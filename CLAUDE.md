@@ -76,10 +76,13 @@ Done (see `git log` for specifics):
   smoke test.
 - User / Profile / roles — email-login `User`, `Profile` with the seven LSP roles
   and a `tuition_paying` flag, auto-created per user, plus the admin back office.
+- CSV bulk-import (`USR-3`) — `manage.py import_users path/to/file.csv`
+  with `--update` and `--dry-run`. Atomic, dedupes by email case-insensitively,
+  creates users with an unusable password (they set one via password reset
+  once SES is wired up).
 
 Next, to finish Milestone 1:
 
-- CSV bulk-import management command — load known users (name, email, role); `USR-3`.
 - AWS skeleton deployment.
 - Separately, an external task: begin Amazon SES domain/DKIM verification.
 
