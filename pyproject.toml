@@ -1,0 +1,35 @@
+[project]
+name = "lsp-website"
+version = "0.1.0"
+description = "Lacanian School of Psychoanalysis — registration and payment website"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "django>=5.2,<5.3",
+    "django-environ>=0.13.0",
+]
+
+[dependency-groups]
+dev = [
+    "factory-boy>=3.3.3",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "pytest-django>=4.12.0",
+    "ruff>=0.15.14",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.development"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+addopts = "--reuse-db"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"config/settings/*" = ["F403", "F405"]
+"*/migrations/*" = ["E501", "I001"]
