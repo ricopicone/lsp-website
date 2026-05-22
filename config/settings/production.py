@@ -23,7 +23,7 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # --- Email: Amazon SES over SMTP ----------------------------------------
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = env("DJANGO_EMAIL_HOST", default="email-smtp.us-east-1.amazonaws.com")
+EMAIL_HOST = env("DJANGO_EMAIL_HOST", default="email-smtp.us-west-2.amazonaws.com")
 EMAIL_PORT = env.int("DJANGO_EMAIL_PORT", default=587)
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = env("DJANGO_EMAIL_HOST_USER", default="")
