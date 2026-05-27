@@ -97,24 +97,18 @@ opening registration.
 
 ## Deploying changes
 
-Local repo lives at `/Users/ricopicone/LSP-Web-Coordinator/lsp-website` (this
-folder). The EC2 host has a copy at `~/lsp-website` on
-`ec2-user@54.188.243.116`. To redeploy:
+Push to `main` and `.github/workflows/deploy.yml` will run the test suite,
+then trigger `~/bin/deploy.sh` on the EC2 host via `aws ssm send-command`.
+That host script does `git pull && docker compose up -d --build`; migrations
+and `collectstatic` run automatically in the container's startup CMD.
 
-```
-rsync -az --delete \
-  --exclude=.git --exclude=.venv --exclude=__pycache__ \
-  --exclude=db.sqlite3 --exclude=staticfiles --exclude=.env \
-  --exclude=.pytest_cache --exclude=.ruff_cache \
-  -e "ssh -i ~/.ssh/lsp-ec2.pem" \
-  ./ ec2-user@54.188.243.116:~/lsp-website/
+SSH into the host with `ssh lsp` (alias resolves to `ec2-user@54.188.243.116`
+via the system `~/.ssh/config`). `.env` lives only on the host (`~/lsp-website/.env`,
+mode 600) — it's `.gitignore`'d and `.dockerignore`'d. Adding a new required
+env var means updating that file on the host before deploying.
 
-ssh -i ~/.ssh/lsp-ec2.pem ec2-user@54.188.243.116 \
-  'cd ~/lsp-website && sg docker -c "docker compose up -d --build"'
-```
-
-Migrations and `collectstatic` run automatically on container start (see
-`Dockerfile` CMD). `.env` on the host holds secrets and is *not* in the repo.
+For a manual deploy without GHA: `gh workflow run Deploy --repo ricopicone/lsp-website`,
+or `ssh lsp '~/bin/deploy.sh'`.
 
 ## Task tracking
 
