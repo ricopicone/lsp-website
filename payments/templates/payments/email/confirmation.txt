@@ -10,7 +10,7 @@ Event runs:      {{ registration.event.start_date|date:"M j, Y" }} – {{ regist
 {% if registration.status == "paid" and registration.event.access_info %}Access details:
 {{ registration.event.access_info }}
 
-{% endif %}If anything looks wrong, reply to this email.
+{% endif %}Questions or anything wrong? Reply to this email — it goes to {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
 {{ site_base_url }}

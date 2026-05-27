@@ -225,7 +225,8 @@ class PricingCode(models.Model):
         decimal_places=2,
         help_text=(
             "Interpreted per pricing_mode: percent_off → 0–100 (percent), "
-            "fixed_amount → USD price, sliding_floor → USD minimum."
+            "fixed_amount → USD price, sliding_floor → USD minimum the "
+            "participant must meet or exceed."
         ),
     )
     valid_until = models.DateTimeField(null=True, blank=True)

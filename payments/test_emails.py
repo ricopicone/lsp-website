@@ -60,6 +60,16 @@ def test_confirmation_email_includes_access_info_when_paid(registration):
 
 
 @pytest.mark.django_db
+def test_confirmation_email_sets_reply_to(registration, settings):
+    settings.SUPPORT_EMAIL = "website@lacanschool.org"
+    send_registration_confirmation(registration)
+    msg = mail.outbox[0]
+    assert msg.reply_to == ["website@lacanschool.org"]
+    # From should stay as the no-reply identity for SES/DKIM consistency.
+    assert msg.from_email != "website@lacanschool.org"
+
+
+@pytest.mark.django_db
 def test_confirmation_email_omits_access_info_when_awaiting_payment(registration):
     registration.status = Registration.Status.AWAITING_PAYMENT
     registration.save()

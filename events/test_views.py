@@ -96,3 +96,51 @@ def test_draft_event_visible_to_staff_with_preview_badge(client, draft_event):
 def test_nonexistent_slug_404s(client):
     response = client.get(reverse("events:detail", args=["does-not-exist"]))
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_access_info_visible_to_paid_registrant(client, published_event):
+    """When the current user has a paid Registration, the event page shows access info."""
+    from registrations.models import Registration
+
+    published_event.access_info = "Zoom: https://example.zoom.us/j/123 — password: SECRETZOOM"
+    published_event.save()
+    user = User.objects.create_user(email="paid@example.com")
+    tier = published_event.price_tiers.first()
+    Registration.objects.create(
+        user=user, event=published_event, price_tier=tier,
+        quoted_amount=Decimal("0.00"),
+        status=Registration.Status.PAID,
+    )
+    client.force_login(user)
+    response = client.get(reverse("events:detail", args=["lacan-seminar-xi"]))
+    assert b"Your access details" in response.content
+    assert b"SECRETZOOM" in response.content
+
+
+@pytest.mark.django_db
+def test_access_info_hidden_from_non_paid_user(client, published_event):
+    """A user without a paid Registration must not see access info."""
+    from registrations.models import Registration
+
+    published_event.access_info = "Zoom: https://example.zoom.us/j/123 — password: SECRETZOOM"
+    published_event.save()
+    user = User.objects.create_user(email="unpaid@example.com")
+    tier = published_event.price_tiers.first()
+    Registration.objects.create(
+        user=user, event=published_event, price_tier=tier,
+        quoted_amount=Decimal("50.00"),
+        status=Registration.Status.AWAITING_PAYMENT,
+    )
+    client.force_login(user)
+    response = client.get(reverse("events:detail", args=["lacan-seminar-xi"]))
+    assert b"Your access details" not in response.content
+    assert b"SECRETZOOM" not in response.content
+
+
+@pytest.mark.django_db
+def test_access_info_hidden_from_anonymous(client, published_event):
+    published_event.access_info = "SECRETZOOM"
+    published_event.save()
+    response = client.get(reverse("events:detail", args=["lacan-seminar-xi"]))
+    assert b"SECRETZOOM" not in response.content

@@ -37,6 +37,13 @@
   </section>
   {% endif %}
 
+  {% if has_paid_registration and event.access_info %}
+  <section style="padding: 1rem; background: #eef7ee; border-left: 3px solid #2a8c3a; border-radius: 4px;">
+    <h2 style="margin-top: 0;">Your access details</h2>
+    <p style="white-space: pre-wrap; margin-bottom: 0;">{{ event.access_info }}</p>
+  </section>
+  {% endif %}
+
   {% if sessions %}
   <section>
     <h2>Sessions</h2>

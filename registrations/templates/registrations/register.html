@@ -16,23 +16,21 @@
   {% endif %}
   <ul style="list-style: none; padding: 0;">
     {% for choice in form.price_tier %}
+      {% with tier=choice.choice_value %}
       <li style="margin: 0.5rem 0;">
-        {{ choice.tag }}
-        <label for="{{ choice.id_for_label }}">
-          {{ choice.choice_label }}
-        </label>
+        {# Re-render the radio so we can attach data-sliding. #}
+        <input type="radio"
+               name="price_tier"
+               value="{{ choice.data.value }}"
+               id="tier-{{ choice.data.value }}"
+               data-sliding="{% if choice.data.value|stringformat:'s' in sliding_tier_ids %}true{% else %}false{% endif %}"
+               {% if choice.data.selected %}checked{% endif %}
+               required>
+        <label for="tier-{{ choice.data.value }}">{{ choice.choice_label }}</label>
       </li>
+      {% endwith %}
     {% endfor %}
   </ul>
-
-  <h2>Sliding-scale amount (optional)</h2>
-  <p>
-    {{ form.sliding_amount }}
-    <small class="muted">{{ form.sliding_amount.help_text }}</small>
-  </p>
-  {% if form.sliding_amount.errors %}
-    <p style="color: #b00;">{{ form.sliding_amount.errors|join:", " }}</p>
-  {% endif %}
 
   <h2>Pricing code (optional)</h2>
   <p>
@@ -43,15 +41,48 @@
     <p style="color: #b00;">{{ form.pricing_code.errors|join:", " }}</p>
   {% endif %}
 
+  <div id="sliding-block" style="display: none;">
+    <h2>Sliding-scale amount</h2>
+    <p>
+      {{ form.sliding_amount }}
+      <small class="muted">{{ form.sliding_amount.help_text }}</small>
+    </p>
+    {% if form.sliding_amount.errors %}
+      <p style="color: #b00;">{{ form.sliding_amount.errors|join:", " }}</p>
+    {% endif %}
+  </div>
+
   {% if form.non_field_errors %}
     <p style="color: #b00;">{{ form.non_field_errors|join:", " }}</p>
   {% endif %}
 
   <p style="margin-top: 1rem;">
-    <button type="submit">Continue</button>
+    <button type="submit">Continue to payment</button>
   </p>
   <p class="muted">
-    Payment is the next step (Stripe Checkout — coming soon).
+    For paid tiers you'll be taken to Stripe's secure checkout to finish.
   </p>
 </form>
+
+<script>
+  (function () {
+    var slidingBlock = document.getElementById('sliding-block');
+    var codeInput = document.querySelector('input[name="pricing_code"]');
+
+    function update() {
+      var selected = document.querySelector('input[name="price_tier"]:checked');
+      var tierSliding = !!(selected && selected.dataset.sliding === 'true');
+      var codeProvided = !!(codeInput && codeInput.value.trim());
+      slidingBlock.style.display = (tierSliding || codeProvided) ? '' : 'none';
+    }
+
+    document.querySelectorAll('input[name="price_tier"]').forEach(function (r) {
+      r.addEventListener('change', update);
+    });
+    if (codeInput) {
+      codeInput.addEventListener('input', update);
+    }
+    update();
+  })();
+</script>
 {% endblock %}

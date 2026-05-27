@@ -21,8 +21,11 @@ def event_detail(request, slug: str):
 
     Unpublished events 404 for anonymous and non-staff users; staff and
     faculty-editors see them so they can preview before flipping
-    ``published``.
+    ``published``. If the current user has a *paid* Registration for the
+    event, the page additionally shows the ``access_info`` block (REG-8).
     """
+    from registrations.models import Registration
+
     event = get_object_or_404(
         Event.objects.prefetch_related("faculty", "sessions", "price_tiers"),
         slug=slug,
@@ -35,6 +38,15 @@ def event_detail(request, slug: str):
         can_edit and request.GET.get("view") == "faculty"
     )
 
+    has_paid_registration = (
+        request.user.is_authenticated
+        and Registration.objects.filter(
+            user=request.user,
+            event=event,
+            status=Registration.Status.PAID,
+        ).exists()
+    )
+
     context = {
         "event": event,
         "sessions": event.sessions.order_by("start_at"),
@@ -43,6 +55,7 @@ def event_detail(request, slug: str):
         ),
         "can_edit": can_edit,
         "show_faculty_view": show_faculty_view,
+        "has_paid_registration": has_paid_registration,
     }
     if show_faculty_view:
         context["registrations"] = event.registrations.select_related(

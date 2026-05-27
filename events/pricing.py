@@ -52,7 +52,7 @@ def resolve_price(
     amount below the floor, code from a different event, code not redeemable).
     """
     if pricing_code is not None:
-        return _apply_code(pricing_code, user, tier)
+        return _apply_code(pricing_code, user, tier, sliding_amount)
 
     if tier.covered_by_tuition and _is_tuition_paying(user):
         return PriceResolution(
@@ -81,7 +81,12 @@ def resolve_price(
     )
 
 
-def _apply_code(code: PricingCode, user, tier: PriceTier) -> PriceResolution:
+def _apply_code(
+    code: PricingCode,
+    user,
+    tier: PriceTier,
+    sliding_amount: Decimal | None,
+) -> PriceResolution:
     if code.event_id != tier.event_id:
         raise PricingError("Pricing code does not apply to this event.")
     if not code.is_redeemable(user=user):
@@ -100,10 +105,23 @@ def _apply_code(code: PricingCode, user, tier: PriceTier) -> PriceResolution:
         amount = code.amount_or_percent
         explanation = f"Fixed price ${amount} via code {code.code}."
     elif code.pricing_mode == PricingCode.Mode.SLIDING_FLOOR:
-        amount = code.amount_or_percent
+        # The code sets a minimum; the participant chooses any amount ≥ floor.
+        floor = code.amount_or_percent
+        if sliding_amount is None:
+            raise PricingError(
+                f"Code {code.code} is sliding-scale (minimum ${floor}); "
+                "enter the amount you'd like to pay."
+            )
+        if sliding_amount < ZERO:
+            raise PricingError("sliding_amount cannot be negative.")
+        if sliding_amount < floor:
+            raise PricingError(
+                f"sliding_amount {sliding_amount} below floor ${floor} "
+                f"(code {code.code})."
+            )
+        amount = sliding_amount
         explanation = (
-            f"Sliding-scale floor ${amount} via code {code.code} "
-            f"(participant may choose any amount ≥ this)."
+            f"Sliding scale via code {code.code} (min ${floor}); chose ${amount}."
         )
     else:
         raise PricingError(f"Unknown pricing_mode: {code.pricing_mode!r}")

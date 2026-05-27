@@ -212,18 +212,37 @@ def test_post_sliding_zero_creates_registration_with_status_paid(
     stub_stripe.assert_not_called()
 
 
-def test_post_tuition_member_covered_by_tuition_short_circuits(
+def test_tuition_member_gets_covered_short_circuit_page(
+    client, event, tuition_tier, tuition_member,
+):
+    """GET with a covered tier renders the one-click confirm panel, not the form."""
+    # Make the covered tier match the user's role so _find_covered_tier picks it.
+    tuition_tier.audience = tuition_member.profile.role
+    tuition_tier.save()
+    client.force_login(tuition_member)
+    response = client.get(reverse("registrations:register", args=[event.slug]))
+    assert response.status_code == 200
+    assert b"included in your tuition" in response.content
+    assert b"Confirm registration" in response.content
+    # The regular tier picker should not be on this page.
+    assert b"Choose your tier" not in response.content
+
+
+def test_tuition_member_covered_confirm_creates_paid_registration(
     client, event, tuition_tier, tuition_member, stub_stripe,
 ):
+    tuition_tier.audience = tuition_member.profile.role
+    tuition_tier.save()
     client.force_login(tuition_member)
     response = client.post(
         reverse("registrations:register", args=[event.slug]),
-        {"price_tier": tuition_tier.id},
+        {"confirm_covered": "1"},
     )
     assert response.status_code == 302
     reg = Registration.objects.get(user=tuition_member, event=event)
     assert reg.quoted_amount == Decimal("0.00")
     assert reg.status == Registration.Status.PAID
+    assert reg.price_tier == tuition_tier
     stub_stripe.assert_not_called()
 
 
@@ -311,6 +330,34 @@ def test_confirmation_page_404s_for_other_user(client, event, standard_tier, use
 
 
 # --- Auth flow ----------------------------------------------------------
+
+
+def test_tier_label_format_in_form(client, event, standard_tier, sliding_tier, user):
+    """The radio labels should be clean human text, not PriceTier.__str__."""
+    client.force_login(user)
+    response = client.get(reverse("registrations:register", args=[event.slug]))
+    # Verbose default __str__ leaks "(event):" — make sure it doesn't appear.
+    assert b"(event):" not in response.content
+    # Clean labels render:
+    assert b"Student" in response.content
+    assert b"Sliding scale" in response.content
+
+
+def test_pre_selects_user_role_matching_tier(
+    client, event, standard_tier, sliding_tier, user,
+):
+    """The role-matching tier should be pre-selected (checked)."""
+    user.profile.role = "student"
+    user.profile.save()
+    client.force_login(user)
+    response = client.get(reverse("registrations:register", args=[event.slug]))
+    body = response.content.decode()
+    # The student tier's radio should have the checked attribute.
+    needle = f'value="{standard_tier.id}"'
+    pos = body.find(needle)
+    assert pos != -1
+    # Look at the surrounding ~200 chars for 'checked'
+    assert "checked" in body[max(0, pos - 200):pos + 200]
 
 
 @pytest.mark.django_db

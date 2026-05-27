@@ -252,6 +252,72 @@ def test_restricted_code_rejected_for_other_user(event, faculty, regular_user):
         resolve_price(user=regular_user, tier=tier, pricing_code=code)
 
 
+def test_sliding_floor_code_requires_sliding_amount(event, faculty, regular_user):
+    tier = PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal("100.00")
+    )
+    code = PricingCode.objects.create(
+        event=event,
+        issued_by=faculty,
+        pricing_mode=PricingCode.Mode.SLIDING_FLOOR,
+        amount_or_percent=Decimal("20.00"),
+    )
+    with pytest.raises(PricingError, match="sliding-scale"):
+        resolve_price(user=regular_user, tier=tier, pricing_code=code)
+
+
+def test_sliding_floor_code_below_floor_rejected(event, faculty, regular_user):
+    tier = PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal("100.00")
+    )
+    code = PricingCode.objects.create(
+        event=event,
+        issued_by=faculty,
+        pricing_mode=PricingCode.Mode.SLIDING_FLOOR,
+        amount_or_percent=Decimal("20.00"),
+    )
+    with pytest.raises(PricingError, match="below floor"):
+        resolve_price(
+            user=regular_user, tier=tier, pricing_code=code,
+            sliding_amount=Decimal("10.00"),
+        )
+
+
+def test_sliding_floor_code_at_floor_accepted(event, faculty, regular_user):
+    tier = PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal("100.00")
+    )
+    code = PricingCode.objects.create(
+        event=event,
+        issued_by=faculty,
+        pricing_mode=PricingCode.Mode.SLIDING_FLOOR,
+        amount_or_percent=Decimal("20.00"),
+    )
+    result = resolve_price(
+        user=regular_user, tier=tier, pricing_code=code,
+        sliding_amount=Decimal("20.00"),
+    )
+    assert result.amount == Decimal("20.00")
+    assert "Sliding scale via code" in result.explanation
+
+
+def test_sliding_floor_code_above_floor_accepted(event, faculty, regular_user):
+    tier = PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal("100.00")
+    )
+    code = PricingCode.objects.create(
+        event=event,
+        issued_by=faculty,
+        pricing_mode=PricingCode.Mode.SLIDING_FLOOR,
+        amount_or_percent=Decimal("20.00"),
+    )
+    result = resolve_price(
+        user=regular_user, tier=tier, pricing_code=code,
+        sliding_amount=Decimal("75.00"),
+    )
+    assert result.amount == Decimal("75.00")
+
+
 def test_percent_off_floors_at_zero_not_negative(event, faculty, regular_user):
     tier = PriceTier.objects.create(
         event=event, audience=Audience.ALL, base_amount=Decimal("50.00")

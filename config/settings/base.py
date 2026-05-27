@@ -134,6 +134,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 # --- Email --------------------------------------------------------------
 
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")
+SUPPORT_EMAIL = env("DJANGO_SUPPORT_EMAIL", default="website@lacanschool.org")
 
 # --- Stripe -------------------------------------------------------------
 # Test-mode keys for development; production keys swapped via env in

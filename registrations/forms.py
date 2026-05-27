@@ -10,17 +10,32 @@ from events.models import PriceTier, PricingCode
 from events.pricing import PricingError, resolve_price
 
 
+class _TierChoiceField(forms.ModelChoiceField):
+    """Format the radio option label cleanly per tier shape."""
+
+    def label_from_instance(self, obj: PriceTier) -> str:
+        audience = obj.get_audience_display()
+        if obj.covered_by_tuition:
+            return f"{audience} — Included in tuition for tuition-paying members"
+        if obj.sliding_scale:
+            floor = obj.minimum_amount if obj.minimum_amount is not None else Decimal("0")
+            return (
+                f"{audience} — Sliding scale "
+                f"(suggested ${obj.base_amount}, minimum ${floor})"
+            )
+        return f"{audience} — ${obj.base_amount}"
+
+
 class RegistrationForm(forms.Form):
     """The public-facing registration form for a single event.
 
     Built with ``event`` and ``user`` kwargs so it can filter tiers to the
-    event and resolve pricing against the user. After ``is_valid()``,
-    ``cleaned_data["resolution"]`` is a ``PriceResolution`` (amount +
-    explanation), and ``cleaned_data["pricing_code_obj"]`` is the
-    ``PricingCode`` redeemed (or ``None``).
+    event and resolve pricing against the user. The user's role-matching
+    tier is pre-selected; ``cleaned_data["resolution"]`` holds the
+    ``PriceResolution`` (amount + explanation) after ``is_valid()``.
     """
 
-    price_tier = forms.ModelChoiceField(
+    price_tier = _TierChoiceField(
         queryset=PriceTier.objects.none(),
         widget=forms.RadioSelect,
         empty_label=None,
@@ -30,7 +45,10 @@ class RegistrationForm(forms.Form):
         min_value=Decimal("0"),
         max_digits=8,
         decimal_places=2,
-        help_text="If your selected tier is sliding-scale, enter what you'd like to pay.",
+        help_text=(
+            "Required when the selected tier is sliding-scale, or when a "
+            "sliding-floor pricing code is applied."
+        ),
     )
     pricing_code = forms.CharField(
         required=False,
@@ -47,6 +65,15 @@ class RegistrationForm(forms.Form):
         self.fields["price_tier"].queryset = PriceTier.objects.filter(
             event=event, session__isnull=True,
         ).order_by("audience")
+
+        # Pre-select the user's role-matching tier, falling back to 'all'.
+        role = getattr(getattr(user, "profile", None), "role", None)
+        if role:
+            initial = self.fields["price_tier"].queryset.filter(audience=role).first()
+            if initial is None:
+                initial = self.fields["price_tier"].queryset.filter(audience="all").first()
+            if initial is not None:
+                self.fields["price_tier"].initial = initial.pk
 
     def clean(self):
         data = super().clean()
