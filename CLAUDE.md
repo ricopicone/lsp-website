@@ -90,19 +90,31 @@ Done (see `git log` for specifics):
   creates users with an unusable password (they set one via password reset
   once SES is wired up).
 - AWS skeleton deployment — Phase 1 skeleton live at
-  `https://register.lacanschool.org/admin/` on a single t4g.small EC2 (Amazon
+  `https://app.lacanschool.org/admin/` on a single t4g.small EC2 (Amazon
   Linux 2023, `~/lsp-website/`) running the Django app in Docker via
   `compose.yml`, fronted by host-level nginx with a Let's Encrypt cert
   (auto-renewed via a systemd timer). Postgres 16 on RDS `lsp-db`
   (db.t4g.micro, private). Email on SES (DKIM-verified; production-access
   request pending). See `aws-infra` memory for endpoints, SG IDs, and the
   Secrets Manager ARN for the RDS master password.
+- Milestone 1 complete (USR-1 through USR-5).
+- Profile extension (USR-6) — `is_faculty` orthogonal axis plus `bio`,
+  `headshot`, `default_billing_mode`, `public`. Bulk importer accepts
+  `is_faculty`.
+- `committees` app (USR-7) — `Committee` + `CommitteeMembership` with
+  structured term dates and named roles. Seeded with Board, Programming
+  Committee, LSP Staff.
+- `events` data model — `Event`, `Session`, `PriceTier`, `PricingCode`
+  (REG-17). Django admin for all.
+- Recurrence helper + `manage.py generate_sessions` (PROG-5) — weekly,
+  monthly-ordinal, or explicit-dates patterns via `dateutil.rrule`.
+- Unified month-grid calendar at `/calendar/` (PROG-6) — FullCalendar.js,
+  staff-gated, JSON feed at `/calendar/events.json`.
+- Milestone 2 complete.
 
-Milestone 1 is complete.
-
-Milestones 2–8 then cover events and pricing, the registration flow, Stripe,
-dues and donations, manual overrides and tests, deploy and pilot dry-run, and
-opening registration.
+Milestones 3–8 then cover the registration flow (M3), Stripe (M4), dues
+and donations (M5), manual overrides and tests (M6), deploy and pilot
+dry-run (M7), and opening registration (M8).
 
 ## Deploying changes
 
