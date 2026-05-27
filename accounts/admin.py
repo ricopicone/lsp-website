@@ -8,7 +8,16 @@ from .models import Profile, User
 class ProfileInline(admin.StackedInline):
     model = Profile
     can_delete = False
-    fields = ("role", "tuition_paying", "notes")
+    fields = (
+        "role",
+        "tuition_paying",
+        "is_faculty",
+        "default_billing_mode",
+        "public",
+        "bio",
+        "headshot",
+        "notes",
+    )
     verbose_name_plural = "Profile"
 
 
@@ -59,6 +68,6 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "role", "tuition_paying")
-    list_filter = ("role", "tuition_paying")
+    list_display = ("user", "role", "tuition_paying", "is_faculty")
+    list_filter = ("role", "tuition_paying", "is_faculty", "public")
     search_fields = ("user__email", "user__first_name", "user__last_name")

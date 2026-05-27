@@ -25,7 +25,14 @@ from django.db import transaction
 from accounts.models import Profile, User
 
 REQUIRED_COLUMNS = {"email"}
-OPTIONAL_COLUMNS = {"first_name", "last_name", "role", "tuition_paying", "notes"}
+OPTIONAL_COLUMNS = {
+    "first_name",
+    "last_name",
+    "role",
+    "tuition_paying",
+    "is_faculty",
+    "notes",
+}
 ALL_COLUMNS = REQUIRED_COLUMNS | OPTIONAL_COLUMNS
 
 _TRUTHY = {"true", "yes", "y", "1", "t"}
@@ -56,8 +63,9 @@ class Command(BaseCommand):
     help = (
         "Bulk-import users from a CSV file (USR-3). "
         "Columns: email (required), first_name, last_name, role, "
-        "tuition_paying, notes. Imported users get an unusable password; "
-        "they set one via password reset once email delivery is configured."
+        "tuition_paying, is_faculty, notes. Imported users get an unusable "
+        "password; they set one via password reset once email delivery is "
+        "configured."
     )
 
     def add_arguments(self, parser):
@@ -156,6 +164,8 @@ class Command(BaseCommand):
             profile_fields["role"] = _normalize_role(val)
         if (val := (row.get("tuition_paying") or "").strip()):
             profile_fields["tuition_paying"] = _parse_bool(val)
+        if (val := (row.get("is_faculty") or "").strip()):
+            profile_fields["is_faculty"] = _parse_bool(val)
         if (val := (row.get("notes") or "").strip()):
             profile_fields["notes"] = val
 

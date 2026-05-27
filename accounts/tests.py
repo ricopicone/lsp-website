@@ -36,6 +36,25 @@ def test_profile_created_automatically():
     assert hasattr(user, "profile")
     assert user.profile.role == Profile.Role.EXTERNAL
     assert user.profile.tuition_paying is False
+    assert user.profile.is_faculty is False
+    assert user.profile.default_billing_mode is None
+    assert user.profile.bio == ""
+    assert user.profile.public is False
+
+
+@pytest.mark.django_db
+def test_default_billing_mode_cleared_for_non_faculty():
+    user = User.objects.create_user(email="bm@example.com")
+    p = user.profile
+    p.is_faculty = True
+    p.default_billing_mode = Profile.BillingMode.PER_SEMINAR
+    p.save()
+    assert p.default_billing_mode == Profile.BillingMode.PER_SEMINAR
+
+    p.is_faculty = False
+    p.save()
+    p.refresh_from_db()
+    assert p.default_billing_mode is None
 
 
 @pytest.mark.django_db

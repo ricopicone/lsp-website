@@ -21,7 +21,7 @@ STORAGES = {
 
 CSRF_TRUSTED_ORIGINS = env(
     "DJANGO_CSRF_TRUSTED_ORIGINS",
-    default=["https://register.lacanschool.org"],
+    default=["https://app.lacanschool.org"],
 )
 
 # --- Security (the site is served over HTTPS) ---------------------------

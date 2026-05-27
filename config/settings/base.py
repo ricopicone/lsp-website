@@ -119,6 +119,14 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# --- Media files (user uploads — e.g. faculty headshots) ---------------
+# Local-disk storage for Phase 1. Move to S3 + django-storages in a later
+# milestone, once a faculty-facing upload UI exists and we need durability
+# across container restarts.
+
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 # --- Email --------------------------------------------------------------
 
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")

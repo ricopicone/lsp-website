@@ -42,11 +42,12 @@ uv run ruff check .                      # lint
 ```
 config/         project — settings/, urls.py, wsgi.py, asgi.py
   settings/     base.py + development.py (default) + production.py
-accounts/       custom User, Profile, roles   <- built
-events/         events, seminars, pricing     <- stub
-registrations/  registrations                 <- stub
-payments/       payments, receipts, Stripe     <- stub
-core/           shared utilities              <- stub
+accounts/       custom User, Profile (incl. faculty fields), bulk import   <- built
+committees/     Committee + CommitteeMembership (USR-7)                    <- M2
+events/         Events, Sessions, PriceTier, PricingCode, recurrence helper <- M2
+registrations/  registrations                                              <- M3
+payments/       payments, receipts, Stripe                                 <- M4
+core/           shared utilities, unified calendar (PROG-6)                <- M2/M3
 ```
 
 - Settings are split by environment. `DJANGO_SETTINGS_MODULE` defaults to
@@ -57,7 +58,15 @@ core/           shared utilities              <- stub
   already wired as `AUTH_USER_MODEL`. Extend it; never swap it.
 - Every `User` gets a `Profile` automatically via a post-save signal.
   `Profile.role` (seven LSP roles) is the single source of truth for pricing
-  tiers and members-only access.
+  tiers and members-only access. `Profile.is_faculty` is an orthogonal axis;
+  the faculty-only fields (`bio`, `headshot`, `default_billing_mode`, `public`)
+  live on Profile itself rather than a separate model — every user has a
+  Profile anyway, and some of those fields may turn out useful for members
+  generally in Phase 2.
+- Committee memberships (Board, Programming Committee, LSP Staff) live in the
+  `committees` app as structured `Committee` + `CommitteeMembership` models
+  (with named roles and term dates), not Django auth Groups. Memberships
+  drive admin permissions.
 - Tests use pytest-django; lint with ruff. Keep both green — CI runs them on push.
 
 ## Design principle: do not over-automate
