@@ -1,0 +1,29 @@
+{% extends "core/base.html" %}
+{% block title %}Registration recorded — LSP{% endblock %}
+{% block content %}
+<h1>Registration recorded</h1>
+
+<p>
+  You're registered for <strong>{{ registration.event.title }}</strong>.
+</p>
+
+<table>
+  <tr><th>Tier</th><td>{{ registration.price_tier.get_audience_display }}</td></tr>
+  <tr><th>Amount due</th><td>${{ registration.quoted_amount }}</td></tr>
+  <tr><th>How priced</th><td><span class="muted">{{ registration.quoted_explanation }}</span></td></tr>
+  <tr><th>Status</th><td>{{ registration.get_status_display }}</td></tr>
+</table>
+
+{% if registration.status == "awaiting_payment" %}
+<p style="margin-top: 1rem;">
+  <em>Payment integration (Stripe Checkout) lands in the next milestone.
+  Until then, the Web Coordinator will follow up about payment.</em>
+</p>
+{% elif registration.status == "paid" %}
+<p style="margin-top: 1rem;">
+  No payment required — you're all set.
+</p>
+{% endif %}
+
+<p><a href="{% url 'events:detail' registration.event.slug %}">Back to event page</a></p>
+{% endblock %}

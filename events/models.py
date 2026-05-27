@@ -270,6 +270,9 @@ class PricingCode(models.Model):
         super().save(*args, **kwargs)
 
     def clean(self):
+        # Form-level clean strips invalid fields from the instance; guard against None.
+        if self.amount_or_percent is None:
+            return
         if self.pricing_mode == self.Mode.PERCENT_OFF and not (
             Decimal("0") <= self.amount_or_percent <= Decimal("100")
         ):

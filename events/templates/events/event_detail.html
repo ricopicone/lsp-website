@@ -12,6 +12,17 @@
     {% endif %}
   </p>
 
+  {% if can_edit %}
+  <nav class="muted">
+    {% if show_faculty_view %}
+      <a href="{% url 'events:detail' event.slug %}">← Public view</a>
+    {% else %}
+      <a href="{% url 'events:detail' event.slug %}?view=faculty">Faculty view</a>
+    {% endif %}
+    · <a href="{% url 'events:edit' event.slug %}">Edit description</a>
+  </nav>
+  {% endif %}
+
   {% if event.faculty.all %}
   <p>
     <strong>Faculty:</strong>
@@ -77,14 +88,83 @@
   </section>
   {% endif %}
 
-  {% if event.status == "open" %}
+  {% if event.status == "open" and event.published %}
   <p style="margin-top: 1.5rem;">
-    <em>Registration UI coming next — for now, contact the Web Coordinator to register.</em>
+    <a href="{% url 'registrations:register' event.slug %}">
+      <strong>Register →</strong>
+    </a>
   </p>
   {% elif event.status == "draft" %}
   <p class="muted" style="margin-top: 1.5rem;">Registration not yet open.</p>
   {% elif event.status == "closed" %}
   <p class="muted" style="margin-top: 1.5rem;">Registration is closed.</p>
+  {% endif %}
+
+  {# ------------------------------------------------------------ #}
+  {# Faculty view (PROG-8): roster + pricing-code generation      #}
+  {# ------------------------------------------------------------ #}
+  {% if show_faculty_view %}
+  <section style="margin-top: 2rem; border-top: 1px solid #ddd; padding-top: 1rem;">
+    <h2>Faculty view</h2>
+
+    <h3>Roster ({{ registrations|length }})</h3>
+    {% if registrations %}
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Email</th><th>Tier</th><th>Amount</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+      {% for reg in registrations %}
+        <tr>
+          <td>{{ reg.user.first_name }} {{ reg.user.last_name }}</td>
+          <td>{{ reg.user.email }}</td>
+          <td>{{ reg.price_tier.get_audience_display }}</td>
+          <td>${{ reg.quoted_amount }}</td>
+          <td>{{ reg.get_status_display }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No registrations yet.</p>
+    {% endif %}
+
+    <h3>Generate a pricing code</h3>
+    <form method="post" action="{% url 'events:generate_code' event.slug %}">
+      {% csrf_token %}
+      {% for field in pricing_code_form %}
+      <p>
+        <label>{{ field.label }}{% if field.field.required %} *{% endif %}<br>
+          {{ field }}
+        </label>
+        {% if field.help_text %}<small class="muted">{{ field.help_text|safe }}</small>{% endif %}
+        {% if field.errors %}<small style="color: #b00;">{{ field.errors|join:", " }}</small>{% endif %}
+      </p>
+      {% endfor %}
+      <p><button type="submit">Mint code</button></p>
+    </form>
+
+    {% if existing_codes %}
+    <h3>Existing codes</h3>
+    <table>
+      <thead>
+        <tr><th>Code</th><th>Mode</th><th>Value</th><th>Uses left</th><th>Expires</th><th>For</th></tr>
+      </thead>
+      <tbody>
+      {% for code in existing_codes %}
+        <tr>
+          <td><code>{{ code.code }}</code></td>
+          <td>{{ code.get_pricing_mode_display }}</td>
+          <td>{{ code.amount_or_percent }}{% if code.pricing_mode == "percent_off" %}%{% else %} USD{% endif %}</td>
+          <td>{% if code.max_uses is None %}∞{% else %}{{ code.uses_remaining }}{% endif %}</td>
+          <td>{% if code.valid_until %}{{ code.valid_until|date:"M j, Y H:i" }}{% else %}—{% endif %}</td>
+          <td>{% if code.restricted_to_user %}{{ code.restricted_to_user.email }}{% else %}anyone{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
   {% endif %}
 </article>
 {% endblock %}

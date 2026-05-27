@@ -1,0 +1,24 @@
+{% extends "core/base.html" %}
+{% block title %}Sign up — LSP{% endblock %}
+{% block content %}
+<h1>Create an account</h1>
+
+<form method="post">
+  {% csrf_token %}
+  {% for field in form %}
+    <p>
+      <label>{{ field.label }}{% if field.field.required %} *{% endif %}<br>
+        {{ field }}
+      </label>
+      {% if field.help_text %}<small class="muted">{{ field.help_text|safe }}</small>{% endif %}
+      {% if field.errors %}<small style="color: #b00;">{{ field.errors|join:", " }}</small>{% endif %}
+    </p>
+  {% endfor %}
+  <input type="hidden" name="next" value="{{ next }}">
+  <p><button type="submit">Create account</button></p>
+</form>
+
+<p class="muted">
+  Already have an account? <a href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Log in</a>.
+</p>
+{% endblock %}

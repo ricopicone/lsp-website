@@ -1,0 +1,21 @@
+{% extends "core/base.html" %}
+{% block title %}Edit — {{ event.title }} — LSP{% endblock %}
+{% block content %}
+<h1>Edit {{ event.title }}</h1>
+<p class="muted">
+  <a href="{% url 'events:detail' event.slug %}">Back to event page</a>
+</p>
+
+<form method="post">
+  {% csrf_token %}
+  <h2>Description</h2>
+  <p>
+    {{ form.description }}
+    <small class="muted">Plain text. Line breaks become paragraphs on the event page.</small>
+  </p>
+  {% if form.description.errors %}
+    <p style="color: #b00;">{{ form.description.errors|join:", " }}</p>
+  {% endif %}
+  <p><button type="submit">Save</button></p>
+</form>
+{% endblock %}

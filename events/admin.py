@@ -67,6 +67,7 @@ class PriceTierAdmin(admin.ModelAdmin):
     )
     list_filter = ("event", "audience", "sliding_scale", "covered_by_tuition")
     autocomplete_fields = ("event", "session")
+    search_fields = ("event__title", "audience")
 
 
 @admin.register(PricingCode)

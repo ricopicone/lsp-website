@@ -1,0 +1,57 @@
+{% extends "core/base.html" %}
+{% block title %}Register — {{ event.title }} — LSP{% endblock %}
+{% block content %}
+<h1>Register for {{ event.title }}</h1>
+<p class="muted">
+  {{ event.start_date|date:"M j, Y" }} – {{ event.end_date|date:"M j, Y" }}
+  · <a href="{% url 'events:detail' event.slug %}">Back to event page</a>
+</p>
+
+<form method="post">
+  {% csrf_token %}
+
+  <h2>Choose your tier</h2>
+  {% if form.price_tier.errors %}
+    <p style="color: #b00;">{{ form.price_tier.errors|join:", " }}</p>
+  {% endif %}
+  <ul style="list-style: none; padding: 0;">
+    {% for choice in form.price_tier %}
+      <li style="margin: 0.5rem 0;">
+        {{ choice.tag }}
+        <label for="{{ choice.id_for_label }}">
+          {{ choice.choice_label }}
+        </label>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <h2>Sliding-scale amount (optional)</h2>
+  <p>
+    {{ form.sliding_amount }}
+    <small class="muted">{{ form.sliding_amount.help_text }}</small>
+  </p>
+  {% if form.sliding_amount.errors %}
+    <p style="color: #b00;">{{ form.sliding_amount.errors|join:", " }}</p>
+  {% endif %}
+
+  <h2>Pricing code (optional)</h2>
+  <p>
+    {{ form.pricing_code }}
+    <small class="muted">{{ form.pricing_code.help_text }}</small>
+  </p>
+  {% if form.pricing_code.errors %}
+    <p style="color: #b00;">{{ form.pricing_code.errors|join:", " }}</p>
+  {% endif %}
+
+  {% if form.non_field_errors %}
+    <p style="color: #b00;">{{ form.non_field_errors|join:", " }}</p>
+  {% endif %}
+
+  <p style="margin-top: 1rem;">
+    <button type="submit">Continue</button>
+  </p>
+  <p class="muted">
+    Payment is the next step (Stripe Checkout — coming soon).
+  </p>
+</form>
+{% endblock %}
