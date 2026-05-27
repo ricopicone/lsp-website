@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>LSP Calendar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 1.5rem; }
+    h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+    .hint { color: #666; font-size: 0.85rem; margin: 0 0 1rem; }
+    #calendar { max-width: 1100px; margin: 0 auto; }
+    a.admin-link { color: #444; text-decoration: none; border-bottom: 1px dotted #aaa; }
+  </style>
+</head>
+<body>
+  <h1>LSP Calendar</h1>
+  <p class="hint">
+    All Sessions across all Events. Click an entry to open its parent Event in
+    <a class="admin-link" href="/admin/">admin</a>.
+  </p>
+  <div id="calendar"></div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const el = document.getElementById('calendar');
+      const calendar = new FullCalendar.Calendar(el, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek,listMonth',
+        },
+        height: 'auto',
+        nowIndicator: true,
+        events: '{% url "core:calendar_events" %}',
+        eventDidMount: (info) => {
+          const loc = info.event.extendedProps.location;
+          if (loc) {
+            info.el.title = loc;
+          }
+        },
+      });
+      calendar.render();
+    });
+  </script>
+</body>
+</html>
