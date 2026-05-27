@@ -130,10 +130,31 @@ Done (see `git log` for specifics):
   on the event page renders the roster and a mint-code form;
   `/events/<slug>/codes/` POST creates a `PricingCode`.
 - Milestone 3 complete.
+- `payments` app — `Payment` (with `stripe_checkout_session_id`
+  unique-when-set as the webhook idempotency key) and `Receipt`
+  (sequential `LSP-YYYY-NNNN`). Django admin.
+- Stripe Checkout integration — `payments.stripe_checkout` creates the
+  Session with the resolved amount; the register view redirects to it
+  for nonzero registrations; `$0` short-circuits straight to PAID.
+- Stripe webhook at `/payments/webhooks/stripe/` — signature-verified,
+  idempotent, marks Payment SUCCEEDED + Registration PAID + creates
+  Receipt + sends emails. Email failures don't rollback the DB or
+  trigger Stripe retries.
+- Transactional emails (REG-7/8/9) via `EmailMessage` with `Reply-To:
+  SUPPORT_EMAIL` (`website@lacanschool.org` by default). Access info
+  released on the event page and in the confirmation email only when
+  the user has a paid Registration.
+- Register form polish — clean tier labels, role pre-selection, hidden
+  sliding amount until needed, one-click "covered by tuition" panel for
+  matching tuition-paying members.
+- Sliding-floor pricing codes (REG-17) now set a minimum (matching the
+  mode name): require sliding_amount input ≥ floor.
+- Production LOGGING in base settings: 5xx tracebacks land in container
+  logs even with DEBUG=False; webhook handler explicitly logs exceptions.
+- Milestone 4 complete.
 
-Milestones 4–8 then cover Stripe (M4), dues and donations (M5),
-manual overrides and tests (M6), deploy and pilot dry-run (M7), and
-opening registration (M8).
+Milestones 5–8 then cover dues and donations (M5), manual overrides and
+tests (M6), deploy and pilot dry-run (M7), and opening registration (M8).
 
 ## Deploying changes
 
