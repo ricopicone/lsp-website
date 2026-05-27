@@ -111,10 +111,29 @@ Done (see `git log` for specifics):
 - Unified month-grid calendar at `/calendar/` (PROG-6) — FullCalendar.js,
   staff-gated, JSON feed at `/calendar/events.json`.
 - Milestone 2 complete.
+- Public event page at `/events/<slug>/` (PROG-1); drafts hidden from
+  anonymous users but previewable by staff and event editors.
+- Auth (architecture § 6.1) — Django `LoginView` + `LogoutView` + custom
+  `signup` view at `/accounts/{login,signup,logout}/`. Login / signup /
+  logged-out templates under `accounts/templates/registration/`.
+- Pricing resolver (`events.pricing.resolve_price`, architecture § 6.2) —
+  one well-tested function: tier base, covered-by-tuition short-circuit,
+  sliding scale, all three pricing-code modes.
+- `registrations` app — `Registration` model + admin; registration form,
+  view, and templates at `/events/<slug>/register/` + confirmation page.
+  Atomic, decrements `PricingCode.uses_remaining`; `$0` short-circuits
+  to `PAID` (no Stripe roundtrip).
+- Faculty edit form (PROG-7) at `/events/<slug>/edit/` — gated by
+  `events.permissions.can_edit_event` (event faculty, Programming
+  Committee, LSP Staff, or Django `is_staff`).
+- Faculty roster + pricing-code generation (PROG-8) — `?view=faculty`
+  on the event page renders the roster and a mint-code form;
+  `/events/<slug>/codes/` POST creates a `PricingCode`.
+- Milestone 3 complete.
 
-Milestones 3–8 then cover the registration flow (M3), Stripe (M4), dues
-and donations (M5), manual overrides and tests (M6), deploy and pilot
-dry-run (M7), and opening registration (M8).
+Milestones 4–8 then cover Stripe (M4), dues and donations (M5),
+manual overrides and tests (M6), deploy and pilot dry-run (M7), and
+opening registration (M8).
 
 ## Deploying changes
 
