@@ -1,1 +1,86 @@
-# Register your models here.
+from django.contrib import admin
+
+from .models import Event, PriceTier, PricingCode, Session
+
+
+class SessionInline(admin.TabularInline):
+    model = Session
+    extra = 0
+    fields = ("sequence", "title", "start_at", "end_at", "location")
+    ordering = ("sequence", "start_at")
+
+
+class PriceTierInline(admin.TabularInline):
+    model = PriceTier
+    extra = 0
+    fields = (
+        "audience",
+        "session",
+        "base_amount",
+        "sliding_scale",
+        "minimum_amount",
+        "covered_by_tuition",
+    )
+    autocomplete_fields = ("session",)
+
+
+@admin.register(Event)
+class EventAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "event_type",
+        "status",
+        "published",
+        "start_date",
+        "end_date",
+        "session_count",
+    )
+    list_filter = ("event_type", "status", "published", "format")
+    search_fields = ("title", "slug", "description")
+    prepopulated_fields = {"slug": ("title",)}
+    filter_horizontal = ("faculty",)
+    inlines = [SessionInline, PriceTierInline]
+
+    @admin.display(description="Sessions")
+    def session_count(self, obj):
+        return obj.sessions.count()
+
+
+@admin.register(Session)
+class SessionAdmin(admin.ModelAdmin):
+    list_display = ("event", "sequence", "title", "start_at", "end_at", "location")
+    list_filter = ("event",)
+    search_fields = ("event__title", "title", "location")
+    date_hierarchy = "start_at"
+    autocomplete_fields = ("event",)
+
+
+@admin.register(PriceTier)
+class PriceTierAdmin(admin.ModelAdmin):
+    list_display = (
+        "event",
+        "session",
+        "audience",
+        "base_amount",
+        "sliding_scale",
+        "covered_by_tuition",
+    )
+    list_filter = ("event", "audience", "sliding_scale", "covered_by_tuition")
+    autocomplete_fields = ("event", "session")
+
+
+@admin.register(PricingCode)
+class PricingCodeAdmin(admin.ModelAdmin):
+    list_display = (
+        "code",
+        "event",
+        "pricing_mode",
+        "amount_or_percent",
+        "valid_until",
+        "uses_remaining",
+        "issued_by",
+    )
+    list_filter = ("event", "pricing_mode")
+    search_fields = ("code", "event__title", "issued_by__email")
+    readonly_fields = ("code", "created_at")
+    autocomplete_fields = ("event", "issued_by", "restricted_to_user")
