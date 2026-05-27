@@ -47,7 +47,7 @@ def stripe_webhook(request):
         return HttpResponseBadRequest("Invalid signature.")
 
     event_type = event["type"]
-    event_id = event.get("id", "?")
+    event_id = event["id"] if "id" in event else "?"
     try:
         if event_type == "checkout.session.completed":
             _handle_checkout_completed(event["data"]["object"])
@@ -64,9 +64,14 @@ def stripe_webhook(request):
     return HttpResponse(status=200)
 
 
-def _handle_checkout_completed(session: dict) -> None:
-    """Idempotently mark the Payment + Registration as paid and issue a Receipt."""
-    session_id = session.get("id")
+def _handle_checkout_completed(session) -> None:
+    """Idempotently mark the Payment + Registration as paid and issue a Receipt.
+
+    ``session`` may be a plain dict (in tests) or a ``stripe.StripeObject``
+    (in production). Both support bracket subscript and ``in`` membership,
+    but ``StripeObject`` does *not* expose ``dict.get`` — use brackets only.
+    """
+    session_id = session["id"] if "id" in session else None
     if not session_id:
         logger.warning("checkout.session.completed without id; ignoring")
         return
@@ -83,11 +88,11 @@ def _handle_checkout_completed(session: dict) -> None:
             return
 
         if payment.status == Payment.Status.SUCCEEDED:
-            # Already processed — idempotent no-op.
-            return
+            return  # already processed — idempotent no-op
 
         payment.mark_succeeded()
-        if intent_id := session.get("payment_intent"):
+        intent_id = session["payment_intent"] if "payment_intent" in session else None
+        if intent_id:
             payment.stripe_payment_intent_id = intent_id
             payment.save(update_fields=("stripe_payment_intent_id",))
 
