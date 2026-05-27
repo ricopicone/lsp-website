@@ -135,6 +135,18 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")
 
+# --- Stripe -------------------------------------------------------------
+# Test-mode keys for development; production keys swapped via env in
+# production.py. STRIPE_WEBHOOK_SECRET is the signing secret for the
+# Stripe webhook endpoint (whsec_...).
+
+STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default="")
+STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default="")
+STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")
+
+# Public base URL used to build Stripe Checkout success/cancel return URLs.
+SITE_BASE_URL = env("SITE_BASE_URL", default="http://localhost:8000")
+
 # --- Defaults -----------------------------------------------------------
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

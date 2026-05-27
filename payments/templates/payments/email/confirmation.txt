@@ -1,0 +1,16 @@
+{{ registration.user.first_name|default:"Hello" }},
+
+You're registered for "{{ registration.event.title }}".
+
+Tier:            {{ registration.price_tier.get_audience_display }}
+Amount:          ${{ registration.quoted_amount }}
+Status:          {{ registration.get_status_display }}
+Event runs:      {{ registration.event.start_date|date:"M j, Y" }} – {{ registration.event.end_date|date:"M j, Y" }}
+
+{% if registration.status == "paid" and registration.event.access_info %}Access details:
+{{ registration.event.access_info }}
+
+{% endif %}If anything looks wrong, reply to this email.
+
+— Lacanian School of Psychoanalysis
+{{ site_base_url }}

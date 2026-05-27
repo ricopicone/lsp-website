@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from unittest.mock import MagicMock
 
 import pytest
 from django.urls import reverse
@@ -11,6 +12,20 @@ from django.urls import reverse
 from accounts.models import User
 from events.models import Audience, Event, PriceTier, PricingCode
 from registrations.models import Registration
+
+
+@pytest.fixture(autouse=True)
+def stub_stripe(monkeypatch):
+    """Replace create_checkout_session with a stub that returns a fake URL.
+
+    The Stripe flow needs the real API to talk to a real account; tests just
+    care that the view triggered it and redirected to the URL it returned.
+    """
+    stub = MagicMock(
+        return_value=(MagicMock(id=42), MagicMock(url="https://stripe.test/session/xyz")),
+    )
+    monkeypatch.setattr("registrations.views.create_checkout_session", stub)
+    return stub
 
 
 @pytest.fixture
@@ -134,7 +149,9 @@ def test_get_renders_form(client, event, standard_tier, user):
 # --- Happy-path POST ----------------------------------------------------
 
 
-def test_post_standard_tier_creates_registration(client, event, standard_tier, user):
+def test_post_standard_tier_redirects_to_stripe(
+    client, event, standard_tier, user, stub_stripe,
+):
     client.force_login(user)
     response = client.post(
         reverse("registrations:register", args=[event.slug]),
@@ -145,10 +162,14 @@ def test_post_standard_tier_creates_registration(client, event, standard_tier, u
     assert reg.quoted_amount == Decimal("100.00")
     assert reg.status == Registration.Status.AWAITING_PAYMENT
     assert reg.pricing_code is None
-    assert response.url == reverse("registrations:confirm", args=[reg.id])
+    assert response.url == "https://stripe.test/session/xyz"
+    stub_stripe.assert_called_once()
+    assert stub_stripe.call_args.args[0] == reg
 
 
-def test_post_sliding_tier_with_amount(client, event, sliding_tier, user):
+def test_post_sliding_tier_with_amount_redirects_to_stripe(
+    client, event, sliding_tier, user, stub_stripe,
+):
     client.force_login(user)
     response = client.post(
         reverse("registrations:register", args=[event.slug]),
@@ -157,6 +178,8 @@ def test_post_sliding_tier_with_amount(client, event, sliding_tier, user):
     assert response.status_code == 302
     reg = Registration.objects.get(user=user, event=event)
     assert reg.quoted_amount == Decimal("35.00")
+    assert response.url == "https://stripe.test/session/xyz"
+    stub_stripe.assert_called_once()
 
 
 def test_post_sliding_tier_without_amount_shows_error(client, event, sliding_tier, user):
@@ -172,10 +195,10 @@ def test_post_sliding_tier_without_amount_shows_error(client, event, sliding_tie
 
 
 def test_post_sliding_zero_creates_registration_with_status_paid(
-    client, event, sliding_tier, user,
+    client, event, sliding_tier, user, stub_stripe,
 ):
     """'None turned away' — zero sliding amount on a min=0 tier should succeed and
-    immediately mark Paid (no Stripe roundtrip for $0)."""
+    immediately mark Paid, *skipping* the Stripe roundtrip."""
     client.force_login(user)
     response = client.post(
         reverse("registrations:register", args=[event.slug]),
@@ -185,10 +208,12 @@ def test_post_sliding_zero_creates_registration_with_status_paid(
     reg = Registration.objects.get(user=user, event=event)
     assert reg.quoted_amount == Decimal("0.00")
     assert reg.status == Registration.Status.PAID
+    assert response.url == reverse("registrations:confirm", args=[reg.id])
+    stub_stripe.assert_not_called()
 
 
 def test_post_tuition_member_covered_by_tuition_short_circuits(
-    client, event, tuition_tier, tuition_member,
+    client, event, tuition_tier, tuition_member, stub_stripe,
 ):
     client.force_login(tuition_member)
     response = client.post(
@@ -199,13 +224,14 @@ def test_post_tuition_member_covered_by_tuition_short_circuits(
     reg = Registration.objects.get(user=tuition_member, event=event)
     assert reg.quoted_amount == Decimal("0.00")
     assert reg.status == Registration.Status.PAID
+    stub_stripe.assert_not_called()
 
 
 # --- Pricing codes ------------------------------------------------------
 
 
 def test_post_with_valid_pricing_code_applies_discount(
-    client, event, standard_tier, user, faculty,
+    client, event, standard_tier, user, faculty, stub_stripe,
 ):
     code = PricingCode.objects.create(
         event=event,
@@ -224,6 +250,8 @@ def test_post_with_valid_pricing_code_applies_discount(
     assert reg.pricing_code_id == code.id
     code.refresh_from_db()
     assert code.uses_remaining == 1
+    # The discounted amount is what gets sent to Stripe.
+    stub_stripe.assert_called_once_with(reg)
 
 
 def test_post_with_unknown_code_shows_error(client, event, standard_tier, user):
@@ -237,7 +265,9 @@ def test_post_with_unknown_code_shows_error(client, event, standard_tier, user):
     assert Registration.objects.filter(user=user, event=event).count() == 0
 
 
-def test_post_with_code_lowercase_normalized(client, event, standard_tier, user, faculty):
+def test_post_with_code_lowercase_normalized(
+    client, event, standard_tier, user, faculty, stub_stripe,
+):
     """Codes are case-insensitive on input; we uppercase before lookup."""
     code = PricingCode.objects.create(
         event=event,
@@ -252,6 +282,7 @@ def test_post_with_code_lowercase_normalized(client, event, standard_tier, user,
     )
     reg = Registration.objects.get(user=user, event=event)
     assert reg.quoted_amount == Decimal("40.00")
+    stub_stripe.assert_called_once()
 
 
 # --- Confirmation page ---------------------------------------------------

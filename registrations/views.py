@@ -11,6 +11,8 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
 from events.models import Event, PricingCode
+from payments.emails import send_registration_confirmation
+from payments.stripe_checkout import create_checkout_session
 
 from .forms import RegistrationForm
 from .models import Registration
@@ -45,7 +47,16 @@ def register_for_event(request, event_slug: str):
                     PricingCode.objects.filter(pk=code.pk).update(
                         uses_remaining=F("uses_remaining") - 1
                     )
-            return redirect("registrations:confirm", reg_id=reg.id)
+
+            # $0 registrations skip Stripe entirely but still get the
+            # confirmation + access_info email (REG-8 / REG-9).
+            if reg.quoted_amount == Decimal("0"):
+                send_registration_confirmation(reg)
+                return redirect("registrations:confirm", reg_id=reg.id)
+
+            # Otherwise hand off to Stripe Checkout.
+            _payment, session = create_checkout_session(reg)
+            return redirect(session.url)
     else:
         form = RegistrationForm(event=event, user=request.user)
 

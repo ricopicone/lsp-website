@@ -1,0 +1,17 @@
+Receipt {{ receipt.receipt_number }}
+Issued: {{ receipt.issued_at|date:"Y-m-d H:i T" }}
+
+Lacanian School of Psychoanalysis
+
+{% if payment.registration %}For: {{ payment.registration.event.title }}
+Tier: {{ payment.registration.price_tier.get_audience_display }}
+{% else %}For: {{ payment.get_payment_type_display }}
+{% endif %}
+Amount paid: ${{ payment.amount }} {{ payment.currency|upper }}
+Paid: {{ payment.paid_at|date:"Y-m-d H:i T" }}
+Method: {{ payment.get_method_display }}
+{% if payment.stripe_payment_intent_id %}Stripe reference: {{ payment.stripe_payment_intent_id }}
+{% endif %}
+This is an automated receipt. Keep for your records.
+
+— Lacanian School of Psychoanalysis
