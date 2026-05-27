@@ -80,15 +80,41 @@ Done (see `git log` for specifics):
   with `--update` and `--dry-run`. Atomic, dedupes by email case-insensitively,
   creates users with an unusable password (they set one via password reset
   once SES is wired up).
+- AWS skeleton deployment — Phase 1 skeleton live at
+  `https://register.lacanschool.org/admin/` on a single t4g.small EC2 (Amazon
+  Linux 2023, `~/lsp-website/`) running the Django app in Docker via
+  `compose.yml`, fronted by host-level nginx with a Let's Encrypt cert
+  (auto-renewed via a systemd timer). Postgres 16 on RDS `lsp-db`
+  (db.t4g.micro, private). Email on SES (DKIM-verified; production-access
+  request pending). See `aws-infra` memory for endpoints, SG IDs, and the
+  Secrets Manager ARN for the RDS master password.
 
-Next, to finish Milestone 1:
-
-- AWS skeleton deployment.
-- Separately, an external task: begin Amazon SES domain/DKIM verification.
+Milestone 1 is complete.
 
 Milestones 2–8 then cover events and pricing, the registration flow, Stripe,
 dues and donations, manual overrides and tests, deploy and pilot dry-run, and
 opening registration.
+
+## Deploying changes
+
+Local repo lives at `/Users/ricopicone/LSP-Web-Coordinator/lsp-website` (this
+folder). The EC2 host has a copy at `~/lsp-website` on
+`ec2-user@54.188.243.116`. To redeploy:
+
+```
+rsync -az --delete \
+  --exclude=.git --exclude=.venv --exclude=__pycache__ \
+  --exclude=db.sqlite3 --exclude=staticfiles --exclude=.env \
+  --exclude=.pytest_cache --exclude=.ruff_cache \
+  -e "ssh -i ~/.ssh/lsp-ec2.pem" \
+  ./ ec2-user@54.188.243.116:~/lsp-website/
+
+ssh -i ~/.ssh/lsp-ec2.pem ec2-user@54.188.243.116 \
+  'cd ~/lsp-website && sg docker -c "docker compose up -d --build"'
+```
+
+Migrations and `collectstatic` run automatically on container start (see
+`Dockerfile` CMD). `.env` on the host holds secrets and is *not* in the repo.
 
 ## Task tracking
 

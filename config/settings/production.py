@@ -9,6 +9,21 @@ DATABASES = {
     "default": env.db("DATABASE_URL"),
 }
 
+# Whitenoise serves static files directly from the gunicorn process —
+# fine for Phase 1 volume; revisit S3 + CloudFront in a later milestone.
+MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+CSRF_TRUSTED_ORIGINS = env(
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    default=["https://register.lacanschool.org"],
+)
+
 # --- Security (the site is served over HTTPS) ---------------------------
 
 SECURE_SSL_REDIRECT = True

@@ -1,0 +1,8 @@
+services:
+  web:
+    build: .
+    image: lsp-website:latest
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8000:8000"
