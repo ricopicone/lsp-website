@@ -147,6 +147,39 @@ STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")
 # Public base URL used to build Stripe Checkout success/cancel return URLs.
 SITE_BASE_URL = env("SITE_BASE_URL", default="http://localhost:8000")
 
+# --- Logging ------------------------------------------------------------
+# Django's default LOGGING only sends to the console when DEBUG=True, so
+# production 5xx tracebacks vanish. Send them to stderr (which Docker
+# captures) unconditionally.
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "django": {"handlers": ["console"], "level": "INFO"},
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "payments": {"handlers": ["console"], "level": "INFO"},
+        "events": {"handlers": ["console"], "level": "INFO"},
+        "registrations": {"handlers": ["console"], "level": "INFO"},
+    },
+}
+
 # --- Defaults -----------------------------------------------------------
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

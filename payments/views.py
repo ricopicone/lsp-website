@@ -47,10 +47,19 @@ def stripe_webhook(request):
         return HttpResponseBadRequest("Invalid signature.")
 
     event_type = event["type"]
-    if event_type == "checkout.session.completed":
-        _handle_checkout_completed(event["data"]["object"])
-    else:
-        logger.info("Stripe webhook ignored (type=%s)", event_type)
+    event_id = event.get("id", "?")
+    try:
+        if event_type == "checkout.session.completed":
+            _handle_checkout_completed(event["data"]["object"])
+        else:
+            logger.info("Stripe webhook ignored (type=%s id=%s)", event_type, event_id)
+    except Exception:
+        # Log the full traceback explicitly — Django's default LOGGING strips
+        # it in production. Returning 500 tells Stripe to retry.
+        logger.exception(
+            "Stripe webhook handler failed (type=%s id=%s)", event_type, event_id
+        )
+        return HttpResponse("internal error", status=500)
 
     return HttpResponse(status=200)
 
@@ -91,7 +100,16 @@ def _handle_checkout_completed(session: dict) -> None:
             Receipt.create_for_payment(payment)
 
     # Send emails *after* the transaction commits so we never report success
-    # via email for a write that rolls back.
+    # via email for a write that rolls back. Email failures (e.g. SES sandbox
+    # rejecting an unverified recipient) must NOT roll back the DB updates or
+    # cause Stripe to retry — log and move on.
     if payment.registration_id:
         payment.registration.refresh_from_db()
-        send_paid_emails(payment.registration)
+        try:
+            send_paid_emails(payment.registration)
+        except Exception:
+            logger.exception(
+                "Failed to send paid-registration emails for payment %s; "
+                "DB updates retained.",
+                payment.id,
+            )
