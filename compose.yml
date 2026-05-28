@@ -6,3 +6,8 @@ services:
     env_file: .env
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      # User uploads (headshots, etc.) persist on the host so container
+      # rebuilds don't wipe them. Host nginx serves /media/ from this path.
+      # Container's app user is uid 1000 == ec2-user on the host.
+      - ./media:/app/media
