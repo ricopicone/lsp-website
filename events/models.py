@@ -181,13 +181,13 @@ class Audience(models.TextChoices):
     """Pricing audience — Profile.Role values plus ``all``."""
 
     ALL = "all", _("All")
-    PROSPECTIVE_APPLICANT = "prospective_applicant", _("Prospective applicant")
+    PROSPECTIVE_APPLICANT = "prospective_applicant", _("Prospective Applicant")
     STUDENT = "student", _("Student")
-    PRE_CANDIDATE = "pre_candidate", _("Pre-candidate analyst")
-    CANDIDATE = "candidate", _("Candidate analyst")
+    PRE_CANDIDATE = "pre_candidate", _("Pre-Candidate Analyst")
+    CANDIDATE = "candidate", _("Candidate Analyst")
     ANALYST = "analyst", _("Analyst")
-    PRE_CANDIDATE_SCHOLAR = "pre_candidate_scholar", _("Pre-candidate scholar")
-    CANDIDATE_SCHOLAR = "candidate_scholar", _("Candidate scholar")
+    PRE_CANDIDATE_SCHOLAR = "pre_candidate_scholar", _("Pre-Candidate Scholar")
+    CANDIDATE_SCHOLAR = "candidate_scholar", _("Candidate Scholar")
     SCHOLAR = "scholar", _("Scholar")
     MEMBER = "member", _("Member")
     EXTERNAL = "external", _("Guest")

@@ -48,13 +48,6 @@
     padding: 0.18rem 0.55rem;
     border-radius: 4px;
   }
-  .det-headline {
-    font-size: 1.02rem;
-    color: #333;
-    margin: 0.75rem 0 0;
-    line-height: 1.45;
-  }
-
   .det-facts {
     display: grid;
     grid-template-columns: 8rem 1fr;
@@ -103,13 +96,7 @@
   {% endif %}
   <div>
     <h1 class="det-name">{{ profile.user.first_name }} {{ profile.user.last_name }}</h1>
-    <span class="det-role">{{ section_label }}</span>
-    {% if profile.bio %}
-      {# First line / paragraph of the bio doubles as the headline tagline #}
-      {% with first_para=profile.bio|linebreaksbr|striptags|truncatewords:30 %}
-        <p class="det-headline">{{ first_para }}</p>
-      {% endwith %}
-    {% endif %}
+    <span class="det-role">{{ profile.get_role_display }}</span>
   </div>
 </header>
 
