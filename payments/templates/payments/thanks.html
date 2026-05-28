@@ -1,34 +1,37 @@
 {% extends "core/base.html" %}
 {% block title %}Thank you — LSP{% endblock %}
 {% block content %}
-<h1>Thank you</h1>
+<div class="max-w-xl mx-auto py-8 space-y-6 text-center">
 
-{% if payment.payment_type == "dues" %}
-<p>
-  Your membership dues payment of <strong>${{ payment.amount }}</strong> has been received.
-  Thanks for supporting the School.
-</p>
-{% elif payment.payment_type == "donation" %}
-<p>
-  Your donation of <strong>${{ payment.amount }}</strong> has been received.
-  We're grateful for your support.
-</p>
-{% endif %}
+  <h1 class="font-serif text-3xl text-base-content">Thank you</h1>
 
-{% if payment.receipt %}
-<p class="muted">
-  Receipt <strong>{{ payment.receipt.receipt_number }}</strong> emailed
-  to {{ payment.recipient_email }}.
-</p>
-{% else %}
-<p class="muted">
-  Your receipt will be emailed once Stripe finishes processing — usually
-  within a minute. If it doesn't arrive, contact
-  <a href="mailto:website@lacanschool.org">website@lacanschool.org</a>.
-</p>
-{% endif %}
+  {% if payment.payment_type == "dues" %}
+  <p class="text-base-content/90">
+    Your membership dues payment of
+    <strong class="text-primary">${{ payment.amount }}</strong>
+    has been received. Thanks for supporting the School.
+  </p>
+  {% elif payment.payment_type == "donation" %}
+  <p class="text-base-content/90">
+    Your donation of
+    <strong class="text-primary">${{ payment.amount }}</strong>
+    has been received. We're grateful for your support.
+  </p>
+  {% endif %}
 
-<p style="margin-top: 1.5rem;">
-  <a href="{% url 'core:landing' %}">← Back to home</a>
-</p>
+  <div class="text-sm text-base-content/60">
+    {% if payment.receipt %}
+      Receipt <strong>{{ payment.receipt.receipt_number }}</strong> emailed to {{ payment.recipient_email }}.
+    {% else %}
+      Your receipt will be emailed once Stripe finishes processing — usually
+      within a minute. If it doesn't arrive, contact
+      <a href="mailto:website@lacanschool.org" class="link">website@lacanschool.org</a>.
+    {% endif %}
+  </div>
+
+  <div>
+    <a href="{% url 'core:landing' %}" class="link link-hover text-base-content/70">← Back to home</a>
+  </div>
+
+</div>
 {% endblock %}

@@ -1,24 +1,31 @@
 {% extends "core/base.html" %}
 {% block title %}Register — {{ event.title }} — LSP{% endblock %}
 {% block content %}
-<h1>Register for {{ event.title }}</h1>
-<p class="muted">
-  {{ event.start_date|date:"M j, Y" }} – {{ event.end_date|date:"M j, Y" }}
-  · <a href="{% url 'events:detail' event.slug %}">Back to event page</a>
-</p>
+<div class="max-w-2xl mx-auto space-y-6">
 
-<section style="padding: 1rem 1.25rem; background: #eef7ee; border-left: 3px solid #2a8c3a; border-radius: 4px;">
-  <p style="margin: 0 0 0.5rem 0;">
-    As a tuition-paying member, this event is <strong>included in your tuition</strong>.
-  </p>
-  <p style="margin: 0;" class="muted">
-    No payment needed. Click below to confirm your registration and receive the access details.
-  </p>
-</section>
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Register for {{ event.title }}</h1>
+    <p class="text-sm text-base-content/60">
+      {{ event.start_date|date:"M j, Y" }}{% if event.end_date != event.start_date %} – {{ event.end_date|date:"M j, Y" }}{% endif %}
+      · <a href="{% url 'events:detail' event.slug %}" class="link link-hover">Back to event page</a>
+    </p>
+  </header>
 
-<form method="post" style="margin-top: 1.5rem;">
-  {% csrf_token %}
-  <input type="hidden" name="confirm_covered" value="1">
-  <button type="submit">Confirm registration</button>
-</form>
+  <div role="alert" class="alert alert-success">
+    <div>
+      <p class="font-medium">Covered by your tuition</p>
+      <p class="text-sm">
+        As a tuition-paying member, this event is included in your tuition.
+        No payment needed. Click below to confirm your registration and receive the access details.
+      </p>
+    </div>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="confirm_covered" value="1">
+    <button type="submit" class="btn btn-primary btn-lg">Confirm registration</button>
+  </form>
+
+</div>
 {% endblock %}

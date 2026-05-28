@@ -1,29 +1,37 @@
 {% extends "core/base.html" %}
 {% block title %}Log in — LSP{% endblock %}
 {% block content %}
-<h1>Log in</h1>
+<div class="max-w-md mx-auto py-8 space-y-6">
 
-{% if form.errors %}
-<p class="muted">Email or password didn't match. Try again.</p>
-{% endif %}
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">Log in</h1>
+    <p class="text-sm text-base-content/60">Member services for the Lacanian School.</p>
+  </header>
 
-<form method="post">
-  {% csrf_token %}
-  <p>
-    <label>Email<br>
-      <input type="email" name="username" autocomplete="email" required autofocus>
-    </label>
+  {% if form.errors %}
+  <div role="alert" class="alert alert-error">
+    <span>Email or password didn't match. Try again.</span>
+  </div>
+  {% endif %}
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div class="form-control space-y-1">
+      <label for="id_username" class="label-text text-sm">Email</label>
+      <input type="email" name="username" id="id_username" autocomplete="email" required autofocus>
+    </div>
+    <div class="form-control space-y-1">
+      <label for="id_password" class="label-text text-sm">Password</label>
+      <input type="password" name="password" id="id_password" autocomplete="current-password" required>
+    </div>
+    <input type="hidden" name="next" value="{{ next }}">
+    <button type="submit" class="btn btn-primary w-full">Log in</button>
+  </form>
+
+  <p class="text-sm text-base-content/60 text-center">
+    No account?
+    <a href="{% url 'signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="link link-primary">Sign up</a>.
   </p>
-  <p>
-    <label>Password<br>
-      <input type="password" name="password" autocomplete="current-password" required>
-    </label>
-  </p>
-  <input type="hidden" name="next" value="{{ next }}">
-  <p><button type="submit">Log in</button></p>
-</form>
 
-<p class="muted">
-  No account? <a href="{% url 'signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Sign up</a>.
-</p>
+</div>
 {% endblock %}

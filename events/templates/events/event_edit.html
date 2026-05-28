@@ -1,21 +1,29 @@
 {% extends "core/base.html" %}
 {% block title %}Edit — {{ event.title }} — LSP{% endblock %}
 {% block content %}
-<h1>Edit {{ event.title }}</h1>
-<p class="muted">
-  <a href="{% url 'events:detail' event.slug %}">Back to event page</a>
-</p>
+<div class="max-w-2xl mx-auto space-y-6">
 
-<form method="post">
-  {% csrf_token %}
-  <h2>Description</h2>
-  <p>
-    {{ form.description }}
-    <small class="muted">Plain text. Line breaks become paragraphs on the event page.</small>
-  </p>
-  {% if form.description.errors %}
-    <p style="color: #b00;">{{ form.description.errors|join:", " }}</p>
-  {% endif %}
-  <p><button type="submit">Save</button></p>
-</form>
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">Edit {{ event.title }}</h1>
+    <p class="text-sm">
+      <a href="{% url 'events:detail' event.slug %}" class="link link-hover text-base-content/70">← Back to event page</a>
+    </p>
+  </header>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div class="form-control space-y-1">
+      <label for="id_description" class="label-text">
+        <h2 class="font-serif text-lg text-base-content">Description</h2>
+      </label>
+      {{ form.description }}
+      <p class="text-xs text-base-content/60">Plain text. Line breaks become paragraphs on the event page.</p>
+      {% if form.description.errors %}
+      <p class="text-xs text-error">{{ form.description.errors|join:", " }}</p>
+      {% endif %}
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+  </form>
+
+</div>
 {% endblock %}

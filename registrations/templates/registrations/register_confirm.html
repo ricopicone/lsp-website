@@ -1,67 +1,78 @@
 {% extends "core/base.html" %}
 {% block title %}Registration recorded — LSP{% endblock %}
 {% block content %}
-<h1>Registration recorded</h1>
+<div class="max-w-2xl mx-auto space-y-6">
 
-{% if messages %}
-  {% for m in messages %}
-    <p style="padding: 0.5rem 0.75rem; background: #fdecec;
-              border-left: 3px solid #b00; border-radius: 4px;">{{ m }}</p>
-  {% endfor %}
-{% endif %}
+  <h1 class="font-serif text-3xl text-base-content">Registration recorded</h1>
 
-{% if request.GET.already %}
-<p style="padding: 0.5rem 0.75rem; background: #fff4d6;
-          border-left: 3px solid #d4a017; border-radius: 4px;">
-  You're already registered for this event — here are the details.
-</p>
-{% endif %}
+  {% if messages %}
+    {% for m in messages %}
+    <div role="alert" class="alert alert-error"><span>{{ m }}</span></div>
+    {% endfor %}
+  {% endif %}
 
-{% if request.GET.cancelled %}
-<p style="padding: 0.5rem 0.75rem; background: #eef7ee;
-          border-left: 3px solid #2a8c3a; border-radius: 4px;">
-  Your registration was cancelled.{% if registration.status == "refunded" %}
-  A refund has been issued to your card; it typically appears in 5–10
-  business days.{% endif %}
-</p>
-{% endif %}
+  {% if request.GET.already %}
+  <div role="alert" class="alert alert-warning">
+    <span>You're already registered for this event — here are the details.</span>
+  </div>
+  {% endif %}
 
-<p>
-  You're registered for <strong>{{ registration.event.title }}</strong>.
-</p>
+  {% if request.GET.cancelled %}
+  <div role="alert" class="alert alert-success">
+    <span>
+      Your registration was cancelled.{% if registration.status == "refunded" %}
+      A refund has been issued to your card; it typically appears in 5–10 business days.{% endif %}
+    </span>
+  </div>
+  {% endif %}
 
-<table>
-  <tr><th>Tier</th><td>{{ registration.price_tier.get_audience_display }}</td></tr>
-  <tr><th>Amount due</th><td>${{ registration.quoted_amount }}</td></tr>
-  <tr><th>How priced</th><td><span class="muted">{{ registration.quoted_explanation }}</span></td></tr>
-  <tr><th>Status</th><td>{{ registration.get_status_display }}</td></tr>
-</table>
+  <p class="text-base-content/90">
+    You're registered for <strong>{{ registration.event.title }}</strong>.
+  </p>
 
-{% if registration.status == "awaiting_payment" %}
-<p style="margin-top: 1rem;">
-  <em>Payment didn't complete. Contact the Web Coordinator to retry or cancel.</em>
-</p>
-{% elif registration.status == "paid" %}
-<p style="margin-top: 1rem;">
-  Payment received — you're all set. Access details have been emailed.
-</p>
-{% endif %}
+  <dl class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-6 gap-y-2 text-sm border-y border-base-300/60 py-5">
+    <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Tier</dt>
+    <dd class="m-0">{{ registration.price_tier.get_audience_display }}</dd>
+    <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Amount due</dt>
+    <dd class="m-0 font-medium">${{ registration.quoted_amount }}</dd>
+    <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">How priced</dt>
+    <dd class="m-0 text-base-content/70">{{ registration.quoted_explanation }}</dd>
+    <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Status</dt>
+    <dd class="m-0">
+      <span class="badge
+        {% if registration.status == 'paid' %}badge-success
+        {% elif registration.status == 'comped' %}badge-info
+        {% elif registration.status == 'cancelled' or registration.status == 'refunded' %}badge-ghost
+        {% else %}badge-warning{% endif %}">
+        {{ registration.get_status_display }}
+      </span>
+    </dd>
+  </dl>
 
-{% if registration.status == "awaiting_payment" or registration.status == "paid" %}
-<form method="post"
-      action="{% url 'registrations:cancel' registration.id %}"
-      style="margin-top: 1.5rem;"
-      onsubmit="return confirm('{% if registration.status == "paid" %}Cancel this registration and refund your payment?{% else %}Cancel this registration?{% endif %}');">
-  {% csrf_token %}
-  <button type="submit"
-          style="background: #faeaea; color: #800; border: 1px solid #c88;
-                 padding: 0.4rem 0.9rem; border-radius: 4px; cursor: pointer;">
-    Cancel registration{% if registration.status == "paid" %} (full refund){% endif %}
-  </button>
-</form>
-{% endif %}
+  {% if registration.status == "awaiting_payment" %}
+  <div role="alert" class="alert alert-warning">
+    <span>Payment didn't complete. Contact the Web Coordinator to retry or cancel.</span>
+  </div>
+  {% elif registration.status == "paid" %}
+  <p class="text-base-content/80">
+    Payment received — you're all set. Access details have been emailed.
+  </p>
+  {% endif %}
 
-<p style="margin-top: 1rem;">
-  <a href="{% url 'events:detail' registration.event.slug %}">Back to event page</a>
-</p>
+  {% if registration.status == "awaiting_payment" or registration.status == "paid" %}
+  <form method="post"
+        action="{% url 'registrations:cancel' registration.id %}"
+        onsubmit="return confirm('{% if registration.status == "paid" %}Cancel this registration and refund your payment?{% else %}Cancel this registration?{% endif %}');">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-outline btn-error btn-sm">
+      Cancel registration{% if registration.status == "paid" %} (full refund){% endif %}
+    </button>
+  </form>
+  {% endif %}
+
+  <p>
+    <a href="{% url 'events:detail' registration.event.slug %}" class="link link-hover text-base-content/70">← Back to event page</a>
+  </p>
+
+</div>
 {% endblock %}

@@ -1,39 +1,44 @@
 {% extends "core/base.html" %}
 {% block title %}Pay membership dues — LSP{% endblock %}
 {% block content %}
-<h1>Pay membership dues</h1>
-<p class="muted">
-  <a href="{% url 'core:landing' %}">← Home</a>
-</p>
+<div class="max-w-xl mx-auto space-y-6">
 
-{% if period %}
-<p>
-  <strong>{{ period.name }}</strong> annual membership is
-  <strong>${{ amount }}</strong>.
-</p>
-<p class="muted">
-  Due by {{ period.due_date|date:"M j, Y" }}. Period runs
-  {{ period.start_date|date:"M j, Y" }} – {{ period.end_date|date:"M j, Y" }}.
-</p>
-{% else %}
-<p>
-  Annual membership in the Lacanian School of Psychoanalysis is
-  <strong>${{ amount }}</strong> per year.
-</p>
-<p class="muted">
-  No academic-year cycle is configured at the moment — your payment will be
-  recorded as undated dues. Contact <a href="mailto:website@lacanschool.org">website@lacanschool.org</a>
-  if you're unsure.
-</p>
-{% endif %}
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Pay membership dues</h1>
+  </header>
 
-<p class="muted">
-  Click <em>Continue to payment</em> to pay securely through Stripe.
-  Your receipt will be emailed to <strong>{{ user.email }}</strong>.
-</p>
+  {% if period %}
+  <div class="rounded-lg border border-base-300 p-5 space-y-2">
+    <p class="text-lg">
+      <strong>{{ period.name }}</strong> annual membership:
+      <span class="text-primary font-semibold">${{ amount }}</span>
+    </p>
+    <p class="text-sm text-base-content/60">
+      Due by {{ period.due_date|date:"M j, Y" }}.
+      Period runs {{ period.start_date|date:"M j, Y" }} – {{ period.end_date|date:"M j, Y" }}.
+    </p>
+  </div>
+  {% else %}
+  <div class="rounded-lg border border-base-300 p-5 space-y-2">
+    <p class="text-lg">
+      Annual membership: <span class="text-primary font-semibold">${{ amount }}</span> per year.
+    </p>
+    <p class="text-sm text-base-content/60">
+      No academic-year cycle is configured at the moment — your payment will be recorded as undated dues.
+      Contact <a href="mailto:website@lacanschool.org" class="link">website@lacanschool.org</a> if you're unsure.
+    </p>
+  </div>
+  {% endif %}
 
-<form method="post" style="margin-top: 1.5rem;">
-  {% csrf_token %}
-  <button type="submit">Continue to payment</button>
-</form>
+  <p class="text-sm text-base-content/70">
+    Click <em>Continue to payment</em> to pay securely through Stripe.
+    Your receipt will be emailed to <strong>{{ user.email }}</strong>.
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary btn-lg">Continue to payment →</button>
+  </form>
+
+</div>
 {% endblock %}

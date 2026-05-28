@@ -1,24 +1,32 @@
 {% extends "core/base.html" %}
 {% block title %}Sign up — LSP{% endblock %}
 {% block content %}
-<h1>Create an account</h1>
+<div class="max-w-md mx-auto py-8 space-y-6">
 
-<form method="post">
-  {% csrf_token %}
-  {% for field in form %}
-    <p>
-      <label>{{ field.label }}{% if field.field.required %} *{% endif %}<br>
-        {{ field }}
+  <header>
+    <h1 class="font-serif text-3xl text-base-content">Create an account</h1>
+  </header>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="form-control space-y-1">
+      <label for="{{ field.id_for_label }}" class="label-text text-sm">
+        {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
       </label>
-      {% if field.help_text %}<small class="muted">{{ field.help_text|safe }}</small>{% endif %}
-      {% if field.errors %}<small style="color: #b00;">{{ field.errors|join:", " }}</small>{% endif %}
-    </p>
-  {% endfor %}
-  <input type="hidden" name="next" value="{{ next }}">
-  <p><button type="submit">Create account</button></p>
-</form>
+      {{ field }}
+      {% if field.help_text %}<p class="text-xs text-base-content/60">{{ field.help_text|safe }}</p>{% endif %}
+      {% if field.errors %}<p class="text-xs text-error">{{ field.errors|join:", " }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <button type="submit" class="btn btn-primary w-full">Create account</button>
+  </form>
 
-<p class="muted">
-  Already have an account? <a href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Log in</a>.
-</p>
+  <p class="text-sm text-base-content/60 text-center">
+    Already have an account?
+    <a href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="link link-primary">Log in</a>.
+  </p>
+
+</div>
 {% endblock %}

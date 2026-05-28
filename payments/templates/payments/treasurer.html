@@ -4,106 +4,152 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 {% endblock %}
 {% block content %}
-<h1>Treasurer dashboard</h1>
-<p class="muted">
-  <a href="{% url 'core:landing' %}">← Home</a>
-  · <a href="{% url 'payments:transactions_csv' %}">All transactions CSV</a>
-  · <a href="/admin/payments/payment/">Admin payments</a>
-</p>
+<div class="space-y-10">
 
-{% if current_period %}
-<h2>Current period: {{ current_period.name }}</h2>
-<p>
-  <strong>${{ current_period.dues_amount }}</strong> per member ·
-  due {{ current_period.due_date|date:"M j, Y" }} ·
-  period {{ current_period.start_date|date:"M j, Y" }} – {{ current_period.end_date|date:"M j, Y" }}.
-</p>
-<table>
-  <tr>
-    <th>Obligated members</th>
-    <td>{{ obligated_count }}</td>
-  </tr>
-  {% with cur=period_stats.0 %}
-  <tr><th>Paid</th><td>{{ cur.paid_count }}</td></tr>
-  <tr><th>Unpaid</th><td>{{ cur.unpaid_count }}</td></tr>
-  <tr><th>Total collected</th><td>${{ cur.total_collected }}</td></tr>
-  {% endwith %}
-</table>
-{% else %}
-<p class="muted">No current dues period configured.</p>
-{% endif %}
+  <header class="space-y-2 border-b border-base-300/60 pb-4">
+    <h1 class="font-serif text-3xl text-base-content">Treasurer dashboard</h1>
+    <div class="flex flex-wrap gap-3 text-sm text-base-content/70">
+      <a href="{% url 'payments:transactions_csv' %}" class="link link-hover">All transactions CSV</a>
+      <span class="text-base-content/30">·</span>
+      <a href="/admin/payments/payment/" class="link link-hover">Admin payments</a>
+    </div>
+  </header>
 
-<h2>Totals collected per period</h2>
-<div style="max-width: 720px;">
-  <canvas id="chart-periods" height="180"></canvas>
+  {# ---------- Current period summary ---------- #}
+  {% if current_period %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Current period: {{ current_period.name }}</h2>
+    <p class="text-sm text-base-content/70">
+      <strong class="text-base-content">${{ current_period.dues_amount }}</strong> per member ·
+      due {{ current_period.due_date|date:"M j, Y" }} ·
+      period {{ current_period.start_date|date:"M j, Y" }} – {{ current_period.end_date|date:"M j, Y" }}.
+    </p>
+
+    {% with cur=period_stats.0 %}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
+        <div class="text-xs uppercase tracking-wider text-base-content/60">Obligated</div>
+        <div class="text-2xl font-serif mt-1">{{ obligated_count }}</div>
+      </div>
+      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
+        <div class="text-xs uppercase tracking-wider text-base-content/60">Paid</div>
+        <div class="text-2xl font-serif mt-1 text-success">{{ cur.paid_count }}</div>
+      </div>
+      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
+        <div class="text-xs uppercase tracking-wider text-base-content/60">Unpaid</div>
+        <div class="text-2xl font-serif mt-1 text-warning">{{ cur.unpaid_count }}</div>
+      </div>
+      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
+        <div class="text-xs uppercase tracking-wider text-base-content/60">Collected</div>
+        <div class="text-2xl font-serif mt-1">${{ cur.total_collected }}</div>
+      </div>
+    </div>
+    {% endwith %}
+  </section>
+  {% else %}
+  <p class="text-base-content/60">No current dues period configured.</p>
+  {% endif %}
+
+  {# ---------- Per-period chart ---------- #}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Totals collected per period</h2>
+    <div class="rounded-lg border border-base-300 p-4 bg-base-100 max-w-3xl">
+      <canvas id="chart-periods" height="180"></canvas>
+    </div>
+  </section>
+
+  {# ---------- Role breakdown ---------- #}
+  {% if role_breakdown %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Current period: paid / unpaid by role</h2>
+    <div class="rounded-lg border border-base-300 p-4 bg-base-100 max-w-3xl">
+      <canvas id="chart-roles" height="200"></canvas>
+    </div>
+    <div class="overflow-x-auto rounded-lg border border-base-300 max-w-3xl">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Role</th><th>Members</th><th>Paid</th><th>Unpaid</th></tr>
+        </thead>
+        <tbody>
+          {% for r in role_breakdown %}
+          <tr>
+            <td>{{ r.role }}</td>
+            <td>{{ r.total }}</td>
+            <td class="text-success">{{ r.paid }}</td>
+            <td class="text-warning">{{ r.unpaid }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ---------- Unpaid members ---------- #}
+  {% if unpaid_users %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Unpaid members <span class="text-base-content/60 text-base font-normal">({{ unpaid_users|length }})</span></h2>
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Name</th><th>Email</th><th>Role</th></tr>
+        </thead>
+        <tbody>
+          {% for u in unpaid_users %}
+          <tr>
+            <td>{{ u.first_name }} {{ u.last_name }}</td>
+            <td><a href="mailto:{{ u.email }}" class="link link-primary">{{ u.email }}</a></td>
+            <td>{{ u.profile.get_role_display }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ---------- All periods ---------- #}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">All periods</h2>
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Period</th><th>Due</th><th>Amount</th><th>Paid</th><th>Unpaid</th><th>Collected</th></tr>
+        </thead>
+        <tbody>
+          {% for s in period_stats %}
+          <tr>
+            <td>{{ s.period.name }}</td>
+            <td class="whitespace-nowrap">{{ s.period.due_date|date:"M j, Y" }}</td>
+            <td class="whitespace-nowrap">${{ s.period.dues_amount }}</td>
+            <td class="text-success">{{ s.paid_count }}</td>
+            <td class="text-warning">{{ s.unpaid_count }}</td>
+            <td class="whitespace-nowrap">${{ s.total_collected }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
 </div>
-
-{% if role_breakdown %}
-<h2>Current period: paid / unpaid by role</h2>
-<div style="max-width: 720px;">
-  <canvas id="chart-roles" height="200"></canvas>
-</div>
-<table style="margin-top: 1rem;">
-  <thead>
-    <tr><th>Role</th><th>Members</th><th>Paid</th><th>Unpaid</th></tr>
-  </thead>
-  <tbody>
-    {% for r in role_breakdown %}
-    <tr>
-      <td>{{ r.role }}</td>
-      <td>{{ r.total }}</td>
-      <td>{{ r.paid }}</td>
-      <td>{{ r.unpaid }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-
-{% if unpaid_users %}
-<h2>Unpaid members ({{ unpaid_users|length }})</h2>
-<table>
-  <thead>
-    <tr><th>Name</th><th>Email</th><th>Role</th></tr>
-  </thead>
-  <tbody>
-    {% for u in unpaid_users %}
-    <tr>
-      <td>{{ u.first_name }} {{ u.last_name }}</td>
-      <td><a href="mailto:{{ u.email }}">{{ u.email }}</a></td>
-      <td>{{ u.profile.get_role_display }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-
-<h2>All periods</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Period</th><th>Due</th><th>Amount</th>
-      <th>Paid</th><th>Unpaid</th><th>Total collected</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for s in period_stats %}
-    <tr>
-      <td>{{ s.period.name }}</td>
-      <td>{{ s.period.due_date|date:"M j, Y" }}</td>
-      <td>${{ s.period.dues_amount }}</td>
-      <td>{{ s.paid_count }}</td>
-      <td>{{ s.unpaid_count }}</td>
-      <td>${{ s.total_collected }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
 
 <script id="chart-periods-data" type="application/json">{{ chart_periods_json|safe }}</script>
 <script id="chart-roles-data" type="application/json">{{ chart_roles_json|safe }}</script>
 <script>
   (function () {
+    // Pull theme colors from DaisyUI CSS vars so charts match silk / abyss.
+    function cssVar(name, fallback) {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return v || fallback;
+    }
+    var primary = cssVar("--color-primary", "#5f8a5f");
+    var warning = cssVar("--color-warning", "#d4a017");
+    var baseContent = cssVar("--color-base-content", "#222");
+
+    Chart.defaults.color = baseContent;
+    Chart.defaults.borderColor = "rgba(127, 127, 127, 0.15)";
+
     var periodsData = JSON.parse(document.getElementById("chart-periods-data").textContent);
     new Chart(document.getElementById("chart-periods"), {
       type: "bar",
@@ -112,8 +158,8 @@
         datasets: [{
           label: "Total collected (USD)",
           data: periodsData.totals,
-          backgroundColor: "rgba(42, 140, 58, 0.55)",
-          borderColor: "rgba(42, 140, 58, 1)",
+          backgroundColor: primary,
+          borderColor: primary,
           borderWidth: 1,
         }],
       },
@@ -131,16 +177,8 @@
         data: {
           labels: rolesData.labels,
           datasets: [
-            {
-              label: "Paid",
-              data: rolesData.paid,
-              backgroundColor: "rgba(42, 140, 58, 0.55)",
-            },
-            {
-              label: "Unpaid",
-              data: rolesData.unpaid,
-              backgroundColor: "rgba(212, 160, 23, 0.55)",
-            },
+            { label: "Paid",   data: rolesData.paid,   backgroundColor: primary },
+            { label: "Unpaid", data: rolesData.unpaid, backgroundColor: warning },
           ],
         },
         options: {

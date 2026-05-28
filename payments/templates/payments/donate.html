@@ -1,56 +1,53 @@
 {% extends "core/base.html" %}
 {% block title %}Donate — LSP{% endblock %}
 {% block content %}
-<h1>Donate to the Lacanian School of Psychoanalysis</h1>
-<p class="muted">
-  <a href="{% url 'core:landing' %}">← Home</a>
-</p>
+<div class="max-w-xl mx-auto space-y-6">
 
-<p>
-  Donations support the School's programs and member services. Thank you.
-</p>
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Donate to the Lacanian School of Psychoanalysis</h1>
+    <p class="text-base-content/70">Donations support the School's programs and member services. Thank you.</p>
+  </header>
 
-<form method="post" style="margin-top: 1rem;">
-  {% csrf_token %}
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
 
-  <p>
-    <label><strong>Amount</strong> (USD)<br>
-      $ {{ form.amount }}
-    </label>
-    {% if form.amount.errors %}<small style="color: #b00;">{{ form.amount.errors|join:", " }}</small>{% endif %}
-  </p>
+    <div class="form-control space-y-1">
+      <label for="id_amount" class="label-text text-sm">Amount (USD)</label>
+      <div class="join">
+        <span class="join-item bg-base-200 border border-base-300 px-3 flex items-center text-base-content/70">$</span>
+        <div class="join-item flex-1">{{ form.amount }}</div>
+      </div>
+      {% if form.amount.errors %}<p class="text-xs text-error">{{ form.amount.errors|join:", " }}</p>{% endif %}
+    </div>
 
-  {% if not user.is_authenticated %}
-  <p>
-    <label><strong>Email</strong><br>
+    {% if not user.is_authenticated %}
+    <div class="form-control space-y-1">
+      <label for="id_email" class="label-text text-sm">Email <span class="text-error">*</span></label>
       {{ form.email }}
-    </label>
-    <br><small class="muted">{{ form.email.help_text }}</small>
-    {% if form.email.errors %}<br><small style="color: #b00;">{{ form.email.errors|join:", " }}</small>{% endif %}
-  </p>
+      {% if form.email.help_text %}<p class="text-xs text-base-content/60">{{ form.email.help_text }}</p>{% endif %}
+      {% if form.email.errors %}<p class="text-xs text-error">{{ form.email.errors|join:", " }}</p>{% endif %}
+    </div>
 
-  <p>
-    <label>Name<br>
+    <div class="form-control space-y-1">
+      <label for="id_name" class="label-text text-sm">Name</label>
       {{ form.name }}
-    </label>
-    <br><small class="muted">{{ form.name.help_text }}</small>
-  </p>
-  {% endif %}
+      {% if form.name.help_text %}<p class="text-xs text-base-content/60">{{ form.name.help_text }}</p>{% endif %}
+    </div>
+    {% endif %}
 
-  <p>
-    <label>Dedication (optional)<br>
+    <div class="form-control space-y-1">
+      <label for="id_dedication" class="label-text text-sm">Dedication (optional)</label>
       {{ form.dedication }}
-    </label>
-    <br><small class="muted">{{ form.dedication.help_text }}</small>
-  </p>
+      {% if form.dedication.help_text %}<p class="text-xs text-base-content/60">{{ form.dedication.help_text }}</p>{% endif %}
+    </div>
 
-  {% if form.non_field_errors %}
-    <p style="color: #b00;">{{ form.non_field_errors|join:", " }}</p>
-  {% endif %}
+    {% if form.non_field_errors %}
+      <div role="alert" class="alert alert-error"><span>{{ form.non_field_errors|join:", " }}</span></div>
+    {% endif %}
 
-  <p style="margin-top: 1rem;">
-    <button type="submit">Continue to payment</button>
-  </p>
-  <p class="muted">You'll complete payment securely on Stripe's hosted page.</p>
-</form>
+    <button type="submit" class="btn btn-primary btn-lg w-full">Continue to payment →</button>
+    <p class="text-xs text-base-content/60">You'll complete payment securely on Stripe's hosted page.</p>
+  </form>
+
+</div>
 {% endblock %}

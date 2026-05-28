@@ -1,85 +1,99 @@
 {% extends "core/base.html" %}
 {% block title %}Register — {{ event.title }} — LSP{% endblock %}
 {% block content %}
-<h1>Register for {{ event.title }}</h1>
-<p class="muted">
-  {{ event.start_date|date:"M j, Y" }} – {{ event.end_date|date:"M j, Y" }}
-  · <a href="{% url 'events:detail' event.slug %}">Back to event page</a>
-</p>
+<div class="max-w-2xl mx-auto space-y-8">
 
-<form method="post">
-  {% csrf_token %}
-
-  <h2>Choose your tier</h2>
-  {% if form.price_tier.errors %}
-    <p style="color: #b00;">{{ form.price_tier.errors|join:", " }}</p>
-  {% endif %}
-  <ul style="list-style: none; padding: 0;">
-    {% for choice in form.price_tier %}
-      <li style="margin: 0.5rem 0;">
-        <input type="radio"
-               name="price_tier"
-               value="{{ choice.data.value }}"
-               id="tier-{{ choice.data.value }}"
-               {% if choice.data.selected %}checked{% endif %}
-               required>
-        <label for="tier-{{ choice.data.value }}">{{ choice.choice_label }}</label>
-      </li>
-    {% endfor %}
-  </ul>
-
-  <h2>Pricing code (optional)</h2>
-  <p>
-    {{ form.pricing_code }}
-    <small class="muted">{{ form.pricing_code.help_text }}</small>
-  </p>
-  {% if form.pricing_code.errors %}
-    <p style="color: #b00;">{{ form.pricing_code.errors|join:", " }}</p>
-  {% endif %}
-  <div id="code-feedback"
-       style="display: none; margin-top: 0.5rem; padding: 0.5rem 0.75rem;
-              background: #eef7ee; border-left: 3px solid #2a8c3a; border-radius: 4px;">
-    <p style="margin: 0;" id="code-feedback-text"></p>
-  </div>
-  <div id="code-error"
-       style="display: none; margin-top: 0.25rem; color: #b00;">
-    <small id="code-error-text"></small>
-  </div>
-
-  <div id="sliding-block" style="display: none;">
-    <h2>Sliding-scale amount</h2>
-    <p style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-      <input type="range"
-             id="sliding-slider"
-             min="0" max="100" step="5" value="0"
-             style="flex: 1 1 16rem; max-width: 28rem;">
-      <span style="white-space: nowrap;">
-        $<input type="number"
-                name="sliding_amount"
-                id="sliding-input"
-                step="0.01"
-                min="0"
-                value=""
-                style="width: 6rem;">
-      </span>
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Register for {{ event.title }}</h1>
+    <p class="text-sm text-base-content/60">
+      {{ event.start_date|date:"M j, Y" }}{% if event.end_date != event.start_date %} – {{ event.end_date|date:"M j, Y" }}{% endif %}
+      · <a href="{% url 'events:detail' event.slug %}" class="link link-hover">Back to event page</a>
     </p>
-    <small class="muted" id="sliding-hint"></small>
-    {% if form.sliding_amount.errors %}
-      <p style="color: #b00;">{{ form.sliding_amount.errors|join:", " }}</p>
+  </header>
+
+  <form method="post" class="space-y-8">
+    {% csrf_token %}
+
+    {# ---------- Tier selection ---------- #}
+    <section class="space-y-3">
+      <h2 class="font-serif text-xl text-base-content">Choose your tier</h2>
+      {% if form.price_tier.errors %}
+      <div role="alert" class="alert alert-error"><span>{{ form.price_tier.errors|join:", " }}</span></div>
+      {% endif %}
+      <div class="space-y-2">
+        {% for choice in form.price_tier %}
+        <label for="tier-{{ choice.data.value }}"
+               class="flex items-start gap-3 p-3 rounded-lg border border-base-300 hover:bg-base-200/40 cursor-pointer transition-colors">
+          <input type="radio"
+                 name="price_tier"
+                 value="{{ choice.data.value }}"
+                 id="tier-{{ choice.data.value }}"
+                 {% if choice.data.selected %}checked{% endif %}
+                 required
+                 class="radio radio-primary mt-1">
+          <span class="text-sm leading-snug">{{ choice.choice_label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </section>
+
+    {# ---------- Pricing code ---------- #}
+    <section class="space-y-2">
+      <h2 class="font-serif text-xl text-base-content">Pricing code (optional)</h2>
+      <div class="form-control">
+        {{ form.pricing_code }}
+        {% if form.pricing_code.help_text %}
+        <p class="text-xs text-base-content/60 mt-1">{{ form.pricing_code.help_text }}</p>
+        {% endif %}
+        {% if form.pricing_code.errors %}
+        <p class="text-xs text-error mt-1">{{ form.pricing_code.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+      <div id="code-feedback" role="status" class="alert alert-success py-2 px-3 text-sm" style="display: none;">
+        <span id="code-feedback-text"></span>
+      </div>
+      <div id="code-error" class="text-xs text-error mt-1" style="display: none;">
+        <span id="code-error-text"></span>
+      </div>
+    </section>
+
+    {# ---------- Sliding-scale amount ---------- #}
+    <section id="sliding-block" class="space-y-3" style="display: none;">
+      <h2 class="font-serif text-xl text-base-content">Sliding-scale amount</h2>
+      <div class="flex flex-wrap items-center gap-3">
+        <input type="range"
+               id="sliding-slider"
+               min="0" max="100" step="5" value="0"
+               class="range range-primary range-sm flex-1 min-w-[16rem] max-w-[28rem]">
+        <div class="flex items-center gap-1.5">
+          <span class="text-base-content/60">$</span>
+          <input type="number"
+                 name="sliding_amount"
+                 id="sliding-input"
+                 step="0.01"
+                 min="0"
+                 value=""
+                 class="unstyled w-24 border border-base-300 rounded-md px-2 py-1.5 bg-base-100 text-base-content text-sm focus:outline-2 focus:outline-primary focus:outline-offset-1">
+        </div>
+      </div>
+      <p class="text-xs text-base-content/60" id="sliding-hint"></p>
+      {% if form.sliding_amount.errors %}
+      <p class="text-xs text-error">{{ form.sliding_amount.errors|join:", " }}</p>
+      {% endif %}
+    </section>
+
+    {% if form.non_field_errors %}
+    <div role="alert" class="alert alert-error"><span>{{ form.non_field_errors|join:", " }}</span></div>
     {% endif %}
-  </div>
 
-  {% if form.non_field_errors %}
-    <p style="color: #b00;">{{ form.non_field_errors|join:", " }}</p>
-  {% endif %}
-
-  <p style="margin-top: 1rem;">
-    <button type="submit">Continue to payment</button>
-  </p>
-  <p class="muted">
-    For paid tiers you'll be taken to Stripe's secure checkout to finish.
-  </p>
-</form>
+    <div class="space-y-2">
+      <button type="submit" class="btn btn-primary btn-lg">Continue to payment →</button>
+      <p class="text-xs text-base-content/60">
+        For paid tiers you'll be taken to Stripe's secure checkout to finish.
+      </p>
+    </div>
+  </form>
+</div>
 
 <script id="tiers-meta" type="application/json">{{ tiers_meta_json|safe }}</script>
 <script>
@@ -99,7 +113,7 @@
     var errorText = document.getElementById('code-error-text');
     var STEP = 5;
 
-    var appliedCode = null;          // {mode, value} once the server validates it
+    var appliedCode = null;
     var debounceTimer = null;
 
     function tierMeta() {
@@ -154,7 +168,6 @@
     function configure() {
       var meta = tierMeta();
 
-      // Code-applied path takes precedence.
       if (appliedCode) {
         var v = parseFloat(appliedCode.value);
         if (appliedCode.mode === 'sliding_floor') {
@@ -174,9 +187,7 @@
             var basePrice = parseFloat(meta.max);
             var discount = basePrice * v / 100;
             var result = Math.max(basePrice - discount, 0).toFixed(2);
-            showFeedback(
-              'Code applied: ' + appliedCode.value + '% off — your price $' + result + '.'
-            );
+            showFeedback('Code applied: ' + appliedCode.value + '% off — your price $' + result + '.');
           } else {
             showFeedback('Code applied: ' + appliedCode.value + '% off the selected tier.');
           }
@@ -184,7 +195,6 @@
         return;
       }
 
-      // No code: fall back to tier-based behavior.
       if (meta && meta.sliding) {
         var tmin = parseFloat(meta.min) || 0;
         var tmax = parseFloat(meta.max) || 100;

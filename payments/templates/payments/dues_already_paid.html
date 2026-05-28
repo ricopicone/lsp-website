@@ -1,22 +1,25 @@
 {% extends "core/base.html" %}
 {% block title %}Dues paid — LSP{% endblock %}
 {% block content %}
-<h1>You're paid up</h1>
+<div class="max-w-xl mx-auto space-y-6">
 
-<section style="padding: 0.75rem 1rem; background: #eef7ee;
-                border-left: 3px solid #2a8c3a; border-radius: 4px;">
-  <p style="margin: 0;">
-    Your annual membership dues for <strong>{{ period.name }}</strong>
-    are paid. Thanks for keeping the School running.
+  <h1 class="font-serif text-3xl text-base-content">You're paid up</h1>
+
+  <div role="alert" class="alert alert-success">
+    <span>
+      Your annual membership dues for <strong>{{ period.name }}</strong>
+      are paid. Thanks for keeping the School running.
+    </span>
+  </div>
+
+  <p class="text-sm text-base-content/60">
+    Period runs {{ period.start_date|date:"M j, Y" }} – {{ period.end_date|date:"M j, Y" }}.
+    The next cycle opens after that.
   </p>
-</section>
 
-<p class="muted" style="margin-top: 1rem;">
-  Period runs {{ period.start_date|date:"M j, Y" }} – {{ period.end_date|date:"M j, Y" }}.
-  The next cycle opens after that.
-</p>
+  <p>
+    <a href="{% url 'core:landing' %}" class="link link-hover text-base-content/70">← Back to home</a>
+  </p>
 
-<p style="margin-top: 1.5rem;">
-  <a href="{% url 'core:landing' %}">← Back to home</a>
-</p>
+</div>
 {% endblock %}

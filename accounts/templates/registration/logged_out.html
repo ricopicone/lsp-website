@@ -1,6 +1,10 @@
 {% extends "core/base.html" %}
 {% block title %}Logged out — LSP{% endblock %}
 {% block content %}
-<h1>Logged out</h1>
-<p>You've been logged out. <a href="{% url 'login' %}">Log in again</a>.</p>
+<div class="max-w-md mx-auto py-12 text-center space-y-4">
+  <h1 class="font-serif text-3xl text-base-content">Logged out</h1>
+  <p class="text-base-content/70">
+    You've been logged out. <a href="{% url 'login' %}" class="link link-primary">Log in again</a>.
+  </p>
+</div>
 {% endblock %}
