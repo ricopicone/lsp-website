@@ -182,10 +182,63 @@ Done (see `git log` for specifics):
 - Production LOGGING in base settings: 5xx tracebacks land in container
   logs even with DEBUG=False; webhook handler explicitly logs exceptions.
 - Milestone 4 complete.
+- Member roster bulk-loaded — 80 members from the public Wix directory
+  (Analysts of the School, Candidate Analysts, Pre-Candidate Analysts,
+  Candidate Scholars, Pre-Candidate Scholars) imported to prod with full
+  bios, credentials, languages, location, normalized phones (E.164 via
+  `django-phonenumber-field`), and headshots downloaded from the Wix CDN
+  into S3. Profile gained `credentials`, `languages_spoken`, `location`,
+  `phone`, `public_email` (login email vs. publicly-listed email — some
+  members use different addresses for each). `Role` extended with a
+  scholar track (`scholar`, `candidate_scholar`, `pre_candidate_scholar`).
+- Public directory at `/directory/` — grid grouped by role, client-side
+  search, per-member detail pages. Serif headings, neutral palette,
+  responsive card grid. Style is template-local for now (no shared
+  stylesheet); easy to factor when visual identity gets formalized.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
+
+## Open items (M7 wrap-up)
+
+- **Un-mask the remaining 19 Google Group members.** The lsp-members group has
+  84 subscribers; 64 are matched to the public directory and 1 is a fuzzy
+  candidate (Ayelet Amittay's wildgeesementalhealth.com address). The other
+  19 are masked (e.g. `dr.pete...@gmail.com`, `volc...@gmail.com`) and almost
+  certainly admin/staff/aliases or members we don't have data for. A GG
+  Workspace admin can export the un-masked list at
+  `admin.google.com → Groups → lsp-members → Members → Export`. Once we have
+  it, re-run the matcher in `import-staging/` to identify any additional
+  dual-email cases, then `import_users --update` to swap login/public emails.
+  See `import-staging/README.md` for the full workflow.
+- **`tuition_paying=true` on every imported member is a guess.** Reconcile
+  against the treasurer's dues ledger before opening fall registration —
+  otherwise REG-4 ("covered by tuition") fires for non-payers.
+- **`is_faculty=false` on every imported member.** Flip for seminar
+  instructors so they can edit events (PROG-7) and mint pricing codes
+  (REG-17).
+- **Manual name fixes.** A handful of imported names need admin polish:
+  "María Líza Ahearne" (split as first=María, last=Líza Ahearne — Líza is a
+  given name), "Carlos Alberto Jimenez" / "Hannah Patricia Bennett" (middle
+  names landed in last_name). The splitter handles particle-laden compound
+  surnames (de la Torre, Bou Ali, Patsalides Hofmann) correctly; pure-middle
+  cases require manual edits.
+- **Set the actual Zoom link** in `Event.access_info` for the Working with
+  Masochism event (currently a placeholder).
+- **SES production access** — request still pending Amazon approval.
+- **Stripe credentials cutover** from rico's business account to the LSP's
+  (Garrett's) once that account is ready.
+
+## Visual identity (deferred to Phase 2)
+
+The directory page is intentionally the only page with real visual polish so
+far (serif headings, neutral palette, photo card grid). Everything else is
+the minimal default style. Designing a coherent visual system makes sense
+*together with* the Phase 2 pages (PUB-1 about, PUB-2 faculty profiles,
+CART-1/2/3 cartels, MEM-1/2/3 members-only area) rather than ahead of them —
+those pages will shape what the design needs to do. Until then, the
+directory's aesthetic can serve as the working seed.
 
 ## Manual-override workflow (staff, REG-14)
 
