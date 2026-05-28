@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
@@ -106,11 +107,15 @@ def register_for_event(request, event_slug: str):
     else:
         form = RegistrationForm(event=event, user=request.user)
 
-    sliding_tier_ids = {
-        str(pk)
-        for pk in PriceTier.objects.filter(
-            event=event, session__isnull=True, sliding_scale=True,
-        ).values_list("pk", flat=True)
+    # Per-tier slider config exposed to the template (and the small JS that
+    # syncs the slider + number input + show/hide of the sliding block).
+    tiers_meta = {
+        str(t.pk): {
+            "sliding": t.sliding_scale,
+            "min": str(t.minimum_amount if t.minimum_amount is not None else 0),
+            "max": str(t.base_amount),
+        }
+        for t in PriceTier.objects.filter(event=event, session__isnull=True)
     }
 
     return render(
@@ -119,7 +124,7 @@ def register_for_event(request, event_slug: str):
         {
             "event": event,
             "form": form,
-            "sliding_tier_ids": sliding_tier_ids,
+            "tiers_meta_json": json.dumps(tiers_meta),
         },
     )
 

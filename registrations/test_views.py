@@ -194,6 +194,26 @@ def test_post_sliding_tier_without_amount_shows_error(client, event, sliding_tie
     assert Registration.objects.filter(user=user, event=event).count() == 0
 
 
+def test_post_sliding_below_floor_rejected_server_side(client, event, user, stub_stripe):
+    """Server-side guarantee that below-floor never silently coerces."""
+    tier = PriceTier.objects.create(
+        event=event,
+        audience=Audience.STUDENT,
+        base_amount=Decimal("100.00"),
+        sliding_scale=True,
+        minimum_amount=Decimal("25.00"),
+    )
+    client.force_login(user)
+    response = client.post(
+        reverse("registrations:register", args=[event.slug]),
+        {"price_tier": tier.id, "sliding_amount": "10.00"},
+    )
+    assert response.status_code == 200
+    assert b"below minimum" in response.content
+    assert Registration.objects.filter(user=user, event=event).count() == 0
+    stub_stripe.assert_not_called()
+
+
 def test_post_sliding_zero_creates_registration_with_status_paid(
     client, event, sliding_tier, user, stub_stripe,
 ):
@@ -341,6 +361,28 @@ def test_tier_label_format_in_form(client, event, standard_tier, sliding_tier, u
     # Clean labels render:
     assert b"Student" in response.content
     assert b"Sliding scale" in response.content
+
+
+def test_register_form_exposes_per_tier_min_max_to_js(
+    client, event, standard_tier, sliding_tier, user,
+):
+    """The slider needs each tier's min/max — exposed via inline JSON."""
+    client.force_login(user)
+    response = client.get(reverse("registrations:register", args=[event.slug]))
+    body = response.content.decode()
+    # Inline tiers-meta script tag carries per-tier slider config.
+    assert 'id="tiers-meta"' in body
+    # The sliding tier has its minimum + base exposed.
+    import json as _json
+    start = body.index('id="tiers-meta"')
+    chunk = body[start:start + 800]
+    inner = chunk.split(">", 1)[1].split("</script>")[0]
+    meta = _json.loads(inner)
+    assert str(sliding_tier.pk) in meta
+    assert meta[str(sliding_tier.pk)]["sliding"] is True
+    assert meta[str(sliding_tier.pk)]["min"] == "0.00"
+    assert meta[str(sliding_tier.pk)]["max"] == "100.00"
+    assert meta[str(standard_tier.pk)]["sliding"] is False
 
 
 def test_pre_selects_user_role_matching_tier(
