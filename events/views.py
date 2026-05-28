@@ -1,9 +1,16 @@
-"""Public-facing event views (PROG-1, PROG-7, PROG-8)."""
+"""Public-facing event views (PROG-1, PROG-7, PROG-8, REG-10)."""
 
 from __future__ import annotations
 
+import csv
+
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, HttpResponseForbidden, JsonResponse
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseForbidden,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -129,6 +136,55 @@ def check_pricing_code(request, slug: str):
         "mode": code.pricing_mode,
         "value": str(code.amount_or_percent),
     })
+
+
+@login_required
+def event_roster_csv(request, slug: str):
+    """CSV export of an event's roster (REG-10).
+
+    Active registrations only (awaiting_payment, paid, comped); cancelled
+    and refunded rows are excluded. Permission mirrors event editing: event
+    faculty, Programming Committee, LSP Staff, or Django is_staff.
+    """
+    from registrations.models import Registration
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to view this roster.")
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = (
+        f'attachment; filename="{event.slug}-roster.csv"'
+    )
+
+    writer = csv.writer(response)
+    writer.writerow([
+        "first_name", "last_name", "email", "role",
+        "tier", "amount", "status", "pricing_code", "registered_at",
+    ])
+
+    qs = (
+        Registration.objects.filter(event=event)
+        .exclude(status__in=(
+            Registration.Status.CANCELLED,
+            Registration.Status.REFUNDED,
+        ))
+        .select_related("user", "user__profile", "price_tier", "pricing_code")
+        .order_by("created_at")
+    )
+    for r in qs:
+        writer.writerow([
+            r.user.first_name,
+            r.user.last_name,
+            r.user.email,
+            getattr(getattr(r.user, "profile", None), "role", ""),
+            r.price_tier.get_audience_display(),
+            r.quoted_amount,
+            r.get_status_display(),
+            r.pricing_code.code if r.pricing_code else "",
+            r.created_at.isoformat(),
+        ])
+    return response
 
 
 @login_required

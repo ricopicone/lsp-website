@@ -1,0 +1,34 @@
+{% extends "core/base.html" %}
+{% block title %}Thank you — LSP{% endblock %}
+{% block content %}
+<h1>Thank you</h1>
+
+{% if payment.payment_type == "dues" %}
+<p>
+  Your membership dues payment of <strong>${{ payment.amount }}</strong> has been received.
+  Thanks for supporting the School.
+</p>
+{% elif payment.payment_type == "donation" %}
+<p>
+  Your donation of <strong>${{ payment.amount }}</strong> has been received.
+  We're grateful for your support.
+</p>
+{% endif %}
+
+{% if payment.receipt %}
+<p class="muted">
+  Receipt <strong>{{ payment.receipt.receipt_number }}</strong> emailed
+  to {{ payment.recipient_email }}.
+</p>
+{% else %}
+<p class="muted">
+  Your receipt will be emailed once Stripe finishes processing — usually
+  within a minute. If it doesn't arrive, contact
+  <a href="mailto:website@lacanschool.org">website@lacanschool.org</a>.
+</p>
+{% endif %}
+
+<p style="margin-top: 1.5rem;">
+  <a href="{% url 'core:landing' %}">← Back to home</a>
+</p>
+{% endblock %}

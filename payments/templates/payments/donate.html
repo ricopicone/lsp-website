@@ -1,0 +1,56 @@
+{% extends "core/base.html" %}
+{% block title %}Donate — LSP{% endblock %}
+{% block content %}
+<h1>Donate to the Lacanian School of Psychoanalysis</h1>
+<p class="muted">
+  <a href="{% url 'core:landing' %}">← Home</a>
+</p>
+
+<p>
+  Donations support the School's programs and member services. Thank you.
+</p>
+
+<form method="post" style="margin-top: 1rem;">
+  {% csrf_token %}
+
+  <p>
+    <label><strong>Amount</strong> (USD)<br>
+      $ {{ form.amount }}
+    </label>
+    {% if form.amount.errors %}<small style="color: #b00;">{{ form.amount.errors|join:", " }}</small>{% endif %}
+  </p>
+
+  {% if not user.is_authenticated %}
+  <p>
+    <label><strong>Email</strong><br>
+      {{ form.email }}
+    </label>
+    <br><small class="muted">{{ form.email.help_text }}</small>
+    {% if form.email.errors %}<br><small style="color: #b00;">{{ form.email.errors|join:", " }}</small>{% endif %}
+  </p>
+
+  <p>
+    <label>Name<br>
+      {{ form.name }}
+    </label>
+    <br><small class="muted">{{ form.name.help_text }}</small>
+  </p>
+  {% endif %}
+
+  <p>
+    <label>Dedication (optional)<br>
+      {{ form.dedication }}
+    </label>
+    <br><small class="muted">{{ form.dedication.help_text }}</small>
+  </p>
+
+  {% if form.non_field_errors %}
+    <p style="color: #b00;">{{ form.non_field_errors|join:", " }}</p>
+  {% endif %}
+
+  <p style="margin-top: 1rem;">
+    <button type="submit">Continue to payment</button>
+  </p>
+  <p class="muted">You'll complete payment securely on Stripe's hosted page.</p>
+</form>
+{% endblock %}

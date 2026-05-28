@@ -148,6 +148,10 @@ STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")
 # Public base URL used to build Stripe Checkout success/cancel return URLs.
 SITE_BASE_URL = env("SITE_BASE_URL", default="http://localhost:8000")
 
+# Annual LSP membership dues (REG-12). Fixed across roles in Phase 1;
+# env-overridable so the amount can change without a deploy.
+DUES_ANNUAL_AMOUNT = env("DUES_ANNUAL_AMOUNT", default="100.00")
+
 # --- Logging ------------------------------------------------------------
 # Django's default LOGGING only sends to the console when DEBUG=True, so
 # production 5xx tracebacks vanish. Send them to stderr (which Docker

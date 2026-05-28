@@ -52,8 +52,8 @@ def test_create_checkout_session_makes_payment_and_stores_session_id(registratio
     assert kwargs["client_reference_id"] == str(payment.id)
     assert kwargs["line_items"][0]["price_data"]["unit_amount"] == 7500
     assert kwargs["line_items"][0]["price_data"]["currency"] == "usd"
-    assert kwargs["metadata"]["registration_id"] == str(registration.id)
     assert kwargs["metadata"]["payment_id"] == str(payment.id)
+    assert kwargs["metadata"]["payment_type"] == "registration"
     assert "stripe=success" in kwargs["success_url"]
     assert "stripe=cancelled" in kwargs["cancel_url"]
 

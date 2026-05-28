@@ -1,0 +1,23 @@
+{% extends "core/base.html" %}
+{% block title %}Pay membership dues — LSP{% endblock %}
+{% block content %}
+<h1>Pay membership dues</h1>
+<p class="muted">
+  <a href="{% url 'core:landing' %}">← Home</a>
+</p>
+
+<p>
+  Annual membership in the Lacanian School of Psychoanalysis is
+  <strong>${{ amount }}</strong> per year.
+</p>
+
+<p class="muted">
+  Click <em>Continue to payment</em> to pay securely through Stripe.
+  Your receipt will be emailed to <strong>{{ user.email }}</strong>.
+</p>
+
+<form method="post" style="margin-top: 1.5rem;">
+  {% csrf_token %}
+  <button type="submit">Continue to payment</button>
+</form>
+{% endblock %}

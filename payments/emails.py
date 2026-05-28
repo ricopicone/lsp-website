@@ -56,13 +56,24 @@ def send_receipt(payment: Payment) -> None:
             "support_email": settings.SUPPORT_EMAIL,
         },
     )
-    _send(
-        subject=subject,
-        body=body,
-        to=[payment.user.email] if payment.user else [],
-    )
+    to_email = payment.recipient_email
+    if not to_email:
+        # Defensive — should never happen for a paid Payment.
+        return
+    _send(subject=subject, body=body, to=[to_email])
     receipt.emailed_at = timezone.now()
     receipt.save(update_fields=("emailed_at",))
+
+
+def send_payment_receipt(payment: Payment) -> None:
+    """Receipt-only send for dues / donations (no registration, no access_info).
+
+    Existing :func:`send_receipt` would suffice but this is a thin wrapper
+    so callers can express intent. Idempotency lives at the call site —
+    the webhook only calls this once per Payment via the SUCCEEDED guard.
+    """
+    if hasattr(payment, "receipt"):
+        send_receipt(payment)
 
 
 def send_paid_emails(registration: Registration) -> None:

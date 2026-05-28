@@ -58,6 +58,13 @@ class Payment(models.Model):
         db_index=True,
         help_text="Set on Stripe payments; used to look up Payment from a webhook event.",
     )
+    email = models.EmailField(
+        blank=True,
+        help_text=(
+            "Receipt-delivery email for anonymous payments (typically donations "
+            "without an account). Falls back to user.email when a user is attached."
+        ),
+    )
     notes = models.TextField(blank=True, help_text="Staff notes — e.g. for offline payments.")
     created_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)
@@ -95,6 +102,13 @@ class Payment(models.Model):
             self.paid_at = timezone.now()
         if save:
             self.save(update_fields=("status", "paid_at"))
+
+    @property
+    def recipient_email(self) -> str | None:
+        """Where to deliver the receipt: the user's email, or the payment's own."""
+        if self.user_id and self.user.email:
+            return self.user.email
+        return self.email or None
 
 
 class Receipt(models.Model):

@@ -1,11 +1,14 @@
 """Stripe Checkout integration (architecture § 6.3).
 
-One responsibility: turn a ``Registration`` (with its already-resolved
-``quoted_amount``) into a Stripe Checkout Session, recording a ``Payment``
-row keyed to the session id for webhook idempotency.
+Three entry points — all build on the same generic ``_make_session`` so
+the webhook handler stays uniform:
 
-The webhook handler in :mod:`payments.views` consumes the resulting
-``checkout.session.completed`` event.
+- ``create_checkout_session(registration)`` — event registration (REG-3).
+- ``create_dues_session(payment)`` — annual membership dues (REG-12).
+- ``create_donation_session(payment)`` — donation (REG-13).
+
+Each creates a Stripe ``Checkout.Session`` whose ``id`` is stored on the
+``Payment`` as the natural webhook idempotency key.
 """
 
 from __future__ import annotations
@@ -25,16 +28,68 @@ def _configure() -> None:
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
-def create_checkout_session(registration: Registration) -> tuple[Payment, stripe.checkout.Session]:
-    """Create a Stripe Checkout Session for ``registration``.
+def _make_session(
+    *,
+    payment: Payment,
+    product_name: str,
+    product_description: str,
+    success_path: str,
+    cancel_path: str,
+    customer_email: str | None = None,
+) -> stripe.checkout.Session:
+    """Generic Checkout Session builder.
 
-    Creates a Payment row (status=PENDING, method=STRIPE), then a Stripe
-    Session with the Payment row's id as ``client_reference_id`` and the
-    Session id stored back on the Payment row for idempotent webhook lookup.
+    Caller owns the Payment row's lifecycle (create with status=PENDING,
+    set ``user`` and ``amount``, etc.). We attach the Session id to the
+    Payment for idempotent webhook lookup.
 
-    The caller is expected to redirect to the returned Session's ``url``.
+    ``automatic_tax`` is intentionally omitted — LSP is a non-profit
+    selling intangible educational services / membership and is not
+    expected to charge sales tax. Verify in the Stripe account that
+    Stripe Tax is OFF before launch.
     """
     _configure()
+    if payment.amount <= Decimal("0"):
+        raise ValueError(
+            f"Refusing to create a Stripe session for a non-positive amount "
+            f"(payment {payment.id}: ${payment.amount})."
+        )
+
+    session = stripe.checkout.Session.create(
+        mode="payment",
+        payment_method_types=["card"],
+        line_items=[
+            {
+                "quantity": 1,
+                "price_data": {
+                    "currency": "usd",
+                    "unit_amount": int(payment.amount * 100),
+                    "product_data": {
+                        "name": product_name[:127],  # Stripe caps name at 127
+                        "description": product_description[:500] if product_description else None,
+                    },
+                },
+            },
+        ],
+        customer_email=customer_email or (payment.user.email if payment.user else None),
+        client_reference_id=str(payment.id),
+        success_url=settings.SITE_BASE_URL + success_path,
+        cancel_url=settings.SITE_BASE_URL + cancel_path,
+        metadata={
+            "payment_id": str(payment.id),
+            "payment_type": payment.payment_type,
+        },
+    )
+
+    payment.stripe_checkout_session_id = session.id
+    payment.save(update_fields=("stripe_checkout_session_id",))
+    return session
+
+
+def create_checkout_session(
+    registration: Registration,
+) -> tuple[Payment, stripe.checkout.Session]:
+    """Build a Checkout Session for an event registration (REG-3)."""
     if registration.quoted_amount <= Decimal("0"):
         raise ValueError(
             "Refusing to create a Stripe session for a $0 registration "
@@ -50,44 +105,47 @@ def create_checkout_session(registration: Registration) -> tuple[Payment, stripe
         status=Payment.Status.PENDING,
     )
 
-    session = stripe.checkout.Session.create(
-        mode="payment",
-        payment_method_types=["card"],
-        line_items=[
-            {
-                "quantity": 1,
-                "price_data": {
-                    "currency": "usd",
-                    "unit_amount": int(registration.quoted_amount * 100),
-                    "product_data": {
-                        "name": registration.event.title,
-                        "description": (
-                            f"{registration.price_tier.get_audience_display()} "
-                            f"— {registration.event.start_date.isoformat()} to "
-                            f"{registration.event.end_date.isoformat()}"
-                        )[:500],
-                    },
-                },
-            },
-        ],
-        customer_email=registration.user.email,
-        client_reference_id=str(payment.id),
-        success_url=(
-            settings.SITE_BASE_URL
-            + reverse("registrations:confirm", args=[registration.id])
+    session = _make_session(
+        payment=payment,
+        product_name=registration.event.title,
+        product_description=(
+            f"{registration.price_tier.get_audience_display()} "
+            f"— {registration.event.start_date.isoformat()} to "
+            f"{registration.event.end_date.isoformat()}"
+        ),
+        success_path=(
+            reverse("registrations:confirm", args=[registration.id])
             + "?stripe=success"
         ),
-        cancel_url=(
-            settings.SITE_BASE_URL
-            + reverse("events:detail", args=[registration.event.slug])
+        cancel_path=(
+            reverse("events:detail", args=[registration.event.slug])
             + "?stripe=cancelled"
         ),
-        metadata={
-            "registration_id": str(registration.id),
-            "payment_id": str(payment.id),
-        },
+    )
+    return payment, session
+
+
+def create_dues_session(payment: Payment) -> stripe.checkout.Session:
+    """Build a Checkout Session for membership dues (REG-12)."""
+    return _make_session(
+        payment=payment,
+        product_name="LSP membership dues",
+        product_description="Annual membership in the Lacanian School of Psychoanalysis",
+        success_path=reverse("payments:thanks", args=[payment.id]) + "?stripe=success",
+        cancel_path="/?stripe=cancelled",
     )
 
-    payment.stripe_checkout_session_id = session.id
-    payment.save(update_fields=("stripe_checkout_session_id",))
-    return payment, session
+
+def create_donation_session(
+    payment: Payment, *, customer_email: str | None = None
+) -> stripe.checkout.Session:
+    """Build a Checkout Session for a donation (REG-13). ``customer_email``
+    overrides ``payment.user.email`` for anonymous donations."""
+    return _make_session(
+        payment=payment,
+        product_name="Donation to the Lacanian School of Psychoanalysis",
+        product_description="Thank you for your support.",
+        success_path=reverse("payments:thanks", args=[payment.id]) + "?stripe=success",
+        cancel_path="/?stripe=cancelled",
+        customer_email=customer_email,
+    )

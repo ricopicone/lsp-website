@@ -129,7 +129,10 @@
   <section style="margin-top: 2rem; border-top: 1px solid #ddd; padding-top: 1rem;">
     <h2>Faculty view</h2>
 
-    <h3>Roster ({{ registrations|length }})</h3>
+    <h3>Roster ({{ registrations|length }})
+      <a href="{% url 'events:roster_csv' event.slug %}"
+         style="font-size: 0.8em; font-weight: normal;">Download CSV</a>
+    </h3>
     {% if registrations %}
     <table>
       <thead>
