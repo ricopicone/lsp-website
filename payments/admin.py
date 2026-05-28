@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Payment, Receipt
+from .models import DuesPeriod, DuesReminder, Payment, Receipt
 
 
 class ReceiptInline(admin.StackedInline):
@@ -30,7 +30,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "user__email",
         "notes",
     )
-    autocomplete_fields = ("user", "registration")
+    autocomplete_fields = ("user", "registration", "dues_period")
     readonly_fields = ("created_at", "paid_at")
     date_hierarchy = "created_at"
     inlines = [ReceiptInline]
@@ -42,3 +42,29 @@ class ReceiptAdmin(admin.ModelAdmin):
     search_fields = ("receipt_number", "payment__user__email")
     readonly_fields = ("receipt_number", "issued_at")
     date_hierarchy = "issued_at"
+
+
+@admin.register(DuesPeriod)
+class DuesPeriodAdmin(admin.ModelAdmin):
+    list_display = (
+        "name", "slug", "start_date", "due_date", "end_date",
+        "dues_amount", "block_registration_when_unpaid", "is_current",
+    )
+    list_filter = ("block_registration_when_unpaid",)
+    search_fields = ("name", "slug")
+    prepopulated_fields = {"slug": ("name",)}
+
+    @admin.display(boolean=True, description="Current?")
+    def is_current(self, obj):
+        from django.utils import timezone
+        today = timezone.now().date()
+        return obj.start_date <= today <= obj.end_date
+
+
+@admin.register(DuesReminder)
+class DuesReminderAdmin(admin.ModelAdmin):
+    list_display = ("user", "dues_period", "sent_at")
+    list_filter = ("dues_period",)
+    search_fields = ("user__email",)
+    readonly_fields = ("user", "dues_period", "sent_at")
+    date_hierarchy = "sent_at"

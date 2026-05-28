@@ -21,10 +21,12 @@ def landing(request):
         .order_by("start_date", "title")[:5]
     )
     user_registrations_url = None
+    dues_period_unpaid = None
     if request.user.is_authenticated:
-        # Simple link to the most recent active registration's confirmation page,
-        # if any. Full "your registrations" index is a Phase 2 thing.
+        from payments.dues import is_dues_obligated, user_paid_for_period
+        from payments.models import DuesPeriod
         from registrations.models import Registration
+
         latest = (
             Registration.objects.filter(user=request.user)
             .exclude(status__in=(
@@ -38,12 +40,23 @@ def landing(request):
             user_registrations_url = reverse(
                 "registrations:confirm", args=[latest.id]
             )
+
+        # Dues banner for obligated unpaid members.
+        current_period = DuesPeriod.current()
+        if (
+            current_period is not None
+            and is_dues_obligated(request.user)
+            and not user_paid_for_period(request.user, current_period)
+        ):
+            dues_period_unpaid = current_period
+
     return render(
         request,
         "core/landing.html",
         {
             "upcoming_events": upcoming,
             "user_registrations_url": user_registrations_url,
+            "dues_period_unpaid": dues_period_unpaid,
         },
     )
 

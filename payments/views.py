@@ -1,16 +1,19 @@
-"""Public payment views: webhook, dues, donations, thanks, exports."""
+"""Public payment views: webhook, dues, donations, thanks, exports, dashboard."""
 
 from __future__ import annotations
 
 import csv
+import json
 import logging
 from datetime import datetime
 from decimal import Decimal
 
 import stripe
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
+from django.db.models import Sum
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt
@@ -20,14 +23,89 @@ from registrations.models import Registration
 
 from .emails import send_paid_emails, send_payment_receipt
 from .forms import DonationForm
-from .models import Payment, Receipt
+from .models import DuesPeriod, Payment, Receipt
 from .stripe_checkout import create_donation_session, create_dues_session
 
 logger = logging.getLogger(__name__)
+User = get_user_model()
 
 
 def _is_staff(user):
     return user.is_authenticated and user.is_staff
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_dashboard(request):
+    """Per-period dues summary + per-role breakdown + multi-period totals."""
+    obligated_roles = list(settings.DUES_OBLIGATED_ROLES)
+    obligated_count = User.objects.filter(
+        is_active=True, profile__role__in=obligated_roles,
+    ).count()
+
+    periods = list(DuesPeriod.objects.order_by("-start_date"))
+    period_stats = []
+    for p in periods:
+        paid_payments = p.payments.filter(status=Payment.Status.SUCCEEDED)
+        paid_count = paid_payments.values("user").distinct().count()
+        total = paid_payments.aggregate(s=Sum("amount"))["s"] or Decimal("0")
+        period_stats.append({
+            "period": p,
+            "paid_count": paid_count,
+            "unpaid_count": max(obligated_count - paid_count, 0),
+            "total_collected": total,
+        })
+
+    current = DuesPeriod.current()
+    role_breakdown = []
+    unpaid_users = []
+    if current is not None:
+        paid_user_ids = set(
+            current.payments
+            .filter(status=Payment.Status.SUCCEEDED)
+            .values_list("user_id", flat=True)
+        )
+        for role in obligated_roles:
+            users_in_role = User.objects.filter(
+                is_active=True, profile__role=role,
+            )
+            total_in_role = users_in_role.count()
+            paid_in_role = users_in_role.filter(id__in=paid_user_ids).count()
+            role_breakdown.append({
+                "role": role,
+                "total": total_in_role,
+                "paid": paid_in_role,
+                "unpaid": total_in_role - paid_in_role,
+            })
+        unpaid_users = list(
+            User.objects.filter(
+                is_active=True, profile__role__in=obligated_roles,
+            )
+            .exclude(id__in=paid_user_ids)
+            .select_related("profile")
+            .order_by("last_name", "first_name", "email")
+        )
+
+    # JSON payloads for Chart.js.
+    chart_periods = {
+        "labels": [s["period"].name for s in reversed(period_stats)],
+        "totals": [float(s["total_collected"]) for s in reversed(period_stats)],
+    }
+    chart_roles = {
+        "labels": [r["role"] for r in role_breakdown],
+        "paid": [r["paid"] for r in role_breakdown],
+        "unpaid": [r["unpaid"] for r in role_breakdown],
+    }
+
+    return render(request, "payments/treasurer.html", {
+        "period_stats": period_stats,
+        "current_period": current,
+        "role_breakdown": role_breakdown,
+        "unpaid_users": unpaid_users,
+        "obligated_count": obligated_count,
+        "chart_periods_json": json.dumps(chart_periods),
+        "chart_roles_json": json.dumps(chart_roles),
+    })
 
 
 @csrf_exempt
@@ -124,8 +202,27 @@ def _handle_checkout_completed(session) -> None:
 
 @login_required
 def dues_pay(request):
-    """Membership dues entry point (REG-12). Fixed annual amount."""
-    amount = Decimal(settings.DUES_ANNUAL_AMOUNT)
+    """Membership dues entry point (REG-12) — uses the current DuesPeriod.
+
+    Falls back to the ``DUES_ANNUAL_AMOUNT`` setting if no period covers
+    today (which shouldn't happen in production once the bootstrap data
+    migration + auto-rollover command are running).
+    """
+    from .dues import user_paid_for_period
+    from .models import DuesPeriod
+
+    period = DuesPeriod.current()
+
+    # Already paid for the current cycle — show a friendly status panel.
+    if period is not None and user_paid_for_period(request.user, period):
+        return render(
+            request,
+            "payments/dues_already_paid.html",
+            {"period": period},
+        )
+
+    amount = period.dues_amount if period else Decimal(str(settings.DUES_ANNUAL_AMOUNT))
+
     if request.method == "POST":
         payment = Payment.objects.create(
             payment_type=Payment.Type.DUES,
@@ -133,10 +230,15 @@ def dues_pay(request):
             amount=amount,
             method=Payment.Method.STRIPE,
             status=Payment.Status.PENDING,
+            dues_period=period,
         )
         session = create_dues_session(payment)
         return redirect(session.url)
-    return render(request, "payments/dues.html", {"amount": amount})
+    return render(
+        request,
+        "payments/dues.html",
+        {"amount": amount, "period": period},
+    )
 
 
 def donate(request):

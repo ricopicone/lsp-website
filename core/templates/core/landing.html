@@ -11,6 +11,15 @@
   <a href="https://lacanschool.org/">lacanschool.org</a>.
 </p>
 
+{% if dues_period_unpaid %}
+<p style="padding: 0.5rem 0.75rem; background: #fff4d6;
+          border-left: 3px solid #d4a017; border-radius: 4px;">
+  Your <strong>{{ dues_period_unpaid.name }}</strong> dues
+  (${{ dues_period_unpaid.dues_amount }}, due {{ dues_period_unpaid.due_date|date:"M j, Y" }})
+  haven't been paid yet — <a href="{% url 'dues' %}">pay now</a>.
+</p>
+{% endif %}
+
 {% if user_registrations_url %}
 <p style="padding: 0.5rem 0.75rem; background: #eef;
           border-left: 3px solid #44a; border-radius: 4px;">
@@ -32,6 +41,7 @@
   {% if user.is_staff %}
     <li>
       <a href="/admin/"><strong>Admin</strong></a>
+      · <a href="{% url 'treasurer' %}">Treasurer dashboard</a>
       · <a href="{% url 'payments:transactions_csv' %}">Transactions CSV</a>
     </li>
   {% endif %}

@@ -1,0 +1,395 @@
+"""Tests for the dues lifecycle: periods, reminders, treasurer dashboard."""
+
+from __future__ import annotations
+
+from datetime import date, timedelta
+from decimal import Decimal
+from io import StringIO
+from unittest.mock import MagicMock, patch
+
+import pytest
+from django.core import mail
+from django.core.management import call_command
+from django.test import override_settings
+from django.urls import reverse
+from django.utils import timezone
+
+from accounts.models import Profile, User
+from payments.dues import is_dues_obligated, user_paid_for_period
+from payments.models import DuesPeriod, DuesReminder, Payment
+
+
+@pytest.fixture
+def current_period(db):
+    """Return the DuesPeriod containing today.
+
+    The seed migration creates the AY containing today, so this should
+    always exist. If the seed picked a future-only period (e.g. tests run
+    just before Sep 1), synthesize one covering today.
+    """
+    period = DuesPeriod.current()
+    if period is not None:
+        return period
+    today = timezone.now().date()
+    return DuesPeriod.objects.create(
+        name="Test AY",
+        slug="test-ay",
+        start_date=today - timedelta(days=60),
+        due_date=today - timedelta(days=30),
+        end_date=today + timedelta(days=300),
+        dues_amount=Decimal("100.00"),
+    )
+
+
+@pytest.fixture
+def member(db):
+    u = User.objects.create_user(email="member@example.com")
+    u.profile.role = Profile.Role.MEMBER
+    u.profile.save()
+    return u
+
+
+@pytest.fixture
+def external_user(db):
+    u = User.objects.create_user(email="external@example.com")
+    u.profile.role = Profile.Role.EXTERNAL
+    u.profile.save()
+    return u
+
+
+@pytest.fixture(autouse=True)
+def stub_stripe(monkeypatch):
+    monkeypatch.setattr(
+        "payments.views.create_dues_session",
+        MagicMock(return_value=MagicMock(id="cs_test", url="https://stripe.test/dues")),
+    )
+
+
+# ---- DuesPeriod.current() ---------------------------------------------
+
+
+@pytest.mark.django_db
+def test_current_finds_period_containing_today(current_period):
+    inside = current_period.start_date + timedelta(days=30)
+    assert DuesPeriod.current(on_date=inside) == current_period
+
+
+@pytest.mark.django_db
+def test_current_returns_none_when_no_period_covers_date():
+    long_after = date(2030, 1, 1)
+    assert DuesPeriod.current(on_date=long_after) is None
+
+
+# ---- is_dues_obligated + user_paid_for_period -------------------------
+
+
+def test_member_role_is_obligated(member):
+    assert is_dues_obligated(member) is True
+
+
+def test_external_role_not_obligated(external_user):
+    assert is_dues_obligated(external_user) is False
+
+
+def test_anonymous_not_obligated():
+    from django.contrib.auth.models import AnonymousUser
+    assert is_dues_obligated(AnonymousUser()) is False
+
+
+@pytest.mark.django_db
+def test_user_paid_for_period_false_when_no_payment(member, current_period):
+    assert user_paid_for_period(member, current_period) is False
+
+
+@pytest.mark.django_db
+def test_user_paid_for_period_true_after_succeeded_payment(member, current_period):
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=member,
+        amount=current_period.dues_amount,
+        status=Payment.Status.SUCCEEDED,
+        dues_period=current_period,
+    )
+    assert user_paid_for_period(member, current_period) is True
+
+
+@pytest.mark.django_db
+def test_user_paid_for_period_false_for_pending_payment(member, current_period):
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=member,
+        amount=current_period.dues_amount,
+        status=Payment.Status.PENDING,
+        dues_period=current_period,
+    )
+    assert user_paid_for_period(member, current_period) is False
+
+
+# ---- /dues/ view uses current period ----------------------------------
+
+
+def test_dues_page_shows_current_period_amount_and_due_date(
+    client, member, current_period,
+):
+    client.force_login(member)
+    response = client.get(reverse("dues"))
+    assert response.status_code == 200
+    assert bytes(current_period.name, "utf-8") in response.content
+    assert b"100.00" in response.content
+
+
+def test_dues_post_attaches_period_to_payment(client, member, current_period):
+    client.force_login(member)
+    client.post(reverse("dues"))
+    payment = Payment.objects.get(payment_type=Payment.Type.DUES, user=member)
+    assert payment.dues_period == current_period
+
+
+def test_dues_page_shows_already_paid_when_user_has_succeeded_payment(
+    client, member, current_period,
+):
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=member,
+        amount=current_period.dues_amount,
+        status=Payment.Status.SUCCEEDED,
+        dues_period=current_period,
+    )
+    client.force_login(member)
+    response = client.get(reverse("dues"))
+    assert response.status_code == 200
+    assert b"paid up" in response.content
+    # No Stripe redirect — confirm button isn't on the already-paid page.
+    assert b"Continue to payment" not in response.content
+
+
+# ---- Landing banner ---------------------------------------------------
+
+
+def test_landing_shows_banner_for_obligated_unpaid_member(
+    client, member, current_period,
+):
+    client.force_login(member)
+    response = client.get(reverse("core:landing"))
+    assert b"dues" in response.content.lower()
+    assert b"pay now" in response.content.lower()
+
+
+def test_landing_no_banner_for_external_user(client, external_user, current_period):
+    client.force_login(external_user)
+    response = client.get(reverse("core:landing"))
+    assert b"haven&#x27;t been paid" not in response.content
+    assert b"pay now" not in response.content.lower()
+
+
+def test_landing_no_banner_when_paid(client, member, current_period):
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=member,
+        amount=current_period.dues_amount,
+        status=Payment.Status.SUCCEEDED,
+        dues_period=current_period,
+    )
+    client.force_login(member)
+    response = client.get(reverse("core:landing"))
+    assert b"pay now" not in response.content.lower()
+
+
+# ---- send_dues_reminders command --------------------------------------
+
+
+def _set_period_due_in_past(period):
+    """Pretend the period's due date is in the past so reminders fire."""
+    period.due_date = timezone.now().date() - timedelta(days=7)
+    period.save(update_fields=("due_date",))
+
+
+@pytest.mark.django_db
+def test_reminders_skipped_before_due_date(member, current_period):
+    # Make sure due_date is in the future for this test.
+    current_period.due_date = timezone.now().date() + timedelta(days=30)
+    current_period.save()
+    out = StringIO()
+    call_command("send_dues_reminders", stdout=out)
+    assert b"not yet past due" in out.getvalue().encode() or "not yet past due" in out.getvalue()
+    assert len(mail.outbox) == 0
+
+
+@pytest.mark.django_db
+def test_reminders_sent_to_obligated_unpaid_member(member, current_period):
+    _set_period_due_in_past(current_period)
+    out = StringIO()
+    call_command("send_dues_reminders", stdout=out)
+    assert len(mail.outbox) == 1
+    assert mail.outbox[0].to == ["member@example.com"]
+    assert "dues are due" in mail.outbox[0].subject
+    assert DuesReminder.objects.filter(user=member, dues_period=current_period).count() == 1
+
+
+@pytest.mark.django_db
+def test_reminders_skip_user_with_recent_reminder(member, current_period):
+    _set_period_due_in_past(current_period)
+    DuesReminder.objects.create(user=member, dues_period=current_period)
+    call_command("send_dues_reminders", stdout=StringIO())
+    assert len(mail.outbox) == 0
+    # Throttle log unchanged
+    assert DuesReminder.objects.filter(user=member).count() == 1
+
+
+@pytest.mark.django_db
+def test_reminders_skip_paid_user(member, current_period):
+    _set_period_due_in_past(current_period)
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=member,
+        amount=current_period.dues_amount,
+        status=Payment.Status.SUCCEEDED,
+        dues_period=current_period,
+    )
+    call_command("send_dues_reminders", stdout=StringIO())
+    assert len(mail.outbox) == 0
+    assert DuesReminder.objects.filter(user=member).count() == 0
+
+
+@pytest.mark.django_db
+def test_reminders_skip_non_obligated_roles(external_user, current_period):
+    _set_period_due_in_past(current_period)
+    call_command("send_dues_reminders", stdout=StringIO())
+    assert len(mail.outbox) == 0
+
+
+@pytest.mark.django_db
+def test_reminders_dry_run_sends_nothing_and_logs_nothing(member, current_period):
+    _set_period_due_in_past(current_period)
+    call_command("send_dues_reminders", "--dry-run", stdout=StringIO())
+    assert len(mail.outbox) == 0
+    assert DuesReminder.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_reminder_resumes_after_seven_days(member, current_period):
+    """A reminder older than 7 days no longer blocks a fresh send."""
+    _set_period_due_in_past(current_period)
+    old = DuesReminder.objects.create(user=member, dues_period=current_period)
+    DuesReminder.objects.filter(pk=old.pk).update(
+        sent_at=timezone.now() - timedelta(days=8),
+    )
+    call_command("send_dues_reminders", stdout=StringIO())
+    assert len(mail.outbox) == 1
+
+
+# ---- create_dues_period_if_needed command -----------------------------
+
+
+@pytest.mark.django_db
+def test_create_dues_period_noop_when_current_exists(current_period):
+    out = StringIO()
+    before = DuesPeriod.objects.count()
+    call_command("create_dues_period_if_needed", stdout=out)
+    assert DuesPeriod.objects.count() == before
+    assert "Nothing to do" in out.getvalue()
+
+
+@pytest.mark.django_db
+def test_create_dues_period_inherits_amount_from_last(current_period):
+    """When today's after the current period, the next one inherits amount + dates."""
+    later = current_period.end_date + timedelta(days=30)
+    with patch("payments.management.commands.create_dues_period_if_needed.timezone") as tz:
+        tz.now.return_value = MagicMock(date=MagicMock(return_value=later))
+        call_command("create_dues_period_if_needed", stdout=StringIO())
+    new = DuesPeriod.objects.order_by("-start_date").first()
+    assert new.start_date.year == current_period.start_date.year + 1
+    assert new.dues_amount == current_period.dues_amount
+    assert new.start_date.month == 9 and new.start_date.day == 1
+
+
+# ---- Treasurer dashboard ----------------------------------------------
+
+
+@pytest.fixture
+def staff_user(db):
+    u = User.objects.create_user(email="staff@example.com", password="x")
+    u.is_staff = True
+    u.save()
+    return u
+
+
+def test_treasurer_dashboard_anonymous_redirects(client):
+    response = client.get(reverse("treasurer"))
+    assert response.status_code == 302
+
+
+def test_treasurer_dashboard_non_staff_forbidden(client, member):
+    client.force_login(member)
+    response = client.get(reverse("treasurer"))
+    assert response.status_code == 302
+
+
+def test_treasurer_dashboard_renders_for_staff(
+    client, staff_user, current_period, member,
+):
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=member,
+        amount=current_period.dues_amount,
+        status=Payment.Status.SUCCEEDED,
+        dues_period=current_period,
+    )
+    client.force_login(staff_user)
+    response = client.get(reverse("treasurer"))
+    assert response.status_code == 200
+    assert b"Treasurer dashboard" in response.content
+    assert bytes(current_period.name, "utf-8") in response.content
+    # Total collected reflects the one paid Payment.
+    assert b"$100.00" in response.content
+
+
+def test_treasurer_dashboard_lists_unpaid_obligated_members(
+    client, staff_user, current_period, member,
+):
+    """member is obligated but hasn't paid → appears in unpaid section."""
+    client.force_login(staff_user)
+    response = client.get(reverse("treasurer"))
+    assert b"member@example.com" in response.content
+
+
+def test_treasurer_dashboard_excludes_paid_from_unpaid_list(
+    client, staff_user, current_period, member,
+):
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=member,
+        amount=current_period.dues_amount,
+        status=Payment.Status.SUCCEEDED,
+        dues_period=current_period,
+    )
+    client.force_login(staff_user)
+    response = client.get(reverse("treasurer"))
+    # member is the only obligated user; once paid, they don't appear in
+    # the unpaid list (which the template hides entirely when empty).
+    assert b"member@example.com" not in response.content
+    assert b"Unpaid members" not in response.content
+
+
+def test_treasurer_dashboard_excludes_external_users_from_obligated_count(
+    client, staff_user, current_period, external_user,
+):
+    client.force_login(staff_user)
+    response = client.get(reverse("treasurer"))
+    # External user shouldn't appear in unpaid list.
+    assert b"external@example.com" not in response.content
+
+
+@override_settings(DUES_OBLIGATED_ROLES=["member"])
+def test_treasurer_dashboard_respects_obligated_roles_setting(
+    client, staff_user, current_period, member, external_user,
+):
+    """With DUES_OBLIGATED_ROLES=[member], only members appear as obligated."""
+    # Add a candidate user — should not be obligated under this override.
+    candidate = User.objects.create_user(email="cand@example.com")
+    candidate.profile.role = Profile.Role.CANDIDATE
+    candidate.profile.save()
+    client.force_login(staff_user)
+    response = client.get(reverse("treasurer"))
+    assert b"member@example.com" in response.content
+    assert b"cand@example.com" not in response.content

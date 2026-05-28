@@ -6,10 +6,26 @@
   <a href="{% url 'core:landing' %}">← Home</a>
 </p>
 
+{% if period %}
+<p>
+  <strong>{{ period.name }}</strong> annual membership is
+  <strong>${{ amount }}</strong>.
+</p>
+<p class="muted">
+  Due by {{ period.due_date|date:"M j, Y" }}. Period runs
+  {{ period.start_date|date:"M j, Y" }} – {{ period.end_date|date:"M j, Y" }}.
+</p>
+{% else %}
 <p>
   Annual membership in the Lacanian School of Psychoanalysis is
   <strong>${{ amount }}</strong> per year.
 </p>
+<p class="muted">
+  No academic-year cycle is configured at the moment — your payment will be
+  recorded as undated dues. Contact <a href="mailto:website@lacanschool.org">website@lacanschool.org</a>
+  if you're unsure.
+</p>
+{% endif %}
 
 <p class="muted">
   Click <em>Continue to payment</em> to pay securely through Stripe.

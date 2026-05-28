@@ -87,6 +87,21 @@ def send_paid_emails(registration: Registration) -> None:
         send_receipt(paid)
 
 
+def send_dues_reminder(user, period) -> None:
+    """Weekly reminder email to an unpaid dues-obligated user (REG-12)."""
+    subject = f"Reminder: {period.name} dues are due"
+    body = render_to_string(
+        "payments/email/dues_reminder.txt",
+        {
+            "user": user,
+            "period": period,
+            "support_email": settings.SUPPORT_EMAIL,
+            "site_base_url": settings.SITE_BASE_URL,
+        },
+    )
+    _send(subject=subject, body=body, to=[user.email])
+
+
 def send_cancellation_email(registration: Registration, refund=None) -> None:
     """Notify the participant that their registration was cancelled.
 

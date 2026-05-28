@@ -150,7 +150,16 @@ SITE_BASE_URL = env("SITE_BASE_URL", default="http://localhost:8000")
 
 # Annual LSP membership dues (REG-12). Fixed across roles in Phase 1;
 # env-overridable so the amount can change without a deploy.
+# Used as the seed amount for a brand-new DuesPeriod; once a DuesPeriod row
+# exists for the current AY, its ``dues_amount`` is authoritative.
 DUES_ANNUAL_AMOUNT = env("DUES_ANNUAL_AMOUNT", default="100.00")
+
+# Profile.role values that owe annual dues. Defaults exclude prospective
+# applicants and external/non-LSP users.
+DUES_OBLIGATED_ROLES = env.list(
+    "DUES_OBLIGATED_ROLES",
+    default=["pre_candidate", "candidate", "analyst", "member", "student"],
+)
 
 # --- Logging ------------------------------------------------------------
 # Django's default LOGGING only sends to the console when DEBUG=True, so

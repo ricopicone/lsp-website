@@ -25,6 +25,7 @@ urlpatterns = [
     path("events/", include("events.urls")),
     path("dues/", _payment_views.dues_pay, name="dues"),
     path("donate/", _payment_views.donate, name="donate"),
+    path("treasurer/", _payment_views.treasurer_dashboard, name="treasurer"),
     path("payments/", include("payments.urls")),
     path("", include("registrations.urls")),
     path("", include("core.urls")),

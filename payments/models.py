@@ -1,4 +1,4 @@
-"""Payments and receipts (architecture § 5.5)."""
+"""Payments, receipts, and the dues lifecycle (architecture § 5.5, REG-12)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,74 @@ from django.conf import settings
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+
+class DuesPeriod(models.Model):
+    """An academic year's dues cycle (REG-12).
+
+    Determines the amount owed, when it's due, and (via the future
+    ``block_registration_when_unpaid`` flag) whether unpaid obligated
+    members can register for events. Use :meth:`current` to find the
+    period covering today.
+    """
+
+    name = models.CharField(max_length=100, unique=True, help_text="e.g. AY 2026–2027")
+    slug = models.SlugField(max_length=100, unique=True)
+    start_date = models.DateField(help_text="First day of the academic year.")
+    due_date = models.DateField(help_text="Payment due by this date.")
+    end_date = models.DateField(help_text="Last day of the academic year.")
+    dues_amount = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        help_text="Amount owed by each obligated member.",
+    )
+    block_registration_when_unpaid = models.BooleanField(
+        default=False,
+        help_text=(
+            "Future flag — not currently enforced. When True, the registration "
+            "view will refuse event registrations from obligated unpaid users."
+        ),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-start_date",)
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def current(cls, on_date=None):
+        """Return the DuesPeriod containing ``on_date`` (default today), or None."""
+        on = on_date or timezone.now().date()
+        return cls.objects.filter(start_date__lte=on, end_date__gte=on).first()
+
+
+class DuesReminder(models.Model):
+    """One row per reminder email sent to a user for a given DuesPeriod.
+
+    Drives the weekly throttle: the send command skips users with a
+    reminder logged in the last seven days.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="dues_reminders",
+    )
+    dues_period = models.ForeignKey(
+        DuesPeriod,
+        on_delete=models.CASCADE,
+        related_name="reminders",
+    )
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-sent_at",)
+        indexes = [models.Index(fields=("user", "dues_period", "-sent_at"))]
+
+    def __str__(self):
+        return f"{self.user} ← {self.dues_period} @ {self.sent_at.isoformat()}"
 
 
 class Payment(models.Model):
@@ -64,6 +132,14 @@ class Payment(models.Model):
             "Receipt-delivery email for anonymous payments (typically donations "
             "without an account). Falls back to user.email when a user is attached."
         ),
+    )
+    dues_period = models.ForeignKey(
+        DuesPeriod,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payments",
+        help_text="The dues cycle this payment satisfies — set for type=DUES.",
     )
     notes = models.TextField(blank=True, help_text="Staff notes — e.g. for offline payments.")
     created_at = models.DateTimeField(auto_now_add=True)

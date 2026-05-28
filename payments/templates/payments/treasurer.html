@@ -1,0 +1,154 @@
+{% extends "core/base.html" %}
+{% block title %}Treasurer dashboard — LSP{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<h1>Treasurer dashboard</h1>
+<p class="muted">
+  <a href="{% url 'core:landing' %}">← Home</a>
+  · <a href="{% url 'payments:transactions_csv' %}">All transactions CSV</a>
+  · <a href="/admin/payments/payment/">Admin payments</a>
+</p>
+
+{% if current_period %}
+<h2>Current period: {{ current_period.name }}</h2>
+<p>
+  <strong>${{ current_period.dues_amount }}</strong> per member ·
+  due {{ current_period.due_date|date:"M j, Y" }} ·
+  period {{ current_period.start_date|date:"M j, Y" }} – {{ current_period.end_date|date:"M j, Y" }}.
+</p>
+<table>
+  <tr>
+    <th>Obligated members</th>
+    <td>{{ obligated_count }}</td>
+  </tr>
+  {% with cur=period_stats.0 %}
+  <tr><th>Paid</th><td>{{ cur.paid_count }}</td></tr>
+  <tr><th>Unpaid</th><td>{{ cur.unpaid_count }}</td></tr>
+  <tr><th>Total collected</th><td>${{ cur.total_collected }}</td></tr>
+  {% endwith %}
+</table>
+{% else %}
+<p class="muted">No current dues period configured.</p>
+{% endif %}
+
+<h2>Totals collected per period</h2>
+<div style="max-width: 720px;">
+  <canvas id="chart-periods" height="180"></canvas>
+</div>
+
+{% if role_breakdown %}
+<h2>Current period: paid / unpaid by role</h2>
+<div style="max-width: 720px;">
+  <canvas id="chart-roles" height="200"></canvas>
+</div>
+<table style="margin-top: 1rem;">
+  <thead>
+    <tr><th>Role</th><th>Members</th><th>Paid</th><th>Unpaid</th></tr>
+  </thead>
+  <tbody>
+    {% for r in role_breakdown %}
+    <tr>
+      <td>{{ r.role }}</td>
+      <td>{{ r.total }}</td>
+      <td>{{ r.paid }}</td>
+      <td>{{ r.unpaid }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if unpaid_users %}
+<h2>Unpaid members ({{ unpaid_users|length }})</h2>
+<table>
+  <thead>
+    <tr><th>Name</th><th>Email</th><th>Role</th></tr>
+  </thead>
+  <tbody>
+    {% for u in unpaid_users %}
+    <tr>
+      <td>{{ u.first_name }} {{ u.last_name }}</td>
+      <td><a href="mailto:{{ u.email }}">{{ u.email }}</a></td>
+      <td>{{ u.profile.get_role_display }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h2>All periods</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Period</th><th>Due</th><th>Amount</th>
+      <th>Paid</th><th>Unpaid</th><th>Total collected</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in period_stats %}
+    <tr>
+      <td>{{ s.period.name }}</td>
+      <td>{{ s.period.due_date|date:"M j, Y" }}</td>
+      <td>${{ s.period.dues_amount }}</td>
+      <td>{{ s.paid_count }}</td>
+      <td>{{ s.unpaid_count }}</td>
+      <td>${{ s.total_collected }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script id="chart-periods-data" type="application/json">{{ chart_periods_json|safe }}</script>
+<script id="chart-roles-data" type="application/json">{{ chart_roles_json|safe }}</script>
+<script>
+  (function () {
+    var periodsData = JSON.parse(document.getElementById("chart-periods-data").textContent);
+    new Chart(document.getElementById("chart-periods"), {
+      type: "bar",
+      data: {
+        labels: periodsData.labels,
+        datasets: [{
+          label: "Total collected (USD)",
+          data: periodsData.totals,
+          backgroundColor: "rgba(42, 140, 58, 0.55)",
+          borderColor: "rgba(42, 140, 58, 1)",
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true } },
+        plugins: { legend: { display: false } },
+      },
+    });
+
+    var rolesData = JSON.parse(document.getElementById("chart-roles-data").textContent);
+    if (rolesData.labels && rolesData.labels.length) {
+      new Chart(document.getElementById("chart-roles"), {
+        type: "bar",
+        data: {
+          labels: rolesData.labels,
+          datasets: [
+            {
+              label: "Paid",
+              data: rolesData.paid,
+              backgroundColor: "rgba(42, 140, 58, 0.55)",
+            },
+            {
+              label: "Unpaid",
+              data: rolesData.unpaid,
+              backgroundColor: "rgba(212, 160, 23, 0.55)",
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+        },
+      });
+    }
+  })();
+</script>
+{% endblock %}
