@@ -5,6 +5,7 @@ from . import views
 app_name = "core"
 
 urlpatterns = [
+    path("", views.landing, name="landing"),
     path("calendar/", views.calendar_page, name="calendar"),
     path("calendar/events.json", views.calendar_events_json, name="calendar_events"),
 ]

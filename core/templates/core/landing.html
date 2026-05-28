@@ -1,0 +1,52 @@
+{% extends "core/base.html" %}
+{% block title %}Lacanian School of Psychoanalysis — Member services{% endblock %}
+{% block content %}
+<h1>Lacanian School of Psychoanalysis</h1>
+<p class="muted">Member services and event registration.</p>
+
+<p>
+  This site handles registration, membership dues, donations, and event
+  scheduling for the Lacanian School. For the main school site — about,
+  faculty, programs, and resources — visit
+  <a href="https://lacanschool.org/">lacanschool.org</a>.
+</p>
+
+{% if user_registrations_url %}
+<p style="padding: 0.5rem 0.75rem; background: #eef;
+          border-left: 3px solid #44a; border-radius: 4px;">
+  Welcome back. <a href="{{ user_registrations_url }}">View your most recent registration</a>.
+</p>
+{% endif %}
+
+<h2>What you can do here</h2>
+<ul style="line-height: 1.9;">
+  <li><a href="{% url 'events:list' %}"><strong>Upcoming events</strong></a> — seminars and special events</li>
+  <li><a href="{% url 'core:calendar' %}"><strong>Calendar</strong></a> — month view of all sessions</li>
+  <li><a href="/dues/"><strong>Pay membership dues</strong></a> <span class="muted">(coming in M5)</span></li>
+  <li><a href="/donate/"><strong>Donate</strong></a> <span class="muted">(coming in M5)</span></li>
+  {% if user.is_authenticated %}
+    <li><a href="{% url 'logout' %}"><strong>Log out</strong></a> ({{ user.email }})</li>
+  {% else %}
+    <li><a href="{% url 'login' %}"><strong>Log in</strong></a> or <a href="{% url 'signup' %}">sign up</a></li>
+  {% endif %}
+</ul>
+
+{% if upcoming_events %}
+<h2>Coming up</h2>
+<ul style="list-style: none; padding: 0;">
+  {% for e in upcoming_events %}
+  <li style="margin: 0.5rem 0;">
+    <a href="{% url 'events:detail' e.slug %}"><strong>{{ e.title }}</strong></a>
+    <span class="muted">
+      · {{ e.start_date|date:"M j" }}{% if e.end_date != e.start_date %} – {{ e.end_date|date:"M j, Y" }}{% else %}, {{ e.end_date|date:"Y" }}{% endif %}
+      · {{ e.get_format_display }}
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<p class="muted" style="margin-top: 2rem; font-size: 0.85rem;">
+  Questions? <a href="mailto:website@lacanschool.org">website@lacanschool.org</a>
+</p>
+{% endblock %}

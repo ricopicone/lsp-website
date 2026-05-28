@@ -5,6 +5,7 @@ from . import views
 app_name = "events"
 
 urlpatterns = [
+    path("", views.event_list, name="list"),
     path("<slug:slug>/", views.event_detail, name="detail"),
     path("<slug:slug>/edit/", views.event_edit, name="edit"),
     path("<slug:slug>/codes/", views.event_generate_code, name="generate_code"),

@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 
 from .forms import EventDescriptionForm, PricingCodeForm
 from .models import Event, PricingCode
@@ -14,6 +15,17 @@ from .permissions import can_edit_event
 
 def _faculty_view_url(event: Event) -> str:
     return reverse("events:detail", args=[event.slug]) + "?view=faculty"
+
+
+def event_list(request):
+    """Public chronological list of upcoming published events (PROG-1)."""
+    today = timezone.now().date()
+    events = (
+        Event.objects.filter(published=True, end_date__gte=today)
+        .order_by("start_date", "title")
+        .prefetch_related("faculty")
+    )
+    return render(request, "events/event_list.html", {"events": events})
 
 
 def event_detail(request, slug: str):
