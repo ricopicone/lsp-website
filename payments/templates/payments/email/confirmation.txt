@@ -1,13 +1,16 @@
 {{ registration.user.first_name|default:"Hello" }},
 
 You're registered for "{{ registration.event.title }}".
-
+{% if is_comp %}
+This is a complimentary registration — no payment is needed. The School
+covered the fee on your behalf.
+{% endif %}
 Tier:            {{ registration.price_tier.get_audience_display }}
 Amount:          ${{ registration.quoted_amount }}
 Status:          {{ registration.get_status_display }}
 Event runs:      {{ registration.event.start_date|date:"M j, Y" }} – {{ registration.event.end_date|date:"M j, Y" }}
 
-{% if registration.status == "paid" and registration.event.access_info %}Access details:
+{% if has_access and registration.event.access_info %}Access details:
 {{ registration.event.access_info }}
 
 {% endif %}Questions or anything wrong? Reply to this email — it goes to {{ support_email }}.

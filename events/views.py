@@ -68,8 +68,14 @@ def event_detail(request, slug: str):
             .order_by("-created_at")
             .first()
         )
+    # PAID and COMPED both grant access — comp means the fee was waived,
+    # not that they're excluded.
     has_paid_registration = bool(
-        user_registration and user_registration.status == Registration.Status.PAID
+        user_registration
+        and user_registration.status in (
+            Registration.Status.PAID,
+            Registration.Status.COMPED,
+        )
     )
 
     context = {

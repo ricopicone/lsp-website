@@ -1,4 +1,7 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.utils import timezone
+
+from payments.emails import send_registration_confirmation
 
 from .models import Registration
 
@@ -24,3 +27,35 @@ class RegistrationAdmin(admin.ModelAdmin):
     filter_horizontal = ("sessions",)
     readonly_fields = ("created_at",)
     date_hierarchy = "created_at"
+    actions = ("comp_selected_registrations",)
+
+    @admin.action(description="Comp selected registrations (mark COMPED + email)")
+    def comp_selected_registrations(self, request, queryset):
+        """Comp registrations not already paid/comped/cancelled/refunded (REG-14)."""
+        compable = queryset.filter(status=Registration.Status.AWAITING_PAYMENT)
+        skipped = queryset.exclude(
+            status=Registration.Status.AWAITING_PAYMENT,
+        ).count()
+        note_line = (
+            f"\n[{timezone.now().date().isoformat()}] Comped by "
+            f"{request.user.email} via admin."
+        )
+        succeeded = 0
+        failed = 0
+        for reg in compable:
+            reg.status = Registration.Status.COMPED
+            reg.staff_notes = (reg.staff_notes or "") + note_line
+            reg.save(update_fields=("status", "staff_notes"))
+            try:
+                send_registration_confirmation(reg)
+            except Exception:
+                failed += 1
+            succeeded += 1
+        msg = f"Comped {succeeded} registration(s)."
+        if skipped:
+            msg += (
+                f" Skipped {skipped} that weren't in 'awaiting payment'."
+            )
+        if failed:
+            msg += f" Email failed for {failed} (status updated regardless)."
+        self.message_user(request, msg, level=messages.SUCCESS)

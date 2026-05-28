@@ -145,6 +145,21 @@ Done (see `git log` for specifics):
 - Transactions CSV at `/payments/transactions.csv` (REG-15, staff gated;
   filters: type, since, until). Linked from landing for staff.
 - Milestone 5 complete.
+- Dues lifecycle — `DuesPeriod` (academic year), `Payment.dues_period`,
+  auto-rollover + weekly reminders via systemd timer
+  (`lsp-dues-cron.timer`), landing-page banner for obligated unpaid
+  members, treasurer dashboard at `/treasurer/` with Chart.js
+  (per-period totals, per-role breakdown, unpaid list).
+- Manual-override admin actions (REG-14) — *Comp selected registrations*
+  on Registration admin, *Apply payment success* on Payment admin
+  (drives the same complete_payment() helper the Stripe webhook uses).
+- Confirmation email + event page now grant access_info for both PAID
+  and COMPED statuses.
+- Security review: `manage.py check --deploy` clean against
+  `config.settings.production`; production.py has the full HTTPS / HSTS
+  / cookie-secure / proxy-SSL-header / CSP-adjacent set.
+- Milestone 6 substantially complete (REG-14 + REG-16 + security pass;
+  broader fuzz/coverage sweep is the remaining piece).
 - `payments` app — `Payment` (with `stripe_checkout_session_id`
   unique-when-set as the webhook idempotency key) and `Receipt`
   (sequential `LSP-YYYY-NNNN`). Django admin.
@@ -168,9 +183,24 @@ Done (see `git log` for specifics):
   logs even with DEBUG=False; webhook handler explicitly logs exceptions.
 - Milestone 4 complete.
 
-Milestones 6–8 then cover manual overrides + security review (M6 —
-REG-16 already done early in M4/M5), production deploy + Swales &amp;
-Hook dry-run (M7), and opening fall registration (M8).
+Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
+(M7 — we're already on prod, so M7 is mostly data load + dry run) and
+opening fall registration (M8).
+
+## Manual-override workflow (staff, REG-14)
+
+The design principle is *space for the singular* (principle 4.1) — every
+automated path has a staff alternative through the Django admin.
+
+| Need | Admin path |
+|---|---|
+| **Comp a registration** (no payment, full access) | Registration list → select rows → action *Comp selected registrations* → status flips to COMPED, comp note added to `staff_notes`, confirmation email sent with access info. Only works for `awaiting_payment` rows. |
+| **Record an offline payment** (cash, check, alt arrangement) | Create a `Payment` (type=REGISTRATION/DUES/DONATION, method=OFFLINE, status=PENDING, registration optional, notes documenting the arrangement). Then select the row → action *Apply payment success* — runs the same side-effect chain as the Stripe webhook: marks SUCCEEDED, flips Registration to PAID, generates Receipt, sends emails. Idempotent. |
+| **Adjust a quoted amount** | Edit `Registration.quoted_amount` directly in admin. No side-effects fire; staff is on the hook for any related downstream emails/refunds. |
+| **Issue a refund / cancel** | For paid registrations, use the public "Cancel registration" button on the confirmation page (self-service Stripe refund). For staff-only flows, mark Registration status REFUNDED in admin and process the refund in Stripe Dashboard manually. |
+
+All admin actions log their effect to `staff_notes` (where applicable) so
+the override trail is auditable.
 
 ## Deploying changes
 

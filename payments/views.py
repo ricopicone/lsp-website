@@ -21,9 +21,9 @@ from django.views.decorators.http import require_POST
 
 from registrations.models import Registration
 
-from .emails import send_paid_emails, send_payment_receipt
 from .forms import DonationForm
-from .models import DuesPeriod, Payment, Receipt
+from .models import DuesPeriod, Payment
+from .operations import complete_payment
 from .stripe_checkout import create_donation_session, create_dues_session
 
 logger = logging.getLogger(__name__)
@@ -167,37 +167,15 @@ def _handle_checkout_completed(session) -> None:
         if payment.status == Payment.Status.SUCCEEDED:
             return  # already processed — idempotent no-op
 
-        payment.mark_succeeded()
+        # Stripe-specific bookkeeping — payment_intent goes onto the row
+        # before we hand off to the generic success machinery.
         intent_id = session["payment_intent"] if "payment_intent" in session else None
         if intent_id:
             payment.stripe_payment_intent_id = intent_id
             payment.save(update_fields=("stripe_payment_intent_id",))
 
-        if payment.registration_id:
-            Registration.objects.filter(
-                pk=payment.registration_id
-            ).update(status=Registration.Status.PAID)
-
-        if not hasattr(payment, "receipt"):
-            Receipt.create_for_payment(payment)
-
-    # Send emails *after* the transaction commits so we never report success
-    # via email for a write that rolls back. Email failures (e.g. SES sandbox
-    # rejecting an unverified recipient) must NOT roll back the DB updates or
-    # cause Stripe to retry — log and move on.
-    try:
-        if payment.registration_id:
-            payment.registration.refresh_from_db()
-            send_paid_emails(payment.registration)
-        else:
-            # Dues / donation — receipt is the only email these get.
-            send_payment_receipt(payment)
-    except Exception:
-        logger.exception(
-            "Failed to send post-payment emails for payment %s; "
-            "DB updates retained.",
-            payment.id,
-        )
+    # Run the shared success side-effects (idempotent across paths).
+    complete_payment(payment)
 
 
 @login_required

@@ -31,12 +31,17 @@ def _send(*, subject: str, body: str, to: list[str]) -> None:
 
 
 def send_registration_confirmation(registration: Registration) -> None:
-    """Send the confirmation email (REG-9), releasing access_info if PAID (REG-8)."""
+    """Send the confirmation email (REG-9), releasing access_info if PAID/COMPED."""
     subject = f"Registration confirmed: {registration.event.title}"
     body = render_to_string(
         "payments/email/confirmation.txt",
         {
             "registration": registration,
+            "is_comp": registration.status == Registration.Status.COMPED,
+            "has_access": registration.status in (
+                Registration.Status.PAID,
+                Registration.Status.COMPED,
+            ),
             "support_email": settings.SUPPORT_EMAIL,
             "site_base_url": settings.SITE_BASE_URL,
         },

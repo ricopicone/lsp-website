@@ -1,6 +1,7 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 
 from .models import DuesPeriod, DuesReminder, Payment, Receipt
+from .operations import complete_payment
 
 
 class ReceiptInline(admin.StackedInline):
@@ -34,6 +35,23 @@ class PaymentAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "paid_at")
     date_hierarchy = "created_at"
     inlines = [ReceiptInline]
+    actions = ("apply_payment_success",)
+
+    @admin.action(description="Apply payment success (offline / manual — REG-14)")
+    def apply_payment_success(self, request, queryset):
+        """For PENDING payments (typically OFFLINE), run the same side-effect
+        chain the Stripe webhook does: mark SUCCEEDED, flip Registration to
+        PAID, create Receipt, send emails. Idempotent."""
+        pending = queryset.filter(status=Payment.Status.PENDING)
+        skipped = queryset.exclude(status=Payment.Status.PENDING).count()
+        succeeded = 0
+        for payment in pending:
+            complete_payment(payment)
+            succeeded += 1
+        msg = f"Marked {succeeded} payment(s) succeeded (with receipt + email)."
+        if skipped:
+            msg += f" Skipped {skipped} not in pending state."
+        self.message_user(request, msg, level=messages.SUCCESS)
 
 
 @admin.register(Receipt)
