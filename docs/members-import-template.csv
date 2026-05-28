@@ -1,0 +1,6 @@
+email,first_name,last_name,role,tuition_paying,is_faculty,notes
+member.one@example.com,Member,One,member,true,false,
+candidate.two@example.com,Candidate,Two,candidate,false,false,
+analyst.three@example.com,Analyst,Three,analyst,false,true,
+student.four@example.com,Student,Four,student,false,false,
+external.five@example.com,External,Five,external,false,false,Not an LSP member
