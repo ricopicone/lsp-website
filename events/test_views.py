@@ -144,3 +144,114 @@ def test_access_info_hidden_from_anonymous(client, published_event):
     published_event.save()
     response = client.get(reverse("events:detail", args=["lacan-seminar-xi"]))
     assert b"SECRETZOOM" not in response.content
+
+
+# ---- Speakers + Faculty bios + single-session collapse ----------------
+
+
+@pytest.fixture
+def special_event(db):
+    from events.models import Audience, PriceTier, Session
+    e = Event.objects.create(
+        title="Working with Masochism", slug="working-with-masochism",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 6), end_date=date(2026, 9, 6),
+        format=Event.Format.ONLINE,
+        published=True, status=Event.Status.OPEN,
+    )
+    Session.objects.create(
+        event=e, sequence=1, title="Lecture",
+        start_at=datetime(2026, 9, 6, 16, 30, tzinfo=dt_timezone.utc),
+        end_at=datetime(2026, 9, 6, 19, 30, tzinfo=dt_timezone.utc),
+        location="Online (Zoom)",
+    )
+    PriceTier.objects.create(
+        event=e, audience=Audience.ALL, base_amount=Decimal("100.00")
+    )
+    return e
+
+
+def test_special_event_collapses_session_into_event_details(client, special_event):
+    response = client.get(reverse("events:detail", args=[special_event.slug]))
+    assert b"Event details" in response.content
+    assert b"Sessions" not in response.content
+
+
+def test_seminar_keeps_sessions_table(client, published_event):
+    """The existing published_event fixture is a seminar with a session."""
+    response = client.get(reverse("events:detail", args=["lacan-seminar-xi"]))
+    assert b"Sessions" in response.content
+
+
+def test_speaker_section_renders_speaker_bios_on_special_event(
+    client, special_event,
+):
+    """For a special_event, the people heading is 'Speakers' and bios render."""
+    from events.models import Speaker
+    s = Speaker.objects.create(
+        name="Stephanie Swales", slug="stephanie-swales",
+        bio="Long bio about Swales' clinical work.",
+        affiliation="Dublin City University",
+    )
+    special_event.speakers.add(s)
+    response = client.get(reverse("events:detail", args=[special_event.slug]))
+    assert b"Speakers" in response.content
+    assert b"Stephanie Swales" in response.content
+    assert b"Dublin City University" in response.content
+    assert b"Long bio about Swales" in response.content
+
+
+@pytest.mark.django_db
+def test_faculty_section_label_for_seminar(client, published_event):
+    """Seminars use 'Faculty' wording when faculty are attached."""
+    user = User.objects.create_user(email="seminar-fac@example.com",
+                                    first_name="Jane", last_name="Doe")
+    user.profile.is_faculty = True
+    user.profile.bio = "Jane has a teaching bio."
+    user.profile.save()
+    published_event.faculty.add(user)
+    response = client.get(reverse("events:detail", args=["lacan-seminar-xi"]))
+    body = response.content
+    assert b"Faculty" in body
+    assert b"teaching bio" in body
+
+
+def test_speaker_section_hides_non_public_speakers(client, special_event):
+    from events.models import Speaker
+    Speaker.objects.create(
+        name="Hidden Speaker", slug="hidden",
+        bio="Should not appear.",
+        public=False,
+    )
+    s_visible = Speaker.objects.create(
+        name="Visible Speaker", slug="visible",
+        bio="Visible to all.",
+        public=True,
+    )
+    special_event.speakers.add(s_visible)
+    # Add hidden speaker to event too
+    hidden = Speaker.objects.get(slug="hidden")
+    special_event.speakers.add(hidden)
+    response = client.get(reverse("events:detail", args=[special_event.slug]))
+    assert b"Visible Speaker" in response.content
+    assert b"Hidden Speaker" not in response.content
+    assert b"Should not appear" not in response.content
+
+
+@pytest.mark.django_db
+def test_guest_label_replaces_external_in_pricing(client):
+    """Audience.EXTERNAL renders as 'Guest' on the public event page."""
+    from events.models import Audience, PriceTier
+    e = Event.objects.create(
+        title="Guest test", slug="guest-test",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 6), end_date=date(2026, 9, 6),
+        published=True, status=Event.Status.OPEN,
+    )
+    PriceTier.objects.create(
+        event=e, audience=Audience.EXTERNAL, base_amount=Decimal("50.00")
+    )
+    response = client.get(reverse("events:detail", args=[e.slug]))
+    assert b"Guest" in response.content
+    # The old wording should be gone.
+    assert b"External / non-LSP" not in response.content

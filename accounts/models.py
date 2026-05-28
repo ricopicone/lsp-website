@@ -39,7 +39,7 @@ class Profile(models.Model):
         CANDIDATE = "candidate", _("Candidate")
         ANALYST = "analyst", _("Analyst")
         MEMBER = "member", _("Member")
-        EXTERNAL = "external", _("External / non-LSP")
+        EXTERNAL = "external", _("Guest")
 
     class BillingMode(models.TextChoices):
         PER_CLASS = "per_class", _("Per class")

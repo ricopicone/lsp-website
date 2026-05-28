@@ -32,11 +32,28 @@
   </p>
   {% endif %}
 
-  {% if event.faculty.all %}
-  <p>
-    <strong>Faculty:</strong>
-    {% for f in event.faculty.all %}{{ f.first_name }} {{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
-  </p>
+  {% if event.faculty.all or event.speakers.all %}
+  <section>
+    <h2>{% if event.event_type == "seminar" %}Faculty{% else %}Speakers{% endif %}</h2>
+    {% for f in event.faculty.all %}
+      <article style="margin-bottom: 1.25rem;">
+        <h3 style="margin-bottom: 0.25rem;">{{ f.first_name }} {{ f.last_name }}</h3>
+        {% if f.profile.bio %}<p>{{ f.profile.bio|linebreaksbr }}</p>{% endif %}
+      </article>
+    {% endfor %}
+    {% for s in event.speakers.all %}
+      {% if s.public %}
+      <article style="margin-bottom: 1.25rem;">
+        <h3 style="margin-bottom: 0.25rem;">
+          {{ s.name }}{% if s.affiliation %}
+            <span class="muted" style="font-weight: normal; font-size: 0.9em;">— {{ s.affiliation }}</span>
+          {% endif %}
+        </h3>
+        {% if s.bio %}<p>{{ s.bio|linebreaksbr }}</p>{% endif %}
+      </article>
+      {% endif %}
+    {% endfor %}
+  </section>
   {% endif %}
 
   {% if event.description %}
@@ -54,24 +71,38 @@
   {% endif %}
 
   {% if sessions %}
-  <section>
-    <h2>Sessions</h2>
-    <table>
-      <thead>
-        <tr><th>#</th><th>Date</th><th>Time</th><th>Location</th></tr>
-      </thead>
-      <tbody>
-        {% for s in sessions %}
-        <tr>
-          <td>{{ s.sequence }}</td>
-          <td>{{ s.start_at|date:"D M j, Y" }}</td>
-          <td>{{ s.start_at|time:"g:i A" }}–{{ s.end_at|time:"g:i A" }}</td>
-          <td>{{ s.location }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </section>
+    {% if event.event_type == "seminar" %}
+      <section>
+        <h2>Sessions</h2>
+        <table>
+          <thead>
+            <tr><th>#</th><th>Date</th><th>Time</th><th>Location</th></tr>
+          </thead>
+          <tbody>
+            {% for s in sessions %}
+            <tr>
+              <td>{{ s.sequence }}</td>
+              <td>{{ s.start_at|date:"D M j, Y" }}</td>
+              <td>{{ s.start_at|time:"g:i A" }}–{{ s.end_at|time:"g:i A" }}</td>
+              <td>{{ s.location }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    {% else %}
+      {# Special events: collapse the single session into "Event details" #}
+      {% with first=sessions.0 %}
+      <section>
+        <h2>Event details</h2>
+        <table>
+          <tr><th>Date</th><td>{{ first.start_at|date:"l, F j, Y" }}</td></tr>
+          <tr><th>Time</th><td>{{ first.start_at|time:"g:i A" }}–{{ first.end_at|time:"g:i A T" }}</td></tr>
+          {% if first.location %}<tr><th>Location</th><td>{{ first.location }}</td></tr>{% endif %}
+        </table>
+      </section>
+      {% endwith %}
+    {% endif %}
   {% endif %}
 
   {% if price_tiers %}

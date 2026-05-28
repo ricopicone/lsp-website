@@ -28,6 +28,43 @@ def generate_pricing_code() -> str:
     return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(8))
 
 
+class Speaker(models.Model):
+    """A presenter on an event — typically external to LSP, no User account.
+
+    Use this for guest speakers, visiting faculty from other institutions,
+    or anyone who shouldn't have an LSP login. For LSP-affiliated faculty
+    who teach a seminar, use ``Event.faculty`` (M2M to User) instead so
+    they can edit the event and see the roster.
+    """
+
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200, unique=True)
+    bio = models.TextField(blank=True)
+    affiliation = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="e.g. 'Dublin City University'.",
+    )
+    headshot = models.ImageField(upload_to="speakers/%Y/", blank=True, null=True)
+    email = models.EmailField(
+        blank=True,
+        help_text="Contact email — not a login. Optional, staff-visible.",
+    )
+    public = models.BooleanField(
+        default=True,
+        help_text="Whether to show this speaker on public event pages.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self):
+        if self.affiliation:
+            return f"{self.name} ({self.affiliation})"
+        return self.name
+
+
 class Event(models.Model):
     class Type(models.TextChoices):
         SEMINAR = "seminar", _("Seminar")
@@ -59,7 +96,16 @@ class Event(models.Model):
         related_name="events_taught",
         blank=True,
         limit_choices_to={"profile__is_faculty": True},
-        help_text="Instructors. Restricted to users marked is_faculty (USR-6).",
+        help_text="LSP-affiliated instructors (User accounts). Restricted to is_faculty (USR-6).",
+    )
+    speakers = models.ManyToManyField(
+        "events.Speaker",
+        related_name="events",
+        blank=True,
+        help_text=(
+            "External presenters with no LSP account. Use for guest speakers; "
+            "for LSP faculty teaching this event, use the ``faculty`` field instead."
+        ),
     )
     start_date = models.DateField()
     end_date = models.DateField()
@@ -141,7 +187,7 @@ class Audience(models.TextChoices):
     CANDIDATE = "candidate", _("Candidate")
     ANALYST = "analyst", _("Analyst")
     MEMBER = "member", _("Member")
-    EXTERNAL = "external", _("External / non-LSP")
+    EXTERNAL = "external", _("Guest")
 
 
 class PriceTier(models.Model):

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Event, PriceTier, PricingCode, Session
+from .models import Event, PriceTier, PricingCode, Session, Speaker
 
 
 class SessionInline(admin.TabularInline):
@@ -38,7 +38,7 @@ class EventAdmin(admin.ModelAdmin):
     list_filter = ("event_type", "status", "published", "format")
     search_fields = ("title", "slug", "description")
     prepopulated_fields = {"slug": ("title",)}
-    filter_horizontal = ("faculty",)
+    filter_horizontal = ("faculty", "speakers")
     inlines = [SessionInline, PriceTierInline]
 
     @admin.display(description="Sessions")
@@ -68,6 +68,14 @@ class PriceTierAdmin(admin.ModelAdmin):
     list_filter = ("event", "audience", "sliding_scale", "covered_by_tuition")
     autocomplete_fields = ("event", "session")
     search_fields = ("event__title", "audience")
+
+
+@admin.register(Speaker)
+class SpeakerAdmin(admin.ModelAdmin):
+    list_display = ("name", "affiliation", "email", "public")
+    list_filter = ("public",)
+    search_fields = ("name", "affiliation", "email", "bio")
+    prepopulated_fields = {"slug": ("name",)}
 
 
 @admin.register(PricingCode)
