@@ -3,6 +3,15 @@
 {% block content %}
 <h1>Registration recorded</h1>
 
+{% if request.GET.already %}
+<p style="padding: 0.5rem 0.75rem; background: #fff4d6;
+          border-left: 3px solid #d4a017; border-radius: 4px;">
+  You're already registered for this event — here are the details. To cancel
+  or change anything, reply to your confirmation email or contact the Web
+  Coordinator.
+</p>
+{% endif %}
+
 <p>
   You're registered for <strong>{{ registration.event.title }}</strong>.
 </p>
@@ -16,12 +25,11 @@
 
 {% if registration.status == "awaiting_payment" %}
 <p style="margin-top: 1rem;">
-  <em>Payment integration (Stripe Checkout) lands in the next milestone.
-  Until then, the Web Coordinator will follow up about payment.</em>
+  <em>Payment didn't complete. Contact the Web Coordinator to retry or cancel.</em>
 </p>
 {% elif registration.status == "paid" %}
 <p style="margin-top: 1rem;">
-  No payment required — you're all set.
+  Payment received — you're all set. Access details have been emailed.
 </p>
 {% endif %}
 

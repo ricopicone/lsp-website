@@ -194,6 +194,73 @@ def test_post_sliding_tier_without_amount_shows_error(client, event, sliding_tie
     assert Registration.objects.filter(user=user, event=event).count() == 0
 
 
+def test_register_redirects_when_already_registered(client, event, standard_tier, user):
+    """GET to /register/ when the user has an active reg → redirect to confirm?already=1."""
+    existing = Registration.objects.create(
+        user=user, event=event, price_tier=standard_tier,
+        quoted_amount=Decimal("100.00"),
+        status=Registration.Status.AWAITING_PAYMENT,
+    )
+    client.force_login(user)
+    response = client.get(reverse("registrations:register", args=[event.slug]))
+    assert response.status_code == 302
+    assert response.url.endswith(
+        reverse("registrations:confirm", args=[existing.id]) + "?already=1"
+    )
+
+
+def test_register_does_not_redirect_when_only_cancelled_exists(
+    client, event, standard_tier, user, stub_stripe,
+):
+    """A cancelled prior registration must not block a fresh registration."""
+    Registration.objects.create(
+        user=user, event=event, price_tier=standard_tier,
+        quoted_amount=Decimal("100.00"),
+        status=Registration.Status.CANCELLED,
+    )
+    client.force_login(user)
+    response = client.post(
+        reverse("registrations:register", args=[event.slug]),
+        {"price_tier": standard_tier.id},
+    )
+    # New registration created and Stripe redirect happens — no "already" redirect.
+    assert response.status_code == 302
+    assert response.url == "https://stripe.test/session/xyz"
+    assert Registration.objects.filter(
+        user=user, event=event, status=Registration.Status.AWAITING_PAYMENT,
+    ).count() == 1
+
+
+def test_confirm_page_shows_already_notice(client, event, standard_tier, user):
+    reg = Registration.objects.create(
+        user=user, event=event, price_tier=standard_tier,
+        quoted_amount=Decimal("100.00"),
+    )
+    client.force_login(user)
+    response = client.get(
+        reverse("registrations:confirm", args=[reg.id]) + "?already=1"
+    )
+    assert response.status_code == 200
+    assert b"already registered" in response.content
+
+
+def test_tuition_member_already_registered_redirects(
+    client, event, tuition_tier, tuition_member,
+):
+    """Tuition short-circuit also honors the already-registered redirect."""
+    tuition_tier.audience = tuition_member.profile.role
+    tuition_tier.save()
+    existing = Registration.objects.create(
+        user=tuition_member, event=event, price_tier=tuition_tier,
+        quoted_amount=Decimal("0.00"),
+        status=Registration.Status.PAID,
+    )
+    client.force_login(tuition_member)
+    response = client.get(reverse("registrations:register", args=[event.slug]))
+    assert response.status_code == 302
+    assert str(existing.id) in response.url
+
+
 def test_post_sliding_below_floor_rejected_server_side(client, event, user, stub_stripe):
     """Server-side guarantee that below-floor never silently coerces."""
     tier = PriceTier.objects.create(

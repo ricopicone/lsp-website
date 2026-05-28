@@ -10,6 +10,7 @@ from django.db import transaction
 from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from events.models import Event, PriceTier, PricingCode
 from payments.emails import send_registration_confirmation
@@ -17,6 +18,22 @@ from payments.stripe_checkout import create_checkout_session
 
 from .forms import RegistrationForm
 from .models import Registration
+
+
+def _existing_active_registration(user, event):
+    """Return the user's existing active Registration for this event, or None."""
+    if not user.is_authenticated:
+        return None
+    return (
+        Registration.objects.filter(user=user, event=event)
+        .exclude(
+            status__in=(
+                Registration.Status.CANCELLED,
+                Registration.Status.REFUNDED,
+            )
+        )
+        .first()
+    )
 
 
 def _find_covered_tier(user, event: Event) -> PriceTier | None:
@@ -63,6 +80,17 @@ def register_for_event(request, event_slug: str):
     event = get_object_or_404(Event, slug=event_slug)
     if not (event.published and event.status == Event.Status.OPEN):
         raise Http404("Registration not open for this event.")
+
+    # Already-registered short-circuit: redirect to the existing reg's
+    # confirmation page with a notice. Prevents the IntegrityError that
+    # `registrations_one_active_per_user_event` would otherwise raise on
+    # duplicate inserts (data migration 0002 cleaned up any pre-existing
+    # duplicates).
+    existing = _existing_active_registration(request.user, event)
+    if existing is not None:
+        return redirect(
+            reverse("registrations:confirm", args=[existing.id]) + "?already=1"
+        )
 
     covered_tier = _find_covered_tier(request.user, event)
 

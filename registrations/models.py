@@ -67,6 +67,19 @@ class Registration(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+        constraints = [
+            # At most one active (non-cancelled, non-refunded) Registration per
+            # (user, event). Historical cancelled/refunded rows are unconstrained
+            # so re-registration after cancellation works. Mirrors the partial
+            # unique pattern used by ``committees.CommitteeMembership``.
+            models.UniqueConstraint(
+                fields=("user", "event"),
+                condition=~models.Q(
+                    status__in=("cancelled", "refunded")
+                ),
+                name="registrations_one_active_per_user_event",
+            ),
+        ]
         indexes = [
             models.Index(fields=("event", "status")),
             models.Index(fields=("user", "event")),
