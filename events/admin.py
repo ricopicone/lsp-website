@@ -27,10 +27,13 @@ class PriceTierInline(admin.TabularInline):
 class EventMemberSpeakerInline(admin.TabularInline):
     model = EventMemberSpeaker
     extra = 0
-    fields = ("user", "sort_order", "bio_override")
+    fields = ("user", "sort_order")
     autocomplete_fields = ("user",)
     verbose_name = "Member speaker (linked LSP user)"
-    verbose_name_plural = "Member speakers (linked LSP users)"
+    verbose_name_plural = (
+        "Member speakers (linked LSP users — bio comes from the user's Profile; "
+        "use Profile.event_bio for an alternate speaker-only bio)"
+    )
 
 
 @admin.register(Event)

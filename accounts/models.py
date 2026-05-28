@@ -70,7 +70,14 @@ class Profile(models.Model):
     )
     bio = models.TextField(
         blank=True,
-        help_text="Short biographical text. Shown on event pages for faculty.",
+        help_text="Short biographical text. Shown on the directory and on event pages.",
+    )
+    event_bio = models.TextField(
+        blank=True,
+        help_text=(
+            "Optional alternate bio used when this member is shown as a "
+            "speaker on an event page. Falls back to ``bio`` when blank."
+        ),
     )
     headshot = models.ImageField(
         upload_to="headshots/%Y/",
@@ -125,6 +132,11 @@ class Profile(models.Model):
     def display_email(self) -> str:
         """Email to show on public pages; falls back to the login email."""
         return self.public_email or self.user.email
+
+    @property
+    def display_event_bio(self) -> str:
+        """Bio to use when listed as a speaker on an event; falls back to ``bio``."""
+        return self.event_bio or self.bio
 
     def save(self, *args, **kwargs):
         if not self.is_faculty:

@@ -159,18 +159,13 @@ class Event(models.Model):
 class EventMemberSpeaker(models.Model):
     """Through model for ``Event.member_speakers``.
 
-    Lets an LSP member appear as a speaker on a specific event while
-    optionally overriding the bio shown on that event's page (some talks
-    warrant a tailored intro). Headshot and credentials always come from
-    the user's Profile.
+    Lets an LSP member appear as a speaker on a specific event. Bio +
+    headshot + credentials come from the user's Profile (with
+    ``Profile.event_bio`` as the alternate-when-speaking fallback path).
     """
 
     event = models.ForeignKey("events.Event", on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    bio_override = models.TextField(
-        blank=True,
-        help_text="Optional per-event bio. Falls back to Profile.bio when blank.",
-    )
     sort_order = models.PositiveIntegerField(
         default=0,
         help_text="Lower numbers appear first. Ties break on name.",
@@ -187,11 +182,6 @@ class EventMemberSpeaker(models.Model):
 
     def __str__(self):
         return f"{self.user.first_name} {self.user.last_name} @ {self.event.slug}"
-
-    @property
-    def display_bio(self) -> str:
-        """The bio to render: per-event override, falling back to Profile.bio."""
-        return self.bio_override or self.user.profile.bio
 
 
 class Session(models.Model):

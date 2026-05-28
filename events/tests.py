@@ -273,19 +273,14 @@ def test_event_faculty_m2m_attaches_users():
 
 
 @pytest.mark.django_db
-def test_member_speaker_display_bio_falls_back_to_profile():
+def test_profile_display_event_bio_falls_back_to_bio():
     u = User.objects.create_user(email="m@example.com", first_name="Stephanie", last_name="Swales")
-    u.profile.bio = "Profile-level bio."
+    u.profile.bio = "General directory bio."
     u.profile.save()
-    e = Event.objects.create(
-        title="Y", slug="y",
-        start_date=date(2026, 9, 6), end_date=date(2026, 9, 6),
-    )
-    link = EventMemberSpeaker.objects.create(event=e, user=u)
-    assert link.display_bio == "Profile-level bio."
-    link.bio_override = "Bio just for this event."
-    link.save()
-    assert link.display_bio == "Bio just for this event."
+    assert u.profile.display_event_bio == "General directory bio."
+    u.profile.event_bio = "Speaker-only bio."
+    u.profile.save()
+    assert u.profile.display_event_bio == "Speaker-only bio."
 
 
 @pytest.mark.django_db
@@ -302,9 +297,10 @@ def test_member_speaker_unique_per_event_and_user():
 
 
 @pytest.mark.django_db
-def test_event_detail_renders_member_speaker_with_overridden_bio(client):
+def test_event_detail_renders_member_speaker_with_event_bio(client):
     u = User.objects.create_user(email="m@example.com", first_name="Stephanie", last_name="Swales")
-    u.profile.bio = "Generic profile bio."
+    u.profile.bio = "Generic directory bio."
+    u.profile.event_bio = "Speaker-specific bio for talks."
     u.profile.save()
     e = Event.objects.create(
         title="Working with Masochism", slug="working-with-masochism",
@@ -312,13 +308,10 @@ def test_event_detail_renders_member_speaker_with_overridden_bio(client):
         published=True, status=Event.Status.OPEN,
         event_type=Event.Type.SPECIAL_EVENT,
     )
-    EventMemberSpeaker.objects.create(
-        event=e, user=u,
-        bio_override="Per-event introduction tailored to the talk.",
-    )
+    e.member_speakers.add(u)
     resp = client.get(f"/events/{e.slug}/")
     assert resp.status_code == 200
     body = resp.content
     assert b"Stephanie Swales" in body
-    assert b"Per-event introduction tailored to the talk." in body
-    assert b"Generic profile bio." not in body
+    assert b"Speaker-specific bio for talks." in body
+    assert b"Generic directory bio." not in body
