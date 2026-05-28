@@ -253,3 +253,126 @@ def test_get_to_generate_code_redirects_to_faculty_view(client, event, faculty_m
     response = client.get(reverse("events:generate_code", args=[event.slug]))
     assert response.status_code == 302
     assert "view=faculty" in response.url
+
+
+# ---- /events/<slug>/check-code/ ----------------------------------------
+
+
+@pytest.fixture
+def some_codes(event, faculty_member, random_user):
+    sf = PricingCode.objects.create(
+        event=event, issued_by=faculty_member,
+        pricing_mode=PricingCode.Mode.SLIDING_FLOOR,
+        amount_or_percent=Decimal("20"),
+    )
+    fa = PricingCode.objects.create(
+        event=event, issued_by=faculty_member,
+        pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("40.00"),
+    )
+    po = PricingCode.objects.create(
+        event=event, issued_by=faculty_member,
+        pricing_mode=PricingCode.Mode.PERCENT_OFF,
+        amount_or_percent=Decimal("25"),
+    )
+    return {"sliding_floor": sf, "fixed_amount": fa, "percent_off": po}
+
+
+def test_check_code_anonymous_requires_login(client, event):
+    response = client.get(reverse("events:check_code", args=[event.slug]), {"code": "X"})
+    assert response.status_code == 302
+    assert "/accounts/login/" in response.url
+
+
+def test_check_code_empty_returns_error(client, event, random_user):
+    client.force_login(random_user)
+    response = client.get(reverse("events:check_code", args=[event.slug]))
+    assert response.status_code == 200
+    assert response.json() == {"ok": False, "error": "Empty code."}
+
+
+def test_check_code_unknown_returns_error(client, event, random_user):
+    client.force_login(random_user)
+    response = client.get(reverse("events:check_code", args=[event.slug]), {"code": "ZZZZ"})
+    assert response.json() == {"ok": False, "error": "Code not recognized for this event."}
+
+
+def test_check_code_sliding_floor_returns_mode_and_value(
+    client, event, some_codes, random_user,
+):
+    client.force_login(random_user)
+    response = client.get(
+        reverse("events:check_code", args=[event.slug]),
+        {"code": some_codes["sliding_floor"].code},
+    )
+    data = response.json()
+    assert data["ok"] is True
+    assert data["mode"] == "sliding_floor"
+    assert data["value"] == "20.00"
+
+
+def test_check_code_fixed_amount_returns_mode_and_value(
+    client, event, some_codes, random_user,
+):
+    client.force_login(random_user)
+    response = client.get(
+        reverse("events:check_code", args=[event.slug]),
+        {"code": some_codes["fixed_amount"].code},
+    )
+    assert response.json() == {"ok": True, "mode": "fixed_amount", "value": "40.00"}
+
+
+def test_check_code_percent_off_returns_mode_and_value(
+    client, event, some_codes, random_user,
+):
+    client.force_login(random_user)
+    response = client.get(
+        reverse("events:check_code", args=[event.slug]),
+        {"code": some_codes["percent_off"].code},
+    )
+    assert response.json() == {"ok": True, "mode": "percent_off", "value": "25.00"}
+
+
+def test_check_code_lowercase_normalized(client, event, some_codes, random_user):
+    client.force_login(random_user)
+    response = client.get(
+        reverse("events:check_code", args=[event.slug]),
+        {"code": some_codes["fixed_amount"].code.lower()},
+    )
+    assert response.json()["ok"] is True
+
+
+def test_check_code_restricted_to_other_user_not_redeemable(
+    client, event, faculty_member, random_user,
+):
+    sally = User.objects.create_user(email="sally@example.com")
+    code = PricingCode.objects.create(
+        event=event, issued_by=faculty_member,
+        pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("0"),
+        restricted_to_user=sally,
+    )
+    client.force_login(random_user)
+    response = client.get(
+        reverse("events:check_code", args=[event.slug]),
+        {"code": code.code},
+    )
+    assert response.json()["ok"] is False
+    assert "not redeemable" in response.json()["error"].lower()
+
+
+def test_check_code_wrong_event_not_recognized(
+    client, event, other_event, faculty_member, random_user,
+):
+    code = PricingCode.objects.create(
+        event=other_event, issued_by=faculty_member,
+        pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("0"),
+    )
+    client.force_login(random_user)
+    response = client.get(
+        reverse("events:check_code", args=[event.slug]),
+        {"code": code.code},
+    )
+    assert response.json()["ok"] is False
+    assert "not recognized" in response.json()["error"].lower()

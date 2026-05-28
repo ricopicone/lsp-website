@@ -36,6 +36,15 @@
   {% if form.pricing_code.errors %}
     <p style="color: #b00;">{{ form.pricing_code.errors|join:", " }}</p>
   {% endif %}
+  <div id="code-feedback"
+       style="display: none; margin-top: 0.5rem; padding: 0.5rem 0.75rem;
+              background: #eef7ee; border-left: 3px solid #2a8c3a; border-radius: 4px;">
+    <p style="margin: 0;" id="code-feedback-text"></p>
+  </div>
+  <div id="code-error"
+       style="display: none; margin-top: 0.25rem; color: #b00;">
+    <small id="code-error-text"></small>
+  </div>
 
   <div id="sliding-block" style="display: none;">
     <h2>Sliding-scale amount</h2>
@@ -74,6 +83,9 @@
 
 <script id="tiers-meta" type="application/json">{{ tiers_meta_json|safe }}</script>
 <script>
+  window.CHECK_CODE_URL = "{% url 'events:check_code' event.slug %}";
+</script>
+<script>
   (function () {
     var tiersMeta = JSON.parse(document.getElementById('tiers-meta').textContent || '{}');
     var slidingBlock = document.getElementById('sliding-block');
@@ -81,9 +93,16 @@
     var input = document.getElementById('sliding-input');
     var hint = document.getElementById('sliding-hint');
     var codeInput = document.querySelector('input[name="pricing_code"]');
+    var feedback = document.getElementById('code-feedback');
+    var feedbackText = document.getElementById('code-feedback-text');
+    var error = document.getElementById('code-error');
+    var errorText = document.getElementById('code-error-text');
     var STEP = 5;
 
-    function selectedTierMeta() {
+    var appliedCode = null;          // {mode, value} once the server validates it
+    var debounceTimer = null;
+
+    function tierMeta() {
       var checked = document.querySelector('input[name="price_tier"]:checked');
       return checked ? tiersMeta[checked.value] || null : null;
     }
@@ -95,49 +114,131 @@
       return val;
     }
 
-    function syncFromSlider() {
-      input.value = slider.value;
+    function showSlider(min, max, hintText) {
+      slidingBlock.style.display = '';
+      slider.style.display = '';
+      slider.min = min;
+      slider.max = max;
+      slider.step = STEP;
+      input.min = min;
+      input.removeAttribute('max');
+      var cur = parseFloat(input.value);
+      cur = clamp(isNaN(cur) ? min : cur, min, max);
+      slider.value = cur;
+      input.value = cur;
+      hint.textContent = hintText;
     }
 
+    function hideSlider() {
+      slidingBlock.style.display = 'none';
+      input.value = '';
+    }
+
+    function showFeedback(msg) {
+      feedback.style.display = '';
+      feedbackText.textContent = msg;
+      error.style.display = 'none';
+    }
+
+    function showError(msg) {
+      error.style.display = '';
+      errorText.textContent = msg;
+      feedback.style.display = 'none';
+    }
+
+    function clearMessages() {
+      feedback.style.display = 'none';
+      error.style.display = 'none';
+    }
+
+    function configure() {
+      var meta = tierMeta();
+
+      // Code-applied path takes precedence.
+      if (appliedCode) {
+        var v = parseFloat(appliedCode.value);
+        if (appliedCode.mode === 'sliding_floor') {
+          var max = (meta && meta.max) ? Math.max(parseFloat(meta.max), v) : v + 100;
+          showSlider(
+            v, max,
+            'Code sets a minimum of $' + v + '. Slider snaps in $' + STEP +
+            ' steps; you may type a different amount.'
+          );
+          showFeedback('Code applied: sliding scale (minimum $' + v + ').');
+        } else if (appliedCode.mode === 'fixed_amount') {
+          hideSlider();
+          showFeedback('Code applied: your price is $' + appliedCode.value + '.');
+        } else if (appliedCode.mode === 'percent_off') {
+          hideSlider();
+          if (meta && !meta.sliding) {
+            var basePrice = parseFloat(meta.max);
+            var discount = basePrice * v / 100;
+            var result = Math.max(basePrice - discount, 0).toFixed(2);
+            showFeedback(
+              'Code applied: ' + appliedCode.value + '% off — your price $' + result + '.'
+            );
+          } else {
+            showFeedback('Code applied: ' + appliedCode.value + '% off the selected tier.');
+          }
+        }
+        return;
+      }
+
+      // No code: fall back to tier-based behavior.
+      if (meta && meta.sliding) {
+        var tmin = parseFloat(meta.min) || 0;
+        var tmax = parseFloat(meta.max) || 100;
+        showSlider(
+          tmin, tmax,
+          'Slider snaps in $' + STEP + ' steps. Minimum $' + tmin +
+          '; suggested $' + tmax + '. You may type a different amount.'
+        );
+      } else {
+        hideSlider();
+      }
+    }
+
+    function syncFromSlider() { input.value = slider.value; }
     function syncFromInput() {
-      var meta = selectedTierMeta();
-      if (!meta || !meta.sliding) return;
-      var min = parseFloat(meta.min) || 0;
-      var max = parseFloat(meta.max) || Infinity;
+      var min = parseFloat(slider.min) || 0;
+      var max = parseFloat(slider.max) || Infinity;
       var val = clamp(parseFloat(input.value), min, max);
       input.value = val;
       slider.value = val;
     }
 
-    function configure() {
-      var meta = selectedTierMeta();
-      var sliding = !!(meta && meta.sliding);
-      var codeProvided = !!(codeInput && codeInput.value.trim());
+    function fetchCode(raw) {
+      if (!window.CHECK_CODE_URL) return;
+      var url = window.CHECK_CODE_URL + '?code=' + encodeURIComponent(raw);
+      fetch(url, { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.ok) {
+            appliedCode = { mode: data.mode, value: data.value };
+            clearMessages();
+            configure();
+          } else {
+            appliedCode = null;
+            showError(data.error || 'Code not valid.');
+            configure();
+          }
+        })
+        .catch(function () {
+          appliedCode = null;
+          configure();
+        });
+    }
 
-      slidingBlock.style.display = (sliding || codeProvided) ? '' : 'none';
-
-      if (sliding) {
-        var min = parseFloat(meta.min) || 0;
-        var max = parseFloat(meta.max) || 100;
-        slider.min = min;
-        slider.max = max;
-        slider.step = STEP;
-        slider.style.display = '';
-        input.min = min;
-        // Initialize to current value or the minimum.
-        var cur = parseFloat(input.value);
-        cur = clamp(isNaN(cur) ? min : cur, min, max);
-        slider.value = cur;
-        input.value = cur;
-        hint.textContent =
-          'Slider snaps in $' + STEP + ' steps. Minimum $' + min +
-          '; suggested $' + max + '. You may type a different amount.';
-      } else if (codeProvided) {
-        // Code-driven path: server knows the floor, we don't. Plain input only.
-        slider.style.display = 'none';
-        input.removeAttribute('min');
-        hint.textContent = "Enter the amount you'd like to pay; validated on submit.";
+    function onCodeInput() {
+      clearTimeout(debounceTimer);
+      var raw = codeInput.value.trim();
+      if (!raw) {
+        appliedCode = null;
+        clearMessages();
+        configure();
+        return;
       }
+      debounceTimer = setTimeout(function () { fetchCode(raw); }, 400);
     }
 
     slider.addEventListener('input', syncFromSlider);
@@ -145,7 +246,7 @@
     document.querySelectorAll('input[name="price_tier"]').forEach(function (r) {
       r.addEventListener('change', configure);
     });
-    if (codeInput) codeInput.addEventListener('input', configure);
+    if (codeInput) codeInput.addEventListener('input', onCodeInput);
     configure();
   })();
 </script>

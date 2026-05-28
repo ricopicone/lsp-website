@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, HttpResponseForbidden
+from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .forms import EventDescriptionForm, PricingCodeForm
-from .models import Event
+from .models import Event, PricingCode
 from .permissions import can_edit_event
 
 
@@ -85,6 +85,31 @@ def event_edit(request, slug: str):
         form = EventDescriptionForm(instance=event)
 
     return render(request, "events/event_edit.html", {"event": event, "form": form})
+
+
+@login_required
+def check_pricing_code(request, slug: str):
+    """JSON: look up a pricing code for this event and return its mode + value.
+
+    Used by the register page to adapt the UI (slider vs fixed display) before
+    submit. Returns ``ok=False`` for missing / invalid / unredeemable codes
+    rather than HTTP errors — the front-end shows the message inline.
+    """
+    event = get_object_or_404(Event, slug=slug)
+    raw = (request.GET.get("code") or "").strip().upper()
+    if not raw:
+        return JsonResponse({"ok": False, "error": "Empty code."})
+    try:
+        code = PricingCode.objects.get(code=raw, event=event)
+    except PricingCode.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "Code not recognized for this event."})
+    if not code.is_redeemable(user=request.user):
+        return JsonResponse({"ok": False, "error": "Code is not redeemable for you right now."})
+    return JsonResponse({
+        "ok": True,
+        "mode": code.pricing_mode,
+        "value": str(code.amount_or_percent),
+    })
 
 
 @login_required
