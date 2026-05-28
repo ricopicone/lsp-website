@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from phonenumber_field.modelfields import PhoneNumberField
 
 from .managers import UserManager
 
@@ -35,9 +36,12 @@ class Profile(models.Model):
     class Role(models.TextChoices):
         PROSPECTIVE_APPLICANT = "prospective_applicant", _("Prospective applicant")
         STUDENT = "student", _("Student")
-        PRE_CANDIDATE = "pre_candidate", _("Pre-candidate")
-        CANDIDATE = "candidate", _("Candidate")
+        PRE_CANDIDATE = "pre_candidate", _("Pre-candidate analyst")
+        CANDIDATE = "candidate", _("Candidate analyst")
         ANALYST = "analyst", _("Analyst")
+        PRE_CANDIDATE_SCHOLAR = "pre_candidate_scholar", _("Pre-candidate scholar")
+        CANDIDATE_SCHOLAR = "candidate_scholar", _("Candidate scholar")
+        SCHOLAR = "scholar", _("Scholar")
         MEMBER = "member", _("Member")
         EXTERNAL = "external", _("Guest")
 
@@ -73,6 +77,34 @@ class Profile(models.Model):
         blank=True,
         null=True,
     )
+    credentials = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Degrees, licenses, board cert (e.g. 'PhD; CA Licensed Psychologist PSY 22767').",
+    )
+    languages_spoken = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Comma-separated languages (e.g. 'English, French, Spanish').",
+    )
+    location = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Free-form city/region/country (e.g. 'Los Gatos, CA, USA').",
+    )
+    phone = PhoneNumberField(
+        blank=True,
+        help_text="Stored in E.164 form. Parsed assuming US if no country code.",
+    )
+    public_email = models.EmailField(
+        blank=True,
+        help_text=(
+            "Public-facing email for directories / event pages. Distinct from "
+            "the login email (User.email) since members often use one address "
+            "for their professional listing and another for school correspondence. "
+            "Falls back to User.email when unset (see Profile.display_email)."
+        ),
+    )
     default_billing_mode = models.CharField(
         max_length=16,
         choices=BillingMode.choices,
@@ -88,6 +120,11 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"{self.user.email} ({self.get_role_display()})"
+
+    @property
+    def display_email(self) -> str:
+        """Email to show on public pages; falls back to the login email."""
+        return self.public_email or self.user.email
 
     def save(self, *args, **kwargs):
         if not self.is_faculty:

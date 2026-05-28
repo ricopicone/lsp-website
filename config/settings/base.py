@@ -46,6 +46,10 @@ DJANGO_APPS = [
     "django.contrib.staticfiles",
 ]
 
+THIRD_PARTY_APPS = [
+    "phonenumber_field",
+]
+
 LOCAL_APPS = [
     "accounts",
     "committees",
@@ -55,7 +59,11 @@ LOCAL_APPS = [
     "core",
 ]
 
-INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
+INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+
+# Parse phone numbers without a country code as US numbers.
+PHONENUMBER_DEFAULT_REGION = "US"
+PHONENUMBER_DEFAULT_FORMAT = "E164"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

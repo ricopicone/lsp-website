@@ -164,7 +164,7 @@ def test_missing_required_column(tmp_path):
 
 @pytest.mark.django_db
 def test_unknown_column_rejected(tmp_path):
-    csv_path = _write_csv(tmp_path, "email,phone\nu@example.com,555\n")
+    csv_path = _write_csv(tmp_path, "email,not_a_column\nu@example.com,x\n")
     with pytest.raises(CommandError, match="unknown column"):
         call_command("import_users", str(csv_path), stdout=StringIO())
 

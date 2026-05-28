@@ -28,3 +28,7 @@ htmlcov/
 .DS_Store
 .idea/
 .vscode/
+
+# One-shot import staging (member rosters, headshot mappings). Lives only on
+# the workstation; ship to prod via scp/SSM.
+/import-staging/

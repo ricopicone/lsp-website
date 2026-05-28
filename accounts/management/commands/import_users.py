@@ -2,7 +2,8 @@
 
 Required column: ``email``.
 Optional columns: ``first_name``, ``last_name``, ``role``,
-``tuition_paying``, ``notes``.
+``tuition_paying``, ``is_faculty``, ``notes``, ``bio``, ``credentials``,
+``languages_spoken``, ``location``, ``phone``.
 
 Imported users are created with an unusable password. Once email
 delivery is configured (Amazon SES), they set a password through the
@@ -16,6 +17,8 @@ import csv
 from pathlib import Path
 from typing import Any
 
+import phonenumbers
+from django.conf import settings
 from django.contrib.auth.models import BaseUserManager
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
@@ -32,11 +35,42 @@ OPTIONAL_COLUMNS = {
     "tuition_paying",
     "is_faculty",
     "notes",
+    "bio",
+    "credentials",
+    "languages_spoken",
+    "location",
+    "phone",
+    "public_email",
 }
 ALL_COLUMNS = REQUIRED_COLUMNS | OPTIONAL_COLUMNS
 
 _TRUTHY = {"true", "yes", "y", "1", "t"}
 _FALSY = {"false", "no", "n", "0", "f"}
+
+
+def _normalize_phone(value: str) -> str:
+    """Parse a phone string to E.164. Empty string in → empty string out."""
+    cleaned = value.strip()
+    if not cleaned:
+        return ""
+    # Strip stray "Phone:" prefix that occasionally survives upstream parsing.
+    if cleaned.lower().startswith("phone:"):
+        cleaned = cleaned.split(":", 1)[1].strip()
+    if not cleaned:
+        return ""
+    # Convert international call prefix "00" to "+" (e.g. "0033675..." → "+33675...").
+    # Skip when the number already starts with "+" or looks like a NANP number
+    # with a leading 1 (which is not an international prefix).
+    if cleaned.startswith("00") and not cleaned.startswith("+"):
+        cleaned = "+" + cleaned[2:]
+    region = getattr(settings, "PHONENUMBER_DEFAULT_REGION", "US")
+    try:
+        parsed = phonenumbers.parse(cleaned, region)
+    except phonenumbers.NumberParseException as exc:
+        raise ValueError(f"cannot parse phone {value!r}: {exc}") from exc
+    if not phonenumbers.is_valid_number(parsed):
+        raise ValueError(f"phone {value!r} parses but is not a valid number")
+    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
 
 
 def _normalize_role(value: str) -> str:
@@ -168,6 +202,21 @@ class Command(BaseCommand):
             profile_fields["is_faculty"] = _parse_bool(val)
         if (val := (row.get("notes") or "").strip()):
             profile_fields["notes"] = val
+        for key in ("bio", "credentials", "languages_spoken", "location"):
+            if (val := (row.get(key) or "").strip()):
+                profile_fields[key] = val
+        if (val := (row.get("public_email") or "").strip()):
+            validate_email(val)
+            profile_fields["public_email"] = BaseUserManager.normalize_email(val)
+        if (val := (row.get("phone") or "").strip()):
+            try:
+                profile_fields["phone"] = _normalize_phone(val)
+            except ValueError as exc:
+                # Phone is a nice-to-have. Warn and import the row with no phone
+                # rather than failing the whole row over a bad number.
+                self.stderr.write(self.style.WARNING(
+                    f"  warning: {row['email']}: {exc} (importing without phone)"
+                ))
 
         existing = User.objects.filter(email__iexact=email).first()
         if existing is not None:
