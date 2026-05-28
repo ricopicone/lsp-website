@@ -19,6 +19,28 @@ STORAGES = {
     },
 }
 
+# User uploads: S3 in production when AWS_STORAGE_BUCKET_NAME is set.
+# Falls back to local filesystem (FileSystemStorage above) when unset.
+# Credentials are picked up from the EC2 instance role via IMDS — no
+# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env.
+AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME", default="")
+if AWS_STORAGE_BUCKET_NAME:
+    AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-west-2")
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": AWS_STORAGE_BUCKET_NAME,
+            "region_name": AWS_S3_REGION_NAME,
+            "querystring_auth": False,  # public URLs; bucket policy grants read
+            "default_acl": None,         # bucket policy handles access
+            "file_overwrite": False,     # never silently clobber same-name uploads
+        },
+    }
+    # Public URL hostname for img tags etc.
+    MEDIA_URL = (
+        f"https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/"
+    )
+
 CSRF_TRUSTED_ORIGINS = env(
     "DJANGO_CSRF_TRUSTED_ORIGINS",
     default=["https://app.lacanschool.org"],

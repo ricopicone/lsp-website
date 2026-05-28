@@ -6,8 +6,8 @@ services:
     env_file: .env
     ports:
       - "127.0.0.1:8000:8000"
-    volumes:
-      # User uploads (headshots, etc.) persist on the host so container
-      # rebuilds don't wipe them. Host nginx serves /media/ from this path.
-      # Container's app user is uid 1000 == ec2-user on the host.
-      - ./media:/app/media
+    # User uploads go to S3 in production (see config/settings/production.py
+    # — AWS_STORAGE_BUCKET_NAME env var triggers S3Storage). No bind-mount
+    # needed since the bucket is the source of truth. Local dev without
+    # AWS_STORAGE_BUCKET_NAME falls back to FileSystemStorage at
+    # BASE_DIR/media inside the dev tree.
