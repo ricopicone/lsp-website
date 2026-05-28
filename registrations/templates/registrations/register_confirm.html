@@ -3,12 +3,26 @@
 {% block content %}
 <h1>Registration recorded</h1>
 
+{% if messages %}
+  {% for m in messages %}
+    <p style="padding: 0.5rem 0.75rem; background: #fdecec;
+              border-left: 3px solid #b00; border-radius: 4px;">{{ m }}</p>
+  {% endfor %}
+{% endif %}
+
 {% if request.GET.already %}
 <p style="padding: 0.5rem 0.75rem; background: #fff4d6;
           border-left: 3px solid #d4a017; border-radius: 4px;">
-  You're already registered for this event — here are the details. To cancel
-  or change anything, reply to your confirmation email or contact the Web
-  Coordinator.
+  You're already registered for this event — here are the details.
+</p>
+{% endif %}
+
+{% if request.GET.cancelled %}
+<p style="padding: 0.5rem 0.75rem; background: #eef7ee;
+          border-left: 3px solid #2a8c3a; border-radius: 4px;">
+  Your registration was cancelled.{% if registration.status == "refunded" %}
+  A refund has been issued to your card; it typically appears in 5–10
+  business days.{% endif %}
 </p>
 {% endif %}
 
@@ -33,5 +47,21 @@
 </p>
 {% endif %}
 
-<p><a href="{% url 'events:detail' registration.event.slug %}">Back to event page</a></p>
+{% if registration.status == "awaiting_payment" or registration.status == "paid" %}
+<form method="post"
+      action="{% url 'registrations:cancel' registration.id %}"
+      style="margin-top: 1.5rem;"
+      onsubmit="return confirm('{% if registration.status == "paid" %}Cancel this registration and refund your payment?{% else %}Cancel this registration?{% endif %}');">
+  {% csrf_token %}
+  <button type="submit"
+          style="background: #faeaea; color: #800; border: 1px solid #c88;
+                 padding: 0.4rem 0.9rem; border-radius: 4px; cursor: pointer;">
+    Cancel registration{% if registration.status == "paid" %} (full refund){% endif %}
+  </button>
+</form>
+{% endif %}
+
+<p style="margin-top: 1rem;">
+  <a href="{% url 'events:detail' registration.event.slug %}">Back to event page</a>
+</p>
 {% endblock %}

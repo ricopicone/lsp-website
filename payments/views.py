@@ -51,6 +51,8 @@ def stripe_webhook(request):
     try:
         if event_type == "checkout.session.completed":
             _handle_checkout_completed(event["data"]["object"])
+        elif event_type == "charge.refunded":
+            _handle_charge_refunded(event["data"]["object"])
         else:
             logger.info("Stripe webhook ignored (type=%s id=%s)", event_type, event_id)
     except Exception:
@@ -118,3 +120,32 @@ def _handle_checkout_completed(session) -> None:
                 "DB updates retained.",
                 payment.id,
             )
+
+
+def _handle_charge_refunded(charge: dict) -> None:
+    """Idempotently mark Payment + Registration as REFUNDED.
+
+    Fires for refunds we initiated synchronously (no-op since we already
+    updated) and for refunds initiated directly in the Stripe Dashboard
+    (the cross-channel case we actually need this for).
+    """
+    intent_id = charge["payment_intent"] if "payment_intent" in charge else None
+    if not intent_id:
+        return
+    with transaction.atomic():
+        payment = Payment.objects.select_for_update().filter(
+            stripe_payment_intent_id=intent_id,
+        ).first()
+        if payment is None:
+            logger.info(
+                "charge.refunded for unknown payment_intent=%s; ignoring", intent_id
+            )
+            return
+        if payment.status != Payment.Status.REFUNDED:
+            payment.status = Payment.Status.REFUNDED
+            payment.save(update_fields=("status",))
+        if payment.registration_id:
+            Registration.objects.filter(
+                pk=payment.registration_id,
+                status=Registration.Status.PAID,
+            ).update(status=Registration.Status.REFUNDED)

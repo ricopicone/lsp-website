@@ -38,13 +38,19 @@ def event_detail(request, slug: str):
         can_edit and request.GET.get("view") == "faculty"
     )
 
-    has_paid_registration = (
-        request.user.is_authenticated
-        and Registration.objects.filter(
-            user=request.user,
-            event=event,
-            status=Registration.Status.PAID,
-        ).exists()
+    user_registration = None
+    if request.user.is_authenticated:
+        user_registration = (
+            Registration.objects.filter(user=request.user, event=event)
+            .exclude(status__in=(
+                Registration.Status.CANCELLED,
+                Registration.Status.REFUNDED,
+            ))
+            .order_by("-created_at")
+            .first()
+        )
+    has_paid_registration = bool(
+        user_registration and user_registration.status == Registration.Status.PAID
     )
 
     context = {
@@ -55,6 +61,7 @@ def event_detail(request, slug: str):
         ),
         "can_edit": can_edit,
         "show_faculty_view": show_faculty_view,
+        "user_registration": user_registration,
         "has_paid_registration": has_paid_registration,
     }
     if show_faculty_view:

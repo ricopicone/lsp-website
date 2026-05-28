@@ -15,4 +15,9 @@ urlpatterns = [
         views.registration_confirm,
         name="confirm",
     ),
+    path(
+        "registrations/<int:reg_id>/cancel/",
+        views.cancel_registration,
+        name="cancel",
+    ),
 ]

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
+from django.db.models import F
 from django.utils.translation import gettext_lazy as _
 
 
@@ -87,3 +88,54 @@ class Registration(models.Model):
 
     def __str__(self):
         return f"{self.user} → {self.event} ({self.get_status_display()}, ${self.quoted_amount})"
+
+    def cancel(self):
+        """Cancel this registration. Refunds the payment if PAID.
+
+        State machine:
+
+        - awaiting_payment → CANCELLED (no money to move)
+        - comped → CANCELLED (no payment exists)
+        - paid → Stripe refund issued → REFUNDED
+        - cancelled / refunded → idempotent no-op
+
+        Pricing-code ``uses_remaining`` is restored when an active reg that
+        consumed a use is cancelled, so the code is available to others (or
+        for a re-register).
+
+        Returns the Stripe ``Refund`` object when a refund was issued,
+        otherwise ``None``.
+        """
+        from payments.models import Payment as _Payment  # avoid circular import
+        from payments.refund import refund_payment  # avoid circular import
+
+        if self.status in (self.Status.CANCELLED, self.Status.REFUNDED):
+            return None
+
+        refund = None
+        with transaction.atomic():
+            if self.status == self.Status.PAID:
+                payment = self.payments.filter(
+                    status=_Payment.Status.SUCCEEDED,
+                    method=_Payment.Method.STRIPE,
+                ).first()
+                if payment is None:
+                    raise RuntimeError(
+                        f"Registration {self.id} is PAID but has no SUCCEEDED Stripe "
+                        f"payment — refund must be handled manually."
+                    )
+                refund = refund_payment(payment)
+                self.status = self.Status.REFUNDED
+            else:
+                self.status = self.Status.CANCELLED
+
+            self.save(update_fields=("status",))
+
+            if self.pricing_code_id:
+                from events.models import PricingCode  # avoid circular import
+                PricingCode.objects.filter(
+                    pk=self.pricing_code_id,
+                    max_uses__isnull=False,
+                ).update(uses_remaining=F("uses_remaining") + 1)
+
+        return refund

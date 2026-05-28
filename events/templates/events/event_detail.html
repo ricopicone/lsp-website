@@ -23,6 +23,15 @@
   </nav>
   {% endif %}
 
+  {% if user_registration %}
+  <p style="padding: 0.5rem 0.75rem; background: #eef; border-left: 3px solid #44a;
+            border-radius: 4px;">
+    You're registered:
+    <strong>{{ user_registration.get_status_display }}</strong>
+    · <a href="{% url 'registrations:confirm' user_registration.id %}">View / manage</a>
+  </p>
+  {% endif %}
+
   {% if event.faculty.all %}
   <p>
     <strong>Faculty:</strong>
@@ -97,9 +106,15 @@
 
   {% if event.status == "open" and event.published %}
   <p style="margin-top: 1.5rem;">
-    <a href="{% url 'registrations:register' event.slug %}">
-      <strong>Register →</strong>
-    </a>
+    {% if user_registration %}
+      <a href="{% url 'registrations:confirm' user_registration.id %}">
+        <strong>View your registration →</strong>
+      </a>
+    {% else %}
+      <a href="{% url 'registrations:register' event.slug %}">
+        <strong>Register →</strong>
+      </a>
+    {% endif %}
   </p>
   {% elif event.status == "draft" %}
   <p class="muted" style="margin-top: 1.5rem;">Registration not yet open.</p>

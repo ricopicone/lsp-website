@@ -1,0 +1,13 @@
+{{ registration.user.first_name|default:"Hello" }},
+
+Your registration for "{{ registration.event.title }}" has been cancelled.
+
+{% if refund_amount %}A refund of ${{ refund_amount }} has been issued to the
+card on file. It typically appears on your statement in 5–10 business days.
+
+{% endif %}If you'd like to register again, you can do so at:
+{{ site_base_url }}/events/{{ registration.event.slug }}/
+
+Questions? Reply to this email — it goes to {{ support_email }}.
+
+— Lacanian School of Psychoanalysis

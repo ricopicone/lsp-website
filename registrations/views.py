@@ -1,23 +1,29 @@
-"""Public registration views (REG-1, REG-3, REG-4, REG-5)."""
+"""Public registration views (REG-1, REG-3, REG-4, REG-5, REG-16)."""
 
 from __future__ import annotations
 
 import json
+import logging
 from decimal import Decimal
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from events.models import Event, PriceTier, PricingCode
-from payments.emails import send_registration_confirmation
+from payments.emails import send_cancellation_email, send_registration_confirmation
+from payments.refund import RefundError
 from payments.stripe_checkout import create_checkout_session
 
 from .forms import RegistrationForm
 from .models import Registration
+
+logger = logging.getLogger(__name__)
 
 
 def _existing_active_registration(user, event):
@@ -164,4 +170,46 @@ def registration_confirm(request, reg_id: int):
         request,
         "registrations/register_confirm.html",
         {"registration": reg},
+    )
+
+
+@login_required
+@require_POST
+def cancel_registration(request, reg_id: int):
+    """Self-cancel a Registration; refund via Stripe if PAID (REG-16)."""
+    reg = get_object_or_404(Registration, pk=reg_id, user=request.user)
+    if reg.status in (Registration.Status.CANCELLED, Registration.Status.REFUNDED):
+        # Idempotent — the cancel button shouldn't render in this state, but
+        # someone may be re-posting an old form.
+        return redirect("registrations:confirm", reg_id=reg.id)
+
+    refund = None
+    try:
+        refund = reg.cancel()
+    except RefundError as exc:
+        # Could not auto-refund (offline payment, missing intent, etc.).
+        logger.warning("Cancel failed for reg %s: %s", reg.id, exc)
+        messages.error(
+            request,
+            "We couldn't process the refund automatically — please contact the "
+            "Web Coordinator and they'll handle it.",
+        )
+        return redirect("registrations:confirm", reg_id=reg.id)
+    except Exception:
+        logger.exception("Unexpected error cancelling reg %s", reg.id)
+        messages.error(
+            request,
+            "Something went wrong cancelling your registration. The Web "
+            "Coordinator has been notified.",
+        )
+        return redirect("registrations:confirm", reg_id=reg.id)
+
+    try:
+        send_cancellation_email(reg, refund=refund)
+    except Exception:
+        logger.exception("Failed to send cancellation email for reg %s", reg.id)
+        # Cancel went through; just log the email failure.
+
+    return redirect(
+        reverse("registrations:confirm", args=[reg.id]) + "?cancelled=1"
     )

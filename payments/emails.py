@@ -74,3 +74,29 @@ def send_paid_emails(registration: Registration) -> None:
     ).order_by("-paid_at").first()
     if paid is not None:
         send_receipt(paid)
+
+
+def send_cancellation_email(registration: Registration, refund=None) -> None:
+    """Notify the participant that their registration was cancelled.
+
+    Includes refund detail if ``refund`` (a Stripe ``Refund`` object or a
+    dict-like with ``amount`` in cents) is provided.
+    """
+    refund_amount = None
+    if refund is not None:
+        # Stripe Refund: amount is in cents.
+        try:
+            refund_amount = (refund["amount"] / 100) if "amount" in refund else None
+        except (TypeError, KeyError):
+            refund_amount = None
+    subject = f"Registration cancelled: {registration.event.title}"
+    body = render_to_string(
+        "payments/email/cancellation.txt",
+        {
+            "registration": registration,
+            "refund_amount": refund_amount,
+            "support_email": settings.SUPPORT_EMAIL,
+            "site_base_url": settings.SITE_BASE_URL,
+        },
+    )
+    _send(subject=subject, body=body, to=[registration.user.email])
