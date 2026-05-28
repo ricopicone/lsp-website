@@ -168,8 +168,9 @@ Done (see `git log` for specifics):
   logs even with DEBUG=False; webhook handler explicitly logs exceptions.
 - Milestone 4 complete.
 
-Milestones 5–8 then cover dues and donations (M5), manual overrides and
-tests (M6), deploy and pilot dry-run (M7), and opening registration (M8).
+Milestones 6–8 then cover manual overrides + security review (M6 —
+REG-16 already done early in M4/M5), production deploy + Swales &amp;
+Hook dry-run (M7), and opening fall registration (M8).
 
 ## Deploying changes
 
