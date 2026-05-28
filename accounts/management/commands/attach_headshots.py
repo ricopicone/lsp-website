@@ -12,7 +12,6 @@ Skips rows whose Profile already has a headshot unless ``--overwrite``.
 from __future__ import annotations
 
 import mimetypes
-from io import BytesIO
 from pathlib import Path
 from urllib.request import Request, urlopen
 
