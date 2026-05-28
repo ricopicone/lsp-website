@@ -130,6 +130,21 @@ Done (see `git log` for specifics):
   on the event page renders the roster and a mint-code form;
   `/events/<slug>/codes/` POST creates a `PricingCode`.
 - Milestone 3 complete.
+- Self-service registration cancel (REG-16, pulled forward from M6) —
+  cancel button on the confirmation page; Stripe refund automated via
+  `stripe.Refund.create`; webhook `charge.refunded` handler; pricing-code
+  uses restored on cancel.
+- Public landing page at `/`, public events list at `/events/`, calendar
+  is now public (drafts visible only to staff).
+- Dues at `/dues/` (login req, $100/year via `DUES_ANNUAL_AMOUNT`),
+  donations at `/donate/` (anon OK; `Payment.email` carries the
+  receipt address). Receipt template now type-aware.
+- Generic post-payment thanks page at `/payments/<id>/thanks/` for
+  non-registration payments.
+- Roster CSV at `/events/<slug>/roster.csv` (REG-10, can_edit_event gated).
+- Transactions CSV at `/payments/transactions.csv` (REG-15, staff gated;
+  filters: type, since, until). Linked from landing for staff.
+- Milestone 5 complete.
 - `payments` app — `Payment` (with `stripe_checkout_session_id`
   unique-when-set as the webhook idempotency key) and `Receipt`
   (sequential `LSP-YYYY-NNNN`). Django admin.
