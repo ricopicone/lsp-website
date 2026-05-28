@@ -297,6 +297,24 @@ def test_member_speaker_unique_per_event_and_user():
 
 
 @pytest.mark.django_db
+def test_event_detail_renders_someone_in_both_faculty_and_member_speakers_once(client):
+    u = User.objects.create_user(email="m@example.com", first_name="Stephanie", last_name="Swales")
+    u.profile.is_faculty = True
+    u.profile.bio = "Just one bio."
+    u.profile.save()
+    e = Event.objects.create(
+        title="X", slug="x",
+        start_date=date(2026, 9, 6), end_date=date(2026, 9, 6),
+        published=True, status=Event.Status.OPEN,
+    )
+    e.faculty.add(u)
+    e.member_speakers.add(u)
+    resp = client.get(f"/events/{e.slug}/")
+    assert resp.status_code == 200
+    assert resp.content.count(b"Stephanie Swales") == 1
+
+
+@pytest.mark.django_db
 def test_event_detail_renders_member_speaker_with_event_bio(client):
     u = User.objects.create_user(email="m@example.com", first_name="Stephanie", last_name="Swales")
     u.profile.bio = "Generic directory bio."

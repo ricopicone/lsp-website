@@ -51,6 +51,8 @@
       </article>
     {% endfor %}
     {% for u in event.member_speakers.all %}
+      {# Skip anyone who's already rendered above as faculty — same person, same section #}
+      {% if u not in event.faculty.all %}
       <article style="display: flex; gap: 1rem; align-items: flex-start;
                       margin-bottom: 1.25rem;">
         {% if u.profile.headshot %}
@@ -64,6 +66,7 @@
           {% if u.profile.display_event_bio %}<p style="margin: 0;">{{ u.profile.display_event_bio|linebreaksbr }}</p>{% endif %}
         </div>
       </article>
+      {% endif %}
     {% endfor %}
     {% for s in event.speakers.all %}
       {% if s.public %}
