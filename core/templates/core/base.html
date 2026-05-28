@@ -1,40 +1,87 @@
-<!DOCTYPE html>
-<html lang="en">
+{% load static %}<!DOCTYPE html>
+<html lang="en" data-theme="silk">
 <head>
   <meta charset="utf-8">
-  <title>{% block title %}LSP{% endblock %}</title>
+  <title>{% block title %}Lacanian School of Psychoanalysis{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      max-width: 760px;
-      margin: 2rem auto;
-      padding: 0 1.25rem;
-      line-height: 1.55;
-      color: #222;
-    }
-    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
-    h2 { font-size: 1.15rem; margin-top: 1.5rem; }
-    .muted { color: #666; }
-    table { border-collapse: collapse; margin-top: 0.5rem; }
-    th, td { padding: 0.4rem 0.75rem; border-bottom: 1px solid #eee; text-align: left; }
-    th { font-weight: 600; }
-    a { color: #1a5fb4; }
-    nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
-    nav a { margin-right: 1rem; }
-    .pill {
-      display: inline-block;
-      padding: 0.1rem 0.5rem;
-      border-radius: 0.5rem;
-      background: #eef;
-      color: #224;
-      font-size: 0.8rem;
-    }
-  </style>
+  <link rel="stylesheet" href="{% static 'css/site.css' %}">
   {% block extra_head %}{% endblock %}
+  <script>
+    // Apply persisted theme preference before paint so there's no flash.
+    (function () {
+      var saved = localStorage.getItem("lsp-theme");
+      if (saved === "silk" || saved === "abyss") {
+        document.documentElement.setAttribute("data-theme", saved);
+      } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        document.documentElement.setAttribute("data-theme", "abyss");
+      }
+    })();
+  </script>
 </head>
-<body>
-  {% block nav %}{% endblock %}
-  {% block content %}{% endblock %}
+<body class="min-h-screen flex flex-col bg-base-100 text-base-content antialiased">
+
+  {% block nav %}
+  <header class="border-b border-base-300/60 bg-base-100">
+    <div class="mx-auto max-w-5xl px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+      <a href="{% url 'core:landing' %}" class="font-serif text-lg leading-none text-base-content hover:text-primary transition-colors">
+        Lacanian School of Psychoanalysis
+      </a>
+      <nav class="hidden sm:flex items-center gap-1 text-sm">
+        <a href="{% url 'events:list' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200">Events</a>
+        <a href="{% url 'directory' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200">Directory</a>
+        <a href="{% url 'core:calendar' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200">Calendar</a>
+        {% if user.is_authenticated %}
+          {% if user.is_staff %}
+            <a href="/admin/" class="px-3 py-1.5 rounded-md hover:bg-base-200">Admin</a>
+          {% endif %}
+          <span class="px-2 text-base-content/60 text-xs hidden md:inline">{{ user.email }}</span>
+          <a href="{% url 'logout' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200">Log out</a>
+        {% else %}
+          <a href="{% url 'login' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200">Log in</a>
+        {% endif %}
+        <button type="button"
+                id="theme-toggle"
+                class="px-2 py-1.5 rounded-md hover:bg-base-200 text-base-content/70"
+                aria-label="Toggle light/dark mode"
+                title="Toggle light/dark mode">
+          <span data-theme-icon="silk">☼</span>
+          <span data-theme-icon="abyss" class="hidden">☽</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+  {% endblock %}
+
+  <main class="flex-1 mx-auto w-full max-w-5xl px-4 sm:px-6 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="border-t border-base-300/60 bg-base-200/40">
+    <div class="mx-auto max-w-5xl px-4 sm:px-6 py-6 text-xs text-base-content/60 flex flex-wrap gap-x-6 gap-y-2 items-center justify-between">
+      <span>© {% now "Y" %} Lacanian School of Psychoanalysis</span>
+      <a href="mailto:website@lacanschool.org" class="hover:text-primary">website@lacanschool.org</a>
+    </div>
+  </footer>
+
+  <script>
+    // Theme toggle: silk <-> abyss, persisted to localStorage.
+    (function () {
+      var btn = document.getElementById("theme-toggle");
+      if (!btn) return;
+      function sync(theme) {
+        document.querySelectorAll("[data-theme-icon]").forEach(function (el) {
+          el.classList.toggle("hidden", el.dataset.themeIcon !== theme);
+        });
+      }
+      sync(document.documentElement.getAttribute("data-theme") || "silk");
+      btn.addEventListener("click", function () {
+        var current = document.documentElement.getAttribute("data-theme") || "silk";
+        var next = current === "silk" ? "abyss" : "silk";
+        document.documentElement.setAttribute("data-theme", next);
+        localStorage.setItem("lsp-theme", next);
+        sync(next);
+      });
+    })();
+  </script>
 </body>
 </html>

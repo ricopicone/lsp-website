@@ -38,7 +38,20 @@ uv run python manage.py createsuperuser  # create an admin (prompts for email)
 uv run python manage.py runserver        # dev server at http://localhost:8000/
 uv run pytest                            # run the test suite
 uv run ruff check .                      # lint
+npm install                              # one-time: install Tailwind + DaisyUI
+npm run watch:css                        # dev: rebuild static/css/site.css on save
+npm run build:css                        # one-shot minified build
 ```
+
+The CSS pipeline (Tailwind v4 + DaisyUI v5) compiles `static/css/input.css`
+to `static/css/site.css`. The output is `.gitignore`'d — rebuild before
+running the dev server, or run `npm run watch:css` in a second terminal.
+`base.html` links `{% static 'css/site.css' %}` and sets `data-theme="silk"`
+(light) with `abyss` (dark) auto-applied via `prefers-color-scheme` and a
+manual toggle. **Authoring rule: use DaisyUI semantic tokens
+(`bg-base-100`, `text-base-content`, `text-primary`, …) — never hardcoded
+colors like `bg-gray-100`** — so theme switching works without per-component
+fiddling.
 
 ## Layout and conventions
 

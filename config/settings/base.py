@@ -130,6 +130,7 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]  # Tailwind build output, future shared assets
 
 # --- Media files (user uploads — e.g. faculty headshots) ---------------
 # Local-disk storage for Phase 1. Move to S3 + django-storages in a later

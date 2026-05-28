@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* Scan Django templates across all apps for class names. */
+@source "../../**/templates/**/*.html";
+
+/* DaisyUI: silk for light, abyss for dark. Auto-switch via prefers-color-scheme. */
+@plugin "daisyui" {
+  themes: silk --default, abyss --prefersdark;
+}

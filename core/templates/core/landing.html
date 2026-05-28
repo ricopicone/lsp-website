@@ -1,69 +1,89 @@
 {% extends "core/base.html" %}
 {% block title %}Lacanian School of Psychoanalysis — Member services{% endblock %}
+
 {% block content %}
-<h1>Lacanian School of Psychoanalysis</h1>
-<p class="muted">Member services and event registration.</p>
+<div class="space-y-8">
 
-<p>
-  This site handles registration, membership dues, donations, and event
-  scheduling for the Lacanian School. For the main school site — about,
-  faculty, programs, and resources — visit
-  <a href="https://lacanschool.org/">lacanschool.org</a>.
-</p>
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl sm:text-4xl text-base-content">Lacanian School of Psychoanalysis</h1>
+    <p class="text-base-content/60">Member services and event registration.</p>
+  </header>
 
-{% if dues_period_unpaid %}
-<p style="padding: 0.5rem 0.75rem; background: #fff4d6;
-          border-left: 3px solid #d4a017; border-radius: 4px;">
-  Your <strong>{{ dues_period_unpaid.name }}</strong> dues
-  (${{ dues_period_unpaid.dues_amount }}, due {{ dues_period_unpaid.due_date|date:"M j, Y" }})
-  haven't been paid yet — <a href="{% url 'dues' %}">pay now</a>.
-</p>
-{% endif %}
+  <p class="text-base-content/80 max-w-2xl">
+    This site handles registration, membership dues, donations, and event
+    scheduling for the Lacanian School. For the main school site — about,
+    faculty, programs, and resources — visit
+    <a href="https://lacanschool.org/" class="link link-primary">lacanschool.org</a>.
+  </p>
 
-{% if user_registrations_url %}
-<p style="padding: 0.5rem 0.75rem; background: #eef;
-          border-left: 3px solid #44a; border-radius: 4px;">
-  Welcome back. <a href="{{ user_registrations_url }}">View your most recent registration</a>.
-</p>
-{% endif %}
-
-<h2>What you can do here</h2>
-<ul style="line-height: 1.9;">
-  <li><a href="{% url 'events:list' %}"><strong>Upcoming events</strong></a> — seminars and special events</li>
-  <li><a href="{% url 'core:calendar' %}"><strong>Calendar</strong></a> — month view of all sessions</li>
-  <li><a href="{% url 'directory' %}"><strong>Directory</strong></a> — analysts, candidates, and scholars</li>
-  <li><a href="{% url 'dues' %}"><strong>Pay membership dues</strong></a></li>
-  <li><a href="{% url 'donate' %}"><strong>Donate</strong></a></li>
-  {% if user.is_authenticated %}
-    <li><a href="{% url 'logout' %}"><strong>Log out</strong></a> ({{ user.email }})</li>
-  {% else %}
-    <li><a href="{% url 'login' %}"><strong>Log in</strong></a> or <a href="{% url 'signup' %}">sign up</a></li>
-  {% endif %}
-  {% if user.is_staff %}
-    <li>
-      <a href="/admin/"><strong>Admin</strong></a>
-      · <a href="{% url 'treasurer' %}">Treasurer dashboard</a>
-      · <a href="{% url 'payments:transactions_csv' %}">Transactions CSV</a>
-    </li>
-  {% endif %}
-</ul>
-
-{% if upcoming_events %}
-<h2>Coming up</h2>
-<ul style="list-style: none; padding: 0;">
-  {% for e in upcoming_events %}
-  <li style="margin: 0.5rem 0;">
-    <a href="{% url 'events:detail' e.slug %}"><strong>{{ e.title }}</strong></a>
-    <span class="muted">
-      · {{ e.start_date|date:"M j" }}{% if e.end_date != e.start_date %} – {{ e.end_date|date:"M j, Y" }}{% else %}, {{ e.end_date|date:"Y" }}{% endif %}
-      · {{ e.get_format_display }}
+  {% if dues_period_unpaid %}
+  <div role="alert" class="alert alert-warning">
+    <span>
+      Your <strong>{{ dues_period_unpaid.name }}</strong> dues
+      (${{ dues_period_unpaid.dues_amount }}, due {{ dues_period_unpaid.due_date|date:"M j, Y" }})
+      haven't been paid yet — <a href="{% url 'dues' %}" class="link">pay now</a>.
     </span>
-  </li>
-  {% endfor %}
-</ul>
-{% endif %}
+  </div>
+  {% endif %}
 
-<p class="muted" style="margin-top: 2rem; font-size: 0.85rem;">
-  Questions? <a href="mailto:website@lacanschool.org">website@lacanschool.org</a>
-</p>
+  {% if user_registrations_url %}
+  <div role="alert" class="alert alert-info">
+    <span>Welcome back. <a href="{{ user_registrations_url }}" class="link">View your most recent registration</a>.</span>
+  </div>
+  {% endif %}
+
+  <section>
+    <h2 class="font-serif text-xl mb-4 text-base-content">What you can do here</h2>
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <li><a href="{% url 'events:list' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
+        <span class="font-medium">Upcoming events</span>
+        <span class="block text-sm text-base-content/60">Seminars and special events</span>
+      </a></li>
+      <li><a href="{% url 'core:calendar' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
+        <span class="font-medium">Calendar</span>
+        <span class="block text-sm text-base-content/60">Month view of all sessions</span>
+      </a></li>
+      <li><a href="{% url 'directory' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
+        <span class="font-medium">Directory</span>
+        <span class="block text-sm text-base-content/60">Analysts, candidates, and scholars</span>
+      </a></li>
+      <li><a href="{% url 'dues' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
+        <span class="font-medium">Pay membership dues</span>
+      </a></li>
+      <li><a href="{% url 'donate' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
+        <span class="font-medium">Donate</span>
+      </a></li>
+      {% if not user.is_authenticated %}
+      <li><a href="{% url 'login' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
+        <span class="font-medium">Log in or sign up</span>
+        <span class="block text-sm text-base-content/60">Access your registrations</span>
+      </a></li>
+      {% endif %}
+      {% if user.is_staff %}
+      <li><a href="{% url 'treasurer' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
+        <span class="font-medium">Treasurer dashboard</span>
+        <span class="block text-sm text-base-content/60">Per-period totals, role breakdown, unpaid</span>
+      </a></li>
+      {% endif %}
+    </ul>
+  </section>
+
+  {% if upcoming_events %}
+  <section>
+    <h2 class="font-serif text-xl mb-4 text-base-content">Coming up</h2>
+    <ul class="divide-y divide-base-300">
+      {% for e in upcoming_events %}
+      <li class="py-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <a href="{% url 'events:detail' e.slug %}" class="link link-hover font-medium">{{ e.title }}</a>
+        <span class="text-sm text-base-content/60">
+          {{ e.start_date|date:"M j" }}{% if e.end_date != e.start_date %} – {{ e.end_date|date:"M j, Y" }}{% else %}, {{ e.end_date|date:"Y" }}{% endif %}
+          · {{ e.get_format_display }}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+</div>
 {% endblock %}
