@@ -16,6 +16,9 @@ Planning documents live in the parent `LSP-Web-Coordinator` folder, alongside th
   `USR-*` accounts, `REG-*` registration/payment, `PROG-*` events, etc.).
 - `../LSP-Website-Architecture-Phase1.md` — the architecture and data model this
   build follows. Read it before making structural decisions.
+- `../LSP-Website-Phase2-Plan.md` — Phase 2 milestone breakdown (M9–M17),
+  dependency map, and the 10 open decisions that shape it. Read before
+  starting any post-launch work.
 
 ## Tech stack
 
