@@ -139,12 +139,11 @@
 {% block content %}
 <div class="dir-heading">
   <h1>Directory</h1>
-  <span class="count" id="dir-total"></span>
   <input type="search"
          id="dir-search"
          class="dir-search"
-         placeholder="Search by name, location, language…"
-         aria-label="Search members"
+         placeholder="Search…"
+         aria-label="Search members by name, location, or language"
          autocomplete="off">
 </div>
 
@@ -156,7 +155,7 @@
 <div id="dir-root">
 {% for section in sections %}
   <section class="dir-section" data-section="{{ section.role }}">
-    <h2>{{ section.label }}<span class="sec-count">{{ section.members|length }}</span></h2>
+    <h2>{{ section.label }}</h2>
     <div class="dir-grid">
       {% for m in section.members %}
         {% with p=m.profile %}
@@ -187,11 +186,9 @@
 <script>
   (function () {
     const search = document.getElementById('dir-search');
-    const total = document.getElementById('dir-total');
     const noMatch = document.getElementById('dir-no-match');
     const cards = Array.from(document.querySelectorAll('.dir-card'));
     const sections = Array.from(document.querySelectorAll('.dir-section'));
-    total.textContent = cards.length + ' members';
 
     function filter() {
       const q = search.value.trim().toLowerCase();
@@ -210,9 +207,6 @@
         sec.style.display = visible ? '' : 'none';
       });
       noMatch.hidden = shown > 0;
-      total.textContent = q
-        ? `${shown} of ${cards.length} members`
-        : `${cards.length} members`;
     }
 
     search.addEventListener('input', filter);
