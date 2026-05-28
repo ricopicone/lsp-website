@@ -103,8 +103,22 @@ class Event(models.Model):
         related_name="events",
         blank=True,
         help_text=(
-            "External presenters with no LSP account. Use for guest speakers; "
-            "for LSP faculty teaching this event, use the ``faculty`` field instead."
+            "External presenters with no LSP account. For LSP-affiliated "
+            "presenters with a User account, use ``member_speakers`` instead "
+            "so we don't duplicate their bio/headshot. For instructors who "
+            "should be able to edit the event, use ``faculty``."
+        ),
+    )
+    member_speakers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        through="events.EventMemberSpeaker",
+        related_name="speaking_engagements",
+        blank=True,
+        help_text=(
+            "LSP-affiliated presenters (User accounts). Bio defaults to "
+            "Profile.bio but can be overridden per-event via the "
+            "EventMemberSpeaker through model. Display-only — does not grant "
+            "edit access."
         ),
     )
     start_date = models.DateField()
@@ -140,6 +154,44 @@ class Event(models.Model):
     def clean(self):
         if self.end_date and self.start_date and self.end_date < self.start_date:
             raise ValidationError({"end_date": "end_date must be on or after start_date."})
+
+
+class EventMemberSpeaker(models.Model):
+    """Through model for ``Event.member_speakers``.
+
+    Lets an LSP member appear as a speaker on a specific event while
+    optionally overriding the bio shown on that event's page (some talks
+    warrant a tailored intro). Headshot and credentials always come from
+    the user's Profile.
+    """
+
+    event = models.ForeignKey("events.Event", on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    bio_override = models.TextField(
+        blank=True,
+        help_text="Optional per-event bio. Falls back to Profile.bio when blank.",
+    )
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Lower numbers appear first. Ties break on name.",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event", "user"],
+                name="event_member_speaker_unique",
+            ),
+        ]
+        ordering = ["sort_order", "user__last_name", "user__first_name"]
+
+    def __str__(self):
+        return f"{self.user.first_name} {self.user.last_name} @ {self.event.slug}"
+
+    @property
+    def display_bio(self) -> str:
+        """The bio to render: per-event override, falling back to Profile.bio."""
+        return self.bio_override or self.user.profile.bio
 
 
 class Session(models.Model):

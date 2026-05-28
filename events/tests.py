@@ -14,6 +14,7 @@ from accounts.models import User
 from events.models import (
     Audience,
     Event,
+    EventMemberSpeaker,
     PriceTier,
     PricingCode,
     Session,
@@ -269,3 +270,55 @@ def test_event_faculty_m2m_attaches_users():
     e.faculty.add(faculty)
     assert list(e.faculty.all()) == [faculty]
     assert list(faculty.events_taught.all()) == [e]
+
+
+@pytest.mark.django_db
+def test_member_speaker_display_bio_falls_back_to_profile():
+    u = User.objects.create_user(email="m@example.com", first_name="Stephanie", last_name="Swales")
+    u.profile.bio = "Profile-level bio."
+    u.profile.save()
+    e = Event.objects.create(
+        title="Y", slug="y",
+        start_date=date(2026, 9, 6), end_date=date(2026, 9, 6),
+    )
+    link = EventMemberSpeaker.objects.create(event=e, user=u)
+    assert link.display_bio == "Profile-level bio."
+    link.bio_override = "Bio just for this event."
+    link.save()
+    assert link.display_bio == "Bio just for this event."
+
+
+@pytest.mark.django_db
+def test_member_speaker_unique_per_event_and_user():
+    u = User.objects.create_user(email="m@example.com")
+    e = Event.objects.create(
+        title="Y", slug="y",
+        start_date=date(2026, 9, 6), end_date=date(2026, 9, 6),
+    )
+    EventMemberSpeaker.objects.create(event=e, user=u)
+    from django.db import IntegrityError
+    with pytest.raises(IntegrityError):
+        EventMemberSpeaker.objects.create(event=e, user=u)
+
+
+@pytest.mark.django_db
+def test_event_detail_renders_member_speaker_with_overridden_bio(client):
+    u = User.objects.create_user(email="m@example.com", first_name="Stephanie", last_name="Swales")
+    u.profile.bio = "Generic profile bio."
+    u.profile.save()
+    e = Event.objects.create(
+        title="Working with Masochism", slug="working-with-masochism",
+        start_date=date(2026, 9, 6), end_date=date(2026, 9, 6),
+        published=True, status=Event.Status.OPEN,
+        event_type=Event.Type.SPECIAL_EVENT,
+    )
+    EventMemberSpeaker.objects.create(
+        event=e, user=u,
+        bio_override="Per-event introduction tailored to the talk.",
+    )
+    resp = client.get(f"/events/{e.slug}/")
+    assert resp.status_code == 200
+    body = resp.content
+    assert b"Stephanie Swales" in body
+    assert b"Per-event introduction tailored to the talk." in body
+    assert b"Generic profile bio." not in body

@@ -32,7 +32,7 @@
   </p>
   {% endif %}
 
-  {% if event.faculty.all or event.speakers.all %}
+  {% if event.faculty.all or event.speakers.all or event.eventmemberspeaker_set.all %}
   <section>
     <h2>{% if event.event_type == "seminar" %}Faculty{% else %}Speakers{% endif %}</h2>
     {% for f in event.faculty.all %}
@@ -47,6 +47,21 @@
         <div>
           <h3 style="margin: 0 0 0.25rem 0;">{{ f.first_name }} {{ f.last_name }}</h3>
           {% if f.profile.bio %}<p style="margin: 0;">{{ f.profile.bio|linebreaksbr }}</p>{% endif %}
+        </div>
+      </article>
+    {% endfor %}
+    {% for m in event.eventmemberspeaker_set.all %}
+      <article style="display: flex; gap: 1rem; align-items: flex-start;
+                      margin-bottom: 1.25rem;">
+        {% if m.user.profile.headshot %}
+        <img src="{{ m.user.profile.headshot.url }}"
+             alt="{{ m.user.first_name }} {{ m.user.last_name }}"
+             style="width: 96px; height: 96px; object-fit: cover;
+                    border-radius: 50%; flex-shrink: 0;">
+        {% endif %}
+        <div>
+          <h3 style="margin: 0 0 0.25rem 0;">{{ m.user.first_name }} {{ m.user.last_name }}</h3>
+          {% if m.display_bio %}<p style="margin: 0;">{{ m.display_bio|linebreaksbr }}</p>{% endif %}
         </div>
       </article>
     {% endfor %}

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Event, PriceTier, PricingCode, Session, Speaker
+from .models import Event, EventMemberSpeaker, PriceTier, PricingCode, Session, Speaker
 
 
 class SessionInline(admin.TabularInline):
@@ -24,6 +24,15 @@ class PriceTierInline(admin.TabularInline):
     autocomplete_fields = ("session",)
 
 
+class EventMemberSpeakerInline(admin.TabularInline):
+    model = EventMemberSpeaker
+    extra = 0
+    fields = ("user", "sort_order", "bio_override")
+    autocomplete_fields = ("user",)
+    verbose_name = "Member speaker (linked LSP user)"
+    verbose_name_plural = "Member speakers (linked LSP users)"
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     list_display = (
@@ -39,7 +48,7 @@ class EventAdmin(admin.ModelAdmin):
     search_fields = ("title", "slug", "description")
     prepopulated_fields = {"slug": ("title",)}
     filter_horizontal = ("faculty", "speakers")
-    inlines = [SessionInline, PriceTierInline]
+    inlines = [SessionInline, PriceTierInline, EventMemberSpeakerInline]
 
     @admin.display(description="Sessions")
     def session_count(self, obj):
