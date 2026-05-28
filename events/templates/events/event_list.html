@@ -1,33 +1,47 @@
 {% extends "core/base.html" %}
-{% block title %}Upcoming events — LSP{% endblock %}
-{% block content %}
-<h1>Upcoming events</h1>
-<p class="muted">
-  <a href="{% url 'core:landing' %}">← Home</a>
-  · <a href="{% url 'core:calendar' %}">Calendar view</a>
-</p>
+{% block title %}Events — Lacanian School of Psychoanalysis{% endblock %}
 
-{% if events %}
-<ul style="list-style: none; padding: 0;">
-  {% for e in events %}
-  <li style="margin: 1.25rem 0; padding-bottom: 1.25rem; border-bottom: 1px solid #eee;">
-    <h2 style="margin: 0 0 0.25rem 0;">
-      <a href="{% url 'events:detail' e.slug %}">{{ e.title }}</a>
-    </h2>
-    <p class="muted" style="margin: 0 0 0.5rem 0;">
-      {{ e.get_event_type_display }} · {{ e.get_format_display }} ·
-      {{ e.start_date|date:"M j, Y" }} – {{ e.end_date|date:"M j, Y" }}
-      {% if e.faculty.all %}
-        · {% for f in e.faculty.all %}{{ f.first_name }} {{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
-      {% endif %}
-    </p>
-    {% if e.description %}
-    <p style="margin: 0;">{{ e.description|truncatewords:40 }}</p>
-    {% endif %}
-  </li>
-  {% endfor %}
-</ul>
-{% else %}
-<p class="muted">No upcoming events.</p>
-{% endif %}
+{% block content %}
+<div class="space-y-8">
+
+  <header class="flex flex-wrap items-baseline justify-between gap-4 border-b border-base-300/60 pb-4">
+    <h1 class="font-serif text-3xl text-base-content">Upcoming events</h1>
+    <a href="{% url 'core:calendar' %}" class="text-sm link link-hover text-base-content/70 hover:text-primary">Calendar view →</a>
+  </header>
+
+  {% if events %}
+  <ul class="space-y-4">
+    {% for e in events %}
+    <li>
+      <a href="{% url 'events:detail' e.slug %}"
+         class="block rounded-lg border border-base-300 bg-base-100 p-5 hover:border-primary/60 hover:bg-base-200/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-2">
+          <h2 class="font-serif text-xl text-base-content">{{ e.title }}</h2>
+          <span class="text-sm text-base-content/60">
+            {{ e.start_date|date:"M j" }}{% if e.end_date != e.start_date %} – {{ e.end_date|date:"M j, Y" }}{% else %}, {{ e.end_date|date:"Y" }}{% endif %}
+          </span>
+        </div>
+        <div class="flex flex-wrap gap-2 mb-3">
+          <span class="badge badge-sm badge-ghost">{{ e.get_event_type_display }}</span>
+          <span class="badge badge-sm badge-ghost">{{ e.get_format_display }}</span>
+          {% if e.faculty.all %}
+          <span class="text-xs text-base-content/60 self-center ml-1">
+            {% for f in e.faculty.all %}{{ f.first_name }} {{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+          </span>
+          {% endif %}
+        </div>
+        {% if e.description %}
+        <p class="text-sm text-base-content/80 line-clamp-3">{{ e.description|truncatewords:40 }}</p>
+        {% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="text-center py-16 text-base-content/60">
+    <p>No upcoming events.</p>
+  </div>
+  {% endif %}
+
+</div>
 {% endblock %}
