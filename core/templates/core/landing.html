@@ -31,6 +31,7 @@
 <ul style="line-height: 1.9;">
   <li><a href="{% url 'events:list' %}"><strong>Upcoming events</strong></a> — seminars and special events</li>
   <li><a href="{% url 'core:calendar' %}"><strong>Calendar</strong></a> — month view of all sessions</li>
+  <li><a href="{% url 'directory' %}"><strong>Directory</strong></a> — analysts, candidates, and scholars</li>
   <li><a href="{% url 'dues' %}"><strong>Pay membership dues</strong></a></li>
   <li><a href="{% url 'donate' %}"><strong>Donate</strong></a></li>
   {% if user.is_authenticated %}

@@ -75,3 +75,69 @@ def test_user_admin_add_page_loads(client):
     client.force_login(admin_user)
     response = client.get("/admin/accounts/user/add/")
     assert response.status_code == 200
+
+
+# --- Directory ---------------------------------------------------------------
+
+
+def _mk_member(email, first, last, role, **extra):
+    u = User.objects.create_user(email=email, first_name=first, last_name=last)
+    p = u.profile
+    p.role = role
+    for k, v in extra.items():
+        setattr(p, k, v)
+    p.save()
+    return u
+
+
+@pytest.mark.django_db
+def test_directory_lists_members_by_role_section(client):
+    _mk_member("a@x.test", "Andre", "Patsalides", Profile.Role.ANALYST, location="Paris")
+    _mk_member("c@x.test", "Cecile", "Gouffrant", Profile.Role.CANDIDATE, location="Philly")
+    # External users must NOT show in the directory.
+    _mk_member("g@x.test", "Guest", "Person", Profile.Role.EXTERNAL)
+    resp = client.get("/directory/")
+    assert resp.status_code == 200
+    body = resp.content
+    assert b"Analysts of the School" in body
+    assert b"Candidate Analysts" in body
+    assert b"Andre" in body and b"Patsalides" in body
+    assert b"Cecile" in body and b"Gouffrant" in body
+    assert b"Guest Person" not in body
+
+
+@pytest.mark.django_db
+def test_directory_detail_resolves_by_slug(client):
+    _mk_member(
+        "a@x.test", "Andre", "Patsalides", Profile.Role.ANALYST,
+        bio="Founding member.", location="Paris, France",
+        credentials="PhD", languages_spoken="French, English",
+    )
+    resp = client.get("/directory/andre-patsalides/")
+    assert resp.status_code == 200
+    body = resp.content
+    assert b"Andre Patsalides" in body
+    assert b"Paris, France" in body
+    assert b"Founding member." in body
+    assert b"PhD" in body
+    assert b"French, English" in body
+    # Public email defaults to login email when public_email is unset.
+    assert b"a@x.test" in body
+
+
+@pytest.mark.django_db
+def test_directory_detail_404_for_unknown_slug(client):
+    resp = client.get("/directory/no-such-person/")
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_directory_detail_prefers_public_email_when_set(client):
+    _mk_member(
+        "login@x.test", "Sora", "Han", Profile.Role.PRE_CANDIDATE_SCHOLAR,
+        public_email="public@x.test",
+    )
+    resp = client.get("/directory/sora-han/")
+    body = resp.content
+    assert b"public@x.test" in body
+    assert b"login@x.test" not in body

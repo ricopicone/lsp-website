@@ -1,0 +1,142 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ profile.user.first_name }} {{ profile.user.last_name }} — Directory{% endblock %}
+
+{% block extra_head %}
+<style>
+  body { max-width: 760px; }
+
+  .det-back { font-size: 0.9rem; color: #555; }
+  .det-back a { color: inherit; text-decoration: none; border-bottom: 1px dotted #999; }
+  .det-back a:hover { color: #1a5fb4; border-color: #1a5fb4; }
+
+  .det-header {
+    display: grid;
+    grid-template-columns: 9rem 1fr;
+    gap: 1.5rem;
+    align-items: start;
+    margin: 1.25rem 0 1.5rem;
+  }
+  .det-photo {
+    width: 9rem;
+    height: 9rem;
+    object-fit: cover;
+    border-radius: 6px;
+    background: #ece9df;
+    color: #777;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Georgia, serif;
+    font-size: 2.5rem;
+  }
+  .det-name {
+    font-family: Georgia, "Iowan Old Style", "Apple Garamond", "Palatino Linotype", serif;
+    font-weight: 500;
+    font-size: 2rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.3rem;
+    line-height: 1.1;
+  }
+  .det-role {
+    display: inline-block;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #555;
+    background: #f0ede4;
+    padding: 0.18rem 0.55rem;
+    border-radius: 4px;
+  }
+  .det-headline {
+    font-size: 1.02rem;
+    color: #333;
+    margin: 0.75rem 0 0;
+    line-height: 1.45;
+  }
+
+  .det-facts {
+    display: grid;
+    grid-template-columns: 8rem 1fr;
+    gap: 0.55rem 1.25rem;
+    margin: 1.75rem 0;
+    font-size: 0.95rem;
+  }
+  .det-facts dt {
+    color: #777;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 0.25rem;
+  }
+  .det-facts dd { margin: 0; color: #222; }
+  .det-facts a { color: #1a5fb4; }
+
+  .det-bio {
+    font-size: 1rem;
+    line-height: 1.65;
+    color: #222;
+    border-top: 1px solid #eee;
+    padding-top: 1.5rem;
+  }
+  .det-bio p { margin: 0 0 1em; }
+
+  @media (max-width: 540px) {
+    .det-header { grid-template-columns: 1fr; }
+    .det-photo { width: 7rem; height: 7rem; font-size: 2rem; }
+    .det-facts { grid-template-columns: 1fr; gap: 0.15rem 0; }
+    .det-facts dt { margin-top: 1rem; }
+  }
+</style>
+{% endblock %}
+
+{% block nav %}
+<nav class="det-back"><a href="{% url 'directory' %}">← Directory</a></nav>
+{% endblock %}
+
+{% block content %}
+<header class="det-header">
+  {% if profile.headshot %}
+    <img class="det-photo" src="{{ profile.headshot.url }}" alt="">
+  {% else %}
+    <div class="det-photo" aria-hidden="true">{{ profile.user.first_name|slice:":1" }}{{ profile.user.last_name|slice:":1" }}</div>
+  {% endif %}
+  <div>
+    <h1 class="det-name">{{ profile.user.first_name }} {{ profile.user.last_name }}</h1>
+    <span class="det-role">{{ section_label }}</span>
+    {% if profile.bio %}
+      {# First line / paragraph of the bio doubles as the headline tagline #}
+      {% with first_para=profile.bio|linebreaksbr|striptags|truncatewords:30 %}
+        <p class="det-headline">{{ first_para }}</p>
+      {% endwith %}
+    {% endif %}
+  </div>
+</header>
+
+<dl class="det-facts">
+  {% if profile.credentials %}
+    <dt>Credentials</dt>
+    <dd>{{ profile.credentials }}</dd>
+  {% endif %}
+  {% if profile.languages_spoken %}
+    <dt>Languages</dt>
+    <dd>{{ profile.languages_spoken }}</dd>
+  {% endif %}
+  {% if profile.location %}
+    <dt>Location</dt>
+    <dd>{{ profile.location }}</dd>
+  {% endif %}
+  {% if profile.phone %}
+    <dt>Phone</dt>
+    <dd><a href="tel:{{ profile.phone }}">{{ profile.phone.as_international }}</a></dd>
+  {% endif %}
+  <dt>Email</dt>
+  <dd><a href="mailto:{{ profile.display_email }}">{{ profile.display_email }}</a></dd>
+</dl>
+
+{% if profile.bio %}
+<div class="det-bio">
+  {{ profile.bio|linebreaks }}
+</div>
+{% endif %}
+{% endblock %}

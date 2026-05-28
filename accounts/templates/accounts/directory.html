@@ -1,0 +1,214 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Directory — Lacanian School of Psychoanalysis{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Override the default narrow column for the directory only. */
+  body { max-width: 1100px; }
+
+  .dir-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 1rem 1.5rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 0.6rem;
+  }
+  .dir-heading h1 {
+    font-family: Georgia, "Iowan Old Style", "Apple Garamond", "Palatino Linotype", serif;
+    font-weight: 500;
+    font-size: 1.8rem;
+    letter-spacing: -0.01em;
+    margin: 0;
+    flex: 1 1 auto;
+  }
+  .dir-heading .count { color: #888; font-size: 0.95rem; }
+  .dir-search {
+    flex: 0 0 auto;
+    font-size: 0.95rem;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    width: 14rem;
+    background: #fff;
+    color: #222;
+  }
+  .dir-search:focus {
+    outline: 2px solid #1a5fb4;
+    outline-offset: 1px;
+    border-color: transparent;
+  }
+
+  .dir-explainer {
+    color: #555;
+    font-size: 0.95rem;
+    margin: 0.75rem 0 2rem;
+    max-width: 38rem;
+  }
+
+  .dir-section { margin: 2.5rem 0 1rem; }
+  .dir-section h2 {
+    font-family: Georgia, "Iowan Old Style", serif;
+    font-weight: 500;
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #555;
+    margin: 0 0 1.1rem;
+  }
+  .dir-section .sec-count { color: #999; font-weight: 400; letter-spacing: 0; text-transform: none; margin-left: 0.4rem; }
+
+  .dir-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+    gap: 1.5rem 1.25rem;
+  }
+
+  .dir-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.55rem;
+    text-decoration: none;
+    color: inherit;
+    padding: 0.75rem;
+    border-radius: 8px;
+    transition: background-color 120ms ease;
+  }
+  .dir-card:hover, .dir-card:focus-visible {
+    background: #f5f4f0;
+    outline: none;
+  }
+  .dir-card:focus-visible { box-shadow: 0 0 0 2px #1a5fb4; }
+
+  .dir-photo {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 50%;
+    background: #ece9df;
+    color: #777;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Georgia, serif;
+    font-size: 2rem;
+  }
+  .dir-photo.empty { padding: 0; }
+
+  .dir-name {
+    font-family: Georgia, "Iowan Old Style", serif;
+    font-size: 1.05rem;
+    line-height: 1.25;
+    color: #222;
+  }
+  .dir-meta {
+    font-size: 0.82rem;
+    color: #666;
+    line-height: 1.35;
+  }
+
+  .dir-empty {
+    color: #777;
+    padding: 2rem 0;
+    text-align: center;
+  }
+
+  @media (max-width: 600px) {
+    .dir-grid { grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 1rem 0.75rem; }
+    .dir-photo { font-size: 1.5rem; }
+    .dir-search { width: 100%; }
+  }
+</style>
+{% endblock %}
+
+{% block nav %}
+<nav><a href="/">← Home</a></nav>
+{% endblock %}
+
+{% block content %}
+<div class="dir-heading">
+  <h1>Directory</h1>
+  <span class="count" id="dir-total"></span>
+  <input type="search"
+         id="dir-search"
+         class="dir-search"
+         placeholder="Search by name, location, language…"
+         aria-label="Search members"
+         autocomplete="off">
+</div>
+
+<p class="dir-explainer">
+  Analysts, candidates, and scholars of the Lacanian School of Psychoanalysis.
+  Click a name for credentials, contact, and bio.
+</p>
+
+<div id="dir-root">
+{% for section in sections %}
+  <section class="dir-section" data-section="{{ section.role }}">
+    <h2>{{ section.label }}<span class="sec-count">{{ section.members|length }}</span></h2>
+    <div class="dir-grid">
+      {% for m in section.members %}
+        {% with p=m.profile %}
+        <a class="dir-card"
+           href="{% url 'directory_detail' m.slug %}"
+           data-name="{{ p.user.first_name|lower }} {{ p.user.last_name|lower }}"
+           data-location="{{ p.location|lower }}"
+           data-languages="{{ p.languages_spoken|lower }}">
+          {% if p.headshot %}
+            <img class="dir-photo" src="{{ p.headshot.url }}" alt="" loading="lazy">
+          {% else %}
+            <div class="dir-photo empty" aria-hidden="true">{{ p.user.first_name|slice:":1" }}{{ p.user.last_name|slice:":1" }}</div>
+          {% endif %}
+          <div class="dir-name">{{ p.user.first_name }} {{ p.user.last_name }}</div>
+          {% if p.location %}<div class="dir-meta">{{ p.location }}</div>{% endif %}
+        </a>
+        {% endwith %}
+      {% endfor %}
+    </div>
+  </section>
+{% empty %}
+  <p class="dir-empty">No members in the directory yet.</p>
+{% endfor %}
+</div>
+
+<p class="dir-empty" id="dir-no-match" hidden>No members match.</p>
+
+<script>
+  (function () {
+    const search = document.getElementById('dir-search');
+    const total = document.getElementById('dir-total');
+    const noMatch = document.getElementById('dir-no-match');
+    const cards = Array.from(document.querySelectorAll('.dir-card'));
+    const sections = Array.from(document.querySelectorAll('.dir-section'));
+    total.textContent = cards.length + ' members';
+
+    function filter() {
+      const q = search.value.trim().toLowerCase();
+      let shown = 0;
+      cards.forEach(card => {
+        const haystack = [
+          card.dataset.name, card.dataset.location, card.dataset.languages
+        ].join(' ');
+        const match = !q || haystack.includes(q);
+        card.style.display = match ? '' : 'none';
+        if (match) shown++;
+      });
+      sections.forEach(sec => {
+        const visible = Array.from(sec.querySelectorAll('.dir-card'))
+          .some(c => c.style.display !== 'none');
+        sec.style.display = visible ? '' : 'none';
+      });
+      noMatch.hidden = shown > 0;
+      total.textContent = q
+        ? `${shown} of ${cards.length} members`
+        : `${cards.length} members`;
+    }
+
+    search.addEventListener('input', filter);
+  })();
+</script>
+{% endblock %}

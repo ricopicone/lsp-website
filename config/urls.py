@@ -17,11 +17,14 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from accounts import views as _account_views
 from payments import views as _payment_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("accounts.urls")),
+    path("directory/", _account_views.directory, name="directory"),
+    path("directory/<slug:slug>/", _account_views.directory_detail, name="directory_detail"),
     path("events/", include("events.urls")),
     path("dues/", _payment_views.dues_pay, name="dues"),
     path("donate/", _payment_views.donate, name="donate"),
