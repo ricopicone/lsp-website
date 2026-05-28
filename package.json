@@ -4,8 +4,8 @@
   "private": true,
   "description": "CSS build tooling for the LSP website (Tailwind v4 + DaisyUI v5).",
   "scripts": {
-    "build:css": "tailwindcss -i ./static/css/input.css -o ./static/css/site.css --minify",
-    "watch:css": "tailwindcss -i ./static/css/input.css -o ./static/css/site.css --watch"
+    "build:css": "tailwindcss -i ./assets/css/input.css -o ./static/css/site.css --minify",
+    "watch:css": "tailwindcss -i ./assets/css/input.css -o ./static/css/site.css --watch"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.0.0",
