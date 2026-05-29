@@ -125,7 +125,12 @@ def _tuition_block_reason(user, event) -> str | None:
             "this year — all options unlock registration."
         )
     if (event.event_type in TUITION_BLOCKING_EVENT_TYPES
-            and enr.status == TuitionEnrollment.Status.COMMITTED):
+            and enr.status == TuitionEnrollment.Status.COMMITTED
+            and _find_covered_tier(user, event) is not None):
+        # The student would be claiming tuition coverage they haven't paid
+        # for. If the event has no covered_by_tuition tier matching their
+        # audience, no coverage would apply — they'd pay the regular fee
+        # like everyone else, so there's nothing to gate on.
         return (
             "You committed to pay tuition for "
             f"{period.name} but we haven't received a payment or a payment "

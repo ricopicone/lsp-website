@@ -628,17 +628,24 @@ def test_special_event_allows_skipping_student(
 
 
 @pytest.mark.django_db
-def test_special_event_blocks_committed_student_with_no_payment(
+def test_special_event_blocks_committed_student_when_event_is_tuition_covered(
     client, special_event, special_event_tier,
 ):
-    """COMMITTED means "I'll pay" — but until payment lands or a plan is set up,
-    special-event registration is blocked. The student needs to either pay or
-    switch to PAYMENT_PLAN first."""
+    """The narrow gate only fires when the event actually has a covered tier
+    matching the student's audience. When it does, COMMITTED-without-payment
+    is blocked — they'd be claiming coverage they haven't paid for."""
     from accounts.models import Profile
+    from events.models import Audience, PriceTier
     from payments.models import TuitionEnrollment, TuitionPeriod
+
     u = User.objects.create_user(email="cand3@example.com", password="x")
     u.profile.role = Profile.Role.CANDIDATE
     u.profile.save()
+    # The event has a covered_by_tuition tier matching the candidate audience.
+    PriceTier.objects.create(
+        event=special_event, audience=Audience.CANDIDATE,
+        base_amount=Decimal("50.00"), covered_by_tuition=True,
+    )
     period = TuitionPeriod.current()
     TuitionEnrollment.objects.create(
         user=u, tuition_period=period,
@@ -650,6 +657,35 @@ def test_special_event_blocks_committed_student_with_no_payment(
     )
     assert resp.status_code == 403
     assert b"committed to pay tuition" in resp.content
+
+
+@pytest.mark.django_db
+def test_special_event_allows_committed_student_when_event_is_not_tuition_covered(
+    client, special_event, special_event_tier,
+):
+    """The narrow gate does NOT fire when the event has no covered tier —
+    a COMMITTED student would pay the regular fee like everyone else, so
+    there's nothing to gate on."""
+    from accounts.models import Profile
+    from payments.models import TuitionEnrollment, TuitionPeriod
+
+    # special_event_tier has covered_by_tuition=False (no covered tier).
+    assert special_event_tier.covered_by_tuition is False
+
+    u = User.objects.create_user(email="cand7@example.com", password="x")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    period = TuitionPeriod.current()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    client.force_login(u)
+    resp = client.get(
+        reverse("registrations:register", args=[special_event.slug])
+    )
+    # No block — they'll see the standard form and pay the regular fee.
+    assert resp.status_code == 200
 
 
 @pytest.mark.django_db
