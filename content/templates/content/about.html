@@ -18,18 +18,17 @@
   </div>
 
   {% if committees %}
-  <section class="space-y-6">
+  <section class="space-y-6 max-w-3xl">
     <h2 class="font-serif text-2xl text-base-content border-b border-base-300/60 pb-2">
-      Governance & Committees
+      Current Rosters
     </h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
       {% for c in committees %}
-      <section class="space-y-3">
-        <h3 class="font-serif text-xl text-base-content">{{ c.name }}</h3>
-        {% if c.description %}<p class="text-sm text-base-content/70">{{ c.description }}</p>{% endif %}
+      <section class="space-y-3 p-5 rounded-lg border border-base-300 bg-base-100">
+        <h3 class="font-serif text-lg text-base-content">{{ c.name }}</h3>
         {% with members=c.memberships.all %}
         {% if members %}
-        <ul class="text-sm space-y-1">
+        <ul class="text-sm space-y-1.5">
           {% for m in members %}{% if not m.end_date %}
           <li class="flex flex-wrap items-baseline gap-x-2">
             {% if m.user.profile.is_in_directory %}
