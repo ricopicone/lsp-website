@@ -200,6 +200,34 @@ def test_directory_detail_prefers_public_email_when_set(client):
     assert b"login@x.test" not in body
 
 
+@pytest.mark.django_db
+def test_directory_card_shows_faculty_badge(client):
+    _mk_member(
+        "f@x.test", "Faye", "Teacher", Profile.Role.ANALYST,
+        is_faculty=True,
+    )
+    _mk_member(
+        "n@x.test", "Nora", "Notfaculty", Profile.Role.ANALYST,
+        is_faculty=False,
+    )
+    body = client.get("/directory/").content
+    # Faculty badge is in the card for the faculty member, not the other.
+    assert b"Faculty" in body
+    # Check it's actually next to Faye, not just an arbitrary appearance —
+    # the card layout puts the badge in the same block as the name.
+    assert body.count(b"Faculty") == 1
+
+
+@pytest.mark.django_db
+def test_directory_detail_shows_faculty_badge(client):
+    _mk_member(
+        "f@x.test", "Faye", "Teacher", Profile.Role.ANALYST,
+        is_faculty=True,
+    )
+    body = client.get("/directory/faye-teacher/").content
+    assert b"Faculty" in body
+
+
 # ---- Find-an-Analyst referral form -------------------------------------
 
 
