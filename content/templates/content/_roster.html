@@ -18,7 +18,7 @@ they're in the public directory.
       <span class="text-base-content">{{ m.user.first_name }} {{ m.user.last_name }}</span>
       {% endif %}
       {% if m.role_in_committee != "member" %}
-      <span class="text-xs text-base-content/60">— {{ m.get_role_in_committee_display }}</span>
+      <span class="text-xs text-base-content/60">– {{ m.get_role_in_committee_display }}</span>
       {% endif %}
     </li>
     {% endif %}{% endfor %}

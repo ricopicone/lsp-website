@@ -79,7 +79,7 @@ core/           shared utilities, unified calendar (PROG-6)                <- M2
   live on Profile itself rather than a separate model — every user has a
   Profile anyway, and some of those fields may turn out useful for members
   generally in Phase 2.
-- Committee memberships (Board, Programming Committee, LSP Staff) live in the
+- Committee memberships (Board, Program Committee, LSP Staff) live in the
   `committees` app as structured `Committee` + `CommitteeMembership` models
   (with named roles and term dates), not Django auth Groups. Memberships
   drive admin permissions.
