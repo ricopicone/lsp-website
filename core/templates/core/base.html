@@ -139,7 +139,9 @@
           “{{ aphorism.quote }}”
         </p>
         <footer class="text-xs text-base-content/45 mt-1">
-          — Lacan, <cite class="not-italic">{{ aphorism.source }}</cite>
+          — Lacan,
+          <cite class="not-italic border-b border-dotted border-base-content/30 cursor-help"
+                title="{{ aphorism.full_attribution }}">{{ aphorism.short_attribution }}</cite>
         </footer>
       </blockquote>
       {% endif %}
