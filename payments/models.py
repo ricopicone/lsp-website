@@ -44,6 +44,12 @@ class DuesPeriod(models.Model):
             "view will refuse event registrations from obligated unpaid users."
         ),
     )
+    reminder_interval_days = models.PositiveSmallIntegerField(
+        default=7,
+        help_text=(
+            "How often to email reminders to unpaid members after the due date."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     #: Maps Profile.role values to the tier-field name on this model.
@@ -310,6 +316,13 @@ class TuitionPeriod(models.Model):
         max_digits=8,
         decimal_places=2,
         help_text="Annual tuition owed by an enrolled student.",
+    )
+    reminder_interval_days = models.PositiveSmallIntegerField(
+        default=7,
+        help_text=(
+            "How often to email reminders to students with no decision / "
+            "unpaid committed status, after the decision-due date."
+        ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -1,13 +1,14 @@
-"""Send weekly dues reminders to obligated unpaid members (REG-12).
+"""Send dues reminders to obligated unpaid members (REG-12).
 
-Wire via a weekly systemd timer on the EC2 host. Idempotent within a
-7-day window via the ``DuesReminder`` log: a user who's already been
-reminded in the last 7 days for the current period is skipped.
+Wire via a daily systemd timer on the EC2 host. Each DuesPeriod carries
+its own ``reminder_interval_days`` (default 7) — the treasurer can change
+it via the treasurer admin Settings tab. A user is skipped if they were
+already reminded within that interval.
 
 Skips:
 - users not in ``DUES_OBLIGATED_ROLES``
 - users who already paid for the current period
-- users whose last reminder was within the past 7 days
+- users whose last reminder was within the period's reminder_interval_days
 - when no current period exists, or it's not yet past due date
 """
 
@@ -50,7 +51,7 @@ class Command(BaseCommand):
             )
             return
 
-        week_ago = timezone.now() - timedelta(days=7)
+        interval_cutoff = timezone.now() - timedelta(days=period.reminder_interval_days)
         sent = 0
         skipped_paid = 0
         skipped_recent = 0
@@ -66,7 +67,7 @@ class Command(BaseCommand):
                 skipped_paid += 1
                 continue
             if DuesReminder.objects.filter(
-                user=user, dues_period=period, sent_at__gte=week_ago,
+                user=user, dues_period=period, sent_at__gte=interval_cutoff,
             ).exists():
                 skipped_recent += 1
                 continue

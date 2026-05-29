@@ -3,20 +3,18 @@
 <div class="space-y-6">
 
   <p class="text-sm text-base-content/60">
-    Per-year status for in-training students (pre-candidates and candidates).
-    Use <a href="/admin/payments/tuitionenrollment/" class="link">enrollments admin</a>
-    to record / change a decision.
+    Annual status for in-training students (pre-candidates and candidates).
   </p>
 
   {% if tuition_period %}
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">
-      Current period: {{ tuition_period.name }}
+      Current academic year: {{ tuition_period.name }}
     </h2>
     <p class="text-sm text-base-content/70">
       <strong class="text-base-content">${{ tuition_period.tuition_amount }}</strong> per student ·
       decisions due {{ tuition_period.decision_due_date|date:"M j, Y" }} ·
-      period {{ tuition_period.start_date|date:"M j, Y" }} – {{ tuition_period.end_date|date:"M j, Y" }}.
+      {{ tuition_period.start_date|date:"M j, Y" }} – {{ tuition_period.end_date|date:"M j, Y" }}.
     </p>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -111,7 +109,7 @@
   {% endif %}
 
   {% else %}
-  <p class="text-base-content/60">No current tuition period configured.</p>
+  <p class="text-base-content/60">No current academic year configured.</p>
   {% endif %}
 
 </div>

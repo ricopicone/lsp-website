@@ -384,7 +384,7 @@ def test_treasurer_dashboard_handles_no_period(client, staff_user):
     client.force_login(staff_user)
     resp = client.get("/treasurer/")
     assert resp.status_code == 200
-    assert b"No current tuition period" in resp.content
+    assert b"No current academic year configured" in resp.content
 
 
 @pytest.mark.django_db
@@ -454,6 +454,8 @@ def test_treasurer_settings_post_updates_both_periods(
         "dues_candidate":     "120",
         "dues_analyst":       "180",
         "tuition_amount":     "850",
+        "dues_reminder_interval_days":    "7",
+        "tuition_reminder_interval_days": "7",
     })
     assert resp.status_code == 302
     assert "saved=1" in resp.url
@@ -475,8 +477,61 @@ def test_treasurer_settings_rejects_negative_amounts(
         "dues_candidate":     "100",
         "dues_analyst":       "150",
         "tuition_amount":     "800",
+        "dues_reminder_interval_days":    "7",
+        "tuition_reminder_interval_days": "7",
     })
     assert resp.status_code == 200  # form re-renders with errors
+
+
+@pytest.mark.django_db
+def test_treasurer_settings_saves_reminder_cadence(
+    client, staff_user, current_period,
+):
+    """Cadence inputs round-trip to both DuesPeriod and TuitionPeriod."""
+    from payments.models import DuesPeriod
+
+    dues_period = DuesPeriod.current()
+    client.force_login(staff_user)
+    resp = client.post(reverse("treasurer_settings"), {
+        "dues_pre_candidate": "50",
+        "dues_candidate":     "100",
+        "dues_analyst":       "150",
+        "tuition_amount":     "800",
+        "dues_reminder_interval_days":    "14",
+        "tuition_reminder_interval_days": "10",
+    })
+    assert resp.status_code == 302
+    dues_period.refresh_from_db()
+    current_period.refresh_from_db()
+    assert dues_period.reminder_interval_days == 14
+    assert current_period.reminder_interval_days == 10
+
+
+@pytest.mark.django_db
+def test_send_tuition_reminders_respects_period_cadence(
+    current_period, mailoutbox,
+):
+    """A 14-day cadence skips users reminded within the past 14 days."""
+    from datetime import timedelta
+    from io import StringIO
+
+    from django.core.management import call_command
+    from django.utils import timezone
+
+    from payments.models import TuitionReminder
+
+    current_period.decision_due_date = current_period.start_date
+    current_period.reminder_interval_days = 14
+    current_period.save()
+
+    u = _mk_candidate("cad@x.test")
+    # Reminded 10 days ago — under the 14-day cadence, should NOT send again.
+    TuitionReminder.objects.create(user=u, tuition_period=current_period)
+    TuitionReminder.objects.filter(user=u).update(
+        sent_at=timezone.now() - timedelta(days=10)
+    )
+    call_command("send_tuition_reminders", stdout=StringIO())
+    assert not any(u.email in m.to for m in mailoutbox)
 
 
 @pytest.mark.django_db
@@ -488,8 +543,9 @@ def test_treasurer_settings_handles_missing_periods(client, staff_user):
     client.force_login(staff_user)
     resp = client.get(reverse("treasurer_settings"))
     assert resp.status_code == 200
-    assert b"No current dues period" in resp.content
-    assert b"No current tuition period" in resp.content
+    body = resp.content
+    # Both sections show a polite "no academic year configured" message.
+    assert body.count(b"No current academic year is configured") == 2
 
 
 # --- Auto-flip on tuition payment success -------------------------------

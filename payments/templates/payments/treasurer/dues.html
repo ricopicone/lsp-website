@@ -4,13 +4,13 @@
 
   {% if current_period %}
   <section class="space-y-3">
-    <h2 class="font-serif text-xl text-base-content">Current period: {{ current_period.name }}</h2>
+    <h2 class="font-serif text-xl text-base-content">Current academic year: {{ current_period.name }}</h2>
     <p class="text-sm text-base-content/70">
       Tiers: <strong>${{ current_period.dues_amount_pre_candidate }}</strong> pre-cand /
       <strong>${{ current_period.dues_amount_candidate }}</strong> cand /
       <strong>${{ current_period.dues_amount_analyst }}</strong> analyst-scholar ·
       due {{ current_period.due_date|date:"M j, Y" }} ·
-      period {{ current_period.start_date|date:"M j, Y" }} – {{ current_period.end_date|date:"M j, Y" }}.
+      {{ current_period.start_date|date:"M j, Y" }} – {{ current_period.end_date|date:"M j, Y" }}.
     </p>
 
     {% with cur=period_stats.0 %}
@@ -35,11 +35,11 @@
     {% endwith %}
   </section>
   {% else %}
-  <p class="text-base-content/60">No current dues period configured.</p>
+  <p class="text-base-content/60">No current academic year configured.</p>
   {% endif %}
 
   <section class="space-y-3">
-    <h2 class="font-serif text-xl text-base-content">Totals collected per period</h2>
+    <h2 class="font-serif text-xl text-base-content">Totals collected per academic year</h2>
     <div class="rounded-lg border border-base-300 p-4 bg-base-100 max-w-3xl">
       <canvas id="chart-periods" height="180"></canvas>
     </div>
@@ -47,7 +47,7 @@
 
   {% if role_breakdown %}
   <section class="space-y-3">
-    <h2 class="font-serif text-xl text-base-content">Current period: paid / unpaid by role</h2>
+    <h2 class="font-serif text-xl text-base-content">Current academic year: paid / unpaid by role</h2>
     <div class="rounded-lg border border-base-300 p-4 bg-base-100 max-w-3xl">
       <canvas id="chart-roles" height="200"></canvas>
     </div>
@@ -74,6 +74,18 @@
   {% if unpaid_users %}
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">Unpaid members <span class="text-base-content/60 text-base font-normal">({{ unpaid_users|length }})</span></h2>
+    <p class="text-sm text-base-content/60">
+      {% if current_period %}
+      These members owe dues for {{ current_period.name }} and haven't paid yet.
+      The website emails each of them a reminder every
+      {{ current_period.reminder_interval_days|default:7 }}
+      day{{ current_period.reminder_interval_days|default:7|pluralize }},
+      starting after the due date ({{ current_period.due_date|date:"M j, Y" }}).
+      Adjust the cadence on the <a href="{% url 'treasurer_settings' %}" class="link">Settings</a> tab.
+      {% else %}
+      These members owe dues and haven't paid yet.
+      {% endif %}
+    </p>
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
@@ -94,12 +106,12 @@
   {% endif %}
 
   <section class="space-y-3">
-    <h2 class="font-serif text-xl text-base-content">All periods</h2>
+    <h2 class="font-serif text-xl text-base-content">All academic years</h2>
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
           <tr>
-            <th>Period</th><th>Due</th>
+            <th>Academic year</th><th>Due</th>
             <th>Pre-cand</th><th>Cand</th><th>Analyst</th>
             <th>Paid</th><th>Unpaid</th><th>Collected</th>
           </tr>

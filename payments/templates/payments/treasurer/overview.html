@@ -50,11 +50,11 @@
         </div>
       </div>
       <div class="text-xs text-base-content/60 pt-1 border-t border-base-300/40">
-        Collected this period: <strong>${{ cur.total_collected }}</strong>
+        Collected this academic year: <strong>${{ cur.total_collected }}</strong>
       </div>
       {% endwith %}
       {% else %}
-      <p class="text-sm text-base-content/60">No current dues period configured.</p>
+      <p class="text-sm text-base-content/60">No current academic year configured.</p>
       {% endif %}
     </section>
 
@@ -90,16 +90,15 @@
         </div>
       </div>
       {% else %}
-      <p class="text-sm text-base-content/60">No current tuition period configured.</p>
+      <p class="text-sm text-base-content/60">No current academic year configured.</p>
       {% endif %}
     </section>
 
   </div>
 
   <p class="text-xs text-base-content/60 pt-2">
-    Adjust amounts under <a href="{% url 'treasurer_settings' %}" class="link">Settings</a> ·
-    Past periods live in <a href="/admin/payments/duesperiod/" class="link">Dues admin</a> /
-    <a href="/admin/payments/tuitionperiod/" class="link">Tuition admin</a>.
+    Adjust amounts and reminder cadence under
+    <a href="{% url 'treasurer_settings' %}" class="link">Settings</a>.
   </p>
 
 </div>

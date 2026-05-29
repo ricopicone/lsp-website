@@ -102,6 +102,16 @@ class TreasurerSettingsForm(forms.Form):
         max_digits=8, decimal_places=2, min_value=Decimal("0"),
         label="Annual tuition (in-training students)",
     )
+    dues_reminder_interval_days = forms.IntegerField(
+        min_value=1, max_value=90,
+        label="Dues reminder cadence (days)",
+        help_text="How often unpaid members are emailed a reminder after the due date.",
+    )
+    tuition_reminder_interval_days = forms.IntegerField(
+        min_value=1, max_value=90,
+        label="Tuition reminder cadence (days)",
+        help_text="How often undecided / committed-without-payment students are emailed.",
+    )
 
     def __init__(self, *args, dues_period=None, tuition_period=None, **kwargs):
         self.dues_period = dues_period
@@ -111,31 +121,46 @@ class TreasurerSettingsForm(forms.Form):
             initial.setdefault("dues_pre_candidate", dues_period.dues_amount_pre_candidate)
             initial.setdefault("dues_candidate",     dues_period.dues_amount_candidate)
             initial.setdefault("dues_analyst",       dues_period.dues_amount_analyst)
+            initial.setdefault(
+                "dues_reminder_interval_days",
+                dues_period.reminder_interval_days,
+            )
         if tuition_period is not None:
             initial.setdefault("tuition_amount", tuition_period.tuition_amount)
+            initial.setdefault(
+                "tuition_reminder_interval_days",
+                tuition_period.reminder_interval_days,
+            )
         kwargs["initial"] = initial
         super().__init__(*args, **kwargs)
         # Disable individual fields when their period doesn't exist —
         # treasurer can't edit values for a period that's not configured.
         if dues_period is None:
-            for f in ("dues_pre_candidate", "dues_candidate", "dues_analyst"):
+            for f in ("dues_pre_candidate", "dues_candidate", "dues_analyst",
+                      "dues_reminder_interval_days"):
                 self.fields[f].disabled = True
                 self.fields[f].required = False
         if tuition_period is None:
-            self.fields["tuition_amount"].disabled = True
-            self.fields["tuition_amount"].required = False
+            for f in ("tuition_amount", "tuition_reminder_interval_days"):
+                self.fields[f].disabled = True
+                self.fields[f].required = False
 
     def save(self):
         with transaction.atomic():
             if self.dues_period is not None:
-                self.dues_period.dues_amount_pre_candidate = self.cleaned_data["dues_pre_candidate"]
-                self.dues_period.dues_amount_candidate     = self.cleaned_data["dues_candidate"]
-                self.dues_period.dues_amount_analyst       = self.cleaned_data["dues_analyst"]
-                self.dues_period.save(update_fields=(
+                d = self.dues_period
+                d.dues_amount_pre_candidate = self.cleaned_data["dues_pre_candidate"]
+                d.dues_amount_candidate     = self.cleaned_data["dues_candidate"]
+                d.dues_amount_analyst       = self.cleaned_data["dues_analyst"]
+                d.reminder_interval_days    = self.cleaned_data["dues_reminder_interval_days"]
+                d.save(update_fields=(
                     "dues_amount_pre_candidate",
                     "dues_amount_candidate",
                     "dues_amount_analyst",
+                    "reminder_interval_days",
                 ))
             if self.tuition_period is not None:
-                self.tuition_period.tuition_amount = self.cleaned_data["tuition_amount"]
-                self.tuition_period.save(update_fields=("tuition_amount",))
+                t = self.tuition_period
+                t.tuition_amount         = self.cleaned_data["tuition_amount"]
+                t.reminder_interval_days = self.cleaned_data["tuition_reminder_interval_days"]
+                t.save(update_fields=("tuition_amount", "reminder_interval_days"))

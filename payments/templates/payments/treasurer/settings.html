@@ -9,10 +9,8 @@
   {% endif %}
 
   <p class="text-sm text-base-content/60">
-    Edit dues + tuition amounts for the current academic-year periods.
-    Past or future periods can be edited under
-    <a href="/admin/payments/duesperiod/" class="link">DuesPeriod admin</a>
-    and <a href="/admin/payments/tuitionperiod/" class="link">TuitionPeriod admin</a>.
+    Edit dues and tuition amounts for the current academic year.
+    Adjustments take effect immediately for new payments and reminders.
   </p>
 
   <form method="post" class="space-y-8">
@@ -25,12 +23,11 @@
         <p class="text-sm text-base-content/60">
           {{ dues_period.name }} ·
           due {{ dues_period.due_date|date:"M j, Y" }} ·
-          period {{ dues_period.start_date|date:"M j, Y" }} – {{ dues_period.end_date|date:"M j, Y" }}.
+          {{ dues_period.start_date|date:"M j, Y" }} – {{ dues_period.end_date|date:"M j, Y" }}.
         </p>
         {% else %}
         <p class="text-sm text-warning">
-          No current dues period configured. Create one via the
-          <code>create_dues_period_if_needed</code> management command or in admin.
+          No current academic year is configured for dues yet.
         </p>
         {% endif %}
       </header>
@@ -51,6 +48,20 @@
         {% endif %}
         {% endfor %}
       </div>
+      <div class="max-w-xs">
+        <label for="{{ form.dues_reminder_interval_days.id_for_label }}"
+               class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
+          {{ form.dues_reminder_interval_days.label }}
+        </label>
+        <div class="input input-bordered flex items-center gap-1">
+          {{ form.dues_reminder_interval_days }}
+          <span class="text-base-content/60 text-sm">days</span>
+        </div>
+        <p class="text-xs text-base-content/60 mt-1">{{ form.dues_reminder_interval_days.help_text }}</p>
+        {% if form.dues_reminder_interval_days.errors %}
+        <p class="text-error text-xs mt-1">{{ form.dues_reminder_interval_days.errors|join:", " }}</p>
+        {% endif %}
+      </div>
     </section>
 
     <section class="space-y-3">
@@ -60,12 +71,11 @@
         <p class="text-sm text-base-content/60">
           {{ tuition_period.name }} ·
           decisions due {{ tuition_period.decision_due_date|date:"M j, Y" }} ·
-          period {{ tuition_period.start_date|date:"M j, Y" }} – {{ tuition_period.end_date|date:"M j, Y" }}.
+          {{ tuition_period.start_date|date:"M j, Y" }} – {{ tuition_period.end_date|date:"M j, Y" }}.
         </p>
         {% else %}
         <p class="text-sm text-warning">
-          No current tuition period configured. Create one via the
-          <code>create_tuition_period_if_needed</code> management command or in admin.
+          No current academic year is configured for tuition yet.
         </p>
         {% endif %}
       </header>
@@ -82,6 +92,20 @@
           {% if form.tuition_amount.errors %}<p class="text-error text-xs mt-1">{{ form.tuition_amount.errors|join:", " }}</p>{% endif %}
         </div>
       </div>
+      <div class="max-w-xs">
+        <label for="{{ form.tuition_reminder_interval_days.id_for_label }}"
+               class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
+          {{ form.tuition_reminder_interval_days.label }}
+        </label>
+        <div class="input input-bordered flex items-center gap-1">
+          {{ form.tuition_reminder_interval_days }}
+          <span class="text-base-content/60 text-sm">days</span>
+        </div>
+        <p class="text-xs text-base-content/60 mt-1">{{ form.tuition_reminder_interval_days.help_text }}</p>
+        {% if form.tuition_reminder_interval_days.errors %}
+        <p class="text-error text-xs mt-1">{{ form.tuition_reminder_interval_days.errors|join:", " }}</p>
+        {% endif %}
+      </div>
     </section>
 
     <div class="pt-2">
@@ -90,14 +114,11 @@
   </form>
 
   <section class="border-t border-base-300/60 pt-6 space-y-2">
-    <h2 class="font-serif text-lg text-base-content">Roll over to the next academic year</h2>
+    <h2 class="font-serif text-lg text-base-content">Next academic year</h2>
     <p class="text-sm text-base-content/60">
-      A new period is created automatically each September by the
-      <code>create_dues_period_if_needed</code> and
-      <code>create_tuition_period_if_needed</code> management commands
-      (wired into a weekly systemd timer on the host). The new period
-      inherits its amounts from the last period, so updates here carry
-      forward by default.
+      A new academic year is set up automatically each September. It inherits
+      its dues tiers, tuition amount, and reminder cadence from this year, so
+      any changes you save here will carry forward.
     </p>
   </section>
 

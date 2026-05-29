@@ -71,7 +71,7 @@ class Command(BaseCommand):
             )
             return
 
-        week_ago = timezone.now() - timedelta(days=7)
+        interval_cutoff = timezone.now() - timedelta(days=period.reminder_interval_days)
         sent = 0
         skipped_done = 0
         skipped_recent = 0
@@ -96,7 +96,7 @@ class Command(BaseCommand):
                 continue
 
             if TuitionReminder.objects.filter(
-                user=user, tuition_period=period, sent_at__gte=week_ago,
+                user=user, tuition_period=period, sent_at__gte=interval_cutoff,
             ).exists():
                 skipped_recent += 1
                 continue
