@@ -30,13 +30,21 @@ def _faculty_view_url(event: Event) -> str:
 
 
 def event_list(request):
-    """Public chronological list of upcoming published events (PROG-1)."""
+    """Public chronological list of upcoming standalone events (PROG-1).
+
+    Excludes annual-program types (seminars, reading groups, cartels) —
+    those have a dedicated home at /program/. Members-only events are
+    hidden from anonymous visitors.
+    """
     today = timezone.now().date()
     events = (
         Event.objects.filter(published=True, end_date__gte=today)
+        .exclude(event_type__in=Event.ANNUAL_PROGRAM_TYPES)
         .order_by("start_date", "title")
         .prefetch_related("faculty")
     )
+    if not request.user.is_authenticated:
+        events = events.filter(visibility=Event.Visibility.PUBLIC)
     return render(request, "events/event_list.html", {"events": events})
 
 

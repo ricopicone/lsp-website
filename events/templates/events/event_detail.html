@@ -7,7 +7,11 @@
   {# ---------- Hero ---------- #}
   <header class="space-y-3">
     <nav class="text-sm">
-      <a href="{% url 'events:list' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Events</a>
+      {% if event.event_type in event.ANNUAL_PROGRAM_TYPES %}
+        <a href="{% url 'program' %}?year={{ event.academic_year }}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Program</a>
+      {% else %}
+        <a href="{% url 'events:list' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Events</a>
+      {% endif %}
     </nav>
     <h1 class="font-serif text-3xl sm:text-4xl text-base-content leading-tight">{{ event.title }}</h1>
     <div class="flex flex-wrap items-center gap-2">

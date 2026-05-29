@@ -100,10 +100,22 @@ class Speaker(models.Model):
 
 class Event(models.Model):
     class Type(models.TextChoices):
+        # --- Annual-program types (live on /program/) ---
         SEMINAR = "seminar", _("Seminar")
-        SPECIAL_EVENT = "special_event", _("Special event")
         READING_GROUP = "reading_group", _("Reading group")
         CARTEL = "cartel", _("Cartel")
+        # --- Standalone / one-off events (live on /events/) ---
+        SPECIAL_EVENT = "special_event", _("Special event")
+        DAY_OF_ASSEMBLY = "day_of_assembly", _("Day of Assembly")
+        WORKING_DAY = "working_day", _("Working Day")
+        SCHOLARLY_SEMINAR = "scholarly_seminar", _("Scholarly Seminar Series")
+
+    class Visibility(models.TextChoices):
+        PUBLIC = "public", _("Public")
+        MEMBERS_ONLY = "members_only", _("Members only")
+
+    #: Types that belong on /program/ rather than /events/.
+    ANNUAL_PROGRAM_TYPES = frozenset({"seminar", "reading_group", "cartel"})
 
     class Format(models.TextChoices):
         ONLINE = "online", _("Online")
@@ -177,6 +189,15 @@ class Event(models.Model):
     published = models.BooleanField(
         default=False,
         help_text="Whether the public event page is visible (PROG-1).",
+    )
+    visibility = models.CharField(
+        max_length=20,
+        choices=Visibility.choices,
+        default=Visibility.PUBLIC,
+        help_text=(
+            "Members-only events (e.g. Scholarly Seminar Series) are hidden "
+            "from anonymous visitors on public listings."
+        ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

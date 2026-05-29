@@ -47,7 +47,7 @@ class EventAdmin(admin.ModelAdmin):
         "end_date",
         "session_count",
     )
-    list_filter = ("event_type", "status", "published", "format")
+    list_filter = ("event_type", "visibility", "status", "published", "format")
     search_fields = ("title", "slug", "description")
     prepopulated_fields = {"slug": ("title",)}
     filter_horizontal = ("faculty", "speakers")

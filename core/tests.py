@@ -40,6 +40,7 @@ def event_with_sessions(db):
     e = Event.objects.create(
         title="Lacan Seminar XI",
         slug="lacan-seminar-xi",
+        event_type=Event.Type.SPECIAL_EVENT,
         start_date=date(2026, 9, 1),
         end_date=date(2026, 12, 15),
         published=True,
@@ -195,8 +196,87 @@ def test_events_list_excludes_past_events(client):
     """Events that ended before today shouldn't appear in the list."""
     Event.objects.create(
         title="Old Event", slug="old",
+        event_type=Event.Type.SPECIAL_EVENT,
         start_date=date(2020, 1, 1), end_date=date(2020, 12, 31),
         published=True,
     )
     response = client.get(reverse("events:list"))
     assert b"Old Event" not in response.content
+
+
+@pytest.mark.django_db
+def test_events_list_excludes_annual_program_types(client):
+    """Seminars, reading groups, cartels live on /program/, not /events/."""
+    future = date(2030, 9, 1)
+    for slug, etype in [
+        ("a-seminar", Event.Type.SEMINAR),
+        ("a-rg", Event.Type.READING_GROUP),
+        ("a-cartel", Event.Type.CARTEL),
+        ("a-special", Event.Type.SPECIAL_EVENT),
+    ]:
+        Event.objects.create(
+            title=f"Event {slug}", slug=slug, event_type=etype,
+            start_date=future, end_date=future, published=True,
+        )
+    response = client.get(reverse("events:list"))
+    assert b"Event a-special" in response.content
+    assert b"Event a-seminar" not in response.content
+    assert b"Event a-rg" not in response.content
+    assert b"Event a-cartel" not in response.content
+
+
+@pytest.mark.django_db
+def test_events_list_hides_members_only_from_anonymous(client, django_user_model):
+    """visibility=members_only events are hidden from anonymous visitors."""
+    future = date(2030, 9, 1)
+    Event.objects.create(
+        title="Members Only Talk", slug="members-only-talk",
+        event_type=Event.Type.SCHOLARLY_SEMINAR,
+        visibility=Event.Visibility.MEMBERS_ONLY,
+        start_date=future, end_date=future, published=True,
+    )
+    Event.objects.create(
+        title="Public Talk", slug="public-talk",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=future, end_date=future, published=True,
+    )
+
+    # Anonymous: members-only hidden.
+    response = client.get(reverse("events:list"))
+    assert b"Public Talk" in response.content
+    assert b"Members Only Talk" not in response.content
+
+    # Authenticated: visible.
+    user = django_user_model.objects.create_user(email="m@example.com", password="x")
+    client.force_login(user)
+    response = client.get(reverse("events:list"))
+    assert b"Members Only Talk" in response.content
+
+
+@pytest.mark.django_db
+def test_event_detail_back_link_seminar_goes_to_program(client):
+    """A seminar's back link points to /program/ for its academic year."""
+    e = Event.objects.create(
+        title="A Seminar", slug="a-seminar-test",
+        event_type=Event.Type.SEMINAR,
+        start_date=date(2027, 9, 1), end_date=date(2028, 5, 1),
+        published=True,
+    )
+    response = client.get(reverse("events:detail", args=[e.slug]))
+    assert response.status_code == 200
+    assert b"\xe2\x86\x90 Program" in response.content
+    assert b"/program/?year=2027-2028" in response.content
+
+
+@pytest.mark.django_db
+def test_event_detail_back_link_special_goes_to_events(client):
+    """A special event's back link points to /events/."""
+    e = Event.objects.create(
+        title="A Workshop", slug="a-workshop-test",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2027, 10, 1), end_date=date(2027, 10, 1),
+        published=True,
+    )
+    response = client.get(reverse("events:detail", args=[e.slug]))
+    assert response.status_code == 200
+    assert b"\xe2\x86\x90 Events" in response.content
