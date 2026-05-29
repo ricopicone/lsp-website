@@ -47,3 +47,51 @@
     font-family: inherit;
   }
 }
+
+/* --- Stylistic flourishes (see static/js/flourishes.js) --- */
+
+/* The falling letter. A randomly chosen letter in a font-serif heading
+   detaches from the line and floats down the page once per session. */
+.lsp-falling-letter {
+  display: inline-block;
+  transform-origin: center;
+  animation: lsp-fall 5.5s cubic-bezier(0.32, 0.04, 0.72, 0.55) forwards;
+  will-change: transform, opacity;
+}
+@keyframes lsp-fall {
+  0%   { transform: translate3d(0, 0, 0) rotate(0);     opacity: 1; }
+  85%  {                                                opacity: 0.85; }
+  100% { transform: translate3d(0, 112vh, 0) rotate(14deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lsp-falling-letter { animation: none; }
+}
+
+/* Palimpsest. Renders a faint twin of the visible text behind itself —
+   either the same string (a typewriter overstrike) or a different one
+   (an earlier draft / translation), set via data-palimpsest attribute. */
+.palimpsest {
+  position: relative;
+  isolation: isolate;
+}
+.palimpsest::before {
+  content: attr(data-palimpsest);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  color: currentColor;
+  opacity: 0.09;
+  transform: translate(0.16em, 0.08em);
+  pointer-events: none;
+  user-select: none;
+  white-space: inherit;
+  font-style: inherit;
+  font-weight: inherit;
+  /* Slight horizontal stretch reads as a worn ribbon impression. */
+  letter-spacing: -0.005em;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* The palimpsest is static, so it's fine to keep, but allow opt-out
+     via a parent .no-flourish if a particular page wants quiet. */
+}
+.no-flourish .palimpsest::before { content: none; }

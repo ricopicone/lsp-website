@@ -132,8 +132,18 @@
   </main>
 
   <footer class="border-t border-base-300/60 bg-base-200/40 mt-12">
-    <div class="mx-auto max-w-5xl px-4 sm:px-6 py-6 text-xs text-base-content/60">
-      <div class="flex flex-wrap gap-x-6 gap-y-2 items-center justify-between">
+    <div class="mx-auto max-w-5xl px-4 sm:px-6 py-6 space-y-4">
+      {% if aphorism %}
+      <blockquote class="text-center max-w-2xl mx-auto">
+        <p class="font-serif italic text-sm text-base-content/70 leading-relaxed">
+          “{{ aphorism.quote }}”
+        </p>
+        <footer class="text-xs text-base-content/45 mt-1">
+          — Lacan, <cite class="not-italic">{{ aphorism.source }}</cite>
+        </footer>
+      </blockquote>
+      {% endif %}
+      <div class="text-xs text-base-content/60 flex flex-wrap gap-x-6 gap-y-2 items-center justify-between pt-4 border-t border-base-300/40">
         <span>© {% now "Y" %} Lacanian School of Psychoanalysis</span>
         <div class="flex items-center gap-4">
           <a href="https://lacanschool.org/" class="hover:text-primary">Main site</a>
@@ -142,6 +152,8 @@
       </div>
     </div>
   </footer>
+
+  <script src="{% static 'js/flourishes.js' %}" defer></script>
 
   <script>
     // Theme toggle: silk <-> abyss, persisted to localStorage.
