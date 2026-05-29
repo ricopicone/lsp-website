@@ -38,8 +38,8 @@ def test_imports_minimal_csv(tmp_path):
 def test_imports_full_row(tmp_path):
     csv_path = _write_csv(
         tmp_path,
-        "email,first_name,last_name,role,tuition_paying,is_faculty,notes\n"
-        "carla@example.com,Carla,Diaz,analyst,true,yes,Faculty analyst\n",
+        "email,first_name,last_name,role,is_faculty,notes\n"
+        "carla@example.com,Carla,Diaz,analyst,yes,Faculty analyst\n",
     )
     call_command("import_users", str(csv_path), stdout=StringIO())
 
@@ -47,7 +47,6 @@ def test_imports_full_row(tmp_path):
     assert carla.first_name == "Carla"
     assert carla.last_name == "Diaz"
     assert carla.profile.role == Profile.Role.ANALYST
-    assert carla.profile.tuition_paying is True
     assert carla.profile.is_faculty is True
     assert carla.profile.notes == "Faculty analyst"
 

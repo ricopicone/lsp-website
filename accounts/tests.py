@@ -35,7 +35,7 @@ def test_profile_created_automatically():
     )
     assert hasattr(user, "profile")
     assert user.profile.role == Profile.Role.EXTERNAL
-    assert user.profile.tuition_paying is False
+    assert user.profile.owes_tuition is False  # default role is EXTERNAL
     assert user.profile.is_faculty is False
     assert user.profile.default_billing_mode is None
     assert user.profile.bio == ""

@@ -46,18 +46,11 @@ def _find_covered_tier(user, event: Event) -> PriceTier | None:
     """Return the covered-by-tuition tier that applies to a tuition-current user.
 
     Returns None unless the user is authenticated, is tuition-current for the
-    active TuitionPeriod (or falls back to legacy ``tuition_paying=True``
-    pre-migration), and there's a covered_by_tuition tier matching their role
-    (or ``all``).
+    active TuitionPeriod, and there's a covered_by_tuition tier matching their
+    role (or ``all``).
     """
     profile = getattr(user, "profile", None) if user.is_authenticated else None
-    if profile is None:
-        return None
-    from payments.models import TuitionPeriod
-    if TuitionPeriod.current() is not None:
-        if not profile.is_tuition_current():
-            return None
-    elif not profile.tuition_paying:
+    if not (profile and profile.is_tuition_current()):
         return None
     qs = PriceTier.objects.filter(
         event=event, session__isnull=True, covered_by_tuition=True,
@@ -89,47 +82,45 @@ def _create_registration(
     return reg
 
 
-#: Event types where unpaid-tuition status blocks registration (M7.5).
-#: Annual-program types (seminar/reading group/cartel) deliberately do NOT
-#: block in year 1 — students who skipped tuition simply pay the regular fee.
-#: User retains the option to flip this per event type later.
-TUITION_BLOCKING_EVENT_TYPES = frozenset({
-    "special_event",
-    "day_of_assembly",
-    "working_day",
-    "scholarly_seminar",
-})
+#: Event types where unsettled-tuition status blocks registration (M7.5).
+#: Only ``special_event`` blocks in year 1. The set is intentionally a config
+#: point — flip more event types in (e.g. ``day_of_assembly``) as the policy
+#: evolves.
+TUITION_BLOCKING_EVENT_TYPES = frozenset({"special_event"})
 
 
 def _tuition_block_reason(user, event) -> str | None:
     """Return a human-readable reason if the user is blocked from registering
-    for this event due to unpaid-tuition status, or None to allow.
+    for this event due to unsettled-tuition status, or None to allow.
 
-    Only applies to in-training-role students for event types in
-    TUITION_BLOCKING_EVENT_TYPES, and only when a TuitionPeriod exists for
-    today. No-period and non-blocking event types short-circuit to None.
+    Policy (M7.5): for in-training students looking at a special event,
+    block when the student either has no decision recorded OR has committed
+    to pay but hasn't actually paid / set up a payment plan yet. Other
+    statuses (PAYMENT_PLAN, PAID_IN_FULL, EXEMPT, SKIPPING) all allow —
+    SKIPPING students pay the regular event fee. Annual-program event types
+    are never blocked.
     """
     if event.event_type not in TUITION_BLOCKING_EVENT_TYPES:
         return None
     profile = getattr(user, "profile", None)
     if not (profile and profile.owes_tuition):
         return None
-    from payments.models import TuitionPeriod
+    from payments.models import TuitionEnrollment, TuitionPeriod
     period = TuitionPeriod.current()
     if period is None:
         return None
     enr = profile.current_tuition_enrollment()
     if enr is None:
         return (
-            "Before registering, please record your tuition decision for "
-            f"{period.name} at /tuition/."
+            "Before registering for this special event, please record your "
+            f"tuition decision for {period.name}."
         )
-    # SKIPPING explicitly blocks; PAYMENT_PLAN with no installments paid yet
-    # is treated as committed (the plan itself is the commitment).
-    if not enr.covers_seminars:
+    if enr.status == TuitionEnrollment.Status.COMMITTED:
         return (
-            f"This event is restricted to tuition-current members for {period.name}. "
-            "Adjust your tuition status at /tuition/."
+            "You committed to pay tuition for "
+            f"{period.name} but we haven't received a payment or a payment "
+            "plan setup yet. Please complete payment, or switch to a payment "
+            "plan, before registering for this special event."
         )
     return None
 

@@ -10,7 +10,6 @@ class ProfileInline(admin.StackedInline):
     can_delete = False
     fields = (
         "role",
-        "tuition_paying",
         "is_faculty",
         "default_billing_mode",
         "public",
@@ -68,6 +67,6 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "role", "tuition_paying", "is_faculty")
-    list_filter = ("role", "tuition_paying", "is_faculty", "public")
+    list_display = ("user", "role", "is_faculty")
+    list_filter = ("role", "is_faculty", "public")
     search_fields = ("user__email", "user__first_name", "user__last_name")

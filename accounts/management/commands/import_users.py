@@ -2,8 +2,8 @@
 
 Required column: ``email``.
 Optional columns: ``first_name``, ``last_name``, ``role``,
-``tuition_paying``, ``is_faculty``, ``notes``, ``bio``, ``credentials``,
-``languages_spoken``, ``location``, ``phone``.
+``is_faculty``, ``notes``, ``bio``, ``credentials``,
+``languages_spoken``, ``location``, ``phone``, ``public_email``.
 
 Imported users are created with an unusable password. Once email
 delivery is configured (Amazon SES), they set a password through the
@@ -32,7 +32,6 @@ OPTIONAL_COLUMNS = {
     "first_name",
     "last_name",
     "role",
-    "tuition_paying",
     "is_faculty",
     "notes",
     "bio",
@@ -97,7 +96,7 @@ class Command(BaseCommand):
     help = (
         "Bulk-import users from a CSV file (USR-3). "
         "Columns: email (required), first_name, last_name, role, "
-        "tuition_paying, is_faculty, notes. Imported users get an unusable "
+        "is_faculty, notes. Imported users get an unusable "
         "password; they set one via password reset once email delivery is "
         "configured."
     )
@@ -196,8 +195,6 @@ class Command(BaseCommand):
         profile_fields: dict[str, Any] = {}
         if (val := (row.get("role") or "").strip()):
             profile_fields["role"] = _normalize_role(val)
-        if (val := (row.get("tuition_paying") or "").strip()):
-            profile_fields["tuition_paying"] = _parse_bool(val)
         if (val := (row.get("is_faculty") or "").strip()):
             profile_fields["is_faculty"] = _parse_bool(val)
         if (val := (row.get("notes") or "").strip()):

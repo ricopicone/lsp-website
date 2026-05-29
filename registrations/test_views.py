@@ -95,13 +95,11 @@ def user(db):
 
 @pytest.fixture
 def tuition_member(db):
-    """Tuition-current user — has both the legacy boolean and a current
-    TuitionEnrollment with COMMITTED status (the new source of truth)."""
+    """Tuition-current user — has a current TuitionEnrollment with COMMITTED
+    status, the source of truth for the covered-by-tuition path."""
     from payments.models import TuitionEnrollment, TuitionPeriod
 
     u = User.objects.create_user(email="member@example.com", password="testpass-XYZ")
-    u.profile.tuition_paying = True
-    u.profile.save()
     period = TuitionPeriod.current()
     if period is not None:
         TuitionEnrollment.objects.update_or_create(
@@ -560,10 +558,10 @@ def test_special_event_blocks_in_training_student_without_decision(
 
 
 @pytest.mark.django_db
-def test_special_event_blocks_skipping_student(
+def test_special_event_allows_skipping_student(
     client, special_event, special_event_tier,
 ):
-    """A student who recorded 'skipping' can't register for a special event."""
+    """Skipping is an explicit choice — student pays event fee, can register."""
     from accounts.models import Profile
     from payments.models import TuitionEnrollment, TuitionPeriod
     u = User.objects.create_user(email="cand2@example.com", password="x")
@@ -578,13 +576,16 @@ def test_special_event_blocks_skipping_student(
     resp = client.get(
         reverse("registrations:register", args=[special_event.slug])
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 200
 
 
 @pytest.mark.django_db
-def test_special_event_allows_committed_student(
+def test_special_event_blocks_committed_student_with_no_payment(
     client, special_event, special_event_tier,
 ):
+    """COMMITTED means "I'll pay" — but until payment lands or a plan is set up,
+    special-event registration is blocked. The student needs to either pay or
+    switch to PAYMENT_PLAN first."""
     from accounts.models import Profile
     from payments.models import TuitionEnrollment, TuitionPeriod
     u = User.objects.create_user(email="cand3@example.com", password="x")
@@ -599,7 +600,29 @@ def test_special_event_allows_committed_student(
     resp = client.get(
         reverse("registrations:register", args=[special_event.slug])
     )
-    # 200 (registration form) — no block.
+    assert resp.status_code == 403
+    assert b"committed to pay tuition" in resp.content
+
+
+@pytest.mark.django_db
+def test_special_event_allows_payment_plan_student(
+    client, special_event, special_event_tier,
+):
+    """PAYMENT_PLAN means the plan is set up — they can register."""
+    from accounts.models import Profile
+    from payments.models import TuitionEnrollment, TuitionPeriod
+    u = User.objects.create_user(email="cand5@example.com", password="x")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    period = TuitionPeriod.current()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    client.force_login(u)
+    resp = client.get(
+        reverse("registrations:register", args=[special_event.slug])
+    )
     assert resp.status_code == 200
 
 

@@ -31,16 +31,14 @@ def faculty(db):
 
 @pytest.fixture
 def tuition_member(db):
-    """A user with a current-year tuition enrollment.
+    """A user with a current-year tuition enrollment (status=committed).
 
-    Mirrors the production path: a TuitionEnrollment row drives
-    "is tuition-paying", not the legacy ``Profile.tuition_paying`` boolean.
+    A TuitionEnrollment row is the source of truth for "is this member
+    tuition-paying this year?" — drives the REG-4 covered-by-tuition path.
     """
     from payments.models import TuitionEnrollment, TuitionPeriod
 
     user = User.objects.create_user(email="tm@example.com")
-    user.profile.tuition_paying = True  # legacy boolean — kept for parallel paths
-    user.profile.save()
     period = TuitionPeriod.current()
     if period is not None:
         TuitionEnrollment.objects.update_or_create(

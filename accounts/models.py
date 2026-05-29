@@ -61,10 +61,6 @@ class Profile(models.Model):
         default=Role.EXTERNAL,
         help_text="LSP standing; drives event pricing and members-only access.",
     )
-    tuition_paying = models.BooleanField(
-        default=False,
-        help_text="Whether this member pays tuition (affects seminar pricing).",
-    )
     is_faculty = models.BooleanField(
         default=False,
         help_text="Faculty axis (USR-6). Orthogonal to role.",
@@ -218,10 +214,9 @@ class Profile(models.Model):
     def is_tuition_current(self, on_date=None) -> bool:
         """Source of truth for "is this user tuition-paying this year?".
 
-        Replaces the legacy ``tuition_paying`` boolean. Returns True when
-        the user has a current-period enrollment with a covers_seminars
-        status (committed / payment_plan / paid_in_full). Returns False
-        for SKIPPING, EXEMPT, no row, or no current period.
+        Returns True when the user has a current-period enrollment with a
+        ``covers_seminars`` status (committed / payment_plan / paid_in_full).
+        Returns False for SKIPPING, EXEMPT, no row, or no current period.
         """
         enr = self.current_tuition_enrollment(on_date)
         return bool(enr and enr.covers_seminars)
