@@ -582,6 +582,98 @@ def test_send_tuition_reminders_respects_period_cadence(
 
 
 @pytest.mark.django_db
+def test_treasurer_tuition_set_status_records_skipping(
+    client, staff_user, current_period,
+):
+    """Inline 'Skipping' button creates the enrollment with that status."""
+    u = _mk_candidate("set-skip@x.test")
+    client.force_login(staff_user)
+    resp = client.post(
+        reverse("treasurer_tuition_set_status", args=[u.id]),
+        {"status": "skipping"},
+    )
+    assert resp.status_code == 302
+    enr = TuitionEnrollment.objects.get(user=u, tuition_period=current_period)
+    assert enr.status == TuitionEnrollment.Status.SKIPPING
+    # Audit trail recorded in notes.
+    assert "set status to Skipping" in enr.notes
+    assert staff_user.email in enr.notes
+
+
+@pytest.mark.django_db
+def test_treasurer_tuition_set_status_overrides_existing(
+    client, staff_user, current_period,
+):
+    """An existing enrollment is updated, not duplicated."""
+    u = _mk_candidate("set-override@x.test")
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    client.force_login(staff_user)
+    client.post(
+        reverse("treasurer_tuition_set_status", args=[u.id]),
+        {"status": "exempt"},
+    )
+    enrollments = TuitionEnrollment.objects.filter(user=u, tuition_period=current_period)
+    assert enrollments.count() == 1
+    assert enrollments.first().status == TuitionEnrollment.Status.EXEMPT
+
+
+@pytest.mark.django_db
+def test_treasurer_tuition_set_status_rejects_invalid_status(
+    client, staff_user, current_period,
+):
+    """Status values not in the inline whitelist (e.g. 'paid_in_full') are
+    silently no-op'd — those paths must go through proper payment recording."""
+    u = _mk_candidate("set-invalid@x.test")
+    client.force_login(staff_user)
+    client.post(
+        reverse("treasurer_tuition_set_status", args=[u.id]),
+        {"status": "paid_in_full"},
+    )
+    assert not TuitionEnrollment.objects.filter(
+        user=u, tuition_period=current_period,
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_treasurer_tuition_record_offline_payment_flips_to_paid_in_full(
+    client, staff_user, current_period,
+):
+    """Record-offline creates installment + payment, runs complete_payment,
+    enrollment lands on PAID_IN_FULL."""
+    from payments.models import Payment, TuitionInstallment
+
+    u = _mk_candidate("offline-pay@x.test")
+    client.force_login(staff_user)
+    resp = client.post(
+        reverse("treasurer_tuition_record_offline_payment", args=[u.id])
+    )
+    assert resp.status_code == 302
+    enr = TuitionEnrollment.objects.get(user=u, tuition_period=current_period)
+    assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL
+    inst = TuitionInstallment.objects.get(enrollment=enr)
+    assert inst.paid is True
+    payment = Payment.objects.get(user=u, payment_type=Payment.Type.TUITION)
+    assert payment.method == Payment.Method.OFFLINE
+    assert payment.status == Payment.Status.SUCCEEDED
+    assert staff_user.email in payment.notes
+
+
+@pytest.mark.django_db
+def test_treasurer_tuition_actions_require_staff(client, current_period):
+    """Non-staff can't trigger the resolution actions."""
+    u = _mk_candidate("anyone@x.test")
+    client.force_login(u)
+    for name in ("treasurer_tuition_set_status",
+                 "treasurer_tuition_record_offline_payment"):
+        resp = client.post(reverse(name, args=[u.id]), {"status": "skipping"})
+        assert resp.status_code == 302
+        assert "/accounts/login/" in resp.url
+
+
+@pytest.mark.django_db
 def test_treasurer_settings_handles_missing_periods(client, staff_user):
     """Settings page renders even when no periods are configured."""
     from payments.models import DuesPeriod, TuitionPeriod

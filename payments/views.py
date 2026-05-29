@@ -16,6 +16,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -172,6 +173,85 @@ def _treasurer_dues_context() -> dict:
         "chart_periods_json": json.dumps(chart_periods),
         "chart_roles_json": json.dumps(chart_roles),
     }
+
+
+_INLINE_TUITION_STATUSES = {
+    "committed":    "Committed",
+    "skipping":     "Skipping",
+    "exempt":       "Exempt",
+}
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_tuition_set_status(request, user_id: int):
+    """Set a user's tuition status for the current period (treasurer action).
+
+    Used by the inline resolution buttons on the tuition reconciliation
+    queue. ``status`` is one of: committed, skipping, exempt.
+    """
+    status = request.POST.get("status", "")
+    if status not in _INLINE_TUITION_STATUSES:
+        return redirect("treasurer_tuition")
+    target = get_object_or_404(User, pk=user_id)
+    period = TuitionPeriod.current()
+    if period is None:
+        return redirect("treasurer_tuition")
+    with transaction.atomic():
+        enr, _ = TuitionEnrollment.objects.update_or_create(
+            user=target, tuition_period=period,
+            defaults={"status": status},
+        )
+        enr.notes = (
+            (enr.notes + "\n" if enr.notes else "")
+            + f"[{timezone.now().date()}] Treasurer ({request.user.email}) "
+            f"set status to {_INLINE_TUITION_STATUSES[status]}."
+        )
+        enr.save(update_fields=("notes",))
+    return redirect("treasurer_tuition")
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_tuition_record_offline_payment(request, user_id: int):
+    """Record an offline tuition payment for the full annual amount.
+
+    Creates (or reuses) a COMMITTED enrollment for the current period,
+    mints a single full-amount TuitionInstallment, creates an OFFLINE
+    Payment, and runs the standard ``complete_payment`` side-effects —
+    which marks the installment paid and flips the enrollment to
+    PAID_IN_FULL. The Payment.notes carries a short audit trail.
+    """
+    target = get_object_or_404(User, pk=user_id)
+    period = TuitionPeriod.current()
+    if period is None:
+        return redirect("treasurer_tuition")
+    with transaction.atomic():
+        enr, _ = TuitionEnrollment.objects.update_or_create(
+            user=target, tuition_period=period,
+            defaults={"status": TuitionEnrollment.Status.COMMITTED},
+        )
+        installment = TuitionInstallment.objects.create(
+            enrollment=enr, sequence=enr.installments.count() + 1,
+            due_date=period.decision_due_date,
+            amount=period.tuition_amount,
+        )
+        payment = Payment.objects.create(
+            payment_type=Payment.Type.TUITION,
+            user=target,
+            amount=period.tuition_amount,
+            method=Payment.Method.OFFLINE,
+            status=Payment.Status.PENDING,
+            tuition_installment=installment,
+            notes=(
+                f"Offline tuition payment recorded by treasurer "
+                f"{request.user.email} on {timezone.now().date()}."
+            ),
+        )
+    complete_payment(payment)
+    return redirect("treasurer_tuition")
 
 
 @login_required
