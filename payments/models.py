@@ -88,6 +88,7 @@ class Payment(models.Model):
         REGISTRATION = "registration", _("Registration")
         DUES = "dues", _("Dues")
         DONATION = "donation", _("Donation")
+        TUITION = "tuition", _("Tuition")
 
     class Status(models.TextChoices):
         PENDING = "pending", _("Pending")
@@ -140,6 +141,14 @@ class Payment(models.Model):
         blank=True,
         related_name="payments",
         help_text="The dues cycle this payment satisfies — set for type=DUES.",
+    )
+    tuition_installment = models.ForeignKey(
+        "payments.TuitionInstallment",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payments",
+        help_text="The tuition installment this payment satisfies — set for type=TUITION.",
     )
     notes = models.TextField(blank=True, help_text="Staff notes — e.g. for offline payments.")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -236,3 +245,179 @@ class Receipt(models.Model):
         raise RuntimeError(
             f"Could not generate a unique receipt number after {max_retries} retries."
         )
+
+
+# ---------------------------------------------------------------------------
+# Tuition lifecycle (M7.5 — see ../LSP-Website-Phase2-Plan.md)
+#
+# Students in the four in-training roles (pre_candidate / candidate / scholar
+# variants) must pay 4 total years of tuition before transitioning to full
+# Analyst / Scholar. The years don't have to be contiguous. Per-year status is
+# tracked on TuitionEnrollment; the legacy Profile.tuition_paying boolean is
+# kept temporarily for migration but is_tuition_current() is the source of
+# truth.
+# ---------------------------------------------------------------------------
+
+
+class TuitionPeriod(models.Model):
+    """An academic year's tuition cycle.
+
+    Mirrors :class:`DuesPeriod` but for student tuition. Decisions and
+    payments are scoped to a period; ``current()`` returns the period
+    covering today (or None).
+    """
+
+    name = models.CharField(max_length=100, unique=True, help_text="e.g. AY 2026–2027")
+    slug = models.SlugField(max_length=100, unique=True)
+    start_date = models.DateField(help_text="First day of the academic year.")
+    decision_due_date = models.DateField(
+        help_text=(
+            "By this date students should have committed to pay / "
+            "pay in installments / skip."
+        ),
+    )
+    end_date = models.DateField(help_text="Last day of the academic year.")
+    tuition_amount = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        help_text="Annual tuition owed by an enrolled student.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-start_date",)
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def current(cls, on_date=None):
+        """Return the TuitionPeriod containing ``on_date`` (default today), or None."""
+        on = on_date or timezone.now().date()
+        return cls.objects.filter(start_date__lte=on, end_date__gte=on).first()
+
+
+class TuitionEnrollment(models.Model):
+    """A student's per-year tuition decision and status.
+
+    Replaces the single ``Profile.tuition_paying`` boolean. A row exists
+    once a student records a decision for the period; absence of a row
+    means "no decision yet" (treated as not-current for blocking checks
+    and not-covered for the REG-4 pricing path).
+    """
+
+    class Status(models.TextChoices):
+        # Order matches the lifecycle: undecided -> committed -> paying -> paid.
+        COMMITTED = "committed", _("Committed (will pay)")
+        PAYMENT_PLAN = "payment_plan", _("On payment plan")
+        PAID_IN_FULL = "paid_in_full", _("Paid in full")
+        EXEMPT = "exempt", _("Exempt (staff-applied)")
+        SKIPPING = "skipping", _("Skipping this year")
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tuition_enrollments",
+    )
+    tuition_period = models.ForeignKey(
+        TuitionPeriod,
+        on_delete=models.PROTECT,
+        related_name="enrollments",
+    )
+    status = models.CharField(max_length=20, choices=Status.choices)
+    decided_at = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True, help_text="Staff notes — overrides, special arrangements.")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "tuition_period"),
+                name="payments_unique_user_per_tuition_period",
+            ),
+        ]
+        ordering = ("-tuition_period__start_date", "user__last_name")
+
+    def __str__(self):
+        return f"{self.user} → {self.tuition_period} ({self.get_status_display()})"
+
+    @property
+    def covers_seminars(self) -> bool:
+        """True when this enrollment grants 'covered by tuition' pricing.
+
+        SKIPPING and EXEMPT explicitly do not cover — exempt means
+        'staff waived the obligation', not 'has paid'.
+        """
+        return self.status in {
+            self.Status.COMMITTED,
+            self.Status.PAYMENT_PLAN,
+            self.Status.PAID_IN_FULL,
+        }
+
+
+class TuitionInstallment(models.Model):
+    """One installment of a payment-plan tuition enrollment.
+
+    Scaffold — MVP supports manual treasurer-marked payments. Auto-charging
+    via Stripe Subscriptions is a Phase 2 enhancement. ``paid`` is the
+    boolean of record; ``payments`` (reverse) holds the linked Payment row(s)
+    when the treasurer applies one.
+    """
+
+    enrollment = models.ForeignKey(
+        TuitionEnrollment,
+        on_delete=models.CASCADE,
+        related_name="installments",
+    )
+    sequence = models.PositiveSmallIntegerField(help_text="1-indexed order within the plan.")
+    due_date = models.DateField()
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    paid = models.BooleanField(default=False)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("enrollment", "sequence")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("enrollment", "sequence"),
+                name="payments_unique_installment_sequence",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.enrollment} #{self.sequence} due {self.due_date}"
+
+    def mark_paid(self, *, save=True) -> None:
+        if self.paid:
+            return
+        self.paid = True
+        if self.paid_at is None:
+            self.paid_at = timezone.now()
+        if save:
+            self.save(update_fields=("paid", "paid_at"))
+
+
+class TuitionReminder(models.Model):
+    """One row per tuition-decision / payment reminder email sent.
+
+    Mirrors :class:`DuesReminder` — drives the weekly throttle for the
+    September+ reminder cron.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tuition_reminders",
+    )
+    tuition_period = models.ForeignKey(
+        TuitionPeriod,
+        on_delete=models.CASCADE,
+        related_name="reminders",
+    )
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-sent_at",)
+        indexes = [models.Index(fields=("user", "tuition_period", "-sent_at"))]
+
+    def __str__(self):
+        return f"{self.user} ← {self.tuition_period} @ {self.sent_at.isoformat()}"

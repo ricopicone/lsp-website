@@ -106,6 +106,9 @@
             {% if user.profile.is_in_directory %}
             <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">Your directory page</a></li>
             {% endif %}
+            {% if user.profile.owes_tuition %}
+            <li><a href="{% url 'tuition' %}">Your tuition decision</a></li>
+            {% endif %}
             <li>
               <a class="text-base-content/50 cursor-not-allowed pointer-events-none" title="Coming soon">
                 Edit profile <span class="badge badge-ghost badge-xs ml-auto">soon</span>

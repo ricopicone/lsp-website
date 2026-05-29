@@ -1,6 +1,15 @@
 from django.contrib import admin, messages
 
-from .models import DuesPeriod, DuesReminder, Payment, Receipt
+from .models import (
+    DuesPeriod,
+    DuesReminder,
+    Payment,
+    Receipt,
+    TuitionEnrollment,
+    TuitionInstallment,
+    TuitionPeriod,
+    TuitionReminder,
+)
 from .operations import complete_payment
 
 
@@ -31,7 +40,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "user__email",
         "notes",
     )
-    autocomplete_fields = ("user", "registration", "dues_period")
+    autocomplete_fields = ("user", "registration", "dues_period", "tuition_installment")
     readonly_fields = ("created_at", "paid_at")
     date_hierarchy = "created_at"
     inlines = [ReceiptInline]
@@ -85,4 +94,54 @@ class DuesReminderAdmin(admin.ModelAdmin):
     list_filter = ("dues_period",)
     search_fields = ("user__email",)
     readonly_fields = ("user", "dues_period", "sent_at")
+    date_hierarchy = "sent_at"
+
+
+@admin.register(TuitionPeriod)
+class TuitionPeriodAdmin(admin.ModelAdmin):
+    list_display = (
+        "name", "slug", "start_date", "decision_due_date", "end_date",
+        "tuition_amount", "is_current",
+    )
+    search_fields = ("name", "slug")
+    prepopulated_fields = {"slug": ("name",)}
+
+    @admin.display(boolean=True, description="Current?")
+    def is_current(self, obj):
+        from django.utils import timezone
+        today = timezone.now().date()
+        return obj.start_date <= today <= obj.end_date
+
+
+class TuitionInstallmentInline(admin.TabularInline):
+    model = TuitionInstallment
+    extra = 0
+    fields = ("sequence", "due_date", "amount", "paid", "paid_at")
+    readonly_fields = ("paid_at",)
+
+
+@admin.register(TuitionEnrollment)
+class TuitionEnrollmentAdmin(admin.ModelAdmin):
+    list_display = ("user", "tuition_period", "status", "decided_at")
+    list_filter = ("tuition_period", "status")
+    search_fields = ("user__email", "user__first_name", "user__last_name")
+    autocomplete_fields = ("user", "tuition_period")
+    readonly_fields = ("decided_at",)
+    inlines = [TuitionInstallmentInline]
+
+
+@admin.register(TuitionInstallment)
+class TuitionInstallmentAdmin(admin.ModelAdmin):
+    list_display = ("enrollment", "sequence", "due_date", "amount", "paid", "paid_at")
+    list_filter = ("paid", "enrollment__tuition_period")
+    search_fields = ("enrollment__user__email",)
+    autocomplete_fields = ("enrollment",)
+
+
+@admin.register(TuitionReminder)
+class TuitionReminderAdmin(admin.ModelAdmin):
+    list_display = ("user", "tuition_period", "sent_at")
+    list_filter = ("tuition_period",)
+    search_fields = ("user__email",)
+    readonly_fields = ("user", "tuition_period", "sent_at")
     date_hierarchy = "sent_at"

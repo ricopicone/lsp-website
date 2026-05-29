@@ -182,10 +182,49 @@ class Profile(models.Model):
         "member",
     })
 
+    #: Roles that owe tuition each academic year (M7.5 — see tuition_lifecycle).
+    IN_TRAINING_ROLES = frozenset({
+        "pre_candidate",
+        "candidate",
+        "pre_candidate_scholar",
+        "candidate_scholar",
+    })
+
     @property
     def is_in_directory(self) -> bool:
         """Whether this profile appears on /directory/ (drives nav links)."""
         return self.role in self.DIRECTORY_ROLES
+
+    @property
+    def owes_tuition(self) -> bool:
+        """Whether this profile's role obligates them to pay tuition each year."""
+        return self.role in self.IN_TRAINING_ROLES
+
+    def current_tuition_enrollment(self, on_date=None):
+        """The TuitionEnrollment row for the period covering ``on_date``, or None.
+
+        Returns None when there's no TuitionPeriod for the date, or no
+        enrollment row recorded for this user in that period (i.e.
+        "no decision yet").
+        """
+        from payments.models import TuitionEnrollment, TuitionPeriod
+        period = TuitionPeriod.current(on_date)
+        if period is None:
+            return None
+        return TuitionEnrollment.objects.filter(
+            user=self.user, tuition_period=period,
+        ).first()
+
+    def is_tuition_current(self, on_date=None) -> bool:
+        """Source of truth for "is this user tuition-paying this year?".
+
+        Replaces the legacy ``tuition_paying`` boolean. Returns True when
+        the user has a current-period enrollment with a covers_seminars
+        status (committed / payment_plan / paid_in_full). Returns False
+        for SKIPPING, EXEMPT, no row, or no current period.
+        """
+        enr = self.current_tuition_enrollment(on_date)
+        return bool(enr and enr.covers_seminars)
 
     @property
     def directory_slug(self) -> str:

@@ -130,5 +130,22 @@ def _apply_code(
 
 
 def _is_tuition_paying(user) -> bool:
+    """Whether ``user`` is tuition-current for today's academic year.
+
+    Consults the per-period TuitionEnrollment via Profile.is_tuition_current
+    (M7.5). Falls back to the legacy Profile.tuition_paying boolean only when
+    no TuitionPeriod is configured for the current date — keeps existing
+    behavior intact while tuition periods are being seeded.
+    """
     profile = getattr(user, "profile", None)
-    return bool(profile and profile.tuition_paying)
+    if profile is None:
+        return False
+    if profile.current_tuition_enrollment() is not None:
+        return profile.is_tuition_current()
+    # No TuitionPeriod row covers today, or no enrollment yet — fall back to
+    # the legacy boolean so REG-4 keeps working pre-migration.
+    from payments.models import TuitionPeriod
+    if TuitionPeriod.current() is None:
+        return bool(profile.tuition_paying)
+    # Period exists but no enrollment row: explicit no-decision-yet → False.
+    return False

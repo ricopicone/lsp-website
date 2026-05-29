@@ -1,0 +1,16 @@
+{% extends "core/base.html" %}
+{% block title %}Tuition — LSP{% endblock %}
+{% block content %}
+<div class="max-w-xl mx-auto space-y-4">
+  <h1 class="font-serif text-3xl text-base-content">Tuition</h1>
+  <p class="text-sm">
+    Tuition is paid by students in the four in-training roles
+    (Pre-Candidate or Candidate Analyst, Pre-Candidate or Candidate Scholar).
+    Your current role is <strong>{{ role_display }}</strong>.
+  </p>
+  <p class="text-sm">
+    If you believe this is incorrect, please write to
+    <a href="mailto:website@lacanschool.org" class="link">website@lacanschool.org</a>.
+  </p>
+</div>
+{% endblock %}

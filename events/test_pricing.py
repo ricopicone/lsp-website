@@ -31,9 +31,22 @@ def faculty(db):
 
 @pytest.fixture
 def tuition_member(db):
+    """A user with a current-year tuition enrollment.
+
+    Mirrors the production path: a TuitionEnrollment row drives
+    "is tuition-paying", not the legacy ``Profile.tuition_paying`` boolean.
+    """
+    from payments.models import TuitionEnrollment, TuitionPeriod
+
     user = User.objects.create_user(email="tm@example.com")
-    user.profile.tuition_paying = True
+    user.profile.tuition_paying = True  # legacy boolean — kept for parallel paths
     user.profile.save()
+    period = TuitionPeriod.current()
+    if period is not None:
+        TuitionEnrollment.objects.update_or_create(
+            user=user, tuition_period=period,
+            defaults={"status": TuitionEnrollment.Status.COMMITTED},
+        )
     return user
 
 

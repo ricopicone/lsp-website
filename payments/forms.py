@@ -49,3 +49,29 @@ class DonationForm(forms.Form):
                 "Email is required so we can send your receipt."
             )
         return email
+
+
+class TuitionDecisionForm(forms.Form):
+    """Student-facing tuition decision form (M7.5).
+
+    Captures the three public-facing choices for an in-training student
+    each academic year: pay in full, set up a payment plan (treasurer
+    follows up to schedule installments), or skip this year. Staff-only
+    statuses (EXEMPT, PAID_IN_FULL once the payment actually lands) are
+    applied via the admin, not this form.
+    """
+
+    STATUS_CHOICES = [
+        ("committed",    "I plan to pay tuition for this year."),
+        ("payment_plan", "I want to set up a payment plan."),
+        ("skipping",     (
+            "I'm skipping tuition this year "
+            "(I'll pay regular fees for any events I attend)."
+        )),
+    ]
+    status = forms.ChoiceField(
+        choices=STATUS_CHOICES,
+        widget=forms.RadioSelect,
+        required=True,
+        label="Your decision for this academic year",
+    )

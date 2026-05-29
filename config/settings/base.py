@@ -172,6 +172,11 @@ DUES_OBLIGATED_ROLES = env.list(
     default=["pre_candidate", "candidate", "analyst", "member", "student"],
 )
 
+# Annual student tuition (M7.5). Mirrors DUES_ANNUAL_AMOUNT — the value
+# is the seed for a new TuitionPeriod; once a period exists, its
+# ``tuition_amount`` is authoritative.
+TUITION_ANNUAL_AMOUNT = env("TUITION_ANNUAL_AMOUNT", default="800.00")
+
 # --- Logging ------------------------------------------------------------
 # Django's default LOGGING only sends to the console when DEBUG=True, so
 # production 5xx tracebacks vanish. Send them to stderr (which Docker

@@ -1,0 +1,63 @@
+{% extends "core/base.html" %}
+{% block title %}Tuition — {{ period.name }} — LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-8">
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Tuition — {{ period.name }}</h1>
+    <p class="text-sm text-base-content/70">
+      Annual amount: <strong>${{ period.tuition_amount }}</strong>.
+      Decisions due by {{ period.decision_due_date|date:"M j, Y" }}.
+    </p>
+  </header>
+
+  <section class="rounded-lg border border-base-300 bg-base-200/40 p-5 text-sm leading-relaxed space-y-2">
+    <p>
+      Students must pay <strong>four total years of tuition</strong> before
+      transitioning to full Analyst or Scholar standing. The four years do
+      not need to be consecutive — you may skip a year if needed and pay it
+      in a later year.
+    </p>
+    <p>
+      Tuition-paying students receive "covered by tuition" pricing on
+      seminars. Students skipping a year still pay the regular per-event fee
+      for any seminars or events they attend.
+    </p>
+  </section>
+
+  {% if enrollment %}
+  <div class="rounded-lg border border-primary/30 bg-primary/5 px-5 py-4">
+    <p class="text-sm">
+      Current decision for {{ period.name }}:
+      <strong>{{ enrollment.get_status_display }}</strong>
+      <span class="text-base-content/60">(recorded {{ enrollment.decided_at|date:"M j, Y" }})</span>
+    </p>
+    <p class="text-sm text-base-content/70 mt-1">
+      You can change your decision below at any time before the academic
+      year ends.
+    </p>
+  </div>
+  {% endif %}
+
+  <form method="post" class="space-y-5">
+    {% csrf_token %}
+    <fieldset class="space-y-2">
+      <legend class="font-serif text-lg text-base-content mb-2">{{ form.status.label }}</legend>
+      {% for radio in form.status %}
+      <label class="flex items-start gap-3 cursor-pointer">
+        {{ radio.tag }}
+        <span class="text-sm">{{ radio.choice_label }}</span>
+      </label>
+      {% endfor %}
+      {% if form.status.errors %}<p class="text-error text-sm">{{ form.status.errors|join:", " }}</p>{% endif %}
+    </fieldset>
+    <button type="submit" class="btn btn-primary">Record decision</button>
+  </form>
+
+  <p class="text-xs text-base-content/60">
+    Questions? Email the treasurer at
+    <a href="mailto:website@lacanschool.org" class="link">website@lacanschool.org</a>.
+  </p>
+
+</div>
+{% endblock %}

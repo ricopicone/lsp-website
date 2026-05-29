@@ -43,13 +43,21 @@ def _existing_active_registration(user, event):
 
 
 def _find_covered_tier(user, event: Event) -> PriceTier | None:
-    """Return the covered-by-tuition tier that applies to a tuition-paying user.
+    """Return the covered-by-tuition tier that applies to a tuition-current user.
 
-    Returns None unless the user is authenticated, has ``tuition_paying=True``,
-    and there's a covered_by_tuition tier matching their role (or ``all``).
+    Returns None unless the user is authenticated, is tuition-current for the
+    active TuitionPeriod (or falls back to legacy ``tuition_paying=True``
+    pre-migration), and there's a covered_by_tuition tier matching their role
+    (or ``all``).
     """
     profile = getattr(user, "profile", None) if user.is_authenticated else None
-    if not (profile and profile.tuition_paying):
+    if profile is None:
+        return None
+    from payments.models import TuitionPeriod
+    if TuitionPeriod.current() is not None:
+        if not profile.is_tuition_current():
+            return None
+    elif not profile.tuition_paying:
         return None
     qs = PriceTier.objects.filter(
         event=event, session__isnull=True, covered_by_tuition=True,
@@ -81,6 +89,51 @@ def _create_registration(
     return reg
 
 
+#: Event types where unpaid-tuition status blocks registration (M7.5).
+#: Annual-program types (seminar/reading group/cartel) deliberately do NOT
+#: block in year 1 — students who skipped tuition simply pay the regular fee.
+#: User retains the option to flip this per event type later.
+TUITION_BLOCKING_EVENT_TYPES = frozenset({
+    "special_event",
+    "day_of_assembly",
+    "working_day",
+    "scholarly_seminar",
+})
+
+
+def _tuition_block_reason(user, event) -> str | None:
+    """Return a human-readable reason if the user is blocked from registering
+    for this event due to unpaid-tuition status, or None to allow.
+
+    Only applies to in-training-role students for event types in
+    TUITION_BLOCKING_EVENT_TYPES, and only when a TuitionPeriod exists for
+    today. No-period and non-blocking event types short-circuit to None.
+    """
+    if event.event_type not in TUITION_BLOCKING_EVENT_TYPES:
+        return None
+    profile = getattr(user, "profile", None)
+    if not (profile and profile.owes_tuition):
+        return None
+    from payments.models import TuitionPeriod
+    period = TuitionPeriod.current()
+    if period is None:
+        return None
+    enr = profile.current_tuition_enrollment()
+    if enr is None:
+        return (
+            "Before registering, please record your tuition decision for "
+            f"{period.name} at /tuition/."
+        )
+    # SKIPPING explicitly blocks; PAYMENT_PLAN with no installments paid yet
+    # is treated as committed (the plan itself is the commitment).
+    if not enr.covers_seminars:
+        return (
+            f"This event is restricted to tuition-current members for {period.name}. "
+            "Adjust your tuition status at /tuition/."
+        )
+    return None
+
+
 @login_required
 def register_for_event(request, event_slug: str):
     event = get_object_or_404(Event, slug=event_slug)
@@ -96,6 +149,15 @@ def register_for_event(request, event_slug: str):
     if existing is not None:
         return redirect(
             reverse("registrations:confirm", args=[existing.id]) + "?already=1"
+        )
+
+    # Tuition gate (M7.5) — block special-event registration for in-training
+    # students who haven't recorded a tuition decision or are skipping the year.
+    if (block_reason := _tuition_block_reason(request.user, event)) is not None:
+        return render(
+            request, "registrations/blocked_tuition.html",
+            {"event": event, "reason": block_reason},
+            status=403,
         )
 
     covered_tier = _find_covered_tier(request.user, event)

@@ -21,8 +21,8 @@ from django.views.decorators.http import require_POST
 
 from registrations.models import Registration
 
-from .forms import DonationForm
-from .models import DuesPeriod, Payment
+from .forms import DonationForm, TuitionDecisionForm
+from .models import DuesPeriod, Payment, TuitionEnrollment, TuitionPeriod
 from .operations import complete_payment
 from .stripe_checkout import create_donation_session, create_dues_session
 
@@ -359,3 +359,50 @@ def _handle_charge_refunded(charge: dict) -> None:
                 pk=payment.registration_id,
                 status=Registration.Status.PAID,
             ).update(status=Registration.Status.REFUNDED)
+
+
+@login_required
+def tuition_decision(request):
+    """Annual tuition decision page (M7.5).
+
+    Open to authenticated users whose Profile.role is in the four
+    in-training tracks (Profile.IN_TRAINING_ROLES). Posts create or
+    update a TuitionEnrollment for the current TuitionPeriod.
+
+    Shows the user their current decision status; lets them switch
+    (committed / payment plan / skipping) before the period closes.
+    """
+    profile = request.user.profile
+    if not profile.owes_tuition:
+        return render(
+            request, "payments/tuition_not_applicable.html",
+            {"role_display": profile.get_role_display()},
+        )
+
+    period = TuitionPeriod.current()
+    if period is None:
+        return render(request, "payments/tuition_no_period.html")
+
+    enrollment = TuitionEnrollment.objects.filter(
+        user=request.user, tuition_period=period,
+    ).first()
+
+    if request.method == "POST":
+        form = TuitionDecisionForm(request.POST)
+        if form.is_valid():
+            status = form.cleaned_data["status"]
+            with transaction.atomic():
+                enrollment, _ = TuitionEnrollment.objects.update_or_create(
+                    user=request.user, tuition_period=period,
+                    defaults={"status": status},
+                )
+            return redirect("tuition")
+    else:
+        initial = {"status": enrollment.status} if enrollment else {}
+        form = TuitionDecisionForm(initial=initial)
+
+    return render(request, "payments/tuition.html", {
+        "period":     period,
+        "enrollment": enrollment,
+        "form":       form,
+    })

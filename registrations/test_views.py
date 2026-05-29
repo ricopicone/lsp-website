@@ -95,9 +95,19 @@ def user(db):
 
 @pytest.fixture
 def tuition_member(db):
+    """Tuition-current user — has both the legacy boolean and a current
+    TuitionEnrollment with COMMITTED status (the new source of truth)."""
+    from payments.models import TuitionEnrollment, TuitionPeriod
+
     u = User.objects.create_user(email="member@example.com", password="testpass-XYZ")
     u.profile.tuition_paying = True
     u.profile.save()
+    period = TuitionPeriod.current()
+    if period is not None:
+        TuitionEnrollment.objects.update_or_create(
+            user=u, tuition_period=period,
+            defaults={"status": TuitionEnrollment.Status.COMMITTED},
+        )
     return u
 
 
@@ -507,3 +517,124 @@ def test_signup_safe_next_redirect_only_relative(client):
     )
     assert response.status_code == 302
     assert not response.url.startswith("https://evil.example.com")
+
+
+# --- Tuition gating (M7.5) ---------------------------------------------
+
+
+@pytest.fixture
+def special_event(db):
+    return Event.objects.create(
+        title="Working with Masochism",
+        slug="working-with-masochism",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 11, 1),
+        end_date=date(2026, 11, 1),
+        status=Event.Status.OPEN,
+        published=True,
+    )
+
+
+@pytest.fixture
+def special_event_tier(special_event):
+    return PriceTier.objects.create(
+        event=special_event, audience=Audience.ALL, base_amount=Decimal("50.00"),
+    )
+
+
+@pytest.mark.django_db
+def test_special_event_blocks_in_training_student_without_decision(
+    client, special_event, special_event_tier,
+):
+    """Candidate Analyst with no tuition decision can't register for a special event."""
+    from accounts.models import Profile
+    u = User.objects.create_user(email="cand@example.com", password="x")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    client.force_login(u)
+    resp = client.get(
+        reverse("registrations:register", args=[special_event.slug])
+    )
+    assert resp.status_code == 403
+    assert b"tuition decision" in resp.content
+
+
+@pytest.mark.django_db
+def test_special_event_blocks_skipping_student(
+    client, special_event, special_event_tier,
+):
+    """A student who recorded 'skipping' can't register for a special event."""
+    from accounts.models import Profile
+    from payments.models import TuitionEnrollment, TuitionPeriod
+    u = User.objects.create_user(email="cand2@example.com", password="x")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    period = TuitionPeriod.current()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=period,
+        status=TuitionEnrollment.Status.SKIPPING,
+    )
+    client.force_login(u)
+    resp = client.get(
+        reverse("registrations:register", args=[special_event.slug])
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_special_event_allows_committed_student(
+    client, special_event, special_event_tier,
+):
+    from accounts.models import Profile
+    from payments.models import TuitionEnrollment, TuitionPeriod
+    u = User.objects.create_user(email="cand3@example.com", password="x")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    period = TuitionPeriod.current()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    client.force_login(u)
+    resp = client.get(
+        reverse("registrations:register", args=[special_event.slug])
+    )
+    # 200 (registration form) — no block.
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_seminar_does_not_block_skipping_student(
+    client, event, sliding_tier,
+):
+    """Seminars deliberately don't block — students pay regular fees if skipping."""
+    from accounts.models import Profile
+    from payments.models import TuitionEnrollment, TuitionPeriod
+    u = User.objects.create_user(email="cand4@example.com", password="x")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    period = TuitionPeriod.current()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=period,
+        status=TuitionEnrollment.Status.SKIPPING,
+    )
+    client.force_login(u)
+    # event is default SEMINAR — should not block.
+    resp = client.get(reverse("registrations:register", args=[event.slug]))
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_special_event_does_not_block_full_analyst(
+    client, special_event, special_event_tier,
+):
+    """Non-in-training roles (Analyst, Scholar, Member) are never blocked by tuition status."""
+    from accounts.models import Profile
+    u = User.objects.create_user(email="analyst@example.com", password="x")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    client.force_login(u)
+    resp = client.get(
+        reverse("registrations:register", args=[special_event.slug])
+    )
+    assert resp.status_code == 200
