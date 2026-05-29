@@ -10,17 +10,7 @@ they're in the public directory.
   </div>
   <ul class="text-sm space-y-1.5">
     {% for m in committee.memberships.all %}{% if not m.end_date %}
-    <li class="flex flex-wrap items-baseline gap-x-2">
-      {% if m.user.profile.is_in_directory %}
-      <a href="{% url 'directory_detail' m.user.profile.directory_slug %}"
-         class="link link-hover text-base-content">{{ m.user.first_name }} {{ m.user.last_name }}</a>
-      {% else %}
-      <span class="text-base-content">{{ m.user.first_name }} {{ m.user.last_name }}</span>
-      {% endif %}
-      {% if m.role_in_committee != "member" %}
-      <span class="text-xs text-base-content/60">– {{ m.get_role_in_committee_display }}</span>
-      {% endif %}
-    </li>
+    <li>{% if m.user.profile.is_in_directory %}<a href="{% url 'directory_detail' m.user.profile.directory_slug %}" class="link link-hover text-base-content">{{ m.user.first_name }} {{ m.user.last_name }}</a>{% else %}<span class="text-base-content">{{ m.user.first_name }} {{ m.user.last_name }}</span>{% endif %}{% if m.role_in_committee != "member" %}<span class="text-xs text-base-content/60">—{{ m.get_role_in_committee_display }}</span>{% endif %}</li>
     {% endif %}{% endfor %}
   </ul>
 </aside>
