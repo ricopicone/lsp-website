@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core import mail
-from django.test import override_settings
 from django.urls import reverse
 
 from accounts.models import User
@@ -27,7 +26,13 @@ def stub_stripe(monkeypatch):
 
 @pytest.fixture
 def user(db):
-    return User.objects.create_user(email="r@example.com", password="testpass-XYZ")
+    """A dues-tier-mapped user (Candidate). Tier amount comes from the seed
+    DuesPeriod or the DUES_CANDIDATE_AMOUNT setting if no period covers today."""
+    from accounts.models import Profile
+    u = User.objects.create_user(email="r@example.com", password="testpass-XYZ")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    return u
 
 
 # ---- Dues -------------------------------------------------------------
@@ -39,16 +44,15 @@ def test_dues_anonymous_redirects_to_login(client):
     assert "/accounts/login/" in response.url
 
 
-@override_settings(DUES_ANNUAL_AMOUNT="100.00")
 def test_dues_get_shows_amount(client, user):
     client.force_login(user)
     response = client.get(reverse("dues"))
     assert response.status_code == 200
+    # CANDIDATE → seed period's $100.00 candidate tier.
     assert b"$100.00" in response.content
     assert b"r@example.com" in response.content  # receipt destination
 
 
-@override_settings(DUES_ANNUAL_AMOUNT="100.00")
 def test_dues_post_creates_payment_and_redirects_to_stripe(client, user, stub_stripe):
     client.force_login(user)
     response = client.post(reverse("dues"))

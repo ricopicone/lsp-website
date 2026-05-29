@@ -1,7 +1,7 @@
 {{ user.first_name|default:"Hello" }},
 
 This is a friendly reminder that your annual membership dues for
-{{ period.name }} (${{ period.dues_amount }}) were due on
+{{ period.name }} (${{ amount }}) were due on
 {{ period.due_date|date:"F j, Y" }} and haven't been received yet.
 
 Pay securely here:

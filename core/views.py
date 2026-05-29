@@ -22,6 +22,7 @@ def landing(request):
     )
     user_registrations_url = None
     dues_period_unpaid = None
+    dues_amount_owed = None
     if request.user.is_authenticated:
         from payments.dues import is_dues_obligated, user_paid_for_period
         from payments.models import DuesPeriod
@@ -49,6 +50,9 @@ def landing(request):
             and not user_paid_for_period(request.user, current_period)
         ):
             dues_period_unpaid = current_period
+            dues_amount_owed = current_period.amount_for_role(
+                request.user.profile.role
+            )
 
     return render(
         request,
@@ -57,6 +61,7 @@ def landing(request):
             "upcoming_events": upcoming,
             "user_registrations_url": user_registrations_url,
             "dues_period_unpaid": dues_period_unpaid,
+            "dues_amount_owed": dues_amount_owed,
         },
     )
 

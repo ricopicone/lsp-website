@@ -93,13 +93,19 @@ def send_paid_emails(registration: Registration) -> None:
 
 
 def send_dues_reminder(user, period) -> None:
-    """Weekly reminder email to an unpaid dues-obligated user (REG-12)."""
+    """Weekly reminder email to an unpaid dues-obligated user (REG-12).
+
+    Resolves the dues amount from the user's role via the period's tier
+    mapping so the email shows the correct per-role amount.
+    """
     subject = f"Reminder: {period.name} dues are due"
+    amount = period.amount_for_role(user.profile.role)
     body = render_to_string(
         "payments/email/dues_reminder.txt",
         {
             "user": user,
             "period": period,
+            "amount": amount,
             "support_email": settings.SUPPORT_EMAIL,
             "site_base_url": settings.SITE_BASE_URL,
         },

@@ -21,7 +21,7 @@
   <div role="alert" class="alert alert-warning">
     <span>
       Your <strong>{{ dues_period_unpaid.name }}</strong> dues
-      (${{ dues_period_unpaid.dues_amount }}, due {{ dues_period_unpaid.due_date|date:"M j, Y" }})
+      (${{ dues_amount_owed }}, due {{ dues_period_unpaid.due_date|date:"M j, Y" }})
       haven't been paid yet — <a href="{% url 'dues' %}" class="link">pay now</a>.
     </span>
   </div>

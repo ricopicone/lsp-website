@@ -75,7 +75,10 @@ class ReceiptAdmin(admin.ModelAdmin):
 class DuesPeriodAdmin(admin.ModelAdmin):
     list_display = (
         "name", "slug", "start_date", "due_date", "end_date",
-        "dues_amount", "block_registration_when_unpaid", "is_current",
+        "dues_amount_pre_candidate",
+        "dues_amount_candidate",
+        "dues_amount_analyst",
+        "block_registration_when_unpaid", "is_current",
     )
     list_filter = ("block_registration_when_unpaid",)
     search_fields = ("name", "slug")

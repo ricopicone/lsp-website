@@ -309,9 +309,9 @@ def _handle_checkout_completed(session) -> None:
 
 @login_required
 def dues_pay(request):
-    """Membership dues entry point (REG-12) — uses the current DuesPeriod.
+    """Membership dues entry point (REG-12) — tiered by role per DuesPeriod.
 
-    Falls back to the ``DUES_ANNUAL_AMOUNT`` setting if no period covers
+    Falls back to the per-tier defaults from settings if no period covers
     today (which shouldn't happen in production once the bootstrap data
     migration + auto-rollover command are running).
     """
@@ -328,7 +328,23 @@ def dues_pay(request):
             {"period": period},
         )
 
-    amount = period.dues_amount if period else Decimal(str(settings.DUES_ANNUAL_AMOUNT))
+    role = request.user.profile.role
+    if period is not None:
+        amount = period.amount_for_role(role)
+    else:
+        # No period configured — fall back to settings defaults.
+        amount = _settings_dues_amount_for_role(role)
+
+    if amount is None:
+        # Role isn't on the dues tier table (e.g. external, member).
+        return render(
+            request,
+            "payments/dues.html",
+            {
+                "amount": None, "period": period,
+                "role_display": request.user.profile.get_role_display(),
+            },
+        )
 
     if request.method == "POST":
         payment = Payment.objects.create(
@@ -346,6 +362,22 @@ def dues_pay(request):
         "payments/dues.html",
         {"amount": amount, "period": period},
     )
+
+
+def _settings_dues_amount_for_role(role: str) -> Decimal | None:
+    """Fallback resolver when no DuesPeriod is configured."""
+    field_to_setting = {
+        "pre_candidate":         "DUES_PRE_CANDIDATE_AMOUNT",
+        "pre_candidate_scholar": "DUES_PRE_CANDIDATE_AMOUNT",
+        "candidate":             "DUES_CANDIDATE_AMOUNT",
+        "candidate_scholar":     "DUES_CANDIDATE_AMOUNT",
+        "analyst":               "DUES_ANALYST_AMOUNT",
+        "scholar":               "DUES_ANALYST_AMOUNT",
+    }
+    setting_name = field_to_setting.get(role)
+    if not setting_name:
+        return None
+    return Decimal(str(getattr(settings, setting_name)))
 
 
 def donate(request):

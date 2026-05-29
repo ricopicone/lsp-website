@@ -30,10 +30,14 @@ class Command(BaseCommand):
         if last is None:
             # Bootstrap: AY starts Sep 1 of this year if we're past Sep 1, else last.
             start_year = today.year if today.month >= 9 else today.year - 1
-            amount = Decimal(str(settings.DUES_ANNUAL_AMOUNT))
+            pre_cand  = Decimal(str(settings.DUES_PRE_CANDIDATE_AMOUNT))
+            cand      = Decimal(str(settings.DUES_CANDIDATE_AMOUNT))
+            analyst   = Decimal(str(settings.DUES_ANALYST_AMOUNT))
         else:
             start_year = last.start_date.year + 1
-            amount = last.dues_amount
+            pre_cand  = last.dues_amount_pre_candidate
+            cand      = last.dues_amount_candidate
+            analyst   = last.dues_amount_analyst
 
         new = DuesPeriod.objects.create(
             name=f"AY {start_year}–{start_year + 1}",
@@ -41,11 +45,14 @@ class Command(BaseCommand):
             start_date=date(start_year, 9, 1),
             due_date=date(start_year, 10, 1),
             end_date=date(start_year + 1, 8, 31),
-            dues_amount=amount,
+            dues_amount_pre_candidate=pre_cand,
+            dues_amount_candidate=cand,
+            dues_amount_analyst=analyst,
         )
         self.stdout.write(
             self.style.SUCCESS(
-                f"Created {new.name} (${new.dues_amount}) — runs "
-                f"{new.start_date.isoformat()} to {new.end_date.isoformat()}."
+                f"Created {new.name} — runs "
+                f"{new.start_date.isoformat()} to {new.end_date.isoformat()}. "
+                f"Tiers: pre-cand ${pre_cand} / cand ${cand} / analyst ${analyst}."
             )
         )

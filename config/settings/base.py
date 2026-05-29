@@ -159,17 +159,25 @@ STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")
 # Public base URL used to build Stripe Checkout success/cancel return URLs.
 SITE_BASE_URL = env("SITE_BASE_URL", default="http://localhost:8000")
 
-# Annual LSP membership dues (REG-12). Fixed across roles in Phase 1;
-# env-overridable so the amount can change without a deploy.
-# Used as the seed amount for a brand-new DuesPeriod; once a DuesPeriod row
-# exists for the current AY, its ``dues_amount`` is authoritative.
-DUES_ANNUAL_AMOUNT = env("DUES_ANNUAL_AMOUNT", default="100.00")
+# Annual LSP membership dues (REG-12) — tiered by role. Used as seed
+# amounts for a brand-new DuesPeriod; once a DuesPeriod row exists for
+# the current AY, its tier fields are authoritative.
+DUES_PRE_CANDIDATE_AMOUNT = env("DUES_PRE_CANDIDATE_AMOUNT", default="50.00")
+DUES_CANDIDATE_AMOUNT     = env("DUES_CANDIDATE_AMOUNT",     default="100.00")
+DUES_ANALYST_AMOUNT       = env("DUES_ANALYST_AMOUNT",       default="150.00")
 
-# Profile.role values that owe annual dues. Defaults exclude prospective
-# applicants and external/non-LSP users.
+# Profile.role values that owe annual dues. The default matches the three
+# tiers above — pre-candidates (analyst + scholar track), candidates (both
+# tracks), and analysts/scholars. MEMBER and STUDENT are not billed
+# separately (Members are already captured by the in-training + analyst /
+# scholar roles in practice).
 DUES_OBLIGATED_ROLES = env.list(
     "DUES_OBLIGATED_ROLES",
-    default=["pre_candidate", "candidate", "analyst", "member", "student"],
+    default=[
+        "pre_candidate", "pre_candidate_scholar",
+        "candidate", "candidate_scholar",
+        "analyst", "scholar",
+    ],
 )
 
 # Annual student tuition (M7.5). Mirrors DUES_ANNUAL_AMOUNT — the value

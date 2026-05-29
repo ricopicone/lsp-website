@@ -21,7 +21,9 @@
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">Current period: {{ current_period.name }}</h2>
     <p class="text-sm text-base-content/70">
-      <strong class="text-base-content">${{ current_period.dues_amount }}</strong> per member ·
+      Tiers: <strong>${{ current_period.dues_amount_pre_candidate }}</strong> pre-cand /
+      <strong>${{ current_period.dues_amount_candidate }}</strong> cand /
+      <strong>${{ current_period.dues_amount_analyst }}</strong> analyst-scholar ·
       due {{ current_period.due_date|date:"M j, Y" }} ·
       period {{ current_period.start_date|date:"M j, Y" }} – {{ current_period.end_date|date:"M j, Y" }}.
     </p>
@@ -115,14 +117,20 @@
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Period</th><th>Due</th><th>Amount</th><th>Paid</th><th>Unpaid</th><th>Collected</th></tr>
+          <tr>
+            <th>Period</th><th>Due</th>
+            <th>Pre-cand</th><th>Cand</th><th>Analyst</th>
+            <th>Paid</th><th>Unpaid</th><th>Collected</th>
+          </tr>
         </thead>
         <tbody>
           {% for s in period_stats %}
           <tr>
             <td>{{ s.period.name }}</td>
             <td class="whitespace-nowrap">{{ s.period.due_date|date:"M j, Y" }}</td>
-            <td class="whitespace-nowrap">${{ s.period.dues_amount }}</td>
+            <td class="whitespace-nowrap">${{ s.period.dues_amount_pre_candidate }}</td>
+            <td class="whitespace-nowrap">${{ s.period.dues_amount_candidate }}</td>
+            <td class="whitespace-nowrap">${{ s.period.dues_amount_analyst }}</td>
             <td class="text-success">{{ s.paid_count }}</td>
             <td class="text-warning">{{ s.unpaid_count }}</td>
             <td class="whitespace-nowrap">${{ s.total_collected }}</td>

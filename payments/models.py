@@ -11,10 +11,10 @@ from django.utils.translation import gettext_lazy as _
 class DuesPeriod(models.Model):
     """An academic year's dues cycle (REG-12).
 
-    Determines the amount owed, when it's due, and (via the future
-    ``block_registration_when_unpaid`` flag) whether unpaid obligated
-    members can register for events. Use :meth:`current` to find the
-    period covering today.
+    Dues are tiered by role: pre-candidates, candidates, and analysts/
+    scholars each pay a different amount per year, set per period. Use
+    :meth:`amount_for_role` to resolve the right tier for a given user.
+    Use :meth:`current` to find the period covering today.
     """
 
     name = models.CharField(max_length=100, unique=True, help_text="e.g. AY 2026–2027")
@@ -22,10 +22,20 @@ class DuesPeriod(models.Model):
     start_date = models.DateField(help_text="First day of the academic year.")
     due_date = models.DateField(help_text="Payment due by this date.")
     end_date = models.DateField(help_text="Last day of the academic year.")
-    dues_amount = models.DecimalField(
+    dues_amount_pre_candidate = models.DecimalField(
         max_digits=8,
         decimal_places=2,
-        help_text="Amount owed by each obligated member.",
+        help_text="Amount owed by pre-candidates (analyst or scholar track).",
+    )
+    dues_amount_candidate = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        help_text="Amount owed by candidates (analyst or scholar track).",
+    )
+    dues_amount_analyst = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        help_text="Amount owed by full Analysts and Scholars.",
     )
     block_registration_when_unpaid = models.BooleanField(
         default=False,
@@ -35,6 +45,16 @@ class DuesPeriod(models.Model):
         ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    #: Maps Profile.role values to the tier-field name on this model.
+    ROLE_TO_TIER = {
+        "pre_candidate":         "dues_amount_pre_candidate",
+        "pre_candidate_scholar": "dues_amount_pre_candidate",
+        "candidate":             "dues_amount_candidate",
+        "candidate_scholar":     "dues_amount_candidate",
+        "analyst":               "dues_amount_analyst",
+        "scholar":               "dues_amount_analyst",
+    }
 
     class Meta:
         ordering = ("-start_date",)
@@ -47,6 +67,15 @@ class DuesPeriod(models.Model):
         """Return the DuesPeriod containing ``on_date`` (default today), or None."""
         on = on_date or timezone.now().date()
         return cls.objects.filter(start_date__lte=on, end_date__gte=on).first()
+
+    def amount_for_role(self, role: str):
+        """Return the dues amount owed by a user with the given Profile.role.
+
+        Roles outside ``ROLE_TO_TIER`` (e.g. ``member``, ``external``) return
+        None — meaning the role isn't dues-obligated under the tiered model.
+        """
+        field = self.ROLE_TO_TIER.get(role)
+        return getattr(self, field) if field else None
 
 
 class DuesReminder(models.Model):

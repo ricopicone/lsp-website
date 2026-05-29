@@ -37,14 +37,19 @@ def current_period(db):
         start_date=today - timedelta(days=60),
         due_date=today - timedelta(days=30),
         end_date=today + timedelta(days=300),
-        dues_amount=Decimal("100.00"),
+        dues_amount_pre_candidate=Decimal("50.00"),
+        dues_amount_candidate=Decimal("100.00"),
+        dues_amount_analyst=Decimal("150.00"),
     )
 
 
 @pytest.fixture
 def member(db):
+    """A dues-obligated user. Uses CANDIDATE role — MEMBER is no longer in
+    DUES_OBLIGATED_ROLES (members are captured by in-training + analyst /
+    scholar roles in practice)."""
     u = User.objects.create_user(email="member@example.com")
-    u.profile.role = Profile.Role.MEMBER
+    u.profile.role = Profile.Role.CANDIDATE
     u.profile.save()
     return u
 
@@ -83,7 +88,9 @@ def test_current_returns_none_when_no_period_covers_date():
 # ---- is_dues_obligated + user_paid_for_period -------------------------
 
 
-def test_member_role_is_obligated(member):
+def test_candidate_role_is_obligated(member):
+    """The ``member`` fixture is now a CANDIDATE — the in-training / analyst /
+    scholar roles are the dues-obligated set."""
     assert is_dues_obligated(member) is True
 
 
@@ -106,7 +113,7 @@ def test_user_paid_for_period_true_after_succeeded_payment(member, current_perio
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
-        amount=current_period.dues_amount,
+        amount=current_period.amount_for_role("candidate"),
         status=Payment.Status.SUCCEEDED,
         dues_period=current_period,
     )
@@ -118,7 +125,7 @@ def test_user_paid_for_period_false_for_pending_payment(member, current_period):
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
-        amount=current_period.dues_amount,
+        amount=current_period.amount_for_role("candidate"),
         status=Payment.Status.PENDING,
         dues_period=current_period,
     )
@@ -151,7 +158,7 @@ def test_dues_page_shows_already_paid_when_user_has_succeeded_payment(
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
-        amount=current_period.dues_amount,
+        amount=current_period.amount_for_role("candidate"),
         status=Payment.Status.SUCCEEDED,
         dues_period=current_period,
     )
@@ -186,7 +193,7 @@ def test_landing_no_banner_when_paid(client, member, current_period):
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
-        amount=current_period.dues_amount,
+        amount=current_period.amount_for_role("candidate"),
         status=Payment.Status.SUCCEEDED,
         dues_period=current_period,
     )
@@ -242,7 +249,7 @@ def test_reminders_skip_paid_user(member, current_period):
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
-        amount=current_period.dues_amount,
+        amount=current_period.amount_for_role("candidate"),
         status=Payment.Status.SUCCEEDED,
         dues_period=current_period,
     )
@@ -299,7 +306,9 @@ def test_create_dues_period_inherits_amount_from_last(current_period):
         call_command("create_dues_period_if_needed", stdout=StringIO())
     new = DuesPeriod.objects.order_by("-start_date").first()
     assert new.start_date.year == current_period.start_date.year + 1
-    assert new.dues_amount == current_period.dues_amount
+    assert new.dues_amount_pre_candidate == current_period.dues_amount_pre_candidate
+    assert new.dues_amount_candidate == current_period.dues_amount_candidate
+    assert new.dues_amount_analyst == current_period.dues_amount_analyst
     assert new.start_date.month == 9 and new.start_date.day == 1
 
 
@@ -331,7 +340,7 @@ def test_treasurer_dashboard_renders_for_staff(
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
-        amount=current_period.dues_amount,
+        amount=current_period.amount_for_role("candidate"),
         status=Payment.Status.SUCCEEDED,
         dues_period=current_period,
     )
@@ -359,16 +368,19 @@ def test_treasurer_dashboard_excludes_paid_from_unpaid_list(
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
-        amount=current_period.dues_amount,
+        amount=current_period.amount_for_role("candidate"),
         status=Payment.Status.SUCCEEDED,
         dues_period=current_period,
     )
     client.force_login(staff_user)
     response = client.get(reverse("treasurer"))
-    # member is the only obligated user; once paid, they don't appear in
-    # the unpaid list (which the template hides entirely when empty).
-    assert b"member@example.com" not in response.content
-    assert b"Unpaid members" not in response.content
+    # member paid → not in the dues unpaid section. (The candidate may still
+    # appear in the tuition reconciliation section — distinct obligation.)
+    body = response.content
+    tuition_start = body.find(b"Tuition")
+    dues_section = body[:tuition_start] if tuition_start > -1 else body
+    assert b"member@example.com" not in dues_section
+    assert b"Unpaid members" not in dues_section
 
 
 def test_treasurer_dashboard_excludes_external_users_from_obligated_count(
@@ -380,16 +392,20 @@ def test_treasurer_dashboard_excludes_external_users_from_obligated_count(
     assert b"external@example.com" not in response.content
 
 
-@override_settings(DUES_OBLIGATED_ROLES=["member"])
+@override_settings(DUES_OBLIGATED_ROLES=["analyst"])
 def test_treasurer_dashboard_respects_obligated_roles_setting(
-    client, staff_user, current_period, member, external_user,
+    client, staff_user, current_period, external_user,
 ):
-    """With DUES_OBLIGATED_ROLES=[member], only members appear in the dues
+    """With DUES_OBLIGATED_ROLES=[analyst], only analysts appear in the dues
     unpaid list. (Candidates may still appear in the tuition reconciliation
     section — different obligation.)"""
-    # Add a candidate user — should not be obligated for dues under this
-    # override, though they appear in the tuition section as a separate
-    # category.
+    # An analyst — should appear in the dues unpaid list.
+    analyst = User.objects.create_user(email="analyst-x@example.com")
+    analyst.profile.role = Profile.Role.ANALYST
+    analyst.profile.save()
+    # A candidate — should NOT appear in the dues unpaid list under this
+    # override (only analyst is obligated), though they're in the tuition
+    # section as a separate category.
     candidate = User.objects.create_user(email="cand@example.com")
     candidate.profile.role = Profile.Role.CANDIDATE
     candidate.profile.save()
@@ -401,5 +417,5 @@ def test_treasurer_dashboard_respects_obligated_roles_setting(
     dues_start = body.find(b"Unpaid members")
     tuition_start = body.find(b"Tuition")
     dues_section = body[dues_start:tuition_start] if dues_start > -1 else body
-    assert b"member@example.com" in dues_section
+    assert b"analyst-x@example.com" in dues_section
     assert b"cand@example.com" not in dues_section

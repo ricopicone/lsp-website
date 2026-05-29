@@ -7,7 +7,16 @@
     <h1 class="font-serif text-3xl text-base-content">Pay membership dues</h1>
   </header>
 
-  {% if period %}
+  {% if amount is None %}
+  <div class="rounded-lg border border-base-300 bg-base-200/40 p-5 space-y-2">
+    <p class="text-sm">
+      Your role ({{ role_display }}) doesn't have an annual dues amount on file.
+      If you believe this is in error, please write to
+      <a href="mailto:website@lacanschool.org" class="link">website@lacanschool.org</a>.
+    </p>
+  </div>
+
+  {% elif period %}
   <div class="rounded-lg border border-base-300 p-5 space-y-2">
     <p class="text-lg">
       <strong>{{ period.name }}</strong> annual membership:
@@ -30,6 +39,7 @@
   </div>
   {% endif %}
 
+  {% if amount %}
   <p class="text-sm text-base-content/70">
     Click <em>Continue to payment</em> to pay securely through Stripe.
     Your receipt will be emailed to <strong>{{ user.email }}</strong>.
@@ -39,6 +49,7 @@
     {% csrf_token %}
     <button type="submit" class="btn btn-primary btn-lg">Continue to payment →</button>
   </form>
+  {% endif %}
 
 </div>
 {% endblock %}
