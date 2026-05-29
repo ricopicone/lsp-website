@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from django.contrib.auth import login
+from django.db.models import Prefetch
 from django.http import Http404
 from django.shortcuts import redirect, render
+
+from committees.models import CommitteeMembership
 
 from .forms import LightSignupForm
 from .models import Profile
@@ -23,10 +26,25 @@ DIRECTORY_SECTIONS = [
 
 
 def _directory_qs():
+    """All directory-eligible profiles, with active public committee
+    memberships prefetched onto ``user.active_public_memberships``."""
+    membership_qs = (
+        CommitteeMembership.objects
+        .filter(end_date__isnull=True, committee__public=True)
+        .select_related("committee")
+        .order_by("committee__name")
+    )
     return (
         Profile.objects
         .filter(role__in=Profile.DIRECTORY_ROLES)
         .select_related("user")
+        .prefetch_related(
+            Prefetch(
+                "user__committee_memberships",
+                queryset=membership_qs,
+                to_attr="active_public_memberships",
+            )
+        )
         .order_by("user__last_name", "user__first_name")
     )
 
