@@ -1,0 +1,106 @@
+{% extends "payments/treasurer/base.html" %}
+{% block tab_content %}
+<div class="space-y-8">
+
+  <p class="text-sm text-base-content/60">
+    At-a-glance state for the current academic year. Use the tabs above
+    for the full per-section views.
+  </p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    {% comment %}Dues card{% endcomment %}
+    <section class="rounded-lg border border-base-300 p-5 space-y-3">
+      <header class="flex items-baseline justify-between">
+        <h2 class="font-serif text-xl text-base-content">Dues</h2>
+        <a href="{% url 'treasurer_dues' %}" class="text-sm link link-primary">Details →</a>
+      </header>
+      {% if current_period %}
+      <p class="text-sm text-base-content/70">
+        <strong>{{ current_period.name }}</strong>, due
+        {{ current_period.due_date|date:"M j, Y" }}.
+      </p>
+      <div class="grid grid-cols-3 gap-2 text-sm">
+        <div class="rounded border border-base-300 p-2">
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Pre-cand</div>
+          <div class="font-serif text-lg">${{ current_period.dues_amount_pre_candidate }}</div>
+        </div>
+        <div class="rounded border border-base-300 p-2">
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Cand</div>
+          <div class="font-serif text-lg">${{ current_period.dues_amount_candidate }}</div>
+        </div>
+        <div class="rounded border border-base-300 p-2">
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Analyst</div>
+          <div class="font-serif text-lg">${{ current_period.dues_amount_analyst }}</div>
+        </div>
+      </div>
+      {% with cur=period_stats.0 %}
+      <div class="grid grid-cols-3 gap-2 text-sm">
+        <div>
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Obligated</div>
+          <div class="font-serif text-lg">{{ obligated_count }}</div>
+        </div>
+        <div>
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Paid</div>
+          <div class="font-serif text-lg text-success">{{ cur.paid_count }}</div>
+        </div>
+        <div>
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Unpaid</div>
+          <div class="font-serif text-lg {% if cur.unpaid_count %}text-warning{% endif %}">{{ cur.unpaid_count }}</div>
+        </div>
+      </div>
+      <div class="text-xs text-base-content/60 pt-1 border-t border-base-300/40">
+        Collected this period: <strong>${{ cur.total_collected }}</strong>
+      </div>
+      {% endwith %}
+      {% else %}
+      <p class="text-sm text-base-content/60">No current dues period configured.</p>
+      {% endif %}
+    </section>
+
+    {% comment %}Tuition card{% endcomment %}
+    <section class="rounded-lg border border-base-300 p-5 space-y-3">
+      <header class="flex items-baseline justify-between">
+        <h2 class="font-serif text-xl text-base-content">Tuition</h2>
+        <a href="{% url 'treasurer_tuition' %}" class="text-sm link link-primary">Details →</a>
+      </header>
+      {% if tuition_period %}
+      <p class="text-sm text-base-content/70">
+        <strong>{{ tuition_period.name }}</strong>,
+        <span class="whitespace-nowrap">decisions due {{ tuition_period.decision_due_date|date:"M j, Y" }}</span>.
+      </p>
+      <div class="grid grid-cols-2 gap-2 text-sm">
+        <div class="rounded border border-base-300 p-2 col-span-2">
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Annual amount</div>
+          <div class="font-serif text-lg">${{ tuition_period.tuition_amount }}</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-sm">
+        <div>
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">In-training</div>
+          <div class="font-serif text-lg">{{ tuition_in_training_count }}</div>
+        </div>
+        <div>
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Recon queue</div>
+          <div class="font-serif text-lg {% if tuition_reconciliation_users|length %}text-warning{% endif %}">{{ tuition_reconciliation_users|length }}</div>
+        </div>
+        <div>
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Collected</div>
+          <div class="font-serif text-lg">${{ tuition_total_collected|floatformat:2 }}</div>
+        </div>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/60">No current tuition period configured.</p>
+      {% endif %}
+    </section>
+
+  </div>
+
+  <p class="text-xs text-base-content/60 pt-2">
+    Adjust amounts under <a href="{% url 'treasurer_settings' %}" class="link">Settings</a> ·
+    Past periods live in <a href="/admin/payments/duesperiod/" class="link">Dues admin</a> /
+    <a href="/admin/payments/tuitionperiod/" class="link">Tuition admin</a>.
+  </p>
+
+</div>
+{% endblock %}

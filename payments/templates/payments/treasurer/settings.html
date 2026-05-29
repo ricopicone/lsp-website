@@ -1,0 +1,105 @@
+{% extends "payments/treasurer/base.html" %}
+{% block tab_content %}
+<div class="space-y-6 max-w-2xl">
+
+  {% if saved %}
+  <div id="saved" role="alert" class="alert alert-success">
+    <span>Settings saved.</span>
+  </div>
+  {% endif %}
+
+  <p class="text-sm text-base-content/60">
+    Edit dues + tuition amounts for the current academic-year periods.
+    Past or future periods can be edited under
+    <a href="/admin/payments/duesperiod/" class="link">DuesPeriod admin</a>
+    and <a href="/admin/payments/tuitionperiod/" class="link">TuitionPeriod admin</a>.
+  </p>
+
+  <form method="post" class="space-y-8">
+    {% csrf_token %}
+
+    <section class="space-y-3">
+      <header>
+        <h2 class="font-serif text-xl text-base-content">Dues</h2>
+        {% if dues_period %}
+        <p class="text-sm text-base-content/60">
+          {{ dues_period.name }} ·
+          due {{ dues_period.due_date|date:"M j, Y" }} ·
+          period {{ dues_period.start_date|date:"M j, Y" }} – {{ dues_period.end_date|date:"M j, Y" }}.
+        </p>
+        {% else %}
+        <p class="text-sm text-warning">
+          No current dues period configured. Create one via the
+          <code>create_dues_period_if_needed</code> management command or in admin.
+        </p>
+        {% endif %}
+      </header>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {% for f in form %}
+        {% if f.name == "dues_pre_candidate" or f.name == "dues_candidate" or f.name == "dues_analyst" %}
+        <div>
+          <label for="{{ f.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
+            {{ f.label }}
+          </label>
+          <div class="input input-bordered flex items-center gap-1">
+            <span class="text-base-content/60">$</span>
+            {{ f }}
+          </div>
+          {% if f.errors %}<p class="text-error text-xs mt-1">{{ f.errors|join:", " }}</p>{% endif %}
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="space-y-3">
+      <header>
+        <h2 class="font-serif text-xl text-base-content">Tuition</h2>
+        {% if tuition_period %}
+        <p class="text-sm text-base-content/60">
+          {{ tuition_period.name }} ·
+          decisions due {{ tuition_period.decision_due_date|date:"M j, Y" }} ·
+          period {{ tuition_period.start_date|date:"M j, Y" }} – {{ tuition_period.end_date|date:"M j, Y" }}.
+        </p>
+        {% else %}
+        <p class="text-sm text-warning">
+          No current tuition period configured. Create one via the
+          <code>create_tuition_period_if_needed</code> management command or in admin.
+        </p>
+        {% endif %}
+      </header>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label for="{{ form.tuition_amount.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
+            {{ form.tuition_amount.label }}
+          </label>
+          <div class="input input-bordered flex items-center gap-1">
+            <span class="text-base-content/60">$</span>
+            {{ form.tuition_amount }}
+          </div>
+          {% if form.tuition_amount.errors %}<p class="text-error text-xs mt-1">{{ form.tuition_amount.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <div class="pt-2">
+      <button type="submit" class="btn btn-primary">Save settings</button>
+    </div>
+  </form>
+
+  <section class="border-t border-base-300/60 pt-6 space-y-2">
+    <h2 class="font-serif text-lg text-base-content">Roll over to the next academic year</h2>
+    <p class="text-sm text-base-content/60">
+      A new period is created automatically each September by the
+      <code>create_dues_period_if_needed</code> and
+      <code>create_tuition_period_if_needed</code> management commands
+      (wired into a weekly systemd timer on the host). The new period
+      inherits its amounts from the last period, so updates here carry
+      forward by default.
+    </p>
+  </section>
+
+</div>
+{% endblock %}

@@ -321,22 +321,17 @@ def test_treasurer_dashboard_shows_tuition_section(client, staff_user, current_p
     )
 
     client.force_login(staff_user)
-    resp = client.get("/treasurer/")
+    resp = client.get(reverse("treasurer_tuition"))
     assert resp.status_code == 200
     body = resp.content
     assert b"Tuition" in body
     assert current_period.name.encode() in body
     # Counts: 1 paid, 1 committed, 1 undecided.
     assert b"Reconciliation queue" in body
-    # Slice the body to just the tuition reconciliation queue section to
-    # avoid false positives from the dues "Unpaid members" section (which
-    # lists candidates regardless of tuition state).
-    recon_start = body.find(b"Reconciliation queue")
-    recon_section = body[recon_start:]
-    assert b"c1@x.test" in recon_section  # undecided
-    assert b"c2@x.test" in recon_section  # committed
+    assert b"c1@x.test" in body  # undecided
+    assert b"c2@x.test" in body  # committed
     # PAID c3 should NOT appear in the tuition reconciliation queue.
-    assert b"c3@x.test" not in recon_section
+    assert b"c3@x.test" not in body
 
 
 @pytest.mark.django_db
@@ -400,6 +395,101 @@ def test_treasurer_dashboard_requires_staff(client, current_period):
     resp = client.get("/treasurer/")
     # treasurer_dashboard uses user_passes_test which redirects to login.
     assert resp.status_code == 302
+
+
+# --- Treasurer admin tabs -----------------------------------------------
+
+
+@pytest.mark.django_db
+def test_treasurer_overview_shows_both_dues_and_tuition_cards(
+    client, staff_user, current_period,
+):
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer"))
+    assert resp.status_code == 200
+    body = resp.content
+    assert b"Dues" in body
+    assert b"Tuition" in body
+    # Tab nav should include all four tabs.
+    for label in (b"Overview", b"Tuition", b"Dues", b"Settings"):
+        assert label in body
+
+
+@pytest.mark.django_db
+def test_treasurer_tabs_all_require_staff(client, current_period):
+    """All four tabs are gated by the staff check."""
+    u = _mk_candidate("not-staff@x.test")
+    client.force_login(u)
+    for name in ("treasurer", "treasurer_tuition", "treasurer_dues", "treasurer_settings"):
+        assert client.get(reverse(name)).status_code == 302
+
+
+@pytest.mark.django_db
+def test_treasurer_settings_renders_with_form(
+    client, staff_user, current_period,
+):
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_settings"))
+    assert resp.status_code == 200
+    body = resp.content
+    assert b"Dues" in body
+    assert b"Tuition" in body
+    # Form fields by name.
+    for field in (b"dues_pre_candidate", b"dues_candidate",
+                  b"dues_analyst", b"tuition_amount"):
+        assert field in body
+
+
+@pytest.mark.django_db
+def test_treasurer_settings_post_updates_both_periods(
+    client, staff_user, current_period,
+):
+    from payments.models import DuesPeriod
+
+    dues_period = DuesPeriod.current()
+    assert dues_period is not None
+    client.force_login(staff_user)
+    resp = client.post(reverse("treasurer_settings"), {
+        "dues_pre_candidate": "60",
+        "dues_candidate":     "120",
+        "dues_analyst":       "180",
+        "tuition_amount":     "850",
+    })
+    assert resp.status_code == 302
+    assert "saved=1" in resp.url
+    dues_period.refresh_from_db()
+    current_period.refresh_from_db()
+    assert dues_period.dues_amount_pre_candidate == Decimal("60.00")
+    assert dues_period.dues_amount_candidate     == Decimal("120.00")
+    assert dues_period.dues_amount_analyst       == Decimal("180.00")
+    assert current_period.tuition_amount         == Decimal("850.00")
+
+
+@pytest.mark.django_db
+def test_treasurer_settings_rejects_negative_amounts(
+    client, staff_user, current_period,
+):
+    client.force_login(staff_user)
+    resp = client.post(reverse("treasurer_settings"), {
+        "dues_pre_candidate": "-1",
+        "dues_candidate":     "100",
+        "dues_analyst":       "150",
+        "tuition_amount":     "800",
+    })
+    assert resp.status_code == 200  # form re-renders with errors
+
+
+@pytest.mark.django_db
+def test_treasurer_settings_handles_missing_periods(client, staff_user):
+    """Settings page renders even when no periods are configured."""
+    from payments.models import DuesPeriod, TuitionPeriod
+    TuitionPeriod.objects.all().delete()
+    DuesPeriod.objects.all().delete()
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_settings"))
+    assert resp.status_code == 200
+    assert b"No current dues period" in resp.content
+    assert b"No current tuition period" in resp.content
 
 
 # --- Auto-flip on tuition payment success -------------------------------

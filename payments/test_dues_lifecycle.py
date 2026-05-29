@@ -356,9 +356,9 @@ def test_treasurer_dashboard_renders_for_staff(
 def test_treasurer_dashboard_lists_unpaid_obligated_members(
     client, staff_user, current_period, member,
 ):
-    """member is obligated but hasn't paid → appears in unpaid section."""
+    """member is obligated but hasn't paid → appears in dues unpaid section."""
     client.force_login(staff_user)
-    response = client.get(reverse("treasurer"))
+    response = client.get(reverse("treasurer_dues"))
     assert b"member@example.com" in response.content
 
 
@@ -373,14 +373,10 @@ def test_treasurer_dashboard_excludes_paid_from_unpaid_list(
         dues_period=current_period,
     )
     client.force_login(staff_user)
-    response = client.get(reverse("treasurer"))
-    # member paid → not in the dues unpaid section. (The candidate may still
-    # appear in the tuition reconciliation section — distinct obligation.)
-    body = response.content
-    tuition_start = body.find(b"Tuition")
-    dues_section = body[:tuition_start] if tuition_start > -1 else body
-    assert b"member@example.com" not in dues_section
-    assert b"Unpaid members" not in dues_section
+    response = client.get(reverse("treasurer_dues"))
+    # member paid → not in the dues unpaid section.
+    assert b"member@example.com" not in response.content
+    assert b"Unpaid members" not in response.content
 
 
 def test_treasurer_dashboard_excludes_external_users_from_obligated_count(
@@ -397,25 +393,15 @@ def test_treasurer_dashboard_respects_obligated_roles_setting(
     client, staff_user, current_period, external_user,
 ):
     """With DUES_OBLIGATED_ROLES=[analyst], only analysts appear in the dues
-    unpaid list. (Candidates may still appear in the tuition reconciliation
-    section — different obligation.)"""
-    # An analyst — should appear in the dues unpaid list.
+    tab's unpaid list. (Candidates appear in the tuition tab — different
+    obligation.)"""
     analyst = User.objects.create_user(email="analyst-x@example.com")
     analyst.profile.role = Profile.Role.ANALYST
     analyst.profile.save()
-    # A candidate — should NOT appear in the dues unpaid list under this
-    # override (only analyst is obligated), though they're in the tuition
-    # section as a separate category.
     candidate = User.objects.create_user(email="cand@example.com")
     candidate.profile.role = Profile.Role.CANDIDATE
     candidate.profile.save()
     client.force_login(staff_user)
-    response = client.get(reverse("treasurer"))
-    # Slice to just the dues "Unpaid members" section to avoid false
-    # positives from the new tuition section.
-    body = response.content
-    dues_start = body.find(b"Unpaid members")
-    tuition_start = body.find(b"Tuition")
-    dues_section = body[dues_start:tuition_start] if dues_start > -1 else body
-    assert b"analyst-x@example.com" in dues_section
-    assert b"cand@example.com" not in dues_section
+    response = client.get(reverse("treasurer_dues"))
+    assert b"analyst-x@example.com" in response.content
+    assert b"cand@example.com" not in response.content

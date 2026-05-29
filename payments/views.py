@@ -44,10 +44,68 @@ def _is_staff(user):
     return user.is_authenticated and user.is_staff
 
 
+TREASURER_TABS = [
+    ("overview", "Overview"),
+    ("tuition",  "Tuition"),
+    ("dues",     "Dues"),
+    ("settings", "Settings"),
+]
+
+
+def _treasurer_tab_links() -> list[tuple[str, str, str]]:
+    """Returns [(key, label, url), ...] used by the tab nav."""
+    from django.urls import reverse
+    name_to_url = {
+        "overview": reverse("treasurer"),
+        "tuition":  reverse("treasurer_tuition"),
+        "dues":     reverse("treasurer_dues"),
+        "settings": reverse("treasurer_settings"),
+    }
+    return [(key, label, name_to_url[key]) for key, label in TREASURER_TABS]
+
+
+def _treasurer_render(request, tab_key: str, template: str, ctx: dict):
+    """Common render helper: injects the tab nav into every treasurer page."""
+    ctx = {**ctx, "tab_key": tab_key, "tabs": _treasurer_tab_links()}
+    return render(request, template, ctx)
+
+
 @login_required
 @user_passes_test(_is_staff)
 def treasurer_dashboard(request):
-    """Per-period dues + tuition summary, role breakdowns, multi-period totals."""
+    """Overview tab — compact highlights for both tuition and dues (M7.5)."""
+    tuition_ctx = _treasurer_tuition_context()
+    dues_ctx = _treasurer_dues_context()
+
+    return _treasurer_render(request, "overview", "payments/treasurer/overview.html", {
+        **dues_ctx,
+        **tuition_ctx,
+    })
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_tuition(request):
+    """Tuition tab — full per-status table, per-role breakdown, reconciliation."""
+    return _treasurer_render(
+        request, "tuition", "payments/treasurer/tuition.html",
+        _treasurer_tuition_context(),
+    )
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_dues(request):
+    """Dues tab — full per-period table, per-role breakdown, unpaid list, charts."""
+    return _treasurer_render(
+        request, "dues", "payments/treasurer/dues.html",
+        _treasurer_dues_context(),
+    )
+
+
+def _treasurer_dues_context() -> dict:
+    """Build the dues-section context — current period summary, multi-period
+    totals, per-role breakdown, unpaid list, Chart.js payloads."""
     obligated_roles = list(settings.DUES_OBLIGATED_ROLES)
     obligated_count = User.objects.filter(
         is_active=True, profile__role__in=obligated_roles,
@@ -96,7 +154,6 @@ def treasurer_dashboard(request):
             .order_by("last_name", "first_name", "email")
         )
 
-    # JSON payloads for Chart.js.
     chart_periods = {
         "labels": [s["period"].name for s in reversed(period_stats)],
         "totals": [float(s["total_collected"]) for s in reversed(period_stats)],
@@ -106,18 +163,44 @@ def treasurer_dashboard(request):
         "paid": [r["paid"] for r in role_breakdown],
         "unpaid": [r["unpaid"] for r in role_breakdown],
     }
-
-    tuition_ctx = _treasurer_tuition_context()
-
-    return render(request, "payments/treasurer.html", {
-        "period_stats": period_stats,
+    return {
+        "period_stats":   period_stats,
         "current_period": current,
         "role_breakdown": role_breakdown,
-        "unpaid_users": unpaid_users,
+        "unpaid_users":   unpaid_users,
         "obligated_count": obligated_count,
         "chart_periods_json": json.dumps(chart_periods),
         "chart_roles_json": json.dumps(chart_roles),
-        **tuition_ctx,
+    }
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_settings(request):
+    """Settings tab — edit tuition + dues amounts for the current period."""
+    from .forms import TreasurerSettingsForm
+    dues_period = DuesPeriod.current()
+    tuition_period = TuitionPeriod.current()
+
+    if request.method == "POST":
+        form = TreasurerSettingsForm(
+            request.POST, dues_period=dues_period, tuition_period=tuition_period,
+        )
+        if form.is_valid():
+            form.save()
+            return redirect(
+                request.path + "?saved=1#saved"
+            )
+    else:
+        form = TreasurerSettingsForm(
+            dues_period=dues_period, tuition_period=tuition_period,
+        )
+
+    return _treasurer_render(request, "settings", "payments/treasurer/settings.html", {
+        "form":           form,
+        "dues_period":    dues_period,
+        "tuition_period": tuition_period,
+        "saved":          request.GET.get("saved") == "1",
     })
 
 

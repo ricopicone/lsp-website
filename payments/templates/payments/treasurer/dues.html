@@ -1,22 +1,7 @@
-{% extends "core/base.html" %}
-{% load static %}
-{% block title %}Treasurer dashboard — LSP{% endblock %}
-{% block extra_head %}
-<script src="{% static 'vendor/chart-4.4.4.umd.min.js' %}"></script>
-{% endblock %}
-{% block content %}
-<div class="space-y-10">
+{% extends "payments/treasurer/base.html" %}
+{% block tab_content %}
+<div class="space-y-8">
 
-  <header class="space-y-2 border-b border-base-300/60 pb-4">
-    <h1 class="font-serif text-3xl text-base-content">Treasurer dashboard</h1>
-    <div class="flex flex-wrap gap-3 text-sm text-base-content/70">
-      <a href="{% url 'payments:transactions_csv' %}" class="link link-hover">All transactions CSV</a>
-      <span class="text-base-content/30">·</span>
-      <a href="/admin/payments/payment/" class="link link-hover">Admin payments</a>
-    </div>
-  </header>
-
-  {# ---------- Current period summary ---------- #}
   {% if current_period %}
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">Current period: {{ current_period.name }}</h2>
@@ -53,7 +38,6 @@
   <p class="text-base-content/60">No current dues period configured.</p>
   {% endif %}
 
-  {# ---------- Per-period chart ---------- #}
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">Totals collected per period</h2>
     <div class="rounded-lg border border-base-300 p-4 bg-base-100 max-w-3xl">
@@ -61,7 +45,6 @@
     </div>
   </section>
 
-  {# ---------- Role breakdown ---------- #}
   {% if role_breakdown %}
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">Current period: paid / unpaid by role</h2>
@@ -88,7 +71,6 @@
   </section>
   {% endif %}
 
-  {# ---------- Unpaid members ---------- #}
   {% if unpaid_users %}
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">Unpaid members <span class="text-base-content/60 text-base font-normal">({{ unpaid_users|length }})</span></h2>
@@ -111,7 +93,6 @@
   </section>
   {% endif %}
 
-  {# ---------- All periods ---------- #}
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">All periods</h2>
     <div class="overflow-x-auto rounded-lg border border-base-300">
@@ -140,129 +121,6 @@
       </table>
     </div>
   </section>
-
-  {% comment %}
-    Tuition section (M7.5) — separate from dues; in-training students only.
-  {% endcomment %}
-  <div class="border-t border-base-300/60 pt-8 space-y-6">
-    <header class="space-y-1">
-      <h2 class="font-serif text-2xl text-base-content">Tuition</h2>
-      <p class="text-sm text-base-content/60">
-        Per-year status for in-training students (pre-candidates and candidates).
-        See <a href="/admin/payments/tuitionenrollment/" class="link">enrollments admin</a>
-        to record / change a decision.
-      </p>
-    </header>
-
-    {% if tuition_period %}
-    <section class="space-y-3">
-      <h3 class="font-serif text-lg text-base-content">
-        Current period: {{ tuition_period.name }}
-      </h3>
-      <p class="text-sm text-base-content/70">
-        <strong class="text-base-content">${{ tuition_period.tuition_amount }}</strong> per student ·
-        decisions due {{ tuition_period.decision_due_date|date:"M j, Y" }} ·
-        period {{ tuition_period.start_date|date:"M j, Y" }} – {{ tuition_period.end_date|date:"M j, Y" }}.
-      </p>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="rounded-lg border border-base-300 p-4 bg-base-100">
-          <div class="text-xs uppercase tracking-wider text-base-content/60">In-training</div>
-          <div class="text-2xl font-serif mt-1">{{ tuition_in_training_count }}</div>
-        </div>
-        <div class="rounded-lg border border-base-300 p-4 bg-base-100">
-          <div class="text-xs uppercase tracking-wider text-base-content/60">Collected</div>
-          <div class="text-2xl font-serif mt-1">${{ tuition_total_collected|floatformat:2 }}</div>
-        </div>
-        <div class="rounded-lg border border-base-300 p-4 bg-base-100 md:col-span-2">
-          <div class="text-xs uppercase tracking-wider text-base-content/60">Reconciliation queue</div>
-          <div class="text-2xl font-serif mt-1 text-warning">{{ tuition_reconciliation_users|length }}</div>
-          <div class="text-xs text-base-content/60 mt-1">undecided + committed-without-payment</div>
-        </div>
-      </div>
-    </section>
-
-    {# ---------- Status breakdown ---------- #}
-    <section class="space-y-3">
-      <h3 class="font-serif text-lg text-base-content">Status breakdown</h3>
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {% for s in tuition_status_counts %}
-        <div class="rounded-lg border border-base-300 p-3 bg-base-100">
-          <div class="text-[0.7rem] uppercase tracking-wider text-base-content/60">{{ s.label }}</div>
-          <div class="text-xl font-serif mt-1
-              {% if s.key == 'paid_in_full' %}text-success{% endif %}
-              {% if s.key == 'committed' or s.key == 'undecided' %}text-warning{% endif %}">
-            {{ s.count }}
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-    </section>
-
-    {# ---------- Per-role breakdown ---------- #}
-    <section class="space-y-3">
-      <h3 class="font-serif text-lg text-base-content">By role</h3>
-      <div class="overflow-x-auto rounded-lg border border-base-300">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>Role</th>
-              <th class="text-right">Total</th>
-              <th class="text-right">Decided</th>
-              <th class="text-right">Undecided</th>
-              <th class="text-right">Committed (unpaid)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in tuition_role_breakdown %}
-            <tr>
-              <td>{{ r.role_label }}</td>
-              <td class="text-right">{{ r.total }}</td>
-              <td class="text-right text-success">{{ r.decided }}</td>
-              <td class="text-right {% if r.undecided %}text-warning{% endif %}">{{ r.undecided }}</td>
-              <td class="text-right {% if r.committed_only %}text-warning{% endif %}">{{ r.committed_only }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    {# ---------- Reconciliation queue ---------- #}
-    {% if tuition_reconciliation_users %}
-    <section class="space-y-3">
-      <h3 class="font-serif text-lg text-base-content">
-        Reconciliation queue
-        <span class="text-base-content/60 text-base font-normal">({{ tuition_reconciliation_users|length }})</span>
-      </h3>
-      <p class="text-sm text-base-content/60">
-        Students who need attention — either they haven't recorded a decision yet, or they committed to pay but no payment has been received. Click through to admin to record a payment, set up a payment plan, or mark as exempt.
-      </p>
-      <div class="overflow-x-auto rounded-lg border border-base-300">
-        <table class="table table-sm">
-          <thead>
-            <tr><th>Name</th><th>Email</th><th>Role</th><th>Reason</th><th></th></tr>
-          </thead>
-          <tbody>
-            {% for row in tuition_reconciliation_users %}
-            <tr>
-              <td>{{ row.user.first_name }} {{ row.user.last_name }}</td>
-              <td class="text-base-content/70 text-xs"><a href="mailto:{{ row.user.email }}" class="link">{{ row.user.email }}</a></td>
-              <td>{{ row.user.profile.get_role_display }}</td>
-              <td class="{% if row.status == 'committed' %}text-warning{% else %}text-base-content/70{% endif %}">{{ row.reason }}</td>
-              <td><a href="/admin/payments/tuitionenrollment/?user__id__exact={{ row.user.id }}" class="link link-primary text-xs">resolve →</a></td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </section>
-    {% endif %}
-
-    {% else %}
-    <p class="text-base-content/60">No current tuition period configured.</p>
-    {% endif %}
-  </div>
 
 </div>
 

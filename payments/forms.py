@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django import forms
+from django.db import transaction
 
 
 class DonationForm(forms.Form):
@@ -75,3 +76,66 @@ class TuitionDecisionForm(forms.Form):
         required=True,
         label="Your decision for this academic year",
     )
+
+
+class TreasurerSettingsForm(forms.Form):
+    """Edit dues + tuition amounts for the current academic-year periods.
+
+    Accepts the periods at construction; renders editable fields for the
+    three dues tier amounts and the tuition annual amount. Submitting
+    updates both period rows in a single transaction.
+    """
+
+    dues_pre_candidate = forms.DecimalField(
+        max_digits=8, decimal_places=2, min_value=Decimal("0"),
+        label="Pre-candidate dues",
+    )
+    dues_candidate = forms.DecimalField(
+        max_digits=8, decimal_places=2, min_value=Decimal("0"),
+        label="Candidate dues",
+    )
+    dues_analyst = forms.DecimalField(
+        max_digits=8, decimal_places=2, min_value=Decimal("0"),
+        label="Analyst / Scholar dues",
+    )
+    tuition_amount = forms.DecimalField(
+        max_digits=8, decimal_places=2, min_value=Decimal("0"),
+        label="Annual tuition (in-training students)",
+    )
+
+    def __init__(self, *args, dues_period=None, tuition_period=None, **kwargs):
+        self.dues_period = dues_period
+        self.tuition_period = tuition_period
+        initial = kwargs.pop("initial", {}) or {}
+        if dues_period is not None:
+            initial.setdefault("dues_pre_candidate", dues_period.dues_amount_pre_candidate)
+            initial.setdefault("dues_candidate",     dues_period.dues_amount_candidate)
+            initial.setdefault("dues_analyst",       dues_period.dues_amount_analyst)
+        if tuition_period is not None:
+            initial.setdefault("tuition_amount", tuition_period.tuition_amount)
+        kwargs["initial"] = initial
+        super().__init__(*args, **kwargs)
+        # Disable individual fields when their period doesn't exist —
+        # treasurer can't edit values for a period that's not configured.
+        if dues_period is None:
+            for f in ("dues_pre_candidate", "dues_candidate", "dues_analyst"):
+                self.fields[f].disabled = True
+                self.fields[f].required = False
+        if tuition_period is None:
+            self.fields["tuition_amount"].disabled = True
+            self.fields["tuition_amount"].required = False
+
+    def save(self):
+        with transaction.atomic():
+            if self.dues_period is not None:
+                self.dues_period.dues_amount_pre_candidate = self.cleaned_data["dues_pre_candidate"]
+                self.dues_period.dues_amount_candidate     = self.cleaned_data["dues_candidate"]
+                self.dues_period.dues_amount_analyst       = self.cleaned_data["dues_analyst"]
+                self.dues_period.save(update_fields=(
+                    "dues_amount_pre_candidate",
+                    "dues_amount_candidate",
+                    "dues_amount_analyst",
+                ))
+            if self.tuition_period is not None:
+                self.tuition_period.tuition_amount = self.cleaned_data["tuition_amount"]
+                self.tuition_period.save(update_fields=("tuition_amount",))
