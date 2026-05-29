@@ -50,48 +50,107 @@
 
 /* --- Stylistic flourishes (see static/js/flourishes.js) --- */
 
-/* The falling letter. A randomly chosen letter in a font-serif heading
-   detaches from the line and floats down the page once per session. */
+/* The falling letter, with an outlined trace left behind.
+   A font-serif letter detaches from a heading and floats down the page;
+   an outlined ghost of the same character remains in its original position. */
+.lsp-letter-fall-container {
+  position: relative;
+  display: inline-block;
+}
+.lsp-letter-trace {
+  /* Outline of the letter sitting in the same space as the original. */
+  position: absolute;
+  inset: 0;
+  -webkit-text-stroke: 1px currentColor;
+  color: transparent;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0;
+  animation: lsp-trace-in 600ms ease-out 300ms forwards;
+}
 .lsp-falling-letter {
   display: inline-block;
   transform-origin: center;
   animation: lsp-fall 5.5s cubic-bezier(0.32, 0.04, 0.72, 0.55) forwards;
   will-change: transform, opacity;
+  position: relative;
 }
 @keyframes lsp-fall {
   0%   { transform: translate3d(0, 0, 0) rotate(0);     opacity: 1; }
   85%  {                                                opacity: 0.85; }
   100% { transform: translate3d(0, 112vh, 0) rotate(14deg); opacity: 0; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .lsp-falling-letter { animation: none; }
+@keyframes lsp-trace-in {
+  to { opacity: 0.5; }
 }
 
-/* Palimpsest. Renders a faint twin of the visible text behind itself —
-   either the same string (a typewriter overstrike) or a different one
-   (an earlier draft / translation), set via data-palimpsest attribute. */
-.palimpsest {
+/* Overtyped correction.
+   A word in a heading is struck through with an animated diagonal, then the
+   original + strike fade to a faint trace, and a duplicate of the word is
+   "typed" letter-by-letter slightly above and offset — typewriter-style. */
+.lsp-overtype-stack {
   position: relative;
-  isolation: isolate;
+  display: inline-block;
+  white-space: pre;
+  /* Reserve a sliver of headroom above the line so the corrected duplicate
+     doesn't clip when it slides up. */
+  vertical-align: baseline;
 }
-.palimpsest::before {
-  content: attr(data-palimpsest);
+.lsp-overtype-base {
+  display: inline-block;
+  opacity: 1;
+  animation: lsp-overtype-fade 600ms ease-out 700ms forwards;
+}
+.lsp-overtype-strike {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 1.5px;
+  width: 0;
+  background: currentColor;
+  transform: translateY(-1px) rotate(-3deg);
+  transform-origin: left center;
+  border-radius: 1px;
+  pointer-events: none;
+  animation: lsp-strike-draw 600ms ease-out forwards,
+             lsp-overtype-fade 600ms ease-out 700ms forwards;
+}
+.lsp-overtype-new {
   position: absolute;
   inset: 0;
-  z-index: -1;
-  color: currentColor;
-  opacity: 0.09;
-  transform: translate(0.16em, 0.08em);
+  transform: translate(0.06em, -0.18em);
   pointer-events: none;
-  user-select: none;
-  white-space: inherit;
   font-style: inherit;
   font-weight: inherit;
-  /* Slight horizontal stretch reads as a worn ribbon impression. */
-  letter-spacing: -0.005em;
+  white-space: inherit;
 }
-@media (prefers-reduced-motion: reduce) {
-  /* The palimpsest is static, so it's fine to keep, but allow opt-out
-     via a parent .no-flourish if a particular page wants quiet. */
+.lsp-overtype-char {
+  opacity: 0;
+  display: inline-block;
+  animation: lsp-typed 100ms ease-out forwards;
 }
-.no-flourish .palimpsest::before { content: none; }
+@keyframes lsp-strike-draw {
+  to { width: 100%; }
+}
+@keyframes lsp-overtype-fade {
+  to { opacity: 0.28; }
+}
+@keyframes lsp-typed {
+  0%   { opacity: 0; transform: translateY(-2px) scaleX(1.08); }
+  100% { opacity: 1; transform: translateY(0)    scaleX(1); }
+}
+
+/* Opt-out container — wrap any section in `.no-flourish` to silence motion. */
+.no-flourish .lsp-falling-letter,
+.no-flourish .lsp-letter-trace,
+.no-flourish .lsp-overtype-strike,
+.no-flourish .lsp-overtype-char,
+.no-flourish .lsp-overtype-base {
+  animation: none;
+  opacity: 1;
+}
+.no-flourish .lsp-letter-trace,
+.no-flourish .lsp-overtype-strike,
+.no-flourish .lsp-overtype-new {
+  display: none;
+}
