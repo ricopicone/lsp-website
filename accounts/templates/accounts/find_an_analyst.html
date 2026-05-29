@@ -61,8 +61,8 @@
 <script>
   // Leaflet's auto-detection of icon paths doesn't survive WhiteNoise's
   // hashed-filename rewrite (its regex looks for "marker-icon.png", not
-  // "marker-icon.<hash>.png"). Define the default icon up front with the
-  // {% static %} paths so Django resolves the hashed names for us.
+  // "marker-icon.<hash>.png"). Define the default icon up front with
+  // Django-resolved static URLs so the hashed names are correct.
   window.LSP_MARKER_ICONS = {
     iconUrl:       "{% static 'vendor/images/marker-icon.png' %}",
     iconRetinaUrl: "{% static 'vendor/images/marker-icon-2x.png' %}",
