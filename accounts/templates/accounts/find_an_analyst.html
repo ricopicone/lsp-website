@@ -18,11 +18,23 @@
     <h1 class="font-serif text-3xl sm:text-4xl text-base-content leading-[1.15] tracking-tight">
       Find an Analyst
     </h1>
-    <p class="text-base sm:text-lg text-base-content/70 leading-relaxed">
-      If you'd like the School's referral coordinator to send you a list of
-      available clinicians, fill out the form below. Or, if you'd prefer to
-      reach out to a member directly, use the map further down to find an
-      LSP member near you.
+    <p class="text-base text-base-content/80 leading-relaxed">
+      Welcome to the Lacanian School of Psychoanalysis' Find an Analyst page.
+      If you are looking for a referral to begin analysis with a member of
+      LSP, you are in the right place. If you are only looking to work with
+      someone in person, please search your location for available
+      clinicians using the map on this page first.
+    </p>
+    <p class="text-sm text-base-content/70 leading-relaxed">
+      LSP's referral coordinator will use your answers to this brief survey
+      to connect you with analysts whose availability is compatible with
+      your own — while keeping your personal identifying information
+      confidential. After receiving your responses, the referral coordinator
+      will provide you with a list of available analysts and their contact
+      information within two weeks. It will be up to you and your desire to
+      contact any clinician or clinicians and make further arrangements to
+      begin your work together, including decisions regarding payment and
+      how often you will meet.
     </p>
   </header>
 
@@ -31,20 +43,15 @@
     {% if submitted %}
     <div role="alert" class="alert alert-success">
       <div>
-        <p class="font-medium">Thanks — your inquiry was sent.</p>
-        <p class="text-sm">The referral coordinator will reply to your email within a few days.</p>
+        <p class="font-medium">Thank you.</p>
+        <p class="text-sm">
+          We will provide the names and contact information of analysts
+          whose availability matches the criteria you shared.
+        </p>
       </div>
     </div>
     {% else %}
     <div class="rounded-lg border border-base-300 bg-base-100 p-6 sm:p-8 space-y-4">
-      <header class="space-y-1">
-        <h2 class="font-serif text-xl text-base-content">Referral coordinator request</h2>
-        <p class="text-sm text-base-content/70">
-          The coordinator will review your request and send you a list of
-          available LSP clinicians who might be a fit.
-        </p>
-      </header>
-
       <p class="text-xs text-base-content/60 leading-relaxed border-l-2 border-warning/60 pl-3">
         <strong>If you are in immediate crisis</strong> and need urgent help, please
         contact <a href="tel:988" class="link">988</a> (Suicide &amp; Crisis Lifeline)
@@ -65,15 +72,27 @@
           Step <span data-current-step>1</span> of 2
         </div>
 
-        {# Step 1: who you are #}
+        {# Step 1: identity + contact + location #}
         <fieldset class="referral-step space-y-4" data-step="1">
           {% for field in form %}
-            {% if field.name == "name" or field.name == "email" or field.name == "phone" or field.name == "location" %}
-            <div class="form-control space-y-1">
+            {% if field.name == "name" or field.name == "pronouns" or field.name == "pronouns_other" or field.name == "email" or field.name == "location" %}
+            <div class="form-control space-y-1{% if field.name == 'pronouns_other' %} hidden{% endif %}"
+                 {% if field.name == 'pronouns_other' %}data-pronouns-other-wrap{% endif %}>
               <label for="{{ field.id_for_label }}" class="label-text text-sm">
                 {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
               </label>
-              {{ field }}
+              {% if field.field.widget.input_type == "radio" or field.field.widget.input_type == "checkbox" %}
+                <div class="flex flex-wrap gap-x-5 gap-y-2 pt-1">
+                  {% for choice in field %}
+                  <label class="flex items-center gap-2 text-sm cursor-pointer">
+                    {{ choice.tag }}
+                    <span>{{ choice.choice_label }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              {% else %}
+                {{ field }}
+              {% endif %}
               {% if field.help_text %}<p class="text-xs text-base-content/60">{{ field.help_text }}</p>{% endif %}
               {% if field.errors %}<p class="text-xs text-error">{{ field.errors|join:", " }}</p>{% endif %}
             </div>
@@ -81,15 +100,15 @@
           {% endfor %}
         </fieldset>
 
-        {# Step 2: what you're looking for #}
+        {# Step 2: how to meet + what you're looking for #}
         <fieldset class="referral-step space-y-4 hidden" data-step="2">
           {% for field in form %}
-            {% if field.name == "preferred_languages" or field.name == "modality" or field.name == "inquiry" or field.name == "additional_notes" %}
+            {% if field.name == "language" or field.name == "modality" or field.name == "additional_information" %}
             <div class="form-control space-y-1">
               <label for="{{ field.id_for_label }}" class="label-text text-sm">
                 {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
               </label>
-              {% if field.field.widget.input_type == "radio" %}
+              {% if field.field.widget.input_type == "radio" or field.field.widget.input_type == "checkbox" %}
                 <div class="flex flex-wrap gap-x-5 gap-y-2 pt-1">
                   {% for choice in field %}
                   <label class="flex items-center gap-2 text-sm cursor-pointer">
@@ -168,6 +187,24 @@
             if (!validateCurrent()) return;
             if (stepIndex < steps.length - 1) { stepIndex++; syncSteps(); }
           });
+
+          // Conditional "Other pronouns" input: show only when the "Other"
+          // pronouns radio is selected.
+          var otherWrap = form.querySelector("[data-pronouns-other-wrap]");
+          if (otherWrap) {
+            var otherInput = otherWrap.querySelector("input[type=text]");
+            function syncPronounsOther() {
+              var picked = form.querySelector("input[name=pronouns]:checked");
+              var show = picked && picked.value === "other";
+              otherWrap.classList.toggle("hidden", !show);
+              if (otherInput) otherInput.required = !!show;
+              if (!show && otherInput) otherInput.value = "";
+            }
+            form.querySelectorAll("input[name=pronouns]").forEach(function (r) {
+              r.addEventListener("change", syncPronounsOther);
+            });
+            syncPronounsOther();
+          }
 
           syncSteps();
         })();

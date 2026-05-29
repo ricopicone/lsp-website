@@ -107,12 +107,18 @@ def find_an_analyst(request):
     if request.method == "POST":
         form = ReferralRequestForm(request.POST)
         if form.is_valid():
-            data = dict(form.cleaned_data)
-            # Convert the modality machine value to its display label for the email.
-            data["modality"] = dict(form.fields["modality"].choices).get(
-                data["modality"], data["modality"]
-            )
-            data.pop("website", None)
+            modality_labels = dict(form.fields["modality"].choices)
+            data = {
+                "name":      form.cleaned_data["name"],
+                "pronouns":  form.pronouns_display(),
+                "email":     form.cleaned_data["email"],
+                "location":  form.cleaned_data["location"],
+                "language":  form.cleaned_data["language"],
+                "modality":  ", ".join(
+                    modality_labels.get(v, v) for v in form.cleaned_data["modality"]
+                ),
+                "additional_information": form.cleaned_data["additional_information"],
+            }
             emails.send_referral_inquiry(data)
             return redirect(f"{request.path}?submitted=1#submitted")
     else:

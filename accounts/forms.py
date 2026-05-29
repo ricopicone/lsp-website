@@ -41,59 +41,89 @@ class LightSignupForm(BaseUserCreationForm):
 
 
 class ReferralRequestForm(forms.Form):
-    """Find-an-Analyst inquiry submitted by a visitor (M11).
+    """Find-an-Analyst inquiry — fields mirror the Wix Typeform exactly."""
 
-    The handler emails the Referral Coordinator with the submitted fields;
-    Reply-To is set to the submitter's address so a coordinator's reply
-    reaches the inquirer.
-    """
-
+    PRONOUN_CHOICES = [
+        ("she/her",   "she/her"),
+        ("he/him",    "he/him"),
+        ("they/them", "they/them"),
+        ("other",     "Other"),
+    ]
     MODALITY_CHOICES = [
-        ("in_person", "In-person"),
-        ("remote",    "Remote (phone or video)"),
-        ("either",    "Either is fine"),
+        ("in_person", "In person"),
+        ("phone",     "By phone"),
+        ("video",     "By online video platform"),
     ]
 
     name = forms.CharField(
-        max_length=120, required=True, label="Your name",
+        max_length=120, required=True, label="What is your name?",
+    )
+    pronouns = forms.ChoiceField(
+        choices=PRONOUN_CHOICES, widget=forms.RadioSelect,
+        required=True, label="What pronouns do you use?",
+    )
+    pronouns_other = forms.CharField(
+        max_length=80, required=False, label="Other pronouns",
+        help_text="Only fill this in if you chose Other above.",
     )
     email = forms.EmailField(
-        required=True, label="Email",
-        help_text="The coordinator will reply to this address.",
-    )
-    phone = forms.CharField(
-        max_length=40, required=False, label="Phone (optional)",
+        required=True,
+        label="What email address would you like to use for the referral process?",
     )
     location = forms.CharField(
-        max_length=200, required=True, label="Where are you?",
-        help_text="City, state or region, country.",
-    )
-    preferred_languages = forms.CharField(
-        max_length=120, required=False, label="Preferred language(s)",
-        help_text="Optional. List one or more, in any order.",
-    )
-    modality = forms.ChoiceField(
-        choices=MODALITY_CHOICES, widget=forms.RadioSelect,
-        required=True, label="Preferred modality",
-    )
-    inquiry = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 5}),
-        required=True, label="What are you looking for?",
-        help_text=(
-            "A few sentences about what brings you to this inquiry — "
-            "what you're hoping the coordinator can help with."
+        max_length=200, required=True,
+        label=(
+            "In what city and state (if in the United States) or city and "
+            "country (if outside of the United States) are you located?"
         ),
     )
-    additional_notes = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 3}),
-        required=False, label="Anything else? (optional)",
+    language = forms.CharField(
+        max_length=80, required=True,
+        label="What language would you prefer to work in?",
+    )
+    modality = forms.MultipleChoiceField(
+        choices=MODALITY_CHOICES, widget=forms.CheckboxSelectMultiple,
+        required=True,
+        label="How would you like to meet?",
+        help_text=(
+            "You can select more than one option. If you are only interested "
+            "in meeting in person, please first consult the map on this page "
+            "to see if there are any available clinicians in your area."
+        ),
+    )
+    additional_information = forms.CharField(
+        widget=forms.Textarea(attrs={"rows": 7}),
+        required=True,
+        label="Anything else for the Referral Coordinator",
+        help_text=(
+            "This space is for you to share any other information you would "
+            "like the Referral Coordinator to distribute to your potential "
+            "Analyst. You may want to share what you are hoping to work on, "
+            "how you came to an interest in psychoanalysis, or if you have "
+            "been in therapy or analysis before. Please do not include any "
+            "identifying information such as your name or email in this "
+            "section."
+        ),
     )
     # Honeypot — humans don't see it; bots fill it. Reject if non-empty.
-    website = forms.CharField(
-        required=False, widget=forms.HiddenInput(),
-    )
+    website = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    def clean_pronouns_other(self):
+        v = (self.cleaned_data.get("pronouns_other") or "").strip()
+        if self.cleaned_data.get("pronouns") == "other" and not v:
+            raise forms.ValidationError(
+                "Please specify your pronouns since you selected Other."
+            )
+        return v
 
     def clean_website(self):
         if self.cleaned_data.get("website"):
             raise forms.ValidationError("Bot detected.")
         return ""
+
+    def pronouns_display(self) -> str:
+        """Pronouns formatted for the coordinator email (resolves "other")."""
+        choice = self.cleaned_data.get("pronouns")
+        if choice == "other":
+            return self.cleaned_data.get("pronouns_other") or "Other"
+        return choice or ""
