@@ -59,6 +59,18 @@
 </div>
 
 <script>
+  // Leaflet's auto-detection of icon paths doesn't survive WhiteNoise's
+  // hashed-filename rewrite (its regex looks for "marker-icon.png", not
+  // "marker-icon.<hash>.png"). Define the default icon up front with the
+  // {% static %} paths so Django resolves the hashed names for us.
+  window.LSP_MARKER_ICONS = {
+    iconUrl:       "{% static 'vendor/images/marker-icon.png' %}",
+    iconRetinaUrl: "{% static 'vendor/images/marker-icon-2x.png' %}",
+    shadowUrl:     "{% static 'vendor/images/marker-shadow.png' %}",
+  };
+</script>
+
+<script>
   window.addEventListener("DOMContentLoaded", function () {
     var el = document.getElementById("lsp-map");
     if (!el || typeof L === "undefined") {
@@ -66,6 +78,18 @@
       if (fb) fb.hidden = false;
       return;
     }
+
+    // Default marker icon — uses the {% static %}-resolved URLs from above.
+    var lspIcon = L.icon({
+      iconUrl:       window.LSP_MARKER_ICONS.iconUrl,
+      iconRetinaUrl: window.LSP_MARKER_ICONS.iconRetinaUrl,
+      shadowUrl:     window.LSP_MARKER_ICONS.shadowUrl,
+      iconSize:      [25, 41],
+      iconAnchor:    [12, 41],
+      popupAnchor:   [1, -34],
+      tooltipAnchor: [16, -28],
+      shadowSize:    [41, 41],
+    });
 
     var map = L.map(el, { worldCopyJump: true }).setView([20, 0], 2);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -79,7 +103,7 @@
         if (!data || !data.pins || !data.pins.length) return;
         var bounds = [];
         data.pins.forEach(function (p) {
-          var marker = L.marker([p.lat, p.lng]).addTo(map);
+          var marker = L.marker([p.lat, p.lng], { icon: lspIcon }).addTo(map);
           var photoHtml = p.headshot
             ? '<img src="' + p.headshot + '" alt="" style="width:48px;height:48px;border-radius:50%;object-fit:cover;float:left;margin-right:0.5rem">'
             : '';
