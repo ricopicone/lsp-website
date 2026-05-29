@@ -293,3 +293,110 @@ def test_send_tuition_reminders_holds_before_decision_due(current_period, mailou
 
     call_command("send_tuition_reminders", stdout=StringIO())
     assert len(mailoutbox) == 0
+
+
+# --- Treasurer dashboard tuition section --------------------------------
+
+
+@pytest.fixture
+def staff_user(db):
+    u = User.objects.create_user(email="staff@x.test", password="x")
+    u.is_staff = True
+    u.save()
+    return u
+
+
+@pytest.mark.django_db
+def test_treasurer_dashboard_shows_tuition_section(client, staff_user, current_period):
+    _mk_candidate("c1@x.test")  # undecided
+    u_committed = _mk_candidate("c2@x.test")
+    TuitionEnrollment.objects.create(
+        user=u_committed, tuition_period=current_period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    u_paid = _mk_candidate("c3@x.test")
+    TuitionEnrollment.objects.create(
+        user=u_paid, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAID_IN_FULL,
+    )
+
+    client.force_login(staff_user)
+    resp = client.get("/treasurer/")
+    assert resp.status_code == 200
+    body = resp.content
+    assert b"Tuition" in body
+    assert current_period.name.encode() in body
+    # Counts: 1 paid, 1 committed, 1 undecided.
+    assert b"Reconciliation queue" in body
+    # Slice the body to just the tuition reconciliation queue section to
+    # avoid false positives from the dues "Unpaid members" section (which
+    # lists candidates regardless of tuition state).
+    recon_start = body.find(b"Reconciliation queue")
+    recon_section = body[recon_start:]
+    assert b"c1@x.test" in recon_section  # undecided
+    assert b"c2@x.test" in recon_section  # committed
+    # PAID c3 should NOT appear in the tuition reconciliation queue.
+    assert b"c3@x.test" not in recon_section
+
+
+@pytest.mark.django_db
+def test_treasurer_dashboard_tuition_counts_collected(
+    client, staff_user, current_period,
+):
+    """The Collected card sums successful TUITION payments linked through
+    installments to the current period."""
+    from decimal import Decimal as D
+
+    from payments.models import (
+        Payment,
+        TuitionInstallment,
+    )
+
+    u = _mk_candidate("c4@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1,
+        due_date=current_period.start_date, amount=D("400.00"),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION,
+        user=u, amount=D("400.00"),
+        status=Payment.Status.SUCCEEDED,
+        tuition_installment=inst,
+    )
+    # An unrelated PENDING tuition payment shouldn't count.
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION,
+        user=u, amount=D("400.00"),
+        status=Payment.Status.PENDING,
+        tuition_installment=inst,
+    )
+
+    client.force_login(staff_user)
+    resp = client.get("/treasurer/")
+    assert resp.status_code == 200
+    assert b"$400.00" in resp.content
+
+
+@pytest.mark.django_db
+def test_treasurer_dashboard_handles_no_period(client, staff_user):
+    """Renders politely when no TuitionPeriod is configured."""
+    from payments.models import TuitionPeriod
+    TuitionPeriod.objects.all().delete()
+    client.force_login(staff_user)
+    resp = client.get("/treasurer/")
+    assert resp.status_code == 200
+    assert b"No current tuition period" in resp.content
+
+
+@pytest.mark.django_db
+def test_treasurer_dashboard_requires_staff(client, current_period):
+    """Non-staff users can't see the dashboard."""
+    u = _mk_candidate("nope@x.test")
+    client.force_login(u)
+    resp = client.get("/treasurer/")
+    # treasurer_dashboard uses user_passes_test which redirects to login.
+    assert resp.status_code == 302

@@ -37,7 +37,7 @@ def _is_staff(user):
 @login_required
 @user_passes_test(_is_staff)
 def treasurer_dashboard(request):
-    """Per-period dues summary + per-role breakdown + multi-period totals."""
+    """Per-period dues + tuition summary, role breakdowns, multi-period totals."""
     obligated_roles = list(settings.DUES_OBLIGATED_ROLES)
     obligated_count = User.objects.filter(
         is_active=True, profile__role__in=obligated_roles,
@@ -97,6 +97,8 @@ def treasurer_dashboard(request):
         "unpaid": [r["unpaid"] for r in role_breakdown],
     }
 
+    tuition_ctx = _treasurer_tuition_context()
+
     return render(request, "payments/treasurer.html", {
         "period_stats": period_stats,
         "current_period": current,
@@ -105,7 +107,124 @@ def treasurer_dashboard(request):
         "obligated_count": obligated_count,
         "chart_periods_json": json.dumps(chart_periods),
         "chart_roles_json": json.dumps(chart_roles),
+        **tuition_ctx,
     })
+
+
+def _treasurer_tuition_context() -> dict:
+    """Build the tuition-section context for the treasurer dashboard (M7.5).
+
+    Counts in-training users by enrollment status for the current
+    TuitionPeriod, with a per-role breakdown, plus a list of undecided
+    + committed-without-payment users (the reconciliation queue).
+    """
+    from accounts.models import Profile
+    period = TuitionPeriod.current()
+    if period is None:
+        return {
+            "tuition_period": None,
+            "tuition_status_counts": [],
+            "tuition_role_breakdown": [],
+            "tuition_reconciliation_users": [],
+            "tuition_in_training_count": 0,
+            "tuition_total_collected": Decimal("0"),
+        }
+
+    in_training_qs = User.objects.filter(
+        is_active=True, profile__role__in=Profile.IN_TRAINING_ROLES,
+    )
+    in_training_count = in_training_qs.count()
+
+    enrollments = list(
+        TuitionEnrollment.objects.filter(tuition_period=period)
+        .select_related("user", "user__profile")
+    )
+    enrollment_by_user = {e.user_id: e for e in enrollments}
+
+    # Count by status; undecided = in_training_count − (users with any enrollment).
+    status_counter: dict[str, int] = {}
+    for e in enrollments:
+        status_counter[e.status] = status_counter.get(e.status, 0) + 1
+    decided_user_ids = {e.user_id for e in enrollments}
+    undecided_users = list(in_training_qs.exclude(id__in=decided_user_ids))
+
+    # Display in a stable, lifecycle order.
+    order = [
+        ("paid_in_full",  "Paid in full"),
+        ("payment_plan",  "On payment plan"),
+        ("committed",     "Committed (unpaid)"),
+        ("exempt",        "Exempt"),
+        ("skipping",      "Skipping"),
+    ]
+    tuition_status_counts = [
+        {"key": k, "label": label, "count": status_counter.get(k, 0)}
+        for k, label in order
+    ]
+    tuition_status_counts.append(
+        {"key": "undecided", "label": "Undecided", "count": len(undecided_users)}
+    )
+
+    # Per-role breakdown for the four in-training roles.
+    role_labels = dict(Profile.Role.choices)
+    role_breakdown_tuition = []
+    for role in sorted(Profile.IN_TRAINING_ROLES):
+        users_in_role = in_training_qs.filter(profile__role=role)
+        total_in_role = users_in_role.count()
+        in_role_user_ids = set(users_in_role.values_list("id", flat=True))
+        decided_in_role = len(in_role_user_ids & decided_user_ids)
+        # Reconciliation = undecided OR (decided with status=committed)
+        committed_in_role = sum(
+            1 for uid in in_role_user_ids
+            if enrollment_by_user.get(uid) and
+               enrollment_by_user[uid].status == TuitionEnrollment.Status.COMMITTED
+        )
+        role_breakdown_tuition.append({
+            "role":           role,
+            "role_label":     role_labels.get(role, role),
+            "total":          total_in_role,
+            "decided":        decided_in_role,
+            "undecided":      total_in_role - decided_in_role,
+            "committed_only": committed_in_role,
+        })
+
+    # Reconciliation list: undecided + committed-without-payment.
+    reconciliation_users = []
+    for u in undecided_users:
+        reconciliation_users.append({
+            "user":   u,
+            "reason": "Undecided",
+            "status": None,
+        })
+    for e in enrollments:
+        if e.status == TuitionEnrollment.Status.COMMITTED:
+            reconciliation_users.append({
+                "user":   e.user,
+                "reason": "Committed, no payment received",
+                "status": e.status,
+            })
+    reconciliation_users.sort(
+        key=lambda r: (r["user"].last_name or "", r["user"].first_name or "", r["user"].email)
+    )
+
+    # Total collected for the period — Payment of type=TUITION, succeeded,
+    # linked to an installment whose enrollment is in this period.
+    total_collected = (
+        Payment.objects.filter(
+            payment_type=Payment.Type.TUITION,
+            status=Payment.Status.SUCCEEDED,
+            tuition_installment__enrollment__tuition_period=period,
+        )
+        .aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    )
+
+    return {
+        "tuition_period":              period,
+        "tuition_status_counts":       tuition_status_counts,
+        "tuition_role_breakdown":      role_breakdown_tuition,
+        "tuition_reconciliation_users": reconciliation_users,
+        "tuition_in_training_count":   in_training_count,
+        "tuition_total_collected":     total_collected,
+    }
 
 
 @csrf_exempt

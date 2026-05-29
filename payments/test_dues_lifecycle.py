@@ -384,12 +384,22 @@ def test_treasurer_dashboard_excludes_external_users_from_obligated_count(
 def test_treasurer_dashboard_respects_obligated_roles_setting(
     client, staff_user, current_period, member, external_user,
 ):
-    """With DUES_OBLIGATED_ROLES=[member], only members appear as obligated."""
-    # Add a candidate user — should not be obligated under this override.
+    """With DUES_OBLIGATED_ROLES=[member], only members appear in the dues
+    unpaid list. (Candidates may still appear in the tuition reconciliation
+    section — different obligation.)"""
+    # Add a candidate user — should not be obligated for dues under this
+    # override, though they appear in the tuition section as a separate
+    # category.
     candidate = User.objects.create_user(email="cand@example.com")
     candidate.profile.role = Profile.Role.CANDIDATE
     candidate.profile.save()
     client.force_login(staff_user)
     response = client.get(reverse("treasurer"))
-    assert b"member@example.com" in response.content
-    assert b"cand@example.com" not in response.content
+    # Slice to just the dues "Unpaid members" section to avoid false
+    # positives from the new tuition section.
+    body = response.content
+    dues_start = body.find(b"Unpaid members")
+    tuition_start = body.find(b"Tuition")
+    dues_section = body[dues_start:tuition_start] if dues_start > -1 else body
+    assert b"member@example.com" in dues_section
+    assert b"cand@example.com" not in dues_section
