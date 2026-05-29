@@ -159,6 +159,13 @@ def test_split_location_slash_and_and():
     ]
 
 
+def test_split_location_semicolon_keeps_full_addresses():
+    from accounts.geocoding import split_location
+    assert split_location("Berlin, Germany; London, UK") == [
+        "Berlin, Germany", "London, UK",
+    ]
+
+
 @pytest.mark.django_db
 def test_profile_is_in_directory_for_member_roles():
     u = User.objects.create_user(email="a@x.test")

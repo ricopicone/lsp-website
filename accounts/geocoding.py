@@ -20,9 +20,9 @@ from geopy.geocoders import Nominatim
 
 NOMINATIM_USER_AGENT = "lsp-website/1.0 (https://app.lacanschool.org)"
 
-#: Splits on " & ", " and ", or " / " — but NOT comma (commas separate
+#: Splits on " & ", " and ", " / ", or ";" — but NOT comma (commas separate
 #: city/state/country within a single place).
-_SPLIT_RE = re.compile(r"\s*(?:&| and | / )\s*", flags=re.IGNORECASE)
+_SPLIT_RE = re.compile(r"\s*(?:&| and | / |;)\s*", flags=re.IGNORECASE)
 
 
 def split_location(text: str) -> list[str]:
