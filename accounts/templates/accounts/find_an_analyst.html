@@ -51,36 +51,127 @@
         or your local emergency services. This form is for routine referrals only.
       </p>
 
-      <form method="post" class="space-y-5">
+      <form method="post" id="referral-form" class="space-y-5">
         {% csrf_token %}
         {{ form.website }}{# honeypot, visually hidden via HiddenInput #}
 
-        {% for field in form %}
-          {% if field.name != "website" %}
-          <div class="form-control space-y-1">
-            <label for="{{ field.id_for_label }}" class="label-text text-sm">
-              {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
-            </label>
-            {% if field.field.widget.input_type == "radio" %}
-              <div class="flex flex-wrap gap-x-5 gap-y-2 pt-1">
-                {% for choice in field %}
-                <label class="flex items-center gap-2 text-sm cursor-pointer">
-                  {{ choice.tag }}
-                  <span>{{ choice.choice_label }}</span>
-                </label>
-                {% endfor %}
-              </div>
-            {% else %}
-              {{ field }}
-            {% endif %}
-            {% if field.help_text %}<p class="text-xs text-base-content/60">{{ field.help_text }}</p>{% endif %}
-            {% if field.errors %}<p class="text-xs text-error">{{ field.errors|join:", " }}</p>{% endif %}
-          </div>
-          {% endif %}
-        {% endfor %}
+        {# Step indicator #}
+        <div class="flex items-center gap-2 text-xs text-base-content/60" aria-hidden="true">
+          <span class="referral-step-label" data-step-label="1">About you</span>
+          <span class="grow border-t border-base-300"></span>
+          <span class="referral-step-label" data-step-label="2">Your inquiry</span>
+        </div>
+        <div class="text-xs text-base-content/50">
+          Step <span data-current-step>1</span> of 2
+        </div>
 
-        <button type="submit" class="btn btn-primary">Send inquiry</button>
+        {# Step 1: who you are #}
+        <fieldset class="referral-step space-y-4" data-step="1">
+          {% for field in form %}
+            {% if field.name == "name" or field.name == "email" or field.name == "phone" or field.name == "location" %}
+            <div class="form-control space-y-1">
+              <label for="{{ field.id_for_label }}" class="label-text text-sm">
+                {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
+              </label>
+              {{ field }}
+              {% if field.help_text %}<p class="text-xs text-base-content/60">{{ field.help_text }}</p>{% endif %}
+              {% if field.errors %}<p class="text-xs text-error">{{ field.errors|join:", " }}</p>{% endif %}
+            </div>
+            {% endif %}
+          {% endfor %}
+        </fieldset>
+
+        {# Step 2: what you're looking for #}
+        <fieldset class="referral-step space-y-4 hidden" data-step="2">
+          {% for field in form %}
+            {% if field.name == "preferred_languages" or field.name == "modality" or field.name == "inquiry" or field.name == "additional_notes" %}
+            <div class="form-control space-y-1">
+              <label for="{{ field.id_for_label }}" class="label-text text-sm">
+                {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
+              </label>
+              {% if field.field.widget.input_type == "radio" %}
+                <div class="flex flex-wrap gap-x-5 gap-y-2 pt-1">
+                  {% for choice in field %}
+                  <label class="flex items-center gap-2 text-sm cursor-pointer">
+                    {{ choice.tag }}
+                    <span>{{ choice.choice_label }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              {% else %}
+                {{ field }}
+              {% endif %}
+              {% if field.help_text %}<p class="text-xs text-base-content/60">{{ field.help_text }}</p>{% endif %}
+              {% if field.errors %}<p class="text-xs text-error">{{ field.errors|join:", " }}</p>{% endif %}
+            </div>
+            {% endif %}
+          {% endfor %}
+        </fieldset>
+
+        {# Step navigation #}
+        <div class="flex items-center justify-between pt-2">
+          <button type="button" class="btn btn-ghost btn-sm hidden" data-step-back>← Back</button>
+          <div class="ml-auto flex gap-2">
+            <button type="button" class="btn btn-primary" data-step-next>Continue →</button>
+            <button type="submit" class="btn btn-primary hidden" data-step-submit>Send inquiry</button>
+          </div>
+        </div>
       </form>
+
+      <script>
+        (function () {
+          var form = document.getElementById("referral-form");
+          if (!form) return;
+          var steps = form.querySelectorAll(".referral-step");
+          var labels = form.querySelectorAll(".referral-step-label");
+          var current = form.querySelector("[data-current-step]");
+          var backBtn = form.querySelector("[data-step-back]");
+          var nextBtn = form.querySelector("[data-step-next]");
+          var submitBtn = form.querySelector("[data-step-submit]");
+          var stepIndex = 0;
+
+          // If the server returned validation errors on a particular step,
+          // jump to the first step with an error so the user sees what's wrong.
+          for (var i = 0; i < steps.length; i++) {
+            if (steps[i].querySelector(".text-error")) { stepIndex = i; break; }
+          }
+
+          function syncSteps() {
+            steps.forEach(function (s, i) { s.classList.toggle("hidden", i !== stepIndex); });
+            labels.forEach(function (l, i) {
+              l.classList.toggle("text-primary", i === stepIndex);
+              l.classList.toggle("font-medium", i === stepIndex);
+            });
+            current.textContent = String(stepIndex + 1);
+            backBtn.classList.toggle("hidden", stepIndex === 0);
+            var last = stepIndex === steps.length - 1;
+            nextBtn.classList.toggle("hidden", last);
+            submitBtn.classList.toggle("hidden", !last);
+          }
+
+          function validateCurrent() {
+            // Use the browser's built-in checkValidity per field in the current step.
+            var fields = steps[stepIndex].querySelectorAll("input, select, textarea");
+            for (var i = 0; i < fields.length; i++) {
+              if (!fields[i].checkValidity()) {
+                fields[i].reportValidity();
+                return false;
+              }
+            }
+            return true;
+          }
+
+          backBtn.addEventListener("click", function () {
+            if (stepIndex > 0) { stepIndex--; syncSteps(); }
+          });
+          nextBtn.addEventListener("click", function () {
+            if (!validateCurrent()) return;
+            if (stepIndex < steps.length - 1) { stepIndex++; syncSteps(); }
+          });
+
+          syncSteps();
+        })();
+      </script>
     </div>
     {% endif %}
   </section>
