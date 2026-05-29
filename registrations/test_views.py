@@ -627,6 +627,38 @@ def test_special_event_allows_payment_plan_student(
 
 
 @pytest.mark.django_db
+def test_special_event_without_covered_tier_charges_tuition_student(
+    client, special_event, special_event_tier,
+):
+    """Confirms the contract: a special event that has no covered_by_tuition
+    tier still charges tuition-current students the standard fee. Whether an
+    event is covered by tuition is decided per-event via PriceTier
+    .covered_by_tuition — it's not implied by tuition status alone."""
+    from accounts.models import Profile
+    from payments.models import TuitionEnrollment, TuitionPeriod
+
+    # special_event_tier is the standard, non-covered tier ($50.00).
+    assert special_event_tier.covered_by_tuition is False
+
+    u = User.objects.create_user(email="cand6@example.com", password="x")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    period = TuitionPeriod.current()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=period,
+        status=TuitionEnrollment.Status.PAID_IN_FULL,
+    )
+    client.force_login(u)
+
+    # GET: the standard form should render, NOT the covered short-circuit page.
+    resp = client.get(reverse("registrations:register", args=[special_event.slug]))
+    assert resp.status_code == 200
+    assert b"included in your tuition" not in resp.content
+    # Standard form has the tier picker; covered short-circuit doesn't.
+    assert b"Choose your tier" in resp.content or b"price_tier" in resp.content
+
+
+@pytest.mark.django_db
 def test_seminar_does_not_block_skipping_student(
     client, event, sliding_tier,
 ):

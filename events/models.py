@@ -336,7 +336,13 @@ class PriceTier(models.Model):
     )
     covered_by_tuition = models.BooleanField(
         default=False,
-        help_text="Tuition-paying members in this audience owe nothing (REG-4).",
+        help_text=(
+            "If set, tuition-current members in this tier's audience get this "
+            "event for free (REG-4). Whether a given event is tuition-covered "
+            "is decided here, per-event: a special event with no "
+            "covered_by_tuition tier charges tuition-paying members the "
+            "standard tier amount."
+        ),
     )
 
     class Meta:
