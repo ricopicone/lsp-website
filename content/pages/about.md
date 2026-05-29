@@ -1,11 +1,11 @@
 ---
-title: About the Lacan School of Psychoanalysis
-summary: Founded in 1990, the Lacan School transmits Freudian and Lacanian psychoanalytic theory, offers formation to clinicians, and provides clinical supervision.
+title: About the Lacanian School of Psychoanalysis
+summary: Founded in 1990, the Lacanian School transmits Freudian and Lacanian psychoanalytic theory, offers formation to clinicians, and provides clinical supervision.
 ---
 
 ## Mission Statement
 
-Founded in 1990, the Lacan School of Psychoanalysis was created within
+Founded in 1990, the Lacanian School of Psychoanalysis was created within
 the historical context of the psychoanalytic movement to conduct education,
 research, and treatment for the benefit of the local community. LSP has
 been created to transmit Freudian and Lacanian psychoanalytic theory,
@@ -13,13 +13,18 @@ offer a formation process to prelicensed and licensed clinicians, and
 provide clinical supervision of psychoanalysis from a Lacanian perspective,
 also known as control analysis.
 
-## Bylaws of LSP
+## Bylaws & Legal Status
 
-Since 2019, the Lacan School has been incorporated as a 501(c)(3) entity,
-organized and operated exclusively for charitable purposes. These Bylaws
-must comply with California law but are subject to change by the Board to
-better reflect the needs, purpose, and functioning of the School. You can
-read through [the most recent version of LSP's Bylaws (PDF)](/static/documents/lsp-bylaws.pdf).
+Since 2019, the Lacanian School has been incorporated as a 501(c)(3)
+entity, organized and operated exclusively for charitable purposes. These
+Bylaws must comply with California law but are subject to change by the
+Board to better reflect the needs, purpose, and functioning of the
+School.
+
+<p class="lsp-doc-link"><a href="/static/documents/lsp-bylaws.pdf">
+  <span class="lsp-doc-badge">PDF</span>
+  The most recent version of LSP's Bylaws
+</a></p>
 
 ## Board of Directors
 
@@ -31,13 +36,15 @@ Elections are organized by the Board of Directors in place. An Executive
 Committee is formed by the Officers of the Board: President, Vice
 President, Treasurer, and Secretary.
 
+<!-- ROSTER:board -->
+
 ## Program Committee
 
-The Lacan School has offered a yearly training in psychoanalysis since
+The Lacanian School has offered a yearly training in psychoanalysis since
 1994, and both the position of the teacher and the student are
 fundamental in the formation of the analyst of the future and the
 transmission of psychoanalysis in Lacan's return to Freud. In addition to
-taking courses as part of their analytic formation, the Lacan School
+taking courses as part of their analytic formation, the Lacanian School
 encourages its pre-Candidates, Candidate Analysts, and Analysts to engage
 in the transmission of psychoanalysis in their own social link through
 teaching seminars, organizing conferences, special events, Cartels, and
@@ -47,13 +54,13 @@ The Program Committee is tasked on an annual basis to request and review
 proposals submitted by the School's membership, to give feedback, and
 ultimately to format and schedule the curriculum for each academic year
 at LSP. The Program Committee reports to the Meeting of the Analysts in
-order to ensure that the Lacan School's program promotes and reflects
+order to ensure that the Lacanian School's program promotes and reflects
 what the School requires as fundamental to the formation of the
 psychoanalyst in the aftermath of Lacan's return to Freud. It thereby
 reviews each year's program to ensure that certain key elements of that
 formation are reflected in the curriculum. In addition to reporting to
 the Meeting of the Analysts, the Program Committee's Board member(s)
-report monthly to the Lacan School's Board of Directors.
+report monthly to the Lacanian School's Board of Directors.
 
 In addition to creating the program for each year, the Program Committee
 is responsible for organizing and supporting key events in the School
@@ -66,6 +73,8 @@ If you are a current member of LSP and are interested in learning more
 about this Committee or would like to join to help with their work, or
 if you have a proposal to submit, please reach out at
 <programcommittee@lacanschool.org>.
+
+<!-- ROSTER:programming-committee -->
 
 ## Meeting of Analysts
 
@@ -114,18 +123,9 @@ and sustaining the Other of speech in every aspect of the School.
 ## Ethical Complaints Process
 
 LSP maintains a documented process for handling ethical complaints
-involving members of the School. The full procedure is available as a
-PDF: [LSP's Process for Handling Ethical Complaints (PDF)](/static/documents/lsp-ethics-complaints.pdf).
+involving members of the School.
 
-## Address & Non-discrimination
-
-The Lacan School of Psychoanalysis
-4960 W. Washington Blvd, PO Box 78374
-Los Angeles, CA 90016
-
-The Lacan School is committed to education and the formation of analysts
-without regard to age, ancestry, disability, national or ethnic origin,
-race, religious belief, sex, sexual orientation, gender identity, marital
-or veteran status.
-
-For all inquiries, please email <admin@lacanschool.org>.
+<p class="lsp-doc-link"><a href="/static/documents/lsp-ethics-complaints.pdf">
+  <span class="lsp-doc-badge">PDF</span>
+  LSP's Process for Handling Ethical Complaints
+</a></p>

@@ -105,6 +105,44 @@
   border-radius: 3px;
 }
 
+/* PDF / document link with a small badge. */
+.lsp-doc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+}
+.lsp-doc-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--color-primary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.lsp-doc-link a:hover {
+  border-bottom-color: var(--color-primary);
+}
+.lsp-doc-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  color: var(--color-base-content);
+  background: var(--color-base-200);
+  border: 1px solid var(--color-base-300);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  text-decoration: none;
+}
+
+/* Inline roster card — overrides .lsp-prose's own list/heading styles
+   because the partial appears inside the rendered Markdown body. */
+.lsp-prose .lsp-roster ul { margin: 0; padding-left: 0; list-style: none; }
+.lsp-prose .lsp-roster li { margin: 0.2rem 0; }
+.lsp-prose .lsp-roster a { text-decoration: none; }
+.lsp-prose .lsp-roster a:hover { text-decoration: underline; }
+
 /* --- Stylistic flourishes (see static/js/flourishes.js) --- */
 
 /* The falling letter.
