@@ -2,20 +2,21 @@
 {% block title %}Lacanian School of Psychoanalysis — Member services{% endblock %}
 
 {% block content %}
-<div class="space-y-8">
+<div class="space-y-12">
 
-  <header class="space-y-1">
-    <h1 class="font-serif text-3xl sm:text-4xl text-base-content">Lacanian School of Psychoanalysis</h1>
-    <p class="text-base-content/60">Member services and event registration.</p>
+  {# ---------- Hero ---------- #}
+  <header class="space-y-3 max-w-3xl">
+    <h1 class="font-serif text-4xl sm:text-5xl text-base-content leading-[1.1] tracking-tight">
+      Lacanian School of Psychoanalysis
+    </h1>
+    <p class="text-base sm:text-lg text-base-content/70 leading-relaxed">
+      Member services and event registration. For the main school site —
+      about, faculty, programs, and resources — visit
+      <a href="https://lacanschool.org/" class="link link-primary">lacanschool.org</a>.
+    </p>
   </header>
 
-  <p class="text-base-content/80 max-w-2xl">
-    This site handles registration, membership dues, donations, and event
-    scheduling for the Lacanian School. For the main school site — about,
-    faculty, programs, and resources — visit
-    <a href="https://lacanschool.org/" class="link link-primary">lacanschool.org</a>.
-  </p>
-
+  {# ---------- Alerts ---------- #}
   {% if dues_period_unpaid %}
   <div role="alert" class="alert alert-warning">
     <span>
@@ -32,49 +33,67 @@
   </div>
   {% endif %}
 
-  <section>
-    <h2 class="font-serif text-xl mb-4 text-base-content">What you can do here</h2>
+  {# ---------- Quick links ---------- #}
+  <section class="space-y-5">
+    <h2 class="font-serif text-2xl text-base-content tracking-tight">What you can do here</h2>
     <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <li><a href="{% url 'events:list' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
-        <span class="font-medium">Upcoming events</span>
-        <span class="block text-sm text-base-content/60">Seminars and special events</span>
-      </a></li>
-      <li><a href="{% url 'core:calendar' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
-        <span class="font-medium">Calendar</span>
-        <span class="block text-sm text-base-content/60">Month view of all sessions</span>
-      </a></li>
-      <li><a href="{% url 'directory' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
-        <span class="font-medium">Directory</span>
-        <span class="block text-sm text-base-content/60">Analysts, candidates, and scholars</span>
-      </a></li>
-      <li><a href="{% url 'dues' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
-        <span class="font-medium">Pay membership dues</span>
-      </a></li>
-      <li><a href="{% url 'donate' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
-        <span class="font-medium">Donate</span>
-      </a></li>
+      <li>
+        <a href="{% url 'events:list' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+          <div class="font-serif text-lg text-base-content tracking-tight">Upcoming events</div>
+          <div class="text-sm text-base-content/60 mt-1">Seminars and special events</div>
+        </a>
+      </li>
+      <li>
+        <a href="{% url 'core:calendar' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+          <div class="font-serif text-lg text-base-content tracking-tight">Calendar</div>
+          <div class="text-sm text-base-content/60 mt-1">Month view of all sessions</div>
+        </a>
+      </li>
+      <li>
+        <a href="{% url 'directory' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+          <div class="font-serif text-lg text-base-content tracking-tight">Directory</div>
+          <div class="text-sm text-base-content/60 mt-1">Analysts, candidates, and scholars</div>
+        </a>
+      </li>
+      <li>
+        <a href="{% url 'dues' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+          <div class="font-serif text-lg text-base-content tracking-tight">Pay membership dues</div>
+          <div class="text-sm text-base-content/60 mt-1">Annual school dues</div>
+        </a>
+      </li>
+      <li>
+        <a href="{% url 'donate' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+          <div class="font-serif text-lg text-base-content tracking-tight">Donate</div>
+          <div class="text-sm text-base-content/60 mt-1">Support the school</div>
+        </a>
+      </li>
       {% if not user.is_authenticated %}
-      <li><a href="{% url 'login' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
-        <span class="font-medium">Log in or sign up</span>
-        <span class="block text-sm text-base-content/60">Access your registrations</span>
-      </a></li>
+      <li>
+        <a href="{% url 'login' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+          <div class="font-serif text-lg text-base-content tracking-tight">Log in or sign up</div>
+          <div class="text-sm text-base-content/60 mt-1">Access your registrations</div>
+        </a>
+      </li>
       {% endif %}
       {% if user.is_staff %}
-      <li><a href="{% url 'treasurer' %}" class="block p-4 rounded-lg border border-base-300 hover:bg-base-200 transition-colors">
-        <span class="font-medium">Treasurer dashboard</span>
-        <span class="block text-sm text-base-content/60">Per-period totals, role breakdown, unpaid</span>
-      </a></li>
+      <li>
+        <a href="{% url 'treasurer' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+          <div class="font-serif text-lg text-base-content tracking-tight">Treasurer dashboard</div>
+          <div class="text-sm text-base-content/60 mt-1">Per-period totals, role breakdown, unpaid</div>
+        </a>
+      </li>
       {% endif %}
     </ul>
   </section>
 
+  {# ---------- Coming up ---------- #}
   {% if upcoming_events %}
-  <section>
-    <h2 class="font-serif text-xl mb-4 text-base-content">Coming up</h2>
+  <section class="space-y-4">
+    <h2 class="font-serif text-2xl text-base-content tracking-tight">Coming up</h2>
     <ul class="divide-y divide-base-300">
       {% for e in upcoming_events %}
       <li class="py-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <a href="{% url 'events:detail' e.slug %}" class="link link-hover font-medium">{{ e.title }}</a>
+        <a href="{% url 'events:detail' e.slug %}" class="link link-hover font-serif text-lg text-base-content">{{ e.title }}</a>
         <span class="text-sm text-base-content/60">
           {{ e.start_date|date:"M j" }}{% if e.end_date != e.start_date %} – {{ e.end_date|date:"M j, Y" }}{% else %}, {{ e.end_date|date:"Y" }}{% endif %}
           · {{ e.get_format_display }}
