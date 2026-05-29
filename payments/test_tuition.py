@@ -200,3 +200,96 @@ def test_form_rejects_staff_only_statuses(client, current_period):
 def test_seed_migration_created_a_period():
     """The data migration should have left at least one period in place."""
     assert TuitionPeriod.objects.exists()
+
+
+# --- Reminder cron -------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_send_tuition_reminders_dry_run(current_period, mailoutbox):
+    """Dry-run reports intended sends without dispatching email."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    _mk_candidate("a@x.test")
+    _mk_candidate("b@x.test")
+    # Push decision_due into the past so the gate opens.
+    current_period.decision_due_date = current_period.start_date
+    current_period.save()
+
+    out = StringIO()
+    call_command("send_tuition_reminders", "--dry-run", stdout=out)
+    assert "would send" in out.getvalue().lower()
+    assert len(mailoutbox) == 0  # dry-run does not actually send
+
+
+@pytest.mark.django_db
+def test_send_tuition_reminders_sends_to_undecided(current_period, mailoutbox):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from payments.models import TuitionReminder
+
+    u = _mk_candidate("c@x.test")
+    current_period.decision_due_date = current_period.start_date
+    current_period.save()
+
+    call_command("send_tuition_reminders", stdout=StringIO())
+    assert len(mailoutbox) >= 1
+    assert any(u.email in m.to for m in mailoutbox)
+    assert TuitionReminder.objects.filter(user=u).exists()
+
+
+@pytest.mark.django_db
+def test_send_tuition_reminders_skips_skipping_status(current_period, mailoutbox):
+    """A student who recorded SKIPPING shouldn't be pestered."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    u = _mk_candidate("d@x.test")
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.SKIPPING,
+    )
+    current_period.decision_due_date = current_period.start_date
+    current_period.save()
+
+    call_command("send_tuition_reminders", stdout=StringIO())
+    assert not any(u.email in m.to for m in mailoutbox)
+
+
+@pytest.mark.django_db
+def test_send_tuition_reminders_throttles_to_weekly(current_period, mailoutbox):
+    """A user already reminded within the last week is skipped."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from payments.models import TuitionReminder
+
+    u = _mk_candidate("e@x.test")
+    TuitionReminder.objects.create(user=u, tuition_period=current_period)
+    current_period.decision_due_date = current_period.start_date
+    current_period.save()
+
+    call_command("send_tuition_reminders", stdout=StringIO())
+    assert not any(u.email in m.to for m in mailoutbox)
+
+
+@pytest.mark.django_db
+def test_send_tuition_reminders_holds_before_decision_due(current_period, mailoutbox):
+    """Pre-decision-due-date, the cron is a no-op."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    _mk_candidate("f@x.test")
+    # Force decision_due_date into the future.
+    current_period.decision_due_date = current_period.end_date
+    current_period.save()
+
+    call_command("send_tuition_reminders", stdout=StringIO())
+    assert len(mailoutbox) == 0

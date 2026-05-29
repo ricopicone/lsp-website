@@ -1,0 +1,39 @@
+{{ user.first_name|default:"Hello" }},
+
+This is a reminder about tuition for the {{ period.name }} academic year.
+{% if not enrollment %}
+We don't have a tuition decision on file for you yet. The amount for
+this year is ${{ period.tuition_amount }}, and decisions were due by
+{{ period.decision_due_date|date:"F j, Y" }}.
+
+Please let us know your plan — pay in full, set up a payment plan, or
+skip this year — at:
+
+  {{ site_base_url }}/tuition/
+
+A reminder of the rule: students must pay four total years of tuition
+before transitioning to full Analyst or Scholar standing. The four years
+don't have to be consecutive.
+{% elif enrollment.status == "committed" %}
+You committed to pay tuition for {{ period.name }} (${{ period.tuition_amount }})
+but we haven't recorded a payment yet.
+
+Please pay in full, or switch to a payment plan, at:
+
+  {{ site_base_url }}/tuition/
+{% else %}
+Your current tuition decision for {{ period.name }} is:
+{{ enrollment.get_status_display }}.
+
+Need to change it? Visit:
+
+  {{ site_base_url }}/tuition/
+{% endif %}
+If you've already taken care of this — by paying offline or in
+conversation with the treasurer — you can ignore this message; it crossed
+in the mail.
+
+Questions, or having trouble paying? Reply to this email — it goes to
+{{ support_email }}.
+
+— Lacanian School of Psychoanalysis

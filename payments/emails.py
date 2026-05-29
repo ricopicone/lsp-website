@@ -107,6 +107,28 @@ def send_dues_reminder(user, period) -> None:
     _send(subject=subject, body=body, to=[user.email])
 
 
+def send_tuition_reminder(user, period, *, enrollment=None) -> None:
+    """Reminder for an in-training student who hasn't decided / paid for the year (M7.5).
+
+    Three phrasings depending on enrollment state:
+    - no enrollment row: "please record your decision at /tuition/"
+    - status=committed but unpaid: "please pay or set up a payment plan"
+    - status=payment_plan with overdue installment: "your installment is due"
+    """
+    subject = f"Tuition for {period.name}: please respond"
+    body = render_to_string(
+        "payments/email/tuition_reminder.txt",
+        {
+            "user": user,
+            "period": period,
+            "enrollment": enrollment,
+            "support_email": settings.SUPPORT_EMAIL,
+            "site_base_url": settings.SITE_BASE_URL,
+        },
+    )
+    _send(subject=subject, body=body, to=[user.email])
+
+
 def send_cancellation_email(registration: Registration, refund=None) -> None:
     """Notify the participant that their registration was cancelled.
 
