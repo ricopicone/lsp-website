@@ -23,15 +23,63 @@
     </p>
   </header>
 
-  {# ----- Referral coordinator form (placeholder until phase D lands) ----- #}
-  <section class="max-w-2xl">
-    <div class="rounded-lg border border-base-300 bg-base-100 p-6 sm:p-8 space-y-3">
-      <h2 class="font-serif text-xl text-base-content">Referral coordinator request</h2>
-      <p class="text-sm text-base-content/70">
-        Coming soon — for now, reach the referral coordinator directly at
-        <a href="mailto:referrals@lacanschool.org" class="link link-primary">referrals@lacanschool.org</a>.
-      </p>
+  {# ----- Referral coordinator form ----- #}
+  <section id="submitted" class="max-w-2xl">
+    {% if submitted %}
+    <div role="alert" class="alert alert-success">
+      <div>
+        <p class="font-medium">Thanks — your inquiry was sent.</p>
+        <p class="text-sm">The referral coordinator will reply to your email within a few days.</p>
+      </div>
     </div>
+    {% else %}
+    <div class="rounded-lg border border-base-300 bg-base-100 p-6 sm:p-8 space-y-4">
+      <header class="space-y-1">
+        <h2 class="font-serif text-xl text-base-content">Referral coordinator request</h2>
+        <p class="text-sm text-base-content/70">
+          The coordinator will review your request and send you a list of
+          available LSP clinicians who might be a fit.
+        </p>
+      </header>
+
+      <p class="text-xs text-base-content/60 leading-relaxed border-l-2 border-warning/60 pl-3">
+        <strong>If you are in immediate crisis</strong> and need urgent help, please
+        contact <a href="tel:988" class="link">988</a> (Suicide &amp; Crisis Lifeline)
+        or your local emergency services. This form is for routine referrals only.
+      </p>
+
+      <form method="post" class="space-y-5">
+        {% csrf_token %}
+        {{ form.website }}{# honeypot, visually hidden via HiddenInput #}
+
+        {% for field in form %}
+          {% if field.name != "website" %}
+          <div class="form-control space-y-1">
+            <label for="{{ field.id_for_label }}" class="label-text text-sm">
+              {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
+            </label>
+            {% if field.field.widget.input_type == "radio" %}
+              <div class="flex flex-wrap gap-x-5 gap-y-2 pt-1">
+                {% for choice in field %}
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                  {{ choice.tag }}
+                  <span>{{ choice.choice_label }}</span>
+                </label>
+                {% endfor %}
+              </div>
+            {% else %}
+              {{ field }}
+            {% endif %}
+            {% if field.help_text %}<p class="text-xs text-base-content/60">{{ field.help_text }}</p>{% endif %}
+            {% if field.errors %}<p class="text-xs text-error">{{ field.errors|join:", " }}</p>{% endif %}
+          </div>
+          {% endif %}
+        {% endfor %}
+
+        <button type="submit" class="btn btn-primary">Send inquiry</button>
+      </form>
+    </div>
+    {% endif %}
   </section>
 
   {# ----- Direct map ----- #}

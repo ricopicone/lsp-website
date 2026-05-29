@@ -1,0 +1,18 @@
+A new Find-an-Analyst inquiry was submitted on the LSP website.
+
+Name:     {{ data.name }}
+Email:    {{ data.email }}
+{% if data.phone %}Phone:    {{ data.phone }}
+{% endif %}Location: {{ data.location }}
+{% if data.preferred_languages %}Languages: {{ data.preferred_languages }}
+{% endif %}Modality: {{ data.modality }}
+
+What they're looking for:
+{{ data.inquiry }}
+{% if data.additional_notes %}
+Additional notes:
+{{ data.additional_notes }}
+{% endif %}
+--
+Sent via the Find an Analyst form on app.lacanschool.org. Hitting Reply
+in your mail client goes directly to the inquirer (Reply-To is set).

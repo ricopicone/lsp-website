@@ -9,7 +9,8 @@ from django.shortcuts import redirect, render
 
 from committees.models import CommitteeMembership
 
-from .forms import LightSignupForm
+from . import emails
+from .forms import LightSignupForm, ReferralRequestForm
 from .models import Profile
 
 # Order in which role sections appear on /directory/. Roles not listed here
@@ -97,8 +98,29 @@ def directory_detail(request, slug: str):
 
 
 def find_an_analyst(request):
-    """Public Find-an-Analyst page: referral form + interactive map of members."""
-    return render(request, "accounts/find_an_analyst.html", {})
+    """Public Find-an-Analyst page: referral form + interactive map of members.
+
+    Handles form GET (display) and POST (validate, email coordinator,
+    redirect to ``?submitted=1``).
+    """
+    submitted = request.GET.get("submitted") == "1"
+    if request.method == "POST":
+        form = ReferralRequestForm(request.POST)
+        if form.is_valid():
+            data = dict(form.cleaned_data)
+            # Convert the modality machine value to its display label for the email.
+            data["modality"] = dict(form.fields["modality"].choices).get(
+                data["modality"], data["modality"]
+            )
+            data.pop("website", None)
+            emails.send_referral_inquiry(data)
+            return redirect(f"{request.path}?submitted=1#submitted")
+    else:
+        form = ReferralRequestForm()
+    return render(request, "accounts/find_an_analyst.html", {
+        "form": form,
+        "submitted": submitted,
+    })
 
 
 def find_an_analyst_pins(request):
