@@ -22,7 +22,6 @@ from pathlib import Path
 import markdown
 from django.conf import settings
 
-
 PAGES_DIR = Path(settings.BASE_DIR) / "content" / "pages"
 FRONTMATTER_RE = re.compile(r"\A---\s*\n(.*?\n)---\s*\n", re.DOTALL)
 

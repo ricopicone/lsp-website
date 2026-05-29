@@ -21,7 +21,6 @@ from django.db import transaction
 from accounts.models import User
 from committees.models import Committee, CommitteeMembership
 
-
 # --- Current rosters (source: lacanschool.org/abouttheschool, 2025-26) ----
 #
 # Roles map to CommitteeMembership.Role values. "Convener" maps to chair
@@ -43,7 +42,8 @@ PROGRAMMING_COMMITTEE_2025_2026 = [
     ("Christopher","Meyer",                CommitteeMembership.Role.MEMBER),
     ("Sheila",     "Cavanagh",             CommitteeMembership.Role.MEMBER),
     ("Casey",      "Butcher",              CommitteeMembership.Role.MEMBER),
-    ("Julien",     "Fischer",              CommitteeMembership.Role.MEMBER),  # source spells "Fisher"; roster has Fischer
+    # Wix About page spells it "Fisher"; the directory roster has "Fischer".
+    ("Julien",     "Fischer",              CommitteeMembership.Role.MEMBER),
     ("John",       "Kreitzberg",           CommitteeMembership.Role.MEMBER),
 ]
 
