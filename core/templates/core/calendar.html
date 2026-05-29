@@ -1,8 +1,9 @@
 {% extends "core/base.html" %}
+{% load static %}
 {% block title %}Calendar — Lacanian School of Psychoanalysis{% endblock %}
 
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="{% static 'vendor/fullcalendar-6.1.15.global.min.js' %}"></script>
 <style>
   /* FullCalendar overrides to pick up DaisyUI theme tokens. */
   .fc {

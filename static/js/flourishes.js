@@ -268,7 +268,7 @@
       var ch = document.createElement("span");
       ch.className = "lsp-overtype-char";
       ch.textContent = correctedText[j];
-      ch.style.animationDelay = (1500 + j * 100) + "ms";
+      ch.style.animationDelay = (1500 + j * 170) + "ms";
       corrected.appendChild(ch);
     }
 

@@ -60,7 +60,11 @@
    the stroke survives the fill-color → transparent transition (using
    currentColor for the stroke would fade with the fill and leave nothing). */
 .lsp-letter-host {
-  -webkit-text-stroke-color: var(--lsp-trace-color, currentColor);
+  /* color-mix lightens the stroke to ~38% opacity of the original color so
+     the trace reads as a faint outline rather than a full-strength glyph. */
+  -webkit-text-stroke-color: color-mix(
+    in srgb, var(--lsp-trace-color, currentColor) 38%, transparent
+  );
   -webkit-text-stroke-width: 0;
   transition: color 600ms ease-out, -webkit-text-stroke-width 600ms ease-out;
 }

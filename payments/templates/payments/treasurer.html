@@ -1,7 +1,8 @@
 {% extends "core/base.html" %}
+{% load static %}
 {% block title %}Treasurer dashboard — LSP{% endblock %}
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="{% static 'vendor/chart-4.4.4.umd.min.js' %}"></script>
 {% endblock %}
 {% block content %}
 <div class="space-y-10">
