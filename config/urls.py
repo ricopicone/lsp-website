@@ -19,6 +19,7 @@ from django.urls import include, path
 
 from accounts import views as _account_views
 from content import views as _content_views
+from events import views as _event_views
 from payments import views as _payment_views
 
 urlpatterns = [
@@ -30,6 +31,7 @@ urlpatterns = [
     path("find-an-analyst/", _account_views.find_an_analyst, name="find_an_analyst"),
     path("find-an-analyst/pins.json", _account_views.find_an_analyst_pins,
          name="find_an_analyst_pins"),
+    path("program/", _event_views.program, name="program"),
     path("events/", include("events.urls")),
     path("dues/", _payment_views.dues_pay, name="dues"),
     path("donate/", _payment_views.donate, name="donate"),

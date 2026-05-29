@@ -11,6 +11,7 @@ Implements the core data model for Milestone 2:
 
 from __future__ import annotations
 
+import datetime as _dt
 import secrets
 from decimal import Decimal
 
@@ -21,6 +22,38 @@ from django.utils.translation import gettext_lazy as _
 
 # Excludes visually ambiguous characters (0/O, 1/I/L).
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+#: Academic-year boundary. Months >= this start a *new* academic year, i.e.
+#: a course starting Sept 2025 is academic year "2025-2026".
+ACADEMIC_YEAR_START_MONTH = 9
+
+
+def academic_year_of(d: _dt.date) -> str:
+    """Return the academic-year label that a given date falls within.
+
+    >>> academic_year_of(date(2025, 9, 1))  # Sept 2025
+    '2025-2026'
+    >>> academic_year_of(date(2026, 6, 30))  # June 2026
+    '2025-2026'
+    """
+    if d.month >= ACADEMIC_YEAR_START_MONTH:
+        return f"{d.year}-{d.year + 1}"
+    return f"{d.year - 1}-{d.year}"
+
+
+def academic_year_date_range(label: str) -> tuple[_dt.date, _dt.date]:
+    """Return [start, end) bounds for an academic-year label like "2025-2026"."""
+    start_year_str, _sep, end_year_str = label.partition("-")
+    start_year = int(start_year_str)
+    end_year = int(end_year_str)
+    return (
+        _dt.date(start_year, ACADEMIC_YEAR_START_MONTH, 1),
+        _dt.date(end_year, ACADEMIC_YEAR_START_MONTH, 1),
+    )
+
+
+def current_academic_year(today: _dt.date | None = None) -> str:
+    return academic_year_of(today or _dt.date.today())
 
 
 def generate_pricing_code() -> str:
@@ -69,6 +102,8 @@ class Event(models.Model):
     class Type(models.TextChoices):
         SEMINAR = "seminar", _("Seminar")
         SPECIAL_EVENT = "special_event", _("Special event")
+        READING_GROUP = "reading_group", _("Reading group")
+        CARTEL = "cartel", _("Cartel")
 
     class Format(models.TextChoices):
         ONLINE = "online", _("Online")
@@ -154,6 +189,16 @@ class Event(models.Model):
     def clean(self):
         if self.end_date and self.start_date and self.end_date < self.start_date:
             raise ValidationError({"end_date": "end_date must be on or after start_date."})
+
+    @property
+    def academic_year(self) -> str:
+        """Academic-year label this event belongs to ("2025-2026")."""
+        return academic_year_of(self.start_date)
+
+    @property
+    def is_offering(self) -> bool:
+        """True for reading groups / cartels — the "Other Offerings" bucket."""
+        return self.event_type in {self.Type.READING_GROUP, self.Type.CARTEL}
 
 
 class EventMemberSpeaker(models.Model):

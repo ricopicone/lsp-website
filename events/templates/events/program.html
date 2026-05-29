@@ -1,0 +1,107 @@
+{% extends "core/base.html" %}
+{% block title %}Program {{ year }} — LSP{% endblock %}
+
+{% block content %}
+<div class="space-y-10">
+
+  <header class="space-y-3 max-w-3xl">
+    <div class="flex flex-wrap items-baseline justify-between gap-3">
+      <h1 class="font-serif text-3xl sm:text-4xl text-base-content leading-[1.15] tracking-tight">
+        Program {{ year }}
+      </h1>
+      {% if available_years|length > 1 %}
+      <form method="get" class="flex items-center gap-2 text-sm">
+        <label for="year-select" class="text-base-content/60">Academic year</label>
+        <select name="year" id="year-select" onchange="this.form.submit()"
+                class="select select-sm select-bordered max-w-[12rem]">
+          {% for y in available_years %}
+          <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
+    </div>
+    <p class="text-sm text-base-content/70 leading-relaxed">
+      The Lacanian School's seminars and other offerings for the
+      {% if is_current_year %}current{% else %}{{ year }}{% endif %} academic year.
+      Click any title for full details, dates, and registration.
+    </p>
+  </header>
+
+  {# ----- Seminars ----- #}
+  <section class="space-y-4">
+    <h2 class="font-serif text-2xl text-base-content border-b border-base-300/60 pb-2">
+      Seminars
+    </h2>
+    {% if seminars %}
+    <ul class="divide-y divide-base-300/60">
+      {% for e in seminars %}
+      <li class="py-4">
+        <a href="{% url 'events:detail' e.slug %}"
+           class="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h3 class="font-serif text-lg text-base-content group-hover:text-primary transition-colors">
+              {{ e.title }}
+            </h3>
+            <span class="text-sm text-base-content/60 whitespace-nowrap">
+              {{ e.start_date|date:"M j" }}{% if e.end_date != e.start_date %} – {{ e.end_date|date:"M j" }}{% endif %}
+              · {{ e.get_format_display }}
+            </span>
+          </div>
+          {% with faculty_list=e.faculty.all %}
+          {% if faculty_list %}
+          <div class="mt-1 text-sm text-base-content/70">
+            {% for f in faculty_list %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+          </div>
+          {% endif %}
+          {% endwith %}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-base-content/60 py-8">
+      No seminars published for {{ year }} yet.
+    </p>
+    {% endif %}
+  </section>
+
+  {# ----- Other offerings (reading groups, cartels) ----- #}
+  {% if offerings %}
+  <section class="space-y-4">
+    <h2 class="font-serif text-2xl text-base-content border-b border-base-300/60 pb-2">
+      Other Offerings
+    </h2>
+    <ul class="divide-y divide-base-300/60">
+      {% for e in offerings %}
+      <li class="py-4">
+        <a href="{% url 'events:detail' e.slug %}"
+           class="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h3 class="font-serif text-lg text-base-content group-hover:text-primary transition-colors">
+              {{ e.title }}
+              <span class="ml-2 text-xs uppercase tracking-wider text-base-content/50 align-middle">
+                {{ e.get_event_type_display }}
+              </span>
+            </h3>
+            <span class="text-sm text-base-content/60 whitespace-nowrap">
+              {{ e.start_date|date:"M j" }}{% if e.end_date != e.start_date %} – {{ e.end_date|date:"M j" }}{% endif %}
+              · {{ e.get_format_display }}
+            </span>
+          </div>
+          {% with faculty_list=e.faculty.all %}
+          {% if faculty_list %}
+          <div class="mt-1 text-sm text-base-content/70">
+            {% for f in faculty_list %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+          </div>
+          {% endif %}
+          {% endwith %}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+</div>
+{% endblock %}
