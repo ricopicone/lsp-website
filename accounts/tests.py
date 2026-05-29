@@ -198,3 +198,62 @@ def test_directory_detail_prefers_public_email_when_set(client):
     body = resp.content
     assert b"public@x.test" in body
     assert b"login@x.test" not in body
+
+
+# ---- Find-an-Analyst referral form -------------------------------------
+
+
+def _valid_referral_post():
+    return {
+        "name":                   "Alex Patient",
+        "pronouns":               "they/them",
+        "pronouns_other":         "",
+        "email":                  "inquirer@example.com",
+        "location":               "Brooklyn, NY",
+        "language":               "English",
+        "modality":               ["video"],
+        "additional_information": "Looking for a Lacanian analyst.",
+        "website":                "",  # honeypot
+    }
+
+
+@pytest.mark.django_db
+def test_find_an_analyst_post_sends_inquiry_and_acknowledgment(client, mailoutbox, settings):
+    settings.REFERRALS_EMAIL = "referrals@lacanschool.org"
+    resp = client.post("/find-an-analyst/", _valid_referral_post(), follow=False)
+    assert resp.status_code == 302
+    assert resp.url.endswith("?submitted=1#submitted")
+    assert len(mailoutbox) == 2
+
+    # The coordinator inquiry: To = referrals, Reply-To = inquirer.
+    inquiry = next(
+        m for m in mailoutbox if m.to == ["referrals@lacanschool.org"]
+    )
+    assert "Alex Patient" in inquiry.subject
+    assert inquiry.reply_to == ["inquirer@example.com"]
+    assert "Brooklyn, NY" in inquiry.body
+
+    # The acknowledgment: To = inquirer, Reply-To = referrals.
+    ack = next(m for m in mailoutbox if m.to == ["inquirer@example.com"])
+    assert ack.reply_to == ["referrals@lacanschool.org"]
+    assert "Alex Patient" in ack.body
+    assert "referrals@lacanschool.org" in ack.body
+
+
+@pytest.mark.django_db
+def test_find_an_analyst_ack_failure_does_not_block_redirect(
+    client, mailoutbox, settings, monkeypatch,
+):
+    """If the acknowledgment email fails to send, the form still succeeds —
+    the coordinator already received the inquiry, which is what matters."""
+    settings.REFERRALS_EMAIL = "referrals@lacanschool.org"
+    from accounts import emails as accounts_emails
+
+    def _boom(_data):
+        raise RuntimeError("SMTP down")
+
+    monkeypatch.setattr(accounts_emails, "send_referral_acknowledgment", _boom)
+    resp = client.post("/find-an-analyst/", _valid_referral_post(), follow=False)
+    assert resp.status_code == 302
+    # Inquiry to coordinator still went through.
+    assert any(m.to == ["referrals@lacanschool.org"] for m in mailoutbox)

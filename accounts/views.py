@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.contrib.auth import login
 from django.db.models import Prefetch
 from django.http import Http404, JsonResponse
@@ -12,6 +14,8 @@ from committees.models import CommitteeMembership
 from . import emails
 from .forms import LightSignupForm, ReferralRequestForm
 from .models import Profile
+
+logger = logging.getLogger(__name__)
 
 # Order in which role sections appear on /directory/. Roles not listed here
 # (external, student, prospective_applicant) are not shown.
@@ -120,6 +124,12 @@ def find_an_analyst(request):
                 "additional_information": form.cleaned_data["additional_information"],
             }
             emails.send_referral_inquiry(data)
+            # Acknowledgment to the inquirer — failure here shouldn't
+            # mask the success of the coordinator email above.
+            try:
+                emails.send_referral_acknowledgment(data)
+            except Exception:
+                logger.exception("Failed to send referral acknowledgment to %s", data["email"])
             return redirect(f"{request.path}?submitted=1#submitted")
     else:
         form = ReferralRequestForm()
