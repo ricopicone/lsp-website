@@ -1,0 +1,57 @@
+{% extends "core/base.html" %}
+{% block title %}{{ page.title }} — LSP{% endblock %}
+
+{% block content %}
+<article class="space-y-10">
+
+  <header class="space-y-3 max-w-3xl">
+    <h1 class="font-serif text-3xl sm:text-4xl text-base-content leading-[1.15] tracking-tight">
+      {{ page.title }}
+    </h1>
+    {% if page.summary %}
+    <p class="text-base sm:text-lg text-base-content/70 leading-relaxed">{{ page.summary }}</p>
+    {% endif %}
+  </header>
+
+  <div class="lsp-prose max-w-3xl">
+    {{ page.body_html|safe }}
+  </div>
+
+  {% if committees %}
+  <section class="space-y-6">
+    <h2 class="font-serif text-2xl text-base-content border-b border-base-300/60 pb-2">
+      Governance & Committees
+    </h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      {% for c in committees %}
+      <section class="space-y-3">
+        <h3 class="font-serif text-xl text-base-content">{{ c.name }}</h3>
+        {% if c.description %}<p class="text-sm text-base-content/70">{{ c.description }}</p>{% endif %}
+        {% with members=c.memberships.all %}
+        {% if members %}
+        <ul class="text-sm space-y-1">
+          {% for m in members %}{% if not m.end_date %}
+          <li class="flex flex-wrap items-baseline gap-x-2">
+            {% if m.user.profile.is_in_directory %}
+            <a href="{% url 'directory_detail' m.user.profile.directory_slug %}" class="link link-hover text-base-content">{{ m.user.first_name }} {{ m.user.last_name }}</a>
+            {% else %}
+            <span class="text-base-content">{{ m.user.first_name }} {{ m.user.last_name }}</span>
+            {% endif %}
+            {% if m.role_in_committee != "member" %}
+            <span class="text-xs text-base-content/60">— {{ m.get_role_in_committee_display }}</span>
+            {% endif %}
+          </li>
+          {% endif %}{% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-base-content/50 italic">No current members listed.</p>
+        {% endif %}
+        {% endwith %}
+      </section>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+</article>
+{% endblock %}

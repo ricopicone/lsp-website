@@ -18,11 +18,13 @@ from django.contrib import admin
 from django.urls import include, path
 
 from accounts import views as _account_views
+from content import views as _content_views
 from payments import views as _payment_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("accounts.urls")),
+    path("about/", _content_views.about, name="about"),
     path("directory/", _account_views.directory, name="directory"),
     path("directory/<slug:slug>/", _account_views.directory_detail, name="directory_detail"),
     path("events/", include("events.urls")),

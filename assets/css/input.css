@@ -48,6 +48,63 @@
   }
 }
 
+/* --- lsp-prose: Markdown body content styling -----------------------------
+   Used by the content app's rendered HTML so we don't need
+   @tailwindcss/typography for a small set of pages. */
+.lsp-prose {
+  color: var(--color-base-content);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.lsp-prose h2 {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  line-height: 1.25;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.005em;
+}
+.lsp-prose h3 {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.lsp-prose p { margin: 0 0 1rem; }
+.lsp-prose ul,
+.lsp-prose ol { margin: 0 0 1rem; padding-left: 1.5rem; }
+.lsp-prose ul { list-style: disc; }
+.lsp-prose ol { list-style: decimal; }
+.lsp-prose li { margin: 0.25rem 0; }
+.lsp-prose a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.lsp-prose a:hover { text-decoration-thickness: 1.5px; }
+.lsp-prose strong { font-weight: 600; }
+.lsp-prose em { font-style: italic; }
+.lsp-prose blockquote {
+  border-left: 3px solid var(--color-base-300);
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: var(--color-base-content);
+  opacity: 0.85;
+}
+.lsp-prose hr {
+  border: 0;
+  border-top: 1px solid var(--color-base-300);
+  margin: 2rem 0;
+}
+.lsp-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-base-200);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
 /* --- Stylistic flourishes (see static/js/flourishes.js) --- */
 
 /* The falling letter.

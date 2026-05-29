@@ -53,6 +53,7 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     "accounts",
     "committees",
+    "content",
     "events",
     "registrations",
     "payments",

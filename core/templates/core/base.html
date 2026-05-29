@@ -40,9 +40,11 @@
       {# Center: page links (hidden on mobile; mobile uses dropdown) #}
       <nav class="hidden sm:flex items-center gap-0.5 text-sm">
         {% with cur=request.path %}
+          {% url 'about' as url_about %}
           {% url 'events:list' as url_events %}
           {% url 'directory' as url_dir %}
           {% url 'core:calendar' as url_cal %}
+          <a href="{{ url_about }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_about in cur %}text-primary font-medium{% endif %}">About</a>
           <a href="{{ url_events }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_events in cur %}text-primary font-medium{% endif %}">Events</a>
           <a href="{{ url_dir }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_dir in cur %}text-primary font-medium{% endif %}">Directory</a>
           <a href="{{ url_cal }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_cal in cur %}text-primary font-medium{% endif %}">Calendar</a>
@@ -89,6 +91,7 @@
             <li><hr class="border-base-300/60 my-1"></li>
 
             {# Mobile: page links inside the menu since the centered nav is hidden #}
+            <li class="sm:hidden"><a href="{% url 'about' %}">About</a></li>
             <li class="sm:hidden"><a href="{% url 'events:list' %}">Events</a></li>
             <li class="sm:hidden"><a href="{% url 'directory' %}">Directory</a></li>
             <li class="sm:hidden"><a href="{% url 'core:calendar' %}">Calendar</a></li>
