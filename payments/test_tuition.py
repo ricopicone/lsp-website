@@ -513,6 +513,201 @@ def test_paying_last_installment_flips_enrollment_to_paid_in_full(current_period
     assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL
 
 
+# --- Stripe Checkout: pay in full, plan setup, pay installment -----------
+
+
+@pytest.fixture
+def stub_stripe(monkeypatch):
+    """Replace create_tuition_session with a stub returning a fake URL."""
+    from unittest.mock import MagicMock
+    stub = MagicMock(return_value=MagicMock(url="https://stripe.test/sess/abc"))
+    monkeypatch.setattr("payments.views.create_tuition_session", stub)
+    return stub
+
+
+@pytest.mark.django_db
+def test_pay_in_full_creates_installment_and_payment(
+    client, current_period, stub_stripe,
+):
+    from payments.models import Payment
+
+    u = _mk_candidate("pif@x.test")
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    client.force_login(u)
+    resp = client.post(reverse("tuition_pay_in_full"))
+    assert resp.status_code == 302
+    assert resp.url.startswith("https://stripe.test/")
+    # Exactly one full-amount installment + one PENDING tuition payment.
+    inst = TuitionInstallment.objects.get(enrollment__user=u)
+    assert inst.amount == current_period.tuition_amount
+    payment = Payment.objects.get(user=u, payment_type=Payment.Type.TUITION)
+    assert payment.status == Payment.Status.PENDING
+    assert payment.tuition_installment_id == inst.id
+
+
+@pytest.mark.django_db
+def test_pay_in_full_blocked_if_no_enrollment(client, current_period, stub_stripe):
+    u = _mk_candidate("no-enr@x.test")
+    client.force_login(u)
+    resp = client.post(reverse("tuition_pay_in_full"))
+    # No enrollment → redirected back, no Stripe session.
+    assert resp.status_code == 302
+    stub_stripe.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_pay_in_full_redirects_if_installments_already_exist(
+    client, current_period, stub_stripe,
+):
+    """Don't mint a parallel "full" installment if a plan is already set up."""
+    u = _mk_candidate("dup@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1,
+        due_date=current_period.start_date, amount=Decimal("400.00"),
+    )
+    client.force_login(u)
+    resp = client.post(reverse("tuition_pay_in_full"))
+    assert resp.status_code == 302
+    stub_stripe.assert_not_called()
+    # No second installment created.
+    assert enr.installments.count() == 1
+
+
+@pytest.mark.django_db
+def test_setup_plan_creates_two_installments(client, current_period):
+    u = _mk_candidate("plan2@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    client.force_login(u)
+    resp = client.post(reverse("tuition_setup_plan"), {"installment_count": "2"})
+    assert resp.status_code == 302
+    insts = list(enr.installments.order_by("sequence"))
+    assert len(insts) == 2
+    # Amounts sum to total.
+    assert insts[0].amount + insts[1].amount == current_period.tuition_amount
+    # Second installment due in Feb of the next calendar year.
+    assert insts[1].due_date.month == 2
+
+
+@pytest.mark.django_db
+def test_setup_plan_creates_nine_installments(client, current_period):
+    u = _mk_candidate("plan9@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    client.force_login(u)
+    resp = client.post(reverse("tuition_setup_plan"), {"installment_count": "9"})
+    assert resp.status_code == 302
+    insts = list(enr.installments.order_by("sequence"))
+    assert len(insts) == 9
+    # Amounts sum exactly to the period total (rounding goes on installment 9).
+    assert sum(i.amount for i in insts) == current_period.tuition_amount
+
+
+@pytest.mark.django_db
+def test_setup_plan_rejects_invalid_count(client, current_period):
+    u = _mk_candidate("badcount@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    client.force_login(u)
+    resp = client.post(reverse("tuition_setup_plan"), {"installment_count": "5"})
+    assert resp.status_code == 302
+    assert enr.installments.count() == 0
+
+
+@pytest.mark.django_db
+def test_setup_plan_idempotent_when_installments_exist(client, current_period):
+    """A duplicate POST doesn't multiply installments."""
+    u = _mk_candidate("idem-plan@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1,
+        due_date=current_period.start_date, amount=Decimal("400.00"),
+    )
+    client.force_login(u)
+    resp = client.post(reverse("tuition_setup_plan"), {"installment_count": "2"})
+    assert resp.status_code == 302
+    assert enr.installments.count() == 1
+
+
+@pytest.mark.django_db
+def test_pay_installment_creates_payment_and_redirects_to_stripe(
+    client, current_period, stub_stripe,
+):
+    from payments.models import Payment
+
+    u = _mk_candidate("pi@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1,
+        due_date=current_period.start_date, amount=Decimal("400.00"),
+    )
+    client.force_login(u)
+    resp = client.post(reverse("tuition_pay_installment", args=[inst.id]))
+    assert resp.status_code == 302
+    assert resp.url.startswith("https://stripe.test/")
+    payment = Payment.objects.get(tuition_installment=inst)
+    assert payment.status == Payment.Status.PENDING
+
+
+@pytest.mark.django_db
+def test_pay_installment_404_for_other_users_installment(
+    client, current_period, stub_stripe,
+):
+    """User A cannot pay user B's installment."""
+    user_a = _mk_candidate("a@x.test")
+    user_b = _mk_candidate("b@x.test")
+    enr_b = TuitionEnrollment.objects.create(
+        user=user_b, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst_b = TuitionInstallment.objects.create(
+        enrollment=enr_b, sequence=1,
+        due_date=current_period.start_date, amount=Decimal("400.00"),
+    )
+    client.force_login(user_a)
+    resp = client.post(reverse("tuition_pay_installment", args=[inst_b.id]))
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_pay_installment_no_op_if_already_paid(
+    client, current_period, stub_stripe,
+):
+    u = _mk_candidate("paid@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1,
+        due_date=current_period.start_date, amount=Decimal("400.00"),
+        paid=True,
+    )
+    client.force_login(u)
+    resp = client.post(reverse("tuition_pay_installment", args=[inst.id]))
+    assert resp.status_code == 302
+    stub_stripe.assert_not_called()
+
+
 @pytest.mark.django_db
 def test_complete_payment_is_idempotent_for_tuition(current_period):
     """Calling complete_payment twice is a no-op the second time."""

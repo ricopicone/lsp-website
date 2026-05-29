@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 import stripe
@@ -22,9 +22,19 @@ from django.views.decorators.http import require_POST
 from registrations.models import Registration
 
 from .forms import DonationForm, TuitionDecisionForm
-from .models import DuesPeriod, Payment, TuitionEnrollment, TuitionPeriod
+from .models import (
+    DuesPeriod,
+    Payment,
+    TuitionEnrollment,
+    TuitionInstallment,
+    TuitionPeriod,
+)
 from .operations import complete_payment
-from .stripe_checkout import create_donation_session, create_dues_session
+from .stripe_checkout import (
+    create_donation_session,
+    create_dues_session,
+    create_tuition_session,
+)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -520,8 +530,160 @@ def tuition_decision(request):
         initial = {"status": enrollment.status} if enrollment else {}
         form = TuitionDecisionForm(initial=initial)
 
+    installments = []
+    if enrollment is not None:
+        installments = list(enrollment.installments.order_by("sequence"))
+
     return render(request, "payments/tuition.html", {
-        "period":     period,
-        "enrollment": enrollment,
-        "form":       form,
+        "period":       period,
+        "enrollment":   enrollment,
+        "installments": installments,
+        "form":         form,
+        "stripe_status": request.GET.get("stripe"),
     })
+
+
+@login_required
+@require_POST
+def tuition_pay_in_full(request):
+    """Pay this year's tuition in a single Stripe transaction (M7.5).
+
+    Creates a single TuitionInstallment for the full annual amount + a
+    Payment + a Stripe Checkout Session, and redirects to Stripe. The
+    webhook (or the treasurer's "Apply payment success" action) will
+    flip the enrollment to PAID_IN_FULL via complete_payment.
+    """
+    profile = request.user.profile
+    if not profile.owes_tuition:
+        return redirect("tuition")
+    period = TuitionPeriod.current()
+    if period is None:
+        return redirect("tuition")
+    enrollment = TuitionEnrollment.objects.filter(
+        user=request.user, tuition_period=period,
+    ).first()
+    if enrollment is None:
+        return redirect("tuition")
+    if enrollment.installments.exists():
+        # Already on a payment plan / has installments — direct to pay one
+        # rather than minting a parallel "full" installment.
+        return redirect("tuition")
+    with transaction.atomic():
+        installment = TuitionInstallment.objects.create(
+            enrollment=enrollment, sequence=1,
+            due_date=period.decision_due_date,
+            amount=period.tuition_amount,
+        )
+        payment = Payment.objects.create(
+            payment_type=Payment.Type.TUITION,
+            user=request.user,
+            amount=period.tuition_amount,
+            method=Payment.Method.STRIPE,
+            status=Payment.Status.PENDING,
+            tuition_installment=installment,
+        )
+    session = create_tuition_session(payment)
+    return redirect(session.url)
+
+
+@login_required
+@require_POST
+def tuition_setup_plan(request):
+    """Create the installment rows for a PAYMENT_PLAN enrollment (M7.5).
+
+    Accepts ``installment_count`` of 2 (Sept + Feb) or 9 (monthly Sept–May).
+    Idempotent: if installments already exist, redirects back without
+    creating duplicates so a refresh of the POST doesn't multiply rows.
+    """
+    profile = request.user.profile
+    if not profile.owes_tuition:
+        return redirect("tuition")
+    period = TuitionPeriod.current()
+    if period is None:
+        return redirect("tuition")
+    enrollment = TuitionEnrollment.objects.filter(
+        user=request.user, tuition_period=period,
+    ).first()
+    if enrollment is None or enrollment.status != TuitionEnrollment.Status.PAYMENT_PLAN:
+        return redirect("tuition")
+    if enrollment.installments.exists():
+        return redirect("tuition")
+    try:
+        count = int(request.POST.get("installment_count", "0"))
+    except (TypeError, ValueError):
+        return redirect("tuition")
+    if count not in (2, 9):
+        return redirect("tuition")
+
+    schedule = _build_installment_schedule(period, count)
+    with transaction.atomic():
+        for seq, (due_date, amount) in enumerate(schedule, start=1):
+            TuitionInstallment.objects.create(
+                enrollment=enrollment, sequence=seq,
+                due_date=due_date, amount=amount,
+            )
+    return redirect("tuition")
+
+
+def _build_installment_schedule(
+    period: TuitionPeriod, count: int,
+) -> list[tuple[date, Decimal]]:
+    """Return a list of ``(due_date, amount)`` tuples summing to tuition_amount.
+
+    For ``count=2``: September (period.decision_due_date) and February.
+    For ``count=9``: monthly from September through May.
+    Rounding goes onto the final installment so the sum is exact.
+    """
+    from calendar import monthrange
+    total = period.tuition_amount
+    start_year = period.start_date.year
+
+    def _last_day(year, month):
+        return monthrange(year, month)[1]
+
+    def _clamp(year, month, day=1):
+        return date(year, month, min(day, _last_day(year, month)))
+
+    if count == 2:
+        # Sept (decision_due) + Feb of the following year (1st).
+        dates = [period.decision_due_date, _clamp(start_year + 1, 2, 1)]
+    elif count == 9:
+        # Sept, Oct, Nov, Dec, Jan, Feb, Mar, Apr, May.
+        months = [(start_year, 9), (start_year, 10), (start_year, 11),
+                  (start_year, 12), (start_year + 1, 1), (start_year + 1, 2),
+                  (start_year + 1, 3), (start_year + 1, 4), (start_year + 1, 5)]
+        dates = [_clamp(y, m, 1) for y, m in months]
+    else:
+        return []
+
+    base = (total / count).quantize(Decimal("0.01"))
+    amounts = [base] * (count - 1)
+    amounts.append(total - sum(amounts))  # remainder goes on the last
+    return list(zip(dates, amounts))
+
+
+@login_required
+@require_POST
+def tuition_pay_installment(request, installment_id: int):
+    """Pay a specific tuition installment via Stripe (M7.5).
+
+    Only the owning user can pay their installment. Re-paying a paid
+    installment is a no-op redirect.
+    """
+    installment = get_object_or_404(
+        TuitionInstallment.objects.select_related("enrollment"),
+        pk=installment_id, enrollment__user=request.user,
+    )
+    if installment.paid:
+        return redirect("tuition")
+    with transaction.atomic():
+        payment = Payment.objects.create(
+            payment_type=Payment.Type.TUITION,
+            user=request.user,
+            amount=installment.amount,
+            method=Payment.Method.STRIPE,
+            status=Payment.Status.PENDING,
+            tuition_installment=installment,
+        )
+    session = create_tuition_session(payment)
+    return redirect(session.url)

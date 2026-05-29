@@ -149,3 +149,34 @@ def create_donation_session(
         cancel_path="/?stripe=cancelled",
         customer_email=customer_email,
     )
+
+
+def create_tuition_session(payment: Payment) -> stripe.checkout.Session:
+    """Build a Checkout Session for a tuition installment payment (M7.5).
+
+    The Payment must already be linked to a TuitionInstallment; the
+    period name appears in the product description for receipt clarity.
+    """
+    installment = payment.tuition_installment
+    if installment is None:
+        raise ValueError(
+            f"Refusing to create a Stripe session for tuition Payment {payment.id}: "
+            "no TuitionInstallment is linked."
+        )
+    enrollment = installment.enrollment
+    period_name = enrollment.tuition_period.name
+    total_installments = enrollment.installments.count()
+    if total_installments == 1:
+        description = f"Annual tuition for {period_name}"
+    else:
+        description = (
+            f"Tuition installment {installment.sequence} of "
+            f"{total_installments} for {period_name}"
+        )
+    return _make_session(
+        payment=payment,
+        product_name=f"LSP tuition — {period_name}",
+        product_description=description,
+        success_path=reverse("tuition") + "?stripe=success",
+        cancel_path=reverse("tuition") + "?stripe=cancelled",
+    )

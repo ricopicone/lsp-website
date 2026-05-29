@@ -11,6 +11,12 @@
     </p>
   </header>
 
+  {% if stripe_status == "cancelled" %}
+  <div class="rounded-lg border border-warning/40 bg-warning/10 px-5 py-3 text-sm">
+    Payment cancelled. No charge was made — you can try again whenever you're ready.
+  </div>
+  {% endif %}
+
   <section class="rounded-lg border border-base-300 bg-base-200/40 p-5 text-sm leading-relaxed space-y-2">
     <p>
       Students must pay <strong>four total years of tuition</strong> before
@@ -37,6 +43,89 @@
       year ends.
     </p>
   </div>
+
+  {# ----- Pay-in-full path (COMMITTED, no installments yet) ----- #}
+  {% if enrollment.status == "committed" and not installments %}
+  <section class="rounded-lg border border-base-300 p-5 space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Pay tuition</h2>
+    <p class="text-sm text-base-content/70">
+      Pay this year's tuition in one transaction via Stripe.
+    </p>
+    <form method="post" action="{% url 'tuition_pay_in_full' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">
+        Pay ${{ period.tuition_amount }} now →
+      </button>
+    </form>
+    <p class="text-xs text-base-content/60">
+      Prefer to spread payments out? Switch your decision to "payment plan"
+      below to set up a 2- or 9-installment schedule.
+    </p>
+  </section>
+  {% endif %}
+
+  {# ----- Plan setup (PAYMENT_PLAN, no installments yet) ----- #}
+  {% if enrollment.status == "payment_plan" and not installments %}
+  <section class="rounded-lg border border-base-300 p-5 space-y-4">
+    <h2 class="font-serif text-xl text-base-content">Choose a payment plan</h2>
+    <p class="text-sm text-base-content/70">
+      Pick how you'd like to split the ${{ period.tuition_amount }} annual tuition.
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <form method="post" action="{% url 'tuition_setup_plan' %}" class="contents">
+        {% csrf_token %}
+        <input type="hidden" name="installment_count" value="2">
+        <button type="submit" class="btn btn-outline justify-start text-left h-auto py-4">
+          <span class="block">
+            <span class="font-medium block">Two installments</span>
+            <span class="text-xs text-base-content/60 block mt-0.5">September + February</span>
+          </span>
+        </button>
+      </form>
+      <form method="post" action="{% url 'tuition_setup_plan' %}" class="contents">
+        {% csrf_token %}
+        <input type="hidden" name="installment_count" value="9">
+        <button type="submit" class="btn btn-outline justify-start text-left h-auto py-4">
+          <span class="block">
+            <span class="font-medium block">Monthly (9 installments)</span>
+            <span class="text-xs text-base-content/60 block mt-0.5">September through May</span>
+          </span>
+        </button>
+      </form>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ----- Installments list (any enrollment with installments) ----- #}
+  {% if installments %}
+  <section class="rounded-lg border border-base-300 p-5 space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Your installments</h2>
+    <table class="table table-sm">
+      <thead>
+        <tr><th>#</th><th>Due</th><th class="text-right">Amount</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for inst in installments %}
+        <tr>
+          <td>{{ inst.sequence }}</td>
+          <td class="whitespace-nowrap">{{ inst.due_date|date:"M j, Y" }}</td>
+          <td class="text-right whitespace-nowrap">${{ inst.amount }}</td>
+          <td class="text-right">
+            {% if inst.paid %}
+              <span class="badge badge-success badge-sm">Paid {{ inst.paid_at|date:"M j" }}</span>
+            {% else %}
+              <form method="post" action="{% url 'tuition_pay_installment' inst.id %}" class="contents">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-xs">Pay →</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
   {% endif %}
 
   <form method="post" class="space-y-5">
