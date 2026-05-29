@@ -100,6 +100,23 @@ class Profile(models.Model):
         blank=True,
         help_text="Free-form city/region/country (e.g. 'Los Gatos, CA, USA').",
     )
+    location_lat = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Latitude geocoded from ``location`` for the Find-an-Analyst map (M11).",
+    )
+    location_lng = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Longitude geocoded from ``location``.",
+    )
+    accepting_patients = models.BooleanField(
+        default=True,
+        help_text=(
+            "Whether this member is currently accepting new patients/analysands. "
+            "Drives a pin filter on the Find-an-Analyst map."
+        ),
+    )
     phone = PhoneNumberField(
         blank=True,
         help_text="Stored in E.164 form. Parsed assuming US if no country code.",

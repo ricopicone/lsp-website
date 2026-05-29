@@ -50,6 +50,10 @@ class CommitteeMembership(models.Model):
         CO_CHAIR = "co_chair", _("Co-chair")
         SECRETARY = "secretary", _("Secretary")
         TREASURER = "treasurer", _("Treasurer")
+        # Staff positions
+        REFERRAL_COORDINATOR = "referral_coordinator", _("Referral Coordinator")
+        WEB_COORDINATOR = "web_coordinator", _("Web Coordinator")
+        ADMIN_ASSISTANT = "admin_assistant", _("Admin Assistant")
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

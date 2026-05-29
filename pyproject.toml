@@ -9,6 +9,7 @@ dependencies = [
     "django-environ>=0.13.0",
     "django-phonenumber-field[phonenumbers]>=8.0",
     "django-storages[s3]>=1.14",
+    "geopy>=2.4.1",
     "gunicorn>=23.0.0",
     "markdown>=3.10.2",
     "pillow>=12.2.0",

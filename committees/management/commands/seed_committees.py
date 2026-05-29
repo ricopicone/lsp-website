@@ -47,9 +47,15 @@ PROGRAMMING_COMMITTEE_2025_2026 = [
     ("John",       "Kreitzberg",           CommitteeMembership.Role.MEMBER),
 ]
 
+LSP_STAFF_2025_2026 = [
+    ("Diana",      "Cuello",               CommitteeMembership.Role.REFERRAL_COORDINATOR),
+    # Add Web Coordinator / Admin Assistant here when their User accounts exist.
+]
+
 ROSTERS = [
     ("board",                 BOARD_2025_2026,                 True),
     ("programming-committee", PROGRAMMING_COMMITTEE_2025_2026, True),
+    ("lsp-staff",             LSP_STAFF_2025_2026,             True),
 ]
 
 
