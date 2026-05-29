@@ -5,7 +5,10 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'vendor/leaflet-1.9.4.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/MarkerCluster-1.5.3.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/MarkerCluster.Default-1.5.3.css' %}">
 <script defer src="{% static 'vendor/leaflet-1.9.4.js' %}"></script>
+<script defer src="{% static 'vendor/leaflet.markercluster-1.5.3.js' %}"></script>
 {% endblock %}
 
 {% block content %}
@@ -91,7 +94,9 @@
       Everyone on the map is a member of LSP, but may not be a clinician or
       practicing currently. Many analysts work remotely by phone or video,
       so location is a starting point, not a constraint. Click a pin for the
-      member's directory page and contact information.
+      member's directory page and contact information — or browse the
+      <a href="{% url 'directory' %}" class="link link-primary">full Directory</a>
+      to see everyone in one list.
     </p>
 
     <div id="lsp-map"
@@ -145,13 +150,21 @@
       attribution: "© OpenStreetMap contributors",
     }).addTo(map);
 
+    // Cluster overlapping markers so a city with five members reads as
+    // a single cluster (clickable to spread or zoom).
+    var cluster = L.markerClusterGroup({
+      maxClusterRadius: 35,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+    });
+
     fetch(el.dataset.pinsUrl, { credentials: "same-origin" })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (!data || !data.pins || !data.pins.length) return;
         var bounds = [];
         data.pins.forEach(function (p) {
-          var marker = L.marker([p.lat, p.lng], { icon: lspIcon }).addTo(map);
+          var marker = L.marker([p.lat, p.lng], { icon: lspIcon });
           var photoHtml = p.headshot
             ? '<img src="' + p.headshot + '" alt="" style="width:48px;height:48px;border-radius:50%;object-fit:cover;float:left;margin-right:0.5rem">'
             : '';
@@ -164,8 +177,10 @@
               '<a href="/directory/' + p.slug + '/" style="font-size:0.85em">View profile →</a>' +
             '</div>'
           );
+          cluster.addLayer(marker);
           bounds.push([p.lat, p.lng]);
         });
+        map.addLayer(cluster);
         if (bounds.length) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 6 });
       })
       .catch(function () {

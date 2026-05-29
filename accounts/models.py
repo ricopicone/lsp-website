@@ -103,12 +103,27 @@ class Profile(models.Model):
     location_lat = models.FloatField(
         null=True,
         blank=True,
-        help_text="Latitude geocoded from ``location`` for the Find-an-Analyst map (M11).",
+        help_text=(
+            "Latitude of the *primary* geocoded location. For members with a "
+            "single location this is the only coord; for members listing two "
+            "(e.g. 'San Francisco & Palo Alto, CA') see ``location_pins`` for "
+            "the full set."
+        ),
     )
     location_lng = models.FloatField(
         null=True,
         blank=True,
-        help_text="Longitude geocoded from ``location``.",
+        help_text="Longitude of the primary geocoded location.",
+    )
+    location_pins = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "List of {lat, lng, label} dicts for the Find-an-Analyst map. "
+            "Populated by geocode_profiles by splitting ``location`` on "
+            "' & ', ' and ', or '/'. Empty list ⇒ render just (location_lat, "
+            "location_lng) as a single pin."
+        ),
     )
     accepting_patients = models.BooleanField(
         default=True,

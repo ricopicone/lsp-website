@@ -1,6 +1,12 @@
-"""Bulk-geocode ``Profile.location`` strings into ``location_lat`` / ``location_lng``.
+"""Bulk-geocode ``Profile.location`` strings.
 
-Idempotent: skips profiles that already have coords unless ``--force`` is set.
+For each profile, splits the location string into one or more sub-places
+(see accounts.geocoding.split_location), geocodes each, stores all
+results in ``Profile.location_pins`` as a list of {lat,lng,label} dicts,
+and writes the primary coord (first hit) to ``location_lat`` / ``location_lng``
+for backward compatibility.
+
+Idempotent: skips profiles that already have coords unless ``--force``.
 Respects Nominatim's 1 req/sec rate limit via geopy RateLimiter.
 """
 
@@ -9,12 +15,12 @@ from __future__ import annotations
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from accounts.geocoding import make_batch_geocoder
+from accounts.geocoding import make_batch_geocoder, split_location
 from accounts.models import Profile
 
 
 class Command(BaseCommand):
-    help = "Geocode Profile.location strings into lat/lng (Nominatim, polite)."
+    help = "Geocode Profile.location into location_lat/lng + location_pins."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -53,22 +59,40 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             for p in targets:
-                result = geocode(p.location)
-                if result is None:
+                pieces = split_location(p.location)
+                pins: list[dict] = []
+                for piece in pieces:
+                    result = geocode(piece)
+                    if result is None:
+                        self.stderr.write(self.style.WARNING(
+                            f"  miss: {p.user.first_name} {p.user.last_name} "
+                            f"({piece!r})"
+                        ))
+                        continue
+                    pins.append({
+                        "lat":   result.lat,
+                        "lng":   result.lng,
+                        "label": piece,
+                    })
+
+                if not pins:
                     misses += 1
-                    self.stderr.write(self.style.WARNING(
-                        f"  miss: {p.user.first_name} {p.user.last_name} "
-                        f"({p.location!r})"
-                    ))
                     continue
-                self.stdout.write(
-                    f"  {p.user.first_name} {p.user.last_name}: "
-                    f"{p.location!r} → ({result.lat:.4f}, {result.lng:.4f}) "
-                    f"[{result.formatted[:60]}…]"
+
+                pin_descr = ", ".join(
+                    f"{pin['label']}→({pin['lat']:.4f},{pin['lng']:.4f})"
+                    for pin in pins
                 )
-                p.location_lat = result.lat
-                p.location_lng = result.lng
-                p.save(update_fields=["location_lat", "location_lng"])
+                self.stdout.write(
+                    f"  {p.user.first_name} {p.user.last_name}: {pin_descr}"
+                )
+
+                p.location_pins = pins
+                # Keep primary lat/lng pointing at the first pin for any code
+                # that hasn't moved to location_pins yet.
+                p.location_lat = pins[0]["lat"]
+                p.location_lng = pins[0]["lng"]
+                p.save(update_fields=["location_pins", "location_lat", "location_lng"])
                 hits += 1
 
             if dry_run:
@@ -76,5 +100,5 @@ class Command(BaseCommand):
 
         prefix = "Would " if dry_run else ""
         self.stdout.write(self.style.SUCCESS(
-            f"{prefix}geocoded {hits}, missed {misses} of {len(targets)}."
+            f"{prefix}geocode {hits} profiles, miss {misses} of {len(targets)}."
         ))

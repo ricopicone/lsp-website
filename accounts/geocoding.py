@@ -2,10 +2,16 @@
 
 Uses Nominatim (OpenStreetMap) — no key, no cost, polite rate-limited use
 required by their TOS. The user-agent string identifies our app.
+
+``split_location`` lets a single ``Profile.location`` field carry several
+geocodable places — e.g. "San Francisco & Palo Alto, CA" becomes two
+queries, ["San Francisco, CA", "Palo Alto, CA"], each rendering its own
+pin on the map.
 """
 
 from __future__ import annotations
 
+import re
 from typing import NamedTuple
 
 from geopy.exc import GeocoderUnavailable, GeopyError
@@ -13,6 +19,33 @@ from geopy.extra.rate_limiter import RateLimiter
 from geopy.geocoders import Nominatim
 
 NOMINATIM_USER_AGENT = "lsp-website/1.0 (https://app.lacanschool.org)"
+
+#: Splits on " & ", " and ", or " / " — but NOT comma (commas separate
+#: city/state/country within a single place).
+_SPLIT_RE = re.compile(r"\s*(?:&| and | / )\s*", flags=re.IGNORECASE)
+
+
+def split_location(text: str) -> list[str]:
+    """Split a free-form location string into one or more place queries.
+
+    If the original ends with a regional suffix (", CA" or ", USA") and an
+    earlier sub-piece doesn't carry its own comma, the suffix propagates so
+    that "San Francisco & Palo Alto, CA" geocodes both halves to California
+    rather than risking a "Palo Alto" in another country.
+    """
+    text = text.strip()
+    parts = [p.strip() for p in _SPLIT_RE.split(text) if p.strip()]
+    if len(parts) <= 1:
+        return parts
+    last = parts[-1]
+    if "," in last:
+        suffix = last[last.find(","):]
+        out: list[str] = []
+        for p in parts[:-1]:
+            out.append(p if "," in p else p + suffix)
+        out.append(last)
+        return out
+    return parts
 
 
 class GeocodeResult(NamedTuple):

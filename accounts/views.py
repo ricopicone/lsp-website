@@ -126,8 +126,9 @@ def find_an_analyst(request):
 def find_an_analyst_pins(request):
     """JSON feed of geocoded public directory members for the Leaflet map.
 
-    Returns a GeoJSON-like ``features`` array. Members without lat/lng are
-    skipped — the map shows only what we've successfully geocoded.
+    Returns a flat ``pins`` array — one entry per geocoded *location*, not
+    per profile, so members who list two places (e.g. "San Francisco &
+    Palo Alto, CA") render as two markers.
     """
     qs = (
         Profile.objects
@@ -138,16 +139,23 @@ def find_an_analyst_pins(request):
     )
     pins = []
     for p in qs:
-        pins.append({
-            "name": f"{p.user.first_name} {p.user.last_name}".strip(),
-            "slug": p.directory_slug,
-            "role": p.get_role_display(),
-            "location": p.location,
-            "lat": p.location_lat,
-            "lng": p.location_lng,
-            "headshot": p.headshot.url if p.headshot else "",
-            "accepting": p.accepting_patients,
-        })
+        # location_pins is the canonical store (one entry per geocoded
+        # sub-place). Fall back to (location_lat, location_lng) as a single
+        # synthetic pin for profiles geocoded before multi-pin landed.
+        raw_pins = p.location_pins or [{
+            "lat": p.location_lat, "lng": p.location_lng, "label": p.location,
+        }]
+        for pin in raw_pins:
+            pins.append({
+                "name":      f"{p.user.first_name} {p.user.last_name}".strip(),
+                "slug":      p.directory_slug,
+                "role":      p.get_role_display(),
+                "location":  pin.get("label") or p.location,
+                "lat":       pin["lat"],
+                "lng":       pin["lng"],
+                "headshot":  p.headshot.url if p.headshot else "",
+                "accepting": p.accepting_patients,
+            })
     return JsonResponse({"pins": pins})
 
 

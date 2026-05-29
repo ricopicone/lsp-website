@@ -131,6 +131,34 @@ def test_directory_detail_404_for_unknown_slug(client):
     assert resp.status_code == 404
 
 
+def test_split_location_single():
+    from accounts.geocoding import split_location
+    assert split_location("Paris, France") == ["Paris, France"]
+    assert split_location("Beijing, China") == ["Beijing, China"]
+
+
+def test_split_location_ampersand_with_shared_suffix():
+    from accounts.geocoding import split_location
+    assert split_location("San Francisco & Palo Alto, CA") == [
+        "San Francisco, CA", "Palo Alto, CA",
+    ]
+
+
+def test_split_location_keeps_complete_addresses_intact():
+    from accounts.geocoding import split_location
+    assert split_location("Paris, France & New York, USA") == [
+        "Paris, France", "New York, USA",
+    ]
+
+
+def test_split_location_slash_and_and():
+    from accounts.geocoding import split_location
+    assert split_location("Berkeley / Oakland, CA") == ["Berkeley, CA", "Oakland, CA"]
+    assert split_location("San Francisco and Palo Alto, CA") == [
+        "San Francisco, CA", "Palo Alto, CA",
+    ]
+
+
 @pytest.mark.django_db
 def test_profile_is_in_directory_for_member_roles():
     u = User.objects.create_user(email="a@x.test")
