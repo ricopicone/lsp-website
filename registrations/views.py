@@ -82,10 +82,10 @@ def _create_registration(
     return reg
 
 
-#: Event types where unsettled-tuition status blocks registration (M7.5).
-#: Only ``special_event`` blocks in year 1. The set is intentionally a config
-#: point — flip more event types in (e.g. ``day_of_assembly``) as the policy
-#: evolves.
+#: Event types where COMMITTED-but-unpaid additionally blocks registration
+#: (M7.5). Only ``special_event`` for now — Days of Assembly, Working Days,
+#: Scholarly Seminars all let COMMITTED students through. The set is a
+#: deliberate config point; flip more event types in as the policy evolves.
 TUITION_BLOCKING_EVENT_TYPES = frozenset({"special_event"})
 
 
@@ -93,15 +93,22 @@ def _tuition_block_reason(user, event) -> str | None:
     """Return a human-readable reason if the user is blocked from registering
     for this event due to unsettled-tuition status, or None to allow.
 
-    Policy (M7.5): for in-training students looking at a special event,
-    block when the student either has no decision recorded OR has committed
-    to pay but hasn't actually paid / set up a payment plan yet. Other
-    statuses (PAYMENT_PLAN, PAID_IN_FULL, EXEMPT, SKIPPING) all allow —
-    SKIPPING students pay the regular event fee. Annual-program event types
-    are never blocked.
+    Two-layer policy (M7.5):
+
+    1. **Broad gate.** In-training students (pre-candidate / candidate /
+       pre-candidate-scholar / candidate-scholar) who have not yet
+       recorded a tuition decision for the current period are blocked
+       from registering for *any* event. Some decision — even SKIPPING
+       — must be on file before they can register for anything.
+
+    2. **Narrow gate.** On top of layer 1, in-training students with
+       status=COMMITTED (said they'll pay, but no payment received and
+       no payment plan set up) are additionally blocked from event
+       types in ``TUITION_BLOCKING_EVENT_TYPES``. This currently
+       targets only ``special_event``; we may extend later. Other
+       statuses (PAYMENT_PLAN, PAID_IN_FULL, EXEMPT, SKIPPING) all
+       pass — SKIPPING students pay the regular event fee.
     """
-    if event.event_type not in TUITION_BLOCKING_EVENT_TYPES:
-        return None
     profile = getattr(user, "profile", None)
     if not (profile and profile.owes_tuition):
         return None
@@ -112,10 +119,13 @@ def _tuition_block_reason(user, event) -> str | None:
     enr = profile.current_tuition_enrollment()
     if enr is None:
         return (
-            "Before registering for this special event, please record your "
-            f"tuition decision for {period.name}."
+            "Before registering for any event, please record your tuition "
+            f"decision for {period.name}. You'll be able to commit to pay, "
+            "set up a payment plan, or note that you're skipping tuition "
+            "this year — all options unlock registration."
         )
-    if enr.status == TuitionEnrollment.Status.COMMITTED:
+    if (event.event_type in TUITION_BLOCKING_EVENT_TYPES
+            and enr.status == TuitionEnrollment.Status.COMMITTED):
         return (
             "You committed to pay tuition for "
             f"{period.name} but we haven't received a payment or a payment "

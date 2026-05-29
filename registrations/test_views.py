@@ -541,10 +541,10 @@ def special_event_tier(special_event):
 
 
 @pytest.mark.django_db
-def test_special_event_blocks_in_training_student_without_decision(
+def test_undecided_in_training_student_is_blocked_from_special_event(
     client, special_event, special_event_tier,
 ):
-    """Candidate Analyst with no tuition decision can't register for a special event."""
+    """No-decision broad gate: special-event registration is blocked."""
     from accounts.models import Profile
     u = User.objects.create_user(email="cand@example.com", password="x")
     u.profile.role = Profile.Role.CANDIDATE
@@ -555,6 +555,54 @@ def test_special_event_blocks_in_training_student_without_decision(
     )
     assert resp.status_code == 403
     assert b"tuition decision" in resp.content
+
+
+@pytest.mark.django_db
+def test_undecided_in_training_student_is_blocked_from_seminar(
+    client, event, standard_tier,
+):
+    """Broad gate: an in-training student with no tuition decision can't
+    register for ANY event — seminars included. Once they pick any option
+    (commit / payment plan / skip), the seminar path opens."""
+    from accounts.models import Profile
+    u = User.objects.create_user(email="seminar-cand@example.com", password="x")
+    u.profile.role = Profile.Role.PRE_CANDIDATE
+    u.profile.save()
+    client.force_login(u)
+    resp = client.get(reverse("registrations:register", args=[event.slug]))
+    assert resp.status_code == 403
+    assert b"tuition decision" in resp.content
+
+
+@pytest.mark.django_db
+def test_undecided_non_in_training_user_is_not_blocked(client, event, standard_tier):
+    """Broad gate applies only to in-training roles — Analysts, Scholars,
+    Members, and external visitors are never blocked."""
+    from accounts.models import Profile
+    u = User.objects.create_user(email="analyst-uds@example.com", password="x")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    client.force_login(u)
+    resp = client.get(reverse("registrations:register", args=[event.slug]))
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_decision_unlocks_seminar_for_in_training_student(client, event, standard_tier):
+    """Any decision — even SKIPPING — clears the broad gate for seminars."""
+    from accounts.models import Profile
+    from payments.models import TuitionEnrollment, TuitionPeriod
+    u = User.objects.create_user(email="seminar-skip@example.com", password="x")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    period = TuitionPeriod.current()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=period,
+        status=TuitionEnrollment.Status.SKIPPING,
+    )
+    client.force_login(u)
+    resp = client.get(reverse("registrations:register", args=[event.slug]))
+    assert resp.status_code == 200
 
 
 @pytest.mark.django_db
