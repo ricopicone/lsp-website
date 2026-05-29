@@ -400,3 +400,151 @@ def test_treasurer_dashboard_requires_staff(client, current_period):
     resp = client.get("/treasurer/")
     # treasurer_dashboard uses user_passes_test which redirects to login.
     assert resp.status_code == 302
+
+
+# --- Auto-flip on tuition payment success -------------------------------
+
+
+@pytest.mark.django_db
+def test_paying_only_installment_flips_enrollment_to_paid_in_full(current_period):
+    """Pay-in-full (single installment): payment success → enrollment becomes PAID_IN_FULL."""
+    from decimal import Decimal as D
+
+    from payments.models import Payment, TuitionInstallment
+    from payments.operations import complete_payment
+
+    u = _mk_candidate("pf@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1,
+        due_date=current_period.start_date, amount=D("800.00"),
+    )
+    payment = Payment.objects.create(
+        payment_type=Payment.Type.TUITION,
+        user=u, amount=D("800.00"),
+        status=Payment.Status.PENDING,
+        tuition_installment=inst,
+    )
+
+    complete_payment(payment)
+
+    inst.refresh_from_db()
+    enr.refresh_from_db()
+    assert inst.paid is True
+    assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL
+
+
+@pytest.mark.django_db
+def test_paying_first_of_two_installments_keeps_payment_plan_status(current_period):
+    """With multiple installments, paying one doesn't flip the enrollment yet."""
+    from decimal import Decimal as D
+
+    from payments.models import Payment, TuitionInstallment
+    from payments.operations import complete_payment
+
+    u = _mk_candidate("pp@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst1 = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1,
+        due_date=current_period.start_date, amount=D("400.00"),
+    )
+    TuitionInstallment.objects.create(
+        enrollment=enr, sequence=2,
+        due_date=current_period.start_date, amount=D("400.00"),
+    )
+    payment = Payment.objects.create(
+        payment_type=Payment.Type.TUITION,
+        user=u, amount=D("400.00"),
+        status=Payment.Status.PENDING,
+        tuition_installment=inst1,
+    )
+
+    complete_payment(payment)
+
+    inst1.refresh_from_db()
+    enr.refresh_from_db()
+    assert inst1.paid is True
+    # Still PAYMENT_PLAN because installment 2 is unpaid.
+    assert enr.status == TuitionEnrollment.Status.PAYMENT_PLAN
+
+
+@pytest.mark.django_db
+def test_paying_last_installment_flips_enrollment_to_paid_in_full(current_period):
+    """Paying the final unpaid installment flips PAYMENT_PLAN → PAID_IN_FULL."""
+    from decimal import Decimal as D
+
+    from payments.models import Payment, TuitionInstallment
+    from payments.operations import complete_payment
+
+    u = _mk_candidate("last@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst1 = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1,
+        due_date=current_period.start_date, amount=D("400.00"),
+        paid=True,  # already paid (pre-existing)
+    )
+    inst2 = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=2,
+        due_date=current_period.start_date, amount=D("400.00"),
+    )
+    payment = Payment.objects.create(
+        payment_type=Payment.Type.TUITION,
+        user=u, amount=D("400.00"),
+        status=Payment.Status.PENDING,
+        tuition_installment=inst2,
+    )
+
+    complete_payment(payment)
+
+    inst1.refresh_from_db()
+    inst2.refresh_from_db()
+    enr.refresh_from_db()
+    assert inst1.paid is True
+    assert inst2.paid is True
+    assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL
+
+
+@pytest.mark.django_db
+def test_complete_payment_is_idempotent_for_tuition(current_period):
+    """Calling complete_payment twice is a no-op the second time."""
+    from decimal import Decimal as D
+
+    from payments.models import Payment, TuitionInstallment
+    from payments.operations import complete_payment
+
+    u = _mk_candidate("idem@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1,
+        due_date=current_period.start_date, amount=D("800.00"),
+    )
+    payment = Payment.objects.create(
+        payment_type=Payment.Type.TUITION,
+        user=u, amount=D("800.00"),
+        status=Payment.Status.PENDING,
+        tuition_installment=inst,
+    )
+
+    complete_payment(payment)
+    payment.refresh_from_db()
+    inst.refresh_from_db()
+    first_paid_at = inst.paid_at
+
+    # Re-call: should not change anything.
+    complete_payment(payment)
+    inst.refresh_from_db()
+    enr.refresh_from_db()
+    assert inst.paid_at == first_paid_at
+    assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL

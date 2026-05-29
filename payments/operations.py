@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 def complete_payment(payment: Payment) -> None:
     """Apply all success-side-effects: status, registration flip, receipt, emails.
 
-    Idempotent. Email failures don't roll back the DB transition.
+    For TUITION payments, additionally mark the linked installment as paid
+    and flip the enrollment to PAID_IN_FULL when all of its installments are
+    paid. Idempotent. Email failures don't roll back the DB transition.
     """
     with transaction.atomic():
         payment.mark_succeeded()
@@ -35,6 +37,8 @@ def complete_payment(payment: Payment) -> None:
                 pk=payment.registration_id,
                 status=Registration.Status.AWAITING_PAYMENT,
             ).update(status=Registration.Status.PAID)
+        if payment.payment_type == Payment.Type.TUITION and payment.tuition_installment_id:
+            _apply_tuition_payment_success(payment)
         if not hasattr(payment, "receipt"):
             Receipt.create_for_payment(payment)
 
@@ -51,3 +55,21 @@ def complete_payment(payment: Payment) -> None:
             "DB state retained.",
             payment.id,
         )
+
+
+def _apply_tuition_payment_success(payment: Payment) -> None:
+    """Mark the installment paid; flip enrollment to PAID_IN_FULL if all paid.
+
+    Idempotent — re-marking a paid installment is a no-op, and flipping
+    an already-paid_in_full enrollment is a no-op.
+    """
+    from .models import TuitionEnrollment, TuitionInstallment
+    installment = TuitionInstallment.objects.select_related(
+        "enrollment",
+    ).get(pk=payment.tuition_installment_id)
+    installment.mark_paid()
+    enrollment = installment.enrollment
+    unpaid_remaining = enrollment.installments.filter(paid=False).exists()
+    if not unpaid_remaining and enrollment.status != TuitionEnrollment.Status.PAID_IN_FULL:
+        enrollment.status = TuitionEnrollment.Status.PAID_IN_FULL
+        enrollment.save(update_fields=("status",))
