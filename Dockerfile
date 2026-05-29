@@ -16,6 +16,7 @@ RUN npm ci --no-audit --no-fund
 COPY assets/css ./assets/css
 # Templates are scanned for class names — copy them in so purging works correctly.
 COPY accounts/templates ./accounts/templates
+COPY content/templates ./content/templates
 COPY core/templates ./core/templates
 COPY events/templates ./events/templates
 COPY payments/templates ./payments/templates
