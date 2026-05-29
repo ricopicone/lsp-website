@@ -43,10 +43,12 @@
           {% url 'about' as url_about %}
           {% url 'events:list' as url_events %}
           {% url 'directory' as url_dir %}
+          {% url 'find_an_analyst' as url_fan %}
           {% url 'core:calendar' as url_cal %}
           <a href="{{ url_about }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_about in cur %}text-primary font-medium{% endif %}">About</a>
           <a href="{{ url_events }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_events in cur %}text-primary font-medium{% endif %}">Events</a>
           <a href="{{ url_dir }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_dir in cur %}text-primary font-medium{% endif %}">Directory</a>
+          <a href="{{ url_fan }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_fan in cur %}text-primary font-medium{% endif %}">Find an Analyst</a>
           <a href="{{ url_cal }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_cal in cur %}text-primary font-medium{% endif %}">Calendar</a>
         {% endwith %}
       </nav>
@@ -94,6 +96,7 @@
             <li class="sm:hidden"><a href="{% url 'about' %}">About</a></li>
             <li class="sm:hidden"><a href="{% url 'events:list' %}">Events</a></li>
             <li class="sm:hidden"><a href="{% url 'directory' %}">Directory</a></li>
+            <li class="sm:hidden"><a href="{% url 'find_an_analyst' %}">Find an Analyst</a></li>
             <li class="sm:hidden"><a href="{% url 'core:calendar' %}">Calendar</a></li>
             <li class="sm:hidden"><hr class="border-base-300/60 my-1"></li>
 

@@ -1,0 +1,111 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Find an Analyst — LSP{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'vendor/leaflet-1.9.4.css' %}">
+<script defer src="{% static 'vendor/leaflet-1.9.4.js' %}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-10">
+
+  <header class="space-y-3 max-w-3xl">
+    <h1 class="font-serif text-3xl sm:text-4xl text-base-content leading-[1.15] tracking-tight">
+      Find an Analyst
+    </h1>
+    <p class="text-base sm:text-lg text-base-content/70 leading-relaxed">
+      If you'd like the School's referral coordinator to send you a list of
+      available clinicians, fill out the form below. Or, if you'd prefer to
+      reach out to a member directly, use the map further down to find an
+      LSP member near you.
+    </p>
+  </header>
+
+  {# ----- Referral coordinator form (placeholder until phase D lands) ----- #}
+  <section class="max-w-2xl">
+    <div class="rounded-lg border border-base-300 bg-base-100 p-6 sm:p-8 space-y-3">
+      <h2 class="font-serif text-xl text-base-content">Referral coordinator request</h2>
+      <p class="text-sm text-base-content/70">
+        Coming soon — for now, reach the referral coordinator directly at
+        <a href="mailto:referrals@lacanschool.org" class="link link-primary">referrals@lacanschool.org</a>.
+      </p>
+    </div>
+  </section>
+
+  {# ----- Direct map ----- #}
+  <section class="space-y-3">
+    <h2 class="font-serif text-2xl text-base-content border-b border-base-300/60 pb-2">
+      Contact a member directly
+    </h2>
+    <p class="text-sm text-base-content/70 max-w-3xl">
+      Everyone on the map is a member of LSP, but may not be a clinician or
+      practicing currently. Many analysts work remotely by phone or video,
+      so location is a starting point, not a constraint. Click a pin for the
+      member's directory page and contact information.
+    </p>
+
+    <div id="lsp-map"
+         class="rounded-lg border border-base-300 bg-base-200"
+         style="height: 32rem;"
+         data-pins-url="{% url 'find_an_analyst_pins' %}"></div>
+
+    <p id="lsp-map-fallback" class="text-sm text-base-content/60" hidden>
+      Map couldn't load — see the <a href="{% url 'directory' %}" class="link link-primary">full directory</a> instead.
+    </p>
+  </section>
+
+</div>
+
+<script>
+  window.addEventListener("DOMContentLoaded", function () {
+    var el = document.getElementById("lsp-map");
+    if (!el || typeof L === "undefined") {
+      var fb = document.getElementById("lsp-map-fallback");
+      if (fb) fb.hidden = false;
+      return;
+    }
+
+    var map = L.map(el, { worldCopyJump: true }).setView([20, 0], 2);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: "© OpenStreetMap contributors",
+    }).addTo(map);
+
+    fetch(el.dataset.pinsUrl, { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.pins || !data.pins.length) return;
+        var bounds = [];
+        data.pins.forEach(function (p) {
+          var marker = L.marker([p.lat, p.lng]).addTo(map);
+          var photoHtml = p.headshot
+            ? '<img src="' + p.headshot + '" alt="" style="width:48px;height:48px;border-radius:50%;object-fit:cover;float:left;margin-right:0.5rem">'
+            : '';
+          marker.bindPopup(
+            photoHtml +
+            '<div style="overflow:hidden">' +
+              '<strong>' + escapeHtml(p.name) + '</strong><br>' +
+              '<span style="font-size:0.85em;color:#666">' + escapeHtml(p.role) + '</span><br>' +
+              (p.location ? '<span style="font-size:0.85em">' + escapeHtml(p.location) + '</span><br>' : '') +
+              '<a href="/directory/' + p.slug + '/" style="font-size:0.85em">View profile →</a>' +
+            '</div>'
+          );
+          bounds.push([p.lat, p.lng]);
+        });
+        if (bounds.length) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 6 });
+      })
+      .catch(function () {
+        var fb = document.getElementById("lsp-map-fallback");
+        if (fb) fb.hidden = false;
+      });
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+  });
+</script>
+{% endblock %}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django.contrib.auth import login
 from django.db.models import Prefetch
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 
 from committees.models import CommitteeMembership
@@ -94,6 +94,39 @@ def directory_detail(request, slug: str):
                 {"profile": profile, "section_label": dict(DIRECTORY_SECTIONS)[profile.role]},
             )
     raise Http404("Member not found")
+
+
+def find_an_analyst(request):
+    """Public Find-an-Analyst page: referral form + interactive map of members."""
+    return render(request, "accounts/find_an_analyst.html", {})
+
+
+def find_an_analyst_pins(request):
+    """JSON feed of geocoded public directory members for the Leaflet map.
+
+    Returns a GeoJSON-like ``features`` array. Members without lat/lng are
+    skipped — the map shows only what we've successfully geocoded.
+    """
+    qs = (
+        Profile.objects
+        .filter(role__in=Profile.DIRECTORY_ROLES)
+        .exclude(location_lat__isnull=True)
+        .exclude(location_lng__isnull=True)
+        .select_related("user")
+    )
+    pins = []
+    for p in qs:
+        pins.append({
+            "name": f"{p.user.first_name} {p.user.last_name}".strip(),
+            "slug": p.directory_slug,
+            "role": p.get_role_display(),
+            "location": p.location,
+            "lat": p.location_lat,
+            "lng": p.location_lng,
+            "headshot": p.headshot.url if p.headshot else "",
+            "accepting": p.accepting_patients,
+        })
+    return JsonResponse({"pins": pins})
 
 
 def _safe_next(request) -> str | None:
