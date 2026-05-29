@@ -54,13 +54,18 @@
    The host is a plain inline span — no layout changes when inserted, so the
    heading never re-wraps. As the gesture fires, the host transitions to an
    outlined trace (text-stroke + transparent fill); a separate, fixed-position
-   clone is drawn from the document body and animates down the viewport. */
+   clone is drawn from the document body and animates down the viewport.
+
+   --lsp-trace-color is set per-host in JS from the host's computed color, so
+   the stroke survives the fill-color → transparent transition (using
+   currentColor for the stroke would fade with the fill and leave nothing). */
 .lsp-letter-host {
-  /* No layout-altering properties: stays inline like the original character. */
+  -webkit-text-stroke-color: var(--lsp-trace-color, currentColor);
+  -webkit-text-stroke-width: 0;
   transition: color 600ms ease-out, -webkit-text-stroke-width 600ms ease-out;
 }
 .lsp-letter-host.is-traced {
-  -webkit-text-stroke: 0.7px currentColor;
+  -webkit-text-stroke-width: 0.9px;
   color: transparent;
 }
 .lsp-falling-letter {

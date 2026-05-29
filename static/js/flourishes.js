@@ -173,6 +173,12 @@
     clone.style.lineHeight  = hostStyle.lineHeight;
     document.body.appendChild(clone);
 
+    // Pass the host's computed text color through as a CSS variable, so the
+    // outline stroke keeps that color even as the fill transitions to
+    // transparent (otherwise currentColor on the stroke would fade with the
+    // fill and the trace would disappear).
+    host.style.setProperty("--lsp-trace-color", hostStyle.color);
+
     // A tick later, switch the host to outline mode (so the letter reads as
     // having "left its outline behind") while the clone falls.
     setTimeout(function () { host.classList.add("is-traced"); }, 200);
