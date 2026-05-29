@@ -19,15 +19,21 @@
 
   <section class="max-w-2xl mx-auto pt-4" aria-labelledby="contact-heading">
     <h2 id="contact-heading" class="sr-only">Contact</h2>
-    <address class="not-italic rounded-lg border border-base-300 bg-base-100 p-8 sm:p-10">
-      <div class="font-serif text-lg text-base-content leading-tight">Lacanian School of Psychoanalysis</div>
-      <div class="mt-3 text-sm text-base-content/80 leading-relaxed">
-        4960 W. Washington Blvd<br>
-        PO Box 78374<br>
-        Los Angeles, CA 90016
-      </div>
-      <div class="mt-6 pt-6 border-t border-base-300/60 text-sm">
-        <a href="mailto:admin@lacanschool.org" class="link link-primary">admin@lacanschool.org</a>
+    <address class="not-italic rounded-lg border border-base-300 bg-base-100 px-10 py-10 sm:px-14 sm:py-12 text-center">
+      {% comment %}
+        Inline-block centers the text block horizontally inside the card,
+        while text-left keeps each line flush-left to the school name.
+      {% endcomment %}
+      <div class="inline-block text-left">
+        <div class="font-serif text-lg text-base-content leading-tight">Lacanian School of Psychoanalysis</div>
+        <div class="mt-3 text-sm text-base-content/80 leading-relaxed">
+          4960 W. Washington Blvd<br>
+          PO Box 78374<br>
+          Los Angeles, CA 90016
+        </div>
+        <div class="mt-6 pt-6 border-t border-base-300/60 text-sm">
+          <a href="mailto:admin@lacanschool.org" class="link link-primary">admin@lacanschool.org</a>
+        </div>
       </div>
     </address>
 
