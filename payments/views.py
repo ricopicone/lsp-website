@@ -177,30 +177,53 @@ def _treasurer_dues_context() -> dict:
 @login_required
 @user_passes_test(_is_staff)
 def treasurer_settings(request):
-    """Settings tab — edit tuition + dues amounts for the current period."""
-    from .forms import TreasurerSettingsForm
-    dues_period = DuesPeriod.current()
-    tuition_period = TuitionPeriod.current()
+    """Settings tab — edit dues + tuition amounts for every academic year.
+
+    Two formsets: one for every DuesPeriod row, one for every
+    TuitionPeriod row. Single submit saves all changes atomically.
+    """
+    from django.forms import modelformset_factory
+
+    from .forms import DuesPeriodRowForm, TuitionPeriodRowForm
+    dues_qs = DuesPeriod.objects.order_by("-start_date")
+    tuition_qs = TuitionPeriod.objects.order_by("-start_date")
+
+    DuesFormSet = modelformset_factory(
+        DuesPeriod, form=DuesPeriodRowForm, extra=0,
+    )
+    TuitionFormSet = modelformset_factory(
+        TuitionPeriod, form=TuitionPeriodRowForm, extra=0,
+    )
 
     if request.method == "POST":
-        form = TreasurerSettingsForm(
-            request.POST, dues_period=dues_period, tuition_period=tuition_period,
+        dues_formset = DuesFormSet(
+            request.POST, queryset=dues_qs, prefix="dues",
         )
-        if form.is_valid():
-            form.save()
-            return redirect(
-                request.path + "?saved=1#saved"
-            )
+        tuition_formset = TuitionFormSet(
+            request.POST, queryset=tuition_qs, prefix="tuition",
+        )
+        if dues_formset.is_valid() and tuition_formset.is_valid():
+            with transaction.atomic():
+                dues_formset.save()
+                tuition_formset.save()
+            return redirect(request.path + "?saved=1#saved")
     else:
-        form = TreasurerSettingsForm(
-            dues_period=dues_period, tuition_period=tuition_period,
-        )
+        dues_formset = DuesFormSet(queryset=dues_qs, prefix="dues")
+        tuition_formset = TuitionFormSet(queryset=tuition_qs, prefix="tuition")
+
+    # Zip each form with its instance so the template can render the AY
+    # name and date window alongside the editable fields.
+    dues_rows = list(zip(dues_formset.forms, dues_qs))
+    tuition_rows = list(zip(tuition_formset.forms, tuition_qs))
 
     return _treasurer_render(request, "settings", "payments/treasurer/settings.html", {
-        "form":           form,
-        "dues_period":    dues_period,
-        "tuition_period": tuition_period,
-        "saved":          request.GET.get("saved") == "1",
+        "dues_formset":         dues_formset,
+        "tuition_formset":      tuition_formset,
+        "dues_rows":            dues_rows,
+        "tuition_rows":         tuition_rows,
+        "current_dues_period":  DuesPeriod.current(),
+        "current_tuition_period": TuitionPeriod.current(),
+        "saved":                request.GET.get("saved") == "1",
     })
 
 

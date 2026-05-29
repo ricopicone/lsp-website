@@ -424,6 +424,50 @@ def test_treasurer_tabs_all_require_staff(client, current_period):
         assert client.get(reverse(name)).status_code == 302
 
 
+def _settings_post_data(
+    dues_periods, tuition_periods,
+    *, dues_overrides=None, tuition_overrides=None,
+):
+    """Build a flat POST dict for the treasurer-settings formsets.
+
+    `dues_overrides` / `tuition_overrides` are dicts keyed by period.id
+    that override the default per-row values.
+    """
+    dues_overrides = dues_overrides or {}
+    tuition_overrides = tuition_overrides or {}
+    data = {
+        "dues-TOTAL_FORMS":      str(len(dues_periods)),
+        "dues-INITIAL_FORMS":    str(len(dues_periods)),
+        "dues-MIN_NUM_FORMS":    "0",
+        "dues-MAX_NUM_FORMS":    "1000",
+        "tuition-TOTAL_FORMS":   str(len(tuition_periods)),
+        "tuition-INITIAL_FORMS": str(len(tuition_periods)),
+        "tuition-MIN_NUM_FORMS": "0",
+        "tuition-MAX_NUM_FORMS": "1000",
+    }
+    for i, p in enumerate(dues_periods):
+        row = {
+            "dues_amount_pre_candidate": str(p.dues_amount_pre_candidate),
+            "dues_amount_candidate":     str(p.dues_amount_candidate),
+            "dues_amount_analyst":       str(p.dues_amount_analyst),
+            "reminder_interval_days":    str(p.reminder_interval_days),
+        }
+        row.update(dues_overrides.get(p.id, {}))
+        for k, v in row.items():
+            data[f"dues-{i}-{k}"] = v
+        data[f"dues-{i}-id"] = str(p.id)
+    for i, p in enumerate(tuition_periods):
+        row = {
+            "tuition_amount":         str(p.tuition_amount),
+            "reminder_interval_days": str(p.reminder_interval_days),
+        }
+        row.update(tuition_overrides.get(p.id, {}))
+        for k, v in row.items():
+            data[f"tuition-{i}-{k}"] = v
+        data[f"tuition-{i}-id"] = str(p.id)
+    return data
+
+
 @pytest.mark.django_db
 def test_treasurer_settings_renders_with_form(
     client, staff_user, current_period,
@@ -434,9 +478,9 @@ def test_treasurer_settings_renders_with_form(
     body = resp.content
     assert b"Dues" in body
     assert b"Tuition" in body
-    # Form fields by name.
-    for field in (b"dues_pre_candidate", b"dues_candidate",
-                  b"dues_analyst", b"tuition_amount"):
+    # Form fields by formset-prefixed name.
+    for field in (b"dues-0-dues_amount_pre_candidate", b"dues-0-dues_amount_candidate",
+                  b"dues-0-dues_amount_analyst", b"tuition-0-tuition_amount"):
         assert field in body
 
 
@@ -445,18 +489,21 @@ def test_treasurer_settings_post_updates_both_periods(
     client, staff_user, current_period,
 ):
     from payments.models import DuesPeriod
-
     dues_period = DuesPeriod.current()
     assert dues_period is not None
     client.force_login(staff_user)
-    resp = client.post(reverse("treasurer_settings"), {
-        "dues_pre_candidate": "60",
-        "dues_candidate":     "120",
-        "dues_analyst":       "180",
-        "tuition_amount":     "850",
-        "dues_reminder_interval_days":    "7",
-        "tuition_reminder_interval_days": "7",
-    })
+    dues_periods    = list(DuesPeriod.objects.order_by("-start_date"))
+    tuition_periods = list(TuitionPeriod.objects.order_by("-start_date"))
+    data = _settings_post_data(
+        dues_periods, tuition_periods,
+        dues_overrides={dues_period.id: {
+            "dues_amount_pre_candidate": "60",
+            "dues_amount_candidate":     "120",
+            "dues_amount_analyst":       "180",
+        }},
+        tuition_overrides={current_period.id: {"tuition_amount": "850"}},
+    )
+    resp = client.post(reverse("treasurer_settings"), data)
     assert resp.status_code == 302
     assert "saved=1" in resp.url
     dues_period.refresh_from_db()
@@ -471,15 +518,16 @@ def test_treasurer_settings_post_updates_both_periods(
 def test_treasurer_settings_rejects_negative_amounts(
     client, staff_user, current_period,
 ):
+    from payments.models import DuesPeriod
+    dues_period = DuesPeriod.current()
     client.force_login(staff_user)
-    resp = client.post(reverse("treasurer_settings"), {
-        "dues_pre_candidate": "-1",
-        "dues_candidate":     "100",
-        "dues_analyst":       "150",
-        "tuition_amount":     "800",
-        "dues_reminder_interval_days":    "7",
-        "tuition_reminder_interval_days": "7",
-    })
+    dues_periods    = list(DuesPeriod.objects.order_by("-start_date"))
+    tuition_periods = list(TuitionPeriod.objects.order_by("-start_date"))
+    data = _settings_post_data(
+        dues_periods, tuition_periods,
+        dues_overrides={dues_period.id: {"dues_amount_pre_candidate": "-1"}},
+    )
+    resp = client.post(reverse("treasurer_settings"), data)
     assert resp.status_code == 200  # form re-renders with errors
 
 
@@ -489,17 +537,16 @@ def test_treasurer_settings_saves_reminder_cadence(
 ):
     """Cadence inputs round-trip to both DuesPeriod and TuitionPeriod."""
     from payments.models import DuesPeriod
-
     dues_period = DuesPeriod.current()
     client.force_login(staff_user)
-    resp = client.post(reverse("treasurer_settings"), {
-        "dues_pre_candidate": "50",
-        "dues_candidate":     "100",
-        "dues_analyst":       "150",
-        "tuition_amount":     "800",
-        "dues_reminder_interval_days":    "14",
-        "tuition_reminder_interval_days": "10",
-    })
+    dues_periods    = list(DuesPeriod.objects.order_by("-start_date"))
+    tuition_periods = list(TuitionPeriod.objects.order_by("-start_date"))
+    data = _settings_post_data(
+        dues_periods, tuition_periods,
+        dues_overrides={dues_period.id: {"reminder_interval_days": "14"}},
+        tuition_overrides={current_period.id: {"reminder_interval_days": "10"}},
+    )
+    resp = client.post(reverse("treasurer_settings"), data)
     assert resp.status_code == 302
     dues_period.refresh_from_db()
     current_period.refresh_from_db()
@@ -544,8 +591,8 @@ def test_treasurer_settings_handles_missing_periods(client, staff_user):
     resp = client.get(reverse("treasurer_settings"))
     assert resp.status_code == 200
     body = resp.content
-    # Both sections show a polite "no academic year configured" message.
-    assert body.count(b"No current academic year is configured") == 2
+    assert b"No academic years configured for dues yet" in body
+    assert b"No academic years configured for tuition yet" in body
 
 
 # --- Auto-flip on tuition payment success -------------------------------

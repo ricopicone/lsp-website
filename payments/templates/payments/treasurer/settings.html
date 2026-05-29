@@ -1,6 +1,6 @@
 {% extends "payments/treasurer/base.html" %}
 {% block tab_content %}
-<div class="space-y-6 max-w-2xl">
+<div class="space-y-8 max-w-4xl">
 
   {% if saved %}
   <div id="saved" role="alert" class="alert alert-success">
@@ -9,107 +9,153 @@
   {% endif %}
 
   <p class="text-sm text-base-content/60">
-    Edit dues and tuition amounts for the current academic year.
-    Adjustments take effect immediately for new payments and reminders.
+    Edit dues and tuition amounts and reminder cadence for any academic year.
+    The current year is the one with a green dot. Changes take effect
+    immediately for new payments and reminders.
   </p>
 
-  <form method="post" class="space-y-8">
+  <form method="post" class="space-y-10">
     {% csrf_token %}
+    {{ dues_formset.management_form }}
+    {{ tuition_formset.management_form }}
 
+    {% comment %}Dues rows (one per academic year){% endcomment %}
     <section class="space-y-3">
       <header>
         <h2 class="font-serif text-xl text-base-content">Dues</h2>
-        {% if dues_period %}
-        <p class="text-sm text-base-content/60">
-          {{ dues_period.name }} ·
-          due {{ dues_period.due_date|date:"M j, Y" }} ·
-          {{ dues_period.start_date|date:"M j, Y" }} – {{ dues_period.end_date|date:"M j, Y" }}.
-        </p>
-        {% else %}
-        <p class="text-sm text-warning">
-          No current academic year is configured for dues yet.
-        </p>
-        {% endif %}
       </header>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {% for f in form %}
-        {% if f.name == "dues_pre_candidate" or f.name == "dues_candidate" or f.name == "dues_analyst" %}
-        <div>
-          <label for="{{ f.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
-            {{ f.label }}
-          </label>
-          <div class="input input-bordered flex items-center gap-1">
-            <span class="text-base-content/60">$</span>
-            {{ f }}
-          </div>
-          {% if f.errors %}<p class="text-error text-xs mt-1">{{ f.errors|join:", " }}</p>{% endif %}
-        </div>
-        {% endif %}
-        {% endfor %}
+      {% if dues_rows %}
+      <div class="overflow-x-auto rounded-lg border border-base-300">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Academic year</th>
+              <th>Pre-cand</th>
+              <th>Cand</th>
+              <th>Analyst</th>
+              <th>Reminder cadence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for form, period in dues_rows %}
+            <tr>
+              <td class="align-top">
+                <div class="flex items-center gap-2">
+                  {% if period == current_dues_period %}
+                  <span class="inline-block w-2 h-2 rounded-full bg-success" title="Current academic year"></span>
+                  {% endif %}
+                  <div>
+                    <div class="font-medium">{{ period.name }}</div>
+                    <div class="text-xs text-base-content/60">
+                      due {{ period.due_date|date:"M j, Y" }}
+                    </div>
+                  </div>
+                </div>
+                {{ form.id }}
+                {% if form.non_field_errors %}<p class="text-error text-xs">{{ form.non_field_errors|join:", " }}</p>{% endif %}
+              </td>
+              <td>
+                <div class="input input-bordered input-sm flex items-center gap-1 w-28">
+                  <span class="text-base-content/60">$</span>
+                  {{ form.dues_amount_pre_candidate }}
+                </div>
+                {% if form.dues_amount_pre_candidate.errors %}<p class="text-error text-xs mt-1">{{ form.dues_amount_pre_candidate.errors|join:", " }}</p>{% endif %}
+              </td>
+              <td>
+                <div class="input input-bordered input-sm flex items-center gap-1 w-28">
+                  <span class="text-base-content/60">$</span>
+                  {{ form.dues_amount_candidate }}
+                </div>
+                {% if form.dues_amount_candidate.errors %}<p class="text-error text-xs mt-1">{{ form.dues_amount_candidate.errors|join:", " }}</p>{% endif %}
+              </td>
+              <td>
+                <div class="input input-bordered input-sm flex items-center gap-1 w-28">
+                  <span class="text-base-content/60">$</span>
+                  {{ form.dues_amount_analyst }}
+                </div>
+                {% if form.dues_amount_analyst.errors %}<p class="text-error text-xs mt-1">{{ form.dues_amount_analyst.errors|join:", " }}</p>{% endif %}
+              </td>
+              <td>
+                <div class="input input-bordered input-sm flex items-center gap-1 w-28">
+                  {{ form.reminder_interval_days }}
+                  <span class="text-base-content/60 text-xs">days</span>
+                </div>
+                {% if form.reminder_interval_days.errors %}<p class="text-error text-xs mt-1">{{ form.reminder_interval_days.errors|join:", " }}</p>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
-      <div class="max-w-xs">
-        <label for="{{ form.dues_reminder_interval_days.id_for_label }}"
-               class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
-          {{ form.dues_reminder_interval_days.label }}
-        </label>
-        <div class="input input-bordered flex items-center gap-1">
-          {{ form.dues_reminder_interval_days }}
-          <span class="text-base-content/60 text-sm">days</span>
-        </div>
-        <p class="text-xs text-base-content/60 mt-1">{{ form.dues_reminder_interval_days.help_text }}</p>
-        {% if form.dues_reminder_interval_days.errors %}
-        <p class="text-error text-xs mt-1">{{ form.dues_reminder_interval_days.errors|join:", " }}</p>
-        {% endif %}
-      </div>
+      {% else %}
+      <p class="text-sm text-warning">
+        No academic years configured for dues yet.
+      </p>
+      {% endif %}
     </section>
 
+    {% comment %}Tuition rows{% endcomment %}
     <section class="space-y-3">
       <header>
         <h2 class="font-serif text-xl text-base-content">Tuition</h2>
-        {% if tuition_period %}
-        <p class="text-sm text-base-content/60">
-          {{ tuition_period.name }} ·
-          decisions due {{ tuition_period.decision_due_date|date:"M j, Y" }} ·
-          {{ tuition_period.start_date|date:"M j, Y" }} – {{ tuition_period.end_date|date:"M j, Y" }}.
-        </p>
-        {% else %}
-        <p class="text-sm text-warning">
-          No current academic year is configured for tuition yet.
-        </p>
-        {% endif %}
       </header>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div>
-          <label for="{{ form.tuition_amount.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
-            {{ form.tuition_amount.label }}
-          </label>
-          <div class="input input-bordered flex items-center gap-1">
-            <span class="text-base-content/60">$</span>
-            {{ form.tuition_amount }}
-          </div>
-          {% if form.tuition_amount.errors %}<p class="text-error text-xs mt-1">{{ form.tuition_amount.errors|join:", " }}</p>{% endif %}
-        </div>
+      {% if tuition_rows %}
+      <div class="overflow-x-auto rounded-lg border border-base-300">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Academic year</th>
+              <th>Annual amount</th>
+              <th>Reminder cadence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for form, period in tuition_rows %}
+            <tr>
+              <td class="align-top">
+                <div class="flex items-center gap-2">
+                  {% if period == current_tuition_period %}
+                  <span class="inline-block w-2 h-2 rounded-full bg-success" title="Current academic year"></span>
+                  {% endif %}
+                  <div>
+                    <div class="font-medium">{{ period.name }}</div>
+                    <div class="text-xs text-base-content/60">
+                      decisions due {{ period.decision_due_date|date:"M j, Y" }}
+                    </div>
+                  </div>
+                </div>
+                {{ form.id }}
+              </td>
+              <td>
+                <div class="input input-bordered input-sm flex items-center gap-1 w-28">
+                  <span class="text-base-content/60">$</span>
+                  {{ form.tuition_amount }}
+                </div>
+                {% if form.tuition_amount.errors %}<p class="text-error text-xs mt-1">{{ form.tuition_amount.errors|join:", " }}</p>{% endif %}
+              </td>
+              <td>
+                <div class="input input-bordered input-sm flex items-center gap-1 w-28">
+                  {{ form.reminder_interval_days }}
+                  <span class="text-base-content/60 text-xs">days</span>
+                </div>
+                {% if form.reminder_interval_days.errors %}<p class="text-error text-xs mt-1">{{ form.reminder_interval_days.errors|join:", " }}</p>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
-      <div class="max-w-xs">
-        <label for="{{ form.tuition_reminder_interval_days.id_for_label }}"
-               class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
-          {{ form.tuition_reminder_interval_days.label }}
-        </label>
-        <div class="input input-bordered flex items-center gap-1">
-          {{ form.tuition_reminder_interval_days }}
-          <span class="text-base-content/60 text-sm">days</span>
-        </div>
-        <p class="text-xs text-base-content/60 mt-1">{{ form.tuition_reminder_interval_days.help_text }}</p>
-        {% if form.tuition_reminder_interval_days.errors %}
-        <p class="text-error text-xs mt-1">{{ form.tuition_reminder_interval_days.errors|join:", " }}</p>
-        {% endif %}
-      </div>
+      {% else %}
+      <p class="text-sm text-warning">
+        No academic years configured for tuition yet.
+      </p>
+      {% endif %}
     </section>
 
     <div class="pt-2">
-      <button type="submit" class="btn btn-primary">Save settings</button>
+      <button type="submit" class="btn btn-primary">Save all changes</button>
     </div>
   </form>
 
@@ -117,8 +163,8 @@
     <h2 class="font-serif text-lg text-base-content">Next academic year</h2>
     <p class="text-sm text-base-content/60">
       A new academic year is set up automatically each September. It inherits
-      its dues tiers, tuition amount, and reminder cadence from this year, so
-      any changes you save here will carry forward.
+      its dues tiers, tuition amount, and reminder cadence from the previous
+      year, so any changes you save above will carry forward.
     </p>
   </section>
 

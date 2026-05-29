@@ -164,3 +164,44 @@ class TreasurerSettingsForm(forms.Form):
                 t.tuition_amount         = self.cleaned_data["tuition_amount"]
                 t.reminder_interval_days = self.cleaned_data["tuition_reminder_interval_days"]
                 t.save(update_fields=("tuition_amount", "reminder_interval_days"))
+
+
+# --- Per-academic-year editing (all DuesPeriods and TuitionPeriods) -----
+
+
+class DuesPeriodRowForm(forms.ModelForm):
+    """One-row editor for a DuesPeriod — used in the all-AY formset."""
+
+    class Meta:
+        from .models import DuesPeriod
+        model = DuesPeriod
+        fields = (
+            "dues_amount_pre_candidate",
+            "dues_amount_candidate",
+            "dues_amount_analyst",
+            "reminder_interval_days",
+        )
+
+    def __init__(self, *args, **kwargs):
+        from django.core.validators import MinValueValidator
+        super().__init__(*args, **kwargs)
+        for f in ("dues_amount_pre_candidate", "dues_amount_candidate",
+                  "dues_amount_analyst"):
+            self.fields[f].validators.append(MinValueValidator(Decimal("0")))
+
+
+class TuitionPeriodRowForm(forms.ModelForm):
+    """One-row editor for a TuitionPeriod — used in the all-AY formset."""
+
+    class Meta:
+        from .models import TuitionPeriod
+        model = TuitionPeriod
+        fields = (
+            "tuition_amount",
+            "reminder_interval_days",
+        )
+
+    def __init__(self, *args, **kwargs):
+        from django.core.validators import MinValueValidator
+        super().__init__(*args, **kwargs)
+        self.fields["tuition_amount"].validators.append(MinValueValidator(Decimal("0")))
