@@ -132,6 +132,28 @@ def test_directory_detail_404_for_unknown_slug(client):
 
 
 @pytest.mark.django_db
+def test_profile_is_in_directory_for_member_roles():
+    u = User.objects.create_user(email="a@x.test")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    assert u.profile.is_in_directory is True
+
+    u.profile.role = Profile.Role.EXTERNAL
+    u.profile.save()
+    assert u.profile.is_in_directory is False
+
+
+@pytest.mark.django_db
+def test_profile_directory_slug_matches_url():
+    u = User.objects.create_user(
+        email="a@x.test", first_name="Andre", last_name="Patsalides"
+    )
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    assert u.profile.directory_slug == "andre-patsalides"
+
+
+@pytest.mark.django_db
 def test_directory_detail_prefers_public_email_when_set(client):
     _mk_member(
         "login@x.test", "Sora", "Han", Profile.Role.PRE_CANDIDATE_SCHOLAR,

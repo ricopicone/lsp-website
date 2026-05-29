@@ -26,28 +26,88 @@
       <a href="{% url 'core:landing' %}" class="font-serif text-lg leading-none text-base-content hover:text-primary transition-colors">
         Lacanian School of Psychoanalysis
       </a>
+
+      {# Center: page links (hidden on mobile for now) #}
       <nav class="hidden sm:flex items-center gap-1 text-sm">
         <a href="{% url 'events:list' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200">Events</a>
         <a href="{% url 'directory' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200">Directory</a>
         <a href="{% url 'core:calendar' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200">Calendar</a>
-        {% if user.is_authenticated %}
-          {% if user.is_staff %}
-            <a href="/admin/" class="px-3 py-1.5 rounded-md hover:bg-base-200">Admin</a>
-          {% endif %}
-          <span class="px-2 text-base-content/60 text-xs hidden md:inline">{{ user.email }}</span>
-          <a href="{% url 'logout' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200">Log out</a>
-        {% else %}
-          <a href="{% url 'login' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200">Log in</a>
-        {% endif %}
+      </nav>
+
+      {# Right: theme toggle + auth (always visible, including mobile) #}
+      <div class="flex items-center gap-1">
         <button type="button"
                 id="theme-toggle"
-                class="px-2 py-1.5 rounded-md hover:bg-base-200 text-base-content/70"
+                class="btn btn-ghost btn-sm btn-circle text-base-content/70"
                 aria-label="Toggle light/dark mode"
                 title="Toggle light/dark mode">
           <span data-theme-icon="silk">☼</span>
           <span data-theme-icon="abyss" class="hidden">☽</span>
         </button>
-      </nav>
+
+        {% if user.is_authenticated %}
+        <div class="dropdown dropdown-end">
+          <div tabindex="0"
+               role="button"
+               class="btn btn-ghost btn-sm btn-circle p-0 size-9 overflow-hidden"
+               aria-label="Account menu">
+            {% if user.profile.headshot %}
+              <img src="{{ user.profile.headshot.url }}" alt="" class="size-full object-cover rounded-full">
+            {% else %}
+              <span class="size-full flex items-center justify-center bg-base-200 text-base-content/70 rounded-full font-serif text-sm">
+                {% if user.first_name or user.last_name %}{{ user.first_name|slice:":1" }}{{ user.last_name|slice:":1" }}{% else %}{{ user.email|slice:":1"|upper }}{% endif %}
+              </span>
+            {% endif %}
+          </div>
+          <ul tabindex="0"
+              class="dropdown-content menu menu-sm mt-3 z-10 p-2 shadow-lg bg-base-100 border border-base-300 rounded-box w-60">
+            <li class="menu-title pt-1 pb-2 px-2">
+              <div class="flex flex-col gap-0.5 leading-tight">
+                <span class="text-base-content text-sm">
+                  {% if user.first_name or user.last_name %}{{ user.first_name }} {{ user.last_name }}{% else %}{{ user.email }}{% endif %}
+                </span>
+                {% if user.first_name or user.last_name %}
+                <span class="text-xs text-base-content/60 truncate font-normal normal-case">{{ user.email }}</span>
+                {% endif %}
+              </div>
+            </li>
+            <li><hr class="border-base-300/60 my-1"></li>
+
+            {# Mobile: surface the page links inside the menu since the centered nav is hidden #}
+            <li class="sm:hidden"><a href="{% url 'events:list' %}">Events</a></li>
+            <li class="sm:hidden"><a href="{% url 'directory' %}">Directory</a></li>
+            <li class="sm:hidden"><a href="{% url 'core:calendar' %}">Calendar</a></li>
+            <li class="sm:hidden"><hr class="border-base-300/60 my-1"></li>
+
+            {% if user.profile.is_in_directory %}
+            <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">Your directory page</a></li>
+            {% endif %}
+            <li>
+              <a class="text-base-content/50 cursor-not-allowed pointer-events-none" title="Coming soon">
+                Edit profile <span class="badge badge-ghost badge-xs ml-auto">soon</span>
+              </a>
+            </li>
+
+            {% if user.is_staff %}
+            <li><hr class="border-base-300/60 my-1"></li>
+            <li><a href="/admin/">Admin</a></li>
+            <li><a href="{% url 'treasurer' %}">Treasurer dashboard</a></li>
+            {% endif %}
+
+            <li><hr class="border-base-300/60 my-1"></li>
+            <li>
+              {# display:contents on the form lets DaisyUI's `.menu li > button` selectors style the button correctly #}
+              <form method="post" action="{% url 'logout' %}" style="display:contents">
+                {% csrf_token %}
+                <button type="submit" class="text-error">Log out</button>
+              </form>
+            </li>
+          </ul>
+        </div>
+        {% else %}
+        <a href="{% url 'login' %}" class="btn btn-ghost btn-sm">Log in</a>
+        {% endif %}
+      </div>
     </div>
   </header>
   {% endblock %}

@@ -5,7 +5,6 @@ from __future__ import annotations
 from django.contrib.auth import login
 from django.http import Http404
 from django.shortcuts import redirect, render
-from django.utils.text import slugify
 
 from .forms import LightSignupForm
 from .models import Profile
@@ -23,18 +22,10 @@ DIRECTORY_SECTIONS = [
 ]
 
 
-def _member_slug(profile: Profile) -> str:
-    """Slug derived from the user's name: "andre-patsalides"."""
-    return (
-        slugify(f"{profile.user.first_name} {profile.user.last_name}".strip())
-        or str(profile.user.pk)
-    )
-
-
 def _directory_qs():
     return (
         Profile.objects
-        .filter(role__in=[r for r, _ in DIRECTORY_SECTIONS])
+        .filter(role__in=Profile.DIRECTORY_ROLES)
         .select_related("user")
         .order_by("user__last_name", "user__first_name")
     )
@@ -65,7 +56,7 @@ def directory(request):
     for profile in _directory_qs():
         by_role.setdefault(profile.role, []).append({
             "profile": profile,
-            "slug": _member_slug(profile),
+            "slug": profile.directory_slug,
         })
     sections = [
         {"role": role, "label": label, "members": by_role.get(role, [])}
@@ -78,7 +69,7 @@ def directory(request):
 def directory_detail(request, slug: str):
     """Full bio page for one member."""
     for profile in _directory_qs():
-        if _member_slug(profile) == slug:
+        if profile.directory_slug == slug:
             return render(
                 request,
                 "accounts/directory_detail.html",

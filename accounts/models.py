@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.modelfields import PhoneNumberField
 
@@ -137,6 +138,30 @@ class Profile(models.Model):
     def display_event_bio(self) -> str:
         """Bio to use when listed as a speaker on an event; falls back to ``bio``."""
         return self.event_bio or self.bio
+
+    #: Roles that appear in the public /directory/ (see accounts.views).
+    DIRECTORY_ROLES = frozenset({
+        "analyst",
+        "candidate",
+        "pre_candidate",
+        "scholar",
+        "candidate_scholar",
+        "pre_candidate_scholar",
+        "member",
+    })
+
+    @property
+    def is_in_directory(self) -> bool:
+        """Whether this profile appears on /directory/ (drives nav links)."""
+        return self.role in self.DIRECTORY_ROLES
+
+    @property
+    def directory_slug(self) -> str:
+        """URL slug for this profile's /directory/<slug>/ page."""
+        return (
+            slugify(f"{self.user.first_name} {self.user.last_name}".strip())
+            or str(self.user.pk)
+        )
 
     def save(self, *args, **kwargs):
         if not self.is_faculty:
