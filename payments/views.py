@@ -53,6 +53,7 @@ TREASURER_TABS = [
     ("payments", "Payments"),
     ("settings", "Settings"),
     ("exports",  "Exports"),
+    ("help",     "Help"),
 ]
 
 
@@ -67,6 +68,7 @@ def _treasurer_tab_links() -> list[tuple[str, str, str]]:
         "payments": reverse("treasurer_payments"),
         "settings": reverse("treasurer_settings"),
         "exports":  reverse("treasurer_exports"),
+        "help":     reverse("treasurer_help"),
     }
     return [(key, label, name_to_url[key]) for key, label in TREASURER_TABS]
 
@@ -244,6 +246,16 @@ def treasurer_member_detail(request, user_id: int):
 def treasurer_exports(request):
     """Exports tab — CSV downloads grouped and described for non-technical staff."""
     return _treasurer_render(request, "exports", "payments/treasurer/exports.html", {})
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_help(request):
+    """Help tab — renders the treasurer guide markdown doc."""
+    from core.docs import render_doc
+    return _treasurer_render(request, "help", "payments/treasurer/help.html", {
+        "rendered_html": render_doc("treasurer-guide"),
+    })
 
 
 @login_required

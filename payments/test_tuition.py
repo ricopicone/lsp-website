@@ -884,6 +884,18 @@ def test_create_tuition_period_if_needed_keeps_two_years_ahead(db):
 
 
 @pytest.mark.django_db
+def test_treasurer_help_renders_markdown(client, staff_user):
+    """Help tab renders the treasurer guide markdown doc with cross-link."""
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_help"))
+    assert resp.status_code == 200
+    body = resp.content
+    assert b"<h1>Treasurer Admin Guide" in body
+    # Cross-reference to the PC admin guide.
+    assert b"/program-admin/help/" in body
+
+
+@pytest.mark.django_db
 def test_treasurer_new_tabs_require_staff(client, current_period):
     """Exports + Payments + Members tabs gated to staff."""
     u = _mk_candidate("not-staff-tab@x.test")

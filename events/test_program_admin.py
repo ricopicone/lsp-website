@@ -205,6 +205,27 @@ def test_program_admin_event_edit_updates_existing(client, pc_member, program):
 
 
 @pytest.mark.django_db
+def test_program_admin_help_renders(client, pc_member):
+    """Help tab renders the PC admin guide markdown."""
+    client.force_login(pc_member)
+    resp = client.get(reverse("program_admin_help"))
+    assert resp.status_code == 200
+    body = resp.content
+    # Markdown rendered: should have <h1> from the doc + a link to the
+    # treasurer guide.
+    assert b"<h1>Program Committee Admin Guide" in body
+    assert b"/treasurer/help/" in body
+
+
+@pytest.mark.django_db
+def test_program_admin_help_requires_pc_or_staff(client):
+    u = User.objects.create_user(email="nope@x.test", password="x")
+    client.force_login(u)
+    resp = client.get(reverse("program_admin_help"))
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
 def test_program_admin_event_edit_404s_when_event_not_in_this_program(
     client, pc_member, program,
 ):

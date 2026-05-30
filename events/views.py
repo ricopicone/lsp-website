@@ -293,11 +293,12 @@ def event_generate_code(request, slug: str):
 
 PC_ADMIN_TABS = [
     ("programs", "Programs"),
+    ("help",     "Help"),
 ]
 
 
 def _pc_admin_tab_links():
-    """Tab nav for the PC admin (currently just Programs; room to grow)."""
+    """Tab nav for the PC admin."""
     return [(key, label, reverse(f"program_admin_{key}"))
             for key, label in PC_ADMIN_TABS]
 
@@ -313,6 +314,17 @@ def _is_pc_or_staff(user) -> bool:
     if not getattr(user, "is_authenticated", False):
         return False
     return user.is_staff or is_program_committee(user)
+
+
+@login_required
+def program_admin_help(request):
+    """Help tab — renders the PC admin guide markdown doc."""
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    from core.docs import render_doc
+    return _pc_admin_render(request, "help", "events/program_admin/help.html", {
+        "rendered_html": render_doc("pc-admin-guide"),
+    })
 
 
 @login_required
