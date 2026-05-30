@@ -19,6 +19,11 @@ def _utc(year, month, day, hour=10, minute=0):
 
 @pytest.fixture
 def published_event(db):
+    from events.models import Program
+    program = Program.objects.create(
+        academic_year="2026-2027", name="Program 2026-2027",
+        published=True,
+    )
     e = Event.objects.create(
         title="Lacan Seminar XI",
         slug="lacan-seminar-xi",
@@ -27,6 +32,7 @@ def published_event(db):
         end_date=date(2026, 12, 15),
         status=Event.Status.OPEN,
         published=True,
+        program=program,
     )
     Session.objects.create(
         event=e, start_at=_utc(2026, 9, 3), end_at=_utc(2026, 9, 3, 12),
@@ -45,6 +51,11 @@ def published_event(db):
 
 @pytest.fixture
 def draft_event(db):
+    from events.models import Program
+    program = Program.objects.get_or_create(
+        academic_year="2026-2027",
+        defaults={"name": "Program 2026-2027", "published": False},
+    )[0]
     return Event.objects.create(
         title="Draft Event",
         slug="draft-event",
@@ -52,6 +63,7 @@ def draft_event(db):
         end_date=date(2026, 12, 15),
         status=Event.Status.DRAFT,
         published=False,
+        program=program,
     )
 
 

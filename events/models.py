@@ -56,6 +56,75 @@ def current_academic_year(today: _dt.date | None = None) -> str:
     return academic_year_of(today or _dt.date.today())
 
 
+class Program(models.Model):
+    """The Lacanian School's annual program for an academic year.
+
+    Owns the set of seminar / reading-group / cartel events for that year.
+    Public visibility of those events cascades from ``Program.is_public_now``:
+    a program is public when its ``published`` flag is True, OR when its
+    ``publish_date`` is set and in the past (the timer auto-publishes it).
+
+    Special events, Days of Assembly, Working Days, and Scholarly Seminars
+    are *not* program-owned — they keep individual ``Event.published``.
+    """
+
+    academic_year = models.CharField(
+        max_length=20, unique=True,
+        help_text="e.g. '2026-2027'.",
+    )
+    name = models.CharField(
+        max_length=100, blank=True,
+        help_text="Optional display name; defaults to 'Program {academic_year}'.",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Optional intro shown on /program/?year=... when published.",
+    )
+    published = models.BooleanField(
+        default=False,
+        help_text=(
+            "If True, the program and its events are publicly visible on "
+            "/program/ and /events/. If False, only Program Committee members "
+            "and staff can preview."
+        ),
+    )
+    publish_date = models.DateTimeField(
+        null=True, blank=True,
+        help_text=(
+            "If set and in the past, the program is treated as published — "
+            "use this to schedule a program release for a future moment."
+        ),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-academic_year",)
+
+    def __str__(self):
+        return self.name or f"Program {self.academic_year}"
+
+    @property
+    def is_public_now(self) -> bool:
+        """True when the program should be publicly visible right now."""
+        if self.published:
+            return True
+        if self.publish_date is not None:
+            from django.utils import timezone
+            return self.publish_date <= timezone.now()
+        return False
+
+    @classmethod
+    def for_year(cls, academic_year: str):
+        return cls.objects.filter(academic_year=academic_year).first()
+
+    @classmethod
+    def public_program_year_q(cls):
+        """Q expression for ``Event``-side filters: program is public now."""
+        from django.db.models import Q
+        from django.utils import timezone
+        return Q(program__published=True) | Q(program__publish_date__lte=timezone.now())
+
+
 def generate_pricing_code() -> str:
     """Generate a short, human-friendly pricing code."""
     return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(8))
@@ -199,6 +268,17 @@ class Event(models.Model):
             "from anonymous visitors on public listings."
         ),
     )
+    program = models.ForeignKey(
+        "events.Program",
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name="events",
+        help_text=(
+            "Set for annual-program-type events (seminar, reading group, "
+            "cartel) — links the event to its academic-year Program. Drives "
+            "public visibility via Program.is_public_now."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -220,6 +300,27 @@ class Event(models.Model):
     def is_offering(self) -> bool:
         """True for reading groups / cartels — the "Other Offerings" bucket."""
         return self.event_type in {self.Type.READING_GROUP, self.Type.CARTEL}
+
+    @property
+    def is_public_now(self) -> bool:
+        """Whether this event is publicly visible right now.
+
+        Annual-program-type events (seminars, reading groups, cartels) cascade
+        from ``Program.is_public_now``: when the program is published or its
+        scheduled publish_date is in the past, the event is public. Other
+        event types use the standalone ``published`` flag.
+
+        Fallback: if an annual-program-type event has no Program attached
+        (e.g. historical data being migrated, or test fixtures), the event's
+        own ``published`` flag is used. Production data is backfilled by
+        migration ``events.0012_program_backfill``; new events created from
+        the PC admin will always have a Program.
+        """
+        if self.event_type in self.ANNUAL_PROGRAM_TYPES:
+            if self.program is not None:
+                return self.program.is_public_now
+            return self.published
+        return self.published
 
 
 class EventMemberSpeaker(models.Model):

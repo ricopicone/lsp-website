@@ -21,3 +21,18 @@ def can_edit_event(user, event) -> bool:
         committee__slug__in=EDITOR_COMMITTEE_SLUGS,
         end_date__isnull=True,
     ).exists()
+
+
+def is_program_committee(user) -> bool:
+    """True if ``user`` is a current member of the Programming Committee.
+
+    Used to gate Program preview before publication and the
+    Program Committee admin interface.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return CommitteeMembership.objects.filter(
+        user=user,
+        committee__slug="programming-committee",
+        end_date__isnull=True,
+    ).exists()

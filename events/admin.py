@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import Event, EventMemberSpeaker, PriceTier, PricingCode, Session, Speaker
+from .models import (
+    Event,
+    EventMemberSpeaker,
+    PriceTier,
+    PricingCode,
+    Program,
+    Session,
+    Speaker,
+)
 
 
 class SessionInline(admin.TabularInline):
@@ -47,7 +55,7 @@ class EventAdmin(admin.ModelAdmin):
         "end_date",
         "session_count",
     )
-    list_filter = ("event_type", "visibility", "status", "published", "format")
+    list_filter = ("event_type", "visibility", "status", "published", "format", "program")
     search_fields = ("title", "slug", "description")
     prepopulated_fields = {"slug": ("title",)}
     filter_horizontal = ("faculty", "speakers")
@@ -105,3 +113,15 @@ class PricingCodeAdmin(admin.ModelAdmin):
     search_fields = ("code", "event__title", "issued_by__email")
     readonly_fields = ("code", "created_at")
     autocomplete_fields = ("event", "issued_by", "restricted_to_user")
+
+
+@admin.register(Program)
+class ProgramAdmin(admin.ModelAdmin):
+    list_display = ("academic_year", "name", "published", "publish_date", "event_count")
+    list_filter = ("published",)
+    search_fields = ("academic_year", "name")
+    readonly_fields = ("created_at",)
+
+    @admin.display(description="Events")
+    def event_count(self, obj):
+        return obj.events.count()

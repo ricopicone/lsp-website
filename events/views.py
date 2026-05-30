@@ -33,8 +33,8 @@ def event_list(request):
     """Public chronological list of upcoming standalone events (PROG-1).
 
     Excludes annual-program types (seminars, reading groups, cartels) —
-    those have a dedicated home at /program/. Members-only events are
-    hidden from anonymous visitors.
+    those have a dedicated home at /program/, gated by Program visibility.
+    Members-only events are hidden from anonymous visitors.
     """
     today = timezone.now().date()
     events = (
@@ -49,41 +49,57 @@ def event_list(request):
 
 
 def program(request):
-    """Annual program: seminars + other offerings for an academic year (PROG-2)."""
+    """Annual program: seminars + other offerings for an academic year (PROG-2).
+
+    Visibility is gated by ``Program.is_public_now`` for the requested
+    academic year. If the Program isn't public yet (and the user isn't
+    staff / on the Program Committee), 404. Program Committee members
+    and Django staff see all programs (any AY) for preview.
+    """
+    from .models import Program
+    from .permissions import is_program_committee
     year = request.GET.get("year") or current_academic_year()
     try:
-        start, end = academic_year_date_range(year)
+        academic_year_date_range(year)
     except (ValueError, IndexError):
         raise Http404("Unknown academic year") from None
 
-    base_qs = (
-        Event.objects.filter(
-            published=True, start_date__gte=start, start_date__lt=end,
-        )
+    program_obj = Program.for_year(year)
+    can_preview = request.user.is_authenticated and (
+        request.user.is_staff or is_program_committee(request.user)
+    )
+    if program_obj is None or (not program_obj.is_public_now and not can_preview):
+        raise Http404("Program not available for this academic year.")
+
+    events_qs = (
+        program_obj.events.all()
         .order_by("start_date", "title")
         .prefetch_related("faculty")
     )
-    seminars = list(base_qs.filter(event_type=Event.Type.SEMINAR))
-    offerings = list(base_qs.filter(
+    seminars = list(events_qs.filter(event_type=Event.Type.SEMINAR))
+    offerings = list(events_qs.filter(
         event_type__in=[Event.Type.READING_GROUP, Event.Type.CARTEL]
     ))
 
-    # Year-picker options: every distinct academic year that has at least
-    # one published event (so the dropdown is data-driven, not hardcoded).
-    distinct_years = sorted({
-        e.academic_year
-        for e in Event.objects.filter(published=True).only("start_date")
-    }, reverse=True)
+    # Year-picker options: every Program that's publicly visible right
+    # now, plus all programs if the viewer can preview. Always include the
+    # current AY label so an empty-program year doesn't vanish.
+    all_programs = Program.objects.all()
+    if not can_preview:
+        all_programs = [p for p in all_programs if p.is_public_now]
+    distinct_years = sorted({p.academic_year for p in all_programs}, reverse=True)
     current = current_academic_year()
     if current not in distinct_years:
         distinct_years.insert(0, current)
 
     return render(request, "events/program.html", {
         "year":            year,
+        "program":         program_obj,
         "seminars":        seminars,
         "offerings":       offerings,
         "available_years": distinct_years,
         "is_current_year": year == current,
+        "is_preview":      not program_obj.is_public_now,
     })
 
 
@@ -98,11 +114,13 @@ def event_detail(request, slug: str):
     from registrations.models import Registration
 
     event = get_object_or_404(
-        Event.objects.prefetch_related("faculty", "sessions", "price_tiers"),
+        Event.objects
+        .prefetch_related("faculty", "sessions", "price_tiers")
+        .select_related("program"),
         slug=slug,
     )
     can_edit = can_edit_event(request.user, event)
-    if not event.published and not can_edit:
+    if not event.is_public_now and not can_edit:
         raise Http404("Event not found.")
 
     show_faculty_view = (
