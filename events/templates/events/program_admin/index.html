@@ -1,0 +1,53 @@
+{% extends "events/program_admin/base.html" %}
+{% block tab_content %}
+<div class="space-y-4">
+
+  <p class="text-sm text-base-content/60">
+    Every academic year that has been set up. Click into one to see its
+    events, edit them, and publish the program when ready.
+  </p>
+
+  {% if rows %}
+  <div class="overflow-x-auto rounded-lg border border-base-300">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Academic year</th>
+          <th>Status</th>
+          <th>Events</th>
+          <th>Publish date</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>
+            <div class="font-medium">{{ row.program }}</div>
+          </td>
+          <td>
+            {% if row.is_public_now %}
+              <span class="badge badge-success badge-sm">Public</span>
+            {% else %}
+              <span class="badge badge-ghost badge-sm">Draft</span>
+            {% endif %}
+          </td>
+          <td class="text-base-content/70">{{ row.event_count }}</td>
+          <td class="text-xs text-base-content/70 whitespace-nowrap">
+            {% if row.program.publish_date %}{{ row.program.publish_date|date:"M j, Y" }}{% else %}—{% endif %}
+          </td>
+          <td>
+            <a href="{% url 'program_admin_detail' row.program.academic_year %}"
+               class="link link-primary text-sm">Open →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-base-content/60 py-6">No programs configured yet.</p>
+  {% endif %}
+
+</div>
+{% endblock %}

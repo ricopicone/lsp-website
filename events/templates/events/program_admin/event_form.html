@@ -1,0 +1,66 @@
+{% extends "events/program_admin/base.html" %}
+{% block tab_content %}
+<div class="space-y-6 max-w-3xl">
+
+  <nav class="text-sm">
+    <a href="{% url 'program_admin_detail' program.academic_year %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← {{ program }}</a>
+  </nav>
+
+  {% if saved %}
+  <div id="saved" role="alert" class="alert alert-success">
+    <span>Saved.</span>
+  </div>
+  {% endif %}
+
+  <header class="space-y-1">
+    <h2 class="font-serif text-2xl text-base-content">
+      {% if creating %}New event{% else %}Edit: {{ event.title }}{% endif %}
+    </h2>
+    <p class="text-sm text-base-content/60">
+      In {{ program }}. The event is automatically attached to this program.
+    </p>
+  </header>
+
+  <form method="post" class="space-y-5">
+    {% csrf_token %}
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {% for field in form %}
+      {% if field.name != "description" and field.name != "access_info" %}
+      <div>
+        <label for="{{ field.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
+          {{ field.label }}
+        </label>
+        {{ field }}
+        {% if field.help_text %}<p class="text-xs text-base-content/50 mt-1">{{ field.help_text }}</p>{% endif %}
+        {% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+
+    {% for field in form %}
+    {% if field.name == "description" or field.name == "access_info" %}
+    <div>
+      <label for="{{ field.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
+        {{ field.label }}
+      </label>
+      {{ field }}
+      {% if field.help_text %}<p class="text-xs text-base-content/50 mt-1">{{ field.help_text }}</p>{% endif %}
+      {% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit" class="btn btn-primary">
+        {% if creating %}Create event{% else %}Save{% endif %}
+      </button>
+      {% if not creating %}
+      <a href="{% url 'events:detail' event.slug %}" class="link link-hover text-sm">View event page →</a>
+      {% endif %}
+    </div>
+  </form>
+
+</div>
+{% endblock %}

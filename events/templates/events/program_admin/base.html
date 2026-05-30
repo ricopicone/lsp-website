@@ -1,0 +1,34 @@
+{% extends "core/base.html" %}
+{% block title %}Program Committee admin — LSP{% endblock %}
+{% block content %}
+<div class="space-y-6">
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Program Committee admin</h1>
+    <p class="text-sm text-base-content/60 max-w-2xl">
+      Plan, edit, and publish the LSP annual program (seminars, reading
+      groups, and cartels). The Treasurer admin handles dues and tuition.
+    </p>
+  </header>
+
+  <nav class="border-b border-base-300/60">
+    <ul class="flex flex-wrap gap-1 text-sm">
+      {% for key, label, url in tabs %}
+      <li>
+        <a href="{{ url }}"
+           class="inline-block px-4 py-2 border-b-2 -mb-px transition-colors
+                  {% if key == tab_key %}border-primary text-primary font-medium
+                  {% else %}border-transparent text-base-content/70 hover:text-base-content hover:border-base-300{% endif %}">
+          {{ label }}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </nav>
+
+  <div class="pt-2">
+    {% block tab_content %}{% endblock %}
+  </div>
+
+</div>
+{% endblock %}

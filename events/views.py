@@ -286,3 +286,144 @@ def event_generate_code(request, slug: str):
         code.save()
 
     return redirect(_faculty_view_url(event))
+
+
+# --- Program Committee admin --------------------------------------------
+
+
+PC_ADMIN_TABS = [
+    ("programs", "Programs"),
+]
+
+
+def _pc_admin_tab_links():
+    """Tab nav for the PC admin (currently just Programs; room to grow)."""
+    return [(key, label, reverse(f"program_admin_{key}"))
+            for key, label in PC_ADMIN_TABS]
+
+
+def _pc_admin_render(request, tab_key, template, ctx):
+    ctx = {**ctx, "tab_key": tab_key, "tabs": _pc_admin_tab_links()}
+    return render(request, template, ctx)
+
+
+def _is_pc_or_staff(user) -> bool:
+    """Gate for PC admin views — Programming Committee members + Django staff."""
+    from .permissions import is_program_committee
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.is_staff or is_program_committee(user)
+
+
+@login_required
+def program_admin_programs(request):
+    """PC admin: list every Program with status + event counts."""
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    from .models import Program
+    rows = []
+    for p in Program.objects.all().order_by("-academic_year"):
+        rows.append({
+            "program":         p,
+            "event_count":     p.events.count(),
+            "published_count": p.events.filter(published=True).count(),
+            "is_public_now":   p.is_public_now,
+        })
+    return _pc_admin_render(request, "programs", "events/program_admin/index.html", {
+        "rows": rows,
+    })
+
+
+@login_required
+def program_admin_detail(request, academic_year: str):
+    """PC admin: view + edit a single program (publish toggle, list events)."""
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    from .forms import ProgramPublishForm
+    from .models import Program
+    program = get_object_or_404(Program, academic_year=academic_year)
+
+    if request.method == "POST":
+        form = ProgramPublishForm(request.POST, instance=program)
+        if form.is_valid():
+            form.save()
+            return redirect(
+                reverse("program_admin_detail", args=[academic_year]) + "?saved=1#saved"
+            )
+    else:
+        form = ProgramPublishForm(instance=program)
+
+    events = list(
+        program.events.all()
+        .order_by("event_type", "start_date", "title")
+        .prefetch_related("faculty")
+    )
+    seminars = [e for e in events if e.event_type == Event.Type.SEMINAR]
+    offerings = [e for e in events if e.event_type in (
+        Event.Type.READING_GROUP, Event.Type.CARTEL,
+    )]
+
+    return _pc_admin_render(request, "programs", "events/program_admin/detail.html", {
+        "program":   program,
+        "form":      form,
+        "events":    events,
+        "seminars":  seminars,
+        "offerings": offerings,
+        "saved":     request.GET.get("saved") == "1",
+    })
+
+
+@login_required
+def program_admin_event_new(request, academic_year: str):
+    """PC admin: create a new event attached to this program."""
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    from .forms import ProgramEventForm
+    from .models import Program
+    program = get_object_or_404(Program, academic_year=academic_year)
+
+    if request.method == "POST":
+        form = ProgramEventForm(request.POST, program=program)
+        if form.is_valid():
+            event = form.save()
+            return redirect(
+                reverse("program_admin_event_edit", args=[academic_year, event.slug])
+            )
+    else:
+        form = ProgramEventForm(program=program)
+
+    return _pc_admin_render(request, "programs", "events/program_admin/event_form.html", {
+        "program":  program,
+        "form":     form,
+        "creating": True,
+    })
+
+
+@login_required
+def program_admin_event_edit(request, academic_year: str, slug: str):
+    """PC admin: edit an existing event in this program."""
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    from .forms import ProgramEventForm
+    from .models import Program
+    program = get_object_or_404(Program, academic_year=academic_year)
+    event = get_object_or_404(Event, slug=slug, program=program)
+
+    if request.method == "POST":
+        form = ProgramEventForm(request.POST, instance=event, program=program)
+        if form.is_valid():
+            form.save()
+            return redirect(
+                reverse("program_admin_event_edit", args=[academic_year, event.slug])
+                + "?saved=1#saved"
+            )
+    else:
+        form = ProgramEventForm(instance=event, program=program)
+
+    return _pc_admin_render(request, "programs", "events/program_admin/event_form.html", {
+        "program":  program,
+        "event":    event,
+        "form":     form,
+        "creating": False,
+        "saved":    request.GET.get("saved") == "1",
+    })

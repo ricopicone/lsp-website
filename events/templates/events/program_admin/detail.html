@@ -1,0 +1,120 @@
+{% extends "events/program_admin/base.html" %}
+{% block tab_content %}
+<div class="space-y-8">
+
+  <nav class="text-sm">
+    <a href="{% url 'program_admin_programs' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← All programs</a>
+  </nav>
+
+  {% if saved %}
+  <div id="saved" role="alert" class="alert alert-success">
+    <span>Saved.</span>
+  </div>
+  {% endif %}
+
+  <header class="space-y-2">
+    <h2 class="font-serif text-2xl text-base-content">
+      {{ program }}
+      {% if program.is_public_now %}
+        <span class="badge badge-success badge-sm align-middle">Public</span>
+      {% else %}
+        <span class="badge badge-ghost badge-sm align-middle">Draft</span>
+      {% endif %}
+    </h2>
+    <p class="text-sm text-base-content/60">
+      Academic year {{ program.academic_year }}.
+      {% if program.is_public_now %}
+      This program is visible at <a href="{% url 'program' %}?year={{ program.academic_year }}" class="link">/program/?year={{ program.academic_year }}</a>.
+      {% else %}
+      This program is hidden from the public until you publish it or its
+      publish date arrives.
+      {% endif %}
+    </p>
+  </header>
+
+  {% comment %}Publish form{% endcomment %}
+  <section class="rounded-lg border border-base-300 p-5 max-w-xl space-y-4">
+    <h3 class="font-serif text-lg text-base-content">Publication</h3>
+    <form method="post" class="space-y-3">
+      {% csrf_token %}
+      <label class="flex items-center gap-2 cursor-pointer">
+        {{ form.published }}
+        <span class="text-sm">Published now</span>
+      </label>
+      <div>
+        <label for="{{ form.publish_date.id_for_label }}"
+               class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
+          Or schedule a publish date / time
+        </label>
+        {{ form.publish_date }}
+        {% if form.publish_date.errors %}
+        <p class="text-error text-xs mt-1">{{ form.publish_date.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+    </form>
+  </section>
+
+  {% comment %}Events list — by category{% endcomment %}
+  <section class="space-y-3">
+    <div class="flex items-baseline justify-between gap-3">
+      <h3 class="font-serif text-lg text-base-content">
+        Events <span class="text-base-content/60 text-sm font-normal">({{ events|length }})</span>
+      </h3>
+      <a href="{% url 'program_admin_event_new' program.academic_year %}" class="btn btn-primary btn-sm">+ New event</a>
+    </div>
+
+    {% if seminars %}
+    <h4 class="text-sm uppercase tracking-wider text-base-content/60 mt-4">Seminars</h4>
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Title</th><th>Faculty</th><th>Dates</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for e in seminars %}
+          <tr>
+            <td>{{ e.title }}</td>
+            <td class="text-xs text-base-content/70">{% for f in e.faculty.all %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td class="text-xs text-base-content/70 whitespace-nowrap">{{ e.start_date|date:"M j" }} – {{ e.end_date|date:"M j, Y" }}</td>
+            <td>
+              <a href="{% url 'program_admin_event_edit' program.academic_year e.slug %}" class="link link-primary text-sm">Edit →</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {% if offerings %}
+    <h4 class="text-sm uppercase tracking-wider text-base-content/60 mt-4">Reading groups + cartels</h4>
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Title</th><th>Type</th><th>Faculty</th><th>Dates</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for e in offerings %}
+          <tr>
+            <td>{{ e.title }}</td>
+            <td class="text-xs">{{ e.get_event_type_display }}</td>
+            <td class="text-xs text-base-content/70">{% for f in e.faculty.all %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td class="text-xs text-base-content/70 whitespace-nowrap">{{ e.start_date|date:"M j" }} – {{ e.end_date|date:"M j, Y" }}</td>
+            <td>
+              <a href="{% url 'program_admin_event_edit' program.academic_year e.slug %}" class="link link-primary text-sm">Edit →</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {% if not seminars and not offerings %}
+    <p class="text-base-content/60 py-6">No events in this program yet. Use <em>New event</em> to add one.</p>
+    {% endif %}
+  </section>
+
+</div>
+{% endblock %}

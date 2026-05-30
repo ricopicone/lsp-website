@@ -1,4 +1,4 @@
-"""Forms for the events app (PROG-7, PROG-8)."""
+"""Forms for the events app (PROG-7, PROG-8, Program Committee admin)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import Event, PricingCode
+from .models import Event, PricingCode, Program
 
 
 class EventDescriptionForm(forms.ModelForm):
@@ -49,3 +49,64 @@ class PricingCodeForm(forms.ModelForm):
         if amount is not None and amount < 0:
             self.add_error("amount_or_percent", "Cannot be negative.")
         return data
+
+
+class ProgramPublishForm(forms.ModelForm):
+    """PC-facing publish-control form for a Program (publish toggle + schedule)."""
+
+    class Meta:
+        model = Program
+        fields = ("published", "publish_date")
+        widgets = {
+            "publish_date": forms.DateTimeInput(
+                attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M",
+            ),
+        }
+
+
+class ProgramEventForm(forms.ModelForm):
+    """PC-facing event create/edit form for events belonging to a Program.
+
+    Restricts event_type to the annual-program types and auto-attaches the
+    target program on save.
+    """
+
+    class Meta:
+        model = Event
+        fields = (
+            "title", "slug", "event_type",
+            "start_date", "end_date",
+            "format", "status",
+            "description", "access_info",
+            "faculty",
+        )
+        widgets = {
+            "start_date": forms.DateInput(attrs={"type": "date"}),
+            "end_date":   forms.DateInput(attrs={"type": "date"}),
+            "description": forms.Textarea(attrs={"rows": 8}),
+            "access_info": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, program=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.program = program
+        # Narrow event_type choices to the annual-program-type set.
+        self.fields["event_type"].choices = [
+            (Event.Type.SEMINAR.value,       Event.Type.SEMINAR.label),
+            (Event.Type.READING_GROUP.value, Event.Type.READING_GROUP.label),
+            (Event.Type.CARTEL.value,        Event.Type.CARTEL.label),
+        ]
+        # Restrict faculty choices to users with is_faculty=True (USR-6).
+        from accounts.models import User
+        self.fields["faculty"].queryset = User.objects.filter(
+            profile__is_faculty=True, is_active=True,
+        ).order_by("last_name", "first_name")
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self.program is not None:
+            instance.program = self.program
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance

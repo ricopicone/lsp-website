@@ -1,4 +1,4 @@
-{% load static %}<!DOCTYPE html>
+{% load static committee_filters %}<!DOCTYPE html>
 <html lang="en" data-theme="silk">
 <head>
   <meta charset="utf-8">
@@ -115,8 +115,12 @@
               </a>
             </li>
 
-            {% if user.is_staff %}
+            {% if user.is_staff or user|is_on_committee:"programming-committee" %}
             <li><hr class="border-base-300/60 my-1"></li>
+            <li><a href="{% url 'program_admin_programs' %}">Program Committee admin</a></li>
+            {% endif %}
+
+            {% if user.is_staff %}
             <li><a href="/admin/">Admin</a></li>
             <li><a href="{% url 'treasurer' %}">Treasurer dashboard</a></li>
             {% endif %}
