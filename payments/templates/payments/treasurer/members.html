@@ -1,0 +1,51 @@
+{% extends "payments/treasurer/base.html" %}
+{% block tab_content %}
+<div class="space-y-6">
+
+  <p class="text-sm text-base-content/60">
+    Look up any member to see their full payment history, tuition
+    enrollments, and event registrations in one place.
+  </p>
+
+  <form method="get" class="flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[20rem]">
+      <label for="member-search" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
+        Search by name or email
+      </label>
+      <input id="member-search" name="q" type="search" value="{{ q }}"
+             class="input input-bordered w-full" placeholder="e.g. Diana Cuello or diana@example.com">
+    </div>
+    <button type="submit" class="btn btn-primary">Search</button>
+  </form>
+
+  {% if q %}
+    {% if results %}
+    <p class="text-xs text-base-content/60">
+      Found {{ results|length }} member{{ results|length|pluralize }} matching "{{ q }}".
+    </p>
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for u in results %}
+          <tr>
+            <td>{{ u.first_name }} {{ u.last_name }}</td>
+            <td class="text-base-content/70">{{ u.email }}</td>
+            <td>{{ u.profile.get_role_display }}</td>
+            <td>
+              <a href="{% url 'treasurer_member_detail' u.id %}" class="link link-primary text-sm">View →</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-base-content/60">No members match "{{ q }}".</p>
+    {% endif %}
+  {% endif %}
+
+</div>
+{% endblock %}

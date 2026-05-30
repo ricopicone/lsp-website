@@ -839,12 +839,64 @@ def test_treasurer_payment_refund_skips_non_stripe_payments(
 
 @pytest.mark.django_db
 def test_treasurer_new_tabs_require_staff(client, current_period):
-    """Exports + Payments tabs gated to staff."""
+    """Exports + Payments + Members tabs gated to staff."""
     u = _mk_candidate("not-staff-tab@x.test")
     client.force_login(u)
-    for name in ("treasurer_exports", "treasurer_payments"):
+    for name in ("treasurer_exports", "treasurer_payments", "treasurer_members"):
         resp = client.get(reverse(name))
         assert resp.status_code == 302
+
+
+# --- Members tab --------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_treasurer_members_search_finds_matching_users(client, staff_user):
+    _mk_candidate("alice@x.test")
+    _mk_candidate("bob@x.test")
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_members") + "?q=alice")
+    body = resp.content
+    assert b"alice@x.test" in body
+    assert b"bob@x.test" not in body
+
+
+@pytest.mark.django_db
+def test_treasurer_members_empty_search_shows_form_only(client, staff_user):
+    _mk_candidate("anyone@x.test")
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_members"))
+    body = resp.content
+    assert b"Search by name or email" in body
+    assert b"anyone@x.test" not in body
+
+
+@pytest.mark.django_db
+def test_treasurer_member_detail_shows_payments_and_enrollments(
+    client, staff_user, current_period,
+):
+    from payments.models import DuesPeriod, Payment
+    u = _mk_candidate("histo@x.test")
+    period = DuesPeriod.current()
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=u, amount=period.amount_for_role("candidate"),
+        status=Payment.Status.SUCCEEDED,
+        dues_period=period,
+    )
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_member_detail", args=[u.id]))
+    assert resp.status_code == 200
+    body = resp.content
+    assert b"histo@x.test" in body
+    assert b"Tuition enrollments" in body
+    assert b"Payments" in body
+    assert b"Committed" in body
+    assert b"$100" in body  # the dues amount
 
 
 @pytest.mark.django_db

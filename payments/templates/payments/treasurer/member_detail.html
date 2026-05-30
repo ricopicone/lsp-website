@@ -1,0 +1,134 @@
+{% extends "payments/treasurer/base.html" %}
+{% block tab_content %}
+<div class="space-y-8">
+
+  <nav class="text-sm">
+    <a href="{% url 'treasurer_members' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Members</a>
+  </nav>
+
+  <header class="space-y-1">
+    <h2 class="font-serif text-2xl text-base-content">
+      {{ target.first_name }} {{ target.last_name }}
+    </h2>
+    <div class="text-sm text-base-content/70">
+      <a href="mailto:{{ target.email }}" class="link">{{ target.email }}</a>
+      <span class="text-base-content/30 mx-1">·</span>
+      {{ target.profile.get_role_display }}
+      {% if target.profile.is_faculty %}
+      <span class="text-base-content/30 mx-1">·</span>
+      <span class="badge badge-accent badge-sm">Faculty</span>
+      {% endif %}
+    </div>
+  </header>
+
+  {% comment %}Tuition enrollments — most recent first.{% endcomment %}
+  <section class="space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Tuition enrollments</h3>
+    {% if enrollments %}
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Academic year</th><th>Status</th><th>Installments</th><th>Recorded</th></tr>
+        </thead>
+        <tbody>
+          {% for e in enrollments %}
+          <tr>
+            <td>{{ e.tuition_period.name }}</td>
+            <td>
+              {% if e.status == "paid_in_full" %}<span class="badge badge-success badge-sm">Paid in full</span>
+              {% elif e.status == "payment_plan" %}<span class="badge badge-info badge-sm">Payment plan</span>
+              {% elif e.status == "committed" %}<span class="badge badge-warning badge-sm">Committed</span>
+              {% elif e.status == "skipping" %}<span class="badge badge-ghost badge-sm">Skipping</span>
+              {% elif e.status == "exempt" %}<span class="badge badge-ghost badge-sm">Exempt</span>
+              {% else %}<span class="badge badge-ghost badge-sm">{{ e.get_status_display }}</span>
+              {% endif %}
+            </td>
+            <td class="text-xs text-base-content/70">
+              {% with insts=e.installments.all %}
+              {% if insts %}
+                {% for i in insts %}
+                  <span class="whitespace-nowrap">
+                    ${{ i.amount }} {% if i.paid %}<span class="text-success">paid</span>{% else %}<span class="text-warning">due {{ i.due_date|date:"M j" }}</span>{% endif %}
+                  </span>{% if not forloop.last %} · {% endif %}
+                {% endfor %}
+              {% else %}—{% endif %}
+              {% endwith %}
+            </td>
+            <td class="text-xs text-base-content/60 whitespace-nowrap">{{ e.decided_at|date:"M j, Y" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-base-content/60">No tuition enrollments on file.</p>
+    {% endif %}
+  </section>
+
+  {% comment %}Payments — all categories, most recent first.{% endcomment %}
+  <section class="space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Payments <span class="text-base-content/60 text-sm font-normal">({{ payments|length }})</span></h3>
+    {% if payments %}
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Date</th><th>Type</th><th>Amount</th><th>Method</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for p in payments %}
+          <tr>
+            <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.created_at|date:"M j, Y" }}</td>
+            <td>
+              {{ p.get_payment_type_display }}
+              {% if p.registration %}
+              <div class="text-xs text-base-content/60">{{ p.registration.event.title|truncatechars:32 }}</div>
+              {% endif %}
+            </td>
+            <td class="whitespace-nowrap">${{ p.amount }}</td>
+            <td class="text-xs">{{ p.get_method_display }}</td>
+            <td>
+              {% if p.status == "succeeded" %}<span class="badge badge-success badge-sm">Succeeded</span>
+              {% elif p.status == "pending" %}<span class="badge badge-warning badge-sm">Pending</span>
+              {% elif p.status == "refunded" %}<span class="badge badge-info badge-sm">Refunded</span>
+              {% elif p.status == "failed" %}<span class="badge badge-error badge-sm">Failed</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-base-content/60">No payments on file.</p>
+    {% endif %}
+  </section>
+
+  {% comment %}Event registrations.{% endcomment %}
+  <section class="space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Event registrations <span class="text-base-content/60 text-sm font-normal">({{ registrations|length }})</span></h3>
+    {% if registrations %}
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Date</th><th>Event</th><th>Tier</th><th>Quoted</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for r in registrations %}
+          <tr>
+            <td class="whitespace-nowrap text-xs text-base-content/70">{{ r.created_at|date:"M j, Y" }}</td>
+            <td>{{ r.event.title }}</td>
+            <td class="text-xs">{% if r.price_tier %}{{ r.price_tier.get_audience_display }}{% endif %}</td>
+            <td class="whitespace-nowrap">${{ r.quoted_amount }}</td>
+            <td><span class="badge badge-sm">{{ r.get_status_display }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-base-content/60">No event registrations on file.</p>
+    {% endif %}
+  </section>
+
+</div>
+{% endblock %}

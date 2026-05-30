@@ -49,6 +49,7 @@ TREASURER_TABS = [
     ("overview", "Overview"),
     ("tuition",  "Tuition"),
     ("dues",     "Dues"),
+    ("members",  "Members"),
     ("payments", "Payments"),
     ("settings", "Settings"),
     ("exports",  "Exports"),
@@ -62,6 +63,7 @@ def _treasurer_tab_links() -> list[tuple[str, str, str]]:
         "overview": reverse("treasurer"),
         "tuition":  reverse("treasurer_tuition"),
         "dues":     reverse("treasurer_dues"),
+        "members":  reverse("treasurer_members"),
         "payments": reverse("treasurer_payments"),
         "settings": reverse("treasurer_settings"),
         "exports":  reverse("treasurer_exports"),
@@ -177,6 +179,64 @@ def _treasurer_dues_context() -> dict:
         "chart_periods_json": json.dumps(chart_periods),
         "chart_roles_json": json.dumps(chart_roles),
     }
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_members(request):
+    """Members tab — search for a member, view their full payment history."""
+    q = (request.GET.get("q") or "").strip()
+    results = []
+    if q:
+        from django.db.models import Q
+        results = list(
+            User.objects.filter(
+                Q(email__icontains=q)
+                | Q(first_name__icontains=q)
+                | Q(last_name__icontains=q),
+            )
+            .select_related("profile")
+            .order_by("last_name", "first_name", "email")[:50]
+        )
+    return _treasurer_render(request, "members", "payments/treasurer/members.html", {
+        "q":       q,
+        "results": results,
+    })
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_member_detail(request, user_id: int):
+    """Per-member detail page: payments, tuition enrollments, registrations."""
+    from registrations.models import Registration
+    target = get_object_or_404(
+        User.objects.select_related("profile"), pk=user_id,
+    )
+    payments = list(
+        Payment.objects.filter(user=target)
+        .select_related("registration__event")
+        .order_by("-created_at")
+    )
+    enrollments = list(
+        TuitionEnrollment.objects.filter(user=target)
+        .select_related("tuition_period")
+        .prefetch_related("installments")
+        .order_by("-tuition_period__start_date")
+    )
+    registrations = list(
+        Registration.objects.filter(user=target)
+        .select_related("event", "price_tier")
+        .order_by("-created_at")
+    )
+    return _treasurer_render(
+        request, "members", "payments/treasurer/member_detail.html",
+        {
+            "target":        target,
+            "payments":      payments,
+            "enrollments":   enrollments,
+            "registrations": registrations,
+        },
+    )
 
 
 @login_required
