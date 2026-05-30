@@ -25,6 +25,7 @@ COPY content/templates ./content/templates
 COPY core/templates ./core/templates
 COPY documents/templates ./documents/templates
 COPY events/templates ./events/templates
+COPY parletre/templates ./parletre/templates
 COPY payments/templates ./payments/templates
 COPY registrations/templates ./registrations/templates
 COPY works/templates ./works/templates

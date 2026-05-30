@@ -28,6 +28,7 @@ from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from . import permissions
+from .rendering import render_markdown
 
 
 class SubscriptionLevel(models.TextChoices):
@@ -187,6 +188,10 @@ class Channel(models.Model):
     def is_forum(self) -> bool:
         return self.kind == self.Kind.FORUM
 
+    @property
+    def description_html(self) -> str:
+        return render_markdown(self.description)
+
     # ---- Access (delegates to parletre.permissions) ----
 
     def visible_to(self, user) -> bool:
@@ -298,6 +303,13 @@ class Post(models.Model):
         where = self.thread.title if self.thread_id else f"#{self.channel.slug}"
         who = self.author or "(removed)"
         return f"{who} in {where}"
+
+    @property
+    def body_html(self) -> str:
+        """Sanitised, rendered Markdown — empty for a soft-deleted post."""
+        if self.deleted:
+            return ""
+        return render_markdown(self.body)
 
 
 class Reaction(models.Model):

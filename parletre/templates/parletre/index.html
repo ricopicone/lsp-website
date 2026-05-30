@@ -1,0 +1,65 @@
+{% extends "core/base.html" %}
+{% block title %}Parlêtre — LSP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl tracking-tight text-base-content">Parlêtre</h1>
+    <p class="text-base-content/70">The school's discussion board — where the parlêtres speak.</p>
+  </header>
+
+  {% comment %} The privacy promise, stated plainly: open ≠ public. {% endcomment %}
+  <div class="alert bg-base-200 border border-base-300 text-base-content/80 text-sm">
+    <span aria-hidden="true">🔒</span>
+    <span>
+      <strong>Private to the school.</strong>
+      Everything in Parlêtre is visible only to members of the Lacanian School —
+      <em>including channels marked “Open.”</em> “Open” means open to every member,
+      never to the public. Nothing here is on the public web.
+    </span>
+  </div>
+
+  {% if not any_channels %}
+    <p class="text-base-content/60 italic">No channels yet. Check back soon.</p>
+  {% endif %}
+
+  {% for label, channels in groups %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-lg text-base-content/80 border-b border-base-300/60 pb-1">{{ label }}</h2>
+    <ul class="grid gap-3 sm:grid-cols-2">
+      {% for channel in channels %}
+      <li class="rounded-box border border-base-300 bg-base-100 p-4 hover:border-base-content/30 transition-colors">
+        <a href="{{ channel.get_absolute_url }}" class="block space-y-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-medium text-base-content">{{ channel.name }}</span>
+            {% if channel.kind == 'chat' %}
+              <span class="badge badge-sm badge-ghost">Chat</span>
+            {% else %}
+              <span class="badge badge-sm badge-ghost">Forum</span>
+            {% endif %}
+            {% if channel.access == 'private' %}
+              <span class="badge badge-sm" title="Visible only to its named members">🔒 Private</span>
+            {% elif channel.access == 'committee' %}
+              <span class="badge badge-sm badge-outline">{{ channel.committee.name }}</span>
+            {% elif channel.access == 'role' %}
+              <span class="badge badge-sm badge-outline">Roles</span>
+            {% else %}
+              <span class="badge badge-sm badge-outline" title="Open to every member (not the public)">Open</span>
+            {% endif %}
+          </div>
+          {% if channel.description %}
+          <p class="text-sm text-base-content/60">{{ channel.description }}</p>
+          {% endif %}
+          {% if channel.user_sub_level and channel.user_sub_level != 'muted' %}
+          <p class="text-xs text-base-content/50">Subscribed</p>
+          {% elif channel.user_sub_level == 'muted' %}
+          <p class="text-xs text-base-content/40">Muted</p>
+          {% endif %}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

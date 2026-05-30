@@ -12,6 +12,7 @@ dependencies = [
     "geopy>=2.4.1",
     "gunicorn>=23.0.0",
     "markdown>=3.10.2",
+    "nh3>=0.3.5",
     "pillow>=12.2.0",
     "psycopg[binary]>=3.2.0",
     "python-dateutil>=2.9.0.post0",

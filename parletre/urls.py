@@ -1,0 +1,18 @@
+from django.urls import path
+
+from . import views
+
+app_name = "parletre"
+
+urlpatterns = [
+    path("", views.index, name="index"),
+    path("<slug:slug>/", views.channel, name="channel"),
+    path("<slug:slug>/subscribe/", views.subscribe, name="subscribe"),
+    path("<slug:slug>/new/", views.new_thread, name="new_thread"),
+    path("<slug:slug>/<slug:thread_slug>/", views.thread, name="thread"),
+    path(
+        "<slug:slug>/<slug:thread_slug>/moderate/",
+        views.moderate_thread,
+        name="moderate_thread",
+    ),
+]

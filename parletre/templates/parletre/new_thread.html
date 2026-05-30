@@ -1,0 +1,33 @@
+{% extends "core/base.html" %}
+{% block title %}New thread — {{ channel.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-5">
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
+    <span aria-hidden="true">/</span>
+    <a href="{{ channel.get_absolute_url }}" class="hover:text-primary">{{ channel.name }}</a>
+  </nav>
+
+  <h1 class="font-serif text-2xl tracking-tight text-base-content">New thread</h1>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div class="space-y-1">
+      <label class="text-sm text-base-content/70" for="{{ form.title.id_for_label }}">Title</label>
+      {{ form.title }}
+      {% if form.title.errors %}<p class="text-error text-sm">{{ form.title.errors|striptags }}</p>{% endif %}
+    </div>
+    <div class="space-y-1">
+      <label class="text-sm text-base-content/70" for="{{ form.body.id_for_label }}">First post</label>
+      {{ form.body }}
+      {% if form.body.errors %}<p class="text-error text-sm">{{ form.body.errors|striptags }}</p>{% endif %}
+      <p class="text-xs text-base-content/40">Markdown supported.</p>
+    </div>
+    <div class="flex gap-2 justify-end">
+      <a href="{{ channel.get_absolute_url }}" class="btn btn-ghost btn-sm">Cancel</a>
+      <button type="submit" class="btn btn-primary btn-sm">Create thread</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

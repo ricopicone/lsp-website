@@ -1,0 +1,15 @@
+{% extends "core/base.html" %}
+{% block title %}Parlêtre — Members only{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto text-center space-y-4 py-10">
+  <div class="text-4xl" aria-hidden="true">🔒</div>
+  <h1 class="font-serif text-2xl tracking-tight text-base-content">Parlêtre is for members of the school</h1>
+  <p class="text-base-content/70">
+    The discussion board is open only to members of the Lacanian School of
+    Psychoanalysis. If you believe you should have access, please contact the
+    Web Coordinator.
+  </p>
+  <a href="{% url 'core:landing' %}" class="btn btn-sm">Back to the site</a>
+</div>
+{% endblock %}

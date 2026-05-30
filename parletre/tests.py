@@ -10,11 +10,13 @@ import datetime
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 
 from accounts.models import Profile
 from committees.models import Committee, CommitteeMembership
 
-from .models import Channel, Subscription, Thread
+from .models import Channel, Post, Subscription, SubscriptionLevel, Thread
+from .rendering import render_markdown
 
 User = get_user_model()
 Role = Profile.Role
@@ -223,3 +225,166 @@ def test_subscription_is_unique_per_user_channel():
     Subscription.objects.create(user=user, channel=ch)
     with pytest.raises(IntegrityError):
         Subscription.objects.create(user=user, channel=ch)
+
+
+# ---- markdown sanitisation ----------------------------------------------
+
+
+def test_render_markdown_keeps_formatting_but_strips_xss():
+    html = render_markdown("Hello **bold** and [ok](https://x.co)")
+    assert "<strong>bold</strong>" in html
+    assert 'href="https://x.co"' in html
+
+    danger = render_markdown("[x](javascript:alert(1))\n\n<script>alert(1)</script>")
+    assert "javascript:" not in danger
+    assert "<script>" not in danger
+
+
+# ---- views: gating & posting --------------------------------------------
+
+
+@pytest.mark.django_db
+def test_index_redirects_anonymous_to_login(client):
+    resp = client.get(reverse("parletre:index"))
+    assert resp.status_code == 302
+    assert "/accounts/login/" in resp.url
+
+
+@pytest.mark.django_db
+def test_index_forbidden_for_non_member(client):
+    guest = make_user("guest@x.co", role=Role.EXTERNAL)
+    client.force_login(guest)
+    resp = client.get(reverse("parletre:index"))
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_index_lists_open_channel_but_not_inaccessible_private(client):
+    make_channel("open-one")
+    private = make_channel("hush", access=Access.PRIVATE)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    client.force_login(member)
+    resp = client.get(reverse("parletre:index"))
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "Open One" in body
+    assert private.name not in body
+    # the privacy promise is on the page
+    assert "including channels marked" in body
+
+
+@pytest.mark.django_db
+def test_inaccessible_channel_404s_rather_than_revealing(client):
+    make_channel("hush", access=Access.PRIVATE)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    client.force_login(member)
+    resp = client.get(reverse("parletre:channel", args=["hush"]))
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_member_can_start_thread_and_reply(client):
+    ch = make_channel("general")
+    member = make_user("m@x.co", role=Role.ANALYST)
+    client.force_login(member)
+
+    resp = client.post(
+        reverse("parletre:new_thread", args=[ch.slug]),
+        {"title": "On the sinthome", "body": "First."},
+    )
+    assert resp.status_code == 302
+    thread = Thread.objects.get(channel=ch, title="On the sinthome")
+    assert thread.posts.count() == 1
+    before = thread.last_activity_at
+
+    resp = client.post(thread.get_absolute_url(), {"body": "A reply."})
+    assert resp.status_code == 302
+    thread.refresh_from_db()
+    assert thread.posts.count() == 2
+    assert thread.last_activity_at >= before
+
+
+@pytest.mark.django_db
+def test_staff_only_channel_rejects_member_thread(client):
+    ch = make_channel("announce", post_policy=Channel.PostPolicy.STAFF_ONLY)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    client.force_login(member)
+    resp = client.post(
+        reverse("parletre:new_thread", args=[ch.slug]),
+        {"title": "Sneaky", "body": "Hi."},
+    )
+    # redirected back with an error message; no thread created
+    assert resp.status_code == 302
+    assert not Thread.objects.filter(channel=ch).exists()
+
+
+@pytest.mark.django_db
+def test_subscribe_sets_level_and_protects_announcements(client):
+    ch = make_channel("general")
+    announce = make_channel("announce", auto_subscribe=True)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    client.force_login(member)
+
+    client.post(reverse("parletre:subscribe", args=[ch.slug]), {"level": "all"})
+    assert Subscription.objects.get(user=member, channel=ch).level == SubscriptionLevel.ALL
+
+    # the announcements channel may be downgraded but not fully muted
+    client.post(reverse("parletre:subscribe", args=[announce.slug]), {"level": "muted"})
+    sub = Subscription.objects.filter(user=member, channel=announce).first()
+    assert sub is None or sub.level != SubscriptionLevel.MUTED
+
+
+@pytest.mark.django_db
+def test_chat_channel_accepts_a_post(client):
+    ch = make_channel("lounge", kind=Channel.Kind.CHAT)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    client.force_login(member)
+    resp = client.post(ch.get_absolute_url(), {"body": "hello room"})
+    assert resp.status_code == 302
+    msg = Post.objects.get(channel=ch, thread__isnull=True)
+    assert msg.body == "hello room"
+
+
+@pytest.mark.django_db
+def test_moderator_can_pin_but_member_cannot(client):
+    ch = make_channel("general")
+    mod = make_user("mod@x.co", role=Role.ANALYST)
+    ch.moderators.add(mod)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=member)
+    Post.objects.create(channel=ch, thread=thread, author=member, body="x")
+    url = reverse("parletre:moderate_thread", args=[ch.slug, thread.slug])
+
+    client.force_login(member)
+    assert client.post(url, {"action": "pin"}).status_code == 404
+    thread.refresh_from_db()
+    assert not thread.pinned
+
+    client.force_login(mod)
+    assert client.post(url, {"action": "pin"}).status_code == 302
+    thread.refresh_from_db()
+    assert thread.pinned
+
+
+# ---- template render smoke tests ----------------------------------------
+
+
+@pytest.mark.django_db
+def test_forum_channel_thread_and_new_thread_render(client):
+    ch = make_channel("general")
+    member = make_user("m@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="Hello", author=member)
+    Post.objects.create(channel=ch, thread=thread, author=member, body="**hi**")
+    client.force_login(member)
+    assert client.get(ch.get_absolute_url()).status_code == 200
+    assert client.get(thread.get_absolute_url()).status_code == 200
+    assert client.get(reverse("parletre:new_thread", args=[ch.slug])).status_code == 200
+
+
+@pytest.mark.django_db
+def test_chat_channel_renders(client):
+    ch = make_channel("lounge", kind=Channel.Kind.CHAT)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    Post.objects.create(channel=ch, author=member, body="hi room")
+    client.force_login(member)
+    assert client.get(ch.get_absolute_url()).status_code == 200
