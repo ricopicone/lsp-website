@@ -243,10 +243,12 @@ class ProfileEditForm(forms.ModelForm):
             "location",
             "phone",
             "public_email",
+            "public_phone",
             "website",
             "specialties",
             "consultation_modalities",
             "year_joined",
+            "public",
             "accepting_patients",
             "default_billing_mode",
             "timezone",
@@ -278,10 +280,13 @@ class ProfileEditForm(forms.ModelForm):
             ),
         }
 
+    #: Per-field visibility <select> name prefix for a TOGGLEABLE_PUBLIC_FIELDS key.
+    VIS_PREFIX = "vis_"
+
     def __init__(self, *args, **kwargs):
         from django.utils import timezone as dj_timezone
 
-        from .models import Profile
+        from .models import TOGGLEABLE_PUBLIC_FIELDS, Profile
 
         super().__init__(*args, **kwargs)
 
@@ -289,9 +294,10 @@ class ProfileEditForm(forms.ModelForm):
         if self.instance and self.instance.pk:
             self.initial["consultation_modalities"] = self.instance.modalities_list
 
-        # phonenumber widget needs the shared input styling applied by hand.
-        self.fields["phone"].widget.attrs.setdefault("class", _INPUT)
-        self.fields["phone"].widget.attrs.setdefault("placeholder", "+1 555 555 5555")
+        # phonenumber widgets need the shared input styling applied by hand.
+        for name in ("phone", "public_phone"):
+            self.fields[name].widget.attrs.setdefault("class", _INPUT)
+            self.fields[name].widget.attrs.setdefault("placeholder", "+1 555 555 5555")
 
         # year_joined as a friendly descending dropdown (harvest accelerator).
         this_year = dj_timezone.now().year
@@ -300,16 +306,45 @@ class ProfileEditForm(forms.ModelForm):
             attrs={"class": _SELECT}, choices=years
         )
 
-        self.fields["accepting_patients"].widget.attrs.setdefault(
-            "class", "toggle toggle-primary"
-        )
+        for name in ("public", "accepting_patients"):
+            self.fields[name].widget.attrs.setdefault("class", "toggle toggle-primary")
+
+        # One visibility <select> (Public / Members only / Private) per
+        # toggleable field, initialised from the member's field_visibility map.
+        # Only meaningful for directory-eligible members (others aren't shown
+        # publicly), so skip them — that also keeps save() from clobbering the
+        # map for non-directory users.
+        directory = bool(self.instance.pk and self.instance.is_in_directory)
+        self._vis_keys = TOGGLEABLE_PUBLIC_FIELDS if directory else ()
+        if directory:
+            current = self.instance.field_visibility or {}
+            for key in TOGGLEABLE_PUBLIC_FIELDS:
+                self.fields[self.VIS_PREFIX + key] = forms.ChoiceField(
+                    required=False,
+                    choices=Profile.Visibility.choices,
+                    initial=current.get(key, Profile.Visibility.PUBLIC),
+                    widget=forms.Select(
+                        attrs={"class": "select select-xs select-bordered",
+                               "aria-label": "Visibility"}
+                    ),
+                )
 
     def clean_consultation_modalities(self):
         # MultipleChoiceField yields a list; the model field is a CSV string.
         return ",".join(self.cleaned_data.get("consultation_modalities") or [])
 
     def save(self, commit=True):
+        from .models import Profile
+
         profile = super().save(commit=False)
+        # Collect the per-field visibility <select>s into field_visibility.
+        # Skip when not rendered (non-directory member) so we don't clobber it.
+        if self._vis_keys:
+            profile.field_visibility = {
+                key: (self.cleaned_data.get(self.VIS_PREFIX + key)
+                      or Profile.Visibility.PUBLIC)
+                for key in self._vis_keys
+            }
         # If the member edited their location, stale the geocode so the next
         # `geocode_profiles` run (which only touches rows with no coords)
         # re-resolves pins. See accounts/management/commands/geocode_profiles.py.

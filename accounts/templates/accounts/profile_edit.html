@@ -33,7 +33,7 @@
     <h1 class="font-serif text-3xl text-base-content">Edit profile</h1>
     <p class="text-sm text-base-content/70">
       Update how you appear across the school's site. Changes show on your
-      {% if profile.is_in_directory %}<a href="{% url 'directory_detail' profile.directory_slug %}" class="link link-primary">directory page</a>{% else %}public listings{% endif %}
+      {% if profile.is_listed %}<a href="{% url 'directory_detail' profile.directory_slug %}" class="link link-primary">directory page</a>{% else %}public listings{% endif %}
       and on event pages where you're listed.
     </p>
   </header>
@@ -97,7 +97,7 @@
         {% include "accounts/_field.html" with field=uform.first_name label="First name" %}
         {% include "accounts/_field.html" with field=uform.last_name label="Last name" %}
         {% include "accounts/_field.html" with field=pform.display_name label="Preferred name" hint="Shown instead of your first + last name, if set." %}
-        {% include "accounts/_field.html" with field=pform.pronouns label="Pronouns" %}
+        {% include "accounts/_field.html" with field=pform.pronouns label="Pronouns" vis=pform.vis_pronouns %}
       </div>
     </section>
 
@@ -116,19 +116,22 @@
     {# ---- About ---------------------------------------------------------- #}
     <section class="space-y-4">
       <h2 class="font-serif text-xl text-base-content">About</h2>
-      {% include "accounts/_field.html" with field=pform.bio label="Bio" hint="Shown on the directory and on event pages." %}
-      {% include "accounts/_field.html" with field=pform.credentials label="Credentials" %}
-      {% include "accounts/_field.html" with field=pform.languages_spoken label="Languages spoken" %}
-      {% include "accounts/_field.html" with field=pform.specialties label="Areas of interest / specialties" %}
+      {% if profile.is_in_directory %}
+      <p class="text-sm text-base-content/60">Use the visibility menu beside each field to choose who sees it: <strong>Public</strong> (anyone), <strong>Members only</strong> (signed-in members), or <strong>Private</strong> (staff only).</p>
+      {% endif %}
+      {% include "accounts/_field.html" with field=pform.bio label="Bio" vis=pform.vis_bio hint="Also shown on event pages where you're a speaker." %}
+      {% include "accounts/_field.html" with field=pform.credentials label="Credentials" vis=pform.vis_credentials %}
+      {% include "accounts/_field.html" with field=pform.languages_spoken label="Languages spoken" vis=pform.vis_languages_spoken %}
+      {% include "accounts/_field.html" with field=pform.specialties label="Areas of interest / specialties" vis=pform.vis_specialties %}
     </section>
 
     {# ---- Contact -------------------------------------------------------- #}
     <section class="space-y-4">
       <h2 class="font-serif text-xl text-base-content">Contact &amp; details</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {% include "accounts/_field.html" with field=pform.phone label="Phone" %}
-        {% include "accounts/_field.html" with field=pform.location label="Location" hint="City/region/country. Updates the Find-an-Analyst map." %}
-        {% include "accounts/_field.html" with field=pform.year_joined label="Academic year joined" hint="Help us complete the school's records." %}
+        {% include "accounts/_field.html" with field=pform.phone label="Phone (private)" hint="Kept on file for staff — never shown publicly. Set a Public phone below to list a number." %}
+        {% include "accounts/_field.html" with field=pform.location label="Location" vis=pform.vis_location hint="City/region/country. Updates the Find-an-Analyst map." %}
+        {% include "accounts/_field.html" with field=pform.year_joined label="Academic year joined" vis=pform.vis_year_joined hint="Help us complete the school's records." %}
       </div>
     </section>
 
@@ -136,14 +139,27 @@
     {# ---- Public profile ------------------------------------------------- #}
     <section class="space-y-4">
       <h2 class="font-serif text-xl text-base-content">Your public profile</h2>
-      <p class="text-sm text-base-content/70">
-        {% if profile.is_in_directory %}You're listed in the
-          <a href="{% url 'directory_detail' profile.directory_slug %}" class="link link-primary">member directory</a>{% if profile.is_faculty %}, and you{% endif %}{% else %}You{% endif %}{% if profile.is_faculty %} appear on the pages of events you teach{% endif %}.
-        These fields set what's shown there — everything here is publicly visible.
-      </p>
+
+      {% if profile.is_in_directory %}
+      <label class="flex items-start gap-3 cursor-pointer">
+        {{ pform.public }}
+        <span class="text-sm text-base-content pt-0.5">List me in the public member directory and the Find-an-Analyst map</span>
+      </label>
+      <div class="rounded-box bg-base-200/60 border border-base-300/60 p-3 text-sm text-base-content/75 leading-relaxed">
+        We list members by default so colleagues, prospective analysands, and
+        the public can find you — we'd encourage you to stay listed and to use a
+        public-facing email below rather than a private one. But your privacy is
+        yours: switch this off and you won't appear in the directory or the
+        Find-an-Analyst map. (You'll still appear on the pages of any events you teach.)
+      </div>
+      {% elif profile.is_faculty %}
+      <p class="text-sm text-base-content/70">You appear on the pages of events you teach. The fields below are publicly visible there.</p>
+      {% endif %}
+
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {% include "accounts/_field.html" with field=pform.public_email label="Public email" hint="The address shown on your public profile. Leave blank to display your login email instead." %}
-        {% include "accounts/_field.html" with field=pform.website label="Website" %}
+        {% include "accounts/_field.html" with field=pform.public_email label="Public email" vis=pform.vis_email hint="Leave blank to show your login email; set visibility to Private to hide email except from staff." %}
+        {% include "accounts/_field.html" with field=pform.public_phone label="Public phone" vis=pform.vis_phone hint="A number to list publicly — separate from your private phone above." %}
+        {% include "accounts/_field.html" with field=pform.website label="Website" vis=pform.vis_website %}
       </div>
       {% include "accounts/_field.html" with field=pform.event_bio label="Event bio" hint="Used on event pages where you're listed as a speaker. Falls back to your bio above when blank." %}
     </section>

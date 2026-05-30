@@ -16,6 +16,31 @@ def _email_change_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+#: Directory-profile fields whose visibility a member sets individually
+#: (Public / Members only / Private) via the editor. Identity fields (name,
+#: role, committees) are always public and aren't listed here. ``email`` and
+#: ``phone`` govern ``public_email`` / ``public_phone``.
+TOGGLEABLE_PUBLIC_FIELDS = (
+    "pronouns",
+    "bio",
+    "credentials",
+    "languages_spoken",
+    "location",
+    "year_joined",
+    "website",
+    "specialties",
+    "email",
+    "phone",
+)
+
+
+def default_field_visibility() -> dict[str, str]:
+    """New profiles start with every field Public (the school lists members
+    by default); members lower individual fields to members-only or private
+    from the editor. Uses the literal value to avoid referencing Profile here."""
+    return {key: "public" for key in TOGGLEABLE_PUBLIC_FIELDS}
+
+
 class User(AbstractUser):
     """Custom user model: login is by email address rather than username."""
 
@@ -63,6 +88,11 @@ class Profile(models.Model):
         IN_PERSON = "in_person", _("In person")
         PHONE = "phone", _("By phone")
         VIDEO = "video", _("By online video")
+
+    class Visibility(models.TextChoices):
+        PUBLIC = "public", _("Public")
+        MEMBERS = "members", _("Members only")
+        PRIVATE = "private", _("Private (staff only)")
 
     user = models.OneToOneField(
         "accounts.User",
@@ -176,7 +206,11 @@ class Profile(models.Model):
     )
     phone = PhoneNumberField(
         blank=True,
-        help_text="Stored in E.164 form. Parsed assuming US if no country code.",
+        help_text=(
+            "Private/on-file number for staff; never shown publicly. The "
+            "publicly listed number is ``public_phone``. E.164; parsed as US "
+            "if no country code."
+        ),
     )
     public_email = models.EmailField(
         blank=True,
@@ -185,6 +219,15 @@ class Profile(models.Model):
             "the login email (User.email) since members often use one address "
             "for their professional listing and another for school correspondence. "
             "Falls back to User.email when unset (see Profile.display_email)."
+        ),
+    )
+    public_phone = PhoneNumberField(
+        blank=True,
+        help_text=(
+            "Public-facing phone shown on the directory. Distinct from "
+            "``phone`` (kept on file for staff and never shown publicly) so a "
+            "member can list an office line while keeping a personal number "
+            "private. Unlike email, this does NOT fall back to ``phone``."
         ),
     )
     display_name = models.CharField(
@@ -237,8 +280,23 @@ class Profile(models.Model):
         help_text="Faculty default for new seminars (REG-6). Null for non-faculty.",
     )
     public = models.BooleanField(
-        default=False,
-        help_text="Whether to show bio/headshot on public-facing pages.",
+        default=True,
+        help_text=(
+            "Master switch: whether this member is listed in the public member "
+            "directory and the Find-an-Analyst map at all. Defaults to listed "
+            "(the school lists members by default); members may opt out for "
+            "privacy. Does not affect event pages they teach."
+        ),
+    )
+    field_visibility = models.JSONField(
+        default=default_field_visibility,
+        blank=True,
+        help_text=(
+            "Per-field visibility map {field_key: 'public'|'members'|'private'} "
+            "for TOGGLEABLE_PUBLIC_FIELDS. 'members' shows only to "
+            "authenticated users; 'private' only to staff (and the member). "
+            "Applied wherever the field is rendered — see Profile.visible_to()."
+        ),
     )
     notes = models.TextField(blank=True)
 
@@ -249,6 +307,36 @@ class Profile(models.Model):
     def display_email(self) -> str:
         """Email to show on public pages; falls back to the login email."""
         return self.public_email or self.user.email
+
+    def visibility_of(self, field_key: str) -> str:
+        """This member's chosen visibility level for ``field_key`` (defaults to
+        Public). See TOGGLEABLE_PUBLIC_FIELDS / Profile.Visibility."""
+        return (self.field_visibility or {}).get(field_key, self.Visibility.PUBLIC)
+
+    def visible_to(self, field_key: str, user) -> bool:
+        """Whether ``field_key`` should be shown to ``user`` (an auth user or
+        AnonymousUser/None). Public → everyone; Members only → any
+        authenticated user; Private → staff or the member themselves."""
+        level = self.visibility_of(field_key)
+        if level == self.Visibility.PUBLIC:
+            return True
+        if user is not None and getattr(user, "is_authenticated", False):
+            if user.is_staff or user.pk == self.user_id:
+                return True
+            if level == self.Visibility.MEMBERS:
+                return True
+        return False
+
+    def visible_fields(self, user) -> dict[str, bool]:
+        """Map of {field_key: visible?} for ``user`` across all toggleable
+        fields — convenient for templates (which can't call methods w/ args)."""
+        return {k: self.visible_to(k, user) for k in TOGGLEABLE_PUBLIC_FIELDS}
+
+    @property
+    def display_phone(self):
+        """Public phone to show on the directory — ``public_phone`` only; the
+        private ``phone`` is never exposed (no fallback, unlike email)."""
+        return self.public_phone
 
     @property
     def display_full_name(self) -> str:
@@ -303,8 +391,14 @@ class Profile(models.Model):
 
     @property
     def is_in_directory(self) -> bool:
-        """Whether this profile appears on /directory/ (drives nav links)."""
+        """Whether this profile's *role* is eligible for /directory/."""
         return self.role in self.DIRECTORY_ROLES
+
+    @property
+    def is_listed(self) -> bool:
+        """Whether this profile is actually shown publicly — role-eligible
+        *and* not opted out (drives the directory query and nav links)."""
+        return self.is_in_directory and self.public
 
     @property
     def owes_tuition(self) -> bool:

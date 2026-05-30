@@ -56,7 +56,7 @@ def _directory_qs():
     )
     return (
         Profile.objects
-        .filter(role__in=Profile.DIRECTORY_ROLES)
+        .filter(role__in=Profile.DIRECTORY_ROLES, public=True)
         .select_related("user")
         .prefetch_related(
             Prefetch(
@@ -95,6 +95,7 @@ def directory(request):
         by_role.setdefault(profile.role, []).append({
             "profile": profile,
             "slug": profile.directory_slug,
+            "show_location": profile.visible_to("location", request.user),
         })
     sections = [
         {"role": role, "label": label, "members": by_role.get(role, [])}
@@ -131,6 +132,7 @@ def directory_detail(request, slug: str):
                     "profile": profile,
                     "section_label": dict(DIRECTORY_SECTIONS)[profile.role],
                     "works": works,
+                    "vis": profile.visible_fields(request.user),
                 },
             )
     raise Http404("Member not found")
@@ -183,13 +185,17 @@ def find_an_analyst_pins(request):
     """
     qs = (
         Profile.objects
-        .filter(role__in=Profile.DIRECTORY_ROLES)
+        .filter(role__in=Profile.DIRECTORY_ROLES, public=True)
         .exclude(location_lat__isnull=True)
         .exclude(location_lng__isnull=True)
         .select_related("user")
     )
     pins = []
     for p in qs:
+        # Respect the member's location visibility — no public pin if they've
+        # restricted their location to members-only / private (vs this viewer).
+        if not p.visible_to("location", request.user):
+            continue
         # location_pins is the canonical store (one entry per geocoded
         # sub-place). Fall back to (location_lat, location_lng) as a single
         # synthetic pin for profiles geocoded before multi-pin landed.

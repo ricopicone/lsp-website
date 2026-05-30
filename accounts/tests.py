@@ -39,7 +39,7 @@ def test_profile_created_automatically():
     assert user.profile.is_faculty is False
     assert user.profile.default_billing_mode is None
     assert user.profile.bio == ""
-    assert user.profile.public is False
+    assert user.profile.public is True  # listed by default; members may opt out
 
 
 @pytest.mark.django_db

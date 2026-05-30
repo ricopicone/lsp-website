@@ -18,7 +18,7 @@
     </div>
     <div class="space-y-2">
       <h1 class="font-serif text-3xl text-base-content leading-tight">
-        {{ profile.display_full_name }}{% if profile.pronouns %} <span class="text-base font-sans text-base-content/50">({{ profile.pronouns }})</span>{% endif %}
+        {{ profile.display_full_name }}{% if vis.pronouns and profile.pronouns %} <span class="text-base font-sans text-base-content/50">({{ profile.pronouns }})</span>{% endif %}
       </h1>
       <div class="flex flex-wrap gap-1.5">
         <span class="inline-block text-xs uppercase tracking-widest text-base-content/70 bg-base-200 px-2 py-1 rounded">{{ profile.get_role_display }}</span>
@@ -39,39 +39,41 @@
   </header>
 
   <dl class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-6 gap-y-2 text-sm border-y border-base-300/60 py-6">
-    {% if profile.credentials %}
+    {% if vis.credentials and profile.credentials %}
       <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Credentials</dt>
       <dd class="m-0">{{ profile.credentials }}</dd>
     {% endif %}
-    {% if profile.languages_spoken %}
+    {% if vis.languages_spoken and profile.languages_spoken %}
       <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Languages</dt>
       <dd class="m-0">{{ profile.languages_spoken }}</dd>
     {% endif %}
-    {% if profile.location %}
+    {% if vis.location and profile.location %}
       <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Location</dt>
       <dd class="m-0">{{ profile.location }}</dd>
     {% endif %}
-    {% if profile.academic_year_joined %}
+    {% if vis.year_joined and profile.academic_year_joined %}
       <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Member since</dt>
       <dd class="m-0">{{ profile.academic_year_joined }}</dd>
     {% endif %}
-    {% if profile.phone %}
+    {% if vis.phone and profile.display_phone %}
       <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Phone</dt>
-      <dd class="m-0"><a href="tel:{{ profile.phone }}" class="link link-primary">{{ profile.phone.as_international }}</a></dd>
+      <dd class="m-0"><a href="tel:{{ profile.display_phone }}" class="link link-primary">{{ profile.display_phone.as_international }}</a></dd>
     {% endif %}
-    {% if profile.website %}
+    {% if vis.website and profile.website %}
       <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Website</dt>
       <dd class="m-0"><a href="{{ profile.website }}" rel="noopener" class="link link-primary break-all">{{ profile.website }}</a></dd>
     {% endif %}
-    <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Email</dt>
-    <dd class="m-0"><a href="mailto:{{ profile.display_email }}" class="link link-primary">{{ profile.display_email }}</a></dd>
-    {% if profile.specialties %}
+    {% if vis.email %}
+      <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Email</dt>
+      <dd class="m-0"><a href="mailto:{{ profile.display_email }}" class="link link-primary">{{ profile.display_email }}</a></dd>
+    {% endif %}
+    {% if vis.specialties and profile.specialties %}
       <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Areas of interest</dt>
       <dd class="m-0">{{ profile.specialties|linebreaksbr }}</dd>
     {% endif %}
   </dl>
 
-  {% if profile.bio %}
+  {% if vis.bio and profile.bio %}
   <div class="prose prose-sm max-w-none text-base-content">
     {{ profile.bio|linebreaks }}
   </div>
