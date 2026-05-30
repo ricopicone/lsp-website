@@ -1,0 +1,362 @@
+{% extends "core/base.html" %}
+{% load static %}
+{% block title %}Edit profile — LSP{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'vendor/cropper-1.6.2.min.css' %}">
+<style>
+  /* Make the cropper's crop box read as the circle the photo will become,
+     and drop a faint head-and-shoulders guide inside it so members know how
+     to frame themselves. */
+  .lsp-cropper .cropper-view-box,
+  .lsp-cropper .cropper-face { border-radius: 50%; }
+  .lsp-cropper .cropper-view-box { outline-color: rgba(255,255,255,0.9); }
+  /* The guide is injected into .cropper-crop-box so it tracks the crop area
+     exactly; it fills that square and the SVG is centered within it. */
+  .lsp-bust-guide {
+    position: absolute; inset: 0; pointer-events: none; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lsp-bust-guide svg { width: 100%; height: 100%; opacity: 0.32; }
+  /* CheckboxSelectMultiple renders <ul><li><label><input>…; lay the options
+     out inline with a little breathing room (avoids fragile arbitrary
+     variants in this Tailwind build). */
+  .lsp-checklist ul { display: flex; flex-wrap: wrap; gap: 0.25rem 1.5rem; list-style: none; padding: 0; margin: 0; }
+  .lsp-checklist label { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-8">
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Edit profile</h1>
+    <p class="text-sm text-base-content/70">
+      Update how you appear across the school's site. Changes show on your
+      {% if profile.is_listed %}<a href="{% url 'directory_detail' profile.directory_slug %}" class="link link-primary">directory page</a>{% else %}public listings{% endif %}
+      and on event pages where you're listed.
+    </p>
+  </header>
+
+  {% if saved %}
+  <div id="saved" role="alert" class="alert alert-success"><span>Saved.</span></div>
+  {% endif %}
+  {% if image_error %}
+  <div role="alert" class="alert alert-error"><span>{{ image_error }} Your other changes were not saved — please try again.</span></div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="space-y-10" id="profile-form">
+    {% csrf_token %}
+
+    {# ---- Photo ---------------------------------------------------------- #}
+    <section class="space-y-3">
+      <h2 class="font-serif text-xl text-base-content">Photo</h2>
+      <p class="text-sm text-base-content/70">
+        Your photo appears as a <strong>circle</strong> in several places, so
+        center your face in the ring and zoom to fit your head and shoulders.
+      </p>
+      <div class="flex items-center gap-5">
+        <div class="w-28 h-28 rounded-full overflow-hidden bg-base-200 ring-1 ring-base-300 flex items-center justify-center text-base-content/40 font-serif text-3xl shrink-0">
+          {% if profile.headshot %}
+            <img id="headshot-preview" src="{{ profile.headshot.url }}" alt="" class="w-full h-full object-cover">
+          {% else %}
+            <img id="headshot-preview" src="" alt="" class="w-full h-full object-cover hidden">
+            <span id="headshot-initials">{{ profile.user.first_name|slice:":1" }}{{ profile.user.last_name|slice:":1" }}</span>
+          {% endif %}
+        </div>
+        <div class="space-y-2">
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="btn btn-sm btn-primary" id="choose-photo">Choose photo…</button>
+            {% if profile.headshot_original %}
+            <button type="button" class="btn btn-sm btn-ghost" id="adjust-photo"
+                    data-original="{{ profile.headshot_original.url }}">Re-center / zoom</button>
+            {% endif %}
+            <button type="button" class="btn btn-sm btn-ghost text-error {% if not profile.headshot %}hidden{% endif %}" id="remove-photo">Remove</button>
+          </div>
+          <p class="text-xs text-base-content/55">JPG, PNG, or WebP. Up to 12&nbsp;MB.</p>
+          <p id="photo-status" class="text-xs text-success hidden">New photo ready — click Save changes.</p>
+        </div>
+      </div>
+
+      {# Carriers for the cropper output. #}
+      <input type="file" name="headshot_file" id="headshot-file" accept="image/*" class="hidden">
+      <input type="hidden" name="headshot_crop" id="headshot-crop">
+      <input type="hidden" name="remove_headshot" id="remove-headshot" value="0">
+    </section>
+
+    {# ---- Identity ------------------------------------------------------- #}
+    <section class="space-y-4">
+      <h2 class="font-serif text-xl text-base-content">Identity</h2>
+      <div class="text-sm flex flex-wrap items-center gap-2 text-base-content/70">
+        <span class="text-xs uppercase tracking-wider text-base-content/60">Standing:</span>
+        <span class="inline-block text-xs uppercase tracking-widest bg-base-200 px-2 py-1 rounded">{{ profile.get_role_display }}</span>
+        {% if profile.is_faculty %}<span class="inline-block text-xs uppercase tracking-widest px-2 py-1 rounded bg-accent/15 text-accent border border-accent/25">Faculty</span>{% endif %}
+        <span class="text-xs text-base-content/45">— set by staff. <a href="mailto:website@lacanschool.org" class="link">Contact us</a> to change.</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% include "accounts/_field.html" with field=uform.first_name label="First name" %}
+        {% include "accounts/_field.html" with field=uform.last_name label="Last name" %}
+        {% include "accounts/_field.html" with field=pform.display_name label="Preferred name" hint="Shown instead of your first + last name, if set." %}
+        {% include "accounts/_field.html" with field=pform.pronouns label="Pronouns" vis=pform.vis_pronouns %}
+      </div>
+    </section>
+
+    {% if can_change_email %}
+    {# ---- Login email (separate flow: verify-before-switch) -------------- #}
+    <section class="space-y-2">
+      <h2 class="font-serif text-xl text-base-content">Login email</h2>
+      <p class="text-sm text-base-content/70">
+        You sign in with <strong>{{ user.email }}</strong>. Changing it sends a
+        confirmation link to the new address before the change takes effect.
+      </p>
+      <a href="{% url 'email_change' %}" class="btn btn-sm btn-ghost">Change login email…</a>
+    </section>
+    {% endif %}
+
+    {# ---- About ---------------------------------------------------------- #}
+    <section class="space-y-4">
+      <h2 class="font-serif text-xl text-base-content">About</h2>
+      {% if profile.is_in_directory %}
+      <p class="text-sm text-base-content/60">Use the visibility menu beside each field to choose who sees it: <strong>Public</strong> (anyone), <strong>Members only</strong> (signed-in members), or <strong>Private</strong> (staff only).</p>
+      {% endif %}
+      {% include "accounts/_field.html" with field=pform.bio label="Bio" vis=pform.vis_bio hint="Also shown on event pages where you're a speaker." %}
+      {% include "accounts/_field.html" with field=pform.credentials label="Credentials" vis=pform.vis_credentials %}
+      {% include "accounts/_field.html" with field=pform.languages_spoken label="Languages spoken" vis=pform.vis_languages_spoken %}
+      {% include "accounts/_field.html" with field=pform.specialties label="Areas of interest / specialties" vis=pform.vis_specialties %}
+    </section>
+
+    {# ---- Contact -------------------------------------------------------- #}
+    <section class="space-y-4">
+      <h2 class="font-serif text-xl text-base-content">Contact &amp; details</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% include "accounts/_field.html" with field=pform.phone label="Phone (private)" hint="Kept on file for staff — never shown publicly. Set a Public phone below to list a number." %}
+        {% include "accounts/_field.html" with field=pform.location label="Location" vis=pform.vis_location hint="City/region/country. Updates the Find-an-Analyst map." %}
+        {% include "accounts/_field.html" with field=pform.year_joined label="Academic year joined" vis=pform.vis_year_joined hint="Help us complete the school's records." %}
+      </div>
+    </section>
+
+    {% if show_listing %}
+    {# ---- Public profile ------------------------------------------------- #}
+    <section class="space-y-4">
+      <h2 class="font-serif text-xl text-base-content">Your public profile</h2>
+
+      {% if profile.is_in_directory %}
+      <label class="flex items-start gap-3 cursor-pointer">
+        {{ pform.public }}
+        <span class="text-sm text-base-content pt-0.5">List me in the public member directory and the Find-an-Analyst map</span>
+      </label>
+      <div class="rounded-box bg-base-200/60 border border-base-300/60 p-3 text-sm text-base-content/75 leading-relaxed">
+        We list members by default so colleagues, prospective analysands, and
+        the public can find you — we'd encourage you to stay listed and to use a
+        public-facing email below rather than a private one. But your privacy is
+        yours: switch this off and you won't appear in the directory or the
+        Find-an-Analyst map. (You'll still appear on the pages of any events you teach.)
+      </div>
+      {% elif profile.is_faculty %}
+      <p class="text-sm text-base-content/70">You appear on the pages of events you teach. The fields below are publicly visible there.</p>
+      {% endif %}
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% include "accounts/_field.html" with field=pform.public_email label="Public email" vis=pform.vis_email hint="Leave blank to show your login email; set visibility to Private to hide email except from staff." %}
+        {% include "accounts/_field.html" with field=pform.public_phone label="Public phone" vis=pform.vis_phone hint="A number to list publicly — separate from your private phone above." %}
+        {% include "accounts/_field.html" with field=pform.website label="Website" vis=pform.vis_website %}
+      </div>
+      {% include "accounts/_field.html" with field=pform.event_bio label="Event bio" hint="Used on event pages where you're listed as a speaker. Falls back to your bio above when blank." %}
+    </section>
+    {% endif %}
+
+    {% if show_practice %}
+    {# ---- Practice ------------------------------------------------------- #}
+    <section class="space-y-4">
+      <h2 class="font-serif text-xl text-base-content">Practice</h2>
+      <label class="flex items-center gap-3 cursor-pointer">
+        {{ pform.accepting_patients }}
+        <span class="text-sm text-base-content">I'm currently accepting new analysands</span>
+      </label>
+      <div>
+        <span class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">{{ pform.consultation_modalities.label }}</span>
+        <div class="lsp-checklist flex flex-wrap gap-x-6 gap-y-1 text-sm">
+          {{ pform.consultation_modalities }}
+        </div>
+        <p class="text-xs text-base-content/55 mt-1">{{ pform.consultation_modalities.help_text }}</p>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if show_billing %}
+    {# ---- Faculty billing ------------------------------------------------ #}
+    <section class="space-y-4">
+      <h2 class="font-serif text-xl text-base-content">Faculty</h2>
+      {% include "accounts/_field.html" with field=pform.default_billing_mode label="Default billing for new seminars" %}
+    </section>
+    {% endif %}
+
+    {# ---- Time zone ------------------------------------------------------ #}
+    <section class="space-y-4" id="timezone">
+      <h2 class="font-serif text-xl text-base-content">Time zone</h2>
+      <p class="text-sm text-base-content/70">
+        Times across the site — sessions, the calendar, confirmation emails —
+        are shown in this zone. A hover tooltip always shows the Pacific Time
+        equivalent.
+      </p>
+      {% include "accounts/_field.html" with field=pform.timezone label="Time zone" %}
+    </section>
+
+    <div class="pt-2 border-t border-base-300/60">
+      <button type="submit" class="btn btn-primary">Save changes</button>
+    </div>
+  </form>
+</div>
+
+{# ---- Cropper modal ---------------------------------------------------- #}
+<dialog id="cropper-modal" class="modal">
+  <div class="modal-box max-w-lg">
+    <h3 class="font-serif text-lg mb-1">Frame your photo</h3>
+    <p class="text-sm text-base-content/65 mb-3">Drag to position, then zoom so your face and shoulders fill the circle.</p>
+
+    <div class="relative bg-base-300 rounded-box overflow-hidden" style="height:320px">
+      <img id="cropper-image" alt="" style="max-width:100%;display:block">
+    </div>
+
+    <div class="flex items-center gap-3 mt-4">
+      <span class="text-xs text-base-content/60">Zoom</span>
+      <input type="range" id="cropper-zoom" min="0" max="1" step="0.01" value="0" class="range range-primary range-sm flex-1">
+      <button type="button" class="btn btn-square btn-sm btn-ghost" id="cropper-rotate" title="Rotate" aria-label="Rotate">⟳</button>
+    </div>
+
+    <div class="modal-action">
+      <button type="button" class="btn btn-ghost" id="cropper-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="cropper-apply">Use photo</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<script src="{% static 'vendor/cropper-1.6.2.min.js' %}"></script>
+<script>
+(function () {
+  var modal     = document.getElementById("cropper-modal");
+  var image     = document.getElementById("cropper-image");
+  var fileInput = document.getElementById("headshot-file");
+  var cropInput = document.getElementById("headshot-crop");
+  var removeIn  = document.getElementById("remove-headshot");
+  var zoom      = document.getElementById("cropper-zoom");
+  var preview   = document.getElementById("headshot-preview");
+  var initials  = document.getElementById("headshot-initials");
+  var status    = document.getElementById("photo-status");
+  var removeBtn = document.getElementById("remove-photo");
+  var cropper   = null;
+  var baseRatio = 0;          // zoom ratio at "fit", for the slider's left end
+  var usingExisting = false;  // re-cropping the stored original (no new upload)
+
+  function destroy() { if (cropper) { cropper.destroy(); cropper = null; } }
+
+  // Drop a faint head-and-shoulders guide INTO the crop box so it tracks the
+  // crop area exactly. Head sits slightly above the box centre; shoulders
+  // splay toward the lower corners. (Cropper.destroy() tears this down with
+  // the rest of its DOM, so no manual cleanup is needed.)
+  function addBustGuide() {
+    var box = document.querySelector("#cropper-modal .cropper-crop-box");
+    if (!box || box.querySelector(".lsp-bust-guide")) return;
+    var g = document.createElement("div");
+    g.className = "lsp-bust-guide";
+    g.setAttribute("aria-hidden", "true");
+    g.innerHTML =
+      '<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="fill:var(--color-base-100)">' +
+      '<circle cx="50" cy="43" r="21"></circle>' +
+      '<path d="M12 100 C12 75 30 65 50 65 C70 65 88 75 88 100 Z"></path>' +
+      "</svg>";
+    box.appendChild(g);
+  }
+
+  function openModal(src, fromExisting) {
+    usingExisting = !!fromExisting;
+    destroy();
+    image.src = src;
+    modal.showModal();
+    image.onload = function () {
+      cropper = new Cropper(image, {
+        aspectRatio: 1, viewMode: 1, dragMode: "move",
+        // autoCropArea: 1 → the crop circle starts as large as the image
+        // allows (the full short edge), i.e. no cropping until you zoom in.
+        autoCropArea: 1, background: false, guides: false,
+        center: false, cropBoxMovable: false, cropBoxResizable: false,
+        toggleDragModeOnDblclick: false,
+        ready: function () {
+          var img = cropper.getImageData();
+          baseRatio = img.width / img.naturalWidth;
+          zoom.value = 0;
+          addBustGuide();
+        },
+        zoom: function (e) {
+          if (!baseRatio) return;
+          var v = (e.ratio - baseRatio) / (baseRatio * 3);  // span: fit → 4×
+          zoom.value = Math.max(0, Math.min(1, v)).toFixed(2);
+        },
+      });
+      image.parentNode.classList.add("lsp-cropper");
+    };
+  }
+
+  document.getElementById("choose-photo").addEventListener("click", function () {
+    fileInput.click();
+  });
+  fileInput.addEventListener("change", function () {
+    var f = fileInput.files && fileInput.files[0];
+    if (!f) return;
+    if (f.size > 12 * 1024 * 1024) { alert("That image is too large (12 MB max)."); fileInput.value = ""; return; }
+    var reader = new FileReader();
+    reader.onload = function (ev) { openModal(ev.target.result, false); };
+    reader.readAsDataURL(f);
+  });
+
+  var adjustBtn = document.getElementById("adjust-photo");
+  if (adjustBtn) adjustBtn.addEventListener("click", function () {
+    fileInput.value = "";                      // re-crop the stored original
+    openModal(adjustBtn.dataset.original, true);
+  });
+
+  zoom.addEventListener("input", function () {
+    if (!cropper || !baseRatio) return;
+    cropper.zoomTo(baseRatio + parseFloat(zoom.value) * baseRatio * 3);
+  });
+  document.getElementById("cropper-rotate").addEventListener("click", function () {
+    if (cropper) cropper.rotate(90);
+  });
+
+  document.getElementById("cropper-apply").addEventListener("click", function () {
+    if (!cropper) { modal.close(); return; }
+    cropInput.value = JSON.stringify(cropper.getData(true));  // natural px
+    removeIn.value = "0";
+    // Live circular preview (same-origin images only; guard taint just in case).
+    try {
+      var canvas = cropper.getCroppedCanvas({ width: 256, height: 256 });
+      if (preview) {
+        preview.src = canvas.toDataURL("image/webp", 0.85);
+        preview.classList.remove("hidden");
+        if (initials) initials.classList.add("hidden");
+      }
+    } catch (e) { /* tainted canvas — server still renders from the crop */ }
+    if (status) status.classList.remove("hidden");
+    if (removeBtn) removeBtn.classList.remove("hidden");
+    destroy();
+    modal.close();
+  });
+  document.getElementById("cropper-cancel").addEventListener("click", function () {
+    if (!usingExisting) fileInput.value = "";
+    destroy();
+    modal.close();
+  });
+
+  if (removeBtn) removeBtn.addEventListener("click", function () {
+    removeIn.value = "1";
+    fileInput.value = "";
+    cropInput.value = "";
+    if (preview) { preview.src = ""; preview.classList.add("hidden"); }
+    if (initials) initials.classList.remove("hidden");
+    if (status) { status.textContent = "Photo will be removed — click Save changes."; status.classList.remove("hidden"); }
+    removeBtn.classList.add("hidden");
+  });
+})();
+</script>
+{% endblock %}

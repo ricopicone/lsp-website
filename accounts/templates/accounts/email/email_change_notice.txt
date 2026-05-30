@@ -1,0 +1,10 @@
+{% autoescape off %}Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
+
+The login email for your Lacanian School of Psychoanalysis account was
+just changed from {{ old_email }} to {{ new_email }}.
+
+If you made this change, no action is needed.
+
+If you did NOT make this change, please contact us right away at
+{{ support_email }} so we can secure your account.
+{% endautoescape %}

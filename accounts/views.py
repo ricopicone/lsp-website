@@ -2,20 +2,33 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 
+from django.conf import settings
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Prefetch
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from committees.models import CommitteeMembership
 
 from . import emails
-from .forms import LightSignupForm, ReferralRequestForm
-from .models import Profile
+from .forms import (
+    EmailChangeForm,
+    LightSignupForm,
+    ProfileEditForm,
+    ReferralRequestForm,
+    UserNameForm,
+)
+from .images import MAX_UPLOAD_BYTES, InvalidImage, render_headshot_square
+from .models import EmailChangeRequest, Profile, User
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +56,7 @@ def _directory_qs():
     )
     return (
         Profile.objects
-        .filter(role__in=Profile.DIRECTORY_ROLES)
+        .filter(role__in=Profile.DIRECTORY_ROLES, public=True)
         .select_related("user")
         .prefetch_related(
             Prefetch(
@@ -82,6 +95,7 @@ def directory(request):
         by_role.setdefault(profile.role, []).append({
             "profile": profile,
             "slug": profile.directory_slug,
+            "show_location": profile.visible_to("location", request.user),
         })
     sections = [
         {"role": role, "label": label, "members": by_role.get(role, [])}
@@ -118,6 +132,7 @@ def directory_detail(request, slug: str):
                     "profile": profile,
                     "section_label": dict(DIRECTORY_SECTIONS)[profile.role],
                     "works": works,
+                    "vis": profile.visible_fields(request.user),
                 },
             )
     raise Http404("Member not found")
@@ -170,13 +185,17 @@ def find_an_analyst_pins(request):
     """
     qs = (
         Profile.objects
-        .filter(role__in=Profile.DIRECTORY_ROLES)
+        .filter(role__in=Profile.DIRECTORY_ROLES, public=True)
         .exclude(location_lat__isnull=True)
         .exclude(location_lng__isnull=True)
         .select_related("user")
     )
     pins = []
     for p in qs:
+        # Respect the member's location visibility — no public pin if they've
+        # restricted their location to members-only / private (vs this viewer).
+        if not p.visible_to("location", request.user):
+            continue
         # location_pins is the canonical store (one entry per geocoded
         # sub-place). Fall back to (location_lat, location_lng) as a single
         # synthetic pin for profiles geocoded before multi-pin landed.
@@ -207,23 +226,205 @@ def _safe_next(request) -> str | None:
 
 @login_required
 def timezone_settings(request):
-    """User-facing TZ picker.
+    """Legacy redirect — the timezone picker is now folded into the unified
+    profile editor (its own section + anchor). Kept so old bookmarks and the
+    ``set_timezone_from_browser`` flow still resolve."""
+    return redirect(reverse("profile_edit") + "#timezone")
 
-    POST writes Profile.timezone (validated against the LSP_TIMEZONES
-    list — empty string clears the preference, sending the user back to
-    the project default).
+
+_CROP_KEYS = ("x", "y", "width", "height", "rotate", "scaleX", "scaleY")
+
+
+def _parse_crop(raw: str | None) -> dict:
+    """Parse the cropper's JSON payload into a clean numeric dict."""
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out = {}
+    for key in _CROP_KEYS:
+        if key in data:
+            try:
+                out[key] = float(data[key])
+            except (TypeError, ValueError):
+                pass
+    return out
+
+
+def _apply_headshot(profile, new_file, crop, remove):
+    """Mutate ``profile``'s headshot fields in place (caller saves).
+
+    Three paths: remove, upload-a-new-photo, or re-crop the existing
+    original. Raises :class:`InvalidImage` on a bad upload; leaves the
+    profile untouched when there's nothing to do.
     """
-    from .forms import TimezoneForm
-    if request.method == "POST":
-        form = TimezoneForm(request.POST, instance=request.user.profile)
-        if form.is_valid():
-            form.save()
-            return redirect(request.path + "?saved=1#saved")
+    if remove:
+        if profile.headshot:
+            profile.headshot.delete(save=False)
+        if profile.headshot_original:
+            profile.headshot_original.delete(save=False)
+        profile.headshot_crop = {}
+        return
+
+    if new_file is not None:
+        if new_file.size and new_file.size > MAX_UPLOAD_BYTES:
+            raise InvalidImage("That image is too large (12 MB max).")
+        square = render_headshot_square(new_file, crop)
+        new_file.seek(0)  # render consumed the stream; rewind to store original
+        ext = os.path.splitext(new_file.name)[1].lower() or ".img"
+        if profile.headshot_original:
+            profile.headshot_original.delete(save=False)
+        profile.headshot_original.save(f"{profile.user.pk}{ext}", new_file, save=False)
+    elif crop and profile.headshot_original:
+        profile.headshot_original.open("rb")
+        square = render_headshot_square(profile.headshot_original, crop)
     else:
-        form = TimezoneForm(instance=request.user.profile)
-    return render(request, "accounts/timezone_settings.html", {
-        "form":  form,
-        "saved": request.GET.get("saved") == "1",
+        return  # no photo change in this submission
+
+    if profile.headshot:
+        profile.headshot.delete(save=False)
+    profile.headshot.save(f"{profile.user.pk}.webp", square, save=False)
+    profile.headshot_crop = crop or {}
+
+
+@login_required
+def profile_edit(request):
+    """Self-service profile editor (USR-6+): name, headshot, bio, listing.
+
+    Edits ``User`` name fields and the member-editable ``Profile`` fields in
+    one page. ``role`` / ``is_faculty`` stay staff-only and render read-only.
+    The headshot is processed through the Pillow square-crop pipeline so it
+    renders correctly in every circle/square frame across the site.
+    """
+    user = request.user
+    profile = user.profile
+    image_error = None
+
+    if request.method == "POST":
+        uform = UserNameForm(request.POST, instance=user)
+        pform = ProfileEditForm(request.POST, instance=profile)
+        if uform.is_valid() and pform.is_valid():
+            crop = _parse_crop(request.POST.get("headshot_crop"))
+            new_file = request.FILES.get("headshot_file")
+            remove = request.POST.get("remove_headshot") == "1"
+            try:
+                prof = pform.save(commit=False)
+                _apply_headshot(prof, new_file, crop, remove)
+            except InvalidImage as exc:
+                image_error = str(exc)
+            else:
+                uform.save()
+                prof.save()
+                return redirect(reverse("profile_edit") + "?saved=1#saved")
+    else:
+        uform = UserNameForm(instance=user)
+        pform = ProfileEditForm(instance=profile)
+
+    # Field-group flags: only show listing/practice sections to members who
+    # actually appear on public pages, and billing only to faculty. The
+    # public directory lists everyone in a directory role (Profile.public is
+    # not a gate anywhere — see _directory_qs), and faculty show on event pages.
+    show_listing = profile.is_in_directory or profile.is_faculty
+    show_practice = profile.role in {
+        Profile.Role.ANALYST,
+        Profile.Role.CANDIDATE,
+        Profile.Role.PRE_CANDIDATE,
+    }
+    return render(request, "accounts/profile_edit.html", {
+        "uform":         uform,
+        "pform":         pform,
+        "profile":       profile,
+        "saved":         request.GET.get("saved") == "1",
+        "image_error":   image_error,
+        "show_listing":  show_listing,
+        "show_practice": show_practice,
+        "show_billing":  profile.is_faculty,
+        "can_change_email": can_change_email(user),
+    })
+
+
+def can_change_email(user) -> bool:
+    """Whether ``user`` may use the self-service login-email change.
+
+    Gated until launch: everyone once ``EMAIL_CHANGE_PUBLIC`` is on, else
+    only addresses in ``EMAIL_CHANGE_ALLOWLIST`` (case-insensitive)."""
+    if getattr(settings, "EMAIL_CHANGE_PUBLIC", False):
+        return True
+    allow = {e.strip().lower() for e in getattr(settings, "EMAIL_CHANGE_ALLOWLIST", [])}
+    return bool(user.is_authenticated and user.email.lower() in allow)
+
+
+@login_required
+def email_change(request):
+    """Initiate a login-email change (gated; password re-auth required).
+
+    On success creates an :class:`EmailChangeRequest`, supersedes any prior
+    pending one, and emails a verification link to the new address. The
+    login email does not change until that link is confirmed.
+    """
+    if not can_change_email(request.user):
+        raise Http404
+
+    sent_to = None
+    if request.method == "POST":
+        form = EmailChangeForm(request.POST, user=request.user)
+        if form.is_valid():
+            new_email = form.cleaned_data["new_email"]
+            # Supersede prior unconfirmed requests so old links stop working.
+            EmailChangeRequest.objects.filter(
+                user=request.user, confirmed_at__isnull=True
+            ).delete()
+            req = EmailChangeRequest.objects.create(
+                user=request.user, new_email=new_email
+            )
+            emails.send_email_change_verification(req)
+            sent_to = new_email
+            form = None  # fall through to the "check your inbox" state
+    else:
+        form = EmailChangeForm(user=request.user)
+
+    return render(request, "accounts/email_change.html", {
+        "form":    form,
+        "sent_to": sent_to,
+    })
+
+
+def email_change_confirm(request, token):
+    """Confirm an email change from the link sent to the new address.
+
+    Token-only (clickable from the new inbox without being logged in). Idempotent
+    against reuse and re-checks uniqueness to close the request→confirm race.
+    """
+    req = EmailChangeRequest.objects.filter(token=token).select_related("user").first()
+    status = None
+    if req is None or req.confirmed_at is not None:
+        status = "invalid"
+    elif req.is_expired():
+        status = "expired"
+    elif User.objects.filter(email__iexact=req.new_email).exclude(pk=req.user_id).exists():
+        # Someone else claimed the address between request and confirmation.
+        status = "taken"
+    else:
+        with transaction.atomic():
+            user = req.user
+            old_email = user.email
+            user.email = req.new_email
+            user.save(update_fields=["email"])
+            req.confirmed_at = timezone.now()
+            req.save(update_fields=["confirmed_at"])
+        try:
+            emails.send_email_change_notice(user, old_email, req.new_email)
+        except Exception:  # a failed courtesy notice must not undo the change
+            logger.exception("email-change notice to %s failed", old_email)
+        status = "ok"
+
+    return render(request, "accounts/email_change_confirm.html", {
+        "status":    status,
+        "new_email": req.new_email if req else None,
     })
 
 

@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from .forms import UserChangeForm, UserCreationForm
-from .models import Profile, User
+from .models import EmailChangeRequest, Profile, User
 
 
 class ProfileInline(admin.StackedInline):
@@ -70,3 +70,14 @@ class ProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "role", "is_faculty")
     list_filter = ("role", "is_faculty", "public")
     search_fields = ("user__email", "user__first_name", "user__last_name")
+
+
+@admin.register(EmailChangeRequest)
+class EmailChangeRequestAdmin(admin.ModelAdmin):
+    list_display = ("user", "new_email", "created_at", "confirmed_at")
+    list_filter = ("confirmed_at",)
+    search_fields = ("user__email", "new_email")
+    readonly_fields = ("user", "new_email", "token", "created_at", "confirmed_at")
+
+    def has_add_permission(self, request):
+        return False

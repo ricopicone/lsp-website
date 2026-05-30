@@ -111,7 +111,7 @@ Done (see `git log` for specifics):
   `compose.yml`, fronted by host-level nginx with a Let's Encrypt cert
   (auto-renewed via a systemd timer). Postgres 16 on RDS `lsp-db`
   (db.t4g.micro, private). Email on SES (DKIM-verified; production-access
-  request pending). See `aws-infra` memory for endpoints, SG IDs, and the
+  request submitted 2026-05-30, status PENDING). See `aws-infra` memory for endpoints, SG IDs, and the
   Secrets Manager ARN for the RDS master password.
 - Milestone 1 complete (USR-1 through USR-5).
 - Profile extension (USR-6) — `is_faculty` orthogonal axis plus `bio`,
@@ -211,6 +211,26 @@ Done (see `git log` for specifics):
   search, per-member detail pages. Serif headings, neutral palette,
   responsive card grid. Style is template-local for now (no shared
   stylesheet); easy to factor when visual identity gets formalized.
+- Self-service profile editor at `/accounts/profile/` (replaces the old
+  "Edit profile · soon" stub). Members edit name, photo, bio, contact,
+  public listing, and practice details; `role`/`is_faculty` stay
+  staff-only (read-only). Headshots go through a Cropper.js modal
+  (circular overlay + bust guide + zoom) and a Pillow pipeline that
+  normalises every upload to a **512² WebP square** (kept non-destructive
+  via `headshot_original` + `headshot_crop`), so all the circle/square
+  frames across the site render correctly with no per-site changes. New
+  Profile fields harvested/enriched: `year_joined` (AY joined),
+  `display_name`, `pronouns`, `website`, `specialties`,
+  `consultation_modalities`. Editing `location` stales the geocode so
+  `geocode_profiles` re-resolves map pins. The timezone picker is folded
+  in (`/accounts/timezone/` now redirects there). See `profile-editor` memory.
+- Self-service **login-email change** at `/accounts/email/change/` —
+  verify-before-switch: password re-auth + uniqueness check → emails a
+  single-use 24h link to the new address → confirm switches `User.email`
+  and notifies the old address. Gated until launch by
+  `EMAIL_CHANGE_ALLOWLIST` (default: rico's address) unless
+  `EMAIL_CHANGE_PUBLIC=true`. `EmailChangeRequest` is admin-auditable.
+  See `email-change` memory.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
@@ -242,7 +262,16 @@ opening fall registration (M8).
   cases require manual edits.
 - **Set the actual Zoom link** in `Event.access_info` for the Working with
   Masochism event (currently a placeholder).
-- **SES production access** — request still pending Amazon approval.
+- **SES production access** — request submitted 2026-05-30 (the prior
+  "pending" note was stale: the SES API showed no request on file, so it
+  was (re)submitted with a transactional use-case; status now PENDING,
+  ~24h review). Until it lands, SES only delivers to *verified
+  identities*. `dr@ricopic.one` and the `lacanschool.org` domain are
+  already verified, so to test login-email-change end-to-end now, verify a
+  *second* address you control and change `dr@ricopic.one` to it.
+- **Open login-email change to all members at launch** — set
+  `DJANGO_EMAIL_CHANGE_PUBLIC=true` in the host `.env` (currently gated to
+  `DJANGO_EMAIL_CHANGE_ALLOWLIST`, default rico's address).
 - **Stripe credentials cutover** from rico's business account to the LSP's
   (Garrett's) once that account is ready.
 

@@ -1,0 +1,30 @@
+{% extends "core/base.html" %}
+{% block title %}Confirm login email — LSP{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto space-y-6">
+  <h1 class="font-serif text-3xl text-base-content">Login email</h1>
+
+  {% if status == "ok" %}
+    <div role="alert" class="alert alert-success">
+      <span>Done — your login email is now <strong>{{ new_email }}</strong>. Use it next time you sign in.</span>
+    </div>
+    <a href="{% url 'profile_edit' %}" class="btn btn-primary btn-sm">Back to profile</a>
+  {% elif status == "expired" %}
+    <div role="alert" class="alert alert-warning">
+      <span>This confirmation link has expired. Please request the change again.</span>
+    </div>
+    <a href="{% url 'email_change' %}" class="btn btn-ghost btn-sm">Try again</a>
+  {% elif status == "taken" %}
+    <div role="alert" class="alert alert-error">
+      <span>That email address is now in use by another account, so we couldn't make the change.</span>
+    </div>
+    <a href="{% url 'email_change' %}" class="btn btn-ghost btn-sm">Try a different address</a>
+  {% else %}
+    <div role="alert" class="alert alert-error">
+      <span>This confirmation link is invalid or has already been used.</span>
+    </div>
+    <a href="{% url 'email_change' %}" class="btn btn-ghost btn-sm">Request a new link</a>
+  {% endif %}
+</div>
+{% endblock %}

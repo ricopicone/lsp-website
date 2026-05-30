@@ -1,0 +1,45 @@
+{% extends "core/base.html" %}
+{% block title %}Change login email — LSP{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto space-y-6">
+  <nav class="text-sm">
+    <a href="{% url 'profile_edit' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Edit profile</a>
+  </nav>
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Change login email</h1>
+    <p class="text-sm text-base-content/70">
+      This changes the email you sign in with. Your current login email is
+      <strong>{{ user.email }}</strong>.
+    </p>
+  </header>
+
+  {% if sent_to %}
+  <div role="alert" class="alert alert-success">
+    <span>
+      Check your inbox at <strong>{{ sent_to }}</strong> — we sent a link to
+      confirm the change. Your login email stays <strong>{{ user.email }}</strong>
+      until you click it.
+    </span>
+  </div>
+  <a href="{% url 'profile_edit' %}" class="btn btn-ghost btn-sm">Back to profile</a>
+  {% else %}
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div>
+      <label for="{{ form.new_email.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">{{ form.new_email.label }}</label>
+      {{ form.new_email }}
+      {% if form.new_email.errors %}<p class="text-error text-xs mt-1">{{ form.new_email.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div>
+      <label for="{{ form.password.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">{{ form.password.label }}</label>
+      {{ form.password }}
+      {% if form.password.errors %}<p class="text-error text-xs mt-1">{{ form.password.errors|join:", " }}</p>{% endif %}
+      <p class="text-xs text-base-content/55 mt-1">{{ form.password.help_text }}</p>
+    </div>
+    <button type="submit" class="btn btn-primary">Send confirmation link</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
