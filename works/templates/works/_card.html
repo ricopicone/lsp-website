@@ -1,0 +1,32 @@
+{# A single Work catalog card. Expects `work` in context. #}
+<article class="space-y-3">
+  <a href="{{ work.get_absolute_url }}" class="block group">
+    {% if work.cover_image %}
+      <img src="{{ work.cover_image.url }}"
+           alt=""
+           class="aspect-[3/4] w-full rounded-md object-cover group-hover:opacity-95 transition-opacity">
+    {% else %}
+      <div class="group-hover:opacity-95 transition-opacity">
+        {% include "works/_tone_card.html" %}
+      </div>
+    {% endif %}
+  </a>
+  <div class="space-y-1">
+    <h3 class="font-serif text-base leading-tight">
+      <a href="{{ work.get_absolute_url }}" class="text-base-content hover:text-primary">
+        {{ work.title }}
+      </a>
+    </h3>
+    <p class="text-xs text-base-content/70 line-clamp-2">
+      {% for wa in work.authorships.all %}{% if not forloop.first %}, {% endif %}<a href="{% url 'directory_detail' wa.user.profile.directory_slug %}" class="hover:text-primary">{{ wa.user.first_name }} {{ wa.user.last_name }}</a>{% endfor %}
+      {% if work.external_authors %}{% if work.authorships.all %}, {% endif %}{{ work.external_authors }}{% endif %}
+    </p>
+    <div class="flex flex-wrap items-center gap-2 text-[11px] text-base-content/55">
+      {% if work.publication_date %}<span>{{ work.publication_date|date:"Y" }}</span>{% endif %}
+      <span class="uppercase tracking-wider">{{ work.get_kind_display }}</span>
+      {% if work.listing_visibility == "members" %}
+      <span class="badge badge-ghost badge-xs">Members</span>
+      {% endif %}
+    </div>
+  </div>
+</article>

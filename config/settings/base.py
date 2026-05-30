@@ -58,6 +58,7 @@ LOCAL_APPS = [
     "events",
     "registrations",
     "payments",
+    "works",
     "core",
 ]
 

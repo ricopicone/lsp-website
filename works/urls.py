@@ -1,0 +1,14 @@
+from django.urls import path
+
+from . import views
+
+app_name = "works"
+
+urlpatterns = [
+    path("", views.index, name="index"),
+    path("add/", views.add, name="add"),
+    path("mine/", views.my_works, name="mine"),
+    path("<slug:slug>/", views.detail, name="detail"),
+    path("<slug:slug>/edit/", views.edit, name="edit"),
+    path("<slug:slug>/pdf/", views.download, name="download"),
+]

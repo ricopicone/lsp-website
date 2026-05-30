@@ -1,0 +1,68 @@
+{% extends "core/base.html" %}
+{% block title %}Works — LSP{% endblock %}
+{% block content %}
+<div class="space-y-8">
+
+  <header class="flex items-start justify-between gap-4">
+    <div class="space-y-2">
+      <h1 class="font-serif text-3xl text-base-content">Works</h1>
+      <p class="text-base-content/70 max-w-2xl">
+        Intellectual work by members of the school — external publications,
+        Palimpsests, Passages, and cartel-produced texts.
+      </p>
+    </div>
+    {% if user.is_authenticated %}
+    <a href="{% url 'works:add' %}" class="btn btn-primary btn-sm shrink-0">Add a work</a>
+    {% endif %}
+  </header>
+
+  <form method="get" class="flex flex-wrap gap-3 items-end border-y border-base-300/60 py-4">
+    <div class="grow min-w-[16rem]">
+      <label for="filter-q" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Search</label>
+      <input type="search" id="filter-q" name="q" value="{{ q }}"
+             placeholder="Title, abstract, author"
+             class="input input-bordered input-sm w-full">
+    </div>
+    <div>
+      <label for="filter-kind" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Kind</label>
+      <select id="filter-kind" name="kind" class="select select-bordered select-sm">
+        <option value="">All</option>
+        {% for value, label in all_kind_choices %}
+        <option value="{{ value }}" {% if value == selected_kind %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="filter-year" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Year</label>
+      <select id="filter-year" name="year" class="select select-bordered select-sm">
+        <option value="">All years</option>
+        {% for y in years %}
+        <option value="{{ y }}" {% if y|stringformat:"s" == selected_year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <label class="cursor-pointer flex items-center gap-2 text-sm">
+      <input type="checkbox" name="has_pdf" value="1" {% if has_pdf %}checked{% endif %}
+             class="checkbox checkbox-sm">
+      <span>Has PDF</span>
+    </label>
+    <button type="submit" class="btn btn-sm">Filter</button>
+    {% if selected_kind or selected_year or has_pdf or q %}
+    <a href="{% url 'works:index' %}" class="btn btn-ghost btn-sm">Clear</a>
+    {% endif %}
+  </form>
+
+  {% if works %}
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-8">
+    {% for work in works %}
+      {% include "works/_card.html" %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="py-12 text-center text-base-content/60">
+    <p>No works match these filters.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -1,0 +1,146 @@
+{% extends "core/base.html" %}
+{% block title %}{% if is_new %}Add a work{% else %}Edit {{ work.title }}{% endif %} — LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-8">
+
+  <nav class="text-sm">
+    {% if is_new %}
+    <a href="{% url 'works:index' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Works</a>
+    {% else %}
+    <a href="{{ work.get_absolute_url }}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← {{ work.title }}</a>
+    {% endif %}
+  </nav>
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">
+      {% if is_new %}Add a work{% else %}Edit work{% endif %}
+    </h1>
+    <p class="text-sm text-base-content/70">
+      Share an external publication, a Palimpsest, or a Passage. You can edit
+      or remove this later from <em>My works</em>.
+    </p>
+  </header>
+
+  <form method="post" enctype="multipart/form-data" class="space-y-6">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="rounded-md border border-error/40 bg-error/5 p-3 text-sm text-error">
+      {{ form.non_field_errors }}
+    </div>
+    {% endif %}
+
+    <div class="space-y-1">
+      <label for="{{ form.title.id_for_label }}" class="block text-sm font-medium">Title</label>
+      {{ form.title }}
+      {% if form.title.errors %}<p class="text-error text-xs mt-1">{{ form.title.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ form.kind.id_for_label }}" class="block text-sm font-medium">Kind</label>
+      {{ form.kind }}
+      {% if form.kind.errors %}<p class="text-error text-xs mt-1">{{ form.kind.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ form.lsp_authors.id_for_label }}" class="block text-sm font-medium">
+        LSP co-authors <span class="text-base-content/50 font-normal">(optional)</span>
+      </label>
+      {{ form.lsp_authors }}
+      <p class="text-xs text-base-content/60">{{ form.lsp_authors.help_text }}</p>
+      {% if form.lsp_authors.errors %}<p class="text-error text-xs mt-1">{{ form.lsp_authors.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ form.external_authors.id_for_label }}" class="block text-sm font-medium">
+        External co-authors <span class="text-base-content/50 font-normal">(optional)</span>
+      </label>
+      {{ form.external_authors }}
+      <p class="text-xs text-base-content/60">{{ form.external_authors.help_text }}</p>
+      {% if form.external_authors.errors %}<p class="text-error text-xs mt-1">{{ form.external_authors.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ form.abstract.id_for_label }}" class="block text-sm font-medium">
+        Abstract <span class="text-base-content/50 font-normal">(optional)</span>
+      </label>
+      {{ form.abstract }}
+      {% if form.abstract.errors %}<p class="text-error text-xs mt-1">{{ form.abstract.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="space-y-1">
+        <label for="{{ form.publication_info.id_for_label }}" class="block text-sm font-medium">
+          Publication info <span class="text-base-content/50 font-normal">(optional)</span>
+        </label>
+        {{ form.publication_info }}
+        {% if form.publication_info.errors %}<p class="text-error text-xs mt-1">{{ form.publication_info.errors|join:", " }}</p>{% endif %}
+      </div>
+      <div class="space-y-1">
+        <label for="{{ form.publication_date.id_for_label }}" class="block text-sm font-medium">
+          Date <span class="text-base-content/50 font-normal">(optional)</span>
+        </label>
+        {{ form.publication_date }}
+        {% if form.publication_date.errors %}<p class="text-error text-xs mt-1">{{ form.publication_date.errors|join:", " }}</p>{% endif %}
+      </div>
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ form.url.id_for_label }}" class="block text-sm font-medium">
+        External link <span class="text-base-content/50 font-normal">(optional — publisher / DOI)</span>
+      </label>
+      {{ form.url }}
+      {% if form.url.errors %}<p class="text-error text-xs mt-1">{{ form.url.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="space-y-1">
+        <label for="{{ form.cover_image.id_for_label }}" class="block text-sm font-medium">
+          Cover image <span class="text-base-content/50 font-normal">(optional)</span>
+        </label>
+        {{ form.cover_image }}
+        {% if form.instance.cover_image %}
+        <p class="text-xs text-base-content/60">Current: {{ form.instance.cover_image.name }}</p>
+        {% endif %}
+        {% if form.cover_image.errors %}<p class="text-error text-xs mt-1">{{ form.cover_image.errors|join:", " }}</p>{% endif %}
+      </div>
+      <div class="space-y-1">
+        <label for="{{ form.pdf.id_for_label }}" class="block text-sm font-medium">
+          PDF <span class="text-base-content/50 font-normal">(optional)</span>
+        </label>
+        {{ form.pdf }}
+        {% if form.instance.pdf %}
+        <p class="text-xs text-base-content/60">Current: {{ form.instance.pdf.name }}</p>
+        {% endif %}
+        {% if form.pdf.errors %}<p class="text-error text-xs mt-1">{{ form.pdf.errors|join:", " }}</p>{% endif %}
+      </div>
+    </div>
+
+    <fieldset class="space-y-3 border-t border-base-300/60 pt-5">
+      <legend class="font-serif text-lg">Visibility</legend>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="space-y-1">
+          <label for="{{ form.listing_visibility.id_for_label }}" class="block text-sm font-medium">Listing</label>
+          {{ form.listing_visibility }}
+          <p class="text-xs text-base-content/60">Who can see this entry in the catalog.</p>
+          {% if form.listing_visibility.errors %}<p class="text-error text-xs mt-1">{{ form.listing_visibility.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="space-y-1">
+          <label for="{{ form.pdf_visibility.id_for_label }}" class="block text-sm font-medium">PDF</label>
+          {{ form.pdf_visibility }}
+          <p class="text-xs text-base-content/60">Who can download the PDF (if attached).</p>
+          {% if form.pdf_visibility.errors %}<p class="text-error text-xs mt-1">{{ form.pdf_visibility.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="flex items-center justify-between border-t border-base-300/60 pt-5">
+      <a href="{% if is_new %}{% url 'works:index' %}{% else %}{{ work.get_absolute_url }}{% endif %}"
+         class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">
+        {% if is_new %}Add work{% else %}Save changes{% endif %}
+      </button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% load works_filters %}
+{# Fallback cover for works without an uploaded cover_image.
+   Deterministic muted background tone keyed off the title; serif title
+   rendered over it. Aspect ratio 3:4 to match the typical book/journal
+   cover proportions. #}
+<div class="aspect-[3/4] w-full rounded-md flex items-center justify-center p-4 text-center overflow-hidden"
+     {% tone_style work.title %}>
+  <span class="font-serif text-base-100 leading-tight text-sm sm:text-base line-clamp-6">
+    {{ work.title }}
+  </span>
+</div>

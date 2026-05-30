@@ -93,12 +93,32 @@ def directory(request):
 
 def directory_detail(request, slug: str):
     """Full bio page for one member."""
+    from works.models import Work, WorkAuthor
     for profile in _directory_qs():
         if profile.directory_slug == slug:
+            works = (
+                Work.listing_for(request.user)
+                .filter(authors=profile.user)
+                .prefetch_related(
+                    Prefetch(
+                        "authorships",
+                        queryset=(
+                            WorkAuthor.objects
+                            .select_related("user")
+                            .order_by("display_order")
+                        ),
+                    ),
+                )
+                .order_by("-publication_date", "-created_at")
+            )
             return render(
                 request,
                 "accounts/directory_detail.html",
-                {"profile": profile, "section_label": dict(DIRECTORY_SECTIONS)[profile.role]},
+                {
+                    "profile": profile,
+                    "section_label": dict(DIRECTORY_SECTIONS)[profile.role],
+                    "works": works,
+                },
             )
     raise Http404("Member not found")
 

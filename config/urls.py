@@ -47,6 +47,7 @@ urlpatterns = [
          name="program_admin_event_edit"),
     path("events/", include("events.urls")),
     path("documents/", include("documents.urls")),
+    path("works/", include("works.urls")),
     path("dues/", _payment_views.dues_pay, name="dues"),
     path("donate/", _payment_views.donate, name="donate"),
     path("tuition/", _payment_views.tuition_decision, name="tuition"),

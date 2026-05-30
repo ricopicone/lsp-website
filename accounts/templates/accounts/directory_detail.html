@@ -63,5 +63,16 @@
   </div>
   {% endif %}
 
+  {% if works %}
+  <section class="space-y-4 pt-6 border-t border-base-300/60">
+    <h2 class="font-serif text-xl text-base-content">Selected works</h2>
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-8">
+      {% for work in works %}
+        {% include "works/_card.html" %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
 </div>
 {% endblock %}
