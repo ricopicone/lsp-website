@@ -1,0 +1,62 @@
+{% extends "core/base.html" %}
+{% block title %}{{ doc.title }} — Documents — LSP{% endblock %}
+{% block content %}
+<article class="max-w-3xl mx-auto space-y-8">
+
+  <nav class="text-sm">
+    <a href="{% url 'documents:index' %}"
+       class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">
+      ← Documents
+    </a>
+  </nav>
+
+  <header class="space-y-2">
+    <p class="text-xs uppercase tracking-wider text-base-content/60">
+      {{ doc.get_category_display }}
+    </p>
+    <h1 class="font-serif text-3xl text-base-content">{{ doc.title }}</h1>
+    {% if doc.summary %}
+    <p class="text-base-content/70 leading-relaxed">{{ doc.summary }}</p>
+    {% endif %}
+    <div class="flex items-center gap-3 text-sm text-base-content/60 pt-1">
+      {% if doc.effective_date %}
+      <span>Effective {{ doc.effective_date|date:"F j, Y" }}</span>
+      {% endif %}
+      {% if doc.visibility == "members" %}
+      <span class="badge badge-ghost badge-sm">Members only</span>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="flex gap-3">
+    <a href="{% url 'documents:download' doc.slug %}" class="btn btn-primary">
+      Download PDF
+    </a>
+  </div>
+
+  {% if doc.description %}
+  <div class="prose max-w-none">
+    {{ doc.description_html }}
+  </div>
+  {% endif %}
+
+  {% if older_versions %}
+  <section class="space-y-3 pt-6 border-t border-base-300/60">
+    <h2 class="font-serif text-lg text-base-content">Earlier versions</h2>
+    <ul class="space-y-2 text-sm">
+      {% for old in older_versions %}
+      <li class="flex items-baseline gap-3">
+        <span class="text-base-content/70">{{ old.title }}</span>
+        {% if old.effective_date %}
+        <span class="text-xs text-base-content/50">(effective {{ old.effective_date|date:"M Y" }})</span>
+        {% endif %}
+        <a href="{% url 'documents:download' old.slug %}"
+           class="text-xs text-base-content/60 hover:text-primary">Download →</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+</article>
+{% endblock %}

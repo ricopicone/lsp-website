@@ -1,0 +1,123 @@
+"""Institutional reference documents — governance, formation, founding, etc.
+
+Distinct from ``works.Work`` (member-contributed intellectual output): a
+``Document`` is institutional material managed by staff (bylaws,
+formation guidelines, founding texts, cartel-process resources). Most
+are public; a few may be members-only.
+
+Documents support version chains via ``superseded_by`` — an older
+bylaws PDF stays accessible but points to the current version so the
+index only surfaces what's in force.
+"""
+
+from __future__ import annotations
+
+import markdown
+from django.db import models
+from django.urls import reverse
+from django.utils.safestring import mark_safe
+from django.utils.translation import gettext_lazy as _
+
+
+class Document(models.Model):
+    class Category(models.TextChoices):
+        GOVERNANCE = "governance", _("Governance")
+        FORMATION = "formation", _("Formation Guidelines")
+        FOUNDING = "founding", _("Founding Texts")
+        CARTEL_RESOURCE = "cartel_resource", _("Cartel Resources")
+        REFERENCE = "reference", _("Reference")
+
+    class Visibility(models.TextChoices):
+        PUBLIC = "public", _("Public")
+        MEMBERS = "members", _("Members only")
+
+    #: Order categories appear in on the index page.
+    CATEGORY_ORDER = [
+        Category.GOVERNANCE,
+        Category.FORMATION,
+        Category.FOUNDING,
+        Category.CARTEL_RESOURCE,
+        Category.REFERENCE,
+    ]
+
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200, unique=True)
+    category = models.CharField(max_length=32, choices=Category.choices)
+    summary = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="One-line description shown on the index card.",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Optional longer-form description (markdown) for the detail page.",
+    )
+    file = models.FileField(upload_to="documents/%Y/")
+    visibility = models.CharField(
+        max_length=16,
+        choices=Visibility.choices,
+        default=Visibility.PUBLIC,
+    )
+    effective_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="When this document took effect (for versioned docs like bylaws).",
+    )
+    superseded_by = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="supersedes",
+        help_text="Set when this document is replaced by a newer version.",
+    )
+    display_order = models.IntegerField(
+        default=0,
+        help_text="Sort key within the category. Lower = earlier.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("category", "display_order", "title")
+
+    def __str__(self) -> str:
+        return self.title
+
+    @property
+    def is_current(self) -> bool:
+        """False when this document has been superseded by a newer version."""
+        return self.superseded_by_id is None
+
+    @property
+    def description_html(self) -> str:
+        if not self.description:
+            return ""
+        return mark_safe(
+            markdown.markdown(
+                self.description,
+                extensions=["smarty", "sane_lists", "tables"],
+                output_format="html5",
+            )
+        )
+
+    def get_absolute_url(self) -> str:
+        return reverse("documents:detail", args=[self.slug])
+
+    def visible_to(self, user) -> bool:
+        """Whether ``user`` may see this document at all."""
+        if self.visibility == self.Visibility.PUBLIC:
+            return True
+        return bool(user and user.is_authenticated)
+
+    @classmethod
+    def for_user(cls, user):
+        """Queryset of *current* documents visible to ``user``.
+
+        Excludes superseded versions; use ``Document.supersedes`` on a
+        current document to surface its version history.
+        """
+        qs = cls.objects.filter(superseded_by__isnull=True)
+        if user and user.is_authenticated:
+            return qs
+        return qs.filter(visibility=cls.Visibility.PUBLIC)

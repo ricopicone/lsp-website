@@ -54,6 +54,7 @@ LOCAL_APPS = [
     "accounts",
     "committees",
     "content",
+    "documents",
     "events",
     "registrations",
     "payments",

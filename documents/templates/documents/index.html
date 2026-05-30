@@ -1,0 +1,61 @@
+{% extends "core/base.html" %}
+{% block title %}Documents — LSP{% endblock %}
+{% block content %}
+<div class="space-y-10">
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Documents</h1>
+    <p class="text-base-content/70 max-w-2xl">
+      Foundational documents of the school — governance, formation guidelines,
+      founding texts, and resources for cartel work.
+    </p>
+  </header>
+
+  {% for section in sections %}
+  <section class="space-y-4">
+    <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">
+      {{ section.label }}
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% for doc in section.documents %}
+      <article class="rounded-lg border border-base-300 bg-base-100 hover:border-base-content/20 transition-colors">
+        <div class="p-5 space-y-3">
+          <div class="space-y-1">
+            <h3 class="font-serif text-lg leading-tight">
+              <a href="{{ doc.get_absolute_url }}" class="text-base-content hover:text-primary">
+                {{ doc.title }}
+              </a>
+            </h3>
+            {% if doc.summary %}
+            <p class="text-sm text-base-content/70 leading-relaxed">{{ doc.summary }}</p>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-3 text-xs text-base-content/60">
+            {% if doc.effective_date %}
+            <span>Effective {{ doc.effective_date|date:"M Y" }}</span>
+            {% endif %}
+            {% if doc.visibility == "members" %}
+            <span class="badge badge-ghost badge-sm">Members only</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-3 pt-1">
+            <a href="{% url 'documents:download' doc.slug %}"
+               class="btn btn-sm btn-primary">
+              Download PDF
+            </a>
+            {% if doc.description %}
+            <a href="{{ doc.get_absolute_url }}"
+               class="text-sm text-base-content/60 hover:text-primary">Details →</a>
+            {% endif %}
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% empty %}
+  <p class="text-base-content/60">No documents available.</p>
+  {% endfor %}
+
+</div>
+{% endblock %}
