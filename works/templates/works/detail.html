@@ -11,8 +11,10 @@
   </nav>
 
   <header class="flex flex-col sm:flex-row gap-8 items-start">
-    {# Modest fixed-pixel cover: 160px (mobile) / 192px (sm+).
-       Earlier vh-based sizing got bigger on tall windows, not smaller. #}
+    {% comment %}
+      Modest fixed-pixel cover: 160px (mobile) / 192px (sm+).
+      Earlier vh-based sizing got bigger on tall windows, not smaller.
+    {% endcomment %}
     <div class="w-40 sm:w-48 shrink-0">
       {% if work.cover_image %}
         <img src="{{ work.cover_image.url }}" alt=""
