@@ -59,6 +59,7 @@ LOCAL_APPS = [
     "registrations",
     "payments",
     "works",
+    "parletre",
     "core",
 ]
 
