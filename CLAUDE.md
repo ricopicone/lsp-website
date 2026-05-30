@@ -111,7 +111,7 @@ Done (see `git log` for specifics):
   `compose.yml`, fronted by host-level nginx with a Let's Encrypt cert
   (auto-renewed via a systemd timer). Postgres 16 on RDS `lsp-db`
   (db.t4g.micro, private). Email on SES (DKIM-verified; production-access
-  request pending). See `aws-infra` memory for endpoints, SG IDs, and the
+  request submitted 2026-05-30, status PENDING). See `aws-infra` memory for endpoints, SG IDs, and the
   Secrets Manager ARN for the RDS master password.
 - Milestone 1 complete (USR-1 through USR-5).
 - Profile extension (USR-6) — `is_faculty` orthogonal axis plus `bio`,
@@ -262,11 +262,13 @@ opening fall registration (M8).
   cases require manual edits.
 - **Set the actual Zoom link** in `Event.access_info` for the Working with
   Masochism event (currently a placeholder).
-- **SES production access** — request still pending Amazon approval. Also
-  blocks real-world testing of the login-email-change emails: until prod
-  access lands, SES only delivers to *verified identities*, so verify
-  `dr@ricopic.one` (and any test "new" address) in SES us-west-2 to
-  exercise the flow.
+- **SES production access** — request submitted 2026-05-30 (the prior
+  "pending" note was stale: the SES API showed no request on file, so it
+  was (re)submitted with a transactional use-case; status now PENDING,
+  ~24h review). Until it lands, SES only delivers to *verified
+  identities*. `dr@ricopic.one` and the `lacanschool.org` domain are
+  already verified, so to test login-email-change end-to-end now, verify a
+  *second* address you control and change `dr@ricopic.one` to it.
 - **Open login-email change to all members at launch** — set
   `DJANGO_EMAIL_CHANGE_PUBLIC=true` in the host `.env` (currently gated to
   `DJANGO_EMAIL_CHANGE_ALLOWLIST`, default rico's address).
