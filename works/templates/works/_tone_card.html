@@ -18,25 +18,27 @@
 
   {% with byline=work.authorships.all %}
   {% if byline %}
-  <div class="absolute flex -space-x-2" style="bottom: 6%; left: 6%;">
+  {# Pin both left + right so the flex container has a real width
+     (left-only would shrink-to-fit and collapse the % children to 0). #}
+  <div class="absolute flex -space-x-2" style="bottom: 6%; left: 6%; right: 6%;">
     {% for wa in byline|slice:":3" %}
       {% if wa.user.profile.headshot %}
-      <div class="aspect-square rounded-full overflow-hidden ring-1 ring-base-100/80"
-           style="width: 22%;">
+      <div class="aspect-square rounded-full overflow-hidden ring-1 ring-base-100/80 shrink-0"
+           style="width: 25%;">
         <img src="{{ wa.user.profile.headshot.url }}"
              alt=""
              class="w-full h-full object-cover">
       </div>
       {% else %}
-      <div class="aspect-square rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center font-serif text-xs text-base-content/80"
-           style="width: 22%;">
+      <div class="aspect-square rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center font-serif text-xs text-base-content/80 shrink-0"
+           style="width: 25%;">
         {{ wa.user.first_name|slice:":1" }}{{ wa.user.last_name|slice:":1" }}
       </div>
       {% endif %}
     {% endfor %}
     {% if byline|length > 3 %}
-    <div class="aspect-square rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center text-[10px] font-medium text-base-content/80"
-         style="width: 22%;">
+    <div class="aspect-square rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center text-[10px] font-medium text-base-content/80 shrink-0"
+         style="width: 25%;">
       +{{ byline|length|add:"-3" }}
     </div>
     {% endif %}
