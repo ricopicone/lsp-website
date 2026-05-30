@@ -13,6 +13,7 @@ from .models import (
     Attachment,
     Channel,
     ChannelCategory,
+    DigestPreference,
     Notification,
     Post,
     Reaction,
@@ -110,3 +111,10 @@ class ReadMarkerAdmin(admin.ModelAdmin):
 class AttachmentAdmin(admin.ModelAdmin):
     list_display = ("original_name", "post", "content_type", "size", "uploaded_at")
     raw_id_fields = ("post",)
+
+
+@admin.register(DigestPreference)
+class DigestPreferenceAdmin(admin.ModelAdmin):
+    list_display = ("user", "frequency", "last_sent_at")
+    list_filter = ("frequency",)
+    raw_id_fields = ("user",)

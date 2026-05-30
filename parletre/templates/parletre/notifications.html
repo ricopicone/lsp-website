@@ -9,7 +9,10 @@
     <span class="text-base-content/70">Notifications</span>
   </nav>
 
-  <h1 class="font-serif text-2xl tracking-tight text-base-content">Notifications</h1>
+  <div class="flex items-center justify-between gap-3">
+    <h1 class="font-serif text-2xl tracking-tight text-base-content">Notifications</h1>
+    <a href="{% url 'parletre:settings' %}" class="btn btn-ghost btn-sm">Email settings</a>
+  </div>
 
   <ul class="divide-y divide-base-300/60 rounded-box border border-base-300 bg-base-100">
     {% for n in items %}

@@ -870,3 +870,88 @@ def test_reply_to_is_support_when_disabled(mailoutbox, settings):
     post = Post.objects.create(channel=ch, thread=thread, author=author, body="hi")
     notify_post(post)
     assert mailoutbox[0].reply_to == [settings.SUPPORT_EMAIL]
+
+
+# ---- digests ------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_build_sections_only_includes_digest_channels_and_others_posts():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from .digests import build_sections
+    me = make_user("me@x.co", role=Role.ANALYST)
+    other = make_user("o@x.co", role=Role.ANALYST)
+
+    digest_ch = make_channel("commons")
+    loud_ch = make_channel("loud")
+    Subscription.objects.create(user=me, channel=digest_ch, level=SubscriptionLevel.DIGEST)
+    Subscription.objects.create(user=me, channel=loud_ch, level=SubscriptionLevel.ALL)
+
+    t1 = Thread.objects.create(channel=digest_ch, title="Digest thread", author=other)
+    Post.objects.create(channel=digest_ch, thread=t1, author=other, body="new")
+    # my own post shouldn't appear
+    Post.objects.create(channel=digest_ch, thread=t1, author=me, body="mine")
+    # a loud channel is emailed immediately, not in the digest
+    t2 = Thread.objects.create(channel=loud_ch, title="Loud", author=other)
+    Post.objects.create(channel=loud_ch, thread=t2, author=other, body="loud")
+
+    since = timezone.now() - timedelta(days=1)
+    sections = build_sections(me, since)
+    assert len(sections) == 1
+    assert sections[0]["channel"] == digest_ch
+    posts = sections[0]["groups"][0]["posts"]
+    assert [p.body for p in posts] == ["new"]   # not "mine", not "loud"
+
+
+@pytest.mark.django_db
+def test_digest_command_sends_and_advances_watermark(mailoutbox):
+    from django.core.management import call_command
+
+    from .models import DigestPreference
+    me = make_user("me@x.co", role=Role.ANALYST)
+    other = make_user("o@x.co", role=Role.ANALYST)
+    ch = make_channel("commons")
+    Subscription.objects.create(user=me, channel=ch, level=SubscriptionLevel.DIGEST)
+    DigestPreference.objects.create(user=me, frequency=DigestPreference.Frequency.DAILY)
+    t = Thread.objects.create(channel=ch, title="Hi", author=other)
+    Post.objects.create(channel=ch, thread=t, author=other, body="news")
+
+    call_command("send_discussion_digests")
+    assert len(mailoutbox) == 1
+    assert mailoutbox[0].to == [me.email]
+    pref = DigestPreference.objects.get(user=me)
+    assert pref.last_sent_at is not None
+
+    # running again immediately sends nothing (cadence not yet due, nothing new)
+    mailoutbox.clear()
+    call_command("send_discussion_digests")
+    assert mailoutbox == []
+
+
+@pytest.mark.django_db
+def test_digest_off_sends_nothing(mailoutbox):
+    from django.core.management import call_command
+
+    from .models import DigestPreference
+    me = make_user("me@x.co", role=Role.ANALYST)
+    other = make_user("o@x.co", role=Role.ANALYST)
+    ch = make_channel("commons")
+    Subscription.objects.create(user=me, channel=ch, level=SubscriptionLevel.DIGEST)
+    DigestPreference.objects.create(user=me, frequency=DigestPreference.Frequency.OFF)
+    t = Thread.objects.create(channel=ch, title="Hi", author=other)
+    Post.objects.create(channel=ch, thread=t, author=other, body="news")
+    call_command("send_discussion_digests")
+    assert mailoutbox == []
+
+
+@pytest.mark.django_db
+def test_settings_page_updates_digest_frequency(client):
+    from .models import DigestPreference
+    me = make_user("me@x.co", role=Role.ANALYST)
+    client.force_login(me)
+    resp = client.post(reverse("parletre:settings"), {"frequency": "daily"})
+    assert resp.status_code == 302
+    assert DigestPreference.objects.get(user=me).frequency == "daily"

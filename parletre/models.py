@@ -503,3 +503,26 @@ class Attachment(models.Model):
     @property
     def is_image(self) -> bool:
         return self.content_type.startswith("image/")
+
+
+class DigestPreference(models.Model):
+    """How often a member wants a batched email digest of their digest-level
+    channels (DISC-6). One per member; absence means no digest."""
+
+    class Frequency(models.TextChoices):
+        OFF = "off", _("No digest")
+        DAILY = "daily", _("Daily")
+        WEEKLY = "weekly", _("Weekly")
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="parletre_digest",
+    )
+    frequency = models.CharField(
+        max_length=8, choices=Frequency.choices, default=Frequency.WEEKLY
+    )
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"{self.user} digest: {self.frequency}"

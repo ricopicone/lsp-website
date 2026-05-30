@@ -27,6 +27,7 @@ from .models import (
     REACTION_EMOJI,
     Attachment,
     Channel,
+    DigestPreference,
     Notification,
     Post,
     Reaction,
@@ -109,6 +110,8 @@ def index(request):
     )
     visible = [c for c in channels if c.visible_to(request.user)]
     _ensure_auto_subscriptions(request.user, visible)
+    # Give every member a digest preference (default weekly) on first visit.
+    DigestPreference.objects.get_or_create(user=request.user)
 
     subs = {
         s.channel_id: s.level
@@ -294,6 +297,27 @@ def thread(request, slug, thread_slug):
             "reaction_palette": REACTION_EMOJI,
             "first_unread_id": first_unread_id,
         },
+    )
+
+
+@login_required
+def preferences(request):
+    """Member's Parlêtre email settings — the digest cadence."""
+    if not is_member(request.user):
+        return render(request, "parletre/not_a_member.html", status=403)
+    pref, _ = DigestPreference.objects.get_or_create(user=request.user)
+    if request.method == "POST":
+        freq = request.POST.get("frequency", "")
+        valid = {value for value, _label in DigestPreference.Frequency.choices}
+        if freq in valid:
+            pref.frequency = freq
+            pref.save(update_fields=["frequency"])
+            messages.success(request, "Digest preference saved.")
+        return redirect("parletre:settings")
+    return render(
+        request,
+        "parletre/settings.html",
+        {"pref": pref, "choices": DigestPreference.Frequency.choices},
     )
 
 

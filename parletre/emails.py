@@ -86,17 +86,13 @@ def send_post_notification(post, recipient, reason: str) -> None:
 
 def send_digest(user, sections, *, period_label: str) -> bool:
     """Send ``user`` a digest. ``sections`` is a list of
-    ``{"channel", "threads": [{"thread", "posts": [...]}]}``. Returns True if sent."""
+    ``{"channel", "groups": [{"label", "url", "posts"}]}`` (see
+    :func:`parletre.digests.build_sections`). Returns True if sent."""
     if not user.email or not sections:
         return False
     body = render_to_string(
         "parletre/email/digest.txt",
-        {
-            "user": user,
-            "sections": sections,
-            "period_label": period_label,
-            "base_url": settings.SITE_BASE_URL.rstrip("/"),
-        },
+        {"user": user, "sections": sections, "period_label": period_label},
     )
     msg = EmailMessage(
         subject=f"[Parlêtre] {period_label} digest",
