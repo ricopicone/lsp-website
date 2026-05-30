@@ -65,7 +65,7 @@ option** — skipping a year is fine but the four-year obligation stands.
 ### The annual decision
 
 Each academic year (Sep 1 – Aug 31), every in-training student must
-record one of these decisions for the upcoming year:
+record one of these decisions for that year:
 
 | Decision | Meaning |
 |---|---|
@@ -78,7 +78,8 @@ Students select `committed`, `payment_plan`, or `skipping` themselves
 via `/tuition/`. `paid_in_full` is reached automatically when a payment
 lands (Stripe Checkout or the treasurer recording an offline payment).
 
-**Decision deadline:** September 30 (configurable per period in Settings).
+**Decision deadline:** August 31 by default (the day before the academic
+year starts). Adjustable per academic year on the Settings tab.
 
 **Reminders** go out automatically every N days from the decision-due
 date onward, to students who haven't recorded a decision or whose
@@ -255,11 +256,13 @@ The Payments tab is for inspecting or correcting individual payments.
 
 ## Settings tab
 
-Per-academic-year amounts. Two tables:
+Per-academic-year settings. Two tables:
 
 - **Dues** — for each year, the three tier amounts (pre-cand /
   candidate / analyst).
-- **Tuition** — for each year, the annual amount.
+- **Tuition** — for each year, the annual amount and the
+  **decision due date** (defaults to August 31, the day before the AY
+  starts).
 
 The current year is marked with a green dot. Editing past years
 doesn't retroactively change anyone's recorded payments — it only

@@ -57,7 +57,9 @@ class Command(BaseCommand):
             name=f"AY {start_year}–{start_year + 1}",
             slug=slug,
             start_date=date(start_year, 9, 1),
-            decision_due_date=date(start_year, 9, 30),
+            # Decision due the day before the AY starts — gives the treasurer
+            # a clean cut-off and lets reminders begin Sept 1.
+            decision_due_date=date(start_year, 8, 31),
             end_date=date(start_year + 1, 8, 31),
             tuition_amount=amount,
             reminder_interval_days=interval,

@@ -31,7 +31,8 @@ writes the program directly using this admin.
 3. Pick **Program Committee admin**.
 
 You'll see the dropdown link if you're a current member of the
-**Programming Committee** on the committees list.
+**Programming Committee** on the committees list (or if you're LSP
+staff with full admin access).
 
 ---
 
@@ -47,10 +48,10 @@ Lists every program. Each row shows:
 - **Publish date** — if scheduled, the date it will flip to Public
   automatically
 
-A new academic year is set up automatically each September by a
-background job, so you should always see at least the current year and
-next year here. The next year starts as **Draft** so you can plan
-ahead without exposing anything publicly.
+An upcoming academic year is set up automatically about a year ahead,
+so you should always see at least the current year and the next year
+here. The next year starts as **Draft** so you can plan ahead without
+exposing anything publicly.
 
 Click **Open** on any row to drill in.
 
@@ -158,23 +159,23 @@ add a per-event hide control.
 ### "Someone proposed an event I want to add — how does that work today?"
 
 Today: a faculty member sends you the details by email or in
-conversation, and you create the event in the program admin. The
-formal proposal workflow (faculty submits a form → PC reviews + votes
-→ approve mints an Event) is designed but not built yet — see the
-[future] section below.
+conversation, and you create the event in the program admin. A formal
+proposal workflow (faculty submits a form → PC reviews + votes →
+approve mints an Event) is in the roadmap below.
 
 ---
 
 ## What's coming (roadmap)
 
-- **Proposal workflow** (M12.5): faculty submits a structured event
-  proposal via a form; PC reviews + comments; approve mints an Event.
-  Replaces the current ad-hoc proposal-by-email-then-PC-types-it-in
-  flow. Designed; build deferred until after we observe this year's
-  manual cycle.
+- **Proposal workflow**: faculty submits a structured event proposal
+  via a form; PC reviews + comments; approve mints an Event. Replaces
+  the current ad-hoc proposal-by-email-then-PC-types-it-in flow.
+  Designed; build deferred until after this year's manual cycle.
 - **Batch clone** for setting up next year from last year's structure
   ("two-week ordeal" → half-day).
-- **Faculty self-edit** of descriptions on events they teach.
+
+> Faculty can already edit descriptions on events they teach today —
+> they don't need to wait for the proposal workflow to land for that.
 
 ---
 

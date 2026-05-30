@@ -207,12 +207,16 @@ class TuitionPeriodRowForm(forms.ModelForm):
         model = TuitionPeriod
         fields = (
             "tuition_amount",
+            "decision_due_date",
             "reminder_interval_days",
         )
+        widgets = {
+            "decision_due_date": forms.DateInput(attrs={"type": "date"}),
+        }
 
     def __init__(self, *args, **kwargs):
         from django.core.validators import MinValueValidator
         super().__init__(*args, **kwargs)
         self.fields["tuition_amount"].validators.append(MinValueValidator(Decimal("0")))
-        for f in self.fields:
+        for f in ("tuition_amount", "reminder_interval_days"):
             self.fields[f].widget.attrs.setdefault("class", _NUMBER_INPUT_CSS)

@@ -101,6 +101,7 @@
             <tr>
               <th>Academic year</th>
               <th>Annual amount</th>
+              <th>Decision due date</th>
             </tr>
           </thead>
           <tbody>
@@ -113,9 +114,6 @@
                   {% endif %}
                   <div>
                     <div class="font-medium">{{ period.name }}</div>
-                    <div class="text-xs text-base-content/60">
-                      decisions due {{ period.decision_due_date|date:"M j, Y" }}
-                    </div>
                   </div>
                 </div>
                 {{ form.id }}
@@ -127,6 +125,10 @@
                   {{ form.tuition_amount }}
                 </div>
                 {% if form.tuition_amount.errors %}<p class="text-error text-xs mt-1">{{ form.tuition_amount.errors|join:", " }}</p>{% endif %}
+              </td>
+              <td>
+                {{ form.decision_due_date }}
+                {% if form.decision_due_date.errors %}<p class="text-error text-xs mt-1">{{ form.decision_due_date.errors|join:", " }}</p>{% endif %}
               </td>
             </tr>
             {% endfor %}

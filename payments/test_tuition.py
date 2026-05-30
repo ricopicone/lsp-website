@@ -458,6 +458,7 @@ def _settings_post_data(
     for i, p in enumerate(tuition_periods):
         row = {
             "tuition_amount":         str(p.tuition_amount),
+            "decision_due_date":      p.decision_due_date.isoformat(),
             "reminder_interval_days": str(p.reminder_interval_days),
         }
         row.update(tuition_overrides.get(p.id, {}))
@@ -528,6 +529,28 @@ def test_treasurer_settings_rejects_negative_amounts(
     )
     resp = client.post(reverse("treasurer_settings"), data)
     assert resp.status_code == 200  # form re-renders with errors
+
+
+@pytest.mark.django_db
+def test_treasurer_settings_saves_decision_due_date(
+    client, staff_user, current_period,
+):
+    """Decision due date round-trips through the tuition formset."""
+    from payments.models import DuesPeriod
+    client.force_login(staff_user)
+    dues_periods    = list(DuesPeriod.objects.order_by("-start_date"))
+    tuition_periods = list(TuitionPeriod.objects.order_by("-start_date"))
+    new_due = current_period.start_date.replace(day=1)  # e.g. Sep 1
+    data = _settings_post_data(
+        dues_periods, tuition_periods,
+        tuition_overrides={current_period.id: {
+            "decision_due_date": new_due.isoformat(),
+        }},
+    )
+    resp = client.post(reverse("treasurer_settings"), data)
+    assert resp.status_code == 302
+    current_period.refresh_from_db()
+    assert current_period.decision_due_date == new_due
 
 
 @pytest.mark.django_db
