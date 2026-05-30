@@ -72,22 +72,26 @@ SCHEDULES = [
         "exclude": [date(2026, 12, 19), date(2027, 1, 2)],
     },
     # 3. Reading Lacan Seminar VIII (II) — 3rd & 4th Wed each month
-    #    Sept–May, Beijing 9–11am = PT prev-day 18-20.
-    #    Convention: store on the Beijing calendar day, PT time.
+    #    Sept–May, Beijing 9–11am = PT prior-day Tue evening 18:00.
+    #    Beijing's 3rd Wed of month X is exactly the day after PT's
+    #    3rd Tue of month X (Tue immediately before Wed; both in the
+    #    same calendar month for any month). Stored as PT Tue 18:00-20:00
+    #    so the calendar shows the session at the time PT participants
+    #    actually join.
     {
         "slug": "reading-seminar-viii-ii-2026-27",
         "kind": "monthly",
-        "weekdays": ["WE"], "weeks": [3, 4],
+        "weekdays": ["TU"], "weeks": [3, 4],
         "start": date(2026, 9, 1), "end": date(2027, 5, 31),
-        # Beijing 9am → previous day 6pm Pacific. Storing as PT 18:00.
-        # The PT date is the day BEFORE the Beijing date, so for the Wed
-        # session we store on the prior Tue. Easier: store as PT 18:00
-        # on the Wed and let the description carry the Beijing context.
         "start_time": time(18, 0), "end_time": time(20, 0),
-        "location": "Online (Beijing time)",
+        # Calendar shows PT 18:00; actual PT time shifts to 17:00 during
+        # PST (Nov-Mar) because Beijing doesn't observe DST. PT
+        # participants should check their own conversion around DST.
+        "location": "Online (Beijing 9-11am — PT time approx, check around DST)",
     },
     # 4. Sounding Out the Signifier — 1st Sat Sept 2026–May 2027,
-    #    11am-1pm ET = 8am-10am PT.
+    #    11am-1pm ET = 8am-10am PT. Per the docx: "January meeting will
+    #    instead be held on 1/9/27 and May meeting will be held on 5/8/27."
     {
         "slug": "sounding-out-the-signifier-2026-27",
         "kind": "monthly",
@@ -95,6 +99,8 @@ SCHEDULES = [
         "start": date(2026, 9, 1), "end": date(2027, 5, 31),
         "start_time": time(8, 0), "end_time": time(10, 0),
         "location": "Philadelphia, PA (TBD)",
+        "exclude": [date(2027, 1, 2), date(2027, 5, 1)],
+        "extra_dates": [date(2027, 1, 9), date(2027, 5, 8)],
     },
     # 5. Secretaries to the Psychotic Subject – Seminar III continued.
     #    1st & 3rd Tue, Sept 2026 – May 2027, 8pm-10pm ET = 5pm-7pm PT.
@@ -183,7 +189,11 @@ SCHEDULES = [
         "location": "TBD, mid-City Los Angeles, CA",
     },
     # 13. Lacanian Clinical Practice — 2nd and 4th Tue,
-    #     Oct 13 2026 – Jun 8 2027, 7-8:20pm PT. Skip April 8.
+    #     Oct 13 2026 – Jun 8 2027, 7-8:20pm PT.
+    #     Per docx: "break from December until classes resume January 12,
+    #     and no class March 23." (Jan 12 = 2nd Tue Jan, so resume IS the
+    #     first session of Jan — only the Dec sessions are skipped, plus
+    #     March 23.)
     {
         "slug": "lacanian-clinical-practice-2026-27",
         "kind": "monthly",
@@ -191,11 +201,9 @@ SCHEDULES = [
         "start": date(2026, 10, 13), "end": date(2027, 6, 8),
         "start_time": time(19, 0), "end_time": time(20, 20),
         "location": "Online (Zoom)",
-        # Description notes: "Break from December until classes resume
-        # January 13; no class April 8". Encode the two skips.
         "exclude": [
             date(2026, 12, 8),  date(2026, 12, 22),  # December break
-            date(2027, 4, 8),                        # no class April 8
+            date(2027, 3, 23),                        # no class March 23
         ],
     },
     # 14. Freud Reading Group — 2nd Sun starting Sept 13 2026
@@ -281,6 +289,20 @@ class Command(BaseCommand):
             exclude = set(s.get("exclude", ()))
             # Apply exclude on the date portion of each window.
             windows = [w for w in windows if w.start_at.date() not in exclude]
+
+            # Append extra one-off dates (e.g. a moved meeting from the
+            # standard pattern). Each gets the same start/end time as the
+            # main pattern.
+            extras = s.get("extra_dates", ())
+            if extras:
+                extras_windows = generate_explicit(
+                    dates=list(extras),
+                    start_time=s["start_time"], end_time=s["end_time"],
+                )
+                windows = sorted(
+                    list(windows) + list(extras_windows),
+                    key=lambda w: w.start_at,
+                )
 
             verb = "would create" if dry else "create"
             self.stdout.write(f"\n{event.title}")
