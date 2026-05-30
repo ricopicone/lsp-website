@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from django.core import mail
@@ -289,27 +289,49 @@ def test_reminder_resumes_after_seven_days(member, current_period):
 
 
 @pytest.mark.django_db
-def test_create_dues_period_noop_when_current_exists(current_period):
+def test_create_dues_period_skips_when_current_and_next_exist(current_period):
+    """If both current AY and next AY exist, the command makes no changes."""
+    # Pre-create the next AY so the always-two-ahead invariant is satisfied.
+    next_start = current_period.start_date.year + 1
+    DuesPeriod.objects.create(
+        name=f"AY {next_start}-{next_start + 1}",
+        slug=f"ay-{next_start}-{next_start + 1}",
+        start_date=date(next_start, 9, 1),
+        due_date=date(next_start, 10, 1),
+        end_date=date(next_start + 1, 8, 31),
+        dues_amount_pre_candidate=Decimal("50.00"),
+        dues_amount_candidate=Decimal("100.00"),
+        dues_amount_analyst=Decimal("150.00"),
+    )
     out = StringIO()
     before = DuesPeriod.objects.count()
     call_command("create_dues_period_if_needed", stdout=out)
     assert DuesPeriod.objects.count() == before
-    assert "Nothing to do" in out.getvalue()
+    # Both periods should report "exists; skipping".
+    assert out.getvalue().count("skipping") == 2
 
 
 @pytest.mark.django_db
 def test_create_dues_period_inherits_amount_from_last(current_period):
-    """When today's after the current period, the next one inherits amount + dates."""
-    later = current_period.end_date + timedelta(days=30)
-    with patch("payments.management.commands.create_dues_period_if_needed.timezone") as tz:
-        tz.now.return_value = MagicMock(date=MagicMock(return_value=later))
-        call_command("create_dues_period_if_needed", stdout=StringIO())
-    new = DuesPeriod.objects.order_by("-start_date").first()
-    assert new.start_date.year == current_period.start_date.year + 1
-    assert new.dues_amount_pre_candidate == current_period.dues_amount_pre_candidate
-    assert new.dues_amount_candidate == current_period.dues_amount_candidate
-    assert new.dues_amount_analyst == current_period.dues_amount_analyst
-    assert new.start_date.month == 9 and new.start_date.day == 1
+    """The newly-created next AY inherits its tiers + cadence from the prior."""
+    # Mutate current_period so we can verify inheritance carries the changes.
+    current_period.dues_amount_pre_candidate = Decimal("55.55")
+    current_period.dues_amount_candidate     = Decimal("111.11")
+    current_period.dues_amount_analyst       = Decimal("222.22")
+    current_period.reminder_interval_days    = 21
+    current_period.save()
+
+    call_command("create_dues_period_if_needed", stdout=StringIO())
+
+    # After the command, current + next should both exist; the next AY is
+    # the one we want to assert inheritance on.
+    next_period = DuesPeriod.objects.order_by("-start_date").first()
+    assert next_period.start_date.year == current_period.start_date.year + 1
+    assert next_period.start_date.month == 9 and next_period.start_date.day == 1
+    assert next_period.dues_amount_pre_candidate == Decimal("55.55")
+    assert next_period.dues_amount_candidate     == Decimal("111.11")
+    assert next_period.dues_amount_analyst       == Decimal("222.22")
+    assert next_period.reminder_interval_days    == 21
 
 
 # ---- Treasurer dashboard ----------------------------------------------

@@ -97,6 +97,45 @@ def test_program_view_shows_unpublished_to_pc_member(client):
 
 
 @pytest.mark.django_db
+def test_create_program_if_needed_creates_current_and_next(db):
+    """The rollover cron ensures both current and next AY exist."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    # Start from empty.
+    Program.objects.all().delete()
+    out = StringIO()
+    call_command("create_program_if_needed", stdout=out)
+
+    today = date.today()
+    if today.month >= 9:
+        current_start = today.year
+    else:
+        current_start = today.year - 1
+    expected = {
+        f"{current_start}-{current_start + 1}",
+        f"{current_start + 1}-{current_start + 2}",
+    }
+    actual = set(Program.objects.values_list("academic_year", flat=True))
+    assert expected.issubset(actual)
+
+
+@pytest.mark.django_db
+def test_create_program_if_needed_is_idempotent(db):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    Program.objects.all().delete()
+    call_command("create_program_if_needed", stdout=StringIO())
+    after_first = Program.objects.count()
+    # Run again — no duplicates created.
+    call_command("create_program_if_needed", stdout=StringIO())
+    assert Program.objects.count() == after_first
+
+
+@pytest.mark.django_db
 def test_event_detail_404s_when_program_unpublished_for_anonymous(client):
     program = Program.objects.create(academic_year="2030-2031", published=False)
     Event.objects.create(

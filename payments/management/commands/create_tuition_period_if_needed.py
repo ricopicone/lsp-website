@@ -1,7 +1,8 @@
-"""Idempotent: ensure a TuitionPeriod covers today; create the next AY if not.
+"""Idempotent: always keep current + next academic year set up for tuition.
 
-Mirrors create_dues_period_if_needed. Wired into the same weekly systemd
-timer so the academic-year rollover happens without manual intervention.
+Mirrors create_dues_period_if_needed. Wired into the same daily systemd
+timer. Maintains *two* years ahead at all times so the treasurer and
+Program Committee can plan ahead.
 """
 
 from __future__ import annotations
@@ -17,34 +18,53 @@ from payments.models import TuitionPeriod
 
 
 class Command(BaseCommand):
-    help = "Ensure a TuitionPeriod exists covering today; create next AY if needed."
+    help = (
+        "Ensure TuitionPeriod rows exist for the current and next academic years."
+    )
 
     def handle(self, *args, **options):
         today = timezone.now().date()
-        current = TuitionPeriod.current(today)
-        if current is not None:
-            self.stdout.write(f"Current period exists: {current.name}. Nothing to do.")
+        if today.month >= 9:
+            current_start = today.year
+        else:
+            current_start = today.year - 1
+        next_start = current_start + 1
+
+        for start_year in (current_start, next_start):
+            self._ensure_period(start_year)
+
+    def _ensure_period(self, start_year: int):
+        slug = f"ay-{start_year}-{start_year + 1}-tuition"
+        existing = TuitionPeriod.objects.filter(slug=slug).first()
+        if existing is not None:
+            self.stdout.write(f"{existing.name} exists; skipping.")
             return
 
-        last = TuitionPeriod.objects.order_by("-start_date").first()
-        if last is None:
-            start_year = today.year if today.month >= 9 else today.year - 1
-            amount = Decimal(str(settings.TUITION_ANNUAL_AMOUNT))
+        prior = (
+            TuitionPeriod.objects
+            .filter(start_date__lt=date(start_year, 9, 1))
+            .order_by("-start_date")
+            .first()
+        )
+        if prior is not None:
+            amount = prior.tuition_amount
+            interval = prior.reminder_interval_days
         else:
-            start_year = last.start_date.year + 1
-            amount = last.tuition_amount
+            amount = Decimal(str(settings.TUITION_ANNUAL_AMOUNT))
+            interval = 7
 
         new = TuitionPeriod.objects.create(
             name=f"AY {start_year}–{start_year + 1}",
-            slug=f"ay-{start_year}-{start_year + 1}-tuition",
+            slug=slug,
             start_date=date(start_year, 9, 1),
             decision_due_date=date(start_year, 9, 30),
             end_date=date(start_year + 1, 8, 31),
             tuition_amount=amount,
+            reminder_interval_days=interval,
         )
         self.stdout.write(
             self.style.SUCCESS(
-                f"Created {new.name} (${new.tuition_amount}) — runs "
-                f"{new.start_date.isoformat()} to {new.end_date.isoformat()}."
+                f"Created {new.name} — ${new.tuition_amount}, "
+                f"reminders every {interval} days."
             )
         )

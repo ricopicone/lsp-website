@@ -838,6 +838,52 @@ def test_treasurer_payment_refund_skips_non_stripe_payments(
 
 
 @pytest.mark.django_db
+def test_create_dues_period_if_needed_keeps_two_years_ahead(db):
+    """Rollover should always maintain current + next AY for dues."""
+    from datetime import date
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from payments.models import DuesPeriod
+
+    DuesPeriod.objects.all().delete()
+    call_command("create_dues_period_if_needed", stdout=StringIO())
+
+    today = date.today()
+    if today.month >= 9:
+        current_start = today.year
+    else:
+        current_start = today.year - 1
+    actual = set(DuesPeriod.objects.values_list("slug", flat=True))
+    assert f"ay-{current_start}-{current_start + 1}" in actual
+    assert f"ay-{current_start + 1}-{current_start + 2}" in actual
+
+
+@pytest.mark.django_db
+def test_create_tuition_period_if_needed_keeps_two_years_ahead(db):
+    """Rollover should always maintain current + next AY for tuition."""
+    from datetime import date
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from payments.models import TuitionPeriod
+
+    TuitionPeriod.objects.all().delete()
+    call_command("create_tuition_period_if_needed", stdout=StringIO())
+
+    today = date.today()
+    if today.month >= 9:
+        current_start = today.year
+    else:
+        current_start = today.year - 1
+    actual = set(TuitionPeriod.objects.values_list("slug", flat=True))
+    assert f"ay-{current_start}-{current_start + 1}-tuition" in actual
+    assert f"ay-{current_start + 1}-{current_start + 2}-tuition" in actual
+
+
+@pytest.mark.django_db
 def test_treasurer_new_tabs_require_staff(client, current_period):
     """Exports + Payments + Members tabs gated to staff."""
     u = _mk_candidate("not-staff-tab@x.test")
