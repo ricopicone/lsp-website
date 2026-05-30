@@ -135,9 +135,11 @@ def vibe_lines(title: str) -> SafeString:
             x1, y1 = rng.randint(40, 100), 0
         else:
             x1, y1 = 100, rng.randint(0, 60)
-        # End inside the bottom-left zone where avatars sit.
-        x2 = rng.randint(0, 22)
-        y2 = rng.randint(82, 98)
+        # End inside the bottom-left avatar zone. The zone is wider now
+        # that avatars are ~22% of card width (a cluster of three spans
+        # roughly x=[6, 65] in viewBox units).
+        x2 = rng.randint(5, 55)
+        y2 = rng.randint(83, 96)
         opacity = rng.uniform(0.35, 0.55)
         sw = rng.choice([0.5, 0.7, 0.9])
         color = rng.choice(["#ffffff", "#000000", "#ffffff"])
