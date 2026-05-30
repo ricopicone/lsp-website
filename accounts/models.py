@@ -61,6 +61,15 @@ class Profile(models.Model):
         default=Role.EXTERNAL,
         help_text="LSP standing; drives event pricing and members-only access.",
     )
+    timezone = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=(
+            "User's preferred timezone (IANA name, e.g. 'America/New_York'). "
+            "Empty = use project default (Pacific Time)."
+        ),
+    )
     is_faculty = models.BooleanField(
         default=False,
         help_text="Faculty axis (USR-6). Orthogonal to role.",

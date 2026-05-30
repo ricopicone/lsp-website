@@ -1,0 +1,196 @@
+"""Tests for per-user timezone handling — middleware, filters, settings.
+
+The LSP membership is distributed across timezones. We render times in
+the user's preferred TZ (with PT shown in a hover tooltip) so a Beijing
+member doesn't have to do 16-hour conversions in their head, while
+PT-native members can still cross-reference quickly.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+from zoneinfo import ZoneInfo
+
+import pytest
+from django.template import Context, Template
+from django.test import RequestFactory
+from django.utils import timezone
+
+from accounts.middleware import TimezoneMiddleware
+from accounts.models import User
+
+# A specific, unambiguous moment: 2026-10-15 17:00 PT = 2026-10-16 00:00 UTC.
+# October 15 is during PDT, so PT = UTC-7. NY is EDT = UTC-4.
+MOMENT_UTC = _dt.datetime(2026, 10, 16, 0, 0, tzinfo=_dt.timezone.utc)
+"""5 PM Pacific (PDT) on October 15 2026 — also 8 PM Eastern, 9 AM next-day Beijing."""
+
+
+# ---- Middleware --------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_middleware_activates_user_timezone():
+    """An authenticated user with Profile.timezone set has that TZ active."""
+    u = User.objects.create_user(email="ny@x.test")
+    u.profile.timezone = "America/New_York"
+    u.profile.save()
+
+    def view(req):
+        # Inside the request, the active TZ should match the user's pref.
+        assert str(timezone.get_current_timezone()) == "America/New_York"
+        return "ok"
+
+    mw = TimezoneMiddleware(view)
+    req = RequestFactory().get("/")
+    req.user = u
+    assert mw(req) == "ok"
+
+
+@pytest.mark.django_db
+def test_middleware_falls_back_to_project_tz_when_no_preference():
+    """No preference → active TZ is the project default (Pacific)."""
+    u = User.objects.create_user(email="default@x.test")
+    # Profile.timezone is "" by default.
+
+    captured = {}
+
+    def view(req):
+        captured["tz"] = str(timezone.get_current_timezone())
+        return "ok"
+
+    mw = TimezoneMiddleware(view)
+    req = RequestFactory().get("/")
+    req.user = u
+    mw(req)
+    # Project default in tests is whatever settings.TIME_ZONE is set to —
+    # for this project that's America/Los_Angeles.
+    assert captured["tz"] == "America/Los_Angeles"
+
+
+@pytest.mark.django_db
+def test_middleware_handles_anonymous_user():
+    """Anonymous users → project default, no crash."""
+    from django.contrib.auth.models import AnonymousUser
+
+    captured = {}
+
+    def view(req):
+        captured["tz"] = str(timezone.get_current_timezone())
+        return "ok"
+
+    mw = TimezoneMiddleware(view)
+    req = RequestFactory().get("/")
+    req.user = AnonymousUser()
+    mw(req)
+    assert captured["tz"] == "America/Los_Angeles"
+
+
+@pytest.mark.django_db
+def test_middleware_ignores_invalid_timezone_string():
+    """Garbage TZ string → silent fallback to project default."""
+    u = User.objects.create_user(email="bogus@x.test")
+    u.profile.timezone = "Mars/Olympus"
+    u.profile.save()
+
+    captured = {}
+
+    def view(req):
+        captured["tz"] = str(timezone.get_current_timezone())
+        return "ok"
+
+    mw = TimezoneMiddleware(view)
+    req = RequestFactory().get("/")
+    req.user = u
+    mw(req)  # should not raise
+    assert captured["tz"] == "America/Los_Angeles"
+
+
+@pytest.mark.django_db
+def test_middleware_deactivates_after_request():
+    """TZ doesn't leak across requests via thread-local state."""
+    u = User.objects.create_user(email="leaky@x.test")
+    u.profile.timezone = "Asia/Shanghai"
+    u.profile.save()
+
+    mw = TimezoneMiddleware(lambda req: "ok")
+    req = RequestFactory().get("/")
+    req.user = u
+    mw(req)
+    # After the middleware returns, the override should be cleared.
+    assert str(timezone.get_current_timezone()) == "America/Los_Angeles"
+
+
+# ---- Template filters --------------------------------------------------
+
+
+def _render(template_src: str, **ctx) -> str:
+    return Template(template_src).render(Context(ctx))
+
+
+def test_user_time_filter_renders_in_active_zone():
+    """With Eastern active, a PT-evening session shows as 8:00 PM EDT."""
+    with timezone.override(ZoneInfo("America/New_York")):
+        out = _render(
+            "{% load tz_filters %}{{ moment|user_time }}",
+            moment=MOMENT_UTC,
+        )
+    assert "8:00 PM EDT" in out
+    assert "<time" in out
+
+
+def test_user_time_filter_tooltip_always_shows_pt():
+    """The title attribute shows PT regardless of viewer's timezone."""
+    with timezone.override(ZoneInfo("America/New_York")):
+        out = _render(
+            "{% load tz_filters %}{{ moment|user_time }}",
+            moment=MOMENT_UTC,
+        )
+    assert "5:00 PM PT" in out
+    assert 'title="' in out
+
+
+def test_user_time_filter_for_pt_viewer_normalizes_pdt_to_pt():
+    """PT viewers see 'PT' (not 'PDT' / 'PST') — LSP convention."""
+    with timezone.override(ZoneInfo("America/Los_Angeles")):
+        out = _render(
+            "{% load tz_filters %}{{ moment|user_time }}",
+            moment=MOMENT_UTC,
+        )
+    assert "5:00 PM PT" in out
+    assert "PDT" not in out
+
+
+def test_user_time_filter_beijing_shows_next_calendar_day():
+    """Beijing's view of a PT-evening session lands on the next day."""
+    with timezone.override(ZoneInfo("Asia/Shanghai")):
+        out = _render(
+            "{% load tz_filters %}{{ moment|user_time }}",
+            moment=MOMENT_UTC,
+        )
+    # 5 PM PT on Oct 15 = 8 AM Oct 16 in Shanghai (CST = UTC+8).
+    assert "8:00 AM CST" in out
+
+
+def test_user_datetime_includes_date_in_display():
+    """user_datetime includes day name + date in the visible text."""
+    with timezone.override(ZoneInfo("America/New_York")):
+        out = _render(
+            "{% load tz_filters %}{{ moment|user_datetime }}",
+            moment=MOMENT_UTC,
+        )
+    assert "Thu, Oct 15" in out
+    assert "8:00 PM EDT" in out
+
+
+def test_user_time_handles_none_gracefully():
+    out = _render(
+        "{% load tz_filters %}[{{ none|user_time }}]",
+        none=None,
+    )
+    assert out == "[]"
+
+
+def test_user_tz_name_returns_active_zone():
+    with timezone.override(ZoneInfo("Europe/Berlin")):
+        out = _render("{% load tz_filters %}{% user_tz_name %}")
+    assert out == "Europe/Berlin"
