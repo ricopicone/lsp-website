@@ -47,14 +47,19 @@ CSRF_TRUSTED_ORIGINS = env(
 )
 
 # --- Channels layer (Parlêtre realtime chat) ----------------------------
-# Share the WebSocket layer across workers via Redis when REDIS_URL is set.
-# Without it, the in-memory layer from base.py is used — correct only for a
-# single worker process.
+# Production runs a single daphne process, so the in-memory channel layer
+# from base.py is correct and sufficient (groups are shared within the one
+# process — HTTP-fallback broadcasts come from that same process too). We do
+# NOT use Redis here: channels-redis against redis-py 8.x raises
+# "TimeoutError: Timeout reading from redis" on group ops, which silently
+# broke live chat. Re-enable Redis only when scaling to multiple worker
+# processes, and only after fixing that combo (e.g. RedisPubSubChannelLayer
+# and/or pinning redis-py) — opt in with PARLETRE_USE_REDIS=true.
 REDIS_URL = env("REDIS_URL", default="")
-if REDIS_URL:
+if env.bool("PARLETRE_USE_REDIS", default=False) and REDIS_URL:
     CHANNEL_LAYERS = {
         "default": {
-            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "BACKEND": "channels_redis.pubsub.RedisPubSubChannelLayer",
             "CONFIG": {"hosts": [REDIS_URL]},
         },
     }
