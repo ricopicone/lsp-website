@@ -1,0 +1,14 @@
+Your {{ period_label }} digest from Parlêtre — new activity in the channels
+you follow by digest.
+
+{% for section in sections %}
+== {{ section.channel.name }} ==
+{% for t in section.threads %}
+  {{ t.thread.title }} ({{ t.posts|length }} new)
+  {{ base_url }}{{ t.thread.get_absolute_url }}
+{% for p in t.posts %}    · {{ p.author.get_full_name|default:"(removed)" }}: {{ p.body|truncatechars:120 }}
+{% endfor %}{% endfor %}
+{% endfor %}
+—
+Parlêtre · the Lacanian School discussion board
+Change your digest frequency or per-channel settings on the board.

@@ -1,10 +1,20 @@
-"""Side-effects of posting in Parlêtre: @mention parsing and in-app
-notifications (the nav bell).
+"""Side-effects of posting in Parlêtre: @mention parsing, in-app
+notifications (the nav bell), and immediate notification emails.
+
+Email follows each member's per-channel subscription level:
+
+* ``all``           → email on every post
+* ``threads_only``  → email on each new thread
+* ``mentions_only`` → email only when @mentioned
+* ``digest``        → no immediate email; batched by send_discussion_digests
+* ``muted``         → never
+
+A direct @mention emails immediately unless the channel is muted. Members
+with no subscription row fall back to the channel's default level.
 
 Mentions are matched by *directory slug* — the slugified "First Last" that
 already identifies a member in directory URLs — so ``@mona-member`` resolves
-to that member. A picker/autocomplete that inserts the right token is a later
-(JS) polish; the resolution and notification plumbing live here.
+to that member.
 """
 
 from __future__ import annotations
@@ -13,22 +23,18 @@ import re
 
 from django.contrib.auth import get_user_model
 
+from . import emails
 from .models import Notification, Subscription, SubscriptionLevel
 from .permissions import channel_visible
 
 User = get_user_model()
 
-#: @token where token looks like a directory slug (letters, digits, - . _).
 _MENTION_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)", re.IGNORECASE)
+_Level = SubscriptionLevel
 
 
 def _mentioned_users(body: str, channel) -> list:
-    """Members named with @slug in ``body`` who can see ``channel``.
-
-    Matches each @token against members' directory slugs. Iterates members
-    (a property, not a DB column, so it can't be queried) — fine at the
-    school's scale (~100s). Returns [] fast when there are no @tokens.
-    """
+    """Members named with @slug in ``body`` who can see ``channel``."""
     tokens = {t.lower() for t in _MENTION_RE.findall(body or "")}
     if not tokens:
         return []
@@ -42,24 +48,39 @@ def _mentioned_users(body: str, channel) -> list:
     return found
 
 
+def _channel_levels(channel) -> dict[int, str]:
+    """Map of user_id → subscription level for ``channel`` (rows that exist)."""
+    return {
+        s.user_id: s.level
+        for s in Subscription.objects.filter(channel=channel)
+    }
+
+
+def _effective_level(levels: dict[int, str], channel, user_id: int) -> str:
+    return levels.get(user_id, channel.default_subscription_level)
+
+
 def notify_post(post) -> None:
-    """Notifications for a new reply or chat post: @mentions, then a reply
-    notice to the thread's author."""
+    """Notifications + immediate emails for a new reply or chat post."""
     actor_id = post.author_id
+    channel = post.channel
+    thread = post.thread
+    levels = _channel_levels(channel)
+    emailed: set[int] = set()
     mentioned_ids = set()
-    for user in _mentioned_users(post.body, post.channel):
+
+    for user in _mentioned_users(post.body, channel):
         if user.id == actor_id:
             continue
         Notification.objects.create(
-            recipient=user,
-            actor=post.author,
-            verb=Notification.Verb.MENTION,
-            post=post,
-            thread=post.thread,
+            recipient=user, actor=post.author,
+            verb=Notification.Verb.MENTION, post=post, thread=thread,
         )
         mentioned_ids.add(user.id)
+        if _effective_level(levels, channel, user.id) != _Level.MUTED:
+            emails.send_post_notification(post, user, "mention")
+            emailed.add(user.id)
 
-    thread = post.thread
     if (
         thread is not None
         and thread.author_id
@@ -67,36 +88,44 @@ def notify_post(post) -> None:
         and thread.author_id not in mentioned_ids
     ):
         Notification.objects.create(
-            recipient_id=thread.author_id,
-            actor=post.author,
-            verb=Notification.Verb.REPLY,
-            post=post,
-            thread=thread,
+            recipient_id=thread.author_id, actor=post.author,
+            verb=Notification.Verb.REPLY, post=post, thread=thread,
         )
+
+    # Email everyone who wants every post.
+    for sub in Subscription.objects.filter(
+        channel=channel, level=_Level.ALL
+    ).exclude(user_id=actor_id).select_related("user"):
+        if sub.user_id in emailed:
+            continue
+        emails.send_post_notification(post, sub.user, "post")
+        emailed.add(sub.user_id)
 
 
 def notify_new_thread(thread, first_post) -> None:
-    """Notifications for a new thread: @mentions in the opening post, then a
-    new-thread notice to members who follow the channel closely."""
+    """Notifications + immediate emails for a new thread."""
     actor_id = thread.author_id
     channel = thread.channel
+    levels = _channel_levels(channel)
+    emailed: set[int] = set()
     mentioned_ids = set()
+
     for user in _mentioned_users(first_post.body, channel):
         if user.id == actor_id:
             continue
         Notification.objects.create(
-            recipient=user,
-            actor=thread.author,
-            verb=Notification.Verb.MENTION,
-            post=first_post,
-            thread=thread,
+            recipient=user, actor=thread.author,
+            verb=Notification.Verb.MENTION, post=first_post, thread=thread,
         )
         mentioned_ids.add(user.id)
+        if _effective_level(levels, channel, user.id) != _Level.MUTED:
+            emails.send_post_notification(first_post, user, "mention")
+            emailed.add(user.id)
 
     followers = (
         Subscription.objects.filter(
             channel=channel,
-            level__in=(SubscriptionLevel.ALL, SubscriptionLevel.THREADS_ONLY),
+            level__in=(_Level.ALL, _Level.THREADS_ONLY),
         )
         .exclude(user_id=actor_id)
         .select_related("user", "user__profile")
@@ -107,8 +136,9 @@ def notify_new_thread(thread, first_post) -> None:
         if not channel_visible(channel, sub.user):
             continue
         Notification.objects.create(
-            recipient=sub.user,
-            actor=thread.author,
-            verb=Notification.Verb.NEW_THREAD,
-            thread=thread,
+            recipient=sub.user, actor=thread.author,
+            verb=Notification.Verb.NEW_THREAD, thread=thread,
         )
+        if sub.user_id not in emailed:
+            emails.send_post_notification(first_post, sub.user, "new_thread")
+            emailed.add(sub.user_id)

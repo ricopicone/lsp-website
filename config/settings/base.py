@@ -161,6 +161,17 @@ PARLETRE_ATTACHMENTS_ROOT = env(
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")
 SUPPORT_EMAIL = env("DJANGO_SUPPORT_EMAIL", default="website@lacanschool.org")
 
+# --- Parlêtre (discussion board) email -----------------------------------
+# Reply-by-email: when enabled, notification emails carry a signed Reply-To
+# at PARLETRE_REPLY_DOMAIN so a member's reply posts back to the thread.
+# Disabled by default until SES inbound is provisioned for that subdomain
+# (see the Phase 2 plan's parallel-prep tasks); until then notification
+# emails just use SUPPORT_EMAIL as Reply-To.
+PARLETRE_REPLY_ENABLED = env.bool("PARLETRE_REPLY_ENABLED", default=False)
+PARLETRE_REPLY_DOMAIN = env("PARLETRE_REPLY_DOMAIN", default="parletre.lacanschool.org")
+# Secret for signing reply tokens (HMAC). Falls back to SECRET_KEY.
+PARLETRE_REPLY_SECRET = env("PARLETRE_REPLY_SECRET", default=SECRET_KEY)
+
 # --- Stripe -------------------------------------------------------------
 # Test-mode keys for development; production keys swapped via env in
 # production.py. STRIPE_WEBHOOK_SECRET is the signing secret for the

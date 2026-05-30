@@ -773,3 +773,100 @@ def test_mention_search_empty_query(client):
     client.force_login(m)
     resp = client.get(reverse("parletre:mention_search"), {"q": ""})
     assert resp.json()["results"] == []
+
+
+# ---- reply tokens -------------------------------------------------------
+
+
+def test_reply_token_roundtrip_and_tamper_detection():
+    from .tokens import THREAD, make_token, parse_token
+    tok = make_token(THREAD, 7, 42)
+    assert parse_token(tok) == {"kind": "t", "target_id": 7, "user_id": 42}
+    assert parse_token(tok[:-1] + ("y" if tok[-1] != "y" else "z")) is None
+    assert parse_token("not-a-token") is None
+
+
+# ---- immediate notification emails --------------------------------------
+
+
+@pytest.mark.django_db
+def test_all_subscriber_gets_immediate_email_on_post(mailoutbox):
+    from .services import notify_post
+    ch = make_channel("commons")
+    author = make_user("a@x.co", first="Ana", last="Author")
+    follower = make_user("f@x.co", role=Role.ANALYST)
+    Subscription.objects.create(user=follower, channel=ch, level=SubscriptionLevel.ALL)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    post = Post.objects.create(channel=ch, thread=thread, author=author, body="hi all")
+    notify_post(post)
+    assert [m.to for m in mailoutbox] == [[follower.email]]
+
+
+@pytest.mark.django_db
+def test_mention_emails_even_at_digest_level_but_not_when_muted(mailoutbox):
+    from .services import notify_post
+    ch = make_channel("commons")
+    author = make_user("a@x.co", first="Ana", last="Author")
+    target = make_user("t@x.co", role=Role.ANALYST, first="Mona", last="Member")
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    # no subscription row -> effective level is the channel default (digest)
+    post = Post.objects.create(
+        channel=ch, thread=thread, author=author, body="hello @mona-member"
+    )
+    notify_post(post)
+    assert [m.to for m in mailoutbox] == [[target.email]]
+
+    mailoutbox.clear()
+    Subscription.objects.create(user=target, channel=ch, level=SubscriptionLevel.MUTED)
+    post2 = Post.objects.create(
+        channel=ch, thread=thread, author=author, body="again @mona-member"
+    )
+    notify_post(post2)
+    assert mailoutbox == []
+
+
+@pytest.mark.django_db
+def test_digest_level_gets_no_immediate_email(mailoutbox):
+    from .services import notify_post
+    ch = make_channel("commons")
+    author = make_user("a@x.co")
+    quiet = make_user("q@x.co", role=Role.ANALYST)
+    Subscription.objects.create(user=quiet, channel=ch, level=SubscriptionLevel.DIGEST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    post = Post.objects.create(channel=ch, thread=thread, author=author, body="hi")
+    notify_post(post)
+    assert mailoutbox == []
+
+
+@pytest.mark.django_db
+def test_reply_to_carries_token_when_enabled(mailoutbox, settings):
+    from .services import notify_post
+    from .tokens import parse_token
+    settings.PARLETRE_REPLY_ENABLED = True
+    settings.PARLETRE_REPLY_DOMAIN = "parletre.lacanschool.org"
+    ch = make_channel("commons")
+    author = make_user("a@x.co")
+    follower = make_user("f@x.co", role=Role.ANALYST)
+    Subscription.objects.create(user=follower, channel=ch, level=SubscriptionLevel.ALL)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    post = Post.objects.create(channel=ch, thread=thread, author=author, body="hi")
+    notify_post(post)
+    reply_to = mailoutbox[0].reply_to[0]
+    assert reply_to.startswith("reply+") and "@parletre.lacanschool.org" in reply_to
+    token = reply_to[len("reply+"):].split("@", 1)[0]
+    parsed = parse_token(token)
+    assert parsed == {"kind": "t", "target_id": thread.id, "user_id": follower.id}
+
+
+@pytest.mark.django_db
+def test_reply_to_is_support_when_disabled(mailoutbox, settings):
+    from .services import notify_post
+    settings.PARLETRE_REPLY_ENABLED = False
+    ch = make_channel("commons")
+    author = make_user("a@x.co")
+    follower = make_user("f@x.co", role=Role.ANALYST)
+    Subscription.objects.create(user=follower, channel=ch, level=SubscriptionLevel.ALL)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    post = Post.objects.create(channel=ch, thread=thread, author=author, body="hi")
+    notify_post(post)
+    assert mailoutbox[0].reply_to == [settings.SUPPORT_EMAIL]
