@@ -4,6 +4,13 @@
 
 {% block extra_head %}
 <script src="{% static 'vendor/fullcalendar-6.1.15.global.min.js' %}"></script>
+{# Luxon + the FullCalendar luxon3 connector give the global build a named-  #}
+{# timezone implementation. Without it, a named `timeZone` (e.g.            #}
+{# "America/Los_Angeles") silently falls back to UTC and every event shows  #}
+{# shifted by the offset. Load order matters: core, then luxon, then the    #}
+{# connector (which auto-registers into FullCalendar.globalPlugins).        #}
+<script src="{% static 'vendor/luxon-3.5.0.global.min.js' %}"></script>
+<script src="{% static 'vendor/fullcalendar-luxon3-6.1.15.global.min.js' %}"></script>
 <style>
   /* FullCalendar overrides to pick up DaisyUI theme tokens. */
   .fc {
@@ -55,9 +62,11 @@
       },
       height: 'auto',
       nowIndicator: true,
-      // Render in the viewer's active TZ — either the user's saved
-      // preference (set via the TZ middleware) or the browser's local
-      // TZ for anonymous viewers (via 'local').
+      // Render in the active TZ — the logged-in user's saved preference
+      // (set via the TZ middleware) or the project default (Pacific) for
+      // anonymous viewers. Named zones are resolved by the luxon3 plugin
+      // loaded above; the feed sends UTC instants, so this only affects
+      // display.
       timeZone: '{% user_tz_name %}',
       events: '{% url "core:calendar_events" %}',
       eventDidMount: function (info) {
