@@ -115,3 +115,40 @@ def vibe_shapes(title: str) -> SafeString:
         'class="absolute inset-0 w-full h-full pointer-events-none">{}</svg>',
         mark_safe("".join(parts)),
     )
+
+
+@register.simple_tag
+def vibe_lines(title: str) -> SafeString:
+    """One or two 'feature' SVG lines drawn through the bottom-left
+    avatar zone — intended to be rendered ON TOP of author avatars so
+    the line passes across the headshot circle. Deterministic per
+    title (separate seed from ``vibe_shapes`` so lines and shapes
+    vary independently).
+    """
+    rng = _seeded_random(title + "::lines")
+    n = rng.randint(1, 2)
+    parts: list[str] = []
+    for _ in range(n):
+        # Start somewhere along the top or right edge — gives a sense
+        # of a line entering the composition from outside.
+        if rng.random() < 0.5:
+            x1, y1 = rng.randint(40, 100), 0
+        else:
+            x1, y1 = 100, rng.randint(0, 60)
+        # End inside the bottom-left zone where avatars sit.
+        x2 = rng.randint(0, 22)
+        y2 = rng.randint(82, 98)
+        opacity = rng.uniform(0.35, 0.55)
+        sw = rng.choice([0.5, 0.7, 0.9])
+        color = rng.choice(["#ffffff", "#000000", "#ffffff"])
+        parts.append(
+            f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
+            f'stroke="{color}" stroke-width="{sw}" opacity="{opacity:.2f}" '
+            f'stroke-linecap="round"/>'
+        )
+
+    return format_html(
+        '<svg viewBox="0 0 100 100" preserveAspectRatio="none" '
+        'class="absolute inset-0 w-full h-full pointer-events-none">{}</svg>',
+        mark_safe("".join(parts)),
+    )
