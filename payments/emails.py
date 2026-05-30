@@ -8,6 +8,9 @@ that a recipient clicking *Reply* in their mail client reaches a human.
 
 from __future__ import annotations
 
+import contextlib
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
@@ -30,22 +33,41 @@ def _send(*, subject: str, body: str, to: list[str]) -> None:
     msg.send(fail_silently=False)
 
 
+def _recipient_timezone(user) -> contextlib.AbstractContextManager:
+    """Context manager that activates the recipient user's preferred TZ
+    while the body renders. Falls back to project default for users
+    with no preference (or no user object).
+
+    Cron-sent emails don't have a request, so the middleware's active
+    TZ is the project default — without this wrapper, every recipient
+    would see PT regardless of their preference.
+    """
+    tz_name = getattr(getattr(user, "profile", None), "timezone", "") or ""
+    if not tz_name:
+        return contextlib.nullcontext()
+    try:
+        return timezone.override(ZoneInfo(tz_name))
+    except ZoneInfoNotFoundError:
+        return contextlib.nullcontext()
+
+
 def send_registration_confirmation(registration: Registration) -> None:
     """Send the confirmation email (REG-9), releasing access_info if PAID/COMPED."""
     subject = f"Registration confirmed: {registration.event.title}"
-    body = render_to_string(
-        "payments/email/confirmation.txt",
-        {
-            "registration": registration,
-            "is_comp": registration.status == Registration.Status.COMPED,
-            "has_access": registration.status in (
-                Registration.Status.PAID,
-                Registration.Status.COMPED,
-            ),
-            "support_email": settings.SUPPORT_EMAIL,
-            "site_base_url": settings.SITE_BASE_URL,
-        },
-    )
+    with _recipient_timezone(registration.user):
+        body = render_to_string(
+            "payments/email/confirmation.txt",
+            {
+                "registration": registration,
+                "is_comp": registration.status == Registration.Status.COMPED,
+                "has_access": registration.status in (
+                    Registration.Status.PAID,
+                    Registration.Status.COMPED,
+                ),
+                "support_email": settings.SUPPORT_EMAIL,
+                "site_base_url": settings.SITE_BASE_URL,
+            },
+        )
     _send(subject=subject, body=body, to=[registration.user.email])
 
 
@@ -53,14 +75,15 @@ def send_receipt(payment: Payment) -> None:
     """Send the receipt email (REG-7) and stamp ``emailed_at``."""
     receipt = payment.receipt
     subject = f"Receipt {receipt.receipt_number} — Lacanian School of Psychoanalysis"
-    body = render_to_string(
-        "payments/email/receipt.txt",
-        {
-            "payment": payment,
-            "receipt": receipt,
-            "support_email": settings.SUPPORT_EMAIL,
-        },
-    )
+    with _recipient_timezone(payment.user):
+        body = render_to_string(
+            "payments/email/receipt.txt",
+            {
+                "payment": payment,
+                "receipt": receipt,
+                "support_email": settings.SUPPORT_EMAIL,
+            },
+        )
     to_email = payment.recipient_email
     if not to_email:
         # Defensive — should never happen for a paid Payment.
@@ -100,16 +123,17 @@ def send_dues_reminder(user, period) -> None:
     """
     subject = f"Reminder: {period.name} dues are due"
     amount = period.amount_for_role(user.profile.role)
-    body = render_to_string(
-        "payments/email/dues_reminder.txt",
-        {
-            "user": user,
-            "period": period,
-            "amount": amount,
-            "support_email": settings.SUPPORT_EMAIL,
-            "site_base_url": settings.SITE_BASE_URL,
-        },
-    )
+    with _recipient_timezone(user):
+        body = render_to_string(
+            "payments/email/dues_reminder.txt",
+            {
+                "user": user,
+                "period": period,
+                "amount": amount,
+                "support_email": settings.SUPPORT_EMAIL,
+                "site_base_url": settings.SITE_BASE_URL,
+            },
+        )
     _send(subject=subject, body=body, to=[user.email])
 
 
@@ -122,16 +146,17 @@ def send_tuition_reminder(user, period, *, enrollment=None) -> None:
     - status=payment_plan with overdue installment: "your installment is due"
     """
     subject = f"Tuition for {period.name}: please respond"
-    body = render_to_string(
-        "payments/email/tuition_reminder.txt",
-        {
-            "user": user,
-            "period": period,
-            "enrollment": enrollment,
-            "support_email": settings.SUPPORT_EMAIL,
-            "site_base_url": settings.SITE_BASE_URL,
-        },
-    )
+    with _recipient_timezone(user):
+        body = render_to_string(
+            "payments/email/tuition_reminder.txt",
+            {
+                "user": user,
+                "period": period,
+                "enrollment": enrollment,
+                "support_email": settings.SUPPORT_EMAIL,
+                "site_base_url": settings.SITE_BASE_URL,
+            },
+        )
     _send(subject=subject, body=body, to=[user.email])
 
 
@@ -149,13 +174,14 @@ def send_cancellation_email(registration: Registration, refund=None) -> None:
         except (TypeError, KeyError):
             refund_amount = None
     subject = f"Registration cancelled: {registration.event.title}"
-    body = render_to_string(
-        "payments/email/cancellation.txt",
-        {
-            "registration": registration,
-            "refund_amount": refund_amount,
-            "support_email": settings.SUPPORT_EMAIL,
-            "site_base_url": settings.SITE_BASE_URL,
-        },
-    )
+    with _recipient_timezone(registration.user):
+        body = render_to_string(
+            "payments/email/cancellation.txt",
+            {
+                "registration": registration,
+                "refund_amount": refund_amount,
+                "support_email": settings.SUPPORT_EMAIL,
+                "site_base_url": settings.SITE_BASE_URL,
+            },
+        )
     _send(subject=subject, body=body, to=[registration.user.email])

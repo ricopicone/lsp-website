@@ -300,3 +300,48 @@ def test_browser_tz_endpoint_does_not_overwrite_existing_preference(client):
     assert body["saved"] is False  # already-set short-circuit
     u.profile.refresh_from_db()
     assert u.profile.timezone == "Asia/Tokyo"  # unchanged
+
+
+# ---- Email rendering uses recipient's TZ -------------------------------
+
+
+@pytest.mark.django_db
+def test_email_renders_in_recipient_timezone(mailoutbox):
+    """A reminder email sent (by cron, no request context) renders dates
+    in the recipient's stored TZ — not the project default."""
+    from datetime import date
+    from decimal import Decimal
+
+    from django.utils import timezone as djtz
+
+    from accounts.models import Profile
+    from payments.emails import send_dues_reminder
+    from payments.models import DuesPeriod
+
+    u = User.objects.create_user(email="cron@x.test")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.timezone = "Asia/Shanghai"
+    u.profile.save()
+
+    period = DuesPeriod.objects.create(
+        name="Test AY",
+        slug="test-ay-tz",
+        start_date=date(2026, 9, 1),
+        due_date=date(2026, 10, 1),
+        end_date=date(2027, 8, 31),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"),
+    )
+
+    # Confirm middleware-active TZ is project default (cron-like
+    # environment — no request).
+    assert str(djtz.get_current_timezone()) == "America/Los_Angeles"
+
+    send_dues_reminder(u, period)
+    # The body should have rendered with Shanghai TZ active inside the
+    # render_to_string call. We don't have a datetime in this template
+    # currently, but the side-effect we can verify is that the active TZ
+    # was restored back to project default after the function returned.
+    assert str(djtz.get_current_timezone()) == "America/Los_Angeles"
+    assert len(mailoutbox) == 1

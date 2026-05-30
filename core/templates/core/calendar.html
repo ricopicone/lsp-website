@@ -42,6 +42,7 @@
   <div id="calendar" class="rounded-lg border border-base-300 bg-base-100 p-3 sm:p-4"></div>
 </div>
 
+{% load tz_filters %}
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     var el = document.getElementById('calendar');
@@ -54,6 +55,10 @@
       },
       height: 'auto',
       nowIndicator: true,
+      // Render in the viewer's active TZ — either the user's saved
+      // preference (set via the TZ middleware) or the browser's local
+      // TZ for anonymous viewers (via 'local').
+      timeZone: '{% user_tz_name %}',
       events: '{% url "core:calendar_events" %}',
       eventDidMount: function (info) {
         var loc = info.event.extendedProps.location;
