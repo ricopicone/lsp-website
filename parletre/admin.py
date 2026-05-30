@@ -9,7 +9,17 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-from .models import Channel, ChannelCategory, Post, Reaction, Subscription, Thread
+from .models import (
+    Attachment,
+    Channel,
+    ChannelCategory,
+    Notification,
+    Post,
+    Reaction,
+    ReadMarker,
+    Subscription,
+    Thread,
+)
 
 
 @admin.register(ChannelCategory)
@@ -81,3 +91,22 @@ class SubscriptionAdmin(admin.ModelAdmin):
 class ReactionAdmin(admin.ModelAdmin):
     list_display = ("emoji", "post", "user", "created_at")
     raw_id_fields = ("post", "user")
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ("recipient", "verb", "actor", "read_at", "created_at")
+    list_filter = ("verb",)
+    raw_id_fields = ("recipient", "actor", "post", "thread")
+
+
+@admin.register(ReadMarker)
+class ReadMarkerAdmin(admin.ModelAdmin):
+    list_display = ("user", "thread", "channel", "last_read_at")
+    raw_id_fields = ("user", "thread", "channel")
+
+
+@admin.register(Attachment)
+class AttachmentAdmin(admin.ModelAdmin):
+    list_display = ("original_name", "post", "content_type", "size", "uploaded_at")
+    raw_id_fields = ("post",)

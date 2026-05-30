@@ -11,7 +11,7 @@
 
   <h1 class="font-serif text-2xl tracking-tight text-base-content">New thread</h1>
 
-  <form method="post" class="space-y-4">
+  <form method="post" enctype="multipart/form-data" class="space-y-4">
     {% csrf_token %}
     <div class="space-y-1">
       <label class="text-sm text-base-content/70" for="{{ form.title.id_for_label }}">Title</label>
@@ -23,6 +23,11 @@
       {{ form.body }}
       {% if form.body.errors %}<p class="text-error text-sm">{{ form.body.errors|striptags }}</p>{% endif %}
       <p class="text-xs text-base-content/40">Markdown supported.</p>
+    </div>
+    <div class="space-y-1">
+      <label class="text-sm text-base-content/70" for="{{ form.attachments.id_for_label }}">Attachments (optional)</label>
+      {{ form.attachments }}
+      {% if form.attachments.errors %}<p class="text-error text-sm">{{ form.attachments.errors|striptags }}</p>{% endif %}
     </div>
     <div class="flex gap-2 justify-end">
       <a href="{{ channel.get_absolute_url }}" class="btn btn-ghost btn-sm">Cancel</a>

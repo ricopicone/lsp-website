@@ -618,3 +618,89 @@ def test_chat_view_marks_channel_read(client):
     assert ch.id in unread_channel_ids(reader, [ch])
     client.get(ch.get_absolute_url())
     assert ch.id not in unread_channel_ids(reader, [ch])
+
+
+# ---- attachments --------------------------------------------------------
+
+
+def _upload(name, content=b"hello", content_type="text/plain"):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    return SimpleUploadedFile(name, content, content_type=content_type)
+
+
+@pytest.mark.django_db
+def test_new_thread_with_attachment(client):
+    from .models import Attachment
+    ch = make_channel("commons")
+    member = make_user("m@x.co", role=Role.ANALYST)
+    client.force_login(member)
+    resp = client.post(
+        reverse("parletre:new_thread", args=[ch.slug]),
+        {"title": "With file", "body": "see attached",
+         "attachments": _upload("notes.txt", b"important")},
+    )
+    assert resp.status_code == 302
+    att = Attachment.objects.get()
+    assert att.original_name == "notes.txt"
+    assert att.size == len(b"important")
+    assert att.post.thread.channel == ch
+
+
+@pytest.mark.django_db
+def test_reply_accepts_multiple_attachments(client):
+    from .models import Attachment
+    ch = make_channel("commons")
+    member = make_user("m@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=member)
+    Post.objects.create(channel=ch, thread=thread, author=member, body="first")
+    client.force_login(member)
+    resp = client.post(
+        thread.get_absolute_url(),
+        {"body": "two files",
+         "attachments": [_upload("a.txt", b"a"), _upload("b.png", b"\x89PNG", "image/png")]},
+    )
+    assert resp.status_code == 302
+    assert Attachment.objects.count() == 2
+    assert Attachment.objects.filter(content_type="image/png").get().is_image
+
+
+@pytest.mark.django_db
+def test_attachment_download_gated_by_channel_visibility(client):
+    from .models import Attachment
+    ch = make_channel("hush", access=Access.PRIVATE)
+    insider = make_user("in@x.co", role=Role.ANALYST)
+    ch.members.add(insider)
+    thread = Thread.objects.create(channel=ch, title="T", author=insider)
+    post = Post.objects.create(channel=ch, thread=thread, author=insider, body="x")
+    att = Attachment.objects.create(
+        post=post, file=_upload("secret.txt", b"top secret"),
+        original_name="secret.txt", content_type="text/plain", size=10,
+    )
+    url = reverse("parletre:attachment", args=[att.id])
+
+    # an outsider can't download it
+    outsider = make_user("out@x.co", role=Role.ANALYST)
+    client.force_login(outsider)
+    assert client.get(url).status_code == 404
+
+    # the insider can
+    client.force_login(insider)
+    resp = client.get(url)
+    assert resp.status_code == 200
+    assert b"top secret" in b"".join(resp.streaming_content)
+
+
+@pytest.mark.django_db
+def test_attachment_rejects_oversized_file(client):
+    from .models import MAX_ATTACHMENT_BYTES
+    ch = make_channel("commons")
+    member = make_user("m@x.co", role=Role.ANALYST)
+    client.force_login(member)
+    big = _upload("big.bin", b"x" * (MAX_ATTACHMENT_BYTES + 1), "application/octet-stream")
+    resp = client.post(
+        reverse("parletre:new_thread", args=[ch.slug]),
+        {"title": "Too big", "body": "oops", "attachments": big},
+    )
+    # form re-renders with an error; no thread created
+    assert resp.status_code == 200
+    assert not Thread.objects.filter(channel=ch).exists()

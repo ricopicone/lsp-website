@@ -14,7 +14,7 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Max
-from django.http import Http404
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -22,6 +22,7 @@ from django.views.decorators.http import require_POST
 from .forms import NewThreadForm, PostForm
 from .models import (
     REACTION_EMOJI,
+    Attachment,
     Channel,
     Notification,
     Post,
@@ -58,6 +59,17 @@ def _attach_reactions(posts, user):
                 entry["mine"] = True
         post.reaction_summary = list(summary.values())
     return posts
+
+
+def _save_attachments(post, files) -> None:
+    for f in files or []:
+        Attachment.objects.create(
+            post=post,
+            file=f,
+            original_name=f.name[:255],
+            content_type=getattr(f, "content_type", "") or "",
+            size=getattr(f, "size", 0) or 0,
+        )
 
 
 def _visible_channel_or_404(user, slug: str) -> Channel:
@@ -134,11 +146,12 @@ def channel(request, slug):
         if not can_post:
             messages.error(request, "You can't post in this channel.")
             return redirect(channel)
-        form = PostForm(request.POST)
+        form = PostForm(request.POST, request.FILES)
         if form.is_valid():
             post = Post.objects.create(
                 channel=channel, author=request.user, body=form.cleaned_data["body"]
             )
+            _save_attachments(post, form.cleaned_data.get("attachments"))
             notify_post(post)
             return redirect(channel)
     else:
@@ -171,7 +184,7 @@ def channel(request, slug):
     context["posts"] = _attach_reactions(
         channel.posts.filter(thread__isnull=True)
         .select_related("author")
-        .prefetch_related("reactions")
+        .prefetch_related("reactions", "attachments")
         .order_by("created_at"),
         request.user,
     )
@@ -189,7 +202,7 @@ def new_thread(request, slug):
         return redirect(channel)
 
     if request.method == "POST":
-        form = NewThreadForm(request.POST)
+        form = NewThreadForm(request.POST, request.FILES)
         if form.is_valid():
             thread = Thread.objects.create(
                 channel=channel,
@@ -202,6 +215,7 @@ def new_thread(request, slug):
                 author=request.user,
                 body=form.cleaned_data["body"],
             )
+            _save_attachments(first_post, form.cleaned_data.get("attachments"))
             notify_new_thread(thread, first_post)
             return redirect(thread)
     else:
@@ -225,7 +239,7 @@ def thread(request, slug, thread_slug):
                 "This thread is locked." if thread.locked else "You can't reply here.",
             )
             return redirect(thread)
-        form = PostForm(request.POST)
+        form = PostForm(request.POST, request.FILES)
         if form.is_valid():
             now = timezone.now()
             post = Post.objects.create(
@@ -234,6 +248,7 @@ def thread(request, slug, thread_slug):
                 author=request.user,
                 body=form.cleaned_data["body"],
             )
+            _save_attachments(post, form.cleaned_data.get("attachments"))
             thread.touch(now)
             notify_post(post)
             return redirect(thread)
@@ -245,7 +260,7 @@ def thread(request, slug, thread_slug):
     marker_before = thread_marker_at(request.user, thread)
     posts = _attach_reactions(
         thread.posts.select_related("author")
-        .prefetch_related("reactions")
+        .prefetch_related("reactions", "attachments")
         .order_by("created_at"),
         request.user,
     )
@@ -320,6 +335,25 @@ def react(request, post_id):
     if post.thread_id:
         return redirect(f"{post.thread.get_absolute_url()}#post-{post.id}")
     return redirect(post.channel)
+
+
+@login_required
+def attachment(request, attachment_id):
+    """Serve an attachment, gated by the channel's access — so a private
+    channel's files stay private. Never link the bare media URL."""
+    att = get_object_or_404(
+        Attachment.objects.select_related("post", "post__channel"), pk=attachment_id
+    )
+    if not att.post.channel.visible_to(request.user):
+        raise Http404()
+    response = FileResponse(
+        att.file.open("rb"),
+        content_type=att.content_type or "application/octet-stream",
+    )
+    disposition = "inline" if att.is_image else "attachment"
+    name = (att.original_name or att.file.name).replace('"', "")
+    response["Content-Disposition"] = f'{disposition}; filename="{name}"'
+    return response
 
 
 @login_required

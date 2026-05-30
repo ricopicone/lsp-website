@@ -30,7 +30,7 @@
         <div class="prose prose-sm max-w-none text-base-content/90">
           {% if post.deleted %}<em class="text-base-content/40">(deleted)</em>{% else %}{{ post.body_html }}{% endif %}
         </div>
-        {% if not post.deleted %}{% include "parletre/_reactions.html" %}{% endif %}
+        {% if not post.deleted %}{% include "parletre/_attachments.html" %}{% include "parletre/_reactions.html" %}{% endif %}
       </div>
     </div>
     {% empty %}
@@ -39,12 +39,13 @@
   </div>
 
   {% if can_post %}
-  <form method="post" class="space-y-2 border-t border-base-300/60 pt-4">
+  <form method="post" enctype="multipart/form-data" class="space-y-2 border-t border-base-300/60 pt-4">
     {% csrf_token %}
     {{ form.body }}
     {% if form.body.errors %}<p class="text-error text-sm">{{ form.body.errors|striptags }}</p>{% endif %}
-    <div class="flex justify-end">
-      <button type="submit" class="btn btn-primary btn-sm">Send</button>
+    <div class="flex items-center justify-between gap-2">
+      <div>{{ form.attachments }}{% if form.attachments.errors %}<p class="text-error text-sm">{{ form.attachments.errors|striptags }}</p>{% endif %}</div>
+      <button type="submit" class="btn btn-primary btn-sm shrink-0">Send</button>
     </div>
   </form>
   {% else %}

@@ -470,3 +470,35 @@ class ReadMarker(models.Model):
     def __str__(self) -> str:
         where = self.thread or self.channel
         return f"{self.user} read {where} @ {self.last_read_at:%Y-%m-%d %H:%M}"
+
+
+#: Per-file attachment size cap (10 MB).
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+
+
+class Attachment(models.Model):
+    """A file attached to a post (DISC-3).
+
+    Served only through the permission-checked download view
+    (``parletre:attachment``), never by a bare media URL — so attachments in
+    a private channel stay as private as the channel. In production the media
+    location these files live in must NOT be exposed by a bare nginx/S3 URL;
+    route downloads through Django.
+    """
+
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="attachments")
+    file = models.FileField(upload_to="parletre/%Y/%m/")
+    original_name = models.CharField(max_length=255, blank=True)
+    content_type = models.CharField(max_length=100, blank=True)
+    size = models.PositiveIntegerField(default=0)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("uploaded_at",)
+
+    def __str__(self) -> str:
+        return self.original_name or self.file.name
+
+    @property
+    def is_image(self) -> bool:
+        return self.content_type.startswith("image/")

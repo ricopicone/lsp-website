@@ -1,0 +1,20 @@
+{% comment %}Attachment list for one post. Expects: post (attachments prefetched).{% endcomment %}
+{% if post.attachments.all %}
+<div class="mt-2 flex flex-wrap gap-2">
+  {% for att in post.attachments.all %}
+  {% if att.is_image %}
+  <a href="{% url 'parletre:attachment' att.id %}" target="_blank" rel="noopener">
+    <img src="{% url 'parletre:attachment' att.id %}" alt="{{ att.original_name }}"
+         class="max-h-48 rounded-box border border-base-300 object-contain">
+  </a>
+  {% else %}
+  <a href="{% url 'parletre:attachment' att.id %}"
+     class="inline-flex items-center gap-2 text-sm rounded-box border border-base-300 bg-base-200/40 px-3 py-1.5 hover:border-base-content/30">
+    <span aria-hidden="true">📎</span>
+    <span class="text-base-content">{{ att.original_name|default:"file" }}</span>
+    {% if att.size %}<span class="text-xs text-base-content/50">{{ att.size|filesizeformat }}</span>{% endif %}
+  </a>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
