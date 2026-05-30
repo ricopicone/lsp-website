@@ -350,10 +350,11 @@ class TuitionEnrollment(models.Model):
 
     class Status(models.TextChoices):
         # Order matches the lifecycle: undecided -> committed -> paying -> paid.
+        # Skipping is allowed; permanent exemption is not — students owe four
+        # total years of tuition before transitioning out of in-training roles.
         COMMITTED = "committed", _("Committed (will pay)")
         PAYMENT_PLAN = "payment_plan", _("On payment plan")
         PAID_IN_FULL = "paid_in_full", _("Paid in full")
-        EXEMPT = "exempt", _("Exempt (staff-applied)")
         SKIPPING = "skipping", _("Skipping this year")
 
     user = models.ForeignKey(
@@ -386,8 +387,8 @@ class TuitionEnrollment(models.Model):
     def covers_seminars(self) -> bool:
         """True when this enrollment grants 'covered by tuition' pricing.
 
-        SKIPPING and EXEMPT explicitly do not cover — exempt means
-        'staff waived the obligation', not 'has paid'.
+        SKIPPING does not cover — the student opted out of tuition this
+        year and pays the regular per-event fee.
         """
         return self.status in {
             self.Status.COMMITTED,

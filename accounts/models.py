@@ -216,7 +216,7 @@ class Profile(models.Model):
 
         Returns True when the user has a current-period enrollment with a
         ``covers_seminars`` status (committed / payment_plan / paid_in_full).
-        Returns False for SKIPPING, EXEMPT, no row, or no current period.
+        Returns False for SKIPPING, no row, or no current period.
         """
         enr = self.current_tuition_enrollment(on_date)
         return bool(enr and enr.covers_seminars)

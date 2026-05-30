@@ -326,7 +326,6 @@ def treasurer_payment_apply_success(request, payment_id: int):
 _INLINE_TUITION_STATUSES = {
     "committed":    "Committed",
     "skipping":     "Skipping",
-    "exempt":       "Exempt",
 }
 
 
@@ -337,7 +336,7 @@ def treasurer_tuition_set_status(request, user_id: int):
     """Set a user's tuition status for the current period (treasurer action).
 
     Used by the inline resolution buttons on the tuition reconciliation
-    queue. ``status`` is one of: committed, skipping, exempt.
+    queue. ``status`` is one of: committed, skipping.
     """
     status = request.POST.get("status", "")
     if status not in _INLINE_TUITION_STATUSES:
@@ -546,7 +545,6 @@ def _treasurer_tuition_context() -> dict:
         ("paid_in_full",  "Paid in full"),
         ("payment_plan",  "On payment plan"),
         ("committed",     "Committed (unpaid)"),
-        ("exempt",        "Exempt"),
         ("skipping",      "Skipping"),
     ]
     tuition_status_counts = [

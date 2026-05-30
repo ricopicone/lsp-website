@@ -185,12 +185,11 @@ def test_post_updates_existing_enrollment(client, current_period):
 
 @pytest.mark.django_db
 def test_form_rejects_staff_only_statuses(client, current_period):
-    """EXEMPT and PAID_IN_FULL aren't student-selectable; admin-only."""
+    """PAID_IN_FULL isn't student-selectable; it's reached via actual payment."""
     u = _mk_candidate()
     client.force_login(u)
-    for forbidden in ("exempt", "paid_in_full"):
-        resp = client.post(reverse("tuition"), {"status": forbidden})
-        assert resp.status_code == 200  # form re-renders with errors
+    resp = client.post(reverse("tuition"), {"status": "paid_in_full"})
+    assert resp.status_code == 200  # form re-renders with errors
 
 
 # --- Backfill migration -------------------------------------------------
@@ -613,11 +612,11 @@ def test_treasurer_tuition_set_status_overrides_existing(
     client.force_login(staff_user)
     client.post(
         reverse("treasurer_tuition_set_status", args=[u.id]),
-        {"status": "exempt"},
+        {"status": "skipping"},
     )
     enrollments = TuitionEnrollment.objects.filter(user=u, tuition_period=current_period)
     assert enrollments.count() == 1
-    assert enrollments.first().status == TuitionEnrollment.Status.EXEMPT
+    assert enrollments.first().status == TuitionEnrollment.Status.SKIPPING
 
 
 @pytest.mark.django_db

@@ -39,7 +39,6 @@
               {% elif e.status == "payment_plan" %}<span class="badge badge-info badge-sm">Payment plan</span>
               {% elif e.status == "committed" %}<span class="badge badge-warning badge-sm">Committed</span>
               {% elif e.status == "skipping" %}<span class="badge badge-ghost badge-sm">Skipping</span>
-              {% elif e.status == "exempt" %}<span class="badge badge-ghost badge-sm">Exempt</span>
               {% else %}<span class="badge badge-ghost badge-sm">{{ e.get_status_display }}</span>
               {% endif %}
             </td>

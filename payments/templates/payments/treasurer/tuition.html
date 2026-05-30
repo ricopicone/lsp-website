@@ -85,7 +85,7 @@
       <span class="text-base-content/60 text-base font-normal">({{ tuition_reconciliation_users|length }})</span>
     </h2>
     <p class="text-sm text-base-content/60">
-      Students who need attention — either they haven't recorded a decision yet, or they committed to pay but no payment has been received. Use the action buttons to record an offline payment, mark them as skipping, or mark them as exempt.
+      Students who need attention — either they haven't recorded a decision yet, or they committed to pay but no payment has been received. Use the action buttons to record an offline payment or mark them as skipping.
     </p>
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
@@ -110,11 +110,6 @@
                   {% csrf_token %}
                   <input type="hidden" name="status" value="skipping">
                   <button type="submit" class="btn btn-ghost btn-xs">Skipping</button>
-                </form>
-                <form method="post" action="{% url 'treasurer_tuition_set_status' row.user.id %}" class="contents">
-                  {% csrf_token %}
-                  <input type="hidden" name="status" value="exempt">
-                  <button type="submit" class="btn btn-ghost btn-xs">Exempt</button>
                 </form>
               </div>
             </td>

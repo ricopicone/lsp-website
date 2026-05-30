@@ -57,9 +57,9 @@ class TuitionDecisionForm(forms.Form):
 
     Captures the three public-facing choices for an in-training student
     each academic year: pay in full, set up a payment plan (treasurer
-    follows up to schedule installments), or skip this year. Staff-only
-    statuses (EXEMPT, PAID_IN_FULL once the payment actually lands) are
-    applied via the admin, not this form.
+    follows up to schedule installments), or skip this year. PAID_IN_FULL
+    is reached automatically once payment lands; the treasurer also has
+    inline actions on the reconciliation queue.
     """
 
     STATUS_CHOICES = [

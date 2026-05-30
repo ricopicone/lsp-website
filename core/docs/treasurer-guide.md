@@ -46,24 +46,48 @@ reconciliation queue is non-zero, open the Tuition tab.
 
 ---
 
-## Tuition tab
+## Tuition
 
-Tuition is **per-academic-year** for in-training students (the four
-"learning" roles: Pre-Candidate Analyst, Candidate Analyst,
-Pre-Candidate Scholar, Candidate Scholar). Each year, each student
-records one of these decisions:
+### Who pays tuition
+
+The four "in-training" roles owe annual tuition:
+
+- Pre-Candidate Analyst
+- Candidate Analyst
+- Pre-Candidate Scholar
+- Candidate Scholar
+
+Full Analysts, Scholars, Members, and external visitors do not pay
+tuition.
+
+**Total years required:** four. The years do **not** have to be
+contiguous — a student may skip one or more years and pay them later.
+A student transitions out of the in-training roles only after four total
+tuition-paid years have been recorded. **Permanent exemption is not an
+option** — skipping a year is fine but the four-year obligation stands.
+
+### The annual decision
+
+Each academic year (Sep 1 – Aug 31), every in-training student must
+record one of these decisions for the upcoming year:
 
 | Decision | Meaning |
 |---|---|
 | **Committed** | "I plan to pay this year" — but no payment received yet |
 | **Payment plan** | "I want to pay in installments" — plan is set up |
 | **Paid in full** | The annual tuition has been received |
-| **Exempt** | You've waived tuition for this student this year |
-| **Skipping** | "I'm not paying tuition this year" (pays regular event fees) |
+| **Skipping** | "I'm not paying tuition this year" (pays regular event fees; year doesn't count toward the four) |
 
-A full reference for the policy (including how it interacts with event
-registration) lives in `LSP-Website-Tuition-Policy.md` in the
-project's planning folder.
+Students select `committed`, `payment_plan`, or `skipping` themselves
+via `/tuition/`. `paid_in_full` is reached automatically when a payment
+lands (Stripe Checkout or the treasurer recording an offline payment).
+
+**Decision deadline:** September 30 (configurable per period in Settings).
+
+**Reminders** go out automatically every N days from the decision-due
+date onward, to students who haven't recorded a decision or whose
+`committed` status hasn't been backed by a payment yet. Adjust the
+cadence on the Settings tab.
 
 ### Sections on the Tuition tab
 
@@ -75,24 +99,21 @@ project's planning folder.
   many undecided, how many committed-but-unpaid.
 - **Reconciliation queue** — the rows you should look at. These are
   either **undecided** or **committed without payment**. Each row has
-  three action buttons:
+  two action buttons:
     - **Record payment** — records an offline tuition payment for the
       annual amount, marks the enrollment Paid in Full, and sends the
       student a receipt + confirmation email. Use this when you've
       received their cash / check.
     - **Skipping** — sets the student's status to Skipping (their
       explicit "I'm not paying this year"). They'll still pay regular
-      fees for any events.
-    - **Exempt** — you're waiving tuition for this student this year.
-      Equivalent to Paid in Full for visibility purposes, but with no
-      money received.
+      fees for any events; the year won't count toward their four.
 
 > All actions are recorded in the enrollment's notes field with the
 > date and your email, so there's an audit trail.
 
 ### Common tuition workflows
 
-- **"A candidate just paid me $800 in cash for this year."**
+- **"A candidate just paid me the tuition amount in cash for this year."**
   → Tuition tab → find them in the reconciliation queue → click
   **Record payment**. Done. They get an email receipt.
 - **"A candidate told me they want to do a payment plan."**
@@ -101,8 +122,58 @@ project's planning folder.
   each installment via Stripe.
 - **"A candidate is skipping this year."**
   → Tuition tab → find them → click **Skipping**.
-- **"This candidate is on a hardship waiver."**
-  → Tuition tab → find them → click **Exempt**.
+
+### How tuition status interacts with event registration
+
+There are **two gates** in front of event registration for in-training
+students. Both must clear for registration to go through.
+
+#### Gate 1 — Broad: must have a decision recorded
+
+If an in-training student has no `TuitionEnrollment` row for the current
+period, they cannot register for *any* event type. They see a polite
+403 page directing them to `/tuition/` to choose an option. Any of the
+four decisions clears this gate — **including `skipping`**. The point
+of this gate is to force engagement with the annual decision, not to
+collect money.
+
+#### Gate 2 — Narrow: committed-without-payment blocked from tuition-covered special events
+
+This gate only fires when **all three** of the following are true:
+
+1. The event's type is `special_event` (Days of Assembly, Working
+   Days, Scholarly Seminars, and all annual-program types like
+   seminars / reading groups / cartels do not engage this gate).
+2. The student's status is `committed` — i.e. they said they'd pay
+   this year, but no payment has been received and no payment plan is
+   set up.
+3. The event has a "covered by tuition" price tier matching the
+   student's audience. (Whether a given event is tuition-covered is
+   decided per-event by the staff who set up the event's price tiers.)
+
+The intuition: this gate stops a student from claiming the "covered by
+tuition" pricing path on a special event without having actually paid
+for the tuition that would cover it. If the event isn't tuition-covered
+in the first place, the student would just pay the regular fee and this
+gate doesn't fire.
+
+#### Full case table
+
+The table reads as: *"a student with this tuition status, trying to
+register for this kind of event, gets this outcome."* Gates apply in
+order: Gate 1 first, then Gate 2.
+
+| Tuition status | Annual-program event (seminar, RG, cartel) | Days of Assembly, Working Day, Scholarly Seminar | Special event (no covered tier) | Special event (with covered tier matching audience) |
+|---|---|---|---|---|
+| **No decision recorded** | Blocked by Gate 1 | Blocked by Gate 1 | Blocked by Gate 1 | Blocked by Gate 1 |
+| **`committed`** | Allowed — pays regular fee or covered fare if covered tier exists | Allowed — same | Allowed — pays regular fee | **Blocked by Gate 2** — would be claiming uncompensated coverage |
+| **`payment_plan`** | Allowed — tuition coverage applies if covered tier exists | Allowed — same | Allowed — pays regular fee | Allowed — covered (plan is set up) |
+| **`paid_in_full`** | Allowed — tuition coverage applies if covered tier exists | Allowed — same | Allowed — pays regular fee | Allowed — covered |
+| **`skipping`** | Allowed — pays regular fee (no tuition coverage available) | Allowed — same | Allowed — pays regular fee | Allowed — pays regular fee (covered tier does not apply to skipping students) |
+
+**Non-in-training roles** (Analyst, Scholar, Member, external) are
+never blocked by either gate. They register for events on the regular
+rules: free where allowed, paid where required.
 
 ---
 
@@ -123,14 +194,14 @@ owe dues.
 
 - **Current academic year summary** — tier amounts inline, due date,
   obligated / paid / unpaid counts, total collected.
-- **Totals collected per period chart** — bar chart, all years.
+- **Totals collected per academic year chart** — bar chart, all years.
 - **Per-role chart** — paid vs unpaid stacked bars for the current year.
 - **Per-role table** — same data in tabular form.
 - **Unpaid members** — list of members who owe dues for the current
   year and haven't paid. Each row shows the amount owed and a
   **Record payment** button. Email reminders go out every N days
   (configurable on Settings) starting after the due date.
-- **All periods table** — every academic year you've configured, with
+- **All academic years table** — every year you've configured, with
   tier amounts + paid / unpaid counts + collected.
 
 ### Common dues workflows
@@ -139,7 +210,7 @@ owe dues.
   → Dues tab → find them in Unpaid → click **Record payment**.
 - **"A member paid via Stripe but it's not showing as paid."**
   → Payments tab → find their pending payment → **Mark paid**. (Should
-  be rare; webhook usually handles this.)
+  be rare; the website usually handles this automatically.)
 
 ---
 
@@ -241,10 +312,9 @@ it and we can probably bring it in.
 - **Issuing receipts** — happens automatically when a Stripe payment
   succeeds (or when you click **Record payment** / **Mark paid**).
 - **Sending payment-success emails** — same.
-- **Creating next year's academic period** — a cron sets up next year
-  in advance so you can plan ahead in Settings.
-- **Sending reminders** — a cron sends them on the cadence you set in
-  Settings.
+- **Creating next year's academic period** — set up automatically so
+  you can plan ahead in Settings.
+- **Sending reminders** — sent on the cadence you set in Settings.
 
 ---
 

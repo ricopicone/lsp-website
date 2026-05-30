@@ -33,8 +33,6 @@ def _needs_reminder(enrollment: TuitionEnrollment | None, today) -> bool:
         return True  # no decision yet
     if enrollment.status == TuitionEnrollment.Status.PAID_IN_FULL:
         return False
-    if enrollment.status == TuitionEnrollment.Status.EXEMPT:
-        return False
     if enrollment.status == TuitionEnrollment.Status.SKIPPING:
         return False  # explicit no — don't pester
     if enrollment.status == TuitionEnrollment.Status.COMMITTED:

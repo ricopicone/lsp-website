@@ -106,7 +106,7 @@ def _tuition_block_reason(user, event) -> str | None:
        no payment plan set up) are additionally blocked from event
        types in ``TUITION_BLOCKING_EVENT_TYPES``. This currently
        targets only ``special_event``; we may extend later. Other
-       statuses (PAYMENT_PLAN, PAID_IN_FULL, EXEMPT, SKIPPING) all
+       statuses (PAYMENT_PLAN, PAID_IN_FULL, SKIPPING) all
        pass — SKIPPING students pay the regular event fee.
     """
     profile = getattr(user, "profile", None)
