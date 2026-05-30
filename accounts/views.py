@@ -6,25 +6,29 @@ import json
 import logging
 import os
 
+from django.conf import settings
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Prefetch
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from committees.models import CommitteeMembership
 
 from . import emails
 from .forms import (
+    EmailChangeForm,
     LightSignupForm,
     ProfileEditForm,
     ReferralRequestForm,
     UserNameForm,
 )
 from .images import MAX_UPLOAD_BYTES, InvalidImage, render_headshot_square
-from .models import Profile
+from .models import EmailChangeRequest, Profile, User
 
 logger = logging.getLogger(__name__)
 
@@ -331,6 +335,88 @@ def profile_edit(request):
         "show_listing":  show_listing,
         "show_practice": show_practice,
         "show_billing":  profile.is_faculty,
+        "can_change_email": can_change_email(user),
+    })
+
+
+def can_change_email(user) -> bool:
+    """Whether ``user`` may use the self-service login-email change.
+
+    Gated until launch: everyone once ``EMAIL_CHANGE_PUBLIC`` is on, else
+    only addresses in ``EMAIL_CHANGE_ALLOWLIST`` (case-insensitive)."""
+    if getattr(settings, "EMAIL_CHANGE_PUBLIC", False):
+        return True
+    allow = {e.strip().lower() for e in getattr(settings, "EMAIL_CHANGE_ALLOWLIST", [])}
+    return bool(user.is_authenticated and user.email.lower() in allow)
+
+
+@login_required
+def email_change(request):
+    """Initiate a login-email change (gated; password re-auth required).
+
+    On success creates an :class:`EmailChangeRequest`, supersedes any prior
+    pending one, and emails a verification link to the new address. The
+    login email does not change until that link is confirmed.
+    """
+    if not can_change_email(request.user):
+        raise Http404
+
+    sent_to = None
+    if request.method == "POST":
+        form = EmailChangeForm(request.POST, user=request.user)
+        if form.is_valid():
+            new_email = form.cleaned_data["new_email"]
+            # Supersede prior unconfirmed requests so old links stop working.
+            EmailChangeRequest.objects.filter(
+                user=request.user, confirmed_at__isnull=True
+            ).delete()
+            req = EmailChangeRequest.objects.create(
+                user=request.user, new_email=new_email
+            )
+            emails.send_email_change_verification(req)
+            sent_to = new_email
+            form = None  # fall through to the "check your inbox" state
+    else:
+        form = EmailChangeForm(user=request.user)
+
+    return render(request, "accounts/email_change.html", {
+        "form":    form,
+        "sent_to": sent_to,
+    })
+
+
+def email_change_confirm(request, token):
+    """Confirm an email change from the link sent to the new address.
+
+    Token-only (clickable from the new inbox without being logged in). Idempotent
+    against reuse and re-checks uniqueness to close the request→confirm race.
+    """
+    req = EmailChangeRequest.objects.filter(token=token).select_related("user").first()
+    status = None
+    if req is None or req.confirmed_at is not None:
+        status = "invalid"
+    elif req.is_expired():
+        status = "expired"
+    elif User.objects.filter(email__iexact=req.new_email).exclude(pk=req.user_id).exists():
+        # Someone else claimed the address between request and confirmation.
+        status = "taken"
+    else:
+        with transaction.atomic():
+            user = req.user
+            old_email = user.email
+            user.email = req.new_email
+            user.save(update_fields=["email"])
+            req.confirmed_at = timezone.now()
+            req.save(update_fields=["confirmed_at"])
+        try:
+            emails.send_email_change_notice(user, old_email, req.new_email)
+        except Exception:  # a failed courtesy notice must not undo the change
+            logger.exception("email-change notice to %s failed", old_email)
+        status = "ok"
+
+    return render(request, "accounts/email_change_confirm.html", {
+        "status":    status,
+        "new_email": req.new_email if req else None,
     })
 
 

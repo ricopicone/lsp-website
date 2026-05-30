@@ -150,6 +150,16 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")
 SUPPORT_EMAIL = env("DJANGO_SUPPORT_EMAIL", default="website@lacanschool.org")
 
+# Self-service login-email change (accounts.views.email_change). Gated until
+# launch: until EMAIL_CHANGE_PUBLIC is True, only addresses in
+# EMAIL_CHANGE_ALLOWLIST see the option and may initiate a change. Default
+# allowlist is the project owner's address for testing while SES is still in
+# sandbox (it only delivers to verified identities anyway).
+EMAIL_CHANGE_PUBLIC = env.bool("DJANGO_EMAIL_CHANGE_PUBLIC", default=False)
+EMAIL_CHANGE_ALLOWLIST = env.list(
+    "DJANGO_EMAIL_CHANGE_ALLOWLIST", default=["dr@ricopic.one"]
+)
+
 # --- Stripe -------------------------------------------------------------
 # Test-mode keys for development; production keys swapped via env in
 # production.py. STRIPE_WEBHOOK_SECRET is the signing secret for the

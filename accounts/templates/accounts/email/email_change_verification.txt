@@ -1,0 +1,12 @@
+{% autoescape off %}Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
+
+We received a request to change the login email for your Lacanian School
+of Psychoanalysis account to this address ({{ new_email }}).
+
+To confirm the change, open this link within {{ ttl_hours }} hours:
+
+  {{ confirm_url }}
+
+Until you confirm, your login email stays the same. If you didn't request
+this, you can safely ignore this message — nothing will change.
+{% endautoescape %}

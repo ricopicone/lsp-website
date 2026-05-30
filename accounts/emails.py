@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
+from django.urls import reverse
 
 
 def send_referral_inquiry(form_cleaned: dict) -> None:
@@ -48,5 +49,58 @@ def send_referral_acknowledgment(form_cleaned: dict) -> None:
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[form_cleaned["email"]],
         reply_to=[referrals],
+    )
+    msg.send(fail_silently=False)
+
+
+def send_email_change_verification(change_request) -> None:
+    """Email a verification link to the *new* address of an email change.
+
+    Clicking the link confirms control of the new address and switches the
+    login email (see ``accounts.views.email_change_confirm``).
+    """
+    confirm_url = settings.SITE_BASE_URL.rstrip("/") + reverse(
+        "email_change_confirm", args=[change_request.token]
+    )
+    body = render_to_string(
+        "accounts/email/email_change_verification.txt",
+        {
+            "user": change_request.user,
+            "new_email": change_request.new_email,
+            "confirm_url": confirm_url,
+            "ttl_hours": int(change_request.TOKEN_TTL.total_seconds() // 3600),
+        },
+    )
+    msg = EmailMessage(
+        subject="Confirm your new Lacanian School login email",
+        body=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[change_request.new_email],
+        reply_to=[settings.SUPPORT_EMAIL],
+    )
+    msg.send(fail_silently=False)
+
+
+def send_email_change_notice(user, old_email: str, new_email: str) -> None:
+    """Notify the *old* address that the account's login email was changed.
+
+    A safety net: if the change wasn't authorized, the old-address owner
+    learns about it and can contact support.
+    """
+    body = render_to_string(
+        "accounts/email/email_change_notice.txt",
+        {
+            "user": user,
+            "old_email": old_email,
+            "new_email": new_email,
+            "support_email": settings.SUPPORT_EMAIL,
+        },
+    )
+    msg = EmailMessage(
+        subject="Your Lacanian School login email was changed",
+        body=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[old_email],
+        reply_to=[settings.SUPPORT_EMAIL],
     )
     msg.send(fail_silently=False)

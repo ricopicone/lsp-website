@@ -1,10 +1,19 @@
+import secrets
+from datetime import timedelta
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.modelfields import PhoneNumberField
 
 from .managers import UserManager
+
+
+def _email_change_token() -> str:
+    """An opaque, single-use token for an email-change confirmation link."""
+    return secrets.token_urlsafe(32)
 
 
 class User(AbstractUser):
@@ -339,3 +348,41 @@ class Profile(models.Model):
         if not self.is_faculty:
             self.default_billing_mode = None
         super().save(*args, **kwargs)
+
+
+class EmailChangeRequest(models.Model):
+    """A pending change to a user's *login* email (``User.email``).
+
+    Verify-before-switch: the new address must prove control by clicking a
+    link before the login email actually changes. The token is opaque and
+    single-use; requests expire after :attr:`TOKEN_TTL`. Creating a new
+    request supersedes any prior unconfirmed one for the same user.
+    """
+
+    TOKEN_TTL = timedelta(hours=24)
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="email_change_requests",
+    )
+    new_email = models.EmailField()
+    token = models.CharField(
+        max_length=64, unique=True, default=_email_change_token, editable=False
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        state = "confirmed" if self.confirmed_at else "pending"
+        return f"{self.user.email} → {self.new_email} ({state})"
+
+    def is_expired(self, now=None) -> bool:
+        return (now or timezone.now()) - self.created_at > self.TOKEN_TTL
+
+    @property
+    def is_pending(self) -> bool:
+        return self.confirmed_at is None and not self.is_expired()

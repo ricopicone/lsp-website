@@ -151,6 +151,49 @@ _TEXTAREA = "textarea textarea-bordered w-full"
 _SELECT = "select select-bordered w-full"
 
 
+class EmailChangeForm(forms.Form):
+    """Initiate a login-email change: new address + current-password re-auth.
+
+    Validates that the new address is well-formed, different from the
+    current one, and not already taken by another account. The actual
+    switch happens only after the new address is verified (see the
+    ``email_change_confirm`` view), so this just gates the request.
+    """
+
+    new_email = forms.EmailField(
+        label="New login email",
+        widget=forms.EmailInput(attrs={"class": _INPUT, "autocomplete": "email"}),
+    )
+    password = forms.CharField(
+        label="Current password",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "current-password"}),
+        help_text="For your security, confirm your password to change your login email.",
+    )
+
+    def __init__(self, *args, user, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_password(self):
+        password = self.cleaned_data.get("password", "")
+        if not self.user.check_password(password):
+            raise forms.ValidationError("That password is incorrect.")
+        return password
+
+    def clean_new_email(self):
+        from django.contrib.auth.models import BaseUserManager
+
+        from .models import User
+
+        email = BaseUserManager.normalize_email(self.cleaned_data["new_email"]).strip()
+        if email.lower() == self.user.email.lower():
+            raise forms.ValidationError("That's already your login email.")
+        if User.objects.filter(email__iexact=email).exclude(pk=self.user.pk).exists():
+            raise forms.ValidationError("An account with that email already exists.")
+        return email
+
+
 class UserNameForm(forms.ModelForm):
     """The name fields that live on User (the rest of the editor is Profile)."""
 

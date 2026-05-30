@@ -99,6 +99,18 @@
       </div>
     </section>
 
+    {% if can_change_email %}
+    {# ---- Login email (separate flow: verify-before-switch) -------------- #}
+    <section class="space-y-2">
+      <h2 class="font-serif text-xl text-base-content">Login email</h2>
+      <p class="text-sm text-base-content/70">
+        You sign in with <strong>{{ user.email }}</strong>. Changing it sends a
+        confirmation link to the new address before the change takes effect.
+      </p>
+      <a href="{% url 'email_change' %}" class="btn btn-sm btn-ghost">Change login email…</a>
+    </section>
+    {% endif %}
+
     {# ---- About ---------------------------------------------------------- #}
     <section class="space-y-4">
       <h2 class="font-serif text-xl text-base-content">About</h2>
