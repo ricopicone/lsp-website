@@ -92,28 +92,63 @@
       {% if form.url.errors %}<p class="text-error text-xs mt-1">{{ form.url.errors|join:", " }}</p>{% endif %}
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div class="space-y-1">
-        <label for="{{ form.cover_image.id_for_label }}" class="block text-sm font-medium">
-          Cover image <span class="text-base-content/50 font-normal">(optional)</span>
-        </label>
-        {{ form.cover_image }}
-        {% if form.instance.cover_image %}
-        <p class="text-xs text-base-content/60">Current: {{ form.instance.cover_image.name }}</p>
-        {% endif %}
-        {% if form.cover_image.errors %}<p class="text-error text-xs mt-1">{{ form.cover_image.errors|join:", " }}</p>{% endif %}
-      </div>
-      <div class="space-y-1">
-        <label for="{{ form.pdf.id_for_label }}" class="block text-sm font-medium">
-          PDF <span class="text-base-content/50 font-normal">(optional)</span>
-        </label>
-        {{ form.pdf }}
-        {% if form.instance.pdf %}
-        <p class="text-xs text-base-content/60">Current: {{ form.instance.pdf.name }}</p>
-        {% endif %}
-        {% if form.pdf.errors %}<p class="text-error text-xs mt-1">{{ form.pdf.errors|join:", " }}</p>{% endif %}
-      </div>
+    <div class="space-y-1">
+      <label for="{{ form.cover_image.id_for_label }}" class="block text-sm font-medium">
+        Cover image <span class="text-base-content/50 font-normal">(optional)</span>
+      </label>
+      {{ form.cover_image }}
+      {% if form.instance.cover_image %}
+      <p class="text-xs text-base-content/60">Current: {{ form.instance.cover_image.name }}</p>
+      {% endif %}
+      {% if form.cover_image.errors %}<p class="text-error text-xs mt-1">{{ form.cover_image.errors|join:", " }}</p>{% endif %}
     </div>
+
+    {# ---- Files: existing (relabel/remove) + add another ---- #}
+    <fieldset class="space-y-4 border-t border-base-300/60 pt-5">
+      <legend class="font-serif text-lg">PDF files</legend>
+
+      {% if not is_new %}
+        {% with existing=form.existing_files %}
+        <div class="space-y-3">
+          {% for wf, label_field, remove_field in existing %}
+          <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-start border border-base-300/60 rounded-md p-3">
+            <div class="space-y-1">
+              <p class="text-xs text-base-content/60 break-all">{{ wf.file.name }}</p>
+              <label class="block text-xs uppercase tracking-wider text-base-content/60">Label</label>
+              {{ label_field }}
+              {% if label_field.errors %}<p class="text-error text-xs">{{ label_field.errors|join:", " }}</p>{% endif %}
+            </div>
+            <label class="flex items-center gap-2 text-sm cursor-pointer mt-6">
+              {{ remove_field }}
+              <span class="text-error">Remove</span>
+            </label>
+          </div>
+          {% empty %}
+          <p class="text-sm text-base-content/60">No PDFs attached yet.</p>
+          {% endfor %}
+        </div>
+        {% endwith %}
+      {% endif %}
+
+      <div class="space-y-1">
+        <label for="{{ form.new_file.id_for_label }}" class="block text-sm font-medium">
+          {% if is_new %}Upload a PDF{% else %}Add another PDF{% endif %}
+          <span class="text-base-content/50 font-normal">(optional)</span>
+        </label>
+        {{ form.new_file }}
+        <p class="text-xs text-base-content/60">{{ form.new_file.help_text }}</p>
+        {% if form.new_file.errors %}<p class="text-error text-xs mt-1">{{ form.new_file.errors|join:", " }}</p>{% endif %}
+      </div>
+
+      <div class="space-y-1">
+        <label for="{{ form.new_file_label.id_for_label }}" class="block text-sm font-medium">
+          Label for this PDF
+          <span class="text-base-content/50 font-normal">(required when the work has multiple files)</span>
+        </label>
+        {{ form.new_file_label }}
+        {% if form.new_file_label.errors %}<p class="text-error text-xs mt-1">{{ form.new_file_label.errors|join:", " }}</p>{% endif %}
+      </div>
+    </fieldset>
 
     <fieldset class="space-y-3 border-t border-base-300/60 pt-5">
       <legend class="font-serif text-lg">Visibility</legend>
@@ -125,9 +160,9 @@
           {% if form.listing_visibility.errors %}<p class="text-error text-xs mt-1">{{ form.listing_visibility.errors|join:", " }}</p>{% endif %}
         </div>
         <div class="space-y-1">
-          <label for="{{ form.pdf_visibility.id_for_label }}" class="block text-sm font-medium">PDF</label>
+          <label for="{{ form.pdf_visibility.id_for_label }}" class="block text-sm font-medium">PDFs</label>
           {{ form.pdf_visibility }}
-          <p class="text-xs text-base-content/60">Who can download the PDF (if attached).</p>
+          <p class="text-xs text-base-content/60">Who can download attached PDFs.</p>
           {% if form.pdf_visibility.errors %}<p class="text-error text-xs mt-1">{{ form.pdf_visibility.errors|join:", " }}</p>{% endif %}
         </div>
       </div>

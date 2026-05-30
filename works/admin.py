@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Work, WorkAuthor
+from .models import Work, WorkAuthor, WorkFile
 
 
 class WorkAuthorInline(admin.TabularInline):
@@ -10,24 +10,34 @@ class WorkAuthorInline(admin.TabularInline):
     fields = ("user", "display_order")
 
 
+class WorkFileInline(admin.TabularInline):
+    model = WorkFile
+    extra = 0
+    fields = ("file", "label", "display_order")
+
+
 @admin.register(Work)
 class WorkAdmin(admin.ModelAdmin):
     list_display = (
         "title", "kind", "listing_visibility", "pdf_visibility",
-        "publication_date", "submitted_by",
+        "file_count", "publication_date", "submitted_by",
     )
     list_filter = ("kind", "listing_visibility", "pdf_visibility")
     search_fields = ("title", "abstract", "publication_info", "external_authors")
     prepopulated_fields = {"slug": ("title",)}
     autocomplete_fields = ("submitted_by",)
-    inlines = [WorkAuthorInline]
+    inlines = [WorkAuthorInline, WorkFileInline]
     fieldsets = (
         (None, {"fields": ("title", "slug", "kind")}),
         ("Visibility", {"fields": ("listing_visibility", "pdf_visibility")}),
         ("Content", {"fields": ("abstract", "publication_info", "url", "publication_date")}),
-        ("Files", {"fields": ("pdf", "cover_image")}),
+        ("Cover", {"fields": ("cover_image",)}),
         ("Authors", {"fields": ("external_authors", "submitted_by")}),
     )
+
+    @admin.display(description="Files")
+    def file_count(self, obj: Work) -> int:
+        return obj.files.count()
 
 
 @admin.register(WorkAuthor)
@@ -35,3 +45,11 @@ class WorkAuthorAdmin(admin.ModelAdmin):
     list_display = ("work", "user", "display_order")
     autocomplete_fields = ("work", "user")
     search_fields = ("work__title", "user__email", "user__first_name", "user__last_name")
+
+
+@admin.register(WorkFile)
+class WorkFileAdmin(admin.ModelAdmin):
+    list_display = ("work", "label", "display_order")
+    list_filter = ("work__kind",)
+    search_fields = ("work__title", "label")
+    autocomplete_fields = ("work",)

@@ -40,30 +40,93 @@
         {% if work.listing_visibility == "members" %}
         <span class="badge badge-ghost badge-sm">Listing: Members only</span>
         {% endif %}
-        {% if work.pdf_visibility == "members" %}
+        {% if work.pdf_visibility == "members" and work.files.all %}
         <span class="badge badge-ghost badge-sm">PDF: Members only</span>
         {% endif %}
       </div>
     </div>
   </header>
 
-  <div class="flex flex-wrap gap-3">
+  {# ---- Files section ---- #}
+  {% with files=work.files.all %}
+  {% if files %}
     {% if pdf_visible %}
-    <a href="{% url 'works:download' work.slug %}" class="btn btn-primary">Download PDF</a>
-    {% elif work.pdf and not user.is_authenticated %}
-    <a href="{% url 'login' %}?next={{ request.path }}" class="btn btn-outline">
-      Log in to download PDF
-    </a>
+      {% if files|length == 1 %}
+        {% with f=files.0 %}
+        <div class="flex flex-wrap gap-3">
+          <a href="{% url 'works:download' work.slug f.pk %}" class="btn btn-primary">
+            Download {% if f.label %}{{ f.label }}{% else %}PDF{% endif %}
+          </a>
+          {% if work.url %}
+          <a href="{{ work.url }}" target="_blank" rel="noopener" class="btn btn-outline">
+            External link →
+          </a>
+          {% endif %}
+          {% if can_edit %}
+          <a href="{% url 'works:edit' work.slug %}" class="btn btn-ghost btn-sm ml-auto">Edit</a>
+          {% endif %}
+        </div>
+        {% endwith %}
+      {% else %}
+        <section class="space-y-3">
+          <h2 class="text-xs uppercase tracking-wider text-base-content/60">PDFs</h2>
+          <ul class="space-y-2">
+            {% for f in files %}
+            <li class="flex items-baseline gap-2">
+              <a href="{% url 'works:download' work.slug f.pk %}"
+                 class="link link-primary">
+                {{ f.label|default:f.file.name }}
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+          <div class="flex flex-wrap gap-3 pt-2">
+            {% if work.url %}
+            <a href="{{ work.url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">
+              External link →
+            </a>
+            {% endif %}
+            {% if can_edit %}
+            <a href="{% url 'works:edit' work.slug %}" class="btn btn-ghost btn-sm ml-auto">Edit</a>
+            {% endif %}
+          </div>
+        </section>
+      {% endif %}
+    {% else %}
+      <div class="flex flex-wrap gap-3">
+        {% if not user.is_authenticated %}
+        <a href="{% url 'login' %}?next={{ request.path }}" class="btn btn-outline">
+          Log in to download {% if files|length > 1 %}PDFs{% else %}PDF{% endif %}
+        </a>
+        {% endif %}
+        {% if work.url %}
+        <a href="{{ work.url }}" target="_blank" rel="noopener" class="btn btn-outline">
+          External link →
+        </a>
+        {% endif %}
+        {% if can_edit %}
+        <a href="{% url 'works:edit' work.slug %}" class="btn btn-ghost btn-sm ml-auto">Edit</a>
+        {% endif %}
+      </div>
     {% endif %}
-    {% if work.url %}
-    <a href="{{ work.url }}" target="_blank" rel="noopener" class="btn btn-outline">
-      External link →
-    </a>
+  {% else %}
+    {% comment %}
+      No files attached — show external link and edit only.
+    {% endcomment %}
+    {% if work.url or can_edit %}
+    <div class="flex flex-wrap gap-3">
+      {% if work.url %}
+      <a href="{{ work.url }}" target="_blank" rel="noopener" class="btn btn-outline">
+        External link →
+      </a>
+      {% endif %}
+      {% if can_edit %}
+      <a href="{% url 'works:edit' work.slug %}" class="btn btn-ghost btn-sm ml-auto">Edit</a>
+      {% endif %}
+    </div>
     {% endif %}
-    {% if can_edit %}
-    <a href="{% url 'works:edit' work.slug %}" class="btn btn-ghost btn-sm ml-auto">Edit</a>
-    {% endif %}
-  </div>
+  {% endif %}
+  {% endwith %}
 
   {% if work.abstract %}
   <div class="prose max-w-none">

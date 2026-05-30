@@ -7,6 +7,10 @@ two-axis visibility model so a member can list their journal article
 publicly while keeping the PDF (which they don't own publisher rights
 to) restricted to LSP members.
 
+A Work has zero or more ``WorkFile`` rows. A single file renders as
+one download button; multiple files render as a labeled list and each
+file must carry a label.
+
 Cartel-internal visibility (only cartel members see the work) is
 deferred to M14 — for now the CARTEL kind uses the same PUBLIC/MEMBERS
 visibility as everything else.
@@ -34,14 +38,6 @@ class Work(models.Model):
         PUBLIC  = "public",  _("Public")
         MEMBERS = "members", _("Members only")
 
-    class PDFVisibility(models.TextChoices):
-        # NONE = no PDF was uploaded. Modelled as a visibility value (vs a
-        # nullable separate field) so the catalog filters can express
-        # "works with a PDF I can read" uniformly.
-        NONE    = "none",    _("No PDF")
-        PUBLIC  = "public",  _("Public PDF")
-        MEMBERS = "members", _("Members-only PDF")
-
     title = models.CharField(max_length=200)
     slug = models.SlugField(max_length=220, unique=True)
     kind = models.CharField(max_length=16, choices=Kind.choices)
@@ -54,11 +50,12 @@ class Work(models.Model):
     )
     pdf_visibility = models.CharField(
         max_length=16,
-        choices=PDFVisibility.choices,
-        default=PDFVisibility.NONE,
+        choices=Visibility.choices,
+        default=Visibility.MEMBERS,
         help_text=(
-            "Who can download the PDF. Cannot be more public than the "
-            "listing — e.g. listing=Members blocks a Public PDF."
+            "Who can download the PDFs attached to this work. Cannot be "
+            "more public than the listing — listing=Members blocks a "
+            "Public PDF setting."
         ),
     )
 
@@ -77,11 +74,6 @@ class Work(models.Model):
     )
     publication_date = models.DateField(null=True, blank=True)
 
-    pdf = models.FileField(
-        upload_to="works/pdf/%Y/",
-        blank=True,
-        null=True,
-    )
     cover_image = models.ImageField(
         upload_to="works/covers/%Y/",
         blank=True,
@@ -120,25 +112,14 @@ class Work(models.Model):
     # ---- Validation ----
 
     def clean(self):
-        # PDF visibility cannot be more open than listing visibility.
         if (
-            self.pdf_visibility == self.PDFVisibility.PUBLIC
+            self.pdf_visibility == self.Visibility.PUBLIC
             and self.listing_visibility == self.Visibility.MEMBERS
         ):
             raise ValidationError({
                 "pdf_visibility": _(
                     "PDF can't be public when the listing is members-only."
                 ),
-            })
-        # PDF visibility says there's a PDF; ensure one is actually attached.
-        if self.pdf_visibility != self.PDFVisibility.NONE and not self.pdf:
-            raise ValidationError({
-                "pdf": _("Attach a PDF or set PDF visibility to 'No PDF'."),
-            })
-        # Conversely: an attached PDF needs a real visibility.
-        if self.pdf and self.pdf_visibility == self.PDFVisibility.NONE:
-            raise ValidationError({
-                "pdf_visibility": _("Pick a visibility for the attached PDF."),
             })
 
     # ---- Visibility helpers ----
@@ -149,9 +130,10 @@ class Work(models.Model):
         return bool(user and user.is_authenticated)
 
     def pdf_visible_to(self, user) -> bool:
-        if self.pdf_visibility == self.PDFVisibility.NONE or not self.pdf:
+        """True only when (a) visibility permits and (b) at least one file exists."""
+        if not self.files.exists():
             return False
-        if self.pdf_visibility == self.PDFVisibility.PUBLIC:
+        if self.pdf_visibility == self.Visibility.PUBLIC:
             return True
         return bool(user and user.is_authenticated)
 
@@ -232,3 +214,31 @@ class WorkAuthor(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} on {self.work}"
+
+
+class WorkFile(models.Model):
+    """A PDF (or other) file attached to a Work.
+
+    A Work with one file renders as a single download button; with
+    multiple, the detail page renders a labeled list and the form
+    requires every file to carry a non-empty label.
+    """
+
+    work = models.ForeignKey(Work, on_delete=models.CASCADE, related_name="files")
+    file = models.FileField(upload_to="works/files/%Y/")
+    label = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text=(
+            "Optional when this is the work's only file; required when "
+            "the work has multiple files."
+        ),
+    )
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("display_order", "created_at")
+
+    def __str__(self) -> str:
+        return self.label or self.file.name.rsplit("/", 1)[-1]

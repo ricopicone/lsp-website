@@ -8,17 +8,21 @@ from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import WorkForm
-from .models import Work, WorkAuthor
+from .models import Work, WorkAuthor, WorkFile
 
 
 def _annotated_qs(user):
-    """Listing queryset with authors prefetched in byline order."""
+    """Listing queryset with authors + files prefetched in order."""
     return (
         Work.listing_for(user)
         .prefetch_related(
             Prefetch(
                 "authorships",
                 queryset=WorkAuthor.objects.select_related("user").order_by("display_order"),
+            ),
+            Prefetch(
+                "files",
+                queryset=WorkFile.objects.order_by("display_order"),
             ),
         )
     )
@@ -27,7 +31,6 @@ def _annotated_qs(user):
 def index(request):
     qs = _annotated_qs(request.user)
 
-    # Filters: kind, year, has-pdf
     kind = request.GET.get("kind") or ""
     year = request.GET.get("year") or ""
     has_pdf = request.GET.get("has_pdf") == "1"
@@ -38,7 +41,7 @@ def index(request):
     if year and year.isdigit():
         qs = qs.filter(publication_date__year=int(year))
     if has_pdf:
-        qs = qs.exclude(pdf_visibility=Work.PDFVisibility.NONE)
+        qs = qs.filter(files__isnull=False).distinct()
     if q:
         qs = qs.filter(
             Q(title__icontains=q)
@@ -48,8 +51,6 @@ def index(request):
             | Q(authors__last_name__icontains=q)
         ).distinct()
 
-    # Year facet — distinct publication years that appear in the filtered set
-    # *before* the year filter is applied, so the dropdown stays useful.
     years_qs = (
         _annotated_qs(request.user)
         .exclude(publication_date__isnull=True)
@@ -61,8 +62,6 @@ def index(request):
     return render(request, "works/index.html", {
         "works": qs,
         "kind_choices": [(c.value, c.label) for c in Work.Kind if c != Work.Kind.CARTEL],
-        # Catalog filter shows the user's selected kind even if CARTEL —
-        # we just don't expose Cartel as a *new* submission kind in v1.
         "all_kind_choices": Work.Kind.choices,
         "years": list(years_qs),
         "selected_kind": kind,
@@ -83,12 +82,13 @@ def detail(request, slug):
     })
 
 
-def download(request, slug):
+def download(request, slug, file_id):
     work = get_object_or_404(Work, slug=slug)
     if not work.pdf_visible_to(request.user):
         raise Http404()
-    filename = work.pdf.name.rsplit("/", 1)[-1]
-    return FileResponse(work.pdf.open("rb"), as_attachment=False, filename=filename)
+    wf = get_object_or_404(WorkFile, pk=file_id, work=work)
+    filename = wf.file.name.rsplit("/", 1)[-1]
+    return FileResponse(wf.file.open("rb"), as_attachment=False, filename=filename)
 
 
 @login_required
@@ -138,6 +138,10 @@ def my_works(request):
             Prefetch(
                 "authorships",
                 queryset=WorkAuthor.objects.select_related("user").order_by("display_order"),
+            ),
+            Prefetch(
+                "files",
+                queryset=WorkFile.objects.order_by("display_order"),
             ),
         )
         .distinct()

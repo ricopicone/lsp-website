@@ -1,19 +1,25 @@
 """Submission form for member-contributed works.
 
-The author entry is the trickiest part: members type LSP co-authors as
-a comma-separated list of names or emails, and the form's clean step
-resolves each entry to a User. Free-text co-authors who aren't in our
-system go in ``external_authors`` instead.
+Two tricky bits beyond a plain ModelForm:
+
+* **Authors**: members type LSP co-authors as comma-separated names or
+  emails; ``clean_lsp_authors`` resolves each entry to a User. Free-text
+  co-authors who aren't in our system go in ``external_authors``.
+
+* **Files**: a Work has zero or more attached PDFs (``WorkFile`` rows).
+  The form takes one new file + label at a time and, on edit, exposes
+  every existing file with relabel + remove. When the final file count
+  is two or more, every file must have a non-empty label.
 """
 
 from __future__ import annotations
 
 from django import forms
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from django.db.models import Max, Q
 from django.utils.text import slugify
 
-from .models import Work
+from .models import Work, WorkFile
 
 User = get_user_model()
 
@@ -40,7 +46,7 @@ def _resolve_user(token: str):
 
 
 class WorkForm(forms.ModelForm):
-    """ModelForm with a free-text author field that resolves to User M2M."""
+    """ModelForm with author resolution + per-file relabel/remove/add."""
 
     lsp_authors = forms.CharField(
         required=False,
@@ -50,6 +56,19 @@ class WorkForm(forms.ModelForm):
             "'First Last' names. You are added automatically — list "
             "co-authors here, in byline order."
         ),
+    )
+    new_file = forms.FileField(
+        required=False,
+        widget=forms.ClearableFileInput(attrs={"class": "file-input file-input-bordered w-full"}),
+        help_text="Upload a PDF. To add more files, save and edit again.",
+    )
+    new_file_label = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={
+            "class": "input input-bordered w-full",
+            "placeholder": "Optional when this is the only file",
+        }),
+        help_text="Required when the work has multiple files.",
     )
 
     class Meta:
@@ -61,7 +80,6 @@ class WorkForm(forms.ModelForm):
             "publication_info",
             "url",
             "publication_date",
-            "pdf",
             "cover_image",
             "external_authors",
             "listing_visibility",
@@ -115,6 +133,31 @@ class WorkForm(forms.ModelForm):
             self.fields["lsp_authors"].initial = ", ".join(
                 f"{u.first_name} {u.last_name}".strip() or u.email for u in others
             )
+        # Inject one label + remove field per existing WorkFile so the edit
+        # form can relabel or remove each file inline.
+        self._existing_file_ids: list[int] = []
+        if self.instance and self.instance.pk:
+            for f in self.instance.files.all().order_by("display_order"):
+                self._existing_file_ids.append(f.pk)
+                self.fields[f"file_{f.pk}_label"] = forms.CharField(
+                    required=False,
+                    initial=f.label,
+                    widget=forms.TextInput(attrs={"class": "input input-bordered input-sm w-full"}),
+                )
+                self.fields[f"file_{f.pk}_remove"] = forms.BooleanField(
+                    required=False,
+                    widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
+                )
+
+    # ---- Convenience for the template ----
+
+    def existing_files(self):
+        """Yield (WorkFile, label_field, remove_field) tuples for the template."""
+        if not (self.instance and self.instance.pk):
+            return
+        files = {f.pk: f for f in self.instance.files.all().order_by("display_order")}
+        for pk in self._existing_file_ids:
+            yield files[pk], self[f"file_{pk}_label"], self[f"file_{pk}_remove"]
 
     # ---- Field-level cleaning ----
 
@@ -141,23 +184,47 @@ class WorkForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        # Cross-field check: model.clean enforces PDF/listing visibility,
-        # but Django's ModelForm won't call full_clean automatically — we
-        # invoke it here so the form sees the error in-line on the right
-        # field instead of just a __all__ message.
+
+        # Visibility constraint (delegate to Model.clean for error placement).
         instance = self.instance
         for field, value in cleaned.items():
-            setattr(instance, field, value)
+            if field in self.Meta.fields:
+                setattr(instance, field, value)
         try:
             instance.clean()
         except forms.ValidationError as e:
-            # Re-raise so ModelForm attaches errors to the right fields.
-            for field, errors in e.error_dict.items() if hasattr(e, "error_dict") else []:
+            for field, errors in (e.error_dict.items() if hasattr(e, "error_dict") else []):
                 for err in errors:
                     self.add_error(field, err)
+
+        # File label rule: if the post-save state has >= 2 files, every
+        # file (existing kept + the new one) must carry a non-empty label.
+        existing_kept_pks = [
+            pk for pk in self._existing_file_ids
+            if not cleaned.get(f"file_{pk}_remove")
+        ]
+        new_file = cleaned.get("new_file")
+        new_label = (cleaned.get("new_file_label") or "").strip()
+        total = len(existing_kept_pks) + (1 if new_file else 0)
+
+        if total >= 2:
+            # Check every kept existing file has a label.
+            for pk in existing_kept_pks:
+                label_val = (cleaned.get(f"file_{pk}_label") or "").strip()
+                if not label_val:
+                    self.add_error(
+                        f"file_{pk}_label",
+                        "Label required when the work has multiple files.",
+                    )
+            if new_file and not new_label:
+                self.add_error(
+                    "new_file_label",
+                    "Label required when the work has multiple files.",
+                )
+
         return cleaned
 
-    # ---- Save: write authors + slug + submitted_by ----
+    # ---- Save: write authors + slug + submitted_by + file ops ----
 
     def save(self, commit=True):
         from django.db import transaction
@@ -179,7 +246,6 @@ class WorkForm(forms.ModelForm):
             instance.submitted_by = self.current_user
 
         co_authors = self.cleaned_data.get("lsp_authors") or []
-        # Current user is author #1; co-authors follow in byline order.
         byline: list = []
         if self.current_user:
             byline.append(self.current_user)
@@ -192,9 +258,37 @@ class WorkForm(forms.ModelForm):
 
         with transaction.atomic():
             instance.save()
-            # Replace authorships to match the byline order.
+
+            # Authorships: replace to match byline order.
             WorkAuthor.objects.filter(work=instance).delete()
             for i, user in enumerate(byline):
                 WorkAuthor.objects.create(work=instance, user=user, display_order=i)
+
+            # Existing files: relabel and remove.
+            for pk in self._existing_file_ids:
+                wf = WorkFile.objects.filter(pk=pk, work=instance).first()
+                if wf is None:
+                    continue
+                if self.cleaned_data.get(f"file_{pk}_remove"):
+                    wf.delete()
+                else:
+                    new_label = (self.cleaned_data.get(f"file_{pk}_label") or "").strip()
+                    if wf.label != new_label:
+                        wf.label = new_label
+                        wf.save(update_fields=["label"])
+
+            # New file: append at the end of display_order.
+            new_file = self.cleaned_data.get("new_file")
+            if new_file:
+                last = (
+                    WorkFile.objects.filter(work=instance).aggregate(m=Max("display_order"))["m"]
+                    or 0
+                )
+                WorkFile.objects.create(
+                    work=instance,
+                    file=new_file,
+                    label=(self.cleaned_data.get("new_file_label") or "").strip(),
+                    display_order=last + 1,
+                )
 
         return instance
