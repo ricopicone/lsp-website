@@ -1091,3 +1091,89 @@ def test_inbound_webhook_rejects_wrong_topic(client, settings):
         content_type="application/json",
     )
     assert resp.status_code == 403
+
+
+# ---- realtime chat (WebSocket consumer, M13.5b) -------------------------
+
+
+def _ws(user, slug):
+    from channels.routing import URLRouter
+    from channels.testing import WebsocketCommunicator
+
+    from .routing import websocket_urlpatterns
+    comm = WebsocketCommunicator(URLRouter(websocket_urlpatterns), f"/ws/parletre/{slug}/")
+    comm.scope["user"] = user
+    return comm
+
+
+@pytest.mark.django_db(transaction=True)
+def test_chat_consumer_posts_and_broadcasts():
+    from asgiref.sync import async_to_sync
+    member = make_user("m@x.co", role=Role.ANALYST)
+    ch = make_channel("lounge", kind=Channel.Kind.CHAT)
+
+    async def scenario():
+        comm = _ws(member, ch.slug)
+        connected, _ = await comm.connect()
+        assert connected
+        first = await comm.receive_json_from()        # our own join presence
+        assert first["kind"] == "presence" and first["event"] == "join"
+        await comm.send_json_to({"body": "hello **live**"})
+        msg = await comm.receive_json_from()
+        assert msg["kind"] == "message"
+        assert "<strong>live</strong>" in msg["body_html"]
+        assert msg["author"]  # has a display name
+        await comm.disconnect()
+
+    async_to_sync(scenario)()
+    assert Post.objects.filter(channel=ch, body="hello **live**", thread__isnull=True).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_chat_consumer_rejects_non_member():
+    from asgiref.sync import async_to_sync
+    guest = make_user("g@x.co", role=Role.EXTERNAL)
+    ch = make_channel("lounge", kind=Channel.Kind.CHAT)
+
+    async def scenario():
+        comm = _ws(guest, ch.slug)
+        connected, _ = await comm.connect()
+        assert not connected
+        await comm.disconnect()
+
+    async_to_sync(scenario)()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_chat_consumer_rejects_forum_channel():
+    from asgiref.sync import async_to_sync
+    member = make_user("m@x.co", role=Role.ANALYST)
+    ch = make_channel("forum-ch")  # default kind = forum
+
+    async def scenario():
+        comm = _ws(member, ch.slug)
+        connected, _ = await comm.connect()
+        assert not connected
+        await comm.disconnect()
+
+    async_to_sync(scenario)()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_chat_consumer_staff_only_channel_blocks_member_send():
+    from asgiref.sync import async_to_sync
+    member = make_user("m@x.co", role=Role.ANALYST)
+    ch = make_channel("announce-chat", kind=Channel.Kind.CHAT,
+                      post_policy=Channel.PostPolicy.STAFF_ONLY)
+
+    async def scenario():
+        comm = _ws(member, ch.slug)
+        connected, _ = await comm.connect()
+        assert connected                              # may read
+        await comm.receive_json_from()                # join presence
+        await comm.send_json_to({"body": "sneak"})    # but not post
+        assert await comm.receive_nothing(timeout=0.3)
+        await comm.disconnect()
+
+    async_to_sync(scenario)()
+    assert not Post.objects.filter(channel=ch).exists()

@@ -46,6 +46,19 @@ CSRF_TRUSTED_ORIGINS = env(
     default=["https://app.lacanschool.org"],
 )
 
+# --- Channels layer (Parlêtre realtime chat) ----------------------------
+# Share the WebSocket layer across workers via Redis when REDIS_URL is set.
+# Without it, the in-memory layer from base.py is used — correct only for a
+# single worker process.
+REDIS_URL = env("REDIS_URL", default="")
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [REDIS_URL]},
+        },
+    }
+
 # --- Security (the site is served over HTTPS) ---------------------------
 
 SECURE_SSL_REDIRECT = True

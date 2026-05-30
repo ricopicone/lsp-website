@@ -38,6 +38,9 @@ ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
 # --- Applications -------------------------------------------------------
 
 DJANGO_APPS = [
+    # daphne must precede staticfiles so it can provide the ASGI runserver.
+    "daphne",
+    "channels",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -100,6 +103,14 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
+
+# Channels layer for Parlêtre realtime chat (M13.5b). In-memory is fine for a
+# single process (dev, tests, and a single-worker prod box); production sets
+# REDIS_URL to share the layer across workers (see production.py).
+CHANNEL_LAYERS = {
+    "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
+}
 
 # --- Database -----------------------------------------------------------
 # Development uses this SQLite database. Production overrides DATABASES

@@ -45,4 +45,7 @@ COPY --chown=app:app . /app
 COPY --from=css-build --chown=app:app /css/static/css/site.css /app/static/css/site.css
 USER app
 EXPOSE 8000
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile - --error-logfile -"]
+# Served under ASGI (daphne) so Parlêtre's WebSocket chat works alongside
+# HTTP. Channels' WebSocket layer is shared across processes via Redis
+# (REDIS_URL) — see compose.yml and config/settings/production.py.
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec daphne -b 0.0.0.0 -p 8000 config.asgi:application"]

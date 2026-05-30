@@ -1,10 +1,11 @@
 {% extends "core/base.html" %}
 {% load static %}
 {% block title %}{{ channel.name }} — Parlêtre{% endblock %}
-{% block extra_head %}<script defer src="{% static 'js/parletre-mentions.js' %}"></script>{% endblock %}
+{% block extra_head %}<script defer src="{% static 'js/parletre-mentions.js' %}"></script>
+<script defer src="{% static 'js/parletre-chat.js' %}"></script>{% endblock %}
 
 {% block content %}
-<div class="space-y-5">
+<div class="space-y-5" data-chat="{{ channel.slug }}">
   <nav class="text-sm text-base-content/50">
     <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
     <span aria-hidden="true">/</span>
@@ -18,12 +19,15 @@
       <div class="prose prose-sm max-w-none text-base-content/70">{{ channel.description_html }}</div>
       {% endif %}
     </div>
-    {% include "parletre/_subscribe.html" %}
+    <div class="flex flex-col items-end gap-1">
+      {% include "parletre/_subscribe.html" %}
+      <span class="text-xs text-success" data-chat-presence aria-live="polite"></span>
+    </div>
   </header>
 
-  <div class="space-y-4">
+  <div class="space-y-4" data-chat-stream>
     {% for post in posts %}
-    <div class="flex gap-3">
+    <div class="flex gap-3" id="post-{{ post.id }}">
       <div class="flex-1 min-w-0">
         <p class="text-sm">
           <span class="font-medium text-base-content">{% if post.author %}{{ post.author.get_full_name|default:post.author.email }}{% else %}(removed){% endif %}</span>
@@ -41,7 +45,7 @@
   </div>
 
   {% if can_post %}
-  <form method="post" enctype="multipart/form-data" class="space-y-2 border-t border-base-300/60 pt-4">
+  <form method="post" enctype="multipart/form-data" data-chat-form class="space-y-2 border-t border-base-300/60 pt-4">
     {% csrf_token %}
     <div class="mention-host" data-mention-url="{% url 'parletre:mention_search' %}?channel={{ channel.slug }}">{{ form.body }}</div>
     {% if form.body.errors %}<p class="text-error text-sm">{{ form.body.errors|striptags }}</p>{% endif %}

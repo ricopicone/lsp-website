@@ -57,6 +57,7 @@ from .reads import (
     unread_channel_ids,
     unread_thread_ids,
 )
+from .realtime import broadcast_chat_post
 from .services import notify_new_thread, notify_post
 
 log = logging.getLogger("parletre")
@@ -175,6 +176,7 @@ def channel(request, slug):
             )
             _save_attachments(post, form.cleaned_data.get("attachments"))
             notify_post(post)
+            broadcast_chat_post(post)  # reach any live WebSocket clients
             return redirect(channel)
     else:
         form = PostForm()
