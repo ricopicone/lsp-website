@@ -1,20 +1,23 @@
 {% load works_filters %}
 {% comment %}
-  Fallback when a work has no uploaded cover_image. Composed in layers:
+  Fallback when a work has no uploaded cover_image. Layers:
     1. Tone-color background (deterministic per title) + 2:3 aspect ratio
     2. Background vibe shapes (random circles/rects/lines)
     3. Author headshot avatars positioned absolutely in the bottom-left
     4. Feature lines drawn on top so a line crosses through the avatars
   Expects `work` in context.
 
-  Notes on the implementation:
-  * Inline styles for ratios and percentages because Tailwind v4 silently
-    drops arbitrary-value classes containing `/` or `%`.
-  * Avatars are each absolutely positioned (not flex) so we sidestep the
-    auto-height-flex-with-aspect-ratio-children layout collapse. Width is
-    22% of card; aspect-ratio: 1 gives the matching height. The `left`
-    offset cascades by 19% so adjacent avatars overlap by 3% (a small
-    stack effect). z-index via revcounter so the first author is on top.
+  Implementation notes:
+  * Tailwind v4 silently drops arbitrary-value classes containing `/`
+    or `%` (e.g. `aspect-[2/3]`, `w-[22%]`) — using inline styles for
+    those values.
+  * Avatar sizing uses the padding-top percentage trick: a div with
+    `width: 22%; padding-top: 22%; height: 0;` is a square box whose
+    side equals 22% of the tone-card's width (padding-top references
+    parent inline size). The actual img sits absolutely inside, filling
+    the padding box. This avoids any reliance on `aspect-ratio`
+    computing height for the avatar, which I've seen flake on prod.
+  * z-index from `forloop.revcounter` so the first author renders on top.
 {% endcomment %}
 <div class="relative w-full rounded-md overflow-hidden"
      style="aspect-ratio: 2/3; background-color: {% tone_for work.title %};">
@@ -22,25 +25,24 @@
 
   {% with byline=work.authorships.all %}
   {% for wa in byline|slice:":3" %}
-    {% if wa.user.profile.headshot %}
     <div class="absolute"
-         style="bottom: 6%; left: calc(6% + 19% * {{ forloop.counter0 }}); width: 22%; aspect-ratio: 1; z-index: {{ forloop.revcounter|add:10 }};">
-      <img src="{{ wa.user.profile.headshot.url }}" alt=""
-           class="w-full h-full object-cover rounded-full ring-1 ring-base-100/80">
-    </div>
-    {% else %}
-    <div class="absolute"
-         style="bottom: 6%; left: calc(6% + 19% * {{ forloop.counter0 }}); width: 22%; aspect-ratio: 1; z-index: {{ forloop.revcounter|add:10 }};">
-      <div class="w-full h-full rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center font-serif text-xs text-base-content/80">
-        {{ wa.user.first_name|slice:":1" }}{{ wa.user.last_name|slice:":1" }}
+         style="bottom: 6%; left: calc(6% + 19% * {{ forloop.counter0 }}); width: 22%; padding-top: 22%; height: 0; z-index: {{ forloop.revcounter|add:10 }};">
+      <div class="absolute inset-0 rounded-full overflow-hidden ring-1 ring-base-100/80">
+        {% if wa.user.profile.headshot %}
+        <img src="{{ wa.user.profile.headshot.url }}" alt=""
+             class="w-full h-full object-cover">
+        {% else %}
+        <div class="w-full h-full bg-base-100/70 flex items-center justify-center font-serif text-xs text-base-content/80">
+          {{ wa.user.first_name|slice:":1" }}{{ wa.user.last_name|slice:":1" }}
+        </div>
+        {% endif %}
       </div>
     </div>
-    {% endif %}
   {% endfor %}
   {% if byline|length > 3 %}
   <div class="absolute"
-       style="bottom: 6%; left: calc(6% + 19% * 3); width: 22%; aspect-ratio: 1; z-index: 10;">
-    <div class="w-full h-full rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center text-[10px] font-medium text-base-content/80">
+       style="bottom: 6%; left: calc(6% + 19% * 3); width: 22%; padding-top: 22%; height: 0; z-index: 10;">
+    <div class="absolute inset-0 rounded-full overflow-hidden ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center text-[10px] font-medium text-base-content/80">
       +{{ byline|length|add:"-3" }}
     </div>
   </div>

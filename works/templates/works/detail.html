@@ -11,9 +11,9 @@
   </nav>
 
   <header class="flex flex-col sm:flex-row gap-8 items-start">
-    {# Cover capped at 33vh wide, so height (at 2:3) is ≈ 50vh — about
-       half window height regardless of viewport size. #}
-    <div class="w-full" style="max-width: min(100%, 33vh); flex-shrink: 0;">
+    {# Modest fixed-pixel cover: 160px (mobile) / 192px (sm+).
+       Earlier vh-based sizing got bigger on tall windows, not smaller. #}
+    <div class="w-40 sm:w-48 shrink-0">
       {% if work.cover_image %}
         <img src="{{ work.cover_image.url }}" alt=""
              class="w-full rounded-md object-cover"
