@@ -227,11 +227,22 @@ def test_timezone_settings_requires_login(client):
 
 
 @pytest.mark.django_db
-def test_timezone_settings_renders_picker(client):
+def test_timezone_settings_redirects_to_profile_editor(client):
+    """The standalone TZ page is now folded into the profile editor."""
+    from django.urls import reverse
+    u = User.objects.create_user(email="redir@x.test", password="x")
+    client.force_login(u)
+    resp = client.get(reverse("timezone_settings"))
+    assert resp.status_code == 302
+    assert resp.url == reverse("profile_edit") + "#timezone"
+
+
+@pytest.mark.django_db
+def test_profile_editor_renders_tz_picker(client):
     from django.urls import reverse
     u = User.objects.create_user(email="picker@x.test", password="x")
     client.force_login(u)
-    resp = client.get(reverse("timezone_settings"))
+    resp = client.get(reverse("profile_edit"))
     assert resp.status_code == 200
     body = resp.content
     # Curated zones should appear in the rendered <select>.
@@ -241,12 +252,12 @@ def test_timezone_settings_renders_picker(client):
 
 
 @pytest.mark.django_db
-def test_timezone_settings_saves_user_choice(client):
+def test_profile_editor_saves_timezone(client):
     from django.urls import reverse
     u = User.objects.create_user(email="picker2@x.test", password="x")
     client.force_login(u)
     resp = client.post(
-        reverse("timezone_settings"),
+        reverse("profile_edit"),
         {"timezone": "Asia/Tokyo"},
     )
     assert resp.status_code == 302
@@ -255,13 +266,13 @@ def test_timezone_settings_saves_user_choice(client):
 
 
 @pytest.mark.django_db
-def test_timezone_settings_can_clear_to_default(client):
+def test_profile_editor_can_clear_timezone(client):
     from django.urls import reverse
     u = User.objects.create_user(email="picker3@x.test", password="x")
     u.profile.timezone = "Europe/Berlin"
     u.profile.save()
     client.force_login(u)
-    client.post(reverse("timezone_settings"), {"timezone": ""})
+    client.post(reverse("profile_edit"), {"timezone": ""})
     u.profile.refresh_from_db()
     assert u.profile.timezone == ""
 

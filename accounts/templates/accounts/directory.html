@@ -29,7 +29,7 @@
           {% with p=m.profile %}
           <a class="dir-card group block rounded-lg p-2 -m-2 hover:bg-base-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
              href="{% url 'directory_detail' m.slug %}"
-             data-name="{{ p.user.first_name|lower }} {{ p.user.last_name|lower }}"
+             data-name="{{ p.user.first_name|lower }} {{ p.user.last_name|lower }} {{ p.display_name|lower }}"
              data-location="{{ p.location|lower }}"
              data-languages="{{ p.languages_spoken|lower }}">
             <div class="aspect-square w-full rounded-full overflow-hidden bg-base-200 mb-2.5 flex items-center justify-center text-base-content/40 font-serif text-2xl">
@@ -39,7 +39,7 @@
                 {{ p.user.first_name|slice:":1" }}{{ p.user.last_name|slice:":1" }}
               {% endif %}
             </div>
-            <div class="font-serif text-base leading-tight text-base-content">{{ p.user.first_name }} {{ p.user.last_name }}</div>
+            <div class="font-serif text-base leading-tight text-base-content">{{ p.display_full_name }}</div>
             {% if p.location %}<div class="text-xs text-base-content/60 mt-0.5">{{ p.location }}</div>{% endif %}
             {% with mems=p.user.active_public_memberships %}
             {% if p.is_faculty or mems %}

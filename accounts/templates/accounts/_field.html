@@ -1,0 +1,12 @@
+{% comment %}
+Reusable labelled form field for the profile editor.
+Params: field (bound field), label (str), hint (optional str).
+{% endcomment %}
+<div>
+  <label for="{{ field.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
+    {{ label }}
+  </label>
+  {{ field }}
+  {% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}
+  {% if hint %}<p class="text-xs text-base-content/55 mt-1">{{ hint }}</p>{% endif %}
+</div>

@@ -40,6 +40,8 @@ OPTIONAL_COLUMNS = {
     "location",
     "phone",
     "public_email",
+    "pronouns",
+    "year_joined",
 }
 ALL_COLUMNS = REQUIRED_COLUMNS | OPTIONAL_COLUMNS
 
@@ -199,9 +201,16 @@ class Command(BaseCommand):
             profile_fields["is_faculty"] = _parse_bool(val)
         if (val := (row.get("notes") or "").strip()):
             profile_fields["notes"] = val
-        for key in ("bio", "credentials", "languages_spoken", "location"):
+        for key in ("bio", "credentials", "languages_spoken", "location", "pronouns"):
             if (val := (row.get(key) or "").strip()):
                 profile_fields[key] = val
+        if (val := (row.get("year_joined") or "").strip()):
+            try:
+                profile_fields["year_joined"] = int(val)
+            except ValueError:
+                self.stderr.write(self.style.WARNING(
+                    f"  warning: {row['email']}: bad year_joined {val!r} (skipped)"
+                ))
         if (val := (row.get("public_email") or "").strip()):
             validate_email(val)
             profile_fields["public_email"] = BaseUserManager.normalize_email(val)

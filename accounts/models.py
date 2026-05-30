@@ -50,6 +50,11 @@ class Profile(models.Model):
         PER_CLASS = "per_class", _("Per class")
         PER_SEMINAR = "per_seminar", _("Per seminar")
 
+    class Modality(models.TextChoices):
+        IN_PERSON = "in_person", _("In person")
+        PHONE = "phone", _("By phone")
+        VIDEO = "video", _("By online video")
+
     user = models.OneToOneField(
         "accounts.User",
         on_delete=models.CASCADE,
@@ -89,6 +94,29 @@ class Profile(models.Model):
         upload_to="headshots/%Y/",
         blank=True,
         null=True,
+        help_text=(
+            "The rendered square shown across the site (circle- and "
+            "square-framed). Derived from ``headshot_original`` via the "
+            "self-service cropper — set it through the cropper, not by hand."
+        ),
+    )
+    headshot_original = models.ImageField(
+        upload_to="headshots/originals/%Y/",
+        blank=True,
+        null=True,
+        help_text=(
+            "The full, uncropped upload. Retained so a member can reopen the "
+            "cropper and re-center / re-zoom without re-uploading."
+        ),
+    )
+    headshot_crop = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Cropper state {x, y, width, height, rotate, scaleX, scaleY} in "
+            "natural-image pixels, so the cropper reopens where the member "
+            "left it. Empty dict ⇒ no crop recorded yet."
+        ),
     )
     credentials = models.CharField(
         max_length=200,
@@ -150,6 +178,48 @@ class Profile(models.Model):
             "Falls back to User.email when unset (see Profile.display_email)."
         ),
     )
+    display_name = models.CharField(
+        max_length=150,
+        blank=True,
+        help_text=(
+            "Preferred name to show instead of first+last (e.g. a member who "
+            "goes by a name other than their legal first name). Falls back to "
+            "the User's first+last when blank (see Profile.display_full_name)."
+        ),
+    )
+    pronouns = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text="e.g. 'she/her', 'he/him', 'they/them'. Shown on the directory.",
+    )
+    website = models.URLField(
+        blank=True,
+        help_text="Personal or professional website, linked from the directory.",
+    )
+    specialties = models.TextField(
+        blank=True,
+        help_text=(
+            "Areas of interest / clinical specialties / theoretical focus. "
+            "Shown on the directory; feeds Find-an-Analyst context."
+        ),
+    )
+    consultation_modalities = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text=(
+            "Comma-separated subset of Modality values (in_person, phone, "
+            "video) describing how this member meets analysands. Drives the "
+            "Find-an-Analyst modality filter."
+        ),
+    )
+    year_joined = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Start year of the academic year this member joined the school "
+            "(e.g. 2018 ⇒ 'AY 2018–2019'). Self-reported; we're harvesting it."
+        ),
+    )
     default_billing_mode = models.CharField(
         max_length=16,
         choices=BillingMode.choices,
@@ -170,6 +240,33 @@ class Profile(models.Model):
     def display_email(self) -> str:
         """Email to show on public pages; falls back to the login email."""
         return self.public_email or self.user.email
+
+    @property
+    def display_full_name(self) -> str:
+        """Preferred display name; falls back to the User's first+last."""
+        return (
+            self.display_name.strip()
+            or f"{self.user.first_name} {self.user.last_name}".strip()
+            or self.user.email
+        )
+
+    @property
+    def modalities_list(self) -> list[str]:
+        """Parsed consultation_modalities tokens (order-preserving)."""
+        return [m for m in self.consultation_modalities.split(",") if m]
+
+    @property
+    def modalities_display(self) -> list[str]:
+        """Human labels for the member's consultation modalities."""
+        labels = dict(self.Modality.choices)
+        return [str(labels[m]) for m in self.modalities_list if m in labels]
+
+    @property
+    def academic_year_joined(self) -> str:
+        """``year_joined`` rendered as 'AY 2018–2019', or '' when unset."""
+        if not self.year_joined:
+            return ""
+        return f"AY {self.year_joined}–{self.year_joined + 1}"
 
     @property
     def display_event_bio(self) -> str:

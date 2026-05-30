@@ -117,12 +117,8 @@
             {% if user.profile.owes_tuition %}
             <li><a href="{% url 'tuition' %}">Your tuition decision</a></li>
             {% endif %}
-            <li><a href="{% url 'timezone_settings' %}">Time zone</a></li>
-            <li>
-              <a class="text-base-content/50 cursor-not-allowed pointer-events-none" title="Coming soon">
-                Edit profile <span class="badge badge-ghost badge-xs ml-auto">soon</span>
-              </a>
-            </li>
+            <li><a href="{% url 'profile_edit' %}">Edit profile</a></li>
+            <li><a href="{% url 'profile_edit' %}#timezone">Time zone</a></li>
 
             {% if user.is_staff or user|is_on_committee:"programming-committee" %}
             <li><hr class="border-base-300/60 my-1"></li>

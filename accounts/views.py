@@ -2,19 +2,28 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.db.models import Prefetch
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from committees.models import CommitteeMembership
 
 from . import emails
-from .forms import LightSignupForm, ReferralRequestForm
+from .forms import (
+    LightSignupForm,
+    ProfileEditForm,
+    ReferralRequestForm,
+    UserNameForm,
+)
+from .images import MAX_UPLOAD_BYTES, InvalidImage, render_headshot_square
 from .models import Profile
 
 logger = logging.getLogger(__name__)
@@ -207,23 +216,121 @@ def _safe_next(request) -> str | None:
 
 @login_required
 def timezone_settings(request):
-    """User-facing TZ picker.
+    """Legacy redirect — the timezone picker is now folded into the unified
+    profile editor (its own section + anchor). Kept so old bookmarks and the
+    ``set_timezone_from_browser`` flow still resolve."""
+    return redirect(reverse("profile_edit") + "#timezone")
 
-    POST writes Profile.timezone (validated against the LSP_TIMEZONES
-    list — empty string clears the preference, sending the user back to
-    the project default).
+
+_CROP_KEYS = ("x", "y", "width", "height", "rotate", "scaleX", "scaleY")
+
+
+def _parse_crop(raw: str | None) -> dict:
+    """Parse the cropper's JSON payload into a clean numeric dict."""
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out = {}
+    for key in _CROP_KEYS:
+        if key in data:
+            try:
+                out[key] = float(data[key])
+            except (TypeError, ValueError):
+                pass
+    return out
+
+
+def _apply_headshot(profile, new_file, crop, remove):
+    """Mutate ``profile``'s headshot fields in place (caller saves).
+
+    Three paths: remove, upload-a-new-photo, or re-crop the existing
+    original. Raises :class:`InvalidImage` on a bad upload; leaves the
+    profile untouched when there's nothing to do.
     """
-    from .forms import TimezoneForm
-    if request.method == "POST":
-        form = TimezoneForm(request.POST, instance=request.user.profile)
-        if form.is_valid():
-            form.save()
-            return redirect(request.path + "?saved=1#saved")
+    if remove:
+        if profile.headshot:
+            profile.headshot.delete(save=False)
+        if profile.headshot_original:
+            profile.headshot_original.delete(save=False)
+        profile.headshot_crop = {}
+        return
+
+    if new_file is not None:
+        if new_file.size and new_file.size > MAX_UPLOAD_BYTES:
+            raise InvalidImage("That image is too large (12 MB max).")
+        square = render_headshot_square(new_file, crop)
+        new_file.seek(0)  # render consumed the stream; rewind to store original
+        ext = os.path.splitext(new_file.name)[1].lower() or ".img"
+        if profile.headshot_original:
+            profile.headshot_original.delete(save=False)
+        profile.headshot_original.save(f"{profile.user.pk}{ext}", new_file, save=False)
+    elif crop and profile.headshot_original:
+        profile.headshot_original.open("rb")
+        square = render_headshot_square(profile.headshot_original, crop)
     else:
-        form = TimezoneForm(instance=request.user.profile)
-    return render(request, "accounts/timezone_settings.html", {
-        "form":  form,
-        "saved": request.GET.get("saved") == "1",
+        return  # no photo change in this submission
+
+    if profile.headshot:
+        profile.headshot.delete(save=False)
+    profile.headshot.save(f"{profile.user.pk}.webp", square, save=False)
+    profile.headshot_crop = crop or {}
+
+
+@login_required
+def profile_edit(request):
+    """Self-service profile editor (USR-6+): name, headshot, bio, listing.
+
+    Edits ``User`` name fields and the member-editable ``Profile`` fields in
+    one page. ``role`` / ``is_faculty`` stay staff-only and render read-only.
+    The headshot is processed through the Pillow square-crop pipeline so it
+    renders correctly in every circle/square frame across the site.
+    """
+    user = request.user
+    profile = user.profile
+    image_error = None
+
+    if request.method == "POST":
+        uform = UserNameForm(request.POST, instance=user)
+        pform = ProfileEditForm(request.POST, instance=profile)
+        if uform.is_valid() and pform.is_valid():
+            crop = _parse_crop(request.POST.get("headshot_crop"))
+            new_file = request.FILES.get("headshot_file")
+            remove = request.POST.get("remove_headshot") == "1"
+            try:
+                prof = pform.save(commit=False)
+                _apply_headshot(prof, new_file, crop, remove)
+            except InvalidImage as exc:
+                image_error = str(exc)
+            else:
+                uform.save()
+                prof.save()
+                return redirect(reverse("profile_edit") + "?saved=1#saved")
+    else:
+        uform = UserNameForm(instance=user)
+        pform = ProfileEditForm(instance=profile)
+
+    # Field-group flags: only show listing/practice sections to members who
+    # actually appear on public pages, and billing only to faculty.
+    show_listing = profile.is_in_directory or profile.is_faculty or profile.public
+    show_practice = profile.role in {
+        Profile.Role.ANALYST,
+        Profile.Role.CANDIDATE,
+        Profile.Role.PRE_CANDIDATE,
+    }
+    return render(request, "accounts/profile_edit.html", {
+        "uform":         uform,
+        "pform":         pform,
+        "profile":       profile,
+        "saved":         request.GET.get("saved") == "1",
+        "image_error":   image_error,
+        "show_listing":  show_listing,
+        "show_practice": show_practice,
+        "show_billing":  profile.is_faculty,
     })
 
 

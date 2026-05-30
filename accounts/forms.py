@@ -142,3 +142,138 @@ class TimezoneForm(forms.ModelForm):
                 choices=[("", "Use Pacific Time (project default)")] + LSP_TIMEZONES,
             ),
         }
+
+
+# Shared Tailwind/DaisyUI input classes so the profile editor matches the
+# rest of the site without per-widget fiddling.
+_INPUT = "input input-bordered w-full"
+_TEXTAREA = "textarea textarea-bordered w-full"
+_SELECT = "select select-bordered w-full"
+
+
+class UserNameForm(forms.ModelForm):
+    """The name fields that live on User (the rest of the editor is Profile)."""
+
+    class Meta:
+        model = User
+        fields = ("first_name", "last_name")
+        widgets = {
+            "first_name": forms.TextInput(attrs={"class": _INPUT}),
+            "last_name": forms.TextInput(attrs={"class": _INPUT}),
+        }
+
+
+class ProfileEditForm(forms.ModelForm):
+    """Self-service profile editor (every field a member may set themselves).
+
+    Excludes the staff-controlled axes (``role``, ``is_faculty``) and the
+    derived geocode fields — those stay in the admin. ``headshot`` is handled
+    separately in the view via the cropper pipeline. ``location`` changes
+    trigger a re-geocode (see :meth:`save`).
+    """
+
+    consultation_modalities = forms.MultipleChoiceField(
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="How you meet analysands",
+        help_text="Shown on Find-an-Analyst.",
+    )
+    # Declared explicitly so a scheme-less entry ("example.org") becomes a
+    # valid https URL (the Django 6.0 default), without the global setting.
+    website = forms.URLField(
+        required=False,
+        assume_scheme="https",
+        widget=forms.URLInput(attrs={"class": _INPUT, "placeholder": "https://"}),
+    )
+
+    class Meta:
+        from .models import Profile
+        from .timezones import LSP_TIMEZONES
+        model = Profile
+        fields = (
+            "display_name",
+            "pronouns",
+            "bio",
+            "event_bio",
+            "credentials",
+            "languages_spoken",
+            "location",
+            "phone",
+            "public_email",
+            "website",
+            "specialties",
+            "consultation_modalities",
+            "year_joined",
+            "accepting_patients",
+            "public",
+            "default_billing_mode",
+            "timezone",
+        )
+        widgets = {
+            "display_name": forms.TextInput(attrs={"class": _INPUT}),
+            "pronouns": forms.TextInput(
+                attrs={"class": _INPUT, "placeholder": "she/her"}
+            ),
+            "bio": forms.Textarea(attrs={"class": _TEXTAREA, "rows": 6}),
+            "event_bio": forms.Textarea(attrs={"class": _TEXTAREA, "rows": 4}),
+            "credentials": forms.TextInput(attrs={"class": _INPUT}),
+            "languages_spoken": forms.TextInput(
+                attrs={"class": _INPUT, "placeholder": "English, French"}
+            ),
+            "location": forms.TextInput(
+                attrs={"class": _INPUT, "placeholder": "Los Gatos, CA, USA"}
+            ),
+            "public_email": forms.EmailInput(attrs={"class": _INPUT}),
+            "website": forms.URLInput(
+                attrs={"class": _INPUT, "placeholder": "https://"}
+            ),
+            "specialties": forms.Textarea(attrs={"class": _TEXTAREA, "rows": 3}),
+            "default_billing_mode": forms.Select(attrs={"class": _SELECT}),
+            # NB: ``website`` is declared on the form (assume_scheme), not here.
+            "timezone": forms.Select(
+                attrs={"class": _SELECT},
+                choices=[("", "Use Pacific Time (project default)")] + LSP_TIMEZONES,
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        from django.utils import timezone as dj_timezone
+
+        from .models import Profile
+
+        super().__init__(*args, **kwargs)
+
+        self.fields["consultation_modalities"].choices = Profile.Modality.choices
+        if self.instance and self.instance.pk:
+            self.initial["consultation_modalities"] = self.instance.modalities_list
+
+        # phonenumber widget needs the shared input styling applied by hand.
+        self.fields["phone"].widget.attrs.setdefault("class", _INPUT)
+        self.fields["phone"].widget.attrs.setdefault("placeholder", "+1 555 555 5555")
+
+        # year_joined as a friendly descending dropdown (harvest accelerator).
+        this_year = dj_timezone.now().year
+        years = [("", "—")] + [(y, f"AY {y}–{y + 1}") for y in range(this_year, 1979, -1)]
+        self.fields["year_joined"].widget = forms.Select(
+            attrs={"class": _SELECT}, choices=years
+        )
+
+        for name in ("public", "accepting_patients"):
+            self.fields[name].widget.attrs.setdefault("class", "toggle toggle-primary")
+
+    def clean_consultation_modalities(self):
+        # MultipleChoiceField yields a list; the model field is a CSV string.
+        return ",".join(self.cleaned_data.get("consultation_modalities") or [])
+
+    def save(self, commit=True):
+        profile = super().save(commit=False)
+        # If the member edited their location, stale the geocode so the next
+        # `geocode_profiles` run (which only touches rows with no coords)
+        # re-resolves pins. See accounts/management/commands/geocode_profiles.py.
+        if "location" in self.changed_data:
+            profile.location_lat = None
+            profile.location_lng = None
+            profile.location_pins = []
+        if commit:
+            profile.save()
+        return profile
