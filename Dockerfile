@@ -14,12 +14,20 @@ WORKDIR /css
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY assets/css ./assets/css
-# Tailwind v4 scans templates at build time for class names; any class only
-# referenced in templates that aren't COPYed here is silently dropped from
-# the output bundle. Glob every <app>/templates dir so adding a new app
-# doesn't require editing this Dockerfile. (Missed works/ + documents/
-# previously, which broke vibe-card avatars in prod.)
-COPY --parents */templates ./
+# Tailwind v4 scans these templates at build time for class names. Any
+# class only referenced in a templates dir that isn't COPYed here is
+# silently dropped from the output bundle — keep this list in sync with
+# every app that has a templates/ dir, or Tailwind will quietly stop
+# emitting classes that page templates rely on. (Forgetting works/ +
+# documents/ here broke vibe-card avatars on prod.)
+COPY accounts/templates ./accounts/templates
+COPY content/templates ./content/templates
+COPY core/templates ./core/templates
+COPY documents/templates ./documents/templates
+COPY events/templates ./events/templates
+COPY payments/templates ./payments/templates
+COPY registrations/templates ./registrations/templates
+COPY works/templates ./works/templates
 RUN npx tailwindcss -i ./assets/css/input.css -o ./static/css/site.css --minify
 
 # --- Stage 3: runtime --------------------------------------------------------
