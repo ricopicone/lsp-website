@@ -23,10 +23,12 @@
     var url = host.getAttribute("data-mention-url");
     if (!textarea || !url) return;
 
+    // Styled by .parletre-mentions in assets/css/input.css (not Tailwind
+    // utilities — Tailwind doesn't scan JS, and the prod CSS build only sees
+    // template dirs, so utility classes built here would be dropped).
     var box = document.createElement("ul");
-    box.className =
-      "menu menu-sm absolute z-30 mt-1 w-72 max-h-64 overflow-auto " +
-      "bg-base-100 border border-base-300 rounded-box shadow-xl hidden";
+    box.className = "parletre-mentions";
+    box.hidden = true;
     box.setAttribute("role", "listbox");
     host.style.position = "relative";
     host.appendChild(box);
@@ -36,7 +38,7 @@
     var matchStart = -1;
 
     function close() {
-      box.classList.add("hidden");
+      box.hidden = true;
       box.innerHTML = "";
       items = [];
       active = -1;
@@ -49,7 +51,7 @@
         var li = document.createElement("li");
         var a = document.createElement("a");
         a.textContent = it.name;
-        a.className = i === active ? "active" : "";
+        if (i === active) a.className = "is-active";
         a.addEventListener("mousedown", function (e) {
           e.preventDefault();
           choose(i);
@@ -57,7 +59,7 @@
         li.appendChild(a);
         box.appendChild(li);
       });
-      box.classList.toggle("hidden", items.length === 0);
+      box.hidden = items.length === 0;
     }
 
     function choose(i) {
@@ -99,7 +101,7 @@
     });
 
     textarea.addEventListener("keydown", function (e) {
-      if (box.classList.contains("hidden") || !items.length) return;
+      if (box.hidden || !items.length) return;
       if (e.key === "ArrowDown") {
         e.preventDefault(); active = (active + 1) % items.length; render();
       } else if (e.key === "ArrowUp") {
