@@ -16,22 +16,10 @@
 
     {% with cur=period_stats.0 %}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
-        <div class="text-xs uppercase tracking-wider text-base-content/60">Obligated</div>
-        <div class="text-2xl font-serif mt-1">{{ obligated_count }}</div>
-      </div>
-      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
-        <div class="text-xs uppercase tracking-wider text-base-content/60">Paid</div>
-        <div class="text-2xl font-serif mt-1 text-success">{{ cur.paid_count }}</div>
-      </div>
-      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
-        <div class="text-xs uppercase tracking-wider text-base-content/60">Unpaid</div>
-        <div class="text-2xl font-serif mt-1 text-warning">{{ cur.unpaid_count }}</div>
-      </div>
-      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
-        <div class="text-xs uppercase tracking-wider text-base-content/60">Collected</div>
-        <div class="text-2xl font-serif mt-1">${{ cur.total_collected }}</div>
-      </div>
+      {% include "core/_stat_card.html" with label="Obligated" value=obligated_count %}
+      {% include "core/_stat_card.html" with label="Paid"      value=cur.paid_count        tone="success" %}
+      {% include "core/_stat_card.html" with label="Unpaid"    value=cur.unpaid_count      tone="warning" %}
+      {% include "core/_stat_card.html" with label="Collected" value=cur.total_collected|usd %}
     </div>
     {% endwith %}
   </section>

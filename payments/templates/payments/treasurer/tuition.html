@@ -1,4 +1,5 @@
 {% extends "payments/treasurer/base.html" %}
+{% load treasurer_filters %}
 {% block tab_content %}
 <div class="space-y-6">
 
@@ -18,19 +19,9 @@
     </p>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
-        <div class="text-xs uppercase tracking-wider text-base-content/60">In-training</div>
-        <div class="text-2xl font-serif mt-1">{{ tuition_in_training_count }}</div>
-      </div>
-      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
-        <div class="text-xs uppercase tracking-wider text-base-content/60">Collected</div>
-        <div class="text-2xl font-serif mt-1">${{ tuition_total_collected|floatformat:2 }}</div>
-      </div>
-      <div class="rounded-lg border border-base-300 p-4 bg-base-100 md:col-span-2">
-        <div class="text-xs uppercase tracking-wider text-base-content/60">Reconciliation queue</div>
-        <div class="text-2xl font-serif mt-1 text-warning">{{ tuition_reconciliation_users|length }}</div>
-        <div class="text-xs text-base-content/60 mt-1">undecided + committed-without-payment</div>
-      </div>
+      {% include "core/_stat_card.html" with label="In-training" value=tuition_in_training_count %}
+      {% include "core/_stat_card.html" with label="Collected"   value=tuition_total_collected|usd %}
+      {% include "core/_stat_card.html" with label="Reconciliation queue" value=tuition_reconciliation_users|length tone="warning" span="2" hint="undecided + committed-without-payment" %}
     </div>
   </section>
 
@@ -38,14 +29,13 @@
     <h2 class="font-serif text-xl text-base-content">Status breakdown</h2>
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
       {% for s in tuition_status_counts %}
-      <div class="rounded-lg border border-base-300 p-3 bg-base-100">
-        <div class="text-[0.7rem] uppercase tracking-wider text-base-content/60">{{ s.label }}</div>
-        <div class="text-xl font-serif mt-1
-            {% if s.key == 'paid_in_full' %}text-success{% endif %}
-            {% if s.key == 'committed' or s.key == 'undecided' %}text-warning{% endif %}">
-          {{ s.count }}
-        </div>
-      </div>
+        {% if s.key == "paid_in_full" %}
+          {% include "core/_stat_card.html" with label=s.label value=s.count tone="success" size="sm" %}
+        {% elif s.key == "committed" or s.key == "undecided" %}
+          {% include "core/_stat_card.html" with label=s.label value=s.count tone="warning" size="sm" %}
+        {% else %}
+          {% include "core/_stat_card.html" with label=s.label value=s.count size="sm" %}
+        {% endif %}
       {% endfor %}
     </div>
   </section>

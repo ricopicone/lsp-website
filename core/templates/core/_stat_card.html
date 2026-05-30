@@ -1,0 +1,20 @@
+{% comment %}
+  A small uppercase-label-over-large-serif-number stat card. Used across
+  the treasurer + program-committee admins for "snapshot" rows.
+
+  Params:
+    label  (required) — small uppercase label text.
+    value  (required) — the main number/text. Caller pre-formats currency
+                        with the appropriate floatformat / $ prefix.
+    tone   (optional) — DaisyUI text-* color for the value: success,
+                        warning, info, error, accent. Omitted = base.
+    hint   (optional) — small dimmed text under the value.
+    span   (optional) — md:col-span-N for use in a grid (e.g. "2").
+    size   (optional) — "sm" for a tighter card (smaller padding +
+                        smaller value text). Default = standard card.
+{% endcomment %}
+<div class="rounded-lg border border-base-300 {% if size == 'sm' %}p-3{% else %}p-4{% endif %} bg-base-100{% if span %} md:col-span-{{ span }}{% endif %}">
+  <div class="text-{% if size == 'sm' %}[0.7rem]{% else %}xs{% endif %} uppercase tracking-wider text-base-content/60">{{ label }}</div>
+  <div class="{% if size == 'sm' %}text-xl{% else %}text-2xl{% endif %} font-serif mt-1{% if tone %} text-{{ tone }}{% endif %}">{{ value }}</div>
+  {% if hint %}<div class="text-xs text-base-content/60 mt-1">{{ hint }}</div>{% endif %}
+</div>

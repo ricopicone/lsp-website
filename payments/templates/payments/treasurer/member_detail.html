@@ -1,4 +1,5 @@
 {% extends "payments/treasurer/base.html" %}
+{% load treasurer_filters %}
 {% block tab_content %}
 <div class="space-y-8">
 
@@ -34,14 +35,7 @@
           {% for e in enrollments %}
           <tr>
             <td>{{ e.tuition_period.name }}</td>
-            <td>
-              {% if e.status == "paid_in_full" %}<span class="badge badge-success badge-sm">Paid in full</span>
-              {% elif e.status == "payment_plan" %}<span class="badge badge-info badge-sm">Payment plan</span>
-              {% elif e.status == "committed" %}<span class="badge badge-warning badge-sm">Committed</span>
-              {% elif e.status == "skipping" %}<span class="badge badge-ghost badge-sm">Skipping</span>
-              {% else %}<span class="badge badge-ghost badge-sm">{{ e.get_status_display }}</span>
-              {% endif %}
-            </td>
+            <td>{% status_badge e.status %}</td>
             <td class="text-xs text-base-content/70">
               {% with insts=e.installments.all %}
               {% if insts %}
@@ -85,13 +79,7 @@
             </td>
             <td class="whitespace-nowrap">${{ p.amount }}</td>
             <td class="text-xs">{{ p.get_method_display }}</td>
-            <td>
-              {% if p.status == "succeeded" %}<span class="badge badge-success badge-sm">Succeeded</span>
-              {% elif p.status == "pending" %}<span class="badge badge-warning badge-sm">Pending</span>
-              {% elif p.status == "refunded" %}<span class="badge badge-info badge-sm">Refunded</span>
-              {% elif p.status == "failed" %}<span class="badge badge-error badge-sm">Failed</span>
-              {% endif %}
-            </td>
+            <td>{% status_badge p.status %}</td>
           </tr>
           {% endfor %}
         </tbody>

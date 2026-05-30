@@ -1,4 +1,5 @@
 {% extends "payments/treasurer/base.html" %}
+{% load treasurer_filters %}
 {% block tab_content %}
 <div class="space-y-6">
 
@@ -72,14 +73,7 @@
           </td>
           <td class="whitespace-nowrap">${{ p.amount }}</td>
           <td class="text-xs">{{ p.get_method_display }}</td>
-          <td>
-            {% if p.status == "succeeded" %}<span class="badge badge-success badge-sm">Succeeded</span>
-            {% elif p.status == "pending" %}<span class="badge badge-warning badge-sm">Pending</span>
-            {% elif p.status == "refunded" %}<span class="badge badge-info badge-sm">Refunded</span>
-            {% elif p.status == "failed" %}<span class="badge badge-error badge-sm">Failed</span>
-            {% else %}<span class="badge badge-ghost badge-sm">{{ p.get_status_display }}</span>
-            {% endif %}
-          </td>
+          <td>{% status_badge p.status %}</td>
           <td>
             <div class="flex flex-wrap gap-1">
               {% if p.status == "pending" %}

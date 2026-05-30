@@ -53,8 +53,7 @@ The four "in-training" roles owe annual tuition:
 - Pre-Candidate Scholar
 - Candidate Scholar
 
-Full Analysts, Scholars, Members, and external visitors do not pay
-tuition.
+Full Analysts, Scholars, and external visitors do not pay tuition.
 
 **Total years required:** four. The years do **not** have to be
 contiguous — a student may skip one or more years and pay them later.
@@ -168,9 +167,9 @@ order: Gate 1 first, then Gate 2.
 | **`paid_in_full`** | Allowed — tuition coverage applies if covered tier exists | Allowed — same | Allowed — pays regular fee | Allowed — covered |
 | **`skipping`** | Allowed — pays regular fee (no tuition coverage available) | Allowed — same | Allowed — pays regular fee | Allowed — pays regular fee (covered tier does not apply to skipping students) |
 
-**Non-in-training roles** (Analyst, Scholar, Member, external) are
-never blocked by either gate. They register for events on the regular
-rules: free where allowed, paid where required.
+**Non-in-training roles** (Analyst, Scholar, external) are never
+blocked by either gate. They register for events on the regular rules:
+free where allowed, paid where required.
 
 ---
 
@@ -184,8 +183,7 @@ Dues are **per-academic-year** and **tiered by role**:
 | Candidate (analyst or scholar track) | $100 |
 | Analyst, Scholar | $150 |
 
-Members (no in-training or analyst role) and external visitors don't
-owe dues.
+External visitors don't owe dues.
 
 ### Sections on the Dues tab
 

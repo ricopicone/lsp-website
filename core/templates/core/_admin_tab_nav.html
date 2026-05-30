@@ -1,0 +1,19 @@
+{% comment %}
+  Shared tab nav for the treasurer + program-committee admin surfaces.
+  Caller provides ``tabs`` (list of (key, label, url)) and ``tab_key``
+  (the current tab's key).
+{% endcomment %}
+<nav class="border-b border-base-300/60">
+  <ul class="flex flex-wrap gap-1 text-sm">
+    {% for key, label, url in tabs %}
+    <li>
+      <a href="{{ url }}"
+         class="inline-block px-4 py-2 border-b-2 -mb-px transition-colors
+                {% if key == tab_key %}border-primary text-primary font-medium
+                {% else %}border-transparent text-base-content/70 hover:text-base-content hover:border-base-300{% endif %}">
+        {{ label }}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</nav>
