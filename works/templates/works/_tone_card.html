@@ -3,55 +3,46 @@
   Fallback when a work has no uploaded cover_image. Composed in layers:
     1. Tone-color background (deterministic per title) + 2:3 aspect ratio
     2. Background vibe shapes (random circles/rects/lines)
-    3. Author headshot avatars in the bottom-left corner
-    4. Feature lines drawn on top of the avatars so a line crosses through
+    3. Author headshot avatars positioned absolutely in the bottom-left
+    4. Feature lines drawn on top so a line crosses through the avatars
   Expects `work` in context.
 
-  Tailwind-v4 gotcha: arbitrary-value classes containing `/` or `%`
-  (`aspect-[2/3]`, `w-[22%]`) are silently dropped during build —
-  using inline `style="aspect-ratio: …; width: …;"` instead. Avatar
-  size uses the padding-bottom-percentage trick to compute a square
-  box from its parent's width without relying on `aspect-square`,
-  which collapses to zero height inside an auto-height flex container.
+  Notes on the implementation:
+  * Inline styles for ratios and percentages because Tailwind v4 silently
+    drops arbitrary-value classes containing `/` or `%`.
+  * Avatars are each absolutely positioned (not flex) so we sidestep the
+    auto-height-flex-with-aspect-ratio-children layout collapse. Width is
+    22% of card; aspect-ratio: 1 gives the matching height. The `left`
+    offset cascades by 19% so adjacent avatars overlap by 3% (a small
+    stack effect). z-index via revcounter so the first author is on top.
 {% endcomment %}
 <div class="relative w-full rounded-md overflow-hidden"
      style="aspect-ratio: 2/3; background-color: {% tone_for work.title %};">
   {% vibe_shapes work.title %}
 
   {% with byline=work.authorships.all %}
-  {% if byline %}
-  {% comment %}
-    Pin both left + right so the flex container has a real width
-    (left-only shrinks to fit and collapses % children to 0).
-    items-end + the padding-bottom hack ensure the avatar box is a
-    real square — aspect-square inside auto-height flex resolves to 0.
-  {% endcomment %}
-  <div class="absolute flex -space-x-2 items-end" style="bottom: 6%; left: 6%; right: 6%;">
-    {% for wa in byline|slice:":3" %}
-      {% if wa.user.profile.headshot %}
-      <div class="relative rounded-full overflow-hidden ring-1 ring-base-100/80 shrink-0"
-           style="width: 25%; padding-bottom: 25%;">
-        <img src="{{ wa.user.profile.headshot.url }}"
-             alt=""
-             class="absolute inset-0 w-full h-full object-cover">
+  {% for wa in byline|slice:":3" %}
+    {% if wa.user.profile.headshot %}
+    <div class="absolute"
+         style="bottom: 6%; left: calc(6% + 19% * {{ forloop.counter0 }}); width: 22%; aspect-ratio: 1; z-index: {{ forloop.revcounter|add:10 }};">
+      <img src="{{ wa.user.profile.headshot.url }}" alt=""
+           class="w-full h-full object-cover rounded-full ring-1 ring-base-100/80">
+    </div>
+    {% else %}
+    <div class="absolute"
+         style="bottom: 6%; left: calc(6% + 19% * {{ forloop.counter0 }}); width: 22%; aspect-ratio: 1; z-index: {{ forloop.revcounter|add:10 }};">
+      <div class="w-full h-full rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center font-serif text-xs text-base-content/80">
+        {{ wa.user.first_name|slice:":1" }}{{ wa.user.last_name|slice:":1" }}
       </div>
-      {% else %}
-      <div class="relative rounded-full ring-1 ring-base-100/80 bg-base-100/70 shrink-0"
-           style="width: 25%; padding-bottom: 25%;">
-        <span class="absolute inset-0 flex items-center justify-center font-serif text-xs text-base-content/80">
-          {{ wa.user.first_name|slice:":1" }}{{ wa.user.last_name|slice:":1" }}
-        </span>
-      </div>
-      {% endif %}
-    {% endfor %}
-    {% if byline|length > 3 %}
-    <div class="relative rounded-full ring-1 ring-base-100/80 bg-base-100/70 shrink-0"
-         style="width: 25%; padding-bottom: 25%;">
-      <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-base-content/80">
-        +{{ byline|length|add:"-3" }}
-      </span>
     </div>
     {% endif %}
+  {% endfor %}
+  {% if byline|length > 3 %}
+  <div class="absolute"
+       style="bottom: 6%; left: calc(6% + 19% * 3); width: 22%; aspect-ratio: 1; z-index: 10;">
+    <div class="w-full h-full rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center text-[10px] font-medium text-base-content/80">
+      +{{ byline|length|add:"-3" }}
+    </div>
   </div>
   {% endif %}
   {% endwith %}

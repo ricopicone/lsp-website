@@ -10,8 +10,10 @@
     </a>
   </nav>
 
-  <header class="grid grid-cols-1 sm:grid-cols-[16rem_1fr] gap-8 items-start">
-    <div class="w-full sm:w-64">
+  <header class="flex flex-col sm:flex-row gap-8 items-start">
+    {# Cover capped at 33vh wide, so height (at 2:3) is ≈ 50vh — about
+       half window height regardless of viewport size. #}
+    <div class="w-full" style="max-width: min(100%, 33vh); flex-shrink: 0;">
       {% if work.cover_image %}
         <img src="{{ work.cover_image.url }}" alt=""
              class="w-full rounded-md object-cover"
