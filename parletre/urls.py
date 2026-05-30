@@ -8,6 +8,7 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("notifications/", views.notifications, name="notifications"),
     path("settings/", views.preferences, name="settings"),
+    path("search/", views.search, name="search"),
     path("mention-search/", views.mention_search, name="mention_search"),
     path("inbound/", views.inbound, name="inbound"),
     path("post/<int:post_id>/react/", views.react, name="react"),

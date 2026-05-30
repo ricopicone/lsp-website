@@ -58,6 +58,7 @@ from .reads import (
     unread_thread_ids,
 )
 from .realtime import broadcast_chat_post
+from .search import make_snippet, search_posts
 from .services import notify_new_thread, notify_post
 
 log = logging.getLogger("parletre")
@@ -316,6 +317,30 @@ def thread(request, slug, thread_slug):
             "first_unread_id": first_unread_id,
         },
     )
+
+
+@login_required
+def search(request):
+    """Search posts the member can see (DISC-4)."""
+    if not is_member(request.user):
+        return render(request, "parletre/not_a_member.html", status=403)
+    query = request.GET.get("q", "").strip()
+    hits = search_posts(request.user, query)
+    results = []
+    for post in hits:
+        target = post.thread or post.channel
+        anchor = f"#post-{post.id}" if post.thread_id else ""
+        results.append(
+            {
+                "post": post,
+                "channel": post.channel,
+                "thread": post.thread,
+                "title": post.thread.title if post.thread_id else f"#{post.channel.slug}",
+                "url": f"{target.get_absolute_url()}{anchor}",
+                "snippet": make_snippet(post.body, query),
+            }
+        )
+    return render(request, "parletre/search.html", {"q": query, "results": results})
 
 
 @login_required

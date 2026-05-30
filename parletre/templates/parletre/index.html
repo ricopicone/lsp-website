@@ -3,9 +3,15 @@
 
 {% block content %}
 <div class="space-y-6">
-  <header class="space-y-1">
-    <h1 class="font-serif text-3xl tracking-tight text-base-content">Parlêtre</h1>
-    <p class="text-base-content/70">The school's discussion board — where the parlêtres speak.</p>
+  <header class="flex flex-wrap items-start justify-between gap-3">
+    <div class="space-y-1">
+      <h1 class="font-serif text-3xl tracking-tight text-base-content">Parlêtre</h1>
+      <p class="text-base-content/70">The school's discussion board — where the parlêtres speak.</p>
+    </div>
+    <form method="get" action="{% url 'parletre:search' %}" class="flex gap-1">
+      <input type="search" name="q" placeholder="Search…" class="input input-bordered input-sm w-44">
+      <button type="submit" class="btn btn-sm">Search</button>
+    </form>
   </header>
 
   {% comment %} The privacy promise, stated plainly: open ≠ public. {% endcomment %}

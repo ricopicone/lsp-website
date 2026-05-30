@@ -1177,3 +1177,75 @@ def test_chat_consumer_staff_only_channel_blocks_member_send():
 
     async_to_sync(scenario)()
     assert not Post.objects.filter(channel=ch).exists()
+
+
+# ---- search (DISC-4) ----------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_search_finds_body_and_thread_title_matches():
+    from .search import search_posts
+    member = make_user("m@x.co", role=Role.ANALYST)
+    ch = make_channel("commons")
+    t1 = Thread.objects.create(channel=ch, title="On the sinthome", author=member)
+    Post.objects.create(channel=ch, thread=t1, author=member, body="a note about jouissance")
+    t2 = Thread.objects.create(channel=ch, title="Cartel logistics", author=member)
+    Post.objects.create(channel=ch, thread=t2, author=member, body="meeting at noon")
+
+    body_hits = search_posts(member, "jouissance")
+    assert [p.thread_id for p in body_hits] == [t1.id]
+    # a thread-title term matches its posts too
+    title_hits = search_posts(member, "sinthome")
+    assert t1.id in [p.thread_id for p in title_hits]
+
+
+@pytest.mark.django_db
+def test_search_excludes_invisible_channels_and_deleted():
+    from .search import search_posts
+    member = make_user("m@x.co", role=Role.ANALYST)
+    visible = make_channel("commons")
+    private = make_channel("hush", access=Access.PRIVATE)  # member not in it
+    tv = Thread.objects.create(channel=visible, title="T", author=member)
+    Post.objects.create(channel=visible, thread=tv, author=member, body="needle here")
+    insider = make_user("in@x.co", role=Role.ANALYST)
+    private.members.add(insider)
+    tp = Thread.objects.create(channel=private, title="P", author=insider)
+    Post.objects.create(channel=private, thread=tp, author=insider, body="needle in private")
+    # a deleted post shouldn't match
+    Post.objects.create(
+        channel=visible, thread=tv, author=member, body="needle deleted", deleted=True
+    )
+
+    hits = search_posts(member, "needle")
+    bodies = [p.body for p in hits]
+    assert "needle here" in bodies
+    assert "needle in private" not in bodies   # private channel hidden
+    assert "needle deleted" not in bodies
+
+
+@pytest.mark.django_db
+def test_search_view_renders_results(client):
+    member = make_user("m@x.co", role=Role.ANALYST)
+    ch = make_channel("commons")
+    t = Thread.objects.create(channel=ch, title="T", author=member)
+    Post.objects.create(channel=ch, thread=t, author=member, body="the mirror stage essay")
+    client.force_login(member)
+    resp = client.get(reverse("parletre:search"), {"q": "mirror"})
+    assert resp.status_code == 200
+    assert b"<mark>mirror</mark>" in resp.content   # match highlighted in the snippet
+
+
+@pytest.mark.django_db
+def test_search_empty_query_returns_no_results(client):
+    member = make_user("m@x.co", role=Role.ANALYST)
+    client.force_login(member)
+    resp = client.get(reverse("parletre:search"), {"q": ""})
+    assert resp.status_code == 200
+    assert resp.context["results"] == []
+
+
+def test_make_snippet_highlights_and_escapes():
+    from .search import make_snippet
+    out = make_snippet("Discussing <b>jouissance</b> & the Real", "jouissance")
+    assert "<mark>jouissance</mark>" in out
+    assert "&lt;b&gt;" in out and "&amp;" in out   # original HTML/amp escaped

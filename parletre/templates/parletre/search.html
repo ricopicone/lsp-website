@@ -1,0 +1,45 @@
+{% extends "core/base.html" %}
+{% block title %}Search — Parlêtre{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-5">
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-base-content/70">Search</span>
+  </nav>
+
+  <form method="get" class="flex gap-2">
+    <input type="search" name="q" value="{{ q }}" autofocus
+           placeholder="Search posts…"
+           class="input input-bordered w-full">
+    <button type="submit" class="btn btn-primary">Search</button>
+  </form>
+
+  {% if q %}
+  <p class="text-sm text-base-content/60">
+    {{ results|length }} result{{ results|length|pluralize }} for “{{ q }}”
+    {% if results|length == 50 %}(showing the first 50){% endif %}
+  </p>
+  <ul class="divide-y divide-base-300/60 rounded-box border border-base-300 bg-base-100">
+    {% for r in results %}
+    <li class="p-4">
+      <a href="{{ r.url }}" class="block space-y-1 hover:text-primary">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="font-medium text-base-content">{{ r.title }}</span>
+          <span class="text-base-content/50">in #{{ r.channel.slug }}</span>
+        </div>
+        <p class="text-sm text-base-content/70">{{ r.snippet }}</p>
+        <p class="text-xs text-base-content/40">
+          {% if r.post.author %}{{ r.post.author.get_full_name|default:r.post.author.email }}{% else %}(removed){% endif %}
+          · {{ r.post.created_at|date:"M j, Y" }}
+        </p>
+      </a>
+    </li>
+    {% empty %}
+    <li class="p-6 text-center text-base-content/50 italic">No posts matched.</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endblock %}
