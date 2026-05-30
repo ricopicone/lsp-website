@@ -1,35 +1,42 @@
 {% load works_filters %}
 {% comment %}
   Fallback when a work has no uploaded cover_image. Composed in layers:
-    1. Tone-color background (deterministic per title)
+    1. Tone-color background (deterministic per title) + 2:3 aspect ratio
     2. Background vibe shapes (random circles/rects/lines)
     3. Author headshot avatars in the bottom-left corner
     4. Feature lines drawn on top of the avatars so a line crosses through
-  Expects `work` in context. Avatars are sized as a fraction of the
-  card width (not fixed px) so they scale with the catalog grid.
+  Expects `work` in context.
+
+  Tailwind-arbitrary-value gotcha: in v4, `aspect-[2/3]` and `w-[22%]`
+  aren't generated reliably (the `/` and `%` apparently confuse the
+  scanner — `min-w-[16rem]` works but ratios + percentages don't).
+  Inline styles below are the pragmatic workaround.
 {% endcomment %}
-<div class="relative aspect-[2/3] w-full rounded-md overflow-hidden"
-     {% tone_style work.title %}>
+<div class="relative w-full rounded-md overflow-hidden"
+     style="aspect-ratio: 2/3; background-color: {% tone_for work.title %};">
   {% vibe_shapes work.title %}
 
   {% with byline=work.authorships.all %}
   {% if byline %}
-  <div class="absolute bottom-[6%] left-[6%] flex -space-x-2">
+  <div class="absolute flex -space-x-2" style="bottom: 6%; left: 6%;">
     {% for wa in byline|slice:":3" %}
       {% if wa.user.profile.headshot %}
-      <div class="w-[22%] aspect-square rounded-full overflow-hidden ring-1 ring-base-100/80">
+      <div class="aspect-square rounded-full overflow-hidden ring-1 ring-base-100/80"
+           style="width: 22%;">
         <img src="{{ wa.user.profile.headshot.url }}"
              alt=""
              class="w-full h-full object-cover">
       </div>
       {% else %}
-      <div class="w-[22%] aspect-square rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center font-serif text-xs text-base-content/80">
+      <div class="aspect-square rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center font-serif text-xs text-base-content/80"
+           style="width: 22%;">
         {{ wa.user.first_name|slice:":1" }}{{ wa.user.last_name|slice:":1" }}
       </div>
       {% endif %}
     {% endfor %}
     {% if byline|length > 3 %}
-    <div class="w-[22%] aspect-square rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center text-[10px] font-medium text-base-content/80">
+    <div class="aspect-square rounded-full ring-1 ring-base-100/80 bg-base-100/70 flex items-center justify-center text-[10px] font-medium text-base-content/80"
+         style="width: 22%;">
       +{{ byline|length|add:"-3" }}
     </div>
     {% endif %}

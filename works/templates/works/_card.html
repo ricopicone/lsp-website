@@ -4,7 +4,8 @@
     {% if work.cover_image %}
       <img src="{{ work.cover_image.url }}"
            alt=""
-           class="aspect-[3/4] w-full rounded-md object-cover group-hover:opacity-95 transition-opacity">
+           class="w-full rounded-md object-cover group-hover:opacity-95 transition-opacity"
+           style="aspect-ratio: 2/3;">
     {% else %}
       <div class="group-hover:opacity-95 transition-opacity">
         {% include "works/_tone_card.html" %}

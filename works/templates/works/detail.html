@@ -14,7 +14,8 @@
     <div class="w-40">
       {% if work.cover_image %}
         <img src="{{ work.cover_image.url }}" alt=""
-             class="aspect-[3/4] w-full rounded-md object-cover">
+             class="w-full rounded-md object-cover"
+             style="aspect-ratio: 2/3;">
       {% else %}
         {% include "works/_tone_card.html" %}
       {% endif %}
