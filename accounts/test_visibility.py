@@ -29,11 +29,14 @@ def _analyst(email="a@x.test"):
 
 
 @pytest.mark.django_db
-def test_default_visibility_all_public():
+def test_default_visibility_public_except_phone():
     u = _analyst()
     anon = AnonymousUser()
-    for key in ("bio", "phone", "email", "location"):
+    for key in ("bio", "email", "location", "credentials"):
         assert u.profile.visible_to(key, anon) is True
+    # Phone is more sensitive — defaults to members-only.
+    assert u.profile.visibility_of("phone") == MEMBERS
+    assert u.profile.visible_to("phone", anon) is False
 
 
 @pytest.mark.django_db

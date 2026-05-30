@@ -35,10 +35,14 @@ TOGGLEABLE_PUBLIC_FIELDS = (
 
 
 def default_field_visibility() -> dict[str, str]:
-    """New profiles start with every field Public (the school lists members
-    by default); members lower individual fields to members-only or private
-    from the editor. Uses the literal value to avoid referencing Profile here."""
-    return {key: "public" for key in TOGGLEABLE_PUBLIC_FIELDS}
+    """New profiles start with every field Public (the school lists members by
+    default) except ``phone``, which defaults to members-only since a phone
+    number is more sensitive. Members adjust any field from the editor. Uses
+    literal values to avoid referencing Profile here."""
+    return {
+        key: ("members" if key == "phone" else "public")
+        for key in TOGGLEABLE_PUBLIC_FIELDS
+    }
 
 
 class User(AbstractUser):
