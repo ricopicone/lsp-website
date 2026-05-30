@@ -7,6 +7,7 @@ app_name = "parletre"
 urlpatterns = [
     path("", views.index, name="index"),
     path("notifications/", views.notifications, name="notifications"),
+    path("mention-search/", views.mention_search, name="mention_search"),
     path("post/<int:post_id>/react/", views.react, name="react"),
     path("attachment/<int:attachment_id>/", views.attachment, name="attachment"),
     path("<slug:slug>/", views.channel, name="channel"),

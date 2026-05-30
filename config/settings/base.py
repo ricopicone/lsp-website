@@ -147,6 +147,15 @@ STATICFILES_DIRS = [BASE_DIR / "static"]  # Tailwind build output, future shared
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Parlêtre attachments live OUTSIDE the public media root (and outside the
+# public S3 bucket) and are served only through the access-checked download
+# view, so files in a private channel stay private. Persist this directory in
+# production the same way media is persisted (a bind-mount), so attachments
+# survive container restarts.
+PARLETRE_ATTACHMENTS_ROOT = env(
+    "PARLETRE_ATTACHMENTS_ROOT", default=str(BASE_DIR / "private-media")
+)
+
 # --- Email --------------------------------------------------------------
 
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")

@@ -12,12 +12,15 @@ and realtime chat transport are later increments.
 from __future__ import annotations
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Max
-from django.http import FileResponse, Http404
+from django.db.models import Count, Max, Q
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+
+from accounts.models import Profile
 
 from .forms import NewThreadForm, PostForm
 from .models import (
@@ -292,6 +295,35 @@ def thread(request, slug, thread_slug):
             "first_unread_id": first_unread_id,
         },
     )
+
+
+@login_required
+def mention_search(request):
+    """Autocomplete for @mentions: members matching ``q`` who can see the
+    given channel. Returns the directory slug to insert (``@first-last``)."""
+    if not is_member(request.user):
+        raise Http404()
+    q = request.GET.get("q", "").strip()
+    if not q:
+        return JsonResponse({"results": []})
+
+    User = get_user_model()
+    qs = User.objects.filter(profile__role__in=Profile.DIRECTORY_ROLES)
+    for term in q.split()[:3]:
+        qs = qs.filter(Q(first_name__icontains=term) | Q(last_name__icontains=term))
+    candidates = qs.select_related("profile").order_by("first_name", "last_name")[:30]
+
+    channel = Channel.objects.filter(slug=request.GET.get("channel", "")).first()
+    results = []
+    for user in candidates:
+        if channel is not None and not channel.visible_to(user):
+            continue
+        results.append(
+            {"slug": user.profile.directory_slug, "name": user.get_full_name() or user.email}
+        )
+        if len(results) >= 8:
+            break
+    return JsonResponse({"results": results})
 
 
 @login_required

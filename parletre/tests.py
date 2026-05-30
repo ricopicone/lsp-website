@@ -704,3 +704,72 @@ def test_attachment_rejects_oversized_file(client):
     # form re-renders with an error; no thread created
     assert resp.status_code == 200
     assert not Thread.objects.filter(channel=ch).exists()
+
+
+@pytest.mark.django_db
+def test_attachment_stored_privately_and_has_no_public_url():
+    """Attachments live outside the public media root, and FieldFile.url
+    raises (base_url=None) so no public link can be built by accident."""
+    from django.conf import settings
+
+    from .models import Attachment
+    ch = make_channel("commons")
+    member = make_user("m@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=member)
+    post = Post.objects.create(channel=ch, thread=thread, author=member, body="x")
+    att = Attachment.objects.create(
+        post=post, file=_upload("p.txt", b"data"),
+        original_name="p.txt", content_type="text/plain", size=4,
+    )
+    assert att.file.storage.location == settings.PARLETRE_ATTACHMENTS_ROOT
+    assert str(settings.MEDIA_ROOT) not in att.file.path
+    with pytest.raises(ValueError):
+        _ = att.file.url
+
+
+# ---- mention autocomplete ----------------------------------------------
+
+
+@pytest.mark.django_db
+def test_mention_search_returns_matching_members(client):
+    make_user("a@x.co", role=Role.ANALYST, first="Mona", last="Member")
+    make_user("b@x.co", role=Role.ANALYST, first="Carl", last="Candidate")
+    searcher = make_user("s@x.co", role=Role.ANALYST, first="Sue", last="Searcher")
+    client.force_login(searcher)
+    resp = client.get(reverse("parletre:mention_search"), {"q": "mona"})
+    assert resp.status_code == 200
+    slugs = [r["slug"] for r in resp.json()["results"]]
+    assert "mona-member" in slugs
+    assert "carl-candidate" not in slugs
+
+
+@pytest.mark.django_db
+def test_mention_search_excludes_members_who_cant_see_channel(client):
+    ch = make_channel("hush", access=Access.PRIVATE)
+    insider = make_user("in@x.co", role=Role.ANALYST, first="Iris", last="Inside")
+    make_user("out@x.co", role=Role.ANALYST, first="Ida", last="Inside")  # not in channel
+    ch.members.add(insider)
+    searcher = make_user("s@x.co", role=Role.ANALYST, first="Sue", last="Searcher")
+    ch.members.add(searcher)
+    client.force_login(searcher)
+    resp = client.get(
+        reverse("parletre:mention_search"), {"q": "inside", "channel": ch.slug}
+    )
+    slugs = [r["slug"] for r in resp.json()["results"]]
+    assert "iris-inside" in slugs
+    assert "ida-inside" not in slugs   # can't see the private channel
+
+
+@pytest.mark.django_db
+def test_mention_search_requires_membership(client):
+    guest = make_user("g@x.co", role=Role.EXTERNAL)
+    client.force_login(guest)
+    assert client.get(reverse("parletre:mention_search"), {"q": "x"}).status_code == 404
+
+
+@pytest.mark.django_db
+def test_mention_search_empty_query(client):
+    m = make_user("m@x.co", role=Role.ANALYST)
+    client.force_login(m)
+    resp = client.get(reverse("parletre:mention_search"), {"q": ""})
+    assert resp.json()["results"] == []

@@ -1,5 +1,7 @@
 {% extends "core/base.html" %}
+{% load static %}
 {% block title %}{{ thread.title }} — Parlêtre{% endblock %}
+{% block extra_head %}<script defer src="{% static 'js/parletre-mentions.js' %}"></script>{% endblock %}
 
 {% block content %}
 <div class="space-y-5">
@@ -60,8 +62,8 @@
   {% if can_post %}
   <form method="post" enctype="multipart/form-data" class="space-y-2 border-t border-base-300/60 pt-4">
     {% csrf_token %}
-    <label class="text-sm text-base-content/70">Reply</label>
-    {{ form.body }}
+    <label class="text-sm text-base-content/70">Reply <span class="text-base-content/40">— type @ to mention</span></label>
+    <div class="mention-host" data-mention-url="{% url 'parletre:mention_search' %}?channel={{ channel.slug }}">{{ form.body }}</div>
     {% if form.body.errors %}<p class="text-error text-sm">{{ form.body.errors|striptags }}</p>{% endif %}
     <div class="flex items-center justify-between gap-2">
       <div>{{ form.attachments }}{% if form.attachments.errors %}<p class="text-error text-sm">{{ form.attachments.errors|striptags }}</p>{% endif %}</div>

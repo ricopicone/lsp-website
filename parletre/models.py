@@ -29,6 +29,7 @@ from django.utils.translation import gettext_lazy as _
 
 from . import permissions
 from .rendering import render_markdown
+from .storage import attachment_storage
 
 #: The fixed palette of reaction emoji members may add to a post (DISC-3).
 #: A closed set keeps input validated and the UI tidy.
@@ -481,13 +482,13 @@ class Attachment(models.Model):
 
     Served only through the permission-checked download view
     (``parletre:attachment``), never by a bare media URL — so attachments in
-    a private channel stay as private as the channel. In production the media
-    location these files live in must NOT be exposed by a bare nginx/S3 URL;
-    route downloads through Django.
+    a private channel stay as private as the channel. Files are stored by
+    :func:`parletre.storage.attachment_storage` *outside* the public media
+    root, so no web server serves them directly.
     """
 
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="attachments")
-    file = models.FileField(upload_to="parletre/%Y/%m/")
+    file = models.FileField(upload_to="%Y/%m/", storage=attachment_storage)
     original_name = models.CharField(max_length=255, blank=True)
     content_type = models.CharField(max_length=100, blank=True)
     size = models.PositiveIntegerField(default=0)
