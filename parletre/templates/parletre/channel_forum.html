@@ -32,7 +32,8 @@
     {% for thread in threads %}
     <li class="p-4 flex items-center justify-between gap-3 hover:bg-base-200/40">
       <div class="min-w-0">
-        <a href="{{ thread.get_absolute_url }}" class="font-medium text-base-content hover:text-primary">
+        <a href="{{ thread.get_absolute_url }}" class="{% if thread.is_unread %}font-semibold{% else %}font-medium{% endif %} text-base-content hover:text-primary">
+          {% if thread.is_unread %}<span class="size-2 rounded-full bg-primary inline-block align-middle shrink-0" title="Unread"></span> {% endif %}
           {% if thread.pinned %}<span title="Pinned" aria-hidden="true">📌</span> {% endif %}
           {% if thread.locked %}<span title="Locked" aria-hidden="true">🔒</span> {% endif %}
           {{ thread.title }}

@@ -29,9 +29,20 @@
     {% endif %}
   </header>
 
+  {% if first_unread_id %}
+  <a href="#post-{{ first_unread_id }}" class="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+    ↓ Jump to first unread
+  </a>
+  {% endif %}
+
   <ol class="space-y-4">
     {% for post in posts %}
-    <li id="post-{{ post.id }}" class="rounded-box border border-base-300 bg-base-100 p-4">
+    {% if post.id == first_unread_id %}
+    <li aria-hidden="true" class="flex items-center gap-2 text-xs text-primary/80">
+      <span class="h-px flex-1 bg-primary/30"></span>New<span class="h-px flex-1 bg-primary/30"></span>
+    </li>
+    {% endif %}
+    <li id="post-{{ post.id }}" class="rounded-box border {% if post.id == first_unread_id %}border-primary/40{% else %}border-base-300{% endif %} bg-base-100 p-4">
       <p class="text-sm mb-2">
         <span class="font-medium text-base-content">{% if post.author %}{{ post.author.get_full_name|default:post.author.email }}{% else %}(removed){% endif %}</span>
         <time class="text-xs text-base-content/40 ml-1" datetime="{{ post.created_at|date:'c' }}">{{ post.created_at|date:"M j, Y, g:i a" }}</time>

@@ -31,6 +31,13 @@ from .models import (
     Thread,
 )
 from .permissions import is_member
+from .reads import (
+    mark_channel_read,
+    mark_thread_read,
+    thread_marker_at,
+    unread_channel_ids,
+    unread_thread_ids,
+)
 from .services import notify_new_thread, notify_post
 
 
@@ -92,12 +99,14 @@ def index(request):
         s.channel_id: s.level
         for s in Subscription.objects.filter(user=request.user)
     }
+    unread = unread_channel_ids(request.user, visible)
 
     # Group into categories, preserving order; uncategorised last.
     groups: list[tuple[str, list[Channel]]] = []
     seen: dict[object, list[Channel]] = {}
     for channel in visible:
         channel.user_sub_level = subs.get(channel.id)
+        channel.is_unread = channel.id in unread
         key = channel.category_id
         if key not in seen:
             label = channel.category.name if channel.category else "Other"
@@ -146,12 +155,19 @@ def channel(request, slug):
     }
 
     if channel.is_forum:
-        context["threads"] = (
-            channel.threads.select_related("author")
-            .annotate(reply_count=Count("posts"), last_post=Max("posts__created_at"))
+        unread_ids = unread_thread_ids(request.user, channel)
+        threads = list(
+            channel.threads.select_related("author").annotate(
+                reply_count=Count("posts"), last_post=Max("posts__created_at")
+            )
         )
+        for thread in threads:
+            thread.is_unread = thread.id in unread_ids
+        context["threads"] = threads
         return render(request, "parletre/channel_forum.html", context)
 
+    # Chat: viewing the stream marks the channel read.
+    mark_channel_read(request.user, channel)
     context["posts"] = _attach_reactions(
         channel.posts.filter(thread__isnull=True)
         .select_related("author")
@@ -224,12 +240,23 @@ def thread(request, slug, thread_slug):
     else:
         form = PostForm()
 
+    # Capture the read watermark *before* marking this view read, so we can
+    # point the member at the first post they haven't seen.
+    marker_before = thread_marker_at(request.user, thread)
     posts = _attach_reactions(
         thread.posts.select_related("author")
         .prefetch_related("reactions")
         .order_by("created_at"),
         request.user,
     )
+    first_unread_id = None
+    if marker_before is not None:
+        for post in posts:
+            if post.created_at > marker_before:
+                first_unread_id = post.id
+                break
+    mark_thread_read(request.user, thread)
+
     moderation_actions = [
         ("pin", "Unpin" if thread.pinned else "Pin"),
         ("lock", "Unlock" if thread.locked else "Lock"),
@@ -247,6 +274,7 @@ def thread(request, slug, thread_slug):
             "can_moderate": channel.can_moderate(request.user),
             "moderation_actions": moderation_actions,
             "reaction_palette": REACTION_EMOJI,
+            "first_unread_id": first_unread_id,
         },
     )
 

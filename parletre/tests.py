@@ -529,3 +529,92 @@ def test_bell_unread_count_in_nav(client):
     resp = client.get(reverse("parletre:index"))
     assert resp.context["parletre_unread"] == 1
     assert "🔔" in resp.content.decode()
+
+
+# ---- unread tracking ----------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_thread_unread_until_viewed_then_clears(client):
+    from .reads import unread_thread_ids
+    ch = make_channel("commons")
+    author = make_user("a@x.co", role=Role.ANALYST)
+    reader = make_user("r@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    Post.objects.create(channel=ch, thread=thread, author=author, body="hi")
+
+    # never-read thread is unread for the reader
+    assert thread.id in unread_thread_ids(reader, ch)
+
+    # viewing it marks it read
+    client.force_login(reader)
+    client.get(thread.get_absolute_url())
+    assert thread.id not in unread_thread_ids(reader, ch)
+
+
+@pytest.mark.django_db
+def test_new_reply_makes_thread_unread_again(client):
+    from .reads import unread_thread_ids
+    ch = make_channel("commons")
+    author = make_user("a@x.co", role=Role.ANALYST)
+    reader = make_user("r@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    Post.objects.create(channel=ch, thread=thread, author=author, body="hi")
+
+    client.force_login(reader)
+    client.get(thread.get_absolute_url())
+    assert thread.id not in unread_thread_ids(reader, ch)
+
+    # a later reply (by someone else) bumps last_activity -> unread again
+    client.force_login(author)
+    client.post(thread.get_absolute_url(), {"body": "more"})
+    assert thread.id in unread_thread_ids(reader, ch)
+
+
+@pytest.mark.django_db
+def test_index_marks_channel_unread(client):
+    ch = make_channel("commons")
+    author = make_user("a@x.co", role=Role.ANALYST)
+    reader = make_user("r@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    Post.objects.create(channel=ch, thread=thread, author=author, body="hi")
+
+    client.force_login(reader)
+    resp = client.get(reverse("parletre:index"))
+    channels = [c for _label, chans in resp.context["groups"] for c in chans]
+    target = next(c for c in channels if c.slug == "commons")
+    assert target.is_unread is True
+
+
+@pytest.mark.django_db
+def test_thread_view_reports_first_unread(client):
+    ch = make_channel("commons")
+    author = make_user("a@x.co", role=Role.ANALYST)
+    reader = make_user("r@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    Post.objects.create(channel=ch, thread=thread, author=author, body="one")
+
+    client.force_login(reader)
+    client.get(thread.get_absolute_url())          # read up to here
+
+    client.force_login(author)
+    client.post(thread.get_absolute_url(), {"body": "two"})  # new post
+
+    client.force_login(reader)
+    resp = client.get(thread.get_absolute_url())
+    second = Post.objects.filter(thread=thread).order_by("created_at").last()
+    assert resp.context["first_unread_id"] == second.id
+
+
+@pytest.mark.django_db
+def test_chat_view_marks_channel_read(client):
+    from .reads import unread_channel_ids
+    ch = make_channel("lounge", kind=Channel.Kind.CHAT)
+    author = make_user("a@x.co", role=Role.ANALYST)
+    reader = make_user("r@x.co", role=Role.ANALYST)
+    Post.objects.create(channel=ch, author=author, body="hello")
+
+    client.force_login(reader)
+    assert ch.id in unread_channel_ids(reader, [ch])
+    client.get(ch.get_absolute_url())
+    assert ch.id not in unread_channel_ids(reader, [ch])

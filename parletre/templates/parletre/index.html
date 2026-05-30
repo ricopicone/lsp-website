@@ -31,6 +31,7 @@
       <li class="rounded-box border border-base-300 bg-base-100 p-4 hover:border-base-content/30 transition-colors">
         <a href="{{ channel.get_absolute_url }}" class="block space-y-1">
           <div class="flex items-center gap-2 flex-wrap">
+            {% if channel.is_unread %}<span class="size-2 rounded-full bg-primary inline-block shrink-0" title="Unread activity"></span>{% endif %}
             <span class="font-medium text-base-content">{{ channel.name }}</span>
             {% if channel.kind == 'chat' %}
               <span class="badge badge-sm badge-ghost">Chat</span>

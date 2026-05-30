@@ -434,3 +434,39 @@ class Notification(models.Model):
         if self.post_id:
             return f"#{self.post.channel.slug}"
         return ""
+
+
+class ReadMarker(models.Model):
+    """How far a member has read — keyed to a thread (forum) or a channel
+    (chat). Drives unread badges and "jump to unread" (DISC-4)."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="parletre_read_markers",
+    )
+    thread = models.ForeignKey(
+        Thread, null=True, blank=True, on_delete=models.CASCADE, related_name="read_markers"
+    )
+    channel = models.ForeignKey(
+        Channel, null=True, blank=True, on_delete=models.CASCADE, related_name="read_markers"
+    )
+    last_read_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "thread"),
+                condition=models.Q(thread__isnull=False),
+                name="parletre_one_marker_per_user_thread",
+            ),
+            models.UniqueConstraint(
+                fields=("user", "channel"),
+                condition=models.Q(channel__isnull=False, thread__isnull=True),
+                name="parletre_one_marker_per_user_channel",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        where = self.thread or self.channel
+        return f"{self.user} read {where} @ {self.last_read_at:%Y-%m-%d %H:%M}"
