@@ -1,4 +1,4 @@
-Your {{ period_label|lower }} digest from Parlêtre — new activity in the
+{% autoescape off %}Your {{ period_label|lower }} digest from Parlêtre — new activity in the
 channels you follow by digest.
 {% for section in sections %}
 == {{ section.channel.name }} =={% for g in section.groups %}
@@ -10,3 +10,4 @@ channels you follow by digest.
 —
 Parlêtre · the Lacanian School discussion board
 Change your digest frequency or per-channel settings on the board.
+{% endautoescape %}

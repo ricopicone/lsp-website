@@ -1,4 +1,4 @@
-{{ actor }} {{ verb }} in {{ channel.name }}.
+{% autoescape off %}{{ actor }} {{ verb }} in {{ channel.name }}.
 
 {{ context_label }}
 
@@ -10,3 +10,4 @@ Read and reply: {{ url }}
 —
 Parlêtre · the Lacanian School discussion board
 You're receiving this because of your notification settings for this channel.
+{% endautoescape %}
