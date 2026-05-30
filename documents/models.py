@@ -5,6 +5,11 @@ Distinct from ``works.Work`` (member-contributed intellectual output): a
 formation guidelines, founding texts, cartel-process resources). Most
 are public; a few may be members-only.
 
+Two-axis visibility (``listing_visibility`` + ``pdf_visibility``) lets a
+document's existence be public while the PDF stays members-only — useful
+for founding texts and cartel papers we want to *acknowledge* publicly
+while restricting the actual text to members. Same shape as Work.
+
 Documents support version chains via ``superseded_by`` — an older
 bylaws PDF stays accessible but points to the current version so the
 index only surfaces what's in force.
@@ -13,6 +18,8 @@ index only surfaces what's in force.
 from __future__ import annotations
 
 import markdown
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils.safestring import mark_safe
@@ -52,11 +59,30 @@ class Document(models.Model):
         blank=True,
         help_text="Optional longer-form description (markdown) for the detail page.",
     )
+    notice = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text=(
+            "Optional banner shown on the detail page and as a chip on the "
+            "index card — e.g. 'Under revision — procedural details may "
+            "change'. Leave blank when the document is settled."
+        ),
+    )
     file = models.FileField(upload_to="documents/%Y/")
-    visibility = models.CharField(
+    listing_visibility = models.CharField(
         max_length=16,
         choices=Visibility.choices,
         default=Visibility.PUBLIC,
+        help_text="Who can see this document exists in the index.",
+    )
+    pdf_visibility = models.CharField(
+        max_length=16,
+        choices=Visibility.choices,
+        default=Visibility.PUBLIC,
+        help_text=(
+            "Who can download the PDF. Cannot be more public than the "
+            "listing — e.g. listing=Members blocks a Public PDF."
+        ),
     )
     effective_date = models.DateField(
         null=True,
@@ -75,6 +101,12 @@ class Document(models.Model):
         default=0,
         help_text="Sort key within the category. Lower = earlier.",
     )
+    authors = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        through="DocumentAuthor",
+        related_name="authored_documents",
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -83,6 +115,21 @@ class Document(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+    # ---- Validation ----
+
+    def clean(self):
+        if (
+            self.pdf_visibility == self.Visibility.PUBLIC
+            and self.listing_visibility == self.Visibility.MEMBERS
+        ):
+            raise ValidationError({
+                "pdf_visibility": _(
+                    "PDF can't be public when the listing is members-only."
+                ),
+            })
+
+    # ---- Display helpers ----
 
     @property
     def is_current(self) -> bool:
@@ -104,15 +151,23 @@ class Document(models.Model):
     def get_absolute_url(self) -> str:
         return reverse("documents:detail", args=[self.slug])
 
-    def visible_to(self, user) -> bool:
-        """Whether ``user`` may see this document at all."""
-        if self.visibility == self.Visibility.PUBLIC:
+    # ---- Visibility helpers ----
+
+    def listing_visible_to(self, user) -> bool:
+        """Whether ``user`` may see this document's listing entry."""
+        if self.listing_visibility == self.Visibility.PUBLIC:
+            return True
+        return bool(user and user.is_authenticated)
+
+    def pdf_visible_to(self, user) -> bool:
+        """Whether ``user`` may download the PDF."""
+        if self.pdf_visibility == self.Visibility.PUBLIC:
             return True
         return bool(user and user.is_authenticated)
 
     @classmethod
     def for_user(cls, user):
-        """Queryset of *current* documents visible to ``user``.
+        """Queryset of *current* documents whose listing is visible to ``user``.
 
         Excludes superseded versions; use ``Document.supersedes`` on a
         current document to surface its version history.
@@ -120,4 +175,34 @@ class Document(models.Model):
         qs = cls.objects.filter(superseded_by__isnull=True)
         if user and user.is_authenticated:
             return qs
-        return qs.filter(visibility=cls.Visibility.PUBLIC)
+        return qs.filter(listing_visibility=cls.Visibility.PUBLIC)
+
+
+class DocumentAuthor(models.Model):
+    """Ordered authorship link between a Document and a User.
+
+    Through model rather than a plain M2M so we can preserve the order
+    of authors on the byline. Mirrors ``works.WorkAuthor``.
+    """
+
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, related_name="authorships",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_authorships",
+    )
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("display_order",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("document", "user"),
+                name="documents_unique_author_per_document",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} on {self.document}"

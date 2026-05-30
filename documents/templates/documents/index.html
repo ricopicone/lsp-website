@@ -26,16 +26,27 @@
                 {{ doc.title }}
               </a>
             </h3>
+            {% if doc.authorships.all %}
+            <p class="text-xs text-base-content/70">
+              {% for a in doc.authorships.all %}{% if not forloop.first %}, {% endif %}<a href="{% url 'directory_detail' a.user.profile.directory_slug %}" class="hover:text-primary">{{ a.user.first_name }} {{ a.user.last_name }}</a>{% endfor %}
+            </p>
+            {% endif %}
             {% if doc.summary %}
             <p class="text-sm text-base-content/70 leading-relaxed">{{ doc.summary }}</p>
             {% endif %}
           </div>
-          <div class="flex items-center gap-3 text-xs text-base-content/60">
+          <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/60">
             {% if doc.effective_date %}
             <span>Effective {{ doc.effective_date|date:"M Y" }}</span>
             {% endif %}
-            {% if doc.visibility == "members" %}
+            {% if doc.pdf_visibility == "members" %}
+            <span class="badge badge-ghost badge-sm">PDF: Members only</span>
+            {% endif %}
+            {% if doc.listing_visibility == "members" %}
             <span class="badge badge-ghost badge-sm">Members only</span>
+            {% endif %}
+            {% if doc.notice %}
+            <span class="badge badge-warning badge-sm" title="{{ doc.notice }}">{{ doc.notice|truncatechars:40 }}</span>
             {% endif %}
           </div>
           <div class="flex items-center gap-3 pt-1">

@@ -1,15 +1,16 @@
-"""Tests for documents app — visibility gating, version chain, index grouping."""
+"""Tests for documents app — visibility gating, authors, notice, version chain."""
 
 from __future__ import annotations
 
 from datetime import date
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
-from accounts.models import User
-from documents.models import Document
+from accounts.models import Profile, User
+from documents.models import Document, DocumentAuthor
 
 
 def _doc(**kwargs) -> Document:
@@ -19,45 +20,83 @@ def _doc(**kwargs) -> Document:
         slug="test-doc",
         category=Document.Category.GOVERNANCE,
         summary="A test document",
-        visibility=Document.Visibility.PUBLIC,
-        file=SimpleUploadedFile("test.pdf", b"%PDF-1.4\n%fake\n", content_type="application/pdf"),
+        listing_visibility=Document.Visibility.PUBLIC,
+        pdf_visibility=Document.Visibility.PUBLIC,
+        file=SimpleUploadedFile(
+            "test.pdf", b"%PDF-1.4\n%fake\n", content_type="application/pdf",
+        ),
     )
     defaults.update(kwargs)
     return Document.objects.create(**defaults)
 
 
-# ---- for_user / visible_to ---------------------------------------------
+# ---- Two-axis visibility ------------------------------------------------
 
 
 @pytest.mark.django_db
-def test_for_user_anonymous_only_sees_public():
-    _doc(slug="open", visibility=Document.Visibility.PUBLIC)
-    _doc(slug="closed", visibility=Document.Visibility.MEMBERS)
+def test_listing_visible_to_anon_when_listing_public():
+    d = _doc()
+    assert d.listing_visible_to(None) is True
 
-    qs = Document.for_user(None)  # anonymous
-    slugs = set(qs.values_list("slug", flat=True))
+
+@pytest.mark.django_db
+def test_listing_hidden_from_anon_when_listing_members():
+    d = _doc(listing_visibility=Document.Visibility.MEMBERS)
+    assert d.listing_visible_to(None) is False
+
+
+@pytest.mark.django_db
+def test_public_listing_with_members_pdf_visible_listing_gated_pdf():
+    """The headline scenario: anon sees the listing, can't download the PDF."""
+    d = _doc(
+        listing_visibility=Document.Visibility.PUBLIC,
+        pdf_visibility=Document.Visibility.MEMBERS,
+    )
+    assert d.listing_visible_to(None) is True
+    assert d.pdf_visible_to(None) is False
+    u = User.objects.create_user(email="m@x.test")
+    assert d.pdf_visible_to(u) is True
+
+
+@pytest.mark.django_db
+def test_clean_rejects_public_pdf_with_members_listing():
+    d = Document(
+        title="X", slug="x", category=Document.Category.GOVERNANCE,
+        listing_visibility=Document.Visibility.MEMBERS,
+        pdf_visibility=Document.Visibility.PUBLIC,
+        file=SimpleUploadedFile("t.pdf", b"%PDF", content_type="application/pdf"),
+    )
+    with pytest.raises(ValidationError) as exc:
+        d.full_clean()
+    assert "pdf_visibility" in exc.value.error_dict
+
+
+# ---- for_user filter ---------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_for_user_anon_only_sees_public_listings():
+    _doc(slug="open")
+    _doc(slug="closed", listing_visibility=Document.Visibility.MEMBERS)
+    slugs = set(Document.for_user(None).values_list("slug", flat=True))
     assert slugs == {"open"}
 
 
 @pytest.mark.django_db
-def test_for_user_authenticated_sees_both():
-    _doc(slug="open", visibility=Document.Visibility.PUBLIC)
-    _doc(slug="closed", visibility=Document.Visibility.MEMBERS)
+def test_for_user_authenticated_sees_all_listings():
+    _doc(slug="open")
+    _doc(slug="closed", listing_visibility=Document.Visibility.MEMBERS)
     u = User.objects.create_user(email="m@x.test")
-
-    qs = Document.for_user(u)
-    slugs = set(qs.values_list("slug", flat=True))
+    slugs = set(Document.for_user(u).values_list("slug", flat=True))
     assert slugs == {"open", "closed"}
 
 
 @pytest.mark.django_db
 def test_for_user_excludes_superseded():
-    """Superseded docs don't appear in for_user even when current."""
     new = _doc(slug="bylaws-2024", title="Bylaws 2024", effective_date=date(2024, 12, 1))
     old = _doc(slug="bylaws-2022", title="Bylaws 2022", effective_date=date(2022, 1, 1))
     old.superseded_by = new
     old.save()
-
     slugs = set(Document.for_user(None).values_list("slug", flat=True))
     assert slugs == {"bylaws-2024"}
 
@@ -70,68 +109,135 @@ def test_index_renders_groups_in_category_order(client):
     _doc(slug="g1", title="Governance one", category=Document.Category.GOVERNANCE)
     _doc(slug="r1", title="Reference one", category=Document.Category.REFERENCE)
     _doc(slug="f1", title="Formation one", category=Document.Category.FORMATION)
-
-    resp = client.get(reverse("documents:index"))
-    body = resp.content.decode()
-    assert resp.status_code == 200
-    # Governance should appear before Formation before Reference in the
-    # rendered HTML (matches Document.CATEGORY_ORDER).
-    g = body.index("Governance one")
-    f = body.index("Formation one")
-    r = body.index("Reference one")
-    assert g < f < r
+    body = client.get(reverse("documents:index")).content.decode()
+    assert body.index("Governance one") < body.index("Formation one") < body.index("Reference one")
 
 
 @pytest.mark.django_db
-def test_index_excludes_members_only_for_anonymous(client):
-    _doc(slug="open", title="Open one", visibility=Document.Visibility.PUBLIC)
-    _doc(slug="secret", title="Secret one", visibility=Document.Visibility.MEMBERS)
-
+def test_index_excludes_members_only_listings_for_anonymous(client):
+    _doc(slug="open", title="Open one")
+    _doc(slug="secret", title="Secret one", listing_visibility=Document.Visibility.MEMBERS)
     body = client.get(reverse("documents:index")).content.decode()
     assert "Open one" in body
     assert "Secret one" not in body
 
 
 @pytest.mark.django_db
-def test_detail_404s_for_anonymous_on_members_only(client):
-    _doc(slug="secret", visibility=Document.Visibility.MEMBERS)
+def test_index_shows_public_listing_with_members_pdf_to_anon(client):
+    """The headline scenario rendered: anon sees the entry but no download access."""
+    _doc(
+        slug="founding",
+        title="Founding Paper",
+        pdf_visibility=Document.Visibility.MEMBERS,
+    )
+    body = client.get(reverse("documents:index")).content.decode()
+    assert "Founding Paper" in body
+    assert "PDF: Members only" in body
+
+
+@pytest.mark.django_db
+def test_detail_404s_for_anonymous_on_members_only_listing(client):
+    _doc(slug="secret", listing_visibility=Document.Visibility.MEMBERS)
     resp = client.get(reverse("documents:detail", args=["secret"]))
     assert resp.status_code == 404
 
 
 @pytest.mark.django_db
-def test_detail_renders_for_member_on_members_only(client):
-    _doc(slug="secret", visibility=Document.Visibility.MEMBERS, title="Secret memo")
+def test_detail_renders_for_anon_when_listing_public_but_pdf_members(client):
+    _doc(
+        slug="founding",
+        title="Founding Paper",
+        pdf_visibility=Document.Visibility.MEMBERS,
+    )
+    body = client.get(reverse("documents:detail", args=["founding"])).content.decode()
+    assert "Founding Paper" in body
+    assert "Log in to download PDF" in body
+    # The live download button should not appear for anon when PDF is members-only.
+    assert reverse("documents:download", args=["founding"]) not in body
+
+
+@pytest.mark.django_db
+def test_detail_shows_download_for_member_on_members_pdf(client):
+    _doc(slug="founding", pdf_visibility=Document.Visibility.MEMBERS)
     u = User.objects.create_user(email="m@x.test", password="x")
     client.force_login(u)
-    resp = client.get(reverse("documents:detail", args=["secret"]))
-    assert resp.status_code == 200
-    assert "Secret memo" in resp.content.decode()
+    body = client.get(reverse("documents:detail", args=["founding"])).content.decode()
+    assert reverse("documents:download", args=["founding"]) in body
+    assert "Download PDF" in body
 
 
 @pytest.mark.django_db
-def test_detail_lists_older_versions(client):
-    new = _doc(slug="bylaws-2024", title="Bylaws 2024", effective_date=date(2024, 12, 1))
-    _doc(  # old version, points at new
-        slug="bylaws-2022",
-        title="Bylaws 2022",
-        effective_date=date(2022, 1, 1),
-        superseded_by=new,
-    )
-    body = client.get(reverse("documents:detail", args=["bylaws-2024"])).content.decode()
-    assert "Bylaws 2022" in body
-    assert "Earlier versions" in body
-
-
-@pytest.mark.django_db
-def test_download_serves_file_for_public_anonymous(client):
+def test_download_serves_file_for_public_pdf_anon(client):
     _doc(slug="open")
     resp = client.get(reverse("documents:download", args=["open"]))
     assert resp.status_code == 200
 
 
 @pytest.mark.django_db
-def test_download_404s_for_anonymous_on_members_only(client):
-    _doc(slug="secret", visibility=Document.Visibility.MEMBERS)
-    resp = client.get(reverse("documents:download", args=["secret"]))
+def test_download_404s_for_anonymous_on_members_pdf(client):
+    _doc(slug="founding", pdf_visibility=Document.Visibility.MEMBERS)
+    resp = client.get(reverse("documents:download", args=["founding"]))
     assert resp.status_code == 404
+
+
+# ---- Authors -----------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_detail_renders_linked_authors(client):
+    u = User.objects.create_user(
+        email="a@x.test", password="x", first_name="Andre", last_name="Patsalides",
+    )
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    d = _doc(slug="founding", title="Founding Paper")
+    DocumentAuthor.objects.create(document=d, user=u, display_order=0)
+    body = client.get(reverse("documents:detail", args=["founding"])).content.decode()
+    assert "Andre Patsalides" in body
+    # Linked to the directory profile.
+    assert f'href="/directory/{u.profile.directory_slug}/"' in body
+
+
+@pytest.mark.django_db
+def test_index_card_renders_linked_authors(client):
+    u = User.objects.create_user(
+        email="a@x.test", password="x", first_name="Andre", last_name="Patsalides",
+    )
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    d = _doc(slug="founding", title="Founding Paper")
+    DocumentAuthor.objects.create(document=d, user=u, display_order=0)
+    body = client.get(reverse("documents:index")).content.decode()
+    assert "Andre Patsalides" in body
+
+
+# ---- Notice ------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_detail_shows_notice_banner(client):
+    _doc(slug="sg", notice="Under revision — procedural details may change")
+    body = client.get(reverse("documents:detail", args=["sg"])).content.decode()
+    assert "Under revision" in body
+
+
+@pytest.mark.django_db
+def test_index_card_shows_notice_chip(client):
+    _doc(slug="sg", notice="Under revision")
+    body = client.get(reverse("documents:index")).content.decode()
+    assert "Under revision" in body
+
+
+# ---- Versioning --------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_detail_lists_older_versions(client):
+    new = _doc(slug="bylaws-2024", title="Bylaws 2024", effective_date=date(2024, 12, 1))
+    _doc(
+        slug="bylaws-2022", title="Bylaws 2022",
+        effective_date=date(2022, 1, 1), superseded_by=new,
+    )
+    body = client.get(reverse("documents:detail", args=["bylaws-2024"])).content.decode()
+    assert "Bylaws 2022" in body
+    assert "Earlier versions" in body

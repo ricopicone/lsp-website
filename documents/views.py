@@ -1,27 +1,40 @@
 """Documents app views.
 
 The index renders the (current) Document list grouped by category as
-cards. Detail pages show the longer markdown description plus a
-download link. The download view exists so members-only documents can
-be gated — public documents could be served directly from S3, but
-routing all PDFs through the same view keeps the permission check in
-one place.
+cards. Detail pages show the longer markdown description, author
+byline, and a download link gated by ``pdf_visible_to``. Two-axis
+visibility means a document can be browsable to the public while its
+PDF stays members-only.
 """
 
 from __future__ import annotations
 
+from django.db.models import Prefetch
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, render
 
-from .models import Document
+from .models import Document, DocumentAuthor
+
+
+def _with_authors(qs):
+    """Prefetch authorships in byline order."""
+    return qs.prefetch_related(
+        Prefetch(
+            "authorships",
+            queryset=(
+                DocumentAuthor.objects
+                .select_related("user")
+                .order_by("display_order")
+            ),
+        ),
+    )
 
 
 def index(request):
-    qs = Document.for_user(request.user).order_by("category", "display_order", "title")
+    qs = _with_authors(
+        Document.for_user(request.user).order_by("category", "display_order", "title")
+    )
 
-    # Group by category, preserving CATEGORY_ORDER so sections appear in a
-    # deliberate order (Governance first, Reference last) regardless of
-    # alphabetic order.
     by_category: dict[str, list[Document]] = {c: [] for c in Document.CATEGORY_ORDER}
     for doc in qs:
         by_category.setdefault(doc.category, []).append(doc)
@@ -39,23 +52,30 @@ def index(request):
 
 
 def detail(request, slug):
-    doc = get_object_or_404(Document, slug=slug)
-    if not doc.visible_to(request.user):
+    doc = get_object_or_404(_with_authors(Document.objects.all()), slug=slug)
+    if not doc.listing_visible_to(request.user):
         raise Http404()
-    older = doc.supersedes.all().order_by("-effective_date") if doc.is_current else []
+    older = (
+        doc.supersedes.all().order_by("-effective_date")
+        if doc.is_current
+        else []
+    )
     return render(
         request,
         "documents/detail.html",
-        {"doc": doc, "older_versions": older},
+        {
+            "doc": doc,
+            "older_versions": older,
+            "pdf_visible": doc.pdf_visible_to(request.user),
+        },
     )
 
 
 def download(request, slug):
     doc = get_object_or_404(Document, slug=slug)
-    if not doc.visible_to(request.user):
+    if not doc.pdf_visible_to(request.user):
         raise Http404()
     if not doc.file:
         raise Http404()
-    # FileResponse handles streaming + Content-Disposition.
     filename = doc.file.name.rsplit("/", 1)[-1]
     return FileResponse(doc.file.open("rb"), as_attachment=False, filename=filename)
