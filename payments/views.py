@@ -286,27 +286,70 @@ def treasurer_payments(request):
 @user_passes_test(_is_staff)
 @require_POST
 def treasurer_payment_refund(request, payment_id: int):
-    """Issue a Stripe refund for a SUCCEEDED Stripe payment.
+    """Refund a SUCCEEDED payment.
 
-    Wraps payments.refund.refund_payment, which already handles Stripe
-    API + DB state transitions and logs failures. Treasurer stays out of
-    the Stripe dashboard for the common case.
+    Stripe payments: calls Stripe's refund API + marks REFUNDED. Cascade
+    to the linked Registration arrives via the charge.refunded webhook.
+
+    Offline payments: marks REFUNDED for accounting + cascades to any
+    linked Registration immediately. The treasurer sends the actual
+    reimbursement (cash, check, etc.) out-of-band — the page's confirm
+    prompt makes that explicit.
     """
     from .refund import RefundError, refund_payment
 
     payment = get_object_or_404(Payment, pk=payment_id)
     if payment.status != Payment.Status.SUCCEEDED:
         return redirect("treasurer_payments")
-    if payment.method != Payment.Method.STRIPE:
-        # Offline payments don't have a Stripe charge to refund — treasurer
-        # must mark Payment.status=REFUNDED in admin and handle reimbursement
-        # outside the system (cash, check, etc.).
+
+    if payment.method == Payment.Method.STRIPE:
+        try:
+            refund_payment(payment)
+        except RefundError as exc:
+            logger.exception("Refund failed for payment %s: %s", payment.id, exc)
+            return redirect("treasurer_payments")
+    else:
+        _record_offline_refund(payment, treasurer=request.user)
+        # Cascade to Registration (the Stripe path gets this via webhook).
+        if payment.registration_id:
+            Registration.objects.filter(
+                pk=payment.registration_id,
+                status=Registration.Status.PAID,
+            ).update(status=Registration.Status.REFUNDED)
+    return redirect("treasurer_payments")
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_payment_resend_receipt(request, payment_id: int):
+    """Re-email the Receipt for a payment.
+
+    Common when a member loses the original email or asks for a copy.
+    No-op if the payment doesn't have a Receipt (yet) — e.g. PENDING
+    payments haven't been completed and have no Receipt to send.
+    """
+    from .emails import send_receipt
+    payment = get_object_or_404(Payment, pk=payment_id)
+    if not hasattr(payment, "receipt"):
         return redirect("treasurer_payments")
     try:
-        refund_payment(payment)
-    except RefundError as exc:
-        logger.exception("Refund failed for payment %s: %s", payment.id, exc)
+        send_receipt(payment)
+    except Exception:
+        logger.exception("Failed to resend receipt for payment %s", payment.id)
     return redirect("treasurer_payments")
+
+
+def _record_offline_refund(payment: Payment, *, treasurer) -> None:
+    """Mark an offline payment REFUNDED with an audit note. No money moves —
+    the treasurer handles reimbursement manually."""
+    payment.status = Payment.Status.REFUNDED
+    audit = (
+        f"[{timezone.now().date()}] Offline refund recorded by treasurer "
+        f"{treasurer.email} (for accounting; reimbursement sent separately)."
+    )
+    payment.notes = (payment.notes + "\n" + audit) if payment.notes else audit
+    payment.save(update_fields=("status", "notes"))
 
 
 @login_required

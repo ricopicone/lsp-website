@@ -814,13 +814,15 @@ def test_treasurer_payment_apply_success_marks_paid(
 
 
 @pytest.mark.django_db
-def test_treasurer_payment_refund_skips_non_stripe_payments(
+def test_treasurer_payment_refund_offline_marks_refunded_with_audit(
     client, staff_user, current_period,
 ):
-    """Offline payments don't have a Stripe charge — refund no-ops."""
+    """Refund on an offline payment marks it REFUNDED (accounting only —
+    no Stripe call, treasurer sends actual reimbursement manually) and
+    leaves an audit note naming the treasurer."""
     from payments.models import DuesPeriod, Payment
     period = DuesPeriod.current()
-    u = _mk_candidate("offline-no-refund@x.test")
+    u = _mk_candidate("offline-refund@x.test")
     p = Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=u, amount=period.amount_for_role("candidate"),
@@ -832,8 +834,52 @@ def test_treasurer_payment_refund_skips_non_stripe_payments(
     resp = client.post(reverse("treasurer_payment_refund", args=[p.id]))
     assert resp.status_code == 302
     p.refresh_from_db()
-    # Status unchanged — offline payment wasn't Stripe-refunded.
-    assert p.status == Payment.Status.SUCCEEDED
+    assert p.status == Payment.Status.REFUNDED
+    assert "Offline refund recorded by treasurer" in p.notes
+    assert staff_user.email in p.notes
+
+
+@pytest.mark.django_db
+def test_treasurer_payment_refund_offline_cascades_to_registration(
+    client, staff_user, current_period,
+):
+    """Offline refund of a registration payment marks the Registration
+    REFUNDED (Stripe path gets this via webhook; offline needs to do it
+    inline)."""
+    from datetime import date
+    from decimal import Decimal as D
+
+    from events.models import Audience, Event, PriceTier
+    from payments.models import Payment
+    from registrations.models import Registration
+
+    event = Event.objects.create(
+        title="Special X", slug="special-x",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 9, 1), end_date=date(2030, 9, 1),
+        published=True,
+    )
+    tier = PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=D("50.00"),
+    )
+    u = _mk_candidate("reg-refund@x.test")
+    reg = Registration.objects.create(
+        user=u, event=event, price_tier=tier,
+        quoted_amount=D("50.00"),
+        status=Registration.Status.PAID,
+    )
+    p = Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION,
+        registration=reg, user=u, amount=D("50.00"),
+        status=Payment.Status.SUCCEEDED,
+        method=Payment.Method.OFFLINE,
+    )
+    client.force_login(staff_user)
+    client.post(reverse("treasurer_payment_refund", args=[p.id]))
+    p.refresh_from_db()
+    reg.refresh_from_db()
+    assert p.status == Payment.Status.REFUNDED
+    assert reg.status == Registration.Status.REFUNDED
 
 
 @pytest.mark.django_db
@@ -884,14 +930,14 @@ def test_create_tuition_period_if_needed_keeps_two_years_ahead(db):
 
 @pytest.mark.django_db
 def test_treasurer_help_renders_markdown(client, staff_user):
-    """Help tab renders the treasurer guide markdown doc with cross-link."""
+    """Help tab renders the treasurer guide markdown doc."""
     client.force_login(staff_user)
     resp = client.get(reverse("treasurer_help"))
     assert resp.status_code == 200
     body = resp.content
     assert b"<h1>Treasurer Admin Guide" in body
-    # Cross-reference to the PC admin guide.
-    assert b"/program-admin/help/" in body
+    # A representative content line.
+    assert b"Reminder cadences" in body
 
 
 @pytest.mark.django_db

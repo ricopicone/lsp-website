@@ -211,10 +211,9 @@ def test_program_admin_help_renders(client, pc_member):
     resp = client.get(reverse("program_admin_help"))
     assert resp.status_code == 200
     body = resp.content
-    # Markdown rendered: should have <h1> from the doc + a link to the
-    # treasurer guide.
     assert b"<h1>Program Committee Admin Guide" in body
-    assert b"/treasurer/help/" in body
+    # A representative content line.
+    assert b"annual program" in body
 
 
 @pytest.mark.django_db

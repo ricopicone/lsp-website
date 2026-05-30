@@ -94,6 +94,19 @@
                 {% csrf_token %}
                 <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
               </form>
+              {% elif p.status == "succeeded" and p.method == "offline" %}
+              <form method="post" action="{% url 'treasurer_payment_refund' p.id %}" class="contents"
+                    onsubmit="return confirm('Mark this ${{ p.amount }} offline payment as REFUNDED for accounting?\n\nThis does NOT move any money — you will need to send the refund check (or process the cash refund) manually.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
+              </form>
+              {% endif %}
+              {% if p.status == "succeeded" and p.receipt %}
+              <form method="post" action="{% url 'treasurer_payment_resend_receipt' p.id %}" class="contents"
+                    onsubmit="return confirm('Resend the receipt email to {{ p.user.email|default:p.email }}?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-xs">Resend receipt</button>
+              </form>
               {% endif %}
             </div>
           </td>

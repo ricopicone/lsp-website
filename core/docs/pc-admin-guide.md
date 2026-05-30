@@ -1,16 +1,11 @@
 # Program Committee Admin Guide
 
-*A walk-through of `/program-admin/` for the Program Committee. You
-shouldn't need to use the underlying Django admin (`/admin/`) for
-routine work on the annual program — everything here lives in the PC
-admin.*
-
-*If you also help with dues / tuition, see the
-[Treasurer Admin Guide](/treasurer/help/).*
+*A walk-through of the Program Committee admin: planning, editing, and
+publishing the LSP annual program (seminars, reading groups, cartels).*
 
 ---
 
-## What the PC admin is for
+## What this admin is for
 
 The Program Committee owns the LSP **annual program** — the set of
 seminars, reading groups, and cartels offered each academic year.
@@ -27,22 +22,16 @@ What this admin doesn't do (yet): solicit and review event proposals
 from faculty. That workflow is designed but deferred. For now, the PC
 writes the program directly using this admin.
 
-> The [Treasurer admin](/treasurer/) is a separate surface for dues
-> and tuition. The PC admin doesn't touch finances; the treasurer
-> admin doesn't touch the academic program. Some people may have
-> access to both.
-
 ---
 
 ## How to get there
 
-1. Log in at `https://app.lacanschool.org/` with your LSP account.
+1. Log in at <https://app.lacanschool.org/> with your LSP account.
 2. Click your photo / initials in the top-right.
 3. Pick **Program Committee admin**.
 
-You'll see the dropdown link only if you're either Django staff or a
-current member of the **Programming Committee** in the committees
-list.
+You'll see the dropdown link if you're a current member of the
+**Programming Committee** on the committees list.
 
 ---
 
@@ -99,7 +88,7 @@ add a new one attached to this program.
 
 > Special events, Days of Assembly, Working Days, and Scholarly
 > Seminars are **not** part of the annual program. They live on
-> `/events/` and are managed individually via Django admin for now.
+> `/events/` and are managed separately.
 
 ---
 
@@ -160,11 +149,11 @@ URL (which only the PC + staff can see while the program is Draft).
 
 ### "I need to take a seminar down from the public site."
 
-Currently this requires changing the event individually in Django
-admin (set `published=False`). For program-type events the program's
-publish state is the main lever — un-publishing one event without
-un-publishing the whole program isn't a routine workflow. If this
-comes up often, we can add a per-event hide control.
+The program's publish state is the main lever — when the program is
+public, all its events are visible; when it's draft, none are. Hiding
+a single event without un-publishing the whole program isn't a
+routine workflow. If this comes up often, ask the Web Coordinator to
+add a per-event hide control.
 
 ### "Someone proposed an event I want to add — how does that work today?"
 
@@ -185,15 +174,13 @@ formal proposal workflow (faculty submits a form → PC reviews + votes
   manual cycle.
 - **Batch clone** for setting up next year from last year's structure
   ("two-week ordeal" → half-day).
-- **Faculty self-edit** of descriptions on events they teach (PROG-7
-  already exists for staff; opening to faculty is a permissions
-  change).
+- **Faculty self-edit** of descriptions on events they teach.
 
 ---
 
-## What to ask Rico for help with
+## When to ask the Web Coordinator for help
 
-- Anything you'd want to do that isn't here.
 - Adding a new PC member to the committee list (so they can access this
   admin).
 - Anything that looks wrong or broken.
+- Anything you'd like to do that this admin doesn't yet handle.

@@ -1,11 +1,7 @@
 # Treasurer Admin Guide
 
-*A walk-through of `/treasurer/` for whoever is acting as treasurer.
-You should never need to use the underlying Django admin (`/admin/`)
-for routine work — everything here lives in the treasurer admin.*
-
-*If you also help with the academic program, see the
-[Program Committee Admin Guide](/program-admin/help/).*
+*A walk-through of the treasurer admin: managing dues, tuition,
+payments, refunds, and the academic-year settings that drive them.*
 
 ---
 
@@ -243,14 +239,17 @@ The Payments tab is for inspecting or correcting individual payments.
     - **Mark paid** appears on pending offline payments. Runs the
       standard success side-effects: marks succeeded, issues a Receipt,
       sends emails.
-    - **Refund** appears on succeeded Stripe payments. Issues a refund
-      via the Stripe API and marks the payment refunded. **This is
-      irreversible** — the confirmation prompt will warn you.
-
-Offline payments don't show **Refund** because they're not in Stripe —
-you have to handle reimbursement separately (cash, check, etc.) and
-mark the payment refunded via Django admin (one of the few times
-you'd visit Django admin).
+    - **Refund** appears on succeeded payments. For Stripe payments it
+      issues an automatic refund via Stripe and marks the payment
+      refunded (**irreversible** — the confirmation prompt will warn
+      you). For offline payments it marks the payment refunded **for
+      accounting purposes only** — no money moves through the system,
+      so you'll need to send the refund check (or process the cash
+      refund) manually. An audit note is added to the payment with the
+      date and your email.
+    - **Resend receipt** appears on succeeded payments that already
+      have a receipt. Common when a member loses the original email or
+      asks for a copy.
 
 ---
 
@@ -290,23 +289,6 @@ Event-specific roster CSVs live on each event's edit page
 
 ---
 
-## What's NOT in the treasurer admin (and why)
-
-You may occasionally need Django admin (`/admin/`) for:
-
-- Editing a Receipt
-- Marking an offline payment as REFUNDED (after handling reimbursement
-  out-of-band)
-- Bulk operations across many records
-
-Everything else — recording payments, resolving tuition statuses,
-issuing Stripe refunds, viewing member history, editing AY amounts,
-adjusting reminder cadence — should be doable from the treasurer admin.
-If you find yourself going to Django admin for something else, mention
-it and we can probably bring it in.
-
----
-
 ## Things you don't have to do (the system handles them)
 
 - **Issuing receipts** — happens automatically when a Stripe payment
@@ -318,9 +300,10 @@ it and we can probably bring it in.
 
 ---
 
-## What to ask Rico for help with
+## When to ask the Web Coordinator for help
 
-- Anything you'd want to do that isn't here.
+- Bulk operations across many records.
 - Anything that looks broken (a number doesn't add up, an email
   bounced, etc.).
 - Setting up a new treasurer account (when you transition out).
+- Anything you'd like to do that this admin doesn't yet handle.
