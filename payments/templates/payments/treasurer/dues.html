@@ -1,4 +1,5 @@
 {% extends "payments/treasurer/base.html" %}
+{% load treasurer_filters %}
 {% block tab_content %}
 <div class="space-y-8">
 
@@ -89,7 +90,7 @@
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Name</th><th>Email</th><th>Role</th></tr>
+          <tr><th>Name</th><th>Email</th><th>Role</th><th>Owed</th><th>Actions</th></tr>
         </thead>
         <tbody>
           {% for u in unpaid_users %}
@@ -97,6 +98,16 @@
             <td>{{ u.first_name }} {{ u.last_name }}</td>
             <td><a href="mailto:{{ u.email }}" class="link link-primary">{{ u.email }}</a></td>
             <td>{{ u.profile.get_role_display }}</td>
+            <td class="whitespace-nowrap">${{ current_period|tier_for:u.profile.role }}</td>
+            <td>
+              <form method="post"
+                    action="{% url 'treasurer_dues_record_offline_payment' u.id %}"
+                    class="contents"
+                    onsubmit="return confirm('Record an offline dues payment of ${{ current_period|tier_for:u.profile.role }} for {{ u.first_name }} {{ u.last_name }}?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-xs">Record payment</button>
+              </form>
+            </td>
           </tr>
           {% endfor %}
         </tbody>

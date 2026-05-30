@@ -215,6 +215,41 @@ def treasurer_tuition_set_status(request, user_id: int):
 @login_required
 @user_passes_test(_is_staff)
 @require_POST
+def treasurer_dues_record_offline_payment(request, user_id: int):
+    """Record an offline dues payment for the user's role-tier amount.
+
+    Creates an OFFLINE Payment for the current DuesPeriod's per-role
+    amount and runs ``complete_payment`` — which marks SUCCEEDED, issues
+    a Receipt, and emails the member.
+    """
+    target = get_object_or_404(User, pk=user_id)
+    period = DuesPeriod.current()
+    if period is None:
+        return redirect("treasurer_dues")
+    amount = period.amount_for_role(target.profile.role)
+    if amount is None:
+        # User's role isn't dues-obligated under the current tier table.
+        return redirect("treasurer_dues")
+    with transaction.atomic():
+        payment = Payment.objects.create(
+            payment_type=Payment.Type.DUES,
+            user=target,
+            amount=amount,
+            method=Payment.Method.OFFLINE,
+            status=Payment.Status.PENDING,
+            dues_period=period,
+            notes=(
+                f"Offline dues payment recorded by treasurer "
+                f"{request.user.email} on {timezone.now().date()}."
+            ),
+        )
+    complete_payment(payment)
+    return redirect("treasurer_dues")
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
 def treasurer_tuition_record_offline_payment(request, user_id: int):
     """Record an offline tuition payment for the full annual amount.
 

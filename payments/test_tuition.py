@@ -673,6 +673,67 @@ def test_treasurer_tuition_actions_require_staff(client, current_period):
         assert "/accounts/login/" in resp.url
 
 
+# --- Treasurer offline dues payment recording ---------------------------
+
+
+@pytest.mark.django_db
+def test_treasurer_dues_record_offline_payment_creates_succeeded_payment(
+    client, staff_user,
+):
+    """Records a SUCCEEDED Payment for the user's role-tier amount."""
+    from payments.models import DuesPeriod, Payment
+
+    u = _mk_candidate("dues-off@x.test")
+    period = DuesPeriod.current()
+    assert period is not None
+    expected_amount = period.amount_for_role(u.profile.role)
+    client.force_login(staff_user)
+    resp = client.post(
+        reverse("treasurer_dues_record_offline_payment", args=[u.id])
+    )
+    assert resp.status_code == 302
+    payment = Payment.objects.get(user=u, payment_type=Payment.Type.DUES)
+    assert payment.status == Payment.Status.SUCCEEDED
+    assert payment.method == Payment.Method.OFFLINE
+    assert payment.amount == expected_amount
+    assert payment.dues_period == period
+    assert staff_user.email in payment.notes
+
+
+@pytest.mark.django_db
+def test_treasurer_dues_record_offline_payment_skips_non_obligated(
+    client, staff_user,
+):
+    """Roles outside the tier table (e.g. external) → no Payment created."""
+    from payments.models import Payment
+
+    u = User.objects.create_user(email="ext@x.test", password="x")
+    u.profile.role = Profile.Role.EXTERNAL
+    u.profile.save()
+    client.force_login(staff_user)
+    resp = client.post(
+        reverse("treasurer_dues_record_offline_payment", args=[u.id])
+    )
+    assert resp.status_code == 302
+    assert not Payment.objects.filter(user=u).exists()
+
+
+@pytest.mark.django_db
+def test_treasurer_dues_record_offline_payment_requires_staff(client):
+    from payments.models import Payment
+
+    u = User.objects.create_user(email="not-staff@x.test", password="x")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    client.force_login(u)
+    resp = client.post(
+        reverse("treasurer_dues_record_offline_payment", args=[u.id])
+    )
+    assert resp.status_code == 302
+    assert "/accounts/login/" in resp.url
+    assert not Payment.objects.filter(user=u).exists()
+
+
 @pytest.mark.django_db
 def test_treasurer_settings_handles_missing_periods(client, staff_user):
     """Settings page renders even when no periods are configured."""
