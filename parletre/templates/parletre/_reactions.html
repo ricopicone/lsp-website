@@ -1,0 +1,25 @@
+{% comment %}Reaction row for one post. Expects: post (with reaction_summary),
+reaction_palette.{% endcomment %}
+<div class="flex items-center gap-1 mt-2 flex-wrap">
+  {% for r in post.reaction_summary %}
+  <form method="post" action="{% url 'parletre:react' post.id %}" style="display:contents">
+    {% csrf_token %}
+    <input type="hidden" name="emoji" value="{{ r.emoji }}">
+    <button type="submit"
+            class="badge badge-sm gap-1 {% if r.mine %}badge-primary{% else %}badge-ghost{% endif %}"
+            title="{% if r.mine %}Remove your reaction{% else %}React{% endif %}">{{ r.emoji }} {{ r.count }}</button>
+  </form>
+  {% endfor %}
+  <details class="dropdown">
+    <summary class="badge badge-sm badge-ghost cursor-pointer list-none" title="Add a reaction">＋</summary>
+    <div class="dropdown-content z-10 mt-1 bg-base-100 border border-base-300 rounded-box p-1 flex gap-1 shadow">
+      {% for e in reaction_palette %}
+      <form method="post" action="{% url 'parletre:react' post.id %}" style="display:contents">
+        {% csrf_token %}
+        <input type="hidden" name="emoji" value="{{ e }}">
+        <button type="submit" class="btn btn-ghost btn-xs">{{ e }}</button>
+      </form>
+      {% endfor %}
+    </div>
+  </details>
+</div>

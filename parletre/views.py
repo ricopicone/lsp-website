@@ -20,8 +20,35 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .forms import NewThreadForm, PostForm
-from .models import Channel, Post, Subscription, SubscriptionLevel, Thread
+from .models import (
+    REACTION_EMOJI,
+    Channel,
+    Post,
+    Reaction,
+    Subscription,
+    SubscriptionLevel,
+    Thread,
+)
 from .permissions import is_member
+
+
+def _attach_reactions(posts, user):
+    """Attach a ``reaction_summary`` list to each post: one entry per distinct
+    emoji with its count and whether ``user`` is among the reactors. Expects
+    ``reactions`` (and their users) prefetched."""
+    posts = list(posts)
+    uid = user.id if getattr(user, "is_authenticated", False) else None
+    for post in posts:
+        summary: dict[str, dict] = {}
+        for reaction in post.reactions.all():
+            entry = summary.setdefault(
+                reaction.emoji, {"emoji": reaction.emoji, "count": 0, "mine": False}
+            )
+            entry["count"] += 1
+            if reaction.user_id == uid:
+                entry["mine"] = True
+        post.reaction_summary = list(summary.values())
+    return posts
 
 
 def _visible_channel_or_404(user, slug: str) -> Channel:
@@ -122,11 +149,14 @@ def channel(request, slug):
         )
         return render(request, "parletre/channel_forum.html", context)
 
-    context["posts"] = (
+    context["posts"] = _attach_reactions(
         channel.posts.filter(thread__isnull=True)
         .select_related("author")
-        .order_by("created_at")
+        .prefetch_related("reactions")
+        .order_by("created_at"),
+        request.user,
     )
+    context["reaction_palette"] = REACTION_EMOJI
     return render(request, "parletre/channel_chat.html", context)
 
 
@@ -189,7 +219,12 @@ def thread(request, slug, thread_slug):
     else:
         form = PostForm()
 
-    posts = thread.posts.select_related("author").order_by("created_at")
+    posts = _attach_reactions(
+        thread.posts.select_related("author")
+        .prefetch_related("reactions")
+        .order_by("created_at"),
+        request.user,
+    )
     moderation_actions = [
         ("pin", "Unpin" if thread.pinned else "Pin"),
         ("lock", "Unlock" if thread.locked else "Lock"),
@@ -206,8 +241,33 @@ def thread(request, slug, thread_slug):
             "can_post": can_post,
             "can_moderate": channel.can_moderate(request.user),
             "moderation_actions": moderation_actions,
+            "reaction_palette": REACTION_EMOJI,
         },
     )
+
+
+@login_required
+@require_POST
+def react(request, post_id):
+    """Toggle the current user's emoji reaction on a post (DISC-3)."""
+    post = get_object_or_404(
+        Post.objects.select_related("channel", "thread"), pk=post_id
+    )
+    if not post.channel.visible_to(request.user):
+        raise Http404()
+    emoji = request.POST.get("emoji", "")
+    if emoji not in REACTION_EMOJI:
+        raise Http404()
+    existing = Reaction.objects.filter(
+        post=post, user=request.user, emoji=emoji
+    ).first()
+    if existing:
+        existing.delete()
+    else:
+        Reaction.objects.create(post=post, user=request.user, emoji=emoji)
+    if post.thread_id:
+        return redirect(f"{post.thread.get_absolute_url()}#post-{post.id}")
+    return redirect(post.channel)
 
 
 @login_required

@@ -30,6 +30,7 @@
         <div class="prose prose-sm max-w-none text-base-content/90">
           {% if post.deleted %}<em class="text-base-content/40">(deleted)</em>{% else %}{{ post.body_html }}{% endif %}
         </div>
+        {% if not post.deleted %}{% include "parletre/_reactions.html" %}{% endif %}
       </div>
     </div>
     {% empty %}

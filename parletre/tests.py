@@ -388,3 +388,49 @@ def test_chat_channel_renders(client):
     Post.objects.create(channel=ch, author=member, body="hi room")
     client.force_login(member)
     assert client.get(ch.get_absolute_url()).status_code == 200
+
+
+# ---- reactions ----------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_react_toggles_on_and_off(client):
+    from .models import Reaction
+    ch = make_channel("general")
+    member = make_user("m@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=member)
+    post = Post.objects.create(channel=ch, thread=thread, author=member, body="x")
+    client.force_login(member)
+    url = reverse("parletre:react", args=[post.id])
+
+    client.post(url, {"emoji": "👍"})
+    assert Reaction.objects.filter(post=post, user=member, emoji="👍").count() == 1
+    # toggling the same emoji again removes it
+    client.post(url, {"emoji": "👍"})
+    assert Reaction.objects.filter(post=post, user=member, emoji="👍").count() == 0
+
+
+@pytest.mark.django_db
+def test_react_rejects_emoji_outside_palette(client):
+    ch = make_channel("general")
+    member = make_user("m@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=member)
+    post = Post.objects.create(channel=ch, thread=thread, author=member, body="x")
+    client.force_login(member)
+    resp = client.post(reverse("parletre:react", args=[post.id]), {"emoji": "💣"})
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_react_blocked_on_invisible_channel(client):
+    from .models import Reaction
+    ch = make_channel("hush", access=Access.PRIVATE)
+    insider = make_user("in@x.co", role=Role.ANALYST)
+    ch.members.add(insider)
+    thread = Thread.objects.create(channel=ch, title="T", author=insider)
+    post = Post.objects.create(channel=ch, thread=thread, author=insider, body="x")
+    outsider = make_user("out@x.co", role=Role.ANALYST)
+    client.force_login(outsider)
+    resp = client.post(reverse("parletre:react", args=[post.id]), {"emoji": "👍"})
+    assert resp.status_code == 404
+    assert Reaction.objects.count() == 0

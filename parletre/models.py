@@ -30,6 +30,10 @@ from django.utils.translation import gettext_lazy as _
 from . import permissions
 from .rendering import render_markdown
 
+#: The fixed palette of reaction emoji members may add to a post (DISC-3).
+#: A closed set keeps input validated and the UI tidy.
+REACTION_EMOJI = ("👍", "❤️", "🎉", "🤔", "👀", "✅")
+
 
 class SubscriptionLevel(models.TextChoices):
     """How much email a member wants from a channel. Shared by Channel
