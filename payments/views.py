@@ -467,14 +467,28 @@ def treasurer_settings(request):
     dues_rows = list(zip(dues_formset.forms, dues_qs))
     tuition_rows = list(zip(tuition_formset.forms, tuition_qs))
 
+    # Pick out the current-AY form for each formset so the template can
+    # render its reminder_interval_days field in the dedicated cadence
+    # section (the same field stays hidden in the per-row table).
+    current_dues = DuesPeriod.current()
+    current_tuition = TuitionPeriod.current()
+    current_dues_form = next(
+        (f for f, p in dues_rows if p == current_dues), None,
+    )
+    current_tuition_form = next(
+        (f for f, p in tuition_rows if p == current_tuition), None,
+    )
+
     return _treasurer_render(request, "settings", "payments/treasurer/settings.html", {
-        "dues_formset":         dues_formset,
-        "tuition_formset":      tuition_formset,
-        "dues_rows":            dues_rows,
-        "tuition_rows":         tuition_rows,
-        "current_dues_period":  DuesPeriod.current(),
-        "current_tuition_period": TuitionPeriod.current(),
-        "saved":                request.GET.get("saved") == "1",
+        "dues_formset":          dues_formset,
+        "tuition_formset":       tuition_formset,
+        "dues_rows":             dues_rows,
+        "tuition_rows":          tuition_rows,
+        "current_dues_period":   current_dues,
+        "current_tuition_period": current_tuition,
+        "current_dues_form":     current_dues_form,
+        "current_tuition_form":  current_tuition_form,
+        "saved":                 request.GET.get("saved") == "1",
     })
 
 

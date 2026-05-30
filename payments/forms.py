@@ -169,6 +169,13 @@ class TreasurerSettingsForm(forms.Form):
 # --- Per-academic-year editing (all DuesPeriods and TuitionPeriods) -----
 
 
+#: Tailwind classes for the number inputs in the AY tables — right-padding
+#: leaves room for the browser's spinner arrows so digits aren't obscured.
+_NUMBER_INPUT_CSS = (
+    "w-full bg-transparent border-0 outline-none focus:outline-none pr-5"
+)
+
+
 class DuesPeriodRowForm(forms.ModelForm):
     """One-row editor for a DuesPeriod — used in the all-AY formset."""
 
@@ -188,6 +195,8 @@ class DuesPeriodRowForm(forms.ModelForm):
         for f in ("dues_amount_pre_candidate", "dues_amount_candidate",
                   "dues_amount_analyst"):
             self.fields[f].validators.append(MinValueValidator(Decimal("0")))
+        for f in self.fields:
+            self.fields[f].widget.attrs.setdefault("class", _NUMBER_INPUT_CSS)
 
 
 class TuitionPeriodRowForm(forms.ModelForm):
@@ -205,3 +214,5 @@ class TuitionPeriodRowForm(forms.ModelForm):
         from django.core.validators import MinValueValidator
         super().__init__(*args, **kwargs)
         self.fields["tuition_amount"].validators.append(MinValueValidator(Decimal("0")))
+        for f in self.fields:
+            self.fields[f].widget.attrs.setdefault("class", _NUMBER_INPUT_CSS)
