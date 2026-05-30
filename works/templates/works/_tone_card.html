@@ -1,13 +1,37 @@
 {% load works_filters %}
 {% comment %}
-  Fallback cover for works without an uploaded cover_image.
-  Deterministic muted background tone keyed off the title; serif title
-  rendered over it. Aspect ratio 3:4 to match the typical book/journal
-  cover proportions.
+  Fallback when a work has no uploaded cover_image. Deterministic muted
+  tone-color background + an abstract SVG composition seeded off the
+  title. If LSP authors have headshots, overlay up to 3 in a corner so
+  the card carries who-made-this signal even without artwork.
+  Expects `work` in context.
 {% endcomment %}
-<div class="aspect-[3/4] w-full rounded-md flex items-center justify-center p-4 text-center overflow-hidden"
+<div class="relative aspect-[3/4] w-full rounded-md overflow-hidden"
      {% tone_style work.title %}>
-  <span class="font-serif text-base-100 leading-tight text-sm sm:text-base line-clamp-6">
-    {{ work.title }}
-  </span>
+  {% vibe_shapes work.title %}
+
+  {% with byline=work.authorships.all %}
+  {% if byline %}
+  <div class="absolute bottom-2 left-2 flex -space-x-2">
+    {% for wa in byline|slice:":3" %}
+      {% if wa.user.profile.headshot %}
+      <div class="w-8 h-8 rounded-full overflow-hidden ring-2 ring-base-100/80">
+        <img src="{{ wa.user.profile.headshot.url }}"
+             alt=""
+             class="w-full h-full object-cover">
+      </div>
+      {% else %}
+      <div class="w-8 h-8 rounded-full ring-2 ring-base-100/80 bg-base-100/70 flex items-center justify-center font-serif text-xs text-base-content/80">
+        {{ wa.user.first_name|slice:":1" }}{{ wa.user.last_name|slice:":1" }}
+      </div>
+      {% endif %}
+    {% endfor %}
+    {% if byline|length > 3 %}
+    <div class="w-8 h-8 rounded-full ring-2 ring-base-100/80 bg-base-100/70 flex items-center justify-center text-[10px] font-medium text-base-content/80">
+      +{{ byline|length|add:"-3" }}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% endwith %}
 </div>
