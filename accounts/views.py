@@ -319,8 +319,10 @@ def profile_edit(request):
         pform = ProfileEditForm(instance=profile)
 
     # Field-group flags: only show listing/practice sections to members who
-    # actually appear on public pages, and billing only to faculty.
-    show_listing = profile.is_in_directory or profile.is_faculty or profile.public
+    # actually appear on public pages, and billing only to faculty. The
+    # public directory lists everyone in a directory role (Profile.public is
+    # not a gate anywhere — see _directory_qs), and faculty show on event pages.
+    show_listing = profile.is_in_directory or profile.is_faculty
     show_practice = profile.role in {
         Profile.Role.ANALYST,
         Profile.Role.CANDIDATE,

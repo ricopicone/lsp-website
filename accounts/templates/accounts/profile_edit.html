@@ -11,11 +11,13 @@
   .lsp-cropper .cropper-view-box,
   .lsp-cropper .cropper-face { border-radius: 50%; }
   .lsp-cropper .cropper-view-box { outline-color: rgba(255,255,255,0.9); }
+  /* The guide is injected into .cropper-crop-box so it tracks the crop area
+     exactly; it fills that square and the SVG is centered within it. */
   .lsp-bust-guide {
-    position: absolute; inset: 0; pointer-events: none; z-index: 10;
-    display: flex; align-items: flex-end; justify-content: center;
+    position: absolute; inset: 0; pointer-events: none; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
   }
-  .lsp-bust-guide svg { width: 58%; height: 58%; opacity: 0.28; }
+  .lsp-bust-guide svg { width: 100%; height: 100%; opacity: 0.32; }
   /* CheckboxSelectMultiple renders <ul><li><label><input>…; lay the options
      out inline with a little breathing room (avoids fragile arbitrary
      variants in this Tailwind build). */
@@ -131,18 +133,19 @@
     </section>
 
     {% if show_listing %}
-    {# ---- Public listing ------------------------------------------------- #}
+    {# ---- Public profile ------------------------------------------------- #}
     <section class="space-y-4">
-      <h2 class="font-serif text-xl text-base-content">Public listing</h2>
-      <label class="flex items-center gap-3 cursor-pointer">
-        {{ pform.public }}
-        <span class="text-sm text-base-content">List my bio and photo on public-facing pages</span>
-      </label>
+      <h2 class="font-serif text-xl text-base-content">Your public profile</h2>
+      <p class="text-sm text-base-content/70">
+        {% if profile.is_in_directory %}You're listed in the
+          <a href="{% url 'directory_detail' profile.directory_slug %}" class="link link-primary">member directory</a>{% if profile.is_faculty %}, and you{% endif %}{% else %}You{% endif %}{% if profile.is_faculty %} appear on the pages of events you teach{% endif %}.
+        These fields set what's shown there — everything here is publicly visible.
+      </p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {% include "accounts/_field.html" with field=pform.public_email label="Public email" hint="Falls back to your login email if blank." %}
+        {% include "accounts/_field.html" with field=pform.public_email label="Public email" hint="The address shown on your public profile. Leave blank to display your login email instead." %}
         {% include "accounts/_field.html" with field=pform.website label="Website" %}
       </div>
-      {% include "accounts/_field.html" with field=pform.event_bio label="Event bio" hint="Optional alternate bio for event pages. Falls back to your bio." %}
+      {% include "accounts/_field.html" with field=pform.event_bio label="Event bio" hint="Used on event pages where you're listed as a speaker. Falls back to your bio above when blank." %}
     </section>
     {% endif %}
 
@@ -197,12 +200,6 @@
 
     <div class="relative bg-base-300 rounded-box overflow-hidden" style="height:320px">
       <img id="cropper-image" alt="" style="max-width:100%;display:block">
-      <div class="lsp-bust-guide" aria-hidden="true">
-        <svg viewBox="0 0 100 100" fill="currentColor" class="text-base-100">
-          <circle cx="50" cy="34" r="20"></circle>
-          <path d="M14 100 C14 70 30 60 50 60 C70 60 86 70 86 100 Z"></path>
-        </svg>
-      </div>
     </div>
 
     <div class="flex items-center gap-3 mt-4">
@@ -238,6 +235,24 @@
 
   function destroy() { if (cropper) { cropper.destroy(); cropper = null; } }
 
+  // Drop a faint head-and-shoulders guide INTO the crop box so it tracks the
+  // crop area exactly. Head sits slightly above the box centre; shoulders
+  // splay toward the lower corners. (Cropper.destroy() tears this down with
+  // the rest of its DOM, so no manual cleanup is needed.)
+  function addBustGuide() {
+    var box = document.querySelector("#cropper-modal .cropper-crop-box");
+    if (!box || box.querySelector(".lsp-bust-guide")) return;
+    var g = document.createElement("div");
+    g.className = "lsp-bust-guide";
+    g.setAttribute("aria-hidden", "true");
+    g.innerHTML =
+      '<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="fill:var(--color-base-100)">' +
+      '<circle cx="50" cy="43" r="21"></circle>' +
+      '<path d="M12 100 C12 75 30 65 50 65 C70 65 88 75 88 100 Z"></path>' +
+      "</svg>";
+    box.appendChild(g);
+  }
+
   function openModal(src, fromExisting) {
     usingExisting = !!fromExisting;
     destroy();
@@ -246,13 +261,16 @@
     image.onload = function () {
       cropper = new Cropper(image, {
         aspectRatio: 1, viewMode: 1, dragMode: "move",
-        autoCropArea: 0.9, background: false, guides: false,
+        // autoCropArea: 1 → the crop circle starts as large as the image
+        // allows (the full short edge), i.e. no cropping until you zoom in.
+        autoCropArea: 1, background: false, guides: false,
         center: false, cropBoxMovable: false, cropBoxResizable: false,
         toggleDragModeOnDblclick: false,
         ready: function () {
           var img = cropper.getImageData();
           baseRatio = img.width / img.naturalWidth;
           zoom.value = 0;
+          addBustGuide();
         },
         zoom: function (e) {
           if (!baseRatio) return;

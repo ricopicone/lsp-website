@@ -248,7 +248,6 @@ class ProfileEditForm(forms.ModelForm):
             "consultation_modalities",
             "year_joined",
             "accepting_patients",
-            "public",
             "default_billing_mode",
             "timezone",
         )
@@ -301,8 +300,9 @@ class ProfileEditForm(forms.ModelForm):
             attrs={"class": _SELECT}, choices=years
         )
 
-        for name in ("public", "accepting_patients"):
-            self.fields[name].widget.attrs.setdefault("class", "toggle toggle-primary")
+        self.fields["accepting_patients"].widget.attrs.setdefault(
+            "class", "toggle toggle-primary"
+        )
 
     def clean_consultation_modalities(self):
         # MultipleChoiceField yields a list; the model field is a CSV string.

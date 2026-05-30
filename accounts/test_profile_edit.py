@@ -104,7 +104,7 @@ def test_editor_renders_role_specific_sections(client, settings, tmp_path):
     u.profile.save()
     client.force_login(u)
     body = client.get(reverse("profile_edit")).content
-    assert b"Public listing" in body
+    assert b"Your public profile" in body
     assert b"Practice" in body
     assert b"accepting new analysands" in body
     assert b"Default billing for new seminars" in body
