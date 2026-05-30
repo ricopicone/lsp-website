@@ -127,3 +127,18 @@ class ReferralRequestForm(forms.Form):
         if choice == "other":
             return self.cleaned_data.get("pronouns_other") or "Other"
         return choice or ""
+
+
+class TimezoneForm(forms.ModelForm):
+    """Per-user timezone picker (Profile.timezone)."""
+
+    class Meta:
+        from .models import Profile
+        from .timezones import LSP_TIMEZONES
+        model = Profile
+        fields = ("timezone",)
+        widgets = {
+            "timezone": forms.Select(
+                choices=[("", "Use Pacific Time (project default)")] + LSP_TIMEZONES,
+            ),
+        }

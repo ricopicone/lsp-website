@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 
 from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
 from django.db.models import Prefetch
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 
 from committees.models import CommitteeMembership
 
@@ -181,3 +183,45 @@ def _safe_next(request) -> str | None:
     if nxt and nxt.startswith("/") and not nxt.startswith("//"):
         return nxt
     return None
+
+
+@login_required
+def timezone_settings(request):
+    """User-facing TZ picker.
+
+    POST writes Profile.timezone (validated against the LSP_TIMEZONES
+    list — empty string clears the preference, sending the user back to
+    the project default).
+    """
+    from .forms import TimezoneForm
+    if request.method == "POST":
+        form = TimezoneForm(request.POST, instance=request.user.profile)
+        if form.is_valid():
+            form.save()
+            return redirect(request.path + "?saved=1#saved")
+    else:
+        form = TimezoneForm(instance=request.user.profile)
+    return render(request, "accounts/timezone_settings.html", {
+        "form":  form,
+        "saved": request.GET.get("saved") == "1",
+    })
+
+
+@require_POST
+@login_required
+def set_timezone_from_browser(request):
+    """Save a browser-detected IANA TZ to Profile.timezone.
+
+    Called via a small JS POST on signup / first dropdown-open. Idempotent
+    — no-op if Profile.timezone is already set. Validates against the
+    curated list before saving.
+    """
+    if request.user.profile.timezone:
+        return JsonResponse({"ok": True, "saved": False, "reason": "already-set"})
+    from .timezones import IS_VALID
+    tz_name = (request.POST.get("tz") or "").strip()
+    if tz_name not in IS_VALID:
+        return JsonResponse({"ok": False, "reason": "not-in-curated-list"})
+    request.user.profile.timezone = tz_name
+    request.user.profile.save(update_fields=("timezone",))
+    return JsonResponse({"ok": True, "saved": True, "tz": tz_name})

@@ -12,6 +12,7 @@
         href="https://fonts.googleapis.com/css2?family=Cutive&family=Cutive+Mono&family=Inter:wght@400;500;600;700&display=swap">
 
   <link rel="stylesheet" href="{% static 'css/site.css' %}">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   {% block extra_head %}{% endblock %}
 
   <script>
@@ -109,6 +110,7 @@
             {% if user.profile.owes_tuition %}
             <li><a href="{% url 'tuition' %}">Your tuition decision</a></li>
             {% endif %}
+            <li><a href="{% url 'timezone_settings' %}">Time zone</a></li>
             <li>
               <a class="text-base-content/50 cursor-not-allowed pointer-events-none" title="Coming soon">
                 Edit profile <span class="badge badge-ghost badge-xs ml-auto">soon</span>
@@ -172,6 +174,32 @@
   </footer>
 
   <script src="{% static 'js/flourishes.js' %}" defer></script>
+
+  {% if user.is_authenticated and not user.profile.timezone %}
+  <script>
+    // One-shot browser-TZ detection: if the user has no Profile.timezone
+    // preference yet, send the browser's detected IANA TZ name to the
+    // server so the next page render uses it. The server validates
+    // against the curated list and falls back silently if not present.
+    (function () {
+      try {
+        var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (!tz) return;
+        if (sessionStorage.getItem("lsp-tz-tried") === tz) return;
+        sessionStorage.setItem("lsp-tz-tried", tz);
+        var token = document.querySelector("meta[name=csrf-token]")?.content || "";
+        var fd = new FormData();
+        fd.append("tz", tz);
+        fetch("{% url 'set_timezone_from_browser' %}", {
+          method: "POST",
+          body: fd,
+          headers: { "X-CSRFToken": token },
+          credentials: "same-origin",
+        }).catch(function () {});
+      } catch (e) { /* no Intl support — bail silently */ }
+    })();
+  </script>
+  {% endif %}
 
   <script>
     // Theme toggle: silk <-> abyss, persisted to localStorage.

@@ -194,3 +194,109 @@ def test_user_tz_name_returns_active_zone():
     with timezone.override(ZoneInfo("Europe/Berlin")):
         out = _render("{% load tz_filters %}{% user_tz_name %}")
     assert out == "Europe/Berlin"
+
+
+# ---- Settings page -----------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_timezone_settings_requires_login(client):
+    from django.urls import reverse
+    resp = client.get(reverse("timezone_settings"))
+    assert resp.status_code == 302
+    assert "/accounts/login/" in resp.url
+
+
+@pytest.mark.django_db
+def test_timezone_settings_renders_picker(client):
+    from django.urls import reverse
+    u = User.objects.create_user(email="picker@x.test", password="x")
+    client.force_login(u)
+    resp = client.get(reverse("timezone_settings"))
+    assert resp.status_code == 200
+    body = resp.content
+    # Curated zones should appear in the rendered <select>.
+    assert b"America/New_York" in body
+    assert b"Asia/Shanghai" in body
+    assert b"Pacific Time (project default)" in body
+
+
+@pytest.mark.django_db
+def test_timezone_settings_saves_user_choice(client):
+    from django.urls import reverse
+    u = User.objects.create_user(email="picker2@x.test", password="x")
+    client.force_login(u)
+    resp = client.post(
+        reverse("timezone_settings"),
+        {"timezone": "Asia/Tokyo"},
+    )
+    assert resp.status_code == 302
+    u.profile.refresh_from_db()
+    assert u.profile.timezone == "Asia/Tokyo"
+
+
+@pytest.mark.django_db
+def test_timezone_settings_can_clear_to_default(client):
+    from django.urls import reverse
+    u = User.objects.create_user(email="picker3@x.test", password="x")
+    u.profile.timezone = "Europe/Berlin"
+    u.profile.save()
+    client.force_login(u)
+    client.post(reverse("timezone_settings"), {"timezone": ""})
+    u.profile.refresh_from_db()
+    assert u.profile.timezone == ""
+
+
+# ---- Browser-detected TZ endpoint --------------------------------------
+
+
+@pytest.mark.django_db
+def test_browser_tz_endpoint_saves_valid_zone(client):
+    from django.urls import reverse
+    u = User.objects.create_user(email="bd@x.test", password="x")
+    client.force_login(u)
+    resp = client.post(
+        reverse("set_timezone_from_browser"),
+        {"tz": "Europe/London"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["saved"] is True
+    u.profile.refresh_from_db()
+    assert u.profile.timezone == "Europe/London"
+
+
+@pytest.mark.django_db
+def test_browser_tz_endpoint_rejects_unknown_zone(client):
+    from django.urls import reverse
+    u = User.objects.create_user(email="bd2@x.test", password="x")
+    client.force_login(u)
+    resp = client.post(
+        reverse("set_timezone_from_browser"),
+        {"tz": "Mars/Olympus"},
+    )
+    body = resp.json()
+    assert body["ok"] is False
+    u.profile.refresh_from_db()
+    assert u.profile.timezone == ""
+
+
+@pytest.mark.django_db
+def test_browser_tz_endpoint_does_not_overwrite_existing_preference(client):
+    """Once the user has manually picked a TZ, the browser-detect endpoint
+    becomes a no-op — we trust their explicit choice over auto-detection."""
+    from django.urls import reverse
+    u = User.objects.create_user(email="bd3@x.test", password="x")
+    u.profile.timezone = "Asia/Tokyo"
+    u.profile.save()
+    client.force_login(u)
+    resp = client.post(
+        reverse("set_timezone_from_browser"),
+        {"tz": "America/New_York"},
+    )
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["saved"] is False  # already-set short-circuit
+    u.profile.refresh_from_db()
+    assert u.profile.timezone == "Asia/Tokyo"  # unchanged
