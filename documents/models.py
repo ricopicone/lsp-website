@@ -32,6 +32,7 @@ class Document(models.Model):
         FORMATION = "formation", _("Formation Guidelines")
         FOUNDING = "founding", _("Founding Texts")
         CARTEL_RESOURCE = "cartel_resource", _("Cartel Resources")
+        NEWSLETTER = "newsletter", _("Newsletters")
         REFERENCE = "reference", _("Reference")
 
     class Visibility(models.TextChoices):
@@ -44,6 +45,7 @@ class Document(models.Model):
         Category.FORMATION,
         Category.FOUNDING,
         Category.CARTEL_RESOURCE,
+        Category.NEWSLETTER,
         Category.REFERENCE,
     ]
 
