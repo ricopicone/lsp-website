@@ -10,11 +10,6 @@
 
   <header class="space-y-2">
     <h1 class="font-serif text-3xl text-base-content">Treasurer admin</h1>
-    <div class="flex flex-wrap gap-3 text-sm text-base-content/70">
-      <a href="{% url 'payments:transactions_csv' %}" class="link link-hover">All transactions CSV</a>
-      <span class="text-base-content/30">·</span>
-      <a href="/admin/payments/payment/" class="link link-hover">Admin payments</a>
-    </div>
   </header>
 
   {% comment %}Tab nav — current tab highlighted via tab_key context var.{% endcomment %}

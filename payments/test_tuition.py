@@ -734,6 +734,119 @@ def test_treasurer_dues_record_offline_payment_requires_staff(client):
     assert not Payment.objects.filter(user=u).exists()
 
 
+# --- Treasurer Exports + Payments tabs ----------------------------------
+
+
+@pytest.mark.django_db
+def test_treasurer_exports_tab_renders(client, staff_user):
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_exports"))
+    assert resp.status_code == 200
+    body = resp.content
+    assert b"All transactions" in body
+    assert b"Download CSV" in body
+
+
+@pytest.mark.django_db
+def test_treasurer_payments_tab_lists_payments(
+    client, staff_user, current_period,
+):
+    from payments.models import DuesPeriod, Payment
+    period = DuesPeriod.current()
+    u = _mk_candidate("pay-list@x.test")
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=u, amount=period.amount_for_role("candidate"),
+        status=Payment.Status.SUCCEEDED,
+        dues_period=period,
+        method=Payment.Method.OFFLINE,
+    )
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_payments"))
+    assert resp.status_code == 200
+    body = resp.content
+    assert b"pay-list@x.test" in body
+    assert b"Dues" in body
+
+
+@pytest.mark.django_db
+def test_treasurer_payments_tab_filters_by_type(
+    client, staff_user, current_period,
+):
+    from payments.models import DuesPeriod, Payment
+    period = DuesPeriod.current()
+    u_dues = _mk_candidate("dues-only@x.test")
+    u_don = _mk_candidate("don-only@x.test")
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES, user=u_dues, amount=Decimal("100"),
+        status=Payment.Status.SUCCEEDED, dues_period=period,
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.DONATION, user=u_don, amount=Decimal("50"),
+        status=Payment.Status.SUCCEEDED,
+    )
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_payments") + "?type=donation")
+    body = resp.content
+    assert b"don-only@x.test" in body
+    assert b"dues-only@x.test" not in body
+
+
+@pytest.mark.django_db
+def test_treasurer_payment_apply_success_marks_paid(
+    client, staff_user, current_period,
+):
+    """Mark paid button on a PENDING offline payment runs complete_payment."""
+    from payments.models import DuesPeriod, Payment
+    period = DuesPeriod.current()
+    u = _mk_candidate("pending-pay@x.test")
+    p = Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=u, amount=period.amount_for_role("candidate"),
+        status=Payment.Status.PENDING,
+        method=Payment.Method.OFFLINE,
+        dues_period=period,
+    )
+    client.force_login(staff_user)
+    resp = client.post(reverse("treasurer_payment_apply_success", args=[p.id]))
+    assert resp.status_code == 302
+    p.refresh_from_db()
+    assert p.status == Payment.Status.SUCCEEDED
+
+
+@pytest.mark.django_db
+def test_treasurer_payment_refund_skips_non_stripe_payments(
+    client, staff_user, current_period,
+):
+    """Offline payments don't have a Stripe charge — refund no-ops."""
+    from payments.models import DuesPeriod, Payment
+    period = DuesPeriod.current()
+    u = _mk_candidate("offline-no-refund@x.test")
+    p = Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=u, amount=period.amount_for_role("candidate"),
+        status=Payment.Status.SUCCEEDED,
+        method=Payment.Method.OFFLINE,
+        dues_period=period,
+    )
+    client.force_login(staff_user)
+    resp = client.post(reverse("treasurer_payment_refund", args=[p.id]))
+    assert resp.status_code == 302
+    p.refresh_from_db()
+    # Status unchanged — offline payment wasn't Stripe-refunded.
+    assert p.status == Payment.Status.SUCCEEDED
+
+
+@pytest.mark.django_db
+def test_treasurer_new_tabs_require_staff(client, current_period):
+    """Exports + Payments tabs gated to staff."""
+    u = _mk_candidate("not-staff-tab@x.test")
+    client.force_login(u)
+    for name in ("treasurer_exports", "treasurer_payments"):
+        resp = client.get(reverse(name))
+        assert resp.status_code == 302
+
+
 @pytest.mark.django_db
 def test_treasurer_settings_handles_missing_periods(client, staff_user):
     """Settings page renders even when no periods are configured."""

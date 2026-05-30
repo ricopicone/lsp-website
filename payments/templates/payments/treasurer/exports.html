@@ -1,0 +1,41 @@
+{% extends "payments/treasurer/base.html" %}
+{% block tab_content %}
+<div class="space-y-6 max-w-3xl">
+
+  <p class="text-sm text-base-content/60">
+    Download CSV files for record-keeping, bookkeeping, or sharing with
+    the board. Each download includes all currently-recorded data.
+  </p>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Payments</h2>
+    <div class="rounded-lg border border-base-300 divide-y divide-base-300/60">
+      <div class="p-4">
+        <div class="flex flex-wrap items-baseline gap-2 justify-between">
+          <div>
+            <h3 class="font-medium">All transactions</h3>
+            <p class="text-sm text-base-content/60">
+              Every payment — registrations, dues, donations, tuition — with
+              user, amount, status, method, date, and Stripe reference.
+              Filterable by date range and type.
+            </p>
+          </div>
+          <a class="btn btn-sm btn-primary"
+             href="{% url 'payments:transactions_csv' %}">Download CSV →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Event rosters</h2>
+    <p class="text-sm text-base-content/60">
+      Per-event registration rosters live on each event's edit page.
+      Visit an event under <a href="{% url 'events:list' %}" class="link">Events</a>
+      or <a href="{% url 'program' %}" class="link">Program</a> and use
+      the "Roster CSV" link.
+    </p>
+  </section>
+
+</div>
+{% endblock %}

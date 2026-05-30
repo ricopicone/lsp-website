@@ -49,7 +49,9 @@ TREASURER_TABS = [
     ("overview", "Overview"),
     ("tuition",  "Tuition"),
     ("dues",     "Dues"),
+    ("payments", "Payments"),
     ("settings", "Settings"),
+    ("exports",  "Exports"),
 ]
 
 
@@ -60,7 +62,9 @@ def _treasurer_tab_links() -> list[tuple[str, str, str]]:
         "overview": reverse("treasurer"),
         "tuition":  reverse("treasurer_tuition"),
         "dues":     reverse("treasurer_dues"),
+        "payments": reverse("treasurer_payments"),
         "settings": reverse("treasurer_settings"),
+        "exports":  reverse("treasurer_exports"),
     }
     return [(key, label, name_to_url[key]) for key, label in TREASURER_TABS]
 
@@ -173,6 +177,78 @@ def _treasurer_dues_context() -> dict:
         "chart_periods_json": json.dumps(chart_periods),
         "chart_roles_json": json.dumps(chart_roles),
     }
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_exports(request):
+    """Exports tab — CSV downloads grouped and described for non-technical staff."""
+    return _treasurer_render(request, "exports", "payments/treasurer/exports.html", {})
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_payments(request):
+    """Payments tab — list of payments with filters + per-row actions."""
+    payment_type = request.GET.get("type") or ""
+    status = request.GET.get("status") or ""
+
+    qs = Payment.objects.select_related("user", "registration__event").order_by("-created_at")
+    if payment_type:
+        qs = qs.filter(payment_type=payment_type)
+    if status:
+        qs = qs.filter(status=status)
+    payments = list(qs[:100])  # cap the page; treasurer can filter to narrow
+
+    return _treasurer_render(request, "payments", "payments/treasurer/payments.html", {
+        "payments":           payments,
+        "type_choices":       Payment.Type.choices,
+        "status_choices":     Payment.Status.choices,
+        "selected_type":      payment_type,
+        "selected_status":    status,
+        "total_count":        qs.count(),
+    })
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_payment_refund(request, payment_id: int):
+    """Issue a Stripe refund for a SUCCEEDED Stripe payment.
+
+    Wraps payments.refund.refund_payment, which already handles Stripe
+    API + DB state transitions and logs failures. Treasurer stays out of
+    the Stripe dashboard for the common case.
+    """
+    from .refund import RefundError, refund_payment
+
+    payment = get_object_or_404(Payment, pk=payment_id)
+    if payment.status != Payment.Status.SUCCEEDED:
+        return redirect("treasurer_payments")
+    if payment.method != Payment.Method.STRIPE:
+        # Offline payments don't have a Stripe charge to refund — treasurer
+        # must mark Payment.status=REFUNDED in admin and handle reimbursement
+        # outside the system (cash, check, etc.).
+        return redirect("treasurer_payments")
+    try:
+        refund_payment(payment)
+    except RefundError as exc:
+        logger.exception("Refund failed for payment %s: %s", payment.id, exc)
+    return redirect("treasurer_payments")
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_payment_apply_success(request, payment_id: int):
+    """Apply success-side-effects for a PENDING offline Payment.
+
+    Mirrors the "Apply payment success" admin action, in-treasurer.
+    """
+    payment = get_object_or_404(Payment, pk=payment_id)
+    if payment.status == Payment.Status.PENDING:
+        complete_payment(payment)
+    return redirect("treasurer_payments")
 
 
 _INLINE_TUITION_STATUSES = {
