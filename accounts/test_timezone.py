@@ -138,25 +138,44 @@ def test_user_time_filter_renders_in_active_zone():
     assert "<time" in out
 
 
-def test_user_time_filter_tooltip_always_shows_pt():
-    """The title attribute shows PT regardless of viewer's timezone."""
+def test_user_time_filter_tooltip_shows_explicit_pdt_pst():
+    """The title attribute shows the explicit PDT/PST abbreviation, not
+    the generic 'PT' — LSP members regularly confuse PDT and PST."""
     with timezone.override(ZoneInfo("America/New_York")):
         out = _render(
             "{% load tz_filters %}{{ moment|user_time }}",
             moment=MOMENT_UTC,
         )
-    assert "5:00 PM PT" in out
+    # October = PDT
+    assert "5:00 PM PDT" in out
     assert 'title="' in out
 
 
-def test_user_time_filter_for_pt_viewer_normalizes_pdt_to_pt():
-    """PT viewers see 'PT' (not 'PDT' / 'PST') — LSP convention."""
+def test_user_time_filter_for_pt_viewer_shows_explicit_abbreviation():
+    """PT viewers see 'PDT' (or 'PST'), not the ambiguous generic 'PT'."""
     with timezone.override(ZoneInfo("America/Los_Angeles")):
         out = _render(
             "{% load tz_filters %}{{ moment|user_time }}",
             moment=MOMENT_UTC,
         )
-    assert "5:00 PM PT" in out
+    # October = PDT
+    assert "5:00 PM PDT" in out
+    # Generic "PT" with no suffix would be ambiguous; ensure we don't
+    # accidentally emit it as the whole label.
+    assert " PT<" not in out
+    assert " PT " not in out
+
+
+def test_user_time_filter_uses_pst_in_winter():
+    """A January moment renders as PST (standard) for a PT viewer."""
+    winter_utc = _dt.datetime(2027, 1, 15, 1, 0, tzinfo=_dt.timezone.utc)
+    # 5 PM PST on Jan 14 = 1 AM UTC Jan 15.
+    with timezone.override(ZoneInfo("America/Los_Angeles")):
+        out = _render(
+            "{% load tz_filters %}{{ m|user_time }}",
+            m=winter_utc,
+        )
+    assert "5:00 PM PST" in out
     assert "PDT" not in out
 
 

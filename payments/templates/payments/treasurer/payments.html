@@ -1,5 +1,5 @@
 {% extends "payments/treasurer/base.html" %}
-{% load treasurer_filters %}
+{% load treasurer_filters tz_filters %}
 {% block tab_content %}
 <div class="space-y-6">
 
@@ -55,7 +55,7 @@
       <tbody>
         {% for p in payments %}
         <tr>
-          <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.created_at|date:"M j, Y H:i" }}</td>
+          <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.created_at|user_datetime }}</td>
           <td>
             {% if p.user %}
               <div>{{ p.user.first_name }} {{ p.user.last_name }}</div>

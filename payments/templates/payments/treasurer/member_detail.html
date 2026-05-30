@@ -1,5 +1,5 @@
 {% extends "payments/treasurer/base.html" %}
-{% load treasurer_filters %}
+{% load treasurer_filters tz_filters %}
 {% block tab_content %}
 <div class="space-y-8">
 
@@ -70,7 +70,7 @@
         <tbody>
           {% for p in payments %}
           <tr>
-            <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.created_at|date:"M j, Y" }}</td>
+            <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.created_at|user_datetime }}</td>
             <td>
               {{ p.get_payment_type_display }}
               {% if p.registration %}
@@ -102,7 +102,7 @@
         <tbody>
           {% for r in registrations %}
           <tr>
-            <td class="whitespace-nowrap text-xs text-base-content/70">{{ r.created_at|date:"M j, Y" }}</td>
+            <td class="whitespace-nowrap text-xs text-base-content/70">{{ r.created_at|user_datetime }}</td>
             <td>{{ r.event.title }}</td>
             <td class="text-xs">{% if r.price_tier %}{{ r.price_tier.get_audience_display }}{% endif %}</td>
             <td class="whitespace-nowrap">${{ r.quoted_amount }}</td>

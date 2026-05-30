@@ -5,13 +5,19 @@ assume "the time" means PT, while members elsewhere now see their own
 zone. The hover tooltip carries the PT equivalent so PT-native readers
 can cross-reference quickly.
 
-Output shape (``user_time`` example for a NY user looking at a 5pm PT
-session):
+Output shape (``user_time`` example for a NY user looking at a 5pm PDT
+session in October):
 
-    <time datetime="2026-09-15T17:00:00-07:00"
-          title="5:00 PM PT (Sept 15)">
+    <time datetime="2026-10-15T17:00:00-07:00"
+          title="5:00 PM PDT (Oct 15)">
       8:00 PM EDT
     </time>
+
+We use the explicit ``PDT``/``PST`` (and ``EDT``/``EST``, ``CET``/``CEST``,
+etc.) rather than the generic ``PT``/``ET``. LSP members regularly
+confuse the daylight and standard variants, which causes real
+"I showed up an hour off" mistakes around DST transitions — the
+explicit form removes that whole class of error.
 """
 
 from __future__ import annotations
@@ -37,26 +43,23 @@ def _format_in_zone(value: _dt.datetime, zone: ZoneInfo, fmt: str) -> str:
 
 
 def _tz_abbr(value: _dt.datetime, zone: ZoneInfo) -> str:
-    """Human TZ abbreviation for ``value`` in ``zone`` (handles DST)."""
-    in_zone = value.astimezone(zone)
-    abbr = in_zone.strftime("%Z")
-    # Normalize PDT/PST → PT for the LSP convention (members usually say "PT")
-    # but keep the precise abbreviation in cross-zone titles to disambiguate.
-    if abbr in ("PDT", "PST"):
-        return "PT"
-    return abbr
+    """Explicit TZ abbreviation for ``value`` in ``zone`` (handles DST).
+
+    Returns ``PDT``/``PST`` etc., not the generic ``PT`` — see the
+    module docstring for why.
+    """
+    return value.astimezone(zone).strftime("%Z")
 
 
 def _hover_title(value: _dt.datetime) -> str:
-    """The text for the title="..." tooltip — always Pacific Time."""
+    """The text for the title="..." tooltip — always Pacific Time, with
+    the explicit PDT/PST so the cross-reference is unambiguous around
+    DST."""
     pt = value.astimezone(PT)
-    # Strip leading 0 from %I (12-hour) for nicer display.
+    abbr = pt.strftime("%Z")  # PDT or PST
     time_str = pt.strftime("%I:%M %p").lstrip("0")
-    date_str = pt.strftime("%b %-d")  # Sept 15 — %-d is non-portable but works on Linux/macOS
-    # On platforms without %-d (Windows), fall back to a manual strip.
-    if "%-d" in date_str or date_str.startswith("0"):
-        date_str = pt.strftime("%b ") + str(pt.day)
-    return f"{time_str} PT ({date_str})"
+    date_str = pt.strftime("%b ") + str(pt.day)
+    return f"{time_str} {abbr} ({date_str})"
 
 
 @register.filter
