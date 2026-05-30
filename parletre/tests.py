@@ -955,3 +955,139 @@ def test_settings_page_updates_digest_frequency(client):
     resp = client.post(reverse("parletre:settings"), {"frequency": "daily"})
     assert resp.status_code == 302
     assert DigestPreference.objects.get(user=me).frequency == "daily"
+
+
+# ---- reply-by-email inbound ---------------------------------------------
+
+
+def _raw_email(to_addr, from_addr, body, *, subject="Re: a thread", message_id="<m1@ex>"):
+    from email.message import EmailMessage
+    m = EmailMessage()
+    m["To"] = to_addr
+    m["From"] = from_addr
+    m["Subject"] = subject
+    if message_id:
+        m["Message-ID"] = message_id
+    m.set_content(body)
+    return m.as_bytes()
+
+
+def _reply_addr(kind, target_id, user_id):
+    from .tokens import make_token
+    return f"reply+{make_token(kind, target_id, user_id)}@parletre.lacanschool.org"
+
+
+def test_extract_reply_strips_quote_and_signature():
+    from .inbound import extract_reply
+    raw = "My new reply.\n\nOn Tue, Ana wrote:\n> the original\n> more"
+    assert extract_reply(raw) == "My new reply."
+    assert extract_reply("Top line\n-- \nRay\nblog.example") == "Top line"
+
+
+@pytest.mark.django_db
+def test_inbound_posts_reply_from_matching_sender():
+    from .inbound import process_inbound_email
+    from .tokens import THREAD
+    ch = make_channel("commons")
+    author = make_user("a@x.co")
+    replier = make_user("r@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    Post.objects.create(channel=ch, thread=thread, author=author, body="orig")
+
+    raw = _raw_email(
+        _reply_addr(THREAD, thread.id, replier.id), replier.email,
+        "Here is my reply.\n\nOn Tue, A wrote:\n> orig",
+    )
+    res = process_inbound_email(raw)
+    assert res["status"] == "posted"
+    post = thread.posts.get(via_email=True)
+    assert post.author == replier
+    assert post.body == "Here is my reply."
+
+
+@pytest.mark.django_db
+def test_inbound_rejects_bad_token_and_sender_mismatch():
+    from .inbound import process_inbound_email
+    from .models import Post as P
+    from .tokens import THREAD
+    ch = make_channel("commons")
+    author = make_user("a@x.co")
+    replier = make_user("r@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+
+    bad = _raw_email("reply+garbage@parletre.lacanschool.org", replier.email, "hi")
+    assert process_inbound_email(bad)["status"] == "bad_token"
+
+    # valid token but the email comes From someone else
+    spoof = _raw_email(
+        _reply_addr(THREAD, thread.id, replier.id), "imposter@x.co", "hi",
+        message_id="<m2@ex>",
+    )
+    assert process_inbound_email(spoof)["status"] == "sender_mismatch"
+    assert not P.objects.filter(via_email=True).exists()
+
+
+@pytest.mark.django_db
+def test_inbound_is_idempotent_on_message_id():
+    from .inbound import process_inbound_email
+    from .tokens import THREAD
+    ch = make_channel("commons")
+    author = make_user("a@x.co")
+    replier = make_user("r@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    raw = _raw_email(
+        _reply_addr(THREAD, thread.id, replier.id), replier.email, "once",
+        message_id="<dupe@ex>",
+    )
+    assert process_inbound_email(raw)["status"] == "posted"
+    assert process_inbound_email(raw)["status"] == "duplicate"
+    assert thread.posts.filter(via_email=True).count() == 1
+
+
+@pytest.mark.django_db
+def test_inbound_blocks_locked_thread():
+    from .inbound import process_inbound_email
+    from .tokens import THREAD
+    ch = make_channel("commons")
+    author = make_user("a@x.co")
+    replier = make_user("r@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author, locked=True)
+    raw = _raw_email(_reply_addr(THREAD, thread.id, replier.id), replier.email, "hi")
+    assert process_inbound_email(raw)["status"] == "cannot_post"
+
+
+@pytest.mark.django_db
+def test_inbound_webhook_processes_sns_notification(client):
+    import base64
+    import json
+
+    from .tokens import THREAD
+    ch = make_channel("commons")
+    author = make_user("a@x.co")
+    replier = make_user("r@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    raw = _raw_email(_reply_addr(THREAD, thread.id, replier.id), replier.email, "via sns")
+
+    envelope = {
+        "Type": "Notification",
+        "Message": json.dumps({"content": base64.b64encode(raw).decode()}),
+    }
+    resp = client.post(
+        reverse("parletre:inbound"), data=json.dumps(envelope),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "posted"
+    assert thread.posts.filter(via_email=True, body="via sns").exists()
+
+
+@pytest.mark.django_db
+def test_inbound_webhook_rejects_wrong_topic(client, settings):
+    import json
+    settings.PARLETRE_SNS_TOPIC_ARN = "arn:aws:sns:expected"
+    resp = client.post(
+        reverse("parletre:inbound"),
+        data=json.dumps({"Type": "Notification", "TopicArn": "arn:aws:sns:other"}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 403

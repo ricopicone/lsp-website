@@ -526,3 +526,33 @@ class DigestPreference(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} digest: {self.frequency}"
+
+
+class InboundEmail(models.Model):
+    """Audit + idempotency record for a reply-by-email message (DISC-7)."""
+
+    class Status(models.TextChoices):
+        POSTED = "posted", _("Posted")
+        DUPLICATE = "duplicate", _("Duplicate")
+        NO_TOKEN = "no_token", _("No reply token")
+        BAD_TOKEN = "bad_token", _("Bad token")
+        SENDER_MISMATCH = "sender_mismatch", _("Sender mismatch")
+        NO_TARGET = "no_target", _("Target gone")
+        CANNOT_POST = "cannot_post", _("Not allowed to post")
+        EMPTY = "empty", _("Empty after quote-strip")
+
+    message_id = models.CharField(max_length=255, blank=True, db_index=True)
+    status = models.CharField(max_length=20, choices=Status.choices)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    post = models.ForeignKey(
+        Post, null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"inbound {self.status} ({self.message_id or 'no-id'})"

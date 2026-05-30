@@ -14,6 +14,7 @@ from .models import (
     Channel,
     ChannelCategory,
     DigestPreference,
+    InboundEmail,
     Notification,
     Post,
     Reaction,
@@ -118,3 +119,11 @@ class DigestPreferenceAdmin(admin.ModelAdmin):
     list_display = ("user", "frequency", "last_sent_at")
     list_filter = ("frequency",)
     raw_id_fields = ("user",)
+
+
+@admin.register(InboundEmail)
+class InboundEmailAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "status", "user", "post", "message_id")
+    list_filter = ("status",)
+    search_fields = ("message_id",)
+    raw_id_fields = ("user", "post")

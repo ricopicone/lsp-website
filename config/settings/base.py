@@ -171,6 +171,11 @@ PARLETRE_REPLY_ENABLED = env.bool("PARLETRE_REPLY_ENABLED", default=False)
 PARLETRE_REPLY_DOMAIN = env("PARLETRE_REPLY_DOMAIN", default="parletre.lacanschool.org")
 # Secret for signing reply tokens (HMAC). Falls back to SECRET_KEY.
 PARLETRE_REPLY_SECRET = env("PARLETRE_REPLY_SECRET", default=SECRET_KEY)
+# Inbound webhook (SES → SNS → /parletre/inbound/). The security boundary is
+# the HMAC reply token + sender match; this optional SNS topic-ARN allowlist
+# is cheap defence-in-depth. Full SNS signature verification is a hardening
+# follow-up. Set to the receiving topic's ARN to reject other senders.
+PARLETRE_SNS_TOPIC_ARN = env("PARLETRE_SNS_TOPIC_ARN", default="")
 
 # --- Stripe -------------------------------------------------------------
 # Test-mode keys for development; production keys swapped via env in

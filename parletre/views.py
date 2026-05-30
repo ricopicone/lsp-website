@@ -3,26 +3,40 @@
 All views require login *and* membership (:func:`permissions.is_member`).
 Channels a member can't access 404 rather than reveal their existence.
 
-This increment covers the read/write forum loop: browse channels, read and
-start threads, reply, post in chat channels, and set a per-channel
-subscription level. Reactions, in-app notifications, digests, reply-by-email,
-and realtime chat transport are later increments.
+Covers the forum loop (browse / start / reply / chat / subscribe), reactions,
+@mentions + notifications, unread tracking, attachments, the digest-settings
+page, and the reply-by-email inbound webhook. Realtime chat transport
+(WebSockets) is the remaining M13.5b increment.
 """
 
 from __future__ import annotations
 
+import base64
+import json
+import logging
+
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Max, Q
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseForbidden,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from accounts.models import Profile
 
 from .forms import NewThreadForm, PostForm
+from .inbound import process_inbound_email
 from .models import (
     REACTION_EMOJI,
     Attachment,
@@ -44,6 +58,8 @@ from .reads import (
     unread_thread_ids,
 )
 from .services import notify_new_thread, notify_post
+
+log = logging.getLogger("parletre")
 
 
 def _attach_reactions(posts, user):
@@ -452,3 +468,67 @@ def moderate_thread(request, slug, thread_slug):
         raise Http404()
     thread.save(update_fields=[{"pin": "pinned", "lock": "locked", "resolve": "resolved"}[action]])
     return redirect(thread)
+
+
+# ---- reply-by-email inbound webhook (DISC-7) ----------------------------
+
+
+def _raw_email_from_ses(ses_message: dict) -> bytes | None:
+    """Pull the raw MIME from an SES notification — inline ``content`` if SNS
+    carried it, else fetched from the S3 receipt bucket (boto3, if available)."""
+    content = ses_message.get("content")
+    if content:
+        try:
+            return base64.b64decode(content)
+        except Exception:
+            return None
+    action = (ses_message.get("receipt") or {}).get("action") or {}
+    bucket, key = action.get("bucketName"), action.get("objectKey")
+    if bucket and key:
+        try:
+            import boto3  # optional; only used when SES stores to S3
+            obj = boto3.client("s3").get_object(Bucket=bucket, Key=key)
+            return obj["Body"].read()
+        except Exception:
+            log.exception("parletre: could not fetch inbound email from s3://%s/%s", bucket, key)
+    return None
+
+
+@csrf_exempt
+@require_POST
+def inbound(request):
+    """SNS endpoint for reply-by-email. Handles subscription confirmation and
+    SES 'email received' notifications. The real security is the signed reply
+    token + sender match inside process_inbound_email."""
+    try:
+        envelope = json.loads(request.body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return HttpResponseBadRequest("invalid JSON")
+
+    topic = getattr(settings, "PARLETRE_SNS_TOPIC_ARN", "")
+    if topic and envelope.get("TopicArn") != topic:
+        return HttpResponseForbidden("unexpected topic")
+
+    msg_type = envelope.get("Type")
+    if msg_type == "SubscriptionConfirmation":
+        url = envelope.get("SubscribeURL")
+        if url:
+            try:
+                import urllib.request
+                urllib.request.urlopen(url, timeout=5)  # noqa: S310 (AWS https URL)
+            except Exception:
+                log.exception("parletre: SNS subscription confirmation failed")
+        return HttpResponse("subscription confirmation received")
+
+    if msg_type == "Notification":
+        try:
+            ses_message = json.loads(envelope.get("Message", "{}"))
+        except ValueError:
+            return HttpResponseBadRequest("invalid SES message")
+        raw = _raw_email_from_ses(ses_message)
+        if raw is None:
+            return HttpResponse("no email content")
+        result = process_inbound_email(raw)
+        return JsonResponse(result)
+
+    return HttpResponse("ignored")

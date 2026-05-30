@@ -13,7 +13,6 @@ so they're valid in an email local part.
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import hmac
 
@@ -29,8 +28,9 @@ def _secret() -> bytes:
 
 
 def _sign(payload: str) -> str:
-    digest = hmac.new(_secret(), payload.encode(), hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(digest).decode().rstrip("=")[:22]
+    # Lowercase hex so the token survives any case-normalisation of the email
+    # address it travels in (base64 would not).
+    return hmac.new(_secret(), payload.encode(), hashlib.sha256).hexdigest()[:24]
 
 
 def make_token(kind: str, target_id: int, user_id: int) -> str:
