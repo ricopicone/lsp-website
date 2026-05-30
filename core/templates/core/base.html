@@ -75,6 +75,17 @@
           <span data-theme-icon="abyss" class="hidden">☽</span>
         </button>
 
+        {% if parletre_is_member %}
+        <a href="{% url 'parletre:notifications' %}"
+           class="btn btn-ghost btn-sm btn-circle relative text-base-content/70"
+           aria-label="Notifications" title="Notifications">
+          <span aria-hidden="true">🔔</span>
+          {% if parletre_unread %}
+          <span class="absolute -top-0.5 -right-0.5 badge badge-xs badge-primary">{{ parletre_unread }}</span>
+          {% endif %}
+        </a>
+        {% endif %}
+
         {% if user.is_authenticated %}
         <div class="dropdown dropdown-end">
           <div tabindex="0"

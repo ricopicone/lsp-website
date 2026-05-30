@@ -370,3 +370,67 @@ class Subscription(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} → #{self.channel.slug} ({self.level})"
+
+
+class Notification(models.Model):
+    """An in-app notification for the nav bell (DISC-3/DISC-5).
+
+    Triggered by: being @mentioned, a reply in a thread you started, or a
+    new thread in a channel you follow closely.
+    """
+
+    class Verb(models.TextChoices):
+        MENTION = "mention", _("mentioned you")
+        REPLY = "reply", _("replied in your thread")
+        NEW_THREAD = "new_thread", _("started a thread")
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="parletre_notifications",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    verb = models.CharField(max_length=16, choices=Verb.choices)
+    post = models.ForeignKey(
+        Post, null=True, blank=True, on_delete=models.CASCADE, related_name="notifications"
+    )
+    thread = models.ForeignKey(
+        Thread, null=True, blank=True, on_delete=models.CASCADE, related_name="notifications"
+    )
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=["recipient", "read_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.actor} {self.get_verb_display()} → {self.recipient}"
+
+    @property
+    def is_unread(self) -> bool:
+        return self.read_at is None
+
+    def url(self) -> str:
+        """Where clicking the notification takes you."""
+        if self.post_id and self.post.thread_id:
+            return f"{self.post.thread.get_absolute_url()}#post-{self.post_id}"
+        if self.thread_id:
+            return self.thread.get_absolute_url()
+        if self.post_id:
+            return self.post.channel.get_absolute_url()
+        return reverse("parletre:index")
+
+    @property
+    def context_label(self) -> str:
+        """The thread/channel this notification points at, for display."""
+        if self.thread_id:
+            return self.thread.title
+        if self.post_id:
+            return f"#{self.post.channel.slug}"
+        return ""

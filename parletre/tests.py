@@ -26,11 +26,12 @@ Access = Channel.Access
 # ---- factories ----------------------------------------------------------
 
 
-def make_user(email, role=Role.ANALYST, is_staff=False):
+def make_user(email, role=Role.ANALYST, is_staff=False, first="", last=""):
     user = User.objects.create_user(email=email, password="pw-test-12345")
-    if is_staff:
-        user.is_staff = True
-        user.save(update_fields=["is_staff"])
+    user.is_staff = is_staff
+    user.first_name = first
+    user.last_name = last
+    user.save(update_fields=["is_staff", "first_name", "last_name"])
     user.profile.role = role
     user.profile.save(update_fields=["role"])
     return user
@@ -434,3 +435,97 @@ def test_react_blocked_on_invisible_channel(client):
     resp = client.post(reverse("parletre:react", args=[post.id]), {"emoji": "👍"})
     assert resp.status_code == 404
     assert Reaction.objects.count() == 0
+
+
+# ---- mentions & notifications -------------------------------------------
+
+
+def _named_member(first, last, email):
+    """A member whose directory_slug is predictable (first-last)."""
+    u = make_user(email, role=Role.ANALYST, first=first, last=last)
+    return u
+
+
+@pytest.mark.django_db
+def test_mention_creates_notification(client):
+    from .models import Notification
+    ch = make_channel("commons")
+    author = _named_member("Posy", "Poster", "posy@x.co")
+    target = _named_member("Mona", "Member", "mona@x.co")
+    assert target.profile.directory_slug == "mona-member"
+    client.force_login(author)
+    client.post(
+        reverse("parletre:new_thread", args=[ch.slug]),
+        {"title": "Hi", "body": "Welcome @mona-member to the school!"},
+    )
+    n = Notification.objects.get(recipient=target)
+    assert n.verb == Notification.Verb.MENTION
+    assert n.actor == author
+
+
+@pytest.mark.django_db
+def test_reply_notifies_thread_author_not_self(client):
+    from .models import Notification
+    ch = make_channel("commons")
+    author = _named_member("Ana", "Author", "ana@x.co")
+    replier = _named_member("Ray", "Replier", "ray@x.co")
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    Post.objects.create(channel=ch, thread=thread, author=author, body="first")
+
+    # author replies to own thread -> no self-notification
+    client.force_login(author)
+    client.post(thread.get_absolute_url(), {"body": "my own follow-up"})
+    assert not Notification.objects.filter(recipient=author).exists()
+
+    # someone else replies -> author gets a REPLY notification
+    client.force_login(replier)
+    client.post(thread.get_absolute_url(), {"body": "a reply"})
+    n = Notification.objects.get(recipient=author)
+    assert n.verb == Notification.Verb.REPLY
+
+
+@pytest.mark.django_db
+def test_new_thread_notifies_close_followers(client):
+    from .models import Notification, Subscription, SubscriptionLevel
+    ch = make_channel("commons")
+    author = _named_member("Ann", "Author", "ann@x.co")
+    follower = _named_member("Fay", "Follower", "fay@x.co")
+    digester = _named_member("Dot", "Digest", "dot@x.co")
+    Subscription.objects.create(user=follower, channel=ch, level=SubscriptionLevel.ALL)
+    Subscription.objects.create(user=digester, channel=ch, level=SubscriptionLevel.DIGEST)
+
+    client.force_login(author)
+    client.post(reverse("parletre:new_thread", args=[ch.slug]), {"title": "News", "body": "hi"})
+
+    assert Notification.objects.filter(
+        recipient=follower, verb=Notification.Verb.NEW_THREAD
+    ).exists()
+    # digest-level followers don't get an in-app new-thread ping
+    assert not Notification.objects.filter(recipient=digester).exists()
+
+
+@pytest.mark.django_db
+def test_notifications_page_marks_all_read(client):
+    from .models import Notification
+    recipient = _named_member("Reed", "Recipient", "reed@x.co")
+    actor = _named_member("Axe", "Actor", "axe@x.co")
+    Notification.objects.create(
+        recipient=recipient, actor=actor, verb=Notification.Verb.MENTION
+    )
+    assert Notification.objects.filter(recipient=recipient, read_at__isnull=True).count() == 1
+    client.force_login(recipient)
+    resp = client.get(reverse("parletre:notifications"))
+    assert resp.status_code == 200
+    assert Notification.objects.filter(recipient=recipient, read_at__isnull=True).count() == 0
+
+
+@pytest.mark.django_db
+def test_bell_unread_count_in_nav(client):
+    from .models import Notification
+    member = _named_member("Bell", "Ringer", "bell@x.co")
+    actor = _named_member("Axe", "Actor", "axe2@x.co")
+    Notification.objects.create(recipient=member, actor=actor, verb=Notification.Verb.MENTION)
+    client.force_login(member)
+    resp = client.get(reverse("parletre:index"))
+    assert resp.context["parletre_unread"] == 1
+    assert "🔔" in resp.content.decode()

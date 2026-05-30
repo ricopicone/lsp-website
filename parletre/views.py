@@ -23,6 +23,7 @@ from .forms import NewThreadForm, PostForm
 from .models import (
     REACTION_EMOJI,
     Channel,
+    Notification,
     Post,
     Reaction,
     Subscription,
@@ -30,6 +31,7 @@ from .models import (
     Thread,
 )
 from .permissions import is_member
+from .services import notify_new_thread, notify_post
 
 
 def _attach_reactions(posts, user):
@@ -125,9 +127,10 @@ def channel(request, slug):
             return redirect(channel)
         form = PostForm(request.POST)
         if form.is_valid():
-            Post.objects.create(
+            post = Post.objects.create(
                 channel=channel, author=request.user, body=form.cleaned_data["body"]
             )
+            notify_post(post)
             return redirect(channel)
     else:
         form = PostForm()
@@ -177,12 +180,13 @@ def new_thread(request, slug):
                 title=form.cleaned_data["title"],
                 author=request.user,
             )
-            Post.objects.create(
+            first_post = Post.objects.create(
                 channel=channel,
                 thread=thread,
                 author=request.user,
                 body=form.cleaned_data["body"],
             )
+            notify_new_thread(thread, first_post)
             return redirect(thread)
     else:
         form = NewThreadForm()
@@ -208,13 +212,14 @@ def thread(request, slug, thread_slug):
         form = PostForm(request.POST)
         if form.is_valid():
             now = timezone.now()
-            Post.objects.create(
+            post = Post.objects.create(
                 channel=channel,
                 thread=thread,
                 author=request.user,
                 body=form.cleaned_data["body"],
             )
             thread.touch(now)
+            notify_post(post)
             return redirect(thread)
     else:
         form = PostForm()
@@ -244,6 +249,25 @@ def thread(request, slug, thread_slug):
             "reaction_palette": REACTION_EMOJI,
         },
     )
+
+
+@login_required
+def notifications(request):
+    """The member's notification feed (the nav bell). Viewing it marks all
+    unread notifications read."""
+    if not is_member(request.user):
+        return render(request, "parletre/not_a_member.html", status=403)
+    items = list(
+        Notification.objects.filter(recipient=request.user)
+        .select_related(
+            "actor", "thread", "thread__channel", "post", "post__channel", "post__thread"
+        )
+        .order_by("-created_at")[:100]
+    )
+    Notification.objects.filter(recipient=request.user, read_at__isnull=True).update(
+        read_at=timezone.now()
+    )
+    return render(request, "parletre/notifications.html", {"items": items})
 
 
 @login_required
