@@ -14,13 +14,12 @@ WORKDIR /css
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY assets/css ./assets/css
-# Templates are scanned for class names — copy them in so purging works correctly.
-COPY accounts/templates ./accounts/templates
-COPY content/templates ./content/templates
-COPY core/templates ./core/templates
-COPY events/templates ./events/templates
-COPY payments/templates ./payments/templates
-COPY registrations/templates ./registrations/templates
+# Tailwind v4 scans templates at build time for class names; any class only
+# referenced in templates that aren't COPYed here is silently dropped from
+# the output bundle. Glob every <app>/templates dir so adding a new app
+# doesn't require editing this Dockerfile. (Missed works/ + documents/
+# previously, which broke vibe-card avatars in prod.)
+COPY --parents */templates ./
 RUN npx tailwindcss -i ./assets/css/input.css -o ./static/css/site.css --minify
 
 # --- Stage 3: runtime --------------------------------------------------------
