@@ -106,11 +106,10 @@ def calendar_events_json(request):
             "title": s.title or s.event.title,
             "start": s.start_at.isoformat(),
             "end": s.end_at.isoformat(),
-            "url": (
-                reverse("admin:events_event_change", args=[s.event_id])
-                if _is_staff(request.user)
-                else reverse("events:detail", args=[s.event.slug])
-            ),
+            # Always link to the public event page — even for staff /
+            # PC. The event page has its own edit affordances; the
+            # calendar shouldn't bounce people into Django admin.
+            "url": reverse("events:detail", args=[s.event.slug]),
             "extendedProps": {
                 "event": s.event.title,
                 "location": s.location,

@@ -100,11 +100,13 @@ def test_calendar_events_json_staff_sees_drafts(
     assert "Draft Event" in titles
 
 
-def test_calendar_events_json_url_admin_for_staff(client, staff_user, event_with_sessions):
+def test_calendar_events_json_url_public_for_staff(client, staff_user, event_with_sessions):
+    """Calendar event links go to the public event page for everyone —
+    including staff. Staff can edit from the event page directly."""
     client.force_login(staff_user)
     response = client.get(reverse("core:calendar_events"))
     first = response.json()[0]
-    assert first["url"].endswith(f"/admin/events/event/{event_with_sessions.id}/change/")
+    assert first["url"] == reverse("events:detail", args=["lacan-seminar-xi"])
 
 
 def test_calendar_events_json_url_public_for_anonymous(client, event_with_sessions):
