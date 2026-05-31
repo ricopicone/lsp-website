@@ -1,0 +1,42 @@
+{% extends "core/base.html" %}
+{% block title %}{% if mode == "new" %}Add{% else %}Edit{% endif %} aphorism — Coordinator — LSP{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-2xl">
+  <nav class="text-sm"><a href="{% url 'coordinator_aphorisms' %}" class="link link-hover text-base-content/60">← Aphorisms</a></nav>
+
+  <h1 class="font-serif text-3xl text-base-content tracking-tight">
+    {% if mode == "new" %}Add aphorism{% else %}Edit aphorism{% endif %}
+  </h1>
+
+  {% if form.non_field_errors %}
+  <div role="alert" class="alert alert-error"><span>{{ form.non_field_errors }}</span></div>
+  {% endif %}
+
+  <form method="post" class="space-y-5">
+    {% csrf_token %}
+    {% for field in form %}
+      {% if field.name == "is_active" %}
+      <div class="space-y-1">
+        <label class="flex items-center gap-2 text-sm font-medium text-base-content" for="{{ field.id_for_label }}">
+          {{ field }} {{ field.label }}
+        </label>
+        {% if field.help_text %}<p class="text-xs text-base-content/55">{{ field.help_text }}</p>{% endif %}
+        {% for e in field.errors %}<p class="text-xs text-error">{{ e }}</p>{% endfor %}
+      </div>
+      {% else %}
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-base-content" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<p class="text-xs text-base-content/55">{{ field.help_text }}</p>{% endif %}
+        {% for e in field.errors %}<p class="text-xs text-error">{{ e }}</p>{% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
+    <div class="flex items-center gap-3 pt-2">
+      <button type="submit" class="btn btn-primary">{% if mode == "new" %}Add{% else %}Save changes{% endif %}</button>
+      <a href="{% url 'coordinator_aphorisms' %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
