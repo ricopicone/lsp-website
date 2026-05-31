@@ -52,6 +52,14 @@ class ChannelAdmin(admin.ModelAdmin):
             "Posting & subscriptions",
             {"fields": ("post_policy", "auto_subscribe", "default_subscription_level")},
         ),
+        (
+            "Disappearing messages",
+            {
+                "fields": ("message_ttl_seconds",),
+                "description": "Set a TTL (seconds) to make this a disappearing chat "
+                "— messages vanish that long after posting. Leave blank for permanent.",
+            },
+        ),
         ("Display", {"fields": ("position", "archived")}),
     )
 

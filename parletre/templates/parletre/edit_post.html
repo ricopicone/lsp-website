@@ -1,0 +1,28 @@
+{% extends "core/base.html" %}
+{% load static %}
+{% block title %}Edit message — Parlêtre{% endblock %}
+{% block extra_head %}<script defer src="{% static 'js/parletre-mentions.js' %}"></script>{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-5">
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
+    <span aria-hidden="true">/</span>
+    <a href="{{ channel.get_absolute_url }}" class="hover:text-primary">{{ channel.name }}</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-base-content/70">Edit</span>
+  </nav>
+
+  <h1 class="font-serif text-2xl tracking-tight text-base-content">Edit message</h1>
+
+  <form method="post" class="space-y-3">
+    {% csrf_token %}
+    <div class="mention-host" data-mention-url="{% url 'parletre:mention_search' %}?channel={{ channel.slug }}">{{ form.body }}</div>
+    {% if form.body.errors %}<p class="text-error text-sm">{{ form.body.errors|striptags }}</p>{% endif %}
+    <div class="flex gap-2 justify-end">
+      <a href="{% if post.thread_id %}{{ post.thread.get_absolute_url }}{% else %}{{ channel.get_absolute_url }}{% endif %}#post-{{ post.id }}" class="btn btn-ghost btn-sm">Cancel</a>
+      <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

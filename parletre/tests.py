@@ -1249,3 +1249,103 @@ def test_make_snippet_highlights_and_escapes():
     out = make_snippet("Discussing <b>jouissance</b> & the Real", "jouissance")
     assert "<mark>jouissance</mark>" in out
     assert "&lt;b&gt;" in out and "&amp;" in out   # original HTML/amp escaped
+
+
+# ---- edit / delete / reply (post actions) -------------------------------
+
+
+@pytest.mark.django_db
+def test_author_can_edit_own_post(client):
+    ch = make_channel("commons")
+    author = make_user("a@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    post = Post.objects.create(channel=ch, thread=thread, author=author, body="original")
+    client.force_login(author)
+    resp = client.post(reverse("parletre:edit_post", args=[post.id]), {"body": "edited now"})
+    assert resp.status_code == 302
+    post.refresh_from_db()
+    assert post.body == "edited now"
+    assert post.edited_at is not None
+
+
+@pytest.mark.django_db
+def test_non_author_cannot_edit(client):
+    ch = make_channel("commons")
+    author = make_user("a@x.co", role=Role.ANALYST)
+    other = make_user("o@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    post = Post.objects.create(channel=ch, thread=thread, author=author, body="original")
+    client.force_login(other)
+    resp = client.post(reverse("parletre:edit_post", args=[post.id]), {"body": "hax"})
+    assert resp.status_code == 404
+    post.refresh_from_db()
+    assert post.body == "original"
+
+
+@pytest.mark.django_db
+def test_author_can_delete_own_post(client):
+    ch = make_channel("commons")
+    author = make_user("a@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    post = Post.objects.create(channel=ch, thread=thread, author=author, body="bye")
+    client.force_login(author)
+    resp = client.post(reverse("parletre:delete_post", args=[post.id]))
+    assert resp.status_code == 302
+    post.refresh_from_db()
+    assert post.deleted is True
+
+
+@pytest.mark.django_db
+def test_moderator_can_delete_others_but_member_cannot(client):
+    ch = make_channel("commons")
+    author = make_user("a@x.co", role=Role.ANALYST)
+    mod = make_user("mod@x.co", role=Role.ANALYST)
+    ch.moderators.add(mod)
+    bystander = make_user("b@x.co", role=Role.ANALYST)
+    thread = Thread.objects.create(channel=ch, title="T", author=author)
+    post = Post.objects.create(channel=ch, thread=thread, author=author, body="x")
+
+    client.force_login(bystander)
+    assert client.post(reverse("parletre:delete_post", args=[post.id])).status_code == 404
+    post.refresh_from_db()
+    assert post.deleted is False
+
+    client.force_login(mod)
+    assert client.post(reverse("parletre:delete_post", args=[post.id])).status_code == 302
+    post.refresh_from_db()
+    assert post.deleted is True
+
+
+@pytest.mark.django_db
+def test_chat_reply_sets_reply_to(client):
+    ch = make_channel("lounge", kind=Channel.Kind.CHAT)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    parent = Post.objects.create(channel=ch, author=member, body="parent message")
+    client.force_login(member)
+    client.post(ch.get_absolute_url(), {"body": "a reply", "reply_to": parent.id})
+    child = Post.objects.filter(channel=ch, body="a reply").get()
+    assert child.reply_to_id == parent.id
+
+
+@pytest.mark.django_db
+def test_reply_to_in_other_channel_is_ignored(client):
+    a = make_channel("a", kind=Channel.Kind.CHAT)
+    b = make_channel("b", kind=Channel.Kind.CHAT)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    foreign = Post.objects.create(channel=b, author=member, body="elsewhere")
+    client.force_login(member)
+    client.post(a.get_absolute_url(), {"body": "hi", "reply_to": foreign.id})
+    child = Post.objects.filter(channel=a, body="hi").get()
+    assert child.reply_to_id is None   # cross-channel parent rejected, not an error
+
+
+@pytest.mark.django_db
+def test_edit_404_on_invisible_channel(client):
+    ch = make_channel("hush", access=Access.PRIVATE)
+    insider = make_user("in@x.co", role=Role.ANALYST)
+    ch.members.add(insider)
+    thread = Thread.objects.create(channel=ch, title="T", author=insider)
+    post = Post.objects.create(channel=ch, thread=thread, author=insider, body="secret")
+    outsider = make_user("out@x.co", role=Role.ANALYST)
+    client.force_login(outsider)
+    assert client.get(reverse("parletre:edit_post", args=[post.id])).status_code == 404

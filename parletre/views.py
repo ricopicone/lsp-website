@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
@@ -35,7 +36,7 @@ from django.views.decorators.http import require_POST
 
 from accounts.models import Profile
 
-from .forms import NewThreadForm, PostForm
+from .forms import EditPostForm, NewThreadForm, PostForm
 from .inbound import process_inbound_email
 from .models import (
     REACTION_EMOJI,
@@ -64,10 +65,11 @@ from .services import notify_new_thread, notify_post
 log = logging.getLogger("parletre")
 
 
-def _attach_reactions(posts, user):
-    """Attach a ``reaction_summary`` list to each post: one entry per distinct
-    emoji with its count and whether ``user`` is among the reactors. Expects
-    ``reactions`` (and their users) prefetched."""
+def _attach_reactions(posts, user, can_moderate=False):
+    """Annotate each post with ``reaction_summary`` plus ``can_edit`` /
+    ``can_delete`` flags for the template. ``can_moderate`` is the channel-level
+    moderator status (computed once) so we avoid a per-post permission query.
+    Expects ``reactions`` (and their users) prefetched."""
     posts = list(posts)
     uid = user.id if getattr(user, "is_authenticated", False) else None
     for post in posts:
@@ -80,6 +82,8 @@ def _attach_reactions(posts, user):
             if reaction.user_id == uid:
                 entry["mine"] = True
         post.reaction_summary = list(summary.values())
+        post.can_edit = not post.deleted and post.author_id is not None and post.author_id == uid
+        post.can_delete = not post.deleted and (post.author_id == uid or can_moderate)
     return posts
 
 
@@ -92,6 +96,22 @@ def _save_attachments(post, files) -> None:
             content_type=getattr(f, "content_type", "") or "",
             size=getattr(f, "size", 0) or 0,
         )
+
+
+def _reply_parent(reply_to_id, channel):
+    """Resolve a reply_to id to a valid parent: a non-deleted post in ``channel``."""
+    if not reply_to_id:
+        return None
+    return (
+        Post.objects.filter(pk=reply_to_id, channel=channel, deleted=False)
+        .select_related("author")
+        .first()
+    )
+
+
+def _post_url(post) -> str:
+    base = post.thread.get_absolute_url() if post.thread_id else post.channel.get_absolute_url()
+    return f"{base}#post-{post.id}"
 
 
 def _visible_channel_or_404(user, slug: str) -> Channel:
@@ -173,14 +193,17 @@ def channel(request, slug):
         form = PostForm(request.POST, request.FILES)
         if form.is_valid():
             post = Post.objects.create(
-                channel=channel, author=request.user, body=form.cleaned_data["body"]
+                channel=channel,
+                author=request.user,
+                body=form.cleaned_data["body"],
+                reply_to=_reply_parent(form.cleaned_data.get("reply_to"), channel),
             )
             _save_attachments(post, form.cleaned_data.get("attachments"))
             notify_post(post)
             broadcast_chat_post(post)  # reach any live WebSocket clients
             return redirect(channel)
     else:
-        form = PostForm()
+        form = PostForm(initial={"reply_to": request.GET.get("reply_to") or None})
 
     sub = Subscription.objects.filter(user=request.user, channel=channel).first()
     context = {
@@ -190,6 +213,7 @@ def channel(request, slug):
         "form": form,
         "sub_level": sub.level if sub else None,
         "levels": SubscriptionLevel.choices,
+        "reply_parent": _reply_parent(request.GET.get("reply_to"), channel),
     }
 
     if channel.is_forum:
@@ -206,13 +230,13 @@ def channel(request, slug):
 
     # Chat: viewing the stream marks the channel read.
     mark_channel_read(request.user, channel)
-    context["posts"] = _attach_reactions(
-        channel.posts.filter(thread__isnull=True)
-        .select_related("author")
-        .prefetch_related("reactions", "attachments")
-        .order_by("created_at"),
-        request.user,
-    )
+    chat_posts = channel.posts.filter(thread__isnull=True).select_related(
+        "author", "reply_to", "reply_to__author"
+    ).prefetch_related("reactions", "attachments").order_by("created_at")
+    if channel.is_ephemeral:
+        cutoff = timezone.now() - timedelta(seconds=channel.message_ttl_seconds)
+        chat_posts = chat_posts.filter(created_at__gte=cutoff)
+    context["posts"] = _attach_reactions(chat_posts, request.user, context["can_moderate"])
     context["reaction_palette"] = REACTION_EMOJI
     return render(request, "parletre/channel_chat.html", context)
 
@@ -272,22 +296,25 @@ def thread(request, slug, thread_slug):
                 thread=thread,
                 author=request.user,
                 body=form.cleaned_data["body"],
+                reply_to=_reply_parent(form.cleaned_data.get("reply_to"), channel),
             )
             _save_attachments(post, form.cleaned_data.get("attachments"))
             thread.touch(now)
             notify_post(post)
-            return redirect(thread)
+            return redirect(_post_url(post))
     else:
-        form = PostForm()
+        form = PostForm(initial={"reply_to": request.GET.get("reply_to") or None})
 
     # Capture the read watermark *before* marking this view read, so we can
     # point the member at the first post they haven't seen.
     marker_before = thread_marker_at(request.user, thread)
+    thread_can_moderate = channel.can_moderate(request.user)
     posts = _attach_reactions(
-        thread.posts.select_related("author")
+        thread.posts.select_related("author", "reply_to", "reply_to__author")
         .prefetch_related("reactions", "attachments")
         .order_by("created_at"),
         request.user,
+        thread_can_moderate,
     )
     first_unread_id = None
     if marker_before is not None:
@@ -311,12 +338,51 @@ def thread(request, slug, thread_slug):
             "posts": posts,
             "form": form,
             "can_post": can_post,
-            "can_moderate": channel.can_moderate(request.user),
+            "can_moderate": thread_can_moderate,
             "moderation_actions": moderation_actions,
             "reaction_palette": REACTION_EMOJI,
             "first_unread_id": first_unread_id,
+            "reply_parent": _reply_parent(request.GET.get("reply_to"), channel),
         },
     )
+
+
+@login_required
+def edit_post(request, post_id):
+    """Edit a post's body (author only)."""
+    post = get_object_or_404(
+        Post.objects.select_related("channel", "thread"), pk=post_id
+    )
+    if not post.channel.visible_to(request.user) or not post.is_editable_by(request.user):
+        raise Http404()
+    if request.method == "POST":
+        form = EditPostForm(request.POST)
+        if form.is_valid():
+            post.body = form.cleaned_data["body"]
+            post.edited_at = timezone.now()
+            post.save(update_fields=["body", "edited_at"])
+            return redirect(_post_url(post))
+    else:
+        form = EditPostForm(initial={"body": post.body})
+    return render(
+        request,
+        "parletre/edit_post.html",
+        {"post": post, "channel": post.channel, "form": form},
+    )
+
+
+@login_required
+@require_POST
+def delete_post(request, post_id):
+    """Soft-delete a post (author or channel moderator)."""
+    post = get_object_or_404(
+        Post.objects.select_related("channel", "thread"), pk=post_id
+    )
+    if not post.channel.visible_to(request.user) or not post.is_deletable_by(request.user):
+        raise Http404()
+    post.deleted = True
+    post.save(update_fields=["deleted"])
+    return redirect(_post_url(post))
 
 
 @login_required

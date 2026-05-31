@@ -74,6 +74,19 @@ class PostForm(forms.Form):
 
     body = forms.CharField(widget=_TEXTAREA, label="")
     attachments = MultipleFileField(required=False)
+    reply_to = forms.IntegerField(required=False, widget=forms.HiddenInput)
+
+    def clean_body(self):
+        body = self.cleaned_data["body"].strip()
+        if not body:
+            raise forms.ValidationError("Say something.")
+        return body
+
+
+class EditPostForm(forms.Form):
+    """Edit an existing post's body."""
+
+    body = forms.CharField(widget=_TEXTAREA, label="")
 
     def clean_body(self):
         body = self.cleaned_data["body"].strip()

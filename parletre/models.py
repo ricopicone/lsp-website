@@ -172,6 +172,13 @@ class Channel(models.Model):
         "auto_subscribe overrides it.",
     )
 
+    message_ttl_seconds = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="If set, messages here disappear this many seconds after posting "
+        "(a 'disappearing' chat, e.g. Purloined Letters). Null = permanent.",
+    )
+
     position = models.IntegerField(
         default=0, help_text="Sort order within the category. Lower = earlier."
     )
@@ -192,6 +199,11 @@ class Channel(models.Model):
     @property
     def is_forum(self) -> bool:
         return self.kind == self.Kind.FORUM
+
+    @property
+    def is_ephemeral(self) -> bool:
+        """True for disappearing-message channels (a TTL is set)."""
+        return bool(self.message_ttl_seconds)
 
     @property
     def description_html(self) -> str:
@@ -315,6 +327,31 @@ class Post(models.Model):
         if self.deleted:
             return ""
         return render_markdown(self.body)
+
+    @property
+    def excerpt(self) -> str:
+        """A short plain-text preview (for reply quoting / search)."""
+        if self.deleted:
+            return "(deleted)"
+        text = " ".join(self.body.split())
+        return text[:120] + ("…" if len(text) > 120 else "")
+
+    def is_editable_by(self, user) -> bool:
+        """Only the author may edit their own (non-deleted) post."""
+        return (
+            not self.deleted
+            and self.author_id is not None
+            and getattr(user, "is_authenticated", False)
+            and self.author_id == user.id
+        )
+
+    def is_deletable_by(self, user) -> bool:
+        """The author, or a moderator of the channel, may delete a post."""
+        if self.deleted or not getattr(user, "is_authenticated", False):
+            return False
+        if self.author_id == user.id:
+            return True
+        return self.channel.can_moderate(user)
 
 
 class Reaction(models.Model):
