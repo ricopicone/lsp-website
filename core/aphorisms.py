@@ -1,6 +1,9 @@
-"""Vetted Lacanian aphorisms surfaced in the site footer.
+"""Vetted Lacanian aphorisms — the initial seed for the ``core.Aphorism`` table.
 
-One is picked per page render via ``core.context_processors.aphorism``.
+At runtime the footer reads aphorisms from the database (``core.Aphorism``),
+edited by staff via the admin / Web Coordinator panel. This list is only the
+one-time seed applied by the ``core`` data migration: editing it changes the
+seed for a fresh install, not what a running site shows.
 
 Each entry has:
 
@@ -8,9 +11,6 @@ Each entry has:
 - ``short_attribution`` — what's shown next to the quote (small chip)
 - ``full_attribution`` — the bibliographic detail; surfaces as a hover
   tooltip (HTML ``title`` attribute) in the footer
-
-This module is the canonical source: edit the ``APHORISMS`` list below to
-add, change, or remove entries (no database or migration involved).
 """
 
 from __future__ import annotations
