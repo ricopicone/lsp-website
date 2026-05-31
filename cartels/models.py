@@ -59,6 +59,7 @@ class Cartel(models.Model):
         PROPOSED = "proposed", _("Proposed — awaiting Coordinator review")
         OPEN = "open", _("Open — soliciting membership")
         DECLINED = "declined", _("Declined")
+        ARCHIVED = "archived", _("Archived")
 
     workgroup = models.OneToOneField(
         Workgroup,
@@ -132,6 +133,7 @@ class Cartel(models.Model):
             "already_applied": already_applied,
             "can_apply": can_apply,
             "pending_requests": pending,
+            "is_generator": bool(authed) and self.generator_id == user.id,
         }
 
     # ---- Membership ----
@@ -170,6 +172,27 @@ class Cartel(models.Model):
         self.review_note = note
         self.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
 
+    @transaction.atomic
+    def resubmit(self):
+        """A declined proposal is re-submitted (after edits) for fresh review."""
+        if self.status != self.Status.DECLINED:
+            return
+        self.status = self.Status.PROPOSED
+        self.reviewed_by = None
+        self.reviewed_at = None
+        self.review_note = ""
+        self.workgroup.landing_visibility = "private"   # hidden again until re-approved
+        self.workgroup.save(update_fields=["landing_visibility"])
+        self.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
+
+    def set_closed(self, value: bool):
+        self.closed = bool(value)
+        self.save(update_fields=["closed"])
+
+    def archive(self):
+        self.status = self.Status.ARCHIVED
+        self.save(update_fields=["status"])
+
     def accept_invitation(self, user):
         """A seeded invitee joins directly (Generator pre-approved them)."""
         inv = self.invitations.filter(invited_user=user, accepted_at__isnull=True).first()
@@ -180,11 +203,15 @@ class Cartel(models.Model):
         inv.save(update_fields=["accepted_at"])
         return inv
 
-    def request_to_join(self, user):
-        """An uninvited member applies (CART-4 step 5)."""
-        req, _ = CartelJoinRequest.objects.get_or_create(
+    def request_to_join(self, user, message=""):
+        """An uninvited member applies (CART-4 step 5), with a note on why."""
+        req, created = CartelJoinRequest.objects.get_or_create(
             cartel=self, applicant=user, status=CartelJoinRequest.Status.PENDING,
+            defaults={"message": message},
         )
+        if not created and message and not req.message:
+            req.message = message
+            req.save(update_fields=["message"])
         return req
 
     @transaction.atomic
@@ -237,6 +264,9 @@ class CartelJoinRequest(models.Model):
     cartel = models.ForeignKey(Cartel, on_delete=models.CASCADE, related_name="join_requests")
     applicant = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="cartel_join_requests"
+    )
+    message = models.TextField(
+        blank=True, help_text="Why the applicant would like to join (shown to members)."
     )
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     decided_by = models.ForeignKey(

@@ -227,6 +227,68 @@ def test_legacy_cartel_urls_redirect_to_groups(client):
     assert client.get(f"/cartels/{slug}/", follow=True).status_code == 200
 
 
+def test_declined_cartel_can_be_edited_and_resubmitted(client):
+    """Improvement 1: a declined proposal, edited by the generator, re-enters
+    review (PROPOSED) and re-hides until re-approved."""
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C", guiding_question="Q1")
+    cartel.decline(_coordinator(), note="Sharpen the question.")
+    client.force_login(gen)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/edit/", {
+        "name": "C", "guiding_question": "A sharper question", "invitees": "",
+    })
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.status == Cartel.Status.PROPOSED
+    assert cartel.guiding_question == "A sharper question"
+    assert cartel.workgroup.landing_visibility == Visibility.PRIVATE   # hidden again
+    # only the generator may edit
+    client.force_login(_member("other@x.test"))
+    assert client.get(f"/cartels/{cartel.workgroup.slug}/edit/").status_code == 404
+
+
+def test_apply_captures_reason_shown_to_members(client):
+    """Improvement 4: the application's 'why' is recorded and shown to members."""
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    applicant = _member("appl@x.test")
+    client.force_login(applicant)
+    client.post(f"/cartels/{cartel.workgroup.slug}/apply/", {"message": "I work on the letter."})
+    req = CartelJoinRequest.objects.get(cartel=cartel, applicant=applicant)
+    assert req.message == "I work on the letter."
+    # a member sees the reason on the cartel page
+    client.force_login(gen)
+    resp = client.get(cartel.workgroup.get_absolute_url())
+    assert b"I work on the letter." in resp.content
+
+
+def test_member_can_close_and_archive(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    client.force_login(gen)
+    client.post(f"/cartels/{cartel.workgroup.slug}/manage/", {"action": "close"})
+    cartel.refresh_from_db()
+    assert cartel.closed is True
+    client.post(f"/cartels/{cartel.workgroup.slug}/manage/", {"action": "archive"})
+    cartel.refresh_from_db()
+    assert cartel.status == Cartel.Status.ARCHIVED
+
+
+def test_my_cartels_and_status_badge_on_kind_list(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(
+        generator=gen, name="Speech and Writing", guiding_question="What is a letter?"
+    )
+    cartel.approve(_coordinator())
+    client.force_login(gen)            # gen is a member of this cartel
+    resp = client.get("/groups/cartels/")
+    assert resp.status_code == 200
+    assert b"My cartels" in resp.content
+    assert b"Open \xc2\xb7 Join!" in resp.content   # status badge ("Open · Join!")
+
+
 def test_proposed_cartel_hidden_from_other_members_on_kind_list(client):
     gen = _member("gen@x.test")
     Cartel.objects.propose(generator=gen, name="Secret Proposal")

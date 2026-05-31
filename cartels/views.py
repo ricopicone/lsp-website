@@ -17,7 +17,7 @@ from accounts.permissions import is_lsp_member
 
 from . import emails
 from .forms import CartelProposalForm
-from .models import Cartel, CartelJoinRequest
+from .models import Cartel, CartelInvitation, CartelJoinRequest
 from .permissions import is_cartel_coordinator
 
 
@@ -98,13 +98,65 @@ def review_decide(request, pk):
 @login_required
 @require_POST
 def apply(request, slug):
-    """A member applies to join an open cartel (CART-4 step 5)."""
+    """A member applies to join an open cartel (CART-4 step 5), with a note."""
     cartel = get_object_or_404(Cartel, workgroup__slug=slug, status=Cartel.Status.OPEN)
     if not is_lsp_member(request.user) or cartel.closed or cartel.is_member(request.user):
         raise Http404
-    cartel.request_to_join(request.user)
+    cartel.request_to_join(request.user, message=(request.POST.get("message") or "").strip())
     emails.notify_members_of_application(cartel, request.user, _abs(request, cartel))
     messages.success(request, "Application sent — a member of the cartel will review it.")
+    return redirect(cartel.get_absolute_url())
+
+
+@login_required
+def edit(request, slug):
+    """The Generator edits a proposed/declined cartel; saving a declined one
+    re-submits it for fresh Coordinator review (improvement 1)."""
+    cartel = get_object_or_404(Cartel, workgroup__slug=slug)
+    editable = cartel.status in (Cartel.Status.PROPOSED, Cartel.Status.DECLINED)
+    if request.user != cartel.generator or not editable:
+        raise Http404
+    if request.method == "POST":
+        form = CartelProposalForm(request.POST)
+        if form.is_valid():
+            wg = cartel.workgroup
+            wg.name = form.cleaned_data["name"]
+            wg.description = form.cleaned_data["description"]
+            wg.save(update_fields=["name", "description"])
+            cartel.guiding_question = form.cleaned_data["guiding_question"]
+            cartel.save(update_fields=["guiding_question"])
+            for user in form.cleaned_data["invitees"]:
+                CartelInvitation.objects.get_or_create(cartel=cartel, invited_user=user)
+            if cartel.status == Cartel.Status.DECLINED:
+                cartel.resubmit()
+                emails.notify_coordinator_of_proposal(cartel, _abs(request, cartel))
+                messages.success(request, "Edited and resubmitted for review.")
+            else:
+                messages.success(request, "Proposal updated.")
+            return redirect(cartel.get_absolute_url())
+    else:
+        form = CartelProposalForm(initial={
+            "name": cartel.workgroup.name,
+            "guiding_question": cartel.guiding_question,
+            "description": cartel.workgroup.description,
+        })
+    return render(request, "cartels/edit.html", {"cartel": cartel, "form": form})
+
+
+@login_required
+@require_POST
+def manage(request, slug):
+    """A member closes/reopens the cartel to new members, or archives it."""
+    cartel = get_object_or_404(Cartel, workgroup__slug=slug)
+    if not cartel.is_member(request.user):
+        raise Http404
+    action = request.POST.get("action")
+    if action == "close":
+        cartel.set_closed(True)
+    elif action == "reopen":
+        cartel.set_closed(False)
+    elif action == "archive":
+        cartel.archive()
     return redirect(cartel.get_absolute_url())
 
 

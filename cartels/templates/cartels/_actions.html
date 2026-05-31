@@ -1,11 +1,13 @@
 {% comment %}
 Cartel-specific UI composed into the generic Workgroup detail page when the
 workgroup has a cartel. Expects: cartel, is_member, has_invite, already_applied,
-can_apply, pending_requests, is_coordinator (from Cartel.viewer_state + the view).
+can_apply, pending_requests, is_generator, is_coordinator.
 {% endcomment %}
 <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-base-content/60">
-  {% if cartel.status != "open" %}<span class="badge badge-outline">{{ cartel.get_status_display }}</span>{% endif %}
-  {% if cartel.closed %}<span class="badge badge-outline">Closed to new members</span>{% endif %}
+  {% if cartel.status == "open" and not cartel.closed %}<span class="badge badge-primary">Open · Join!</span>
+  {% elif cartel.status == "open" and cartel.closed %}<span class="badge badge-ghost">Closed · Active</span>
+  {% elif cartel.status == "archived" %}<span class="badge badge-ghost">Archived</span>
+  {% elif cartel.status != "open" %}<span class="badge badge-outline">{{ cartel.get_status_display }}</span>{% endif %}
 </div>
 
 {% if cartel.guiding_question %}
@@ -15,20 +17,32 @@ can_apply, pending_requests, is_coordinator (from Cartel.viewer_state + the view
 </section>
 {% endif %}
 
-<section class="flex flex-wrap gap-2">
+{% comment %} Generator: edit / resubmit a declined-or-proposed cartel {% endcomment %}
+{% if is_generator and cartel.status == "declined" %}
+<div class="rounded-lg border border-base-300/60 bg-base-200/40 p-4 space-y-2">
+  <p class="text-sm text-base-content/70">This proposal was declined{% if cartel.review_note %} — “{{ cartel.review_note }}”{% endif %}.</p>
+  <a href="{% url 'cartels:edit' workgroup.slug %}" class="btn btn-primary btn-sm">Edit &amp; resubmit</a>
+</div>
+{% elif is_generator and cartel.status == "proposed" %}
+<a href="{% url 'cartels:edit' workgroup.slug %}" class="btn btn-ghost btn-sm">Edit proposal</a>
+{% endif %}
+
+{% comment %} Apply (with a note on why) {% endcomment %}
+<section class="flex flex-wrap items-start gap-2">
   {% if has_invite %}
   <form method="post" action="{% url 'cartels:accept_invitation' workgroup.slug %}">
     {% csrf_token %}<button class="btn btn-primary btn-sm">Accept invitation</button>
   </form>
   {% elif can_apply %}
-  <form method="post" action="{% url 'cartels:apply' workgroup.slug %}">
-    {% csrf_token %}<button class="btn btn-primary btn-sm">Apply to join</button>
+  <form method="post" action="{% url 'cartels:apply' workgroup.slug %}" class="w-full max-w-md space-y-2">
+    {% csrf_token %}
+    <label class="block text-sm font-medium">Why would you like to join?</label>
+    <textarea name="message" rows="3" class="textarea textarea-bordered w-full"
+              placeholder="A note for the cartel's members (optional)"></textarea>
+    <button class="btn btn-primary btn-sm">Apply to join</button>
   </form>
   {% elif already_applied %}
   <span class="text-sm text-base-content/60">Your application is pending review.</span>
-  {% endif %}
-  {% if is_coordinator and cartel.status == "proposed" %}
-  <a href="{% url 'cartels:review_queue' %}" class="btn btn-ghost btn-sm">Review in queue</a>
   {% endif %}
 </section>
 
@@ -37,15 +51,32 @@ can_apply, pending_requests, is_coordinator (from Cartel.viewer_state + the view
   <h2 class="font-serif text-xl">Applications</h2>
   <ul class="space-y-2">
     {% for req in pending_requests %}
-    <li class="flex items-center justify-between rounded-md border border-base-300/50 px-3 py-2">
-      <span>{{ req.applicant.get_full_name|default:req.applicant.email }}</span>
-      <form method="post" action="{% url 'cartels:decide_request' workgroup.slug req.pk %}" class="flex gap-2">
-        {% csrf_token %}
-        <button name="decision" value="accept" class="btn btn-primary btn-xs">Accept</button>
-        <button name="decision" value="decline" class="btn btn-ghost btn-xs">Decline</button>
-      </form>
+    <li class="rounded-md border border-base-300/50 px-3 py-2 space-y-1">
+      <div class="flex items-center justify-between gap-3">
+        <span>{{ req.applicant.get_full_name|default:req.applicant.email }}</span>
+        <form method="post" action="{% url 'cartels:decide_request' workgroup.slug req.pk %}" class="flex gap-2">
+          {% csrf_token %}
+          <button name="decision" value="accept" class="btn btn-primary btn-xs">Accept</button>
+          <button name="decision" value="decline" class="btn btn-ghost btn-xs">Decline</button>
+        </form>
+      </div>
+      {% if req.message %}<p class="text-sm text-base-content/70 italic">“{{ req.message }}”</p>{% endif %}
     </li>
     {% endfor %}
   </ul>
 </section>
+{% endif %}
+
+{% comment %} Member management: close to new members / archive {% endcomment %}
+{% if is_member and cartel.status == "open" %}
+<form method="post" action="{% url 'cartels:manage' workgroup.slug %}" class="flex flex-wrap gap-2 border-t border-base-300/50 pt-3">
+  {% csrf_token %}
+  {% if cartel.closed %}
+  <button name="action" value="reopen" class="btn btn-ghost btn-xs">Reopen to new members</button>
+  {% else %}
+  <button name="action" value="close" class="btn btn-ghost btn-xs">Close to new members</button>
+  {% endif %}
+  <button name="action" value="archive" class="btn btn-ghost btn-xs"
+          onclick="return confirm('Archive this cartel?')">Archive</button>
+</form>
 {% endif %}

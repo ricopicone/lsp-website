@@ -10,7 +10,7 @@ from django.urls import reverse
 
 from works.models import Work
 
-from .models import Workgroup
+from .models import Workgroup, WorkgroupMembership
 
 
 def _attached(workgroup, accessor):
@@ -72,13 +72,24 @@ def workgroup_kind_list(request, kind):
         "kind_label_plural": f"{label}s",
         "groups": groups,
     }
-    # Cartels get formation entry points here (the unified Cartels home).
+    # Cartels get formation entry points + a "My cartels" section here
+    # (the unified Cartels home).
     if kind == Workgroup.Kind.CARTEL:
         from accounts.permissions import is_lsp_member
         from cartels.permissions import is_cartel_coordinator
 
         context["can_propose_cartel"] = is_lsp_member(request.user)
         context["is_cartel_coordinator"] = is_cartel_coordinator(request.user)
+        if request.user.is_authenticated:
+            mine_ids = set(
+                WorkgroupMembership.objects
+                .filter(user=request.user, workgroup__kind=Workgroup.Kind.CARTEL)
+                .values_list("workgroup_id", flat=True)
+            )
+            context["my_cartels"] = [g for g in groups if g.id in mine_ids] + [
+                g for g in Workgroup.objects.filter(id__in=mine_ids)
+                if g not in groups  # include ones not in the visible list (e.g. proposed)
+            ]
     return render(request, "workgroups/kind_list.html", context)
 
 

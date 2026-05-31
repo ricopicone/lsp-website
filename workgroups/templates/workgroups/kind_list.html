@@ -15,19 +15,24 @@
     </div>
   </header>
 
-  {% if groups %}
-  <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-    {% for g in groups %}
-    <li class="rounded-lg border border-base-300/50 p-4 hover:bg-base-200/40">
-      <a href="{{ g.get_absolute_url }}" class="font-medium link link-hover">{{ g.name }}</a>
-      {% if g.description %}
-      <p class="text-sm text-base-content/60 mt-1 line-clamp-2">{{ g.description_html|striptags }}</p>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="text-base-content/60">No {{ kind_label_plural|lower }} to show yet.</p>
+  {% if my_cartels %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl">My cartels</h2>
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {% for g in my_cartels %}{% include "workgroups/_group_card.html" %}{% endfor %}
+    </ul>
+  </section>
   {% endif %}
+
+  <section class="space-y-3">
+    {% if my_cartels %}<h2 class="font-serif text-xl">All {{ kind_label_plural|lower }}</h2>{% endif %}
+    {% if groups %}
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {% for g in groups %}{% include "workgroups/_group_card.html" %}{% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-base-content/60">No {{ kind_label_plural|lower }} to show yet.</p>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}
