@@ -2,25 +2,65 @@
 {% load parletre_tags %}
 {% block title %}Lacanian School of Psychoanalysis{% endblock %}
 
+{% block extra_head %}
+<style>
+  /* Landing-only refinements — semantic tokens only, so silk/abyss both work.
+
+     1. A soft primary-tinted glow behind the hero gives the front door depth
+        without a background image. color-mix keeps it faint (the flourishes
+        already use color-mix, so support is established).
+     2. One orchestrated page-load reveal of the hero, staggered via --d.
+        Reduced-motion users are opted out entirely (no opacity:0 start). */
+  .lsp-hero { position: relative; isolation: isolate; }
+  .lsp-hero::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: -3.5rem -28% auto -28%;
+    height: 150%;
+    background: radial-gradient(
+      52% 60% at 24% 12%,
+      color-mix(in srgb, var(--color-primary) 13%, transparent),
+      transparent 72%
+    );
+    pointer-events: none;
+  }
+  /* A faint vertical hairline marks the editorial statement band. */
+  .lsp-rule-accent { box-shadow: inset 2px 0 0 0 var(--color-primary); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .lsp-reveal {
+      opacity: 0;
+      animation: lsp-rise 720ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      animation-delay: calc(var(--d, 0) * 90ms);
+    }
+  }
+  @keyframes lsp-rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: none; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="space-y-16 sm:space-y-24">
 
   {# ===================== Hero ===================== #}
-  <header class="space-y-7 max-w-3xl pt-2 sm:pt-6">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/50">
+  <header class="lsp-hero space-y-7 max-w-3xl pt-2 sm:pt-8">
+    <p class="lsp-reveal font-mono text-xs uppercase tracking-[0.2em] text-base-content/50" style="--d:0">
       A worldwide school · based in San Francisco
     </p>
-    <h1 class="font-serif text-4xl sm:text-6xl text-base-content leading-[1.05] tracking-tight">
+    <h1 class="lsp-reveal font-serif text-4xl sm:text-6xl text-base-content leading-[1.05] tracking-tight" style="--d:1">
       Lacanian School<br class="hidden sm:block"> of Psychoanalysis
     </h1>
-    <p class="text-lg sm:text-xl text-base-content/75 leading-relaxed max-w-2xl">
+    <p class="lsp-reveal text-lg sm:text-xl text-base-content/75 leading-relaxed max-w-2xl" style="--d:2">
       A community for the practice, transmission, and study of
       psychoanalysis—Freud's discovery as it was read, and reopened, by Jacques
       Lacan. We form analysts, transmit psychoanalysis through seminars and
       special events open to the public, and sustain the clinical practice of
       psychoanalysis.
     </p>
-    <div class="flex flex-wrap items-center gap-3 pt-1">
+    <div class="lsp-reveal flex flex-wrap items-center gap-3 pt-1" style="--d:3">
       <a href="{% url 'find_an_analyst' %}" class="btn btn-primary">Find an analyst</a>
       <a href="{% url 'program' %}" class="btn btn-outline">Explore the program</a>
       <a href="{% url 'about' %}" class="btn btn-ghost">About the School</a>
@@ -54,7 +94,7 @@
 
       <a href="{% url 'find_an_analyst' %}"
          class="group flex flex-col rounded-xl border border-base-300 p-6 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
-        <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45">Seeking analysis</span>
+        <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45"><span class="text-primary/70">01</span> · Seeking analysis</span>
         <h3 class="font-serif text-xl text-base-content mt-2 tracking-tight">Find an analyst</h3>
         <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">
           Analysts and candidates of the School practice across the country and
@@ -67,7 +107,7 @@
 
       <a href="{% url 'program' %}"
          class="group flex flex-col rounded-xl border border-base-300 p-6 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
-        <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45">Wanting to study</span>
+        <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45"><span class="text-primary/70">02</span> · Wanting to study</span>
         <h3 class="font-serif text-xl text-base-content mt-2 tracking-tight">Attend the seminars</h3>
         <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">
           Year-long teaching seminars, reading groups, and special events—many
@@ -80,7 +120,7 @@
 
       <a href="{% url 'about' %}"
          class="group flex flex-col rounded-xl border border-base-300 p-6 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
-        <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45">Toward formation</span>
+        <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45"><span class="text-primary/70">03</span> · Toward formation</span>
         <h3 class="font-serif text-xl text-base-content mt-2 tracking-tight">Join the work</h3>
         <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">
           Formation proceeds through analysis, study, and the cartel, along two
@@ -127,15 +167,30 @@
   </section>
   {% endif %}
 
+  {# ============ Editorial statement: a school run by its students ============ #}
+  <section class="border-t border-base-300/60 pt-12 sm:pt-16">
+    <div class="lsp-rule-accent pl-6 sm:pl-9 max-w-3xl">
+      <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45 mb-5">How we are organized</p>
+      <p class="font-serif text-3xl sm:text-5xl text-base-content leading-[1.08] tracking-tight">
+        A school run by its students.
+      </p>
+      <p class="text-base sm:text-lg text-base-content/70 leading-relaxed mt-6 max-w-2xl">
+        Following Lacan's founding gesture, the School belongs to those who
+        study within it. Its committees, cartels, and seminars are carried by
+        the members themselves—candidates, analysts, and scholars who share the
+        work of its direction.
+      </p>
+    </div>
+  </section>
+
   {# ===================== Orientation ===================== #}
-  <section class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 lg:gap-14 items-start border-t border-base-300/60 pt-12">
+  <section class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 lg:gap-14 items-start">
     <div class="space-y-5 max-w-2xl">
       <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">What we do</h2>
       <p class="text-base-content/75 leading-relaxed">
-        The School is organized around teaching and the formation of analysts.
-        Faculty lead <strong>seminars</strong> that read Freud and Lacan
-        closely; members gather in <strong>cartels</strong>—small groups formed
-        around a shared question.
+        Teaching is at the center. Faculty lead <strong>seminars</strong> that
+        read Freud and Lacan closely; members gather in <strong>cartels</strong>—small
+        groups formed around a shared question.
       </p>
       <p class="text-base-content/75 leading-relaxed">
         Formation follows two tracks—Analyst and Scholar—each with its own path
