@@ -361,12 +361,22 @@ class Event(models.Model):
             return self.workgroup
         from workgroups.models import Workgroup, build_workgroup
 
+        # Stopgap mapping until the Workgroup-primary reframe lands (see
+        # docs/design-workgroup-events.md). The annual-program offering types
+        # map to their matching workgroup kind; everything else defaults to
+        # seminar for now.
+        kind = {
+            self.Type.SEMINAR: Workgroup.Kind.SEMINAR,
+            self.Type.READING_GROUP: Workgroup.Kind.READING_GROUP,
+            self.Type.CARTEL: Workgroup.Kind.CARTEL,
+        }.get(self.event_type, Workgroup.Kind.SEMINAR)
+
         slug, n = self.slug, 2
         while Workgroup.objects.filter(slug=slug).exists():
             slug = f"{self.slug}-{n}"
             n += 1
         self.workgroup = build_workgroup(
-            Workgroup.Kind.SEMINAR,
+            kind,
             name=self.title,
             slug=slug,
             description=self.description or "",

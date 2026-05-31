@@ -49,6 +49,18 @@ def test_get_or_create_workgroup_is_idempotent_and_seminar_kind():
     assert event.get_or_create_workgroup() == wg   # idempotent
 
 
+def test_workgroup_kind_follows_event_type():
+    """Stopgap: a reading-group event's workspace is a reading_group workgroup,
+    not a seminar (so /groups/reading-groups/ populates)."""
+    rg = Event.objects.create(
+        title="Reading Lacan's Seminar XI", slug="reading-xi",
+        event_type=Event.Type.READING_GROUP,
+        start_date=date(2026, 9, 1), end_date=date(2027, 5, 1),
+    )
+    wg = rg.get_or_create_workgroup()
+    assert wg.kind == wg.Kind.READING_GROUP
+
+
 def test_creating_workspace_provisions_a_channel():
     event = _seminar()
     wg = event.get_or_create_workgroup()
