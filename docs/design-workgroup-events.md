@@ -118,15 +118,17 @@ per Event (no cross-year merge, per decision #1). **Take an RDS snapshot
 first** (as with the committee fold-in); validate on a local copy of the data
 shape; reverse = noop.
 
-**R3 — Invert creation in the PC admin.** When the PC admin creates an
-annual-program Event, auto-create-and-link its offering Workgroup (or attach to
-a chosen existing one for a recurring offering). Keeps the admin UX close to
-today while enforcing "every program Event has a generating workgroup." Special
-events created by the PC link to the PC workgroup.
+**R3 — Invert creation in the PC admin. ✅ DONE.** `Event.ensure_workgroup()`
+replaces the stopgap `get_or_create_workgroup`: offerings get their own
+workgroup (auto-provisioned channel); PC-organized events (special / assembly /
+work day / scholarly) link to the Programming Committee's workgroup. The PC
+admin event-create view calls it on save, so every PC-created event gets its
+generating workgroup. (The Django-admin "Create workspace" action also uses it.)
 
-**R4 — Remove the stopgap + cleanup.** Delete `Event.get_or_create_workgroup`
-and the old "Create workspace" admin action (creation now flows
-Workgroup→Event). Tidy docs.
+**R4 — Remove the stopgap + cleanup.** Mostly folded into R3 (the
+`get_or_create_workgroup` stopgap is gone). Remaining: doc tidy + decide
+whether the standalone "Create workspace" admin action is still wanted now that
+PC-admin creation auto-attaches.
 
 **Risk gates:** R1, R3, R4 are code-only / additive and ship on the normal
 test-green rhythm. **R2 is the only stage that mutates prod data — snapshot +

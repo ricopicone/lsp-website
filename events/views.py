@@ -398,6 +398,9 @@ def program_admin_event_new(request, academic_year: str):
         form = ProgramEventForm(request.POST, program=program)
         if form.is_valid():
             event = form.save()
+            # Workgroup-primary: every PC-created event gets its generating
+            # workgroup (offering → own group; PC-organized → the PC's group).
+            event.ensure_workgroup()
             return redirect(
                 reverse("program_admin_event_edit", args=[academic_year, event.slug])
             )
