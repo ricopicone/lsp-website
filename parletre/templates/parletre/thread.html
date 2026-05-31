@@ -1,0 +1,80 @@
+{% extends "core/base.html" %}
+{% load static %}
+{% block title %}{{ thread.title }} — Parlêtre{% endblock %}
+{% block extra_head %}<script defer src="{% static 'js/parletre-mentions.js' %}"></script>{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
+    <span aria-hidden="true">/</span>
+    <a href="{{ channel.get_absolute_url }}" class="hover:text-primary">{{ channel.name }}</a>
+  </nav>
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-2xl tracking-tight text-base-content">
+      {% if thread.pinned %}<span title="Pinned" aria-hidden="true">📌</span> {% endif %}
+      {% if thread.locked %}<span title="Locked" aria-hidden="true">🔒</span> {% endif %}
+      {{ thread.title }}
+      {% if thread.resolved %}<span class="badge badge-success badge-outline align-middle">Resolved</span>{% endif %}
+    </h1>
+    {% if can_moderate %}
+    <div class="flex gap-2">
+      {% for action, verb in moderation_actions %}
+      <form method="post" action="{% url 'parletre:moderate_thread' channel.slug thread.slug %}" style="display:contents">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="{{ action }}">
+        <button type="submit" class="btn btn-xs btn-ghost">{{ verb }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </header>
+
+  {% if first_unread_id %}
+  <a href="#post-{{ first_unread_id }}" class="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+    ↓ Jump to first unread
+  </a>
+  {% endif %}
+
+  <ol class="space-y-4">
+    {% for post in posts %}
+    {% if post.id == first_unread_id %}
+    <li aria-hidden="true" class="flex items-center gap-2 text-xs text-primary/80">
+      <span class="h-px flex-1 bg-primary/30"></span>New<span class="h-px flex-1 bg-primary/30"></span>
+    </li>
+    {% endif %}
+    <li id="post-{{ post.id }}" class="rounded-box border {% if post.id == first_unread_id %}border-primary/40{% else %}border-base-300{% endif %} bg-base-100 p-4">
+      <p class="text-sm mb-2">
+        <span class="font-medium text-base-content">{% if post.author %}{{ post.author.get_full_name|default:post.author.email }}{% else %}(removed){% endif %}</span>
+        <time class="text-xs text-base-content/40 ml-1" datetime="{{ post.created_at|date:'c' }}">{{ post.created_at|date:"M j, Y, g:i a" }}</time>
+        {% if post.edited_at %}<span class="text-xs text-base-content/40">(edited)</span>{% endif %}
+        {% if post.via_email %}<span class="badge badge-xs badge-ghost" title="Posted by email">✉</span>{% endif %}
+      </p>
+      {% include "parletre/_reply_context.html" %}
+      <div class="prose prose-sm max-w-none text-base-content/90">
+        {% if post.deleted %}<em class="text-base-content/40">(deleted)</em>{% else %}{{ post.body_html }}{% endif %}
+      </div>
+      {% if not post.deleted %}{% include "parletre/_attachments.html" %}{% include "parletre/_reactions.html" %}{% include "parletre/_post_actions.html" %}{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+
+  {% if can_post %}
+  <form id="composer" method="post" enctype="multipart/form-data" class="space-y-2 border-t border-base-300/60 pt-4">
+    {% csrf_token %}
+    {{ form.reply_to }}
+    {% include "parletre/_reply_banner.html" %}
+    <label class="text-sm text-base-content/70">Reply <span class="text-base-content/40">— type @ to mention</span></label>
+    <div class="mention-host" data-mention-url="{% url 'parletre:mention_search' %}?channel={{ channel.slug }}">{{ form.body }}</div>
+    {% if form.body.errors %}<p class="text-error text-sm">{{ form.body.errors|striptags }}</p>{% endif %}
+    <div class="flex items-center justify-between gap-2">
+      <div>{{ form.attachments }}{% if form.attachments.errors %}<p class="text-error text-sm">{{ form.attachments.errors|striptags }}</p>{% endif %}</div>
+      <button type="submit" class="btn btn-primary btn-sm shrink-0">Post reply</button>
+    </div>
+  </form>
+  {% elif thread.locked %}
+  <p class="text-sm text-base-content/50 border-t border-base-300/60 pt-4">🔒 This thread is locked.</p>
+  {% endif %}
+</div>
+{% endblock %}

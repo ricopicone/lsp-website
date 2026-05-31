@@ -1,4 +1,4 @@
-{% load static committee_filters %}<!DOCTYPE html>
+{% load static committee_filters parletre_tags %}<!DOCTYPE html>
 <html lang="en" data-theme="silk">
 <head>
   <meta charset="utf-8">
@@ -57,6 +57,10 @@
           <a href="{{ url_cal }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_cal in cur %}text-primary font-medium{% endif %}">Calendar</a>
           <a href="{{ url_works }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_works in cur %}text-primary font-medium{% endif %}">Works</a>
           <a href="{{ url_docs }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_docs in cur %}text-primary font-medium{% endif %}">Documents</a>
+          {% if user|is_parletre_member %}
+          {% url 'parletre:index' as url_parletre %}
+          <a href="{{ url_parletre }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_parletre in cur %}text-primary font-medium{% endif %}">Parlêtre</a>
+          {% endif %}
         {% endwith %}
       </nav>
 
@@ -70,6 +74,17 @@
           <span data-theme-icon="silk">☼</span>
           <span data-theme-icon="abyss" class="hidden">☽</span>
         </button>
+
+        {% if parletre_is_member %}
+        <a href="{% url 'parletre:notifications' %}"
+           class="btn btn-ghost btn-sm btn-circle relative text-base-content/70"
+           aria-label="Notifications" title="Notifications">
+          <span aria-hidden="true">🔔</span>
+          {% if parletre_unread %}
+          <span class="absolute -top-0.5 -right-0.5 badge badge-xs badge-primary">{{ parletre_unread }}</span>
+          {% endif %}
+        </a>
+        {% endif %}
 
         {% if user.is_authenticated %}
         <div class="dropdown dropdown-end">
@@ -108,6 +123,9 @@
             <li class="sm:hidden"><a href="{% url 'core:calendar' %}">Calendar</a></li>
             <li class="sm:hidden"><a href="{% url 'works:index' %}">Works</a></li>
             <li class="sm:hidden"><a href="{% url 'documents:index' %}">Documents</a></li>
+            {% if user|is_parletre_member %}
+            <li class="sm:hidden"><a href="{% url 'parletre:index' %}">Parlêtre</a></li>
+            {% endif %}
             <li class="sm:hidden"><hr class="border-base-300/60 my-1"></li>
 
             {% if user.profile.is_listed %}

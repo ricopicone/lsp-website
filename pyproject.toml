@@ -5,6 +5,8 @@ description = "Lacanian School of Psychoanalysis — registration and payment we
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "channels-redis>=4.3.0",
+    "channels[daphne]>=4.3.2",
     "django>=5.2,<5.3",
     "django-environ>=0.13.0",
     "django-phonenumber-field[phonenumbers]>=8.0",
@@ -12,6 +14,7 @@ dependencies = [
     "geopy>=2.4.1",
     "gunicorn>=23.0.0",
     "markdown>=3.10.2",
+    "nh3>=0.3.5",
     "pillow>=12.2.0",
     "psycopg[binary]>=3.2.0",
     "python-dateutil>=2.9.0.post0",

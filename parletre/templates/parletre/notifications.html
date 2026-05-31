@@ -1,0 +1,36 @@
+{% extends "core/base.html" %}
+{% block title %}Notifications — Parlêtre{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-5">
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-base-content/70">Notifications</span>
+  </nav>
+
+  <div class="flex items-center justify-between gap-3">
+    <h1 class="font-serif text-2xl tracking-tight text-base-content">Notifications</h1>
+    <a href="{% url 'parletre:settings' %}" class="btn btn-ghost btn-sm">Email settings</a>
+  </div>
+
+  <ul class="divide-y divide-base-300/60 rounded-box border border-base-300 bg-base-100">
+    {% for n in items %}
+    <li class="p-3 {% if n.is_unread %}bg-base-200/50{% endif %}">
+      <a href="{{ n.url }}" class="flex items-start gap-2 hover:text-primary">
+        {% if n.is_unread %}<span class="mt-1.5 size-2 rounded-full bg-primary shrink-0" aria-label="unread"></span>
+        {% else %}<span class="mt-1.5 size-2 shrink-0"></span>{% endif %}
+        <span class="text-sm">
+          <span class="font-medium text-base-content">{% if n.actor %}{{ n.actor.get_full_name|default:n.actor.email }}{% else %}Someone{% endif %}</span>
+          <span class="text-base-content/70">{{ n.get_verb_display }}</span>
+          {% if n.context_label %}<span class="text-base-content/90">— {{ n.context_label }}</span>{% endif %}
+          <time class="block text-xs text-base-content/40" datetime="{{ n.created_at|date:'c' }}">{{ n.created_at|date:"M j, Y, g:i a" }}</time>
+        </span>
+      </a>
+    </li>
+    {% empty %}
+    <li class="p-6 text-center text-base-content/50 italic">No notifications yet.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

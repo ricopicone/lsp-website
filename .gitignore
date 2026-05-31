@@ -36,3 +36,4 @@ htmlcov/
 # Tailwind/DaisyUI CSS build pipeline
 node_modules/
 /static/css/site.css
+/private-media/

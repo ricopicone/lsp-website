@@ -46,6 +46,24 @@ CSRF_TRUSTED_ORIGINS = env(
     default=["https://app.lacanschool.org"],
 )
 
+# --- Channels layer (Parlêtre realtime chat) ----------------------------
+# Production runs a single daphne process, so the in-memory channel layer
+# from base.py is correct and sufficient (groups are shared within the one
+# process — HTTP-fallback broadcasts come from that same process too). We do
+# NOT use Redis here: channels-redis against redis-py 8.x raises
+# "TimeoutError: Timeout reading from redis" on group ops, which silently
+# broke live chat. Re-enable Redis only when scaling to multiple worker
+# processes, and only after fixing that combo (e.g. RedisPubSubChannelLayer
+# and/or pinning redis-py) — opt in with PARLETRE_USE_REDIS=true.
+REDIS_URL = env("REDIS_URL", default="")
+if env.bool("PARLETRE_USE_REDIS", default=False) and REDIS_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.pubsub.RedisPubSubChannelLayer",
+            "CONFIG": {"hosts": [REDIS_URL]},
+        },
+    }
+
 # --- Security (the site is served over HTTPS) ---------------------------
 
 SECURE_SSL_REDIRECT = True

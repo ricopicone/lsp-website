@@ -4,10 +4,26 @@ services:
     image: lsp-website:latest
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Parlêtre realtime chat shares its WebSocket layer across processes
+      # via Redis (config/settings/production.py reads REDIS_URL).
+      - REDIS_URL=redis://redis:6379/0
     ports:
       - "127.0.0.1:8000:8000"
-    # User uploads go to S3 in production (see config/settings/production.py
-    # — AWS_STORAGE_BUCKET_NAME env var triggers S3Storage). No bind-mount
-    # needed since the bucket is the source of truth. Local dev without
-    # AWS_STORAGE_BUCKET_NAME falls back to FileSystemStorage at
-    # BASE_DIR/media inside the dev tree.
+    depends_on:
+      - redis
+    volumes:
+      # Public user uploads go to S3 in production (see
+      # config/settings/production.py — AWS_STORAGE_BUCKET_NAME triggers
+      # S3Storage). Parlêtre *attachments* are deliberately kept off any
+      # public URL (parletre/storage.py) and stored on disk; this named
+      # volume persists them across container restarts/redeploys.
+      - lsp-private-media:/app/private-media
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Chat fan-out only — safe to lose on restart, so no persistence configured.
+
+volumes:
+  lsp-private-media:

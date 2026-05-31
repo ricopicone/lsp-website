@@ -38,6 +38,9 @@ ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
 # --- Applications -------------------------------------------------------
 
 DJANGO_APPS = [
+    # daphne must precede staticfiles so it can provide the ASGI runserver.
+    "daphne",
+    "channels",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -59,6 +62,7 @@ LOCAL_APPS = [
     "registrations",
     "payments",
     "works",
+    "parletre",
     "core",
 ]
 
@@ -92,12 +96,21 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.aphorism",
+                "parletre.context_processors.notifications",
             ],
         },
     },
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
+
+# Channels layer for Parlêtre realtime chat (M13.5b). In-memory is fine for a
+# single process (dev, tests, and a single-worker prod box); production sets
+# REDIS_URL to share the layer across workers (see production.py).
+CHANNEL_LAYERS = {
+    "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
+}
 
 # --- Database -----------------------------------------------------------
 # Development uses this SQLite database. Production overrides DATABASES
@@ -145,6 +158,15 @@ STATICFILES_DIRS = [BASE_DIR / "static"]  # Tailwind build output, future shared
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Parlêtre attachments live OUTSIDE the public media root (and outside the
+# public S3 bucket) and are served only through the access-checked download
+# view, so files in a private channel stay private. Persist this directory in
+# production the same way media is persisted (a bind-mount), so attachments
+# survive container restarts.
+PARLETRE_ATTACHMENTS_ROOT = env(
+    "PARLETRE_ATTACHMENTS_ROOT", default=str(BASE_DIR / "private-media")
+)
+
 # --- Email --------------------------------------------------------------
 
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")
@@ -159,6 +181,22 @@ EMAIL_CHANGE_PUBLIC = env.bool("DJANGO_EMAIL_CHANGE_PUBLIC", default=False)
 EMAIL_CHANGE_ALLOWLIST = env.list(
     "DJANGO_EMAIL_CHANGE_ALLOWLIST", default=["dr@ricopic.one"]
 )
+
+# --- Parlêtre (discussion board) email -----------------------------------
+# Reply-by-email: when enabled, notification emails carry a signed Reply-To
+# at PARLETRE_REPLY_DOMAIN so a member's reply posts back to the thread.
+# Disabled by default until SES inbound is provisioned for that subdomain
+# (see the Phase 2 plan's parallel-prep tasks); until then notification
+# emails just use SUPPORT_EMAIL as Reply-To.
+PARLETRE_REPLY_ENABLED = env.bool("PARLETRE_REPLY_ENABLED", default=False)
+PARLETRE_REPLY_DOMAIN = env("PARLETRE_REPLY_DOMAIN", default="parletre.lacanschool.org")
+# Secret for signing reply tokens (HMAC). Falls back to SECRET_KEY.
+PARLETRE_REPLY_SECRET = env("PARLETRE_REPLY_SECRET", default=SECRET_KEY)
+# Inbound webhook (SES → SNS → /parletre/inbound/). The security boundary is
+# the HMAC reply token + sender match; this optional SNS topic-ARN allowlist
+# is cheap defence-in-depth. Full SNS signature verification is a hardening
+# follow-up. Set to the receiving topic's ARN to reject other senders.
+PARLETRE_SNS_TOPIC_ARN = env("PARLETRE_SNS_TOPIC_ARN", default="")
 
 # --- Stripe -------------------------------------------------------------
 # Test-mode keys for development; production keys swapped via env in

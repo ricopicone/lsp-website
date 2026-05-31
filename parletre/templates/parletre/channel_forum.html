@@ -1,0 +1,56 @@
+{% extends "core/base.html" %}
+{% block title %}{{ channel.name }} — Parlêtre{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-base-content/70">{{ channel.name }}</span>
+  </nav>
+
+  <header class="flex flex-wrap items-start justify-between gap-3">
+    <div class="space-y-1">
+      <h1 class="font-serif text-2xl tracking-tight text-base-content">{{ channel.name }}</h1>
+      {% if channel.description %}
+      <div class="prose prose-sm max-w-none text-base-content/70">{{ channel.description_html }}</div>
+      {% endif %}
+    </div>
+    <div class="flex items-center gap-3">
+      {% include "parletre/_subscribe.html" %}
+      {% if can_post %}
+      <a href="{% url 'parletre:new_thread' channel.slug %}" class="btn btn-primary btn-sm">New thread</a>
+      {% endif %}
+    </div>
+  </header>
+
+  {% if not can_post %}
+  <p class="text-xs text-base-content/50">This is a read-only channel — only moderators may post.</p>
+  {% endif %}
+
+  <ul class="divide-y divide-base-300/60 rounded-box border border-base-300 bg-base-100">
+    {% for thread in threads %}
+    <li class="p-4 flex items-center justify-between gap-3 hover:bg-base-200/40">
+      <div class="min-w-0">
+        <a href="{{ thread.get_absolute_url }}" class="{% if thread.is_unread %}font-semibold{% else %}font-medium{% endif %} text-base-content hover:text-primary">
+          {% if thread.is_unread %}<span class="size-2 rounded-full bg-primary inline-block align-middle shrink-0" title="Unread"></span> {% endif %}
+          {% if thread.pinned %}<span title="Pinned" aria-hidden="true">📌</span> {% endif %}
+          {% if thread.locked %}<span title="Locked" aria-hidden="true">🔒</span> {% endif %}
+          {{ thread.title }}
+          {% if thread.resolved %}<span class="badge badge-sm badge-success badge-outline">Resolved</span>{% endif %}
+        </a>
+        <p class="text-xs text-base-content/50">
+          {% if thread.author %}{{ thread.author.get_full_name|default:thread.author.email }}{% else %}(removed){% endif %}
+          · {{ thread.reply_count }} post{{ thread.reply_count|pluralize }}
+        </p>
+      </div>
+      <time class="text-xs text-base-content/40 whitespace-nowrap" datetime="{{ thread.last_activity_at|date:'c' }}">
+        {{ thread.last_activity_at|date:"M j, g:i a" }}
+      </time>
+    </li>
+    {% empty %}
+    <li class="p-6 text-center text-base-content/50 italic">No threads yet.{% if can_post %} Start one.{% endif %}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

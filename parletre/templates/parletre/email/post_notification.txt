@@ -1,0 +1,13 @@
+{% autoescape off %}{{ actor }} {{ verb }} in {{ channel.name }}.
+
+{{ context_label }}
+
+{{ post.body }}
+
+Read and reply: {{ url }}
+{% if reply_enabled %}Or just reply to this email and it will post to the thread.{% endif %}
+
+—
+Parlêtre · the Lacanian School discussion board
+You're receiving this because of your notification settings for this channel.
+{% endautoescape %}

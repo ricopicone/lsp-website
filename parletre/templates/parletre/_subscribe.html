@@ -1,0 +1,12 @@
+{% comment %}Per-channel notification level. Expects: channel, sub_level, levels.{% endcomment %}
+<form method="post" action="{% url 'parletre:subscribe' channel.slug %}" class="flex items-center gap-2">
+  {% csrf_token %}
+  <label class="text-sm text-base-content/60" for="sub-level">Notify me:</label>
+  <select id="sub-level" name="level" class="select select-bordered select-sm"
+          onchange="this.form.submit()">
+    {% for value, label in levels %}
+    <option value="{{ value }}" {% if value == sub_level %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <noscript><button type="submit" class="btn btn-sm">Save</button></noscript>
+</form>

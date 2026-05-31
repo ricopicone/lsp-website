@@ -1,0 +1,33 @@
+{% extends "core/base.html" %}
+{% block title %}Settings — Parlêtre{% endblock %}
+
+{% block content %}
+<div class="max-w-xl space-y-5">
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-base-content/70">Settings</span>
+  </nav>
+
+  <h1 class="font-serif text-2xl tracking-tight text-base-content">Email settings</h1>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <fieldset class="space-y-2">
+      <legend class="text-sm font-medium text-base-content/80">Digest of your “digest-level” channels</legend>
+      <p class="text-sm text-base-content/60">
+        Channels you follow more closely email you immediately; the rest are
+        rolled up into a digest at this cadence.
+      </p>
+      {% for value, label in choices %}
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="radio" name="frequency" value="{{ value }}" class="radio radio-sm"
+               {% if value == pref.frequency %}checked{% endif %}>
+        <span>{{ label }}</span>
+      </label>
+      {% endfor %}
+    </fieldset>
+    <button type="submit" class="btn btn-primary btn-sm">Save</button>
+  </form>
+</div>
+{% endblock %}
