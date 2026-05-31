@@ -243,3 +243,15 @@ class WorkgroupMembership(models.Model):
     @property
     def is_active(self) -> bool:
         return self.end_date is None
+
+
+def build_workgroup(kind, *, name, **kwargs):
+    """Create a Workgroup of ``kind`` with its per-kind capability seed applied.
+
+    The seed fills any toggle the caller didn't pass explicitly. Shared by the
+    concrete group types' ``create_with_workgroup`` helpers so the creation
+    logic lives on the Workgroup side (add-to-Workgroup-first principle).
+    """
+    toggles = Workgroup.kind_toggle_defaults(kind)
+    toggles.update(kwargs)
+    return Workgroup.objects.create(kind=kind, name=name, **toggles)

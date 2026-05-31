@@ -65,6 +65,7 @@ LOCAL_APPS = [
     "parletre",
     "workgroups",
     "cartels",
+    "workinggroups",
     "core",
 ]
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from django.db import models, transaction
 
-from workgroups.models import Workgroup
+from workgroups.models import Workgroup, build_workgroup
 
 
 class CartelManager(models.Manager):
@@ -23,12 +23,8 @@ class CartelManager(models.Manager):
         Applies the cartel capability-toggle seed; any explicit toggle passed
         in ``workgroup_kwargs`` wins.
         """
-        toggles = Workgroup.kind_toggle_defaults(Workgroup.Kind.CARTEL)
-        toggles.update(workgroup_kwargs)
-        workgroup = Workgroup.objects.create(
-            kind=Workgroup.Kind.CARTEL, name=name, **toggles
-        )
-        return self.create(workgroup=workgroup)
+        wg = build_workgroup(Workgroup.Kind.CARTEL, name=name, **workgroup_kwargs)
+        return self.create(workgroup=wg)
 
 
 class Cartel(models.Model):
