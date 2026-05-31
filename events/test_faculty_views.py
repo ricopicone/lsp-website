@@ -71,8 +71,8 @@ def pc_member(db):
 @pytest.fixture
 def staff_member(db):
     u = User.objects.create_user(email="staff@example.com")
-    u.profile.is_lsp_staff = True
-    u.profile.save(update_fields=["is_lsp_staff"])
+    from core.models import StaffRole
+    StaffRole.objects.get(key=StaffRole.LSP_STAFF).holders.add(u)
     return u
 
 

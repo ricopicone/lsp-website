@@ -64,10 +64,11 @@ class StaffRole(models.Model):
     data migration. Superusers implicitly hold every role (see ``core.access``).
     """
 
-    # Well-known keys that control panels gate on.
+    # Well-known keys that code gates on.
     WEB_COORDINATOR = "web_coordinator"
     TREASURER = "treasurer"
     CARTEL_COORDINATOR = "cartel_coordinator"
+    LSP_STAFF = "lsp_staff"
 
     key = models.SlugField(
         max_length=50,

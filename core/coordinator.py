@@ -21,7 +21,7 @@ from .models import Aphorism, StaffRole
 def _panels_for(user) -> list[dict]:
     """The control panels ``user`` may access, in display order."""
     panels = []
-    if has_staff_role(user, StaffRole.WEB_COORDINATOR):
+    if user.is_superuser or has_staff_role(user, StaffRole.WEB_COORDINATOR):
         panels.append(
             {
                 "title": "Aphorisms",
