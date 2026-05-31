@@ -10,7 +10,7 @@ import pytest
 from django.urls import reverse
 
 from accounts.models import User
-from committees.models import Committee, CommitteeMembership
+from committees.models import Committee
 from events.models import Audience, Event, PriceTier, PricingCode
 from registrations.models import Registration
 
@@ -62,10 +62,8 @@ def other_faculty(db, other_event):
 @pytest.fixture
 def pc_member(db):
     u = User.objects.create_user(email="pc@example.com")
-    CommitteeMembership.objects.create(
-        user=u,
-        committee=Committee.objects.get(slug="programming-committee"),
-        start_date=date(2026, 1, 1),
+    Committee.objects.get(slug="programming-committee").add_member(
+        u, start_date=date(2026, 1, 1)
     )
     return u
 
@@ -73,11 +71,8 @@ def pc_member(db):
 @pytest.fixture
 def staff_member(db):
     u = User.objects.create_user(email="staff@example.com")
-    CommitteeMembership.objects.create(
-        user=u,
-        committee=Committee.objects.get(slug="lsp-staff"),
-        start_date=date(2026, 1, 1),
-    )
+    u.profile.is_lsp_staff = True
+    u.profile.save(update_fields=["is_lsp_staff"])
     return u
 
 

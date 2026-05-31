@@ -122,6 +122,14 @@ class Profile(models.Model):
         default=False,
         help_text="Faculty axis (USR-6). Orthogonal to role.",
     )
+    is_lsp_staff = models.BooleanField(
+        default=False,
+        help_text=(
+            "LSP Staff designation — distinct from Django's is_staff. Grants "
+            "the Staff Parlêtre channel, board entry, and event-edit rights "
+            "(replaces the former 'LSP Staff' committee). Orthogonal to role."
+        ),
+    )
     bio = models.TextField(
         blank=True,
         help_text="Short biographical text. Shown on the directory and on event pages.",

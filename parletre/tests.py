@@ -13,7 +13,8 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 
 from accounts.models import Profile
-from committees.models import Committee, CommitteeMembership
+from committees.models import Committee
+from workgroups.models import WorkgroupMembership
 
 from .models import Channel, Post, Subscription, SubscriptionLevel, Thread
 from .rendering import render_markdown
@@ -51,13 +52,8 @@ def make_committee(slug, name=None):
     return committee
 
 
-def add_to_committee(user, committee, role=CommitteeMembership.Role.MEMBER):
-    return CommitteeMembership.objects.create(
-        user=user,
-        committee=committee,
-        role_in_committee=role,
-        start_date=datetime.date(2026, 1, 1),
-    )
+def add_to_committee(user, committee, role=WorkgroupMembership.Role.MEMBER):
+    return committee.add_member(user, role=role, start_date=datetime.date(2026, 1, 1))
 
 
 # ---- the board-wide gate: is_member -------------------------------------
@@ -161,7 +157,7 @@ def test_staff_see_role_and_committee_channels_but_not_private():
     private = make_channel("hush", access=Access.PRIVATE)
     role_ch = make_channel("analysts", access=Access.ROLE, allowed_roles=["analyst"])
     pc = make_committee("pc", "PC")
-    committee_ch = make_channel("pc", access=Access.COMMITTEE, committee=pc)
+    committee_ch = make_channel("pc-legacy", access=Access.COMMITTEE, committee=pc)
     assert role_ch.visible_to(staff)
     assert committee_ch.visible_to(staff)
     assert not private.visible_to(staff)
@@ -193,9 +189,9 @@ def test_staff_only_channel_blocks_member_posts_but_allows_moderators():
 @pytest.mark.django_db
 def test_committee_chair_moderates_its_channel_but_plain_member_does_not():
     pc = make_committee("pc", "PC")
-    ch = make_channel("pc", access=Access.COMMITTEE, committee=pc)
+    ch = make_channel("pc-legacy", access=Access.COMMITTEE, committee=pc)
     chair = make_user("chair@x.co", role=Role.ANALYST)
-    add_to_committee(chair, pc, role=CommitteeMembership.Role.CHAIR)
+    add_to_committee(chair, pc, role=WorkgroupMembership.Role.CHAIR)
     plain = make_user("plain@x.co", role=Role.ANALYST)
     add_to_committee(plain, pc)
     assert ch.can_moderate(chair)

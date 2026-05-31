@@ -16,22 +16,26 @@ from __future__ import annotations
 def is_lsp_member(user) -> bool:
     """Whether ``user`` counts as an LSP member.
 
-    True for Django staff, anyone holding a directory (member) role, and
-    anyone on an active committee (Board / PC / Staff carried under a
-    non-member role still belong).
+    True for Django staff, anyone holding a directory (member) role, anyone
+    with the LSP Staff designation, and anyone on an active committee (Board /
+    PC carried under a non-member role still belong — read via the committee's
+    workgroup roster after the Stage-4 fold-in).
     """
     if not getattr(user, "is_authenticated", False):
         return False
     if user.is_staff:
         return True
+
     from accounts.models import Profile
 
     profile = getattr(user, "profile", None)
-    if profile is not None and profile.role in Profile.DIRECTORY_ROLES:
+    if profile is not None and (profile.role in Profile.DIRECTORY_ROLES or profile.is_lsp_staff):
         return True
 
-    from committees.models import CommitteeMembership
+    from workgroups.models import Workgroup, WorkgroupMembership
 
-    return CommitteeMembership.objects.filter(
-        user=user, end_date__isnull=True
+    return WorkgroupMembership.objects.filter(
+        user=user,
+        end_date__isnull=True,
+        workgroup__kind=Workgroup.Kind.COMMITTEE,
     ).exists()

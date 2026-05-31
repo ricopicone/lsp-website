@@ -101,6 +101,7 @@ class Channel(models.Model):
         ROLE = "role", _("Specific roles")
         COMMITTEE = "committee", _("Committee")
         WORKGROUP = "workgroup", _("Workgroup")
+        LSP_STAFF = "lsp_staff", _("LSP Staff")
         PRIVATE = "private", _("Private — named members")
         # "Open" means open to every *member* — never to the public. All of
         # Parlêtre sits behind the members-only gate (see permissions.is_member).

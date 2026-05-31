@@ -8,7 +8,7 @@ import pytest
 from django.urls import reverse
 
 from accounts.models import User
-from committees.models import Committee, CommitteeMembership
+from committees.models import Committee
 from events.models import Event, Program
 
 
@@ -19,10 +19,7 @@ def pc_member(db):
         slug="programming-committee",
         defaults={"name": "Programming Committee"},
     )
-    CommitteeMembership.objects.create(
-        user=u, committee=committee,
-        start_date=date(2026, 1, 1),
-    )
+    committee.add_member(u, start_date=date(2026, 1, 1))
     return u
 
 

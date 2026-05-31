@@ -1,18 +1,16 @@
-"""LSP committees and memberships (USR-7).
+"""LSP committees (USR-7).
 
-A ``Committee`` is an organizational entity with its own page, charter, and
-roster. ``CommitteeMembership`` records a user's tenure on a committee,
-including the role they hold within it and their term dates. Multiple
-historical memberships per (user, committee) are allowed; at most one
-*active* (``end_date IS NULL``) membership per pair is enforced via a
-partial unique constraint.
+A ``Committee`` is an organizational entity with its own page and charter. As
+of the Stage-4 workgroups fold-in it *attaches* a :class:`workgroups.Workgroup`
+(``kind=committee``) which holds the roster — membership lives on
+``workgroups.WorkgroupMembership``, not here. ``Committee`` keeps only its
+committee-specific identity (charter, public page). See
+``docs/design-workgroups.md``.
 """
 
 from __future__ import annotations
 
-from django.conf import settings
 from django.db import models
-from django.utils.translation import gettext_lazy as _
 
 
 class Committee(models.Model):
@@ -31,6 +29,14 @@ class Committee(models.Model):
         default=False,
         help_text="Whether this committee has a public page.",
     )
+    workgroup = models.OneToOneField(
+        "workgroups.Workgroup",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="committee",
+        help_text="The backing workgroup (kind=committee) that holds the roster.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -39,58 +45,48 @@ class Committee(models.Model):
     def __str__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        """Ensure every committee has a backing committee-kind workgroup.
+
+        The Stage-4 fold-in migration backfills existing committees; this keeps
+        the invariant for any committee created afterward (admin, seed, tests).
+        """
+        super().save(*args, **kwargs)
+        if self.workgroup_id is None:
+            from workgroups.models import Workgroup, build_workgroup
+
+            slug, n = self.slug, 2
+            while Workgroup.objects.filter(slug=slug).exists():
+                slug = f"{self.slug}-{n}"
+                n += 1
+            self.workgroup = build_workgroup(
+                Workgroup.Kind.COMMITTEE,
+                name=self.name,
+                slug=slug,
+                description=self.description or "",
+                landing_visibility="public" if self.public else "members",
+                content_visibility="members",
+            )
+            super().save(update_fields=["workgroup"])
+
     def active_members(self):
-        return self.memberships.filter(end_date__isnull=True).select_related("user")
+        """Current roster, read from the attached workgroup."""
+        if self.workgroup_id is None:
+            from workgroups.models import WorkgroupMembership
 
+            return WorkgroupMembership.objects.none()
+        return self.workgroup.active_members()
 
-class CommitteeMembership(models.Model):
-    class Role(models.TextChoices):
-        MEMBER = "member", _("Member")
-        CHAIR = "chair", _("Chair")
-        CO_CHAIR = "co_chair", _("Co-chair")
-        SECRETARY = "secretary", _("Secretary")
-        TREASURER = "treasurer", _("Treasurer")
-        # Staff positions
-        REFERRAL_COORDINATOR = "referral_coordinator", _("Referral Coordinator")
-        WEB_COORDINATOR = "web_coordinator", _("Web Coordinator")
-        ADMIN_ASSISTANT = "admin_assistant", _("Admin Assistant")
+    def add_member(self, user, *, role="member", start_date=None, end_date=None):
+        """Add ``user`` to this committee's roster (on its workgroup)."""
+        from workgroups.models import WorkgroupMembership
 
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="committee_memberships",
-    )
-    committee = models.ForeignKey(
-        Committee,
-        on_delete=models.CASCADE,
-        related_name="memberships",
-    )
-    role_in_committee = models.CharField(
-        max_length=20,
-        choices=Role.choices,
-        default=Role.MEMBER,
-    )
-    start_date = models.DateField()
-    end_date = models.DateField(
-        null=True,
-        blank=True,
-        help_text="Null for currently-serving members.",
-    )
-
-    class Meta:
-        ordering = ("committee__name", "-start_date")
-        constraints = [
-            models.UniqueConstraint(
-                fields=("user", "committee"),
-                condition=models.Q(end_date__isnull=True),
-                name="committees_one_active_membership_per_user_committee",
-            ),
-        ]
-
-    def __str__(self):
-        active = "active" if self.end_date is None else f"ended {self.end_date.isoformat()}"
-        return f"{self.user} — {self.committee} ({self.get_role_in_committee_display()}, {active})"
-
-    @property
-    def is_active(self) -> bool:
-        return self.end_date is None
+        if start_date is None:
+            start_date = self.created_at.date() if self.created_at else None
+        return WorkgroupMembership.objects.create(
+            workgroup=self.workgroup,
+            user=user,
+            role=role,
+            start_date=start_date,
+            end_date=end_date,
+        )

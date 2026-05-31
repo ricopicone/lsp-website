@@ -26,8 +26,7 @@ Parlêtre as a whole is members-only and never public.
 
 from __future__ import annotations
 
-from accounts.models import Profile
-from committees.models import CommitteeMembership
+from accounts.permissions import is_lsp_member as _is_lsp_member
 from workgroups.models import Workgroup, WorkgroupMembership
 
 #: Workgroup kinds whose channels allow the staff read/moderate bypass.
@@ -36,32 +35,19 @@ from workgroups.models import Workgroup, WorkgroupMembership
 #: matching the legacy COMMITTEE access mode.
 _WORKGROUP_STAFF_BYPASS_KINDS = (Workgroup.Kind.COMMITTEE, Workgroup.Kind.SEMINAR)
 
-#: The LSP roles that, on their own, grant entry to the members-only board.
-#: Mirrors the public-directory membership set — the people the school
-#: considers actual members (analysts, candidates, pre-candidates across both
-#: tracks, scholars, and plain members). Prospective applicants, students,
-#: and guests (external) are excluded.
-MEMBER_ROLES = Profile.DIRECTORY_ROLES
-
-
 def _authenticated(user) -> bool:
     return bool(getattr(user, "is_authenticated", False))
 
 
 def is_member(user) -> bool:
-    """Whether ``user`` may enter Parlêtre at all (the MEM-1 gate)."""
-    if not _authenticated(user):
-        return False
-    if user.is_staff:
-        return True
-    profile = getattr(user, "profile", None)
-    if profile is not None and profile.role in MEMBER_ROLES:
-        return True
-    # Board / PC / Staff members may sit outside the member-role set (e.g. an
-    # admin assistant carried as a guest role) but still belong on the board.
-    return CommitteeMembership.objects.filter(
-        user=user, end_date__isnull=True
-    ).exists()
+    """Whether ``user`` may enter Parlêtre at all (the MEM-1 gate).
+
+    Consolidated onto :func:`accounts.permissions.is_lsp_member` (Stage-4
+    fold-in): Django staff, a directory/member role, the LSP Staff
+    designation, or active membership in a committee-kind workgroup
+    (Board / PC) all grant entry.
+    """
+    return _is_lsp_member(user)
 
 
 def _workgroup_lead(workgroup, user) -> bool:
@@ -100,16 +86,14 @@ def channel_can_moderate(channel, user) -> bool:
         return True
     if channel.moderators.filter(pk=user.pk).exists():
         return True
-    # Chairs of a channel's gating committee moderate it by default.
+    # Legacy committee-access channels: chairs of the gating committee
+    # moderate, read via the committee's workgroup roster.
     if channel.committee_id is not None:
-        return CommitteeMembership.objects.filter(
+        return WorkgroupMembership.objects.filter(
             user=user,
-            committee_id=channel.committee_id,
             end_date__isnull=True,
-            role_in_committee__in=(
-                CommitteeMembership.Role.CHAIR,
-                CommitteeMembership.Role.CO_CHAIR,
-            ),
+            workgroup__committee__pk=channel.committee_id,
+            role__in=WorkgroupMembership.LEAD_ROLES,
         ).exists()
     return False
 
@@ -143,6 +127,11 @@ def channel_visible(channel, user) -> bool:
         if wg.is_member(user):
             return True
         return user.is_staff and wg.kind in _WORKGROUP_STAFF_BYPASS_KINDS
+    if access == Access.LSP_STAFF:
+        # The LSP Staff channel: gated by the is_lsp_staff designation
+        # (staff keep oversight).
+        profile = getattr(user, "profile", None)
+        return bool(profile and profile.is_lsp_staff) or user.is_staff
     # Role- and committee-gated channels: staff may always read (moderation,
     # support) — privacy is not the point for those.
     if user.is_staff:
@@ -151,8 +140,9 @@ def channel_visible(channel, user) -> bool:
         profile = getattr(user, "profile", None)
         return profile is not None and profile.role in (channel.allowed_roles or [])
     if access == Access.COMMITTEE:
-        return channel.committee_id is not None and CommitteeMembership.objects.filter(
-            user=user, committee_id=channel.committee_id, end_date__isnull=True
+        # Legacy committee-access channels, read via the committee's workgroup.
+        return channel.committee_id is not None and WorkgroupMembership.objects.filter(
+            user=user, end_date__isnull=True, workgroup__committee__pk=channel.committee_id
         ).exists()
     return False
 

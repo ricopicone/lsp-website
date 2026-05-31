@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 
 from accounts.models import Profile, User
 from cartels.models import Cartel
-from committees.models import Committee, CommitteeMembership
+from committees.models import Committee
 from workgroups.models import Visibility, Workgroup, WorkgroupMembership
 
 pytestmark = pytest.mark.django_db
@@ -102,10 +102,8 @@ def test_committee_member_counts_as_lsp_member_for_members_visibility():
     """A committee member with a non-directory role still passes MEMBERS."""
     wg = _wg(landing_visibility=Visibility.MEMBERS, content_visibility=Visibility.MEMBERS)
     staffer = _user("s@x.test", role=Profile.Role.EXTERNAL)
-    committee = Committee.objects.create(name="Staff", slug="staff")
-    CommitteeMembership.objects.create(
-        user=staffer, committee=committee, start_date=datetime.date(2026, 1, 1)
-    )
+    committee = Committee.objects.create(name="Ethics", slug="ethics")
+    committee.add_member(staffer, start_date=datetime.date(2026, 1, 1))
     assert wg.content_visible_to(staffer) is True
 
 

@@ -12,7 +12,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import User
-from committees.models import Committee, CommitteeMembership
 from events.models import Audience, Event, PriceTier, PricingCode
 from payments.models import Payment, Receipt
 from registrations.models import Registration
@@ -123,14 +122,11 @@ def test_roster_csv_excludes_cancelled_and_refunded(
     assert not any("refunded@example.com" in line for line in body)
 
 
-def test_roster_csv_for_lsp_staff_committee(client, event, tier, random_user):
-    """Membership in LSP Staff committee grants roster access for any event."""
+def test_roster_csv_for_lsp_staff(client, event, tier, random_user):
+    """The LSP Staff designation grants roster access for any event."""
     staff_member = User.objects.create_user(email="lsp-staff@example.com")
-    CommitteeMembership.objects.create(
-        user=staff_member,
-        committee=Committee.objects.get(slug="lsp-staff"),
-        start_date=date(2026, 1, 1),
-    )
+    staff_member.profile.is_lsp_staff = True
+    staff_member.profile.save(update_fields=["is_lsp_staff"])
     Registration.objects.create(
         user=random_user, event=event, price_tier=tier,
         quoted_amount=Decimal("100.00"), status=Registration.Status.PAID,

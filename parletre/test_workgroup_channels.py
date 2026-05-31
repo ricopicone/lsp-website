@@ -61,7 +61,7 @@ def test_provision_is_idempotent():
 
 def test_channel_category_matches_kind():
     cartel = _wg(kind=Workgroup.Kind.CARTEL, name="Cartel X")
-    committee = _wg(kind=Workgroup.Kind.COMMITTEE, name="Board")
+    committee = _wg(kind=Workgroup.Kind.COMMITTEE, name="Finance Committee")
     assert cartel.channels.first().category.name == "Cartels"
     assert committee.channels.first().category.name == "Committees"
 
@@ -117,3 +117,28 @@ def test_workgroup_channel_post_gated_by_membership():
     _join(wg, insider)
     assert channel_can_post(ch, insider) is True
     assert channel_can_post(ch, outsider) is False
+
+
+# ---- LSP Staff designation (Stage 4 fold-in) --------------------------
+
+def test_is_lsp_staff_designation_grants_board_entry():
+    from accounts.permissions import is_lsp_member
+
+    staffer = _user("staff@x.test", role=Profile.Role.EXTERNAL)
+    assert is_lsp_member(staffer) is False
+    staffer.profile.is_lsp_staff = True
+    staffer.profile.save(update_fields=["is_lsp_staff"])
+    assert is_lsp_member(staffer) is True
+
+
+def test_lsp_staff_channel_gated_by_designation():
+    ch = Channel.objects.create(
+        name="Staff Room", slug="staff-room", kind=Channel.Kind.FORUM,
+        access=Channel.Access.LSP_STAFF,
+    )
+    plain = _user("plain@x.test")                                   # member, not staff
+    staffer = _user("desig@x.test", role=Profile.Role.EXTERNAL)
+    staffer.profile.is_lsp_staff = True
+    staffer.profile.save(update_fields=["is_lsp_staff"])
+    assert channel_visible(ch, staffer) is True
+    assert channel_visible(ch, plain) is False

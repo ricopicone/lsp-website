@@ -17,7 +17,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from committees.models import CommitteeMembership
+from workgroups.models import Workgroup, WorkgroupMembership
 
 from . import emails
 from .forms import (
@@ -47,12 +47,20 @@ DIRECTORY_SECTIONS = [
 
 def _directory_qs():
     """All directory-eligible profiles, with active public committee
-    memberships prefetched onto ``user.active_public_memberships``."""
+    memberships prefetched onto ``user.active_public_memberships``.
+
+    Committee rosters now live on the committee's workgroup, so this reads
+    committee-kind workgroup memberships whose committee is public.
+    """
     membership_qs = (
-        CommitteeMembership.objects
-        .filter(end_date__isnull=True, committee__public=True)
-        .select_related("committee")
-        .order_by("committee__name")
+        WorkgroupMembership.objects
+        .filter(
+            end_date__isnull=True,
+            workgroup__kind=Workgroup.Kind.COMMITTEE,
+            workgroup__committee__public=True,
+        )
+        .select_related("workgroup__committee")
+        .order_by("workgroup__committee__name")
     )
     return (
         Profile.objects
@@ -60,7 +68,7 @@ def _directory_qs():
         .select_related("user")
         .prefetch_related(
             Prefetch(
-                "user__committee_memberships",
+                "user__workgroup_memberships",
                 queryset=membership_qs,
                 to_attr="active_public_memberships",
             )

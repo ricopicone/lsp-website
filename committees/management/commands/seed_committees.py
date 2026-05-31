@@ -1,14 +1,14 @@
-"""Seed the Board + Programming Committee with current rosters from the
-About page (M10 setup). Idempotent — re-run as the roster shifts.
+"""Seed the Board + Programming Committee rosters (and the LSP Staff
+designation) from the About page (M10 setup). Idempotent — re-run as the
+roster shifts.
 
 Memberships are resolved by `first_name + last_name` match against existing
 User accounts. Names that don't resolve are reported with a hint so the
 Web Coordinator can adjust (typo, spelling variant, missing account).
 
-Each named member is granted an *active* membership (end_date=None) with
-their listed role. Previously-active memberships not in the current list
-are *closed* (end_date set to today) — that way the historical record
-sticks around while only the current roster reads as active.
+Committee rosters live on the committee's workgroup
+(``WorkgroupMembership``). LSP Staff is not a committee — its members get the
+``Profile.is_lsp_staff`` designation instead.
 """
 
 from __future__ import annotations
@@ -19,43 +19,43 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from accounts.models import User
-from committees.models import Committee, CommitteeMembership
+from committees.models import Committee
+from workgroups.models import WorkgroupMembership
+
+Role = WorkgroupMembership.Role
 
 # --- Current rosters (source: lacanschool.org/abouttheschool, 2025-26) ----
-#
-# Roles map to CommitteeMembership.Role values. "Convener" maps to chair
-# semantics in the spec; we use CHAIR here.
 
 BOARD_2025_2026 = [
-    ("Christopher", "Meyer",               CommitteeMembership.Role.CHAIR),       # President
-    ("Beatrice",    "Patsalides Hofmann",  CommitteeMembership.Role.CO_CHAIR),    # Vice President
-    ("Garrett",     "Tanner",              CommitteeMembership.Role.TREASURER),
-    ("Diana",       "Cuello",              CommitteeMembership.Role.SECRETARY),
-    ("Marcelo",     "Estrada",             CommitteeMembership.Role.MEMBER),
-    ("Annie",       "Rogers",              CommitteeMembership.Role.MEMBER),
-    ("Nathan",      "Lupo",                CommitteeMembership.Role.MEMBER),
+    ("Christopher", "Meyer",               Role.CHAIR),       # President
+    ("Beatrice",    "Patsalides Hofmann",  Role.CO_CHAIR),    # Vice President
+    ("Garrett",     "Tanner",              Role.TREASURER),
+    ("Diana",       "Cuello",              Role.SECRETARY),
+    ("Marcelo",     "Estrada",             Role.MEMBER),
+    ("Annie",       "Rogers",              Role.MEMBER),
+    ("Nathan",      "Lupo",                Role.MEMBER),
 ]
 
 PROGRAMMING_COMMITTEE_2025_2026 = [
-    ("Diana",      "Cuello",               CommitteeMembership.Role.CHAIR),  # Convener
-    ("Marcelo",    "Estrada",              CommitteeMembership.Role.MEMBER),
-    ("Christopher","Meyer",                CommitteeMembership.Role.MEMBER),
-    ("Sheila",     "Cavanagh",             CommitteeMembership.Role.MEMBER),
-    ("Casey",      "Butcher",              CommitteeMembership.Role.MEMBER),
+    ("Diana",      "Cuello",               Role.CHAIR),  # Convener
+    ("Marcelo",    "Estrada",              Role.MEMBER),
+    ("Christopher","Meyer",                Role.MEMBER),
+    ("Sheila",     "Cavanagh",             Role.MEMBER),
+    ("Casey",      "Butcher",              Role.MEMBER),
     # Wix About page spells it "Fisher"; the directory roster has "Fischer".
-    ("Julien",     "Fischer",              CommitteeMembership.Role.MEMBER),
-    ("John",       "Kreitzberg",           CommitteeMembership.Role.MEMBER),
+    ("Julien",     "Fischer",              Role.MEMBER),
+    ("John",       "Kreitzberg",           Role.MEMBER),
 ]
 
+# LSP Staff is now a designation (Profile.is_lsp_staff), not a committee.
 LSP_STAFF_2025_2026 = [
-    ("Diana",      "Cuello",               CommitteeMembership.Role.REFERRAL_COORDINATOR),
+    ("Diana",      "Cuello"),
     # Add Web Coordinator / Admin Assistant here when their User accounts exist.
 ]
 
-ROSTERS = [
-    ("board",                 BOARD_2025_2026,                 True),
-    ("programming-committee", PROGRAMMING_COMMITTEE_2025_2026, True),
-    ("lsp-staff",             LSP_STAFF_2025_2026,             True),
+COMMITTEE_ROSTERS = [
+    ("board",                 BOARD_2025_2026),
+    ("programming-committee", PROGRAMMING_COMMITTEE_2025_2026),
 ]
 
 
@@ -74,7 +74,7 @@ def _find_user(first: str, last: str) -> User | None:
 
 
 class Command(BaseCommand):
-    help = "Seed Board + Programming Committee with current rosters from the About page."
+    help = "Seed Board + Programming Committee rosters and the LSP Staff designation."
 
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true")
@@ -87,18 +87,18 @@ class Command(BaseCommand):
     def handle(self, *args, dry_run: bool, start_date: str, **opts):
         start = date.fromisoformat(start_date)
         today = date.today()
-        report = {"created": 0, "kept": 0, "closed": 0, "unresolved": []}
+        report = {"created": 0, "kept": 0, "closed": 0, "staff": 0, "unresolved": []}
 
         with transaction.atomic():
-            for slug, roster, public in ROSTERS:
+            for slug, roster in COMMITTEE_ROSTERS:
                 committee = Committee.objects.filter(slug=slug).first()
                 if committee is None:
                     self.stderr.write(f"  no committee with slug={slug!r}; skipping")
                     continue
-                if not committee.public and public:
+                if not committee.public:
                     committee.public = True
                     committee.save(update_fields=["public"])
-
+                wg = committee.workgroup
                 target_users: set[int] = set()
 
                 for first, last, role in roster:
@@ -111,24 +111,19 @@ class Command(BaseCommand):
                         continue
                     target_users.add(user.pk)
 
-                    existing = (committee.memberships
-                                .filter(user=user, end_date__isnull=True)
-                                .first())
+                    existing = wg.memberships.filter(user=user, end_date__isnull=True).first()
                     if existing:
-                        if existing.role_in_committee != role:
-                            existing.role_in_committee = role
-                            existing.save(update_fields=["role_in_committee"])
+                        if existing.role != role:
+                            existing.role = role
+                            existing.save(update_fields=["role"])
                         report["kept"] += 1
                         continue
-                    CommitteeMembership.objects.create(
-                        committee=committee, user=user,
-                        role_in_committee=role, start_date=start,
-                    )
+                    committee.add_member(user, role=role, start_date=start)
                     report["created"] += 1
                     self.stdout.write(f"  {slug}: added {first} {last} ({role})")
 
                 # Close out memberships not in the current roster.
-                to_close = (committee.memberships
+                to_close = (wg.memberships
                             .filter(end_date__isnull=True)
                             .exclude(user_id__in=target_users))
                 for m in to_close:
@@ -139,11 +134,27 @@ class Command(BaseCommand):
                         f"  {slug}: closed {m.user.first_name} {m.user.last_name}"
                     )
 
+            # LSP Staff designation.
+            for first, last in LSP_STAFF_2025_2026:
+                user = _find_user(first, last)
+                if user is None:
+                    report["unresolved"].append(("lsp-staff", first, last))
+                    self.stderr.write(self.style.WARNING(
+                        f"  lsp-staff: no User found for {first!r} {last!r}"
+                    ))
+                    continue
+                if not user.profile.is_lsp_staff:
+                    user.profile.is_lsp_staff = True
+                    user.profile.save(update_fields=["is_lsp_staff"])
+                    report["staff"] += 1
+                    self.stdout.write(f"  lsp-staff: designated {first} {last}")
+
             if dry_run:
                 transaction.set_rollback(True)
 
         self.stdout.write(self.style.SUCCESS(
             f"{'Would ' if dry_run else ''}create {report['created']}, "
-            f"keep {report['kept']}, close {report['closed']} memberships. "
+            f"keep {report['kept']}, close {report['closed']} memberships; "
+            f"{report['staff']} LSP Staff designated. "
             f"{len(report['unresolved'])} unresolved name(s)."
         ))

@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import User
-from committees.models import Committee, CommitteeMembership
+from committees.models import Committee
 from events.models import Event, Program
 
 
@@ -87,10 +87,7 @@ def test_program_view_shows_unpublished_to_pc_member(client):
         slug="programming-committee",
         defaults={"name": "Programming Committee"},
     )
-    CommitteeMembership.objects.create(
-        user=u, committee=committee,
-        start_date=date(2026, 1, 1),
-    )
+    committee.add_member(u, start_date=date(2026, 1, 1))
     client.force_login(u)
     resp = client.get(reverse("program") + "?year=2030-2031")
     assert resp.status_code == 200

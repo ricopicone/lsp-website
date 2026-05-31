@@ -52,9 +52,9 @@
               {% endif %}
               {% for mem in mems %}
               <span class="inline-flex items-center text-[0.65rem] leading-none font-medium px-1.5 py-0.5 rounded
-                           {% if mem.role_in_committee != "member" %}bg-primary/15 text-primary border border-primary/25
+                           {% if mem.role != "member" %}bg-primary/15 text-primary border border-primary/25
                            {% else %}bg-base-200 text-base-content/70 border border-base-300{% endif %}">
-                {{ mem.committee.name }}{% if mem.role_in_committee != "member" %} · {{ mem.get_role_in_committee_display }}{% endif %}
+                {{ mem.workgroup.committee.name }}{% if mem.role != "member" %} · {{ mem.get_role_display }}{% endif %}
               </span>
               {% endfor %}
             </div>
