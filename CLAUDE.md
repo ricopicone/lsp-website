@@ -99,8 +99,9 @@ Done (see `git log` for specifics):
 
 - Project scaffold — Django project, five apps, split settings, GitHub Actions CI,
   smoke test.
-- User / Profile / roles — email-login `User`, `Profile` with the seven LSP roles
-  and a `tuition_paying` flag, auto-created per user, plus the admin back office.
+- User / Profile / roles — email-login `User`, `Profile` with the seven LSP roles,
+  auto-created per user, plus the admin back office. (Per-year tuition status
+  later moved off Profile into `payments.TuitionEnrollment` — see M7.5 below.)
 - CSV bulk-import (`USR-3`) — `manage.py import_users path/to/file.csv`
   with `--update` and `--dry-run`. Atomic, dedupes by email case-insensitively,
   creates users with an unusable password (they set one via password reset
@@ -231,6 +232,17 @@ Done (see `git log` for specifics):
   `EMAIL_CHANGE_ALLOWLIST` (default: rico's address) unless
   `EMAIL_CHANGE_PUBLIC=true`. `EmailChangeRequest` is admin-auditable.
   See `email-change` memory.
+- **M7.5 — per-year tuition lifecycle** (replaces the old single
+  `Profile.tuition_paying` boolean, now dropped). `payments.TuitionPeriod`
+  (academic-year cycle, mirrors `DuesPeriod`) + `TuitionEnrollment`
+  (per-year decision: `COMMITTED` / `PAYMENT_PLAN` / `PAID_IN_FULL` /
+  `SKIPPING`; absence of a row = no decision) + `TuitionInstallment`
+  (payment-plan scaffold). REG-4 "covered by tuition" now keys off
+  `Profile.is_tuition_current()` for the *current* academic year, not a
+  global flag. Reminders from Sept 1 reuse the dues cron
+  (`send_tuition_reminders`). Treasurer guide at `/treasurer/help/`
+  (`core/docs/treasurer-guide.md`) is the canonical policy doc.
+  See `tuition-lifecycle` memory.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
@@ -248,9 +260,13 @@ opening fall registration (M8).
   it, re-run the matcher in `import-staging/` to identify any additional
   dual-email cases, then `import_users --update` to swap login/public emails.
   See `import-staging/README.md` for the full workflow.
-- **`tuition_paying=true` on every imported member is a guess.** Reconcile
-  against the treasurer's dues ledger before opening fall registration —
-  otherwise REG-4 ("covered by tuition") fires for non-payers.
+- **Reconcile backfilled tuition enrollments.** Migration
+  `payments.0006_seed_initial_tuition_period` seeded `TuitionEnrollment`
+  rows from the old `tuition_paying=true` guess on every imported member.
+  Reconcile those per-year statuses against the treasurer's dues ledger
+  before opening fall registration — otherwise REG-4 ("covered by tuition")
+  fires for non-payers. This is a treasurer data task (admin or
+  `/treasurer/`), not a code change.
 - **`is_faculty=false` on every imported member.** Flip for seminar
   instructors so they can edit events (PROG-7) and mint pricing codes
   (REG-17).
