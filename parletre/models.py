@@ -100,11 +100,14 @@ class Channel(models.Model):
         OPEN = "open", _("Open — every member")
         ROLE = "role", _("Specific roles")
         COMMITTEE = "committee", _("Committee")
+        WORKGROUP = "workgroup", _("Workgroup")
         PRIVATE = "private", _("Private — named members")
         # "Open" means open to every *member* — never to the public. All of
         # Parlêtre sits behind the members-only gate (see permissions.is_member).
-        # A CARTEL access mode + a ``cartel`` FK arrive with the cartels app
-        # (M14), which auto-provisions one private channel per cartel.
+        # WORKGROUP gates by membership in the linked ``workgroup`` (cartels,
+        # working groups, and — after the Stage-4 fold-in — committees), and is
+        # auto-provisioned one channel per workgroup. The legacy COMMITTEE mode
+        # + ``committee`` FK persist until that fold-in.
 
     class PostPolicy(models.TextChoices):
         OPEN = "open", _("Any member may post")
@@ -147,6 +150,15 @@ class Channel(models.Model):
         related_name="parletre_channels",
         help_text="When access=committee: members of this committee may enter; "
         "its chairs moderate.",
+    )
+    workgroup = models.ForeignKey(
+        "workgroups.Workgroup",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="channels",
+        help_text="When access=workgroup: members of this workgroup may enter; "
+        "its chairs / plus-one moderate.",
     )
     members = models.ManyToManyField(
         settings.AUTH_USER_MODEL,

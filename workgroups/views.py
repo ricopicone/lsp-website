@@ -27,6 +27,7 @@ def workgroup_detail(request, slug):
         raise Http404  # don't reveal that a hidden group exists
 
     can_view = wg.content_visible_to(request.user)
+    is_member = wg.is_member(request.user)
     members = list(wg.active_members()) if can_view else []
     works = []
     if can_view and wg.has_works:
@@ -35,10 +36,13 @@ def workgroup_detail(request, slug):
             .filter(workgroup=wg)
             .prefetch_related("files")
         )
+    # Link to the group's discussion channel for members (Parlêtre, Stage 2).
+    channel = wg.channels.first() if is_member else None
     return render(request, "workgroups/detail.html", {
         "workgroup": wg,
         "can_view_content": can_view,
         "members": members,
         "works": works,
-        "is_member": wg.is_member(request.user),
+        "is_member": is_member,
+        "channel": channel,
     })

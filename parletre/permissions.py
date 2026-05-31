@@ -28,6 +28,13 @@ from __future__ import annotations
 
 from accounts.models import Profile
 from committees.models import CommitteeMembership
+from workgroups.models import Workgroup, WorkgroupMembership
+
+#: Workgroup kinds whose channels allow the staff read/moderate bypass.
+#: Cartels and working groups are intimate — genuinely private, no bypass
+#: (like a PRIVATE channel). Committees and seminars keep staff oversight,
+#: matching the legacy COMMITTEE access mode.
+_WORKGROUP_STAFF_BYPASS_KINDS = (Workgroup.Kind.COMMITTEE, Workgroup.Kind.SEMINAR)
 
 #: The LSP roles that, on their own, grant entry to the members-only board.
 #: Mirrors the public-directory membership set — the people the school
@@ -57,6 +64,28 @@ def is_member(user) -> bool:
     ).exists()
 
 
+def _workgroup_lead(workgroup, user) -> bool:
+    """Whether ``user`` holds a leading role (chair / co-chair / plus-one) in
+    ``workgroup`` — the roles that moderate its channel."""
+    return WorkgroupMembership.objects.filter(
+        workgroup=workgroup,
+        user=user,
+        end_date__isnull=True,
+        role__in=WorkgroupMembership.LEAD_ROLES,
+    ).exists()
+
+
+def _can_moderate_workgroup_channel(channel, user) -> bool:
+    if channel.moderators.filter(pk=user.pk).exists():
+        return True
+    wg = channel.workgroup
+    if wg is None:
+        return False
+    if _workgroup_lead(wg, user):
+        return True
+    return user.is_staff and wg.kind in _WORKGROUP_STAFF_BYPASS_KINDS
+
+
 def channel_can_moderate(channel, user) -> bool:
     """Whether ``user`` may moderate ``channel`` (pin/lock/move/delete)."""
     if not _authenticated(user):
@@ -65,6 +94,8 @@ def channel_can_moderate(channel, user) -> bool:
     # private channel stays private even for moderation.
     if channel.access == channel.Access.PRIVATE:
         return channel.moderators.filter(pk=user.pk).exists()
+    if channel.access == channel.Access.WORKGROUP:
+        return _can_moderate_workgroup_channel(channel, user)
     if user.is_staff:
         return True
     if channel.moderators.filter(pk=user.pk).exists():
@@ -103,6 +134,15 @@ def channel_visible(channel, user) -> bool:
             channel.members.filter(pk=user.pk).exists()
             or channel.moderators.filter(pk=user.pk).exists()
         )
+    if access == Access.WORKGROUP:
+        # Gated by workgroup membership. Intimate kinds (cartel / working group)
+        # get no staff bypass — checked before the staff shortcut below.
+        wg = channel.workgroup
+        if wg is None:
+            return False
+        if wg.is_member(user):
+            return True
+        return user.is_staff and wg.kind in _WORKGROUP_STAFF_BYPASS_KINDS
     # Role- and committee-gated channels: staff may always read (moderation,
     # support) — privacy is not the point for those.
     if user.is_staff:

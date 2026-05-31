@@ -10,7 +10,12 @@
         <span>{{ workgroup.start_date|date:"Y" }}{% if workgroup.end_date %}–{{ workgroup.end_date|date:"Y" }}{% else %}–present{% endif %}</span>
       {% endif %}
     </div>
-    <h1 class="font-serif text-3xl text-base-content">{{ workgroup.name }}</h1>
+    <div class="flex items-start justify-between gap-4">
+      <h1 class="font-serif text-3xl text-base-content">{{ workgroup.name }}</h1>
+      {% if channel %}
+      <a href="{{ channel.get_absolute_url }}" class="btn btn-primary btn-sm shrink-0">Discussion</a>
+      {% endif %}
+    </div>
   </header>
 
   {% if workgroup.description %}
