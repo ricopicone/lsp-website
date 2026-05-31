@@ -1349,3 +1349,68 @@ def test_edit_404_on_invisible_channel(client):
     outsider = make_user("out@x.co", role=Role.ANALYST)
     client.force_login(outsider)
     assert client.get(reverse("parletre:edit_post", args=[post.id])).status_code == 404
+
+
+# ---- disappearing messages (Purloined Letters) --------------------------
+
+
+@pytest.mark.django_db
+def test_ephemeral_chat_hides_expired_and_purge_deletes(client):
+    from datetime import timedelta
+
+    from django.core.management import call_command
+    from django.utils import timezone
+    ch = make_channel("ple", kind=Channel.Kind.CHAT, message_ttl_seconds=3600)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    old = Post.objects.create(channel=ch, author=member, body="old one")
+    Post.objects.filter(id=old.id).update(created_at=timezone.now() - timedelta(hours=2))
+    fresh = Post.objects.create(channel=ch, author=member, body="fresh one")
+
+    client.force_login(member)
+    body = client.get(ch.get_absolute_url()).content.decode()
+    assert "fresh one" in body and "old one" not in body   # hidden on read
+
+    call_command("purge_expired_messages")
+    assert not Post.objects.filter(id=old.id).exists()      # purged from DB
+    assert Post.objects.filter(id=fresh.id).exists()
+
+
+@pytest.mark.django_db
+def test_ephemeral_channel_skips_notifications(mailoutbox):
+    from .models import Notification
+    from .services import notify_post
+    ch = make_channel("ple", kind=Channel.Kind.CHAT, message_ttl_seconds=3600)
+    author = make_user("a@x.co", role=Role.ANALYST)
+    follower = make_user("f@x.co", role=Role.ANALYST)
+    Subscription.objects.create(user=follower, channel=ch, level=SubscriptionLevel.ALL)
+    post = Post.objects.create(channel=ch, author=author, body="hello @f-follower")
+    notify_post(post)
+    assert Notification.objects.count() == 0
+    assert mailoutbox == []
+
+
+@pytest.mark.django_db
+def test_search_and_digest_exclude_ephemeral():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from .digests import build_sections
+    from .search import search_posts
+    me = make_user("me@x.co", role=Role.ANALYST)
+    other = make_user("o@x.co", role=Role.ANALYST)
+    ch = make_channel("ple", kind=Channel.Kind.CHAT, message_ttl_seconds=3600)
+    Subscription.objects.create(user=me, channel=ch, level=SubscriptionLevel.DIGEST)
+    Post.objects.create(channel=ch, author=other, body="needle in disappearing chat")
+    assert search_posts(me, "needle") == []
+    assert build_sections(me, timezone.now() - timedelta(days=1)) == []
+
+
+@pytest.mark.django_db
+def test_seed_creates_purloined_letters():
+    from django.core.management import call_command
+    call_command("seed_parletre")
+    ch = Channel.objects.get(slug="purloined-letters")
+    assert ch.is_ephemeral and ch.message_ttl_seconds == 86400
+    assert ch.kind == Channel.Kind.CHAT
+    assert ch.ttl_display == "1 day"

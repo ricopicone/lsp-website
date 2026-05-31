@@ -94,6 +94,21 @@ class Command(BaseCommand):
             )
             created += was_created
 
+        # Disappearing-message chat — the letter that does not arrive.
+        _, was_created = Channel.objects.get_or_create(
+            slug="purloined-letters",
+            defaults={
+                "name": "Purloined Letters",
+                "category": cats.get("general"),
+                "kind": Channel.Kind.CHAT,
+                "access": Channel.Access.OPEN,
+                "message_ttl_seconds": 86400,  # 24h; admin-configurable
+                "description": "A disappearing chat — messages vanish 24 hours "
+                "after posting. Say it while it lasts.",
+            },
+        )
+        created += was_created
+
         self.stdout.write(
             self.style.SUCCESS(f"Parlêtre seeded ({created} new channel(s)).")
         )

@@ -34,6 +34,8 @@ def build_sections(user, since) -> list[dict]:
     )
     for sub in subs:
         channel = sub.channel
+        if channel.is_ephemeral:
+            continue  # disappearing chats aren't digested
         if not channel_visible(channel, user):
             continue
         posts = list(

@@ -62,6 +62,8 @@ def _effective_level(levels: dict[int, str], channel, user_id: int) -> str:
 
 def notify_post(post) -> None:
     """Notifications + immediate emails for a new reply or chat post."""
+    if post.channel.is_ephemeral:
+        return  # disappearing chats are in-the-moment — no notifications/emails
     actor_id = post.author_id
     channel = post.channel
     thread = post.thread
@@ -104,6 +106,8 @@ def notify_post(post) -> None:
 
 def notify_new_thread(thread, first_post) -> None:
     """Notifications + immediate emails for a new thread."""
+    if thread.channel.is_ephemeral:
+        return
     actor_id = thread.author_id
     channel = thread.channel
     levels = _channel_levels(channel)

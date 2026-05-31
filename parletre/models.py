@@ -206,6 +206,18 @@ class Channel(models.Model):
         return bool(self.message_ttl_seconds)
 
     @property
+    def ttl_display(self) -> str:
+        """Human-friendly TTL, e.g. '24 hours' (empty for permanent channels)."""
+        s = self.message_ttl_seconds
+        if not s:
+            return ""
+        for unit, secs in (("day", 86400), ("hour", 3600), ("minute", 60)):
+            if s % secs == 0:
+                n = s // secs
+                return f"{n} {unit}{'s' if n != 1 else ''}"
+        return f"{s} seconds"
+
+    @property
     def description_html(self) -> str:
         return render_markdown(self.description)
 

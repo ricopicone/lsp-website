@@ -35,9 +35,9 @@ def search_posts(user, query: str, *, limit: int = 50):
     channel_ids = visible_channel_ids(user)
     if not channel_ids:
         return []
-    qs = Post.objects.filter(channel_id__in=channel_ids, deleted=False).select_related(
-        "author", "thread", "channel"
-    )
+    qs = Post.objects.filter(
+        channel_id__in=channel_ids, deleted=False, channel__message_ttl_seconds__isnull=True
+    ).select_related("author", "thread", "channel")
     if connection.vendor == "postgresql":
         from django.contrib.postgres.search import (
             SearchQuery,

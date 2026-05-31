@@ -44,6 +44,9 @@
             {% else %}
               <span class="badge badge-sm badge-ghost">Forum</span>
             {% endif %}
+            {% if channel.is_ephemeral %}
+              <span class="badge badge-sm badge-warning badge-outline" title="Messages disappear">⏳ Disappearing</span>
+            {% endif %}
             {% if channel.access == 'private' %}
               <span class="badge badge-sm" title="Visible only to its named members">🔒 Private</span>
             {% elif channel.access == 'committee' %}
