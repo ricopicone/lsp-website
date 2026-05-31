@@ -24,7 +24,8 @@ def about(request):
     committees_by_slug = {
         c.slug: c
         for c in Committee.objects.filter(public=True)
-                                  .prefetch_related("memberships__user__profile")
+                                  .select_related("workgroup")
+                                  .prefetch_related("workgroup__memberships__user__profile")
     }
 
     def _replace(match):
