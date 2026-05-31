@@ -18,6 +18,7 @@ from .models import Channel, ChannelCategory
 _CATEGORY_FOR_KIND = {
     Workgroup.Kind.COMMITTEE: ("Committees", 20),
     Workgroup.Kind.CARTEL: ("Cartels", 30),
+    Workgroup.Kind.READING_GROUP: ("Reading Groups", 35),
     Workgroup.Kind.WORKING_GROUP: ("Working Groups", 40),
     Workgroup.Kind.SEMINAR: ("Seminars", 50),
 }

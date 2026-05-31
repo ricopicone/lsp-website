@@ -46,6 +46,7 @@ class Workgroup(models.Model):
         WORKING_GROUP = "working_group", _("Working group")
         COMMITTEE = "committee", _("Committee")
         SEMINAR = "seminar", _("Seminar")
+        READING_GROUP = "reading_group", _("Reading group")
 
     #: Per-kind seed for the capability toggles, applied at creation (the
     #: Table A defaults from the design worksheet). Every group can still turn
@@ -61,6 +62,7 @@ class Workgroup(models.Model):
             "has_tasks": True, "has_decisions": True,
         },
         Kind.SEMINAR: {"has_works": False, "has_calendar": True},
+        Kind.READING_GROUP: {"has_calendar": True},
     }
 
     kind = models.CharField(max_length=16, choices=Kind.choices)
