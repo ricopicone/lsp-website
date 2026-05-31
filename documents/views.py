@@ -17,8 +17,8 @@ from .models import Document, DocumentAuthor
 
 
 def _with_authors(qs):
-    """Prefetch authorships in byline order."""
-    return qs.prefetch_related(
+    """Prefetch authorships in byline order and the owning workgroup."""
+    return qs.select_related("owning_workgroup").prefetch_related(
         Prefetch(
             "authorships",
             queryset=(

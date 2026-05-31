@@ -13,16 +13,20 @@ class DocumentAuthorInline(admin.TabularInline):
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
     list_display = (
-        "title", "category", "listing_visibility", "pdf_visibility",
-        "effective_date", "is_current_display", "display_order",
+        "title", "category", "owning_workgroup", "listing_visibility",
+        "pdf_visibility", "effective_date", "is_current_display", "display_order",
     )
-    list_filter = ("category", "listing_visibility", "pdf_visibility")
+    list_filter = ("category", "owning_workgroup", "listing_visibility", "pdf_visibility")
     search_fields = ("title", "summary", "description", "notice")
     prepopulated_fields = {"slug": ("title",)}
-    autocomplete_fields = ("superseded_by",)
+    autocomplete_fields = ("superseded_by", "owning_workgroup")
     inlines = [DocumentAuthorInline]
     fieldsets = (
         (None, {"fields": ("title", "slug", "category", "summary", "description")}),
+        ("Ownership", {
+            "fields": ("owning_workgroup",),
+            "description": "The committee or working group that produced this document.",
+        }),
         ("File", {"fields": ("file",)}),
         ("Visibility & ordering", {
             "fields": ("listing_visibility", "pdf_visibility", "display_order"),

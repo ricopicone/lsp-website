@@ -31,6 +31,19 @@ class SeedDoc:
     summary: str
     effective_date: date | None = None
     display_order: int = 0
+    #: Name of the Committee whose Workgroup owns this document, if any.
+    owning_committee: str | None = None
+
+
+#: Slugs renamed across seed revisions — ``old -> new``. On re-seed, an
+#: existing row under the old slug is repointed to the new slug (preserving
+#: its file + PK) before the normal update pass runs, so prod doesn't end up
+#: with an orphaned stale row.
+RENAMED_SLUGS = {
+    # Was mis-seeded as a cartel resource; it is the Program Committee's
+    # general program-proposal style sheet (and never mentions cartels).
+    "cartel-proposal-style-guide": "program-proposal-style-guide",
+}
 
 
 SEED: list[SeedDoc] = [
@@ -114,15 +127,19 @@ SEED: list[SeedDoc] = [
         summary="An extended essay on what cartel work looks like in practice.",
         display_order=20,
     ),
-    SeedDoc(
-        slug="cartel-proposal-style-guide",
-        title="Style Guide for Cartel Proposals",
-        category=Document.Category.CARTEL_RESOURCE,
-        filename="Style Sheet for Proposals.pdf",
-        summary="Style and format guide for submitting a cartel proposal.",
-        display_order=30,
-    ),
     # ---- Reference ----
+    SeedDoc(
+        slug="program-proposal-style-guide",
+        title="Program Proposal Style Guide",
+        category=Document.Category.REFERENCE,
+        filename="Style Sheet for Proposals.pdf",
+        summary=(
+            "Program Committee style and format guide for submitting seminar, "
+            "reading-group, workshop, and special-event proposals."
+        ),
+        owning_committee="Program Committee",
+        display_order=20,
+    ),
     SeedDoc(
         slug="global-calendar",
         title="LSP Global Calendar",
@@ -155,6 +172,23 @@ class Command(BaseCommand):
         if not src.is_dir():
             raise CommandError(f"Source directory not found: {src}")
 
+        # Repoint any rows seeded under a now-defunct slug before the main
+        # pass, so a re-seed reclassifies in place instead of orphaning a row.
+        renamed = 0
+        for old_slug, new_slug in RENAMED_SLUGS.items():
+            if Document.objects.filter(slug=new_slug).exists():
+                continue
+            stale = Document.objects.filter(slug=old_slug).first()
+            if stale is None:
+                continue
+            if dry_run:
+                self.stdout.write(f"  rename: {old_slug} → {new_slug}")
+            else:
+                stale.slug = new_slug
+                stale.save(update_fields=["slug"])
+                self.stdout.write(self.style.SUCCESS(f"  renamed: {old_slug} → {new_slug}"))
+            renamed += 1
+
         created = updated = skipped = 0
         missing: list[str] = []
 
@@ -176,6 +210,8 @@ class Command(BaseCommand):
                     created += 1
                 continue
 
+            owning_workgroup = self._resolve_owning_workgroup(entry)
+
             with transaction.atomic():
                 doc = existing or Document(slug=entry.slug)
                 doc.title = entry.title
@@ -183,7 +219,9 @@ class Command(BaseCommand):
                 doc.summary = entry.summary
                 doc.effective_date = entry.effective_date
                 doc.display_order = entry.display_order
-                doc.visibility = Document.Visibility.PUBLIC
+                doc.owning_workgroup = owning_workgroup
+                doc.listing_visibility = Document.Visibility.PUBLIC
+                doc.pdf_visibility = Document.Visibility.PUBLIC
                 # Always re-attach the file so a fresh source PDF replaces an
                 # older one. The FileField.save call uploads through the
                 # configured storage backend.
@@ -201,9 +239,31 @@ class Command(BaseCommand):
         prefix = "[DRY RUN] " if dry_run else ""
         self.stdout.write("")
         self.stdout.write(
-            f"{prefix}{created} created, {updated} updated, {skipped} missing."
+            f"{prefix}{created} created, {updated} updated, "
+            f"{renamed} renamed, {skipped} missing."
         )
         if missing:
             self.stdout.write(self.style.WARNING("Missing source files:"))
             for name in missing:
                 self.stdout.write(f"  - {name}")
+
+    def _resolve_owning_workgroup(self, entry: SeedDoc):
+        """The Workgroup of ``entry.owning_committee``, or ``None``.
+
+        Documents are owned through the shared Workgroup layer, so we look the
+        committee up and hand back its attached workgroup. A missing committee
+        is a soft failure — the document still seeds, just unowned — with a
+        warning so the gap is visible.
+        """
+        if not entry.owning_committee:
+            return None
+        from committees.models import Committee
+
+        committee = Committee.objects.filter(name=entry.owning_committee).first()
+        if committee is None:
+            self.stderr.write(self.style.WARNING(
+                f"  owner not found: committee {entry.owning_committee!r} "
+                f"(seed it first); {entry.slug} will be unowned."
+            ))
+            return None
+        return committee.workgroup
