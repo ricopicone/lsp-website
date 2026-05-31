@@ -60,10 +60,24 @@ class EventAdmin(admin.ModelAdmin):
     prepopulated_fields = {"slug": ("title",)}
     filter_horizontal = ("faculty", "speakers")
     inlines = [SessionInline, PriceTierInline, EventMemberSpeakerInline]
+    actions = ("create_workspace",)
 
     @admin.display(description="Sessions")
     def session_count(self, obj):
         return obj.sessions.count()
+
+    @admin.action(description="Create workspace (discussion channel) for selected events")
+    def create_workspace(self, request, queryset):
+        created = 0
+        for event in queryset:
+            if event.workgroup_id is None:
+                event.get_or_create_workgroup()
+                created += 1
+        self.message_user(
+            request,
+            f"Created {created} workspace(s); "
+            f"{queryset.count() - created} already had one.",
+        )
 
 
 @admin.register(Session)

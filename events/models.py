@@ -237,6 +237,18 @@ class Event(models.Model):
             "edit access."
         ),
     )
+    workgroup = models.OneToOneField(
+        "workgroups.Workgroup",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="event",
+        help_text=(
+            "Optional collaborative workspace (channel + shared files) for this "
+            "event's participants. Roster derives from faculty + paid/comped "
+            "registrants — not hand-managed."
+        ),
+    )
     start_date = models.DateField()
     end_date = models.DateField()
     format = models.CharField(
@@ -321,6 +333,48 @@ class Event(models.Model):
                 return self.program.is_public_now
             return self.published
         return self.published
+
+    # ---- Workgroup attachment (Stage 5) ----
+
+    def is_workgroup_member(self, user) -> bool:
+        """Roster for this event's attached workspace: faculty + registrants
+        who have access (paid or comped)."""
+        if not getattr(user, "is_authenticated", False):
+            return False
+        if self.faculty.filter(pk=user.pk).exists():
+            return True
+        from registrations.models import Registration
+
+        return self.registrations.filter(
+            user=user,
+            status__in=(Registration.Status.PAID, Registration.Status.COMPED),
+        ).exists()
+
+    def get_or_create_workgroup(self):
+        """Attach (once) a seminar-kind Workgroup for this event's workspace.
+
+        Idempotent; creating the Workgroup auto-provisions its channel via the
+        Parlêtre signal. Roster is derived (``is_workgroup_member``), so no
+        WorkgroupMembership rows are created.
+        """
+        if self.workgroup_id is not None:
+            return self.workgroup
+        from workgroups.models import Workgroup, build_workgroup
+
+        slug, n = self.slug, 2
+        while Workgroup.objects.filter(slug=slug).exists():
+            slug = f"{self.slug}-{n}"
+            n += 1
+        self.workgroup = build_workgroup(
+            Workgroup.Kind.SEMINAR,
+            name=self.title,
+            slug=slug,
+            description=self.description or "",
+            landing_visibility="members",
+            content_visibility="private",
+        )
+        self.save(update_fields=["workgroup"])
+        return self.workgroup
 
 
 class EventMemberSpeaker(models.Model):

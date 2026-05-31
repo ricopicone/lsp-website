@@ -62,7 +62,7 @@ fiddling.
 config/         project — settings/, urls.py, wsgi.py, asgi.py
   settings/     base.py + development.py (default) + production.py
 accounts/       custom User, Profile, directory, profile editor, import   <- built
-committees/     Committee + CommitteeMembership (USR-7)                    <- M2
+committees/     Committee (USR-7); roster on its attached Workgroup        <- M2 / folded-in
 events/         Events, Sessions, PriceTier, PricingCode, recurrence helper <- M2
 registrations/  registrations                                              <- M3
 payments/       payments, receipts, Stripe, dues + tuition lifecycle       <- M4/M6/M7.5
@@ -71,8 +71,9 @@ content/        editable site pages (about, etc.)                          <- Ph
 works/          faculty/member publication showcase                        <- Phase 2
 documents/      newsletters / shared documents                            <- Phase 2
 parletre/       Parlêtre members-only discussion board (MEM-3, M13.5)      <- Phase 2
-workgroups/     shared Workgroup layer (cartels/working-groups/seminars)   <- Phase 2
+workgroups/     shared Workgroup layer (roster+channel+works+files)        <- Phase 2
 cartels/        Cartels (CART-1/2/3), built on the Workgroup layer         <- Phase 2
+workinggroups/  Working groups, built on the Workgroup layer               <- Phase 2
 ```
 
 - Settings are split by environment. `DJANGO_SETTINGS_MODULE` defaults to
@@ -88,10 +89,19 @@ cartels/        Cartels (CART-1/2/3), built on the Workgroup layer         <- Ph
   live on Profile itself rather than a separate model — every user has a
   Profile anyway, and some of those fields may turn out useful for members
   generally in Phase 2.
-- Committee memberships (Board, Program Committee, LSP Staff) live in the
-  `committees` app as structured `Committee` + `CommitteeMembership` models
-  (with named roles and term dates), not Django auth Groups. Memberships
-  drive admin permissions.
+- **Workgroups layer (Phase 2):** cartels, working groups, committees, and
+  seminars all share one `workgroups.Workgroup` (roster via
+  `WorkgroupMembership`, an auto-provisioned Parlêtre channel, shared works/
+  files, capability toggles seeded per kind). Concrete types *attach* a
+  Workgroup: `Cartel`/`WorkingGroup` are thin attach-models, `Committee` keeps
+  its charter/public page + attaches one (roster relocated off the removed
+  `CommitteeMembership`), and `Event` (seminar) attaches one whose roster is
+  *derived* from faculty + paid/comped registrants. **When adding a group
+  feature, put it on `Workgroup` first.** See `docs/design-workgroups.md` +
+  the `workgroups-architecture` memory.
+- Committees (Board, Programming Committee) drive admin permissions; **LSP
+  Staff is now the `Profile.is_lsp_staff` designation**, not a committee — it
+  grants board entry, event-edit, and an `access=lsp_staff` Parlêtre channel.
 - Tests use pytest-django; lint with ruff. Keep both green — CI runs them on push.
 
 ## Design principle: do not over-automate

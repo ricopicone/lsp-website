@@ -14,7 +14,7 @@ the attaching models.
 from __future__ import annotations
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils.text import slugify
@@ -156,11 +156,18 @@ class Workgroup(models.Model):
         """The single access primitive the cross-cutting apps call.
 
         For self-managed kinds this reads ``WorkgroupMembership``. A seminar
-        workgroup will derive its roster from the attached ``Event`` (faculty +
-        paid registrants) in Stage 5 — that dispatch belongs here.
+        workgroup derives its roster from the attached ``Event`` (faculty +
+        paid/comped registrants) — dispatched via the reverse ``event``
+        accessor so this app needn't import ``events``.
         """
         if not getattr(user, "is_authenticated", False):
             return False
+        try:
+            event = self.event
+        except ObjectDoesNotExist:
+            event = None
+        if event is not None:
+            return event.is_workgroup_member(user)
         return self.memberships.filter(
             user=user, end_date__isnull=True
         ).exists()
