@@ -100,7 +100,9 @@ class Cartel(models.Model):
         return self.workgroup.name
 
     def get_absolute_url(self) -> str:
-        return self.workgroup.get_absolute_url()
+        from django.urls import reverse
+
+        return reverse("cartels:detail", args=[self.workgroup.slug])
 
     # ---- Membership ----
 

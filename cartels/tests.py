@@ -116,3 +116,110 @@ def test_plus_one_is_a_membership_role():
     assert cartel.workgroup.memberships.filter(
         user=p1, role=WorkgroupMembership.Role.PLUS_ONE, end_date__isnull=True
     ).exists()
+
+
+# ---- views (end-to-end through HTTP) ----------------------------------
+
+def test_propose_view_creates_cartel_and_redirects(client):
+    gen = _member("gen@x.test")
+    client.force_login(gen)
+    resp = client.post("/cartels/propose/", {
+        "name": "Speech and Writing",
+        "guiding_question": "What is a letter?",
+        "description": "Reading the Écrits.",
+        "invitees": "",
+    })
+    assert resp.status_code == 302
+    cartel = Cartel.objects.get(workgroup__name="Speech and Writing")
+    assert cartel.status == Cartel.Status.PROPOSED
+    assert cartel.is_member(gen)
+
+
+def test_propose_view_blocks_non_members(client):
+    from accounts.models import User
+    # role defaults to external (not an LSP member)
+    guest = User.objects.create_user(email="guest@x.test", password="x")
+    client.force_login(guest)
+    resp = client.post("/cartels/propose/", {"name": "X", "guiding_question": "Q"})
+    assert resp.status_code == 404
+    assert not Cartel.objects.filter(workgroup__name="X").exists()
+
+
+def test_review_queue_gated_to_coordinator(client):
+    plain = _member("plain@x.test")
+    client.force_login(plain)
+    assert client.get("/cartels/review/").status_code == 404
+    client.force_login(_coordinator())
+    assert client.get("/cartels/review/").status_code == 200
+
+
+def test_coordinator_approves_via_view(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    coord = _coordinator()
+    client.force_login(coord)
+    resp = client.post(f"/cartels/review/{cartel.pk}/decide/", {"decision": "approve"})
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.status == Cartel.Status.OPEN
+
+
+def test_apply_and_member_accepts_via_views(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    applicant = _member("appl@x.test")
+
+    client.force_login(applicant)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/apply/")
+    assert resp.status_code == 302
+    req = CartelJoinRequest.objects.get(cartel=cartel, applicant=applicant)
+    assert req.status == CartelJoinRequest.Status.PENDING
+
+    client.force_login(gen)   # an existing member gates
+    resp = client.post(
+        f"/cartels/{cartel.workgroup.slug}/requests/{req.pk}/decide/", {"decision": "accept"}
+    )
+    assert resp.status_code == 302
+    assert cartel.is_member(applicant)
+
+
+def test_propose_form_renders(client):
+    client.force_login(_member("gen@x.test"))
+    resp = client.get("/cartels/propose/")
+    assert resp.status_code == 200
+    assert b"Propose a cartel" in resp.content
+
+
+def test_cartel_detail_renders_with_gating_ui(client):
+    """GET the cartel page as a member with a pending application — exercises
+    the guiding-question, roster, and member-gating template branches."""
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C", guiding_question="What is a letter?")
+    cartel.approve(_coordinator())
+    cartel.request_to_join(_member("appl@x.test"))
+    client.force_login(gen)
+    resp = client.get(f"/cartels/{cartel.workgroup.slug}/")
+    assert resp.status_code == 200
+    assert b"What is a letter?" in resp.content   # guiding question
+    assert b"Applications" in resp.content         # member-gating UI
+    assert b"Members" in resp.content
+
+
+def test_cartel_detail_shows_apply_to_eligible_member(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    client.force_login(_member("outsider@x.test"))
+    resp = client.get(f"/cartels/{cartel.workgroup.slug}/")
+    assert resp.status_code == 200
+    assert b"Apply to join" in resp.content
+
+
+def test_proposed_cartel_hidden_from_other_members_on_index(client):
+    gen = _member("gen@x.test")
+    Cartel.objects.propose(generator=gen, name="Secret Proposal")
+    other = _member("other@x.test")
+    client.force_login(other)
+    resp = client.get("/cartels/")
+    assert b"Secret Proposal" not in resp.content   # private until approved

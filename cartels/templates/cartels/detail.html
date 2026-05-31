@@ -1,0 +1,83 @@
+{% extends "core/base.html" %}
+{% block title %}{{ workgroup.name }} — Cartels — LSP{% endblock %}
+{% block content %}
+<div class="max-w-3xl space-y-8">
+
+  <header class="space-y-2">
+    <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-base-content/60">
+      <span class="badge badge-ghost">Cartel</span>
+      {% if cartel.status != "open" %}<span class="badge badge-outline">{{ cartel.get_status_display }}</span>{% endif %}
+      {% if cartel.closed %}<span class="badge badge-outline">Closed to new members</span>{% endif %}
+    </div>
+    <div class="flex items-start justify-between gap-4">
+      <h1 class="font-serif text-3xl text-base-content">{{ workgroup.name }}</h1>
+      {% if channel %}<a href="{{ channel.get_absolute_url }}" class="btn btn-primary btn-sm shrink-0">Discussion</a>{% endif %}
+    </div>
+  </header>
+
+  {% if cartel.guiding_question %}
+  <section class="space-y-1">
+    <h2 class="text-xs uppercase tracking-wider text-base-content/60">Guiding question</h2>
+    <p class="text-lg text-base-content/90">{{ cartel.guiding_question }}</p>
+  </section>
+  {% endif %}
+
+  {% if workgroup.description %}
+  <section class="prose max-w-none text-base-content/80">{{ workgroup.description_html }}</section>
+  {% endif %}
+
+  {% comment %} Actions {% endcomment %}
+  <section class="flex flex-wrap gap-2">
+    {% if has_invite %}
+    <form method="post" action="{% url 'cartels:accept_invitation' workgroup.slug %}">
+      {% csrf_token %}<button class="btn btn-primary btn-sm">Accept invitation</button>
+    </form>
+    {% elif can_apply %}
+    <form method="post" action="{% url 'cartels:apply' workgroup.slug %}">
+      {% csrf_token %}<button class="btn btn-primary btn-sm">Apply to join</button>
+    </form>
+    {% elif already_applied %}
+    <span class="text-sm text-base-content/60">Your application is pending review.</span>
+    {% endif %}
+  </section>
+
+  {% if pending_requests %}
+  <section class="space-y-2">
+    <h2 class="font-serif text-xl">Applications</h2>
+    <ul class="space-y-2">
+      {% for req in pending_requests %}
+      <li class="flex items-center justify-between rounded-md border border-base-300/50 px-3 py-2">
+        <span>{{ req.applicant.get_full_name|default:req.applicant.email }}</span>
+        <form method="post" action="{% url 'cartels:decide_request' workgroup.slug req.pk %}" class="flex gap-2">
+          {% csrf_token %}
+          <button name="decision" value="accept" class="btn btn-primary btn-xs">Accept</button>
+          <button name="decision" value="decline" class="btn btn-ghost btn-xs">Decline</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if members %}
+  <section class="space-y-2">
+    <h2 class="font-serif text-xl">Members</h2>
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {% for m in members %}
+      <li class="flex items-center justify-between rounded-md border border-base-300/50 px-3 py-2">
+        <span>{{ m.user.get_full_name|default:m.user.email }}</span>
+        {% if m.role == "plus_one" %}<span class="badge badge-sm badge-outline">Plus-one</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if is_coordinator and cartel.status == "proposed" %}
+  <section class="rounded-lg border border-base-300/60 bg-base-200/40 p-4">
+    <p class="text-sm text-base-content/70">This proposal is awaiting your review — <a href="{% url 'cartels:review_queue' %}" class="link">go to the review queue</a>.</p>
+  </section>
+  {% endif %}
+
+</div>
+{% endblock %}
