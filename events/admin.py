@@ -71,7 +71,7 @@ class EventAdmin(admin.ModelAdmin):
         created = 0
         for event in queryset:
             if event.workgroup_id is None:
-                event.get_or_create_workgroup()
+                event.ensure_workgroup()
                 created += 1
         self.message_user(
             request,

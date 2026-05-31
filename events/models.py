@@ -351,39 +351,54 @@ class Event(models.Model):
             status__in=(Registration.Status.PAID, Registration.Status.COMPED),
         ).exists()
 
-    def get_or_create_workgroup(self):
-        """Attach (once) a seminar-kind Workgroup for this event's workspace.
+    #: Event types organized by the Programming Committee (not their own group).
+    PC_OWNED_TYPES = frozenset({
+        "special_event", "day_of_assembly", "working_day", "scholarly_seminar",
+    })
 
-        Idempotent; creating the Workgroup auto-provisions its channel via the
-        Parlêtre signal. Roster is derived (``is_workgroup_member``), so no
-        WorkgroupMembership rows are created.
+    def ensure_workgroup(self):
+        """Ensure this event has a generating workgroup, and return it.
+
+        Workgroup-primary model (docs/design-workgroup-events.md): an annual-
+        program offering (seminar / reading group / cartel) gets its own
+        offering Workgroup of the matching kind (which auto-provisions a channel
+        via the Parlêtre signal); a PC-organized event (special / assembly /
+        work day / scholarly) links to the Programming Committee's workgroup.
+        Idempotent. Returns None only if a PC-owned event can't find the PC
+        workgroup.
         """
         if self.workgroup_id is not None:
             return self.workgroup
         from workgroups.models import Workgroup, build_workgroup
 
-        # Stopgap mapping until the Workgroup-primary reframe lands (see
-        # docs/design-workgroup-events.md). The annual-program offering types
-        # map to their matching workgroup kind; everything else defaults to
-        # seminar for now.
-        kind = {
+        offering_kind = {
             self.Type.SEMINAR: Workgroup.Kind.SEMINAR,
             self.Type.READING_GROUP: Workgroup.Kind.READING_GROUP,
             self.Type.CARTEL: Workgroup.Kind.CARTEL,
-        }.get(self.event_type, Workgroup.Kind.SEMINAR)
+        }.get(self.event_type)
 
-        slug, n = self.slug, 2
-        while Workgroup.objects.filter(slug=slug).exists():
-            slug = f"{self.slug}-{n}"
-            n += 1
-        self.workgroup = build_workgroup(
-            kind,
-            name=self.title,
-            slug=slug,
-            description=self.description or "",
-            landing_visibility="members",
-            content_visibility="private",
-        )
+        if offering_kind is not None:
+            slug, n = self.slug[:140], 2
+            while Workgroup.objects.filter(slug=slug).exists():
+                slug = f"{self.slug[:135]}-{n}"
+                n += 1
+            self.workgroup = build_workgroup(
+                offering_kind,
+                name=self.title[:120],   # Workgroup.name is max_length=120
+                slug=slug,
+                description=self.description or "",
+                landing_visibility="members",
+                content_visibility="private",
+            )
+        else:
+            # PC-organized event → the Programming Committee's workgroup.
+            from committees.models import Committee
+
+            pc = Committee.objects.filter(slug="programming-committee").first()
+            if pc is None or pc.workgroup_id is None:
+                return None
+            self.workgroup_id = pc.workgroup_id
+
         self.save(update_fields=["workgroup"])
         return self.workgroup
 

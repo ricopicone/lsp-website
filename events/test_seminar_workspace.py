@@ -41,24 +41,40 @@ def _register(user, event, status=Registration.Status.PAID):
     )
 
 
-def test_get_or_create_workgroup_is_idempotent_and_seminar_kind():
+def test_ensure_workgroup_is_idempotent_and_seminar_kind():
     event = _seminar()
-    wg = event.get_or_create_workgroup()
+    wg = event.ensure_workgroup()
     assert wg.kind == wg.Kind.SEMINAR
     assert wg.has_works is False          # seminar capability seed
-    assert event.get_or_create_workgroup() == wg   # idempotent
+    assert event.ensure_workgroup() == wg   # idempotent
 
 
 def test_workgroup_kind_follows_event_type():
-    """Stopgap: a reading-group event's workspace is a reading_group workgroup,
-    not a seminar (so /groups/reading-groups/ populates)."""
+    """A reading-group event's workspace is a reading_group workgroup, not a
+    seminar (so /groups/reading-groups/ populates)."""
     rg = Event.objects.create(
         title="Reading Lacan's Seminar XI", slug="reading-xi",
         event_type=Event.Type.READING_GROUP,
         start_date=date(2026, 9, 1), end_date=date(2027, 5, 1),
     )
-    wg = rg.get_or_create_workgroup()
+    wg = rg.ensure_workgroup()
     assert wg.kind == wg.Kind.READING_GROUP
+
+
+def test_pc_owned_event_links_to_pc_workgroup():
+    """R3: a PC-organized event (assembly/work-day/special) links to the
+    Programming Committee's workgroup, not a new offering group."""
+    from committees.models import Committee
+
+    pc = Committee.objects.get(slug="programming-committee")  # seeded + folded in
+    special = Event.objects.create(
+        title="Spring Day of Assembly", slug="doa-2026",
+        event_type=Event.Type.DAY_OF_ASSEMBLY,
+        start_date=date(2026, 4, 1), end_date=date(2026, 4, 1),
+    )
+    wg = special.ensure_workgroup()
+    assert wg == pc.workgroup
+    assert wg.kind == wg.Kind.COMMITTEE
 
 
 def test_generate_event_links_event_to_workgroup():
@@ -91,14 +107,14 @@ def test_is_member_spans_multiple_generated_events():
 
 def test_creating_workspace_provisions_a_channel():
     event = _seminar()
-    wg = event.get_or_create_workgroup()
+    wg = event.ensure_workgroup()
     assert wg.channels.first() is not None
     assert wg.channels.first().category.name == "Seminars"
 
 
 def test_roster_derives_from_faculty_and_paid_registrants():
     event = _seminar()
-    wg = event.get_or_create_workgroup()
+    wg = event.ensure_workgroup()
 
     teacher = _user("teacher@x.test", is_faculty=True)
     event.faculty.add(teacher)
@@ -121,7 +137,7 @@ def test_seminar_channel_visible_to_registrant_not_to_stranger():
     from parletre.permissions import channel_visible
 
     event = _seminar()
-    wg = event.get_or_create_workgroup()
+    wg = event.ensure_workgroup()
     ch = wg.channels.first()
     assert ch.access == Channel.Access.WORKGROUP
 
