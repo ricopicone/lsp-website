@@ -14,17 +14,20 @@ Columns (only `email` is required; rest optional):
 
 | Column | Notes |
 |---|---|
-| `email` | unique; login identifier |
+| `email` | required; unique; login identifier |
 | `first_name`, `last_name` | optional |
-| `role` | `prospective_applicant`, `student`, `pre_candidate`, `candidate`, `analyst`, `member`, `external` |
-| `tuition_paying` | `true`/`false`/`yes`/`no`/`1`/`0` |
-| `is_faculty` | same boolean parsing |
+| `role` | `prospective_applicant`, `student`, `pre_candidate`, `candidate`, `analyst`, `scholar`, `pre_candidate_scholar`, `candidate_scholar`, `member`, `external` |
+| `is_faculty` | `true`/`false`/`yes`/`no`/`1`/`0` |
 | `notes` | free-text, staff-only |
+| `bio`, `credentials`, `languages_spoken`, `location`, `phone`, `public_email`, `pronouns`, `year_joined` | optional profile fields |
 
 See `docs/members-import-template.csv` for a sample.
 
 Roles map directly to `Profile.role` values; unknown columns are
 rejected up-front. Email matching is case-insensitive (dedupes).
+**There is no `tuition_paying` column** — tuition is now a per-year
+decision (`payments.TuitionEnrollment`), set by the member or treasurer,
+not on import.
 
 ### Dry-run, then import
 
@@ -142,6 +145,39 @@ aws sesv2 get-account --profile lsp --region us-west-2 \
 
 Until `ProductionAccess: true`, transactional email only reaches
 verified test recipients (`aws sesv2 list-email-identities --profile lsp --region us-west-2`).
+
+## Background tasks (systemd timers on the host)
+
+Recurring jobs run as host-level systemd timers that `docker exec` a
+management command in `lsp-website-web-1` (not in-container cron):
+
+| Timer | Command | Purpose |
+|---|---|---|
+| `lsp-dues-cron.timer` | `send_dues_reminders` + `send_tuition_reminders` | Weekly dues/tuition reminder emails to obligated unpaid/undecided members (from Sept 1, throttled per period) |
+| `lsp-parletre-purge.timer` | `purge_expired_messages` | Redacts expired Parlêtre disappearing-channel messages (blackout body + delete attachment files, keep rows) |
+
+Inspect/trigger on the host:
+
+```
+ssh lsp 'systemctl list-timers "lsp-*"'
+ssh lsp 'systemctl start lsp-parletre-purge.service'   # run once now
+ssh lsp 'journalctl -u lsp-parletre-purge.service -n 50'
+```
+
+`create_dues_period_if_needed` / `create_tuition_period_if_needed` are
+idempotent and ensure the current + next academic-year periods exist;
+run them before opening a new year.
+
+## Realtime chat (Parlêtre) deployment notes
+
+Parlêtre's chat uses Django Channels over **daphne (ASGI)** — the
+container CMD runs daphne, not a WSGI server, and nginx proxies `/ws/`
+to it. The production channel layer is **in-memory** (single daphne
+process), which is correct for the current single-container deploy.
+`channels_redis` is gated behind `PARLETRE_USE_REDIS=true` (+ a
+`RedisPubSubChannelLayer`) for a future multi-process setup — leave it
+off unless you scale out, since the pinned redis-py is incompatible with
+the older channels_redis client.
 
 ## Add an SSH IP to the allowlist
 
