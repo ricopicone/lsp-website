@@ -1355,7 +1355,7 @@ def test_edit_404_on_invisible_channel(client):
 
 
 @pytest.mark.django_db
-def test_ephemeral_chat_hides_expired_and_purge_deletes(client):
+def test_ephemeral_chat_redacts_expired_keeps_fresh(client):
     from datetime import timedelta
 
     from django.core.management import call_command
@@ -1368,11 +1368,14 @@ def test_ephemeral_chat_hides_expired_and_purge_deletes(client):
 
     client.force_login(member)
     body = client.get(ch.get_absolute_url()).content.decode()
-    assert "fresh one" in body and "old one" not in body   # hidden on read
+    assert "fresh one" in body and "old one" not in body   # old is blacked out, fresh shows
 
     call_command("purge_expired_messages")
-    assert not Post.objects.filter(id=old.id).exists()      # purged from DB
-    assert Post.objects.filter(id=fresh.id).exists()
+    old.refresh_from_db()
+    assert old.redacted is True and "█" in old.body         # redacted in place, not deleted
+    assert Post.objects.filter(id=old.id).exists()
+    fresh.refresh_from_db()
+    assert not fresh.redacted                                # fresh untouched
 
 
 @pytest.mark.django_db
@@ -1414,3 +1417,76 @@ def test_seed_creates_purloined_letters():
     assert ch.is_ephemeral and ch.message_ttl_seconds == 86400
     assert ch.kind == Channel.Kind.CHAT
     assert ch.ttl_display == "1 day"
+
+
+# ---- redacted disappearing messages -------------------------------------
+
+
+def test_blackout_preserves_shape_not_content():
+    from .models import blackout
+    assert blackout("Has everyone read?") == "███ ████████ █████"
+    assert blackout("a b\nc") == "█ █\n█"
+    assert blackout("") == ""
+
+
+@pytest.mark.django_db
+def test_expired_message_is_redacted_on_read_not_hidden(client):
+    from datetime import timedelta
+
+    from django.utils import timezone
+    ch = make_channel("ple", kind=Channel.Kind.CHAT, message_ttl_seconds=3600)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    old = Post.objects.create(channel=ch, author=member, body="secret words here")
+    Post.objects.filter(id=old.id).update(created_at=timezone.now() - timedelta(hours=2))
+    client.force_login(member)
+    body = client.get(ch.get_absolute_url()).content.decode()
+    assert "secret words here" not in body   # real content never sent
+    assert "█" in body                        # shown as a redaction bar
+
+
+@pytest.mark.django_db
+def test_purge_command_redacts_body_and_deletes_files_keeps_row():
+    from datetime import timedelta
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from django.core.management import call_command
+    from django.utils import timezone
+
+    from .models import Attachment
+    ch = make_channel("ple", kind=Channel.Kind.CHAT, message_ttl_seconds=3600)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    old = Post.objects.create(channel=ch, author=member, body="will vanish soon")
+    att = Attachment.objects.create(
+        post=old, file=SimpleUploadedFile("p.txt", b"data"),
+        original_name="p.txt", content_type="text/plain", size=4,
+    )
+    Post.objects.filter(id=old.id).update(created_at=timezone.now() - timedelta(hours=2))
+
+    call_command("purge_expired_messages")
+    old.refresh_from_db()
+    assert old.redacted is True
+    assert "will" not in old.body and "█" in old.body
+    att.refresh_from_db()
+    assert not att.file                                  # real file gone
+    assert Attachment.objects.filter(id=att.id).exists()  # row kept (for the black box)
+
+
+@pytest.mark.django_db
+def test_redacted_attachment_download_is_404(client):
+    from datetime import timedelta
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from django.utils import timezone
+
+    from .models import Attachment
+    ch = make_channel("ple", kind=Channel.Kind.CHAT, message_ttl_seconds=3600)
+    member = make_user("m@x.co", role=Role.ANALYST)
+    old = Post.objects.create(channel=ch, author=member, body="x")
+    att = Attachment.objects.create(
+        post=old, file=SimpleUploadedFile("s.txt", b"top secret"),
+        original_name="s.txt", content_type="text/plain", size=10,
+    )
+    Post.objects.filter(id=old.id).update(created_at=timezone.now() - timedelta(hours=2))
+    client.force_login(member)
+    # past TTL → refused even before the cron persists redaction
+    assert client.get(reverse("parletre:attachment", args=[att.id])).status_code == 404

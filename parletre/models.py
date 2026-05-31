@@ -20,6 +20,8 @@ realtime chat transport (M13.5b).
 
 from __future__ import annotations
 
+import re
+
 from django.conf import settings
 from django.db import models
 from django.urls import reverse
@@ -34,6 +36,12 @@ from .storage import attachment_storage
 #: The fixed palette of reaction emoji members may add to a post (DISC-3).
 #: A closed set keeps input validated and the UI tidy.
 REACTION_EMOJI = ("👍", "❤️", "🎉", "🤔", "👀", "✅")
+
+
+def blackout(text: str) -> str:
+    """Redact text: every non-whitespace character becomes a █ block,
+    preserving word/line shape but not content."""
+    return re.sub(r"\S", "█", text or "")
 
 
 class SubscriptionLevel(models.TextChoices):
@@ -324,6 +332,11 @@ class Post(models.Model):
     deleted = models.BooleanField(
         default=False, help_text="Soft tombstone; body hidden but slot kept."
     )
+    redacted = models.BooleanField(
+        default=False,
+        help_text="A disappearing-channel message whose content has been redacted "
+        "(real text/files deleted; a blacked-out bar remains).",
+    )
 
     class Meta:
         ordering = ("created_at",)
@@ -339,6 +352,12 @@ class Post(models.Model):
         if self.deleted:
             return ""
         return render_markdown(self.body)
+
+    @property
+    def redacted_display(self) -> str:
+        """The current body rendered as redaction blocks (no content leaks —
+        computed even before the cron persists the redaction)."""
+        return blackout(self.body)
 
     @property
     def excerpt(self) -> str:

@@ -35,13 +35,16 @@
         <p class="text-sm">
           <span class="font-medium text-base-content">{% if post.author %}{{ post.author.get_full_name|default:post.author.email }}{% else %}(removed){% endif %}</span>
           <time class="text-xs text-base-content/40 ml-1" datetime="{{ post.created_at|date:'c' }}">{{ post.created_at|date:"M j, g:i a" }}</time>
-          {% if post.edited_at %}<span class="text-xs text-base-content/40">(edited)</span>{% endif %}
+          {% if post.edited_at and not post.is_redacted %}<span class="text-xs text-base-content/40">(edited)</span>{% endif %}
         </p>
-        {% include "parletre/_reply_context.html" %}
+        {% if not post.is_redacted %}{% include "parletre/_reply_context.html" %}{% endif %}
         <div class="prose prose-sm max-w-none text-base-content/90">
-          {% if post.deleted %}<em class="text-base-content/40">(deleted)</em>{% else %}{{ post.body_html }}{% endif %}
+          {% if post.deleted %}<em class="text-base-content/40">(deleted)</em>
+          {% elif post.is_redacted %}<span class="redacted">{{ post.redacted_display }}</span>
+          {% else %}{{ post.body_html }}{% endif %}
         </div>
-        {% if not post.deleted %}{% include "parletre/_attachments.html" %}{% include "parletre/_reactions.html" %}{% include "parletre/_post_actions.html" %}{% endif %}
+        {% if post.is_redacted %}{% include "parletre/_redacted_attachments.html" %}
+        {% elif not post.deleted %}{% include "parletre/_attachments.html" %}{% include "parletre/_reactions.html" %}{% include "parletre/_post_actions.html" %}{% endif %}
       </div>
     </div>
     {% empty %}
