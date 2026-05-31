@@ -363,6 +363,35 @@ def test_settings_endpoints_gated_to_members(client):
     assert b"Settings" not in resp.content
 
 
+def test_discuss_and_chat_tabs_render_inline_for_member(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    wg = cartel.workgroup
+    assert wg.channels.filter(kind="forum").exists()
+    assert wg.channels.filter(kind="chat").exists()
+
+    client.force_login(gen)
+    resp = client.get(wg.get_absolute_url())
+    assert b"tab=discuss" in resp.content and b"tab=chat" in resp.content  # tabs offered
+
+    d = client.get(f"{wg.get_absolute_url()}?tab=discuss")
+    assert d.status_code == 200
+    assert b"New thread" in d.content                 # inline forum
+    c = client.get(f"{wg.get_absolute_url()}?tab=chat")
+    assert c.status_code == 200
+    assert b"data-chat" in c.content                  # inline chat (composer/stream)
+
+
+def test_discuss_chat_tabs_hidden_from_non_member(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    client.force_login(_member("outsider@x.test"))
+    resp = client.get(cartel.workgroup.get_absolute_url())
+    assert b"tab=discuss" not in resp.content and b"tab=chat" not in resp.content
+
+
 def test_proposed_cartel_hidden_from_other_members_on_kind_list(client):
     gen = _member("gen@x.test")
     Cartel.objects.propose(generator=gen, name="Secret Proposal")

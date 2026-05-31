@@ -1,5 +1,8 @@
 {% extends "core/base.html" %}
+{% load static %}
 {% block title %}{{ workgroup.name }} — LSP{% endblock %}
+{% block extra_head %}{% if active_tab == "chat" %}<script defer src="{% static 'js/parletre-mentions.js' %}"></script>
+<script defer src="{% static 'js/parletre-chat.js' %}"></script>{% endif %}{% endblock %}
 {% block content %}
 <div class="space-y-6">
 
@@ -10,12 +13,7 @@
         <span>{{ workgroup.start_date|date:"Y" }}{% if workgroup.end_date %}–{{ workgroup.end_date|date:"Y" }}{% else %}–present{% endif %}</span>
       {% endif %}
     </div>
-    <div class="flex items-start justify-between gap-4">
-      <h1 class="font-serif text-3xl text-base-content">{{ workgroup.name }}</h1>
-      {% if channel %}
-      <a href="{{ channel.get_absolute_url }}" class="btn btn-primary btn-sm shrink-0">Discussion</a>
-      {% endif %}
-    </div>
+    <h1 class="font-serif text-3xl text-base-content">{{ workgroup.name }}</h1>
   </header>
 
   <div role="tablist" class="tabs tabs-bordered">
@@ -26,6 +24,14 @@
   </div>
 
   {% if active_tab == "overview" %}{% include "workgroups/_tab_overview.html" %}
+  {% elif active_tab == "discuss" %}
+    <div class="space-y-4 pt-2">
+      {% if can_post %}<div class="flex justify-end"><a href="{% url 'parletre:new_thread' channel.slug %}" class="btn btn-primary btn-sm">New thread</a></div>{% endif %}
+      {% include "parletre/_forum_threads.html" %}
+      <p class="text-xs text-base-content/50"><a href="{{ channel.get_absolute_url }}" class="link">Open full discussion ↗</a></p>
+    </div>
+  {% elif active_tab == "chat" %}
+    <div class="pt-2">{% include "parletre/_chat_body.html" %}</div>
   {% elif active_tab == "work" %}{% include "workgroups/_tab_work.html" %}
   {% elif active_tab == "settings" %}{% include "workgroups/_tab_settings.html" %}
   {% endif %}

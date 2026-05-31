@@ -252,6 +252,46 @@ def channel(request, slug):
     return render(request, "parletre/channel_chat.html", context)
 
 
+def channel_inline_context(request, channel) -> dict:
+    """Read-side context for rendering a channel's body inline (e.g. inside a
+    workgroup's Workspace tab). Mirrors the GET path of :func:`channel`;
+    posting still happens against the Parlêtre channel endpoints.
+    """
+    context = {
+        "channel": channel,
+        "can_post": channel.can_post(request.user),
+        "can_moderate": channel.can_moderate(request.user),
+        "inline": True,
+    }
+    if channel.is_forum:
+        unread_ids = unread_thread_ids(request.user, channel)
+        threads = list(
+            channel.threads.select_related("author").annotate(
+                reply_count=Count("posts"), last_post=Max("posts__created_at")
+            )
+        )
+        for thread in threads:
+            thread.is_unread = thread.id in unread_ids
+        context["threads"] = threads
+        return context
+
+    mark_channel_read(request.user, channel)
+    chat_posts = channel.posts.filter(thread__isnull=True).select_related(
+        "author", "reply_to", "reply_to__author"
+    ).prefetch_related("reactions", "attachments").order_by("created_at")
+    cutoff = (
+        timezone.now() - timedelta(seconds=channel.message_ttl_seconds)
+        if channel.is_ephemeral
+        else None
+    )
+    context["posts"] = _attach_reactions(
+        chat_posts, request.user, context["can_moderate"], cutoff
+    )
+    context["reaction_palette"] = REACTION_EMOJI
+    context["form"] = PostForm(initial={"reply_to": None})
+    return context
+
+
 @login_required
 def new_thread(request, slug):
     channel = _visible_channel_or_404(request.user, slug)
