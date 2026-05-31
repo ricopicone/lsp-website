@@ -9,9 +9,8 @@ Each entry has:
 - ``full_attribution`` — the bibliographic detail; surfaces as a hover
   tooltip (HTML ``title`` attribute) in the footer
 
-Source: ``../lacan_aphorisms.json`` in the parent ``LSP-Web-Coordinator``
-folder — kept in sync by the Web Coordinator. Inlined here so the runtime
-doesn't depend on a sibling-directory file.
+This module is the canonical source: edit the ``APHORISMS`` list below to
+add, change, or remove entries (no database or migration involved).
 """
 
 from __future__ import annotations

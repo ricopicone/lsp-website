@@ -43,19 +43,6 @@
         {% with cur=request.path %}
           <a href="{% url 'about' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/about/' in cur %}text-primary font-medium{% endif %}">About</a>
 
-          {# People #}
-          <div class="dropdown dropdown-hover">
-            <div tabindex="0" role="button"
-                 class="px-3 py-1.5 rounded-md hover:bg-base-200 cursor-pointer flex items-center gap-1 {% if '/directory/' in cur or '/find-an-analyst/' in cur %}text-primary font-medium{% endif %}">
-              People
-              <svg class="size-3 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-            </div>
-            <ul tabindex="0" class="dropdown-content menu menu-sm z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-52">
-              <li><a href="{% url 'directory' %}">Directory</a></li>
-              <li><a href="{% url 'find_an_analyst' %}">Find an Analyst</a></li>
-            </ul>
-          </div>
-
           {# Groups #}
           <div class="dropdown dropdown-hover">
             <div tabindex="0" role="button"
@@ -71,6 +58,19 @@
               <li><a href="{% url 'workgroups:kind_committees' %}">Committees</a></li>
               <li><a href="{% url 'workgroups:kind_working_groups' %}">Working Groups</a></li>
               <li><a href="{% url 'workgroups:kind_reading_groups' %}">Reading Groups</a></li>
+            </ul>
+          </div>
+
+          {# People #}
+          <div class="dropdown dropdown-hover">
+            <div tabindex="0" role="button"
+                 class="px-3 py-1.5 rounded-md hover:bg-base-200 cursor-pointer flex items-center gap-1 {% if '/directory/' in cur or '/find-an-analyst/' in cur %}text-primary font-medium{% endif %}">
+              People
+              <svg class="size-3 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+            <ul tabindex="0" class="dropdown-content menu menu-sm z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-52">
+              <li><a href="{% url 'directory' %}">Directory</a></li>
+              <li><a href="{% url 'find_an_analyst' %}">Find an Analyst</a></li>
             </ul>
           </div>
 
@@ -120,10 +120,6 @@
               class="dropdown-content menu menu-sm mt-2 z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-60 overflow-y-auto flex-nowrap">
             <li><a href="{% url 'about' %}">About</a></li>
 
-            <li class="menu-title">People</li>
-            <li><a href="{% url 'directory' %}">Directory</a></li>
-            <li><a href="{% url 'find_an_analyst' %}">Find an Analyst</a></li>
-
             <li class="menu-title">Groups</li>
             <li><a href="{% url 'workgroups:list' %}">Overview</a></li>
             <li><a href="{% url 'workgroups:kind_seminars' %}">Seminars</a></li>
@@ -131,6 +127,10 @@
             <li><a href="{% url 'workgroups:kind_committees' %}">Committees</a></li>
             <li><a href="{% url 'workgroups:kind_working_groups' %}">Working Groups</a></li>
             <li><a href="{% url 'workgroups:kind_reading_groups' %}">Reading Groups</a></li>
+
+            <li class="menu-title">People</li>
+            <li><a href="{% url 'directory' %}">Directory</a></li>
+            <li><a href="{% url 'find_an_analyst' %}">Find an Analyst</a></li>
 
             <li class="menu-title">Events</li>
             <li><a href="{% url 'program' %}">Program</a></li>

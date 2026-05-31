@@ -215,67 +215,65 @@
   </section>
 
   {# ===================== Site index ===================== #}
-  <section class="space-y-6 border-t border-base-300/60 pt-12">
+  <section class="space-y-8 border-t border-base-300/60 pt-12">
     <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">Everything here</h2>
-    <ul class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-      {% with card="block h-full p-4 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors" tt="font-serif text-base text-base-content tracking-tight" td="text-xs text-base-content/55 mt-1" %}
+    {% with lbl="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45" lnk="link link-hover text-base-content/80" %}
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-8 gap-y-10">
 
-      <li><a href="{% url 'directory' %}" class="{{ card }}">
-        <div class="{{ tt }}">Directory</div>
-        <div class="{{ td }}">Analysts, candidates &amp; scholars</div></a></li>
+      <nav class="space-y-3">
+        <div class="{{ lbl }}">Groups</div>
+        <ul class="space-y-2 text-sm">
+          <li><a href="{% url 'workgroups:list' %}" class="{{ lnk }}">Overview</a></li>
+          <li><a href="{% url 'workgroups:kind_seminars' %}" class="{{ lnk }}">Seminars</a></li>
+          <li><a href="{% url 'workgroups:kind_cartels' %}" class="{{ lnk }}">Cartels</a></li>
+          <li><a href="{% url 'workgroups:kind_reading_groups' %}" class="{{ lnk }}">Reading groups</a></li>
+        </ul>
+      </nav>
 
-      <li><a href="{% url 'find_an_analyst' %}" class="{{ card }}">
-        <div class="{{ tt }}">Find an Analyst</div>
-        <div class="{{ td }}">Map of practitioners</div></a></li>
+      <nav class="space-y-3">
+        <div class="{{ lbl }}">People</div>
+        <ul class="space-y-2 text-sm">
+          <li><a href="{% url 'directory' %}" class="{{ lnk }}">Directory</a></li>
+          <li><a href="{% url 'find_an_analyst' %}" class="{{ lnk }}">Find an Analyst</a></li>
+        </ul>
+      </nav>
 
-      <li><a href="{% url 'events:list' %}" class="{{ card }}">
-        <div class="{{ tt }}">Events</div>
-        <div class="{{ td }}">Seminars &amp; special events</div></a></li>
+      <nav class="space-y-3">
+        <div class="{{ lbl }}">Events</div>
+        <ul class="space-y-2 text-sm">
+          <li><a href="{% url 'program' %}" class="{{ lnk }}">Program</a></li>
+          <li><a href="{% url 'events:list' %}" class="{{ lnk }}">Other events</a></li>
+          <li><a href="{% url 'core:calendar' %}" class="{{ lnk }}">Calendar</a></li>
+        </ul>
+      </nav>
 
-      <li><a href="{% url 'core:calendar' %}" class="{{ card }}">
-        <div class="{{ tt }}">Calendar</div>
-        <div class="{{ td }}">Every session, month view</div></a></li>
+      <nav class="space-y-3">
+        <div class="{{ lbl }}">Artifacts</div>
+        <ul class="space-y-2 text-sm">
+          <li><a href="{% url 'works:index' %}" class="{{ lnk }}">Works</a></li>
+          <li><a href="{% url 'documents:index' %}" class="{{ lnk }}">Documents</a></li>
+        </ul>
+      </nav>
 
-      <li><a href="{% url 'works:index' %}" class="{{ card }}">
-        <div class="{{ tt }}">Works</div>
-        <div class="{{ td }}">Publications by members</div></a></li>
+      <nav class="space-y-3">
+        <div class="{{ lbl }}">Membership</div>
+        <ul class="space-y-2 text-sm">
+          <li><a href="{% url 'dues' %}" class="{{ lnk }}">Pay dues</a></li>
+          <li><a href="{% url 'donate' %}" class="{{ lnk }}">Donate</a></li>
+          {% if user|is_parletre_member %}
+          <li><a href="{% url 'parletre:index' %}" class="{{ lnk }}">Parlêtre</a></li>
+          {% endif %}
+          {% if user.is_staff %}
+          <li><a href="{% url 'treasurer' %}" class="{{ lnk }}">Treasurer</a></li>
+          {% endif %}
+          {% if not user.is_authenticated %}
+          <li><a href="{% url 'login' %}" class="link link-hover text-primary">Log in or sign up</a></li>
+          {% endif %}
+        </ul>
+      </nav>
 
-      <li><a href="{% url 'documents:index' %}" class="{{ card }}">
-        <div class="{{ tt }}">Documents</div>
-        <div class="{{ td }}">Newsletters &amp; shared files</div></a></li>
-
-      <li><a href="{% url 'workgroups:list' %}" class="{{ card }}">
-        <div class="{{ tt }}">Groups</div>
-        <div class="{{ td }}">Cartels, seminars &amp; more</div></a></li>
-
-      <li><a href="{% url 'dues' %}" class="{{ card }}">
-        <div class="{{ tt }}">Membership dues</div>
-        <div class="{{ td }}">Pay your annual dues</div></a></li>
-
-      <li><a href="{% url 'donate' %}" class="{{ card }}">
-        <div class="{{ tt }}">Donate</div>
-        <div class="{{ td }}">Support the School</div></a></li>
-
-      {% if user|is_parletre_member %}
-      <li><a href="{% url 'parletre:index' %}" class="{{ card }}">
-        <div class="{{ tt }}">Parlêtre</div>
-        <div class="{{ td }}">Members' discussion board</div></a></li>
-      {% endif %}
-
-      {% if not user.is_authenticated %}
-      <li><a href="{% url 'login' %}" class="{{ card }}">
-        <div class="{{ tt }}">Log in or sign up</div>
-        <div class="{{ td }}">Access your account</div></a></li>
-      {% endif %}
-
-      {% if user.is_staff %}
-      <li><a href="{% url 'treasurer' %}" class="{{ card }}">
-        <div class="{{ tt }}">Treasurer</div>
-        <div class="{{ td }}">Dashboard &amp; reports</div></a></li>
-      {% endif %}
-
-      {% endwith %}
-    </ul>
+    </div>
+    {% endwith %}
   </section>
 
   {# ===================== Closing invitation ===================== #}
