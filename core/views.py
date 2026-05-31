@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.db import models
 from django.http import JsonResponse
@@ -20,8 +20,22 @@ def landing(request):
     from workgroups.models import Visibility, Workgroup
 
     today = timezone.now().date()
+    # "Coming up" shows events that haven't started yet — with one exception:
+    # seminars (year-long) that started within the last month and aren't over,
+    # so a freshly-begun seminar still surfaces for late registration.
+    a_month_ago = today - timedelta(days=31)
+    seminar_types = [Event.Type.SEMINAR, Event.Type.SCHOLARLY_SEMINAR]
     upcoming = (
-        Event.objects.filter(published=True, end_date__gte=today)
+        Event.objects.filter(published=True)
+        .filter(
+            models.Q(start_date__gte=today)
+            | models.Q(
+                event_type__in=seminar_types,
+                start_date__gte=a_month_ago,
+                start_date__lt=today,
+                end_date__gte=today,
+            )
+        )
         .order_by("start_date", "title")[:4]
     )
 
