@@ -61,6 +61,34 @@ def test_workgroup_kind_follows_event_type():
     assert wg.kind == wg.Kind.READING_GROUP
 
 
+def test_generate_event_links_event_to_workgroup():
+    """R1: a Workgroup generates Events (Workgroup-primary direction)."""
+    from workgroups.models import Workgroup
+
+    wg = Workgroup.objects.create(kind=Workgroup.Kind.READING_GROUP, name="RG XI")
+    e = wg.generate_event(
+        slug="rg-xi-2026", start_date=date(2026, 9, 1), end_date=date(2027, 5, 1)
+    )
+    assert e.workgroup_id == wg.id
+    assert e.event_type == Event.Type.READING_GROUP   # derived from kind
+    assert e.title == "RG XI"
+    assert list(wg.events.all()) == [e]
+
+
+def test_is_member_spans_multiple_generated_events():
+    """A recurring offering is one Workgroup with many Events (FK, not 1:1);
+    membership in any linked event's roster counts."""
+    from workgroups.models import Workgroup
+
+    wg = Workgroup.objects.create(kind=Workgroup.Kind.SEMINAR, name="Recurring Seminar")
+    wg.generate_event(slug="sem-2025", start_date=date(2025, 9, 1), end_date=date(2026, 5, 1))
+    e2 = wg.generate_event(slug="sem-2026", start_date=date(2026, 9, 1), end_date=date(2027, 5, 1))
+    u = _user("reg@x.test")
+    _register(u, e2, status=Registration.Status.PAID)   # only in the 2026 offering
+    assert wg.is_member(u) is True
+    assert wg.is_member(_user("nobody@x.test")) is False
+
+
 def test_creating_workspace_provisions_a_channel():
     event = _seminar()
     wg = event.get_or_create_workgroup()

@@ -79,20 +79,58 @@ so this is bigger than a Stage. Plan:
 
 Take an RDS snapshot before the backfill, as with the committee fold-in.
 
-## Open forks (settle before building)
+## Locked decisions (2026-05-31)
 
-1. **Recurring offerings:** does a seminar/reading group that runs in multiple
-   years share **one Workgroup across years** (one identity, many yearly
-   Events) or **one Workgroup per offering/year**? → *(Recommend: one shared
-   Workgroup across years — that's the point of a durable group; the Program +
-   Event carry the per-year specifics.)*
-2. **Organized events** (assembly / work day / special): do they get a
-   **dedicated workgroup** each, or just point `Event.workgroup` at the **PC**
-   as generator (no new group)? → *(Recommend: PC as generator; no dedicated
-   group unless one genuinely collaborates.)*
-3. **Committee/WG meetings as Events:** in scope for this reframe, or a later
-   follow-on once offerings are inverted? → *(Recommend: model the FK to allow
-   it, build the meeting-creation UI later.)*
+1. **Recurring offerings → one shared Workgroup across years.** A seminar /
+   reading group keeps one durable Workgroup (identity, members, channel,
+   works); each year is a new Event under it (the Program carries the
+   per-year specifics). *Caveat: the historical **backfill** creates one
+   Workgroup per existing Event — we don't auto-merge across years (titles
+   drift; mis-merging is worse than duplication). Going forward, a recurring
+   offering reuses its Workgroup; staff can merge historical ones by hand.*
+2. **Organized events (special / assembly / work day) → PC as generator.**
+   `Event.workgroup` points at the Programming Committee workgroup; no
+   dedicated group is created. The Event keeps its own public/members audience.
+3. **Committee/WG meetings as private Events → allowed by the model now, UI
+   later.** The FK supports it; the meeting-creation UI is a follow-on.
+
+## Staged build plan (R1–R4)
+
+Sequenced so the safe, additive work ships first and the one prod-data
+migration is isolated behind a snapshot.
+
+**R1 — `Event.workgroup` OneToOne → ForeignKey (additive, no data migration).**
+A workgroup generates many Events. Reverse accessor `event` → `events`. Only
+one code consumer: `Workgroup.is_member` (dispatch) — change from the single
+`self.event` to "is faculty/registrant of **any** linked event"
+(`any(e.is_workgroup_member(user) for e in self.events.all())`; event counts
+per group are tiny). Add `Workgroup.generate_event(**kwargs)` (creates an Event
+linked to this workgroup; event_type defaults from kind for offerings). Update
+the Stage-5 tests (`wg.event` → `wg.events`). Migration = one `AlterField`
+(drops the unique constraint; column unchanged). **Ships like an additive
+stage — no prod risk.**
+
+**R2 — Backfill existing prod Events + snapshot (the one risky stage).** Data
+migration: every annual-program Event without a workgroup gets a freshly
+created offering Workgroup (kind from event_type) linked; special / assembly /
+work-day / scholarly Events get linked to the **PC** workgroup. One Workgroup
+per Event (no cross-year merge, per decision #1). **Take an RDS snapshot
+first** (as with the committee fold-in); validate on a local copy of the data
+shape; reverse = noop.
+
+**R3 — Invert creation in the PC admin.** When the PC admin creates an
+annual-program Event, auto-create-and-link its offering Workgroup (or attach to
+a chosen existing one for a recurring offering). Keeps the admin UX close to
+today while enforcing "every program Event has a generating workgroup." Special
+events created by the PC link to the PC workgroup.
+
+**R4 — Remove the stopgap + cleanup.** Delete `Event.get_or_create_workgroup`
+and the old "Create workspace" admin action (creation now flows
+Workgroup→Event). Tidy docs.
+
+**Risk gates:** R1, R3, R4 are code-only / additive and ship on the normal
+test-green rhythm. **R2 is the only stage that mutates prod data — snapshot +
+present verification before push**, exactly like Stage 4.
 
 ## Stopgap currently in place
 

@@ -237,16 +237,17 @@ class Event(models.Model):
             "edit access."
         ),
     )
-    workgroup = models.OneToOneField(
+    workgroup = models.ForeignKey(
         "workgroups.Workgroup",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="event",
+        related_name="events",
         help_text=(
-            "Optional collaborative workspace (channel + shared files) for this "
-            "event's participants. Roster derives from faculty + paid/comped "
-            "registrants — not hand-managed."
+            "The workgroup that generates/owns this event (Workgroup-primary "
+            "model — see docs/design-workgroup-events.md). For offerings it's "
+            "the offering's own group; for special events it's the organizing "
+            "committee. A group may generate many events over time."
         ),
     )
     start_date = models.DateField()
