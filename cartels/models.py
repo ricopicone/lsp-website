@@ -100,9 +100,39 @@ class Cartel(models.Model):
         return self.workgroup.name
 
     def get_absolute_url(self) -> str:
-        from django.urls import reverse
+        # The cartel's canonical page is the generic Workgroup detail
+        # (/groups/<slug>/), which composes the cartel actions partial.
+        return self.workgroup.get_absolute_url()
 
-        return reverse("cartels:detail", args=[self.workgroup.slug])
+    def viewer_state(self, user) -> dict:
+        """Cartel-specific context for the (generic) detail page — so the
+        workgroups detail view can compose cartel UI via this one call,
+        without importing the cartels app."""
+        from accounts.permissions import is_lsp_member
+
+        authed = getattr(user, "is_authenticated", False)
+        is_member = self.is_member(user)
+        has_invite = bool(authed) and self.invitations.filter(
+            invited_user=user, accepted_at__isnull=True
+        ).exists()
+        already_applied = bool(authed) and self.join_requests.filter(
+            applicant=user, status=CartelJoinRequest.Status.PENDING
+        ).exists()
+        can_apply = (
+            self.status == self.Status.OPEN and not self.closed
+            and is_lsp_member(user) and not is_member and not has_invite and not already_applied
+        )
+        pending = (
+            list(self.join_requests.filter(status=CartelJoinRequest.Status.PENDING)
+                 .select_related("applicant"))
+            if is_member else []
+        )
+        return {
+            "has_invite": has_invite,
+            "already_applied": already_applied,
+            "can_apply": can_apply,
+            "pending_requests": pending,
+        }
 
     # ---- Membership ----
 

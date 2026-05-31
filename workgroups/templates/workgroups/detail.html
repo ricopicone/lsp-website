@@ -24,6 +24,9 @@
   </section>
   {% endif %}
 
+  {# Kind-specific UI, composed in when a concrete group type is attached. #}
+  {% if cartel %}{% include "cartels/_actions.html" %}{% endif %}
+
   {% if not can_view_content %}
     <div class="rounded-lg border border-base-300/60 bg-base-200/40 p-6 text-base-content/70">
       This group's roster and output are private to its members.

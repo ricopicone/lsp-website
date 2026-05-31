@@ -6,7 +6,13 @@
     <p class="text-sm">
       <a href="{% url 'workgroups:list' %}" class="link link-hover text-base-content/60">← Groups</a>
     </p>
-    <h1 class="font-serif text-3xl text-base-content">{{ kind_label_plural }}</h1>
+    <div class="flex items-start justify-between gap-4">
+      <h1 class="font-serif text-3xl text-base-content">{{ kind_label_plural }}</h1>
+      <div class="flex flex-col gap-1 shrink-0">
+        {% if can_propose_cartel %}<a href="{% url 'cartels:propose' %}" class="btn btn-primary btn-sm">Propose a cartel</a>{% endif %}
+        {% if is_cartel_coordinator %}<a href="{% url 'cartels:review_queue' %}" class="btn btn-ghost btn-sm">Review proposals</a>{% endif %}
+      </div>
+    </div>
   </header>
 
   {% if groups %}

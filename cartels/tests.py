@@ -191,35 +191,46 @@ def test_propose_form_renders(client):
     assert b"Propose a cartel" in resp.content
 
 
-def test_cartel_detail_renders_with_gating_ui(client):
-    """GET the cartel page as a member with a pending application — exercises
-    the guiding-question, roster, and member-gating template branches."""
+def test_cartel_ui_composed_into_unified_groups_detail(client):
+    """The cartel UI now renders on the unified /groups/<slug>/ page — guiding
+    question, member-gating, and roster — composed from the cartel partial."""
     gen = _member("gen@x.test")
     cartel = Cartel.objects.propose(generator=gen, name="C", guiding_question="What is a letter?")
     cartel.approve(_coordinator())
     cartel.request_to_join(_member("appl@x.test"))
     client.force_login(gen)
-    resp = client.get(f"/cartels/{cartel.workgroup.slug}/")
+    resp = client.get(cartel.workgroup.get_absolute_url())   # /groups/<slug>/
     assert resp.status_code == 200
     assert b"What is a letter?" in resp.content   # guiding question
     assert b"Applications" in resp.content         # member-gating UI
     assert b"Members" in resp.content
 
 
-def test_cartel_detail_shows_apply_to_eligible_member(client):
+def test_groups_detail_shows_apply_to_eligible_member(client):
     gen = _member("gen@x.test")
     cartel = Cartel.objects.propose(generator=gen, name="C")
     cartel.approve(_coordinator())
     client.force_login(_member("outsider@x.test"))
-    resp = client.get(f"/cartels/{cartel.workgroup.slug}/")
+    resp = client.get(cartel.workgroup.get_absolute_url())
     assert resp.status_code == 200
     assert b"Apply to join" in resp.content
 
 
-def test_proposed_cartel_hidden_from_other_members_on_index(client):
+def test_legacy_cartel_urls_redirect_to_groups(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    slug = cartel.workgroup.slug
+    client.force_login(gen)
+    assert client.get("/cartels/").status_code == 302
+    assert client.get(f"/cartels/{slug}/").status_code == 302
+    assert client.get(f"/cartels/{slug}/", follow=True).status_code == 200
+
+
+def test_proposed_cartel_hidden_from_other_members_on_kind_list(client):
     gen = _member("gen@x.test")
     Cartel.objects.propose(generator=gen, name="Secret Proposal")
     other = _member("other@x.test")
     client.force_login(other)
-    resp = client.get("/cartels/")
+    resp = client.get("/groups/cartels/")
     assert b"Secret Proposal" not in resp.content   # private until approved

@@ -190,10 +190,12 @@ def test_reading_groups_kind_page_renders(client):
     assert resp.status_code == 200
 
 
-def test_cartels_index_lists_visible_cartels(client):
+def test_cartels_listed_under_unified_groups_kind_page(client):
     Cartel.objects.create_with_workgroup(
         name="Speech and Writing", landing_visibility=Visibility.PUBLIC
     )
-    resp = client.get("/cartels/")
+    # /cartels/ now redirects into the unified Groups section.
+    assert client.get("/cartels/").status_code == 302
+    resp = client.get("/groups/cartels/")
     assert resp.status_code == 200
     assert b"Speech and Writing" in resp.content

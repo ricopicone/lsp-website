@@ -26,16 +26,13 @@ def _abs(request, obj):
 
 
 def index(request):
-    """Public list of cartels visible to the user (PROPOSED stay hidden)."""
-    cartels = [
-        c for c in Cartel.objects.select_related("workgroup")
-        if c.workgroup.landing_visible_to(request.user)
-    ]
-    return render(request, "cartels/index.html", {
-        "cartels": cartels,
-        "can_propose": is_lsp_member(request.user),
-        "is_coordinator": is_cartel_coordinator(request.user),
-    })
+    """Cartels are browsed under the unified Groups section now."""
+    return redirect("workgroups:kind_cartels")
+
+
+def detail(request, slug):
+    """The cartel's canonical page is the (kind-aware) Workgroup detail."""
+    return redirect("workgroups:detail", slug=slug)
 
 
 @login_required
@@ -96,43 +93,6 @@ def review_decide(request, pk):
         emails.notify_generator_of_decision(cartel, _abs(request, cartel))
         messages.success(request, f"Declined '{cartel.workgroup.name}'.")
     return redirect("cartels:review_queue")
-
-
-@login_required
-def detail(request, slug):
-    """A cartel's page: guiding question, roster, apply + member-gating."""
-    cartel = get_object_or_404(Cartel.objects.select_related("workgroup"), workgroup__slug=slug)
-    wg = cartel.workgroup
-    if not wg.landing_visible_to(request.user):
-        raise Http404
-    user = request.user
-    is_member = cartel.is_member(user)
-    pending = (
-        cartel.join_requests.filter(status=CartelJoinRequest.Status.PENDING)
-        .select_related("applicant") if is_member else []
-    )
-    has_invite = cartel.invitations.filter(
-        invited_user=user, accepted_at__isnull=True
-    ).exists()
-    already_applied = cartel.join_requests.filter(
-        applicant=user, status=CartelJoinRequest.Status.PENDING
-    ).exists()
-    can_apply = (
-        cartel.status == Cartel.Status.OPEN and not cartel.closed
-        and is_lsp_member(user) and not is_member and not has_invite and not already_applied
-    )
-    return render(request, "cartels/detail.html", {
-        "cartel": cartel,
-        "workgroup": wg,
-        "members": list(wg.active_members()) if wg.content_visible_to(user) else [],
-        "is_member": is_member,
-        "pending_requests": pending,
-        "has_invite": has_invite,
-        "already_applied": already_applied,
-        "can_apply": can_apply,
-        "channel": wg.channels.first() if is_member else None,
-        "is_coordinator": is_cartel_coordinator(user),
-    })
 
 
 @login_required

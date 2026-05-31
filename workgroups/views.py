@@ -3,6 +3,7 @@ group kind renders through."""
 
 from __future__ import annotations
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
@@ -10,6 +11,15 @@ from django.urls import reverse
 from works.models import Work
 
 from .models import Workgroup
+
+
+def _attached(workgroup, accessor):
+    """The concrete object attached to ``workgroup`` via a reverse OneToOne
+    (e.g. its Cartel), or None — without importing the owning app."""
+    try:
+        return getattr(workgroup, accessor)
+    except ObjectDoesNotExist:
+        return None
 
 #: The Groups overview / dropdown order: kind, url-name suffix, label, blurb.
 #: Drives both the overview cards and the per-kind routes in ``urls.py``.
@@ -57,11 +67,19 @@ def workgroup_kind_list(request, kind):
         g for g in Workgroup.objects.filter(kind=kind)
         if g.landing_visible_to(request.user)
     ]
-    return render(request, "workgroups/kind_list.html", {
+    context = {
         "kind_label": label,
         "kind_label_plural": f"{label}s",
         "groups": groups,
-    })
+    }
+    # Cartels get formation entry points here (the unified Cartels home).
+    if kind == Workgroup.Kind.CARTEL:
+        from accounts.permissions import is_lsp_member
+        from cartels.permissions import is_cartel_coordinator
+
+        context["can_propose_cartel"] = is_lsp_member(request.user)
+        context["is_cartel_coordinator"] = is_cartel_coordinator(request.user)
+    return render(request, "workgroups/kind_list.html", context)
 
 
 def workgroup_detail(request, slug):
@@ -82,11 +100,24 @@ def workgroup_detail(request, slug):
         )
     # Link to the group's discussion channel for members (Parlêtre, Stage 2).
     channel = wg.channels.first() if is_member else None
-    return render(request, "workgroups/detail.html", {
+
+    context = {
         "workgroup": wg,
         "can_view_content": can_view,
         "members": members,
         "works": works,
         "is_member": is_member,
         "channel": channel,
-    })
+    }
+    # Compose kind-specific UI without importing the concrete app: reach the
+    # attached object via its reverse accessor and ask it for its viewer state.
+    # (Cartels today; the same pattern extends to other kinds with their own UI.)
+    cartel = _attached(wg, "cartel")
+    if cartel is not None:
+        from cartels.permissions import is_cartel_coordinator
+
+        context["cartel"] = cartel
+        context["is_coordinator"] = is_cartel_coordinator(request.user)
+        context.update(cartel.viewer_state(request.user))
+
+    return render(request, "workgroups/detail.html", context)
