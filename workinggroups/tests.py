@@ -27,10 +27,9 @@ def test_working_group_listed_on_groups_index(client):
     WorkingGroup.objects.create_with_workgroup(
         name="Translation Working Group", landing_visibility=Visibility.PUBLIC
     )
-    resp = client.get("/groups/")
+    resp = client.get("/groups/working-groups/")
     assert resp.status_code == 200
     assert b"Translation Working Group" in resp.content
-    assert b"Working group" in resp.content   # kind grouper header
 
 
 def test_working_group_gets_its_own_channel():

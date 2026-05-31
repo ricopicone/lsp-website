@@ -284,9 +284,13 @@ Phase 2 plan for milestone IDs):**
   Decorative glyphs use an inline-SVG `{% icon %}` tag. See
   `discussion-board` memory.
 - **Workgroups** (`workgroups`) — shared collaborative layer; attach one
-  Workgroup to cartels / working groups / seminars and the roster +
-  Parlêtre channel gating live on it (`Channel.workgroup`,
-  `access=workgroup`). **Add features to the Workgroup first.** See
+  Workgroup to cartels / committees / working groups / seminars / reading
+  groups and the
+  roster + Parlêtre channel gating live on it (`Channel.workgroup`,
+  `access=workgroup`). `Workgroup.Kind` has five kinds (cartel,
+  working_group, committee, seminar, reading_group). `/groups/` is a
+  per-kind overview; each kind has its own index at `/groups/<kind>/`
+  (`workgroups:kind_*`). **Add features to the Workgroup first.** See
   `workgroups-architecture` memory.
 - **Cartels** (`cartels`, CART-1/2/3) — built on the Workgroup layer.
 - **Directory** (`/directory/`), **Find an Analyst** map, member

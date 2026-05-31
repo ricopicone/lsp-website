@@ -1,0 +1,27 @@
+{% extends "core/base.html" %}
+{% block title %}{{ kind_label_plural }} — LSP{% endblock %}
+{% block content %}
+<div class="space-y-8">
+  <header class="space-y-2">
+    <p class="text-sm">
+      <a href="{% url 'workgroups:list' %}" class="link link-hover text-base-content/60">← Groups</a>
+    </p>
+    <h1 class="font-serif text-3xl text-base-content">{{ kind_label_plural }}</h1>
+  </header>
+
+  {% if groups %}
+  <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    {% for g in groups %}
+    <li class="rounded-lg border border-base-300/50 p-4 hover:bg-base-200/40">
+      <a href="{{ g.get_absolute_url }}" class="font-medium link link-hover">{{ g.name }}</a>
+      {% if g.description %}
+      <p class="text-sm text-base-content/60 mt-1 line-clamp-2">{{ g.description_html|striptags }}</p>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-base-content/60">No {{ kind_label_plural|lower }} to show yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

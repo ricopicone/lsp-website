@@ -162,19 +162,32 @@ def test_detail_shows_roster_to_group_member(client):
     assert b"Vera" in resp.content
 
 
-def test_groups_list_renders_and_groups_by_kind(client):
-    Cartel.objects.create_with_workgroup(
-        name="Letter Cartel", landing_visibility=Visibility.PUBLIC
-    )
+def test_groups_overview_shows_a_card_per_kind(client):
+    """The /groups/ overview lists the kinds, not individual groups."""
+    resp = client.get("/groups/")
+    assert resp.status_code == 200
+    for label in (b"Seminars", b"Cartels", b"Committees",
+                  b"Working Groups", b"Reading Groups"):
+        assert label in resp.content
+
+
+def test_kind_list_shows_visible_groups_of_that_kind(client):
     Workgroup.objects.create(
         kind=Workgroup.Kind.WORKING_GROUP, name="Ethics WG",
         landing_visibility=Visibility.PUBLIC,
     )
-    resp = client.get("/groups/")
+    Cartel.objects.create_with_workgroup(
+        name="Letter Cartel", landing_visibility=Visibility.PUBLIC
+    )
+    resp = client.get("/groups/working-groups/")
     assert resp.status_code == 200
-    assert b"Letter Cartel" in resp.content
     assert b"Ethics WG" in resp.content
-    assert b"Working group" in resp.content   # kind grouper header
+    assert b"Letter Cartel" not in resp.content   # other kind excluded
+
+
+def test_reading_groups_kind_page_renders(client):
+    resp = client.get("/groups/reading-groups/")
+    assert resp.status_code == 200
 
 
 def test_cartels_index_lists_visible_cartels(client):
