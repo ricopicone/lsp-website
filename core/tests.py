@@ -282,3 +282,52 @@ def test_event_detail_back_link_special_goes_to_events(client):
     response = client.get(reverse("events:detail", args=[e.slug]))
     assert response.status_code == 200
     assert b"\xe2\x86\x90 Events" in response.content
+
+
+# ---- Footer aphorism (DB-backed, staff-editable) ----------------------
+
+
+@pytest.mark.django_db
+def test_aphorism_context_processor_excludes_inactive():
+    from django.core.cache import cache
+
+    from core.context_processors import _active_aphorisms
+    from core.models import Aphorism
+
+    Aphorism.objects.all().delete()  # post_delete clears the cache
+    Aphorism.objects.create(quote="Active one", short_attribution="X", is_active=True)
+    Aphorism.objects.create(quote="Hidden one", short_attribution="Y", is_active=False)
+
+    quotes = {i["quote"] for i in _active_aphorisms()}
+    assert "Active one" in quotes
+    assert "Hidden one" not in quotes
+    cache.clear()
+
+
+@pytest.mark.django_db
+def test_aphorism_edit_invalidates_cache():
+    from core.context_processors import _active_aphorisms
+    from core.models import Aphorism
+
+    Aphorism.objects.all().delete()
+    a = Aphorism.objects.create(quote="First", is_active=True)
+    assert {i["quote"] for i in _active_aphorisms()} == {"First"}
+
+    a.quote = "Edited"
+    a.save()  # post_save must drop the cached list
+    assert {i["quote"] for i in _active_aphorisms()} == {"Edited"}
+
+
+@pytest.mark.django_db
+def test_landing_footer_renders_aphorism(client):
+    from core.models import Aphorism
+
+    Aphorism.objects.all().delete()
+    Aphorism.objects.create(
+        quote="The unconscious is structured like a language.",
+        short_attribution="Seminar XI",
+        is_active=True,
+    )
+    response = client.get(reverse("core:landing"))
+    assert response.status_code == 200
+    assert b"structured like a language" in response.content
