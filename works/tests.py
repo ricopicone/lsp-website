@@ -84,6 +84,21 @@ def test_pdf_members_only_blocks_anon_but_allows_member():
     assert w.pdf_visible_to(u) is True
 
 
+@pytest.mark.django_db
+def test_members_only_means_lsp_member_not_just_logged_in():
+    """"Members only" tracks is_lsp_member, consistent with Workgroup —
+    a logged-in non-member (prospective applicant / guest) doesn't qualify."""
+    w = _make_work(listing=Work.Visibility.MEMBERS, slug="m-only")
+    applicant = _make_user(email="hopeful@x.test", role=Profile.Role.PROSPECTIVE_APPLICANT)
+    guest = _make_user(email="ext@x.test", role=Profile.Role.EXTERNAL)
+    member = _make_user(email="real@x.test", role=Profile.Role.ANALYST)
+    assert w.listing_visible_to(applicant) is False
+    assert w.listing_visible_to(guest) is False
+    assert w.listing_visible_to(member) is True
+    assert w not in Work.listing_for(applicant)
+    assert w in Work.listing_for(member)
+
+
 # ---- Model.clean (visibility constraint) -------------------------------
 
 
@@ -97,6 +112,50 @@ def test_pdf_public_with_members_listing_invalid():
     with pytest.raises(ValidationError) as exc:
         w.full_clean()
     assert "pdf_visibility" in exc.value.error_dict
+
+
+@pytest.mark.django_db
+def test_group_visibility_requires_workgroup():
+    w = Work(
+        title="X", slug="x", kind=Work.Kind.CARTEL,
+        listing_visibility=Work.Visibility.GROUP,
+        pdf_visibility=Work.Visibility.GROUP,
+    )
+    with pytest.raises(ValidationError) as exc:
+        w.full_clean()
+    assert "workgroup" in exc.value.error_dict
+
+
+# ---- GROUP (workgroup-only) visibility ---------------------------------
+
+
+@pytest.mark.django_db
+def test_group_work_visible_only_to_group_members():
+    import datetime
+
+    from workgroups.models import Workgroup, WorkgroupMembership
+
+    wg = Workgroup.objects.create(kind=Workgroup.Kind.CARTEL, name="Cartel A")
+    insider = _make_user(email="in@x.test")
+    outsider = _make_user(email="out@x.test")
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=insider, start_date=datetime.date(2026, 1, 1)
+    )
+    w = _make_work(
+        kind=Work.Kind.CARTEL,
+        listing=Work.Visibility.GROUP,
+        pdf_vis=Work.Visibility.GROUP,
+    )
+    w.workgroup = wg
+    w.save()
+
+    assert w.listing_visible_to(insider) is True
+    assert w.listing_visible_to(outsider) is False
+    assert w.listing_visible_to(None) is False
+    # listing_for queryset agrees with the per-instance check
+    assert w in Work.listing_for(insider)
+    assert w not in Work.listing_for(outsider)
+    assert w not in Work.listing_for(None)
 
 
 # ---- editable_by -------------------------------------------------------

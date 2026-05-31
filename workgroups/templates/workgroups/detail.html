@@ -1,0 +1,67 @@
+{% extends "core/base.html" %}
+{% block title %}{{ workgroup.name }} — LSP{% endblock %}
+{% block content %}
+<div class="space-y-8">
+
+  <header class="space-y-2">
+    <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-base-content/60">
+      <span class="badge badge-ghost">{{ workgroup.get_kind_display }}</span>
+      {% if workgroup.start_date %}
+        <span>{{ workgroup.start_date|date:"Y" }}{% if workgroup.end_date %}–{{ workgroup.end_date|date:"Y" }}{% else %}–present{% endif %}</span>
+      {% endif %}
+    </div>
+    <h1 class="font-serif text-3xl text-base-content">{{ workgroup.name }}</h1>
+  </header>
+
+  {% if workgroup.description %}
+  <section class="prose max-w-none text-base-content/80">
+    {{ workgroup.description_html }}
+  </section>
+  {% endif %}
+
+  {% if not can_view_content %}
+    <div class="rounded-lg border border-base-300/60 bg-base-200/40 p-6 text-base-content/70">
+      This group's roster and output are private to its members.
+    </div>
+  {% else %}
+
+    <section class="space-y-3">
+      <h2 class="font-serif text-xl">Members</h2>
+      {% if members %}
+      <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {% for m in members %}
+        <li class="flex items-center justify-between rounded-md border border-base-300/50 px-3 py-2">
+          <span>{{ m.user.get_full_name|default:m.user.email }}</span>
+          {% if m.role != "member" %}
+          <span class="badge badge-sm badge-outline">{{ m.get_role_display }}</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-base-content/60 text-sm">No members listed yet.</p>
+      {% endif %}
+    </section>
+
+    {% if workgroup.has_works %}
+    <section class="space-y-3">
+      <h2 class="font-serif text-xl">Output</h2>
+      {% if works %}
+      <ul class="space-y-2">
+        {% for w in works %}
+        <li>
+          <a href="{{ w.get_absolute_url }}" class="link link-hover font-medium">{{ w.title }}</a>
+          <span class="text-base-content/50 text-sm">· {{ w.get_kind_display }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-base-content/60 text-sm">No works shared yet.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+  {% endif %}
+
+</div>
+{% endblock %}

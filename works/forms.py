@@ -82,6 +82,7 @@ class WorkForm(forms.ModelForm):
             "publication_date",
             "cover_image",
             "external_authors",
+            "workgroup",
             "listing_visibility",
             "pdf_visibility",
         )
@@ -109,6 +110,7 @@ class WorkForm(forms.ModelForm):
                 "class": "input input-bordered w-full",
                 "placeholder": "Co-authors not in our system (free text)",
             }),
+            "workgroup": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "listing_visibility": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "pdf_visibility": forms.Select(attrs={"class": "select select-bordered w-full"}),
         }
@@ -116,13 +118,29 @@ class WorkForm(forms.ModelForm):
     def __init__(self, *args, current_user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.current_user = current_user
-        # CARTEL kind is in the data model but its cartel-FK + cartel-internal
-        # visibility belong to M14. Hide it from the v1 submission form.
-        if "kind" in self.fields:
-            self.fields["kind"].choices = [
-                (v, label) for v, label in self.fields["kind"].choices
-                if v != Work.Kind.CARTEL
-            ]
+
+        # Workgroup picker: a member may attach a work to a group they belong
+        # to (which unlocks the "Workgroup members only" visibility). Limit the
+        # choices to the user's active groups, keeping any group already set on
+        # the instance (so staff editing doesn't silently drop it).
+        if "workgroup" in self.fields:
+            from workgroups.models import Workgroup, WorkgroupMembership
+
+            ids = set()
+            if current_user is not None and getattr(current_user, "is_authenticated", False):
+                ids.update(
+                    WorkgroupMembership.objects.filter(
+                        user=current_user, end_date__isnull=True
+                    ).values_list("workgroup_id", flat=True)
+                )
+            if self.instance and self.instance.workgroup_id:
+                ids.add(self.instance.workgroup_id)
+            self.fields["workgroup"].queryset = Workgroup.objects.filter(pk__in=ids)
+            self.fields["workgroup"].required = False
+            self.fields["workgroup"].help_text = (
+                "Attach this to one of your groups. Required if you set a "
+                "visibility of 'Workgroup members only'."
+            )
         # Seed lsp_authors with existing co-authors (minus the current user)
         # so editors don't lose the list on round-trip.
         if self.instance and self.instance.pk and not self.is_bound:

@@ -49,6 +49,7 @@
           {% url 'core:calendar' as url_cal %}
           {% url 'documents:index' as url_docs %}
           {% url 'works:index' as url_works %}
+          {% url 'cartels:index' as url_cartels %}
           <a href="{{ url_about }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_about in cur %}text-primary font-medium{% endif %}">About</a>
           <a href="{{ url_program }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_program in cur %}text-primary font-medium{% endif %}">Program</a>
           <a href="{{ url_events }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_events in cur %}text-primary font-medium{% endif %}">Events</a>
@@ -56,6 +57,7 @@
           <a href="{{ url_fan }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_fan in cur %}text-primary font-medium{% endif %}">Find an Analyst</a>
           <a href="{{ url_cal }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_cal in cur %}text-primary font-medium{% endif %}">Calendar</a>
           <a href="{{ url_works }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_works in cur %}text-primary font-medium{% endif %}">Works</a>
+          <a href="{{ url_cartels }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_cartels in cur %}text-primary font-medium{% endif %}">Cartels</a>
           <a href="{{ url_docs }}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if url_docs in cur %}text-primary font-medium{% endif %}">Documents</a>
           {% if user|is_parletre_member %}
           {% url 'parletre:index' as url_parletre %}
@@ -122,6 +124,7 @@
             <li class="sm:hidden"><a href="{% url 'find_an_analyst' %}">Find an Analyst</a></li>
             <li class="sm:hidden"><a href="{% url 'core:calendar' %}">Calendar</a></li>
             <li class="sm:hidden"><a href="{% url 'works:index' %}">Works</a></li>
+            <li class="sm:hidden"><a href="{% url 'cartels:index' %}">Cartels</a></li>
             <li class="sm:hidden"><a href="{% url 'documents:index' %}">Documents</a></li>
             {% if user|is_parletre_member %}
             <li class="sm:hidden"><a href="{% url 'parletre:index' %}">Parlêtre</a></li>

@@ -152,6 +152,14 @@
 
     <fieldset class="space-y-3 border-t border-base-300/60 pt-5">
       <legend class="font-serif text-lg">Visibility</legend>
+      {% if form.workgroup.field.queryset.exists %}
+      <div class="space-y-1">
+        <label for="{{ form.workgroup.id_for_label }}" class="block text-sm font-medium">Group</label>
+        {{ form.workgroup }}
+        <p class="text-xs text-base-content/60">{{ form.workgroup.help_text }}</p>
+        {% if form.workgroup.errors %}<p class="text-error text-xs mt-1">{{ form.workgroup.errors|join:", " }}</p>{% endif %}
+      </div>
+      {% endif %}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="space-y-1">
           <label for="{{ form.listing_visibility.id_for_label }}" class="block text-sm font-medium">Listing</label>

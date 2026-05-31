@@ -49,6 +49,8 @@ urlpatterns = [
     path("documents/", include("documents.urls")),
     path("works/", include("works.urls")),
     path("parletre/", include("parletre.urls")),
+    path("groups/", include("workgroups.urls")),
+    path("cartels/", include("cartels.urls")),
     path("dues/", _payment_views.dues_pay, name="dues"),
     path("donate/", _payment_views.donate, name="donate"),
     path("tuition/", _payment_views.tuition_decision, name="tuition"),

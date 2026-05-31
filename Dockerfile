@@ -29,6 +29,8 @@ COPY parletre/templates ./parletre/templates
 COPY payments/templates ./payments/templates
 COPY registrations/templates ./registrations/templates
 COPY works/templates ./works/templates
+COPY workgroups/templates ./workgroups/templates
+COPY cartels/templates ./cartels/templates
 RUN npx tailwindcss -i ./assets/css/input.css -o ./static/css/site.css --minify
 
 # --- Stage 3: runtime --------------------------------------------------------

@@ -11,9 +11,11 @@ A Work has zero or more ``WorkFile`` rows. A single file renders as
 one download button; multiple files render as a labeled list and each
 file must carry a label.
 
-Cartel-internal visibility (only cartel members see the work) is
-deferred to M14 — for now the CARTEL kind uses the same PUBLIC/MEMBERS
-visibility as everything else.
+Visibility levels (most → least public): PUBLIC (anyone), MEMBERS (any LSP
+member — see ``accounts.permissions.is_lsp_member``), GROUP (members of the
+producing workgroup only). "Members only" means an actual member of the
+school, consistent with ``workgroups.Workgroup`` — not merely a logged-in
+account (prospective applicants, students, and guests don't qualify).
 """
 
 from __future__ import annotations
@@ -26,6 +28,8 @@ from django.urls import reverse
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
+from accounts.permissions import is_lsp_member
+
 
 class Work(models.Model):
     class Kind(models.TextChoices):
@@ -37,10 +41,21 @@ class Work(models.Model):
     class Visibility(models.TextChoices):
         PUBLIC  = "public",  _("Public")
         MEMBERS = "members", _("Members only")
+        GROUP   = "group",   _("Workgroup members only")
 
     title = models.CharField(max_length=200)
     slug = models.SlugField(max_length=220, unique=True)
     kind = models.CharField(max_length=16, choices=Kind.choices)
+
+    workgroup = models.ForeignKey(
+        "workgroups.Workgroup",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="works",
+        help_text="The producing group. Required when a visibility is set to "
+        "'Workgroup members only'.",
+    )
 
     listing_visibility = models.CharField(
         max_length=16,
@@ -111,38 +126,76 @@ class Work(models.Model):
 
     # ---- Validation ----
 
+    #: Publicness rank — higher = more open. GROUP (one group's members) is
+    #: the most restrictive, below MEMBERS (any logged-in member).
+    _VISIBILITY_RANK = {
+        Visibility.PUBLIC: 2,
+        Visibility.MEMBERS: 1,
+        Visibility.GROUP: 0,
+    }
+
     def clean(self):
-        if (
-            self.pdf_visibility == self.Visibility.PUBLIC
-            and self.listing_visibility == self.Visibility.MEMBERS
-        ):
+        rank = self._VISIBILITY_RANK
+        if rank[self.pdf_visibility] > rank[self.listing_visibility]:
             raise ValidationError({
                 "pdf_visibility": _(
-                    "PDF can't be public when the listing is members-only."
+                    "The PDF can't be more public than the listing."
+                ),
+            })
+        if (
+            self.Visibility.GROUP in (self.listing_visibility, self.pdf_visibility)
+            and self.workgroup_id is None
+        ):
+            raise ValidationError({
+                "workgroup": _(
+                    "Set a workgroup when visibility is 'Workgroup members only'."
                 ),
             })
 
     # ---- Visibility helpers ----
 
-    def listing_visible_to(self, user) -> bool:
-        if self.listing_visibility == self.Visibility.PUBLIC:
+    def _visible_at(self, level, user) -> bool:
+        if level == self.Visibility.PUBLIC:
             return True
-        return bool(user and user.is_authenticated)
+        if level == self.Visibility.GROUP:
+            return bool(self.workgroup_id and self.workgroup.is_member(user))
+        return is_lsp_member(user)  # MEMBERS — an actual LSP member, not just logged in
+
+    def listing_visible_to(self, user) -> bool:
+        return self._visible_at(self.listing_visibility, user)
 
     def pdf_visible_to(self, user) -> bool:
         """True only when (a) visibility permits and (b) at least one file exists."""
         if not self.files.exists():
             return False
-        if self.pdf_visibility == self.Visibility.PUBLIC:
-            return True
-        return bool(user and user.is_authenticated)
+        return self._visible_at(self.pdf_visibility, user)
 
     @classmethod
     def listing_for(cls, user):
-        """Queryset of works whose *listing* is visible to ``user``."""
-        if user and user.is_authenticated:
-            return cls.objects.all()
-        return cls.objects.filter(listing_visibility=cls.Visibility.PUBLIC)
+        """Queryset of works whose *listing* is visible to ``user``.
+
+        GROUP-visibility works are shown only to members of the producing
+        workgroup — no staff bypass (cartel-internal output is genuinely
+        group-only; admins still see everything via the Django admin).
+        """
+        from django.db.models import Q
+
+        visible = Q(listing_visibility=cls.Visibility.PUBLIC)
+        if not (user and user.is_authenticated):
+            return cls.objects.filter(visible)
+
+        if is_lsp_member(user):
+            visible |= Q(listing_visibility=cls.Visibility.MEMBERS)
+
+        from workgroups.models import WorkgroupMembership
+
+        member_group_ids = WorkgroupMembership.objects.filter(
+            user=user, end_date__isnull=True
+        ).values("workgroup_id")
+        visible |= Q(
+            listing_visibility=cls.Visibility.GROUP, workgroup_id__in=member_group_ids
+        )
+        return cls.objects.filter(visible)
 
     # ---- Edit permission ----
 

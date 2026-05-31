@@ -1,0 +1,32 @@
+{% extends "core/base.html" %}
+{% block title %}Groups — LSP{% endblock %}
+{% block content %}
+<div class="space-y-8">
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Groups</h1>
+    <p class="text-base-content/70 max-w-2xl">
+      Cartels, working groups, committees, and seminars — the collaborative
+      groups of the school.
+    </p>
+  </header>
+
+  {% regroup groups by get_kind_display as kind_groups %}
+  {% for kind in kind_groups %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl">{{ kind.grouper }}</h2>
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {% for g in kind.list %}
+      <li class="rounded-lg border border-base-300/50 p-4 hover:bg-base-200/40">
+        <a href="{{ g.get_absolute_url }}" class="font-medium link link-hover">{{ g.name }}</a>
+        {% if g.description %}
+        <p class="text-sm text-base-content/60 mt-1 line-clamp-2">{{ g.description_html|striptags }}</p>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% empty %}
+  <p class="text-base-content/60">No groups to show.</p>
+  {% endfor %}
+</div>
+{% endblock %}
