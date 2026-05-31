@@ -59,6 +59,7 @@ class Cartel(models.Model):
         PROPOSED = "proposed", _("Proposed — awaiting Coordinator review")
         OPEN = "open", _("Open — soliciting membership")
         DECLINED = "declined", _("Declined")
+        ARCHIVED = "archived", _("Archived")
 
     workgroup = models.OneToOneField(
         Workgroup,
@@ -132,6 +133,7 @@ class Cartel(models.Model):
             "already_applied": already_applied,
             "can_apply": can_apply,
             "pending_requests": pending,
+            "is_generator": bool(authed) and self.generator_id == user.id,
         }
 
     # ---- Membership ----
@@ -170,6 +172,43 @@ class Cartel(models.Model):
         self.review_note = note
         self.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
 
+    @transaction.atomic
+    def resubmit(self):
+        """A declined proposal is re-submitted (after edits) for fresh review."""
+        if self.status != self.Status.DECLINED:
+            return
+        self.status = self.Status.PROPOSED
+        self.reviewed_by = None
+        self.reviewed_at = None
+        self.review_note = ""
+        self.workgroup.landing_visibility = "private"   # hidden again until re-approved
+        self.workgroup.save(update_fields=["landing_visibility"])
+        self.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
+
+    def set_closed(self, value: bool):
+        self.closed = bool(value)
+        self.save(update_fields=["closed"])
+
+    def archive(self):
+        self.status = self.Status.ARCHIVED
+        self.save(update_fields=["status"])
+
+    def set_internal_plus_one(self, user):
+        """Designate an LSP-member plus-one: demote any existing internal
+        plus-one to member, then set ``user`` as the plus-one (joining if
+        needed)."""
+        lead = WorkgroupMembership.Role
+        self.workgroup.memberships.filter(
+            role=lead.PLUS_ONE, end_date__isnull=True
+        ).exclude(user=user).update(role=lead.MEMBER)
+        m = self.workgroup.memberships.filter(user=user, end_date__isnull=True).first()
+        if m:
+            if m.role != lead.PLUS_ONE:
+                m.role = lead.PLUS_ONE
+                m.save(update_fields=["role"])
+            return m
+        return self.add_member(user, plus_one=True)
+
     def accept_invitation(self, user):
         """A seeded invitee joins directly (Generator pre-approved them)."""
         inv = self.invitations.filter(invited_user=user, accepted_at__isnull=True).first()
@@ -180,11 +219,15 @@ class Cartel(models.Model):
         inv.save(update_fields=["accepted_at"])
         return inv
 
-    def request_to_join(self, user):
-        """An uninvited member applies (CART-4 step 5)."""
-        req, _ = CartelJoinRequest.objects.get_or_create(
+    def request_to_join(self, user, message=""):
+        """An uninvited member applies (CART-4 step 5), with a note on why."""
+        req, created = CartelJoinRequest.objects.get_or_create(
             cartel=self, applicant=user, status=CartelJoinRequest.Status.PENDING,
+            defaults={"message": message},
         )
+        if not created and message and not req.message:
+            req.message = message
+            req.save(update_fields=["message"])
         return req
 
     @transaction.atomic
@@ -225,6 +268,23 @@ class CartelInvitation(models.Model):
         return f"{self.invited_user} invited to {self.cartel}"
 
 
+class ExternalPlusOne(models.Model):
+    """An external (non-LSP) plus-one for a cartel — modeled on
+    ``events.Speaker``. The cartel may invite them to create an account, which
+    converts them to a normal internal plus-one when they sign up."""
+
+    cartel = models.ForeignKey(Cartel, on_delete=models.CASCADE, related_name="external_plus_ones")
+    name = models.CharField(max_length=200)
+    affiliation = models.CharField(max_length=200, blank=True)
+    bio = models.TextField(blank=True)
+    email = models.EmailField(blank=True, help_text="Used to invite account creation.")
+    invited_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.name} (plus-one, external) — {self.cartel}"
+
+
 class CartelJoinRequest(models.Model):
     """An uninvited member's application to join an Open cartel; accepted or
     declined by an existing member (member-gated growth)."""
@@ -237,6 +297,9 @@ class CartelJoinRequest(models.Model):
     cartel = models.ForeignKey(Cartel, on_delete=models.CASCADE, related_name="join_requests")
     applicant = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="cartel_join_requests"
+    )
+    message = models.TextField(
+        blank=True, help_text="Why the applicant would like to join (shown to members)."
     )
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     decided_by = models.ForeignKey(

@@ -19,4 +19,5 @@ urlpatterns = [
     path("reading-groups/", views.workgroup_kind_list, {"kind": "reading_group"},
          name="kind_reading_groups"),
     path("<slug:slug>/", views.workgroup_detail, name="detail"),
+    path("<slug:slug>/dates/", views.workgroup_update_dates, name="update_dates"),
 ]

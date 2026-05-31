@@ -1,0 +1,64 @@
+{% comment %}Cartel join-flow UI for the Overview tab. Expects: cartel,
+is_member, has_invite, already_applied, can_apply, pending_requests,
+is_generator, is_coordinator, workgroup.{% endcomment %}
+<div class="flex items-center gap-2 text-xs uppercase tracking-wider text-base-content/60">
+  {% if cartel.status == "open" and not cartel.closed %}<span class="badge badge-primary">Open · Join!</span>
+  {% elif cartel.status == "open" and cartel.closed %}<span class="badge badge-ghost">Closed · Active</span>
+  {% elif cartel.status == "archived" %}<span class="badge badge-ghost">Archived</span>
+  {% elif cartel.status != "open" %}<span class="badge badge-outline">{{ cartel.get_status_display }}</span>{% endif %}
+</div>
+
+{% if cartel.guiding_question %}
+<section class="space-y-1">
+  <h2 class="text-xs uppercase tracking-wider text-base-content/60">Guiding question</h2>
+  <p class="text-lg text-base-content/90">{{ cartel.guiding_question }}</p>
+</section>
+{% endif %}
+
+{% if is_generator and cartel.status == "declined" %}
+<div class="rounded-lg border border-base-300/60 bg-base-200/40 p-4 space-y-2">
+  <p class="text-sm text-base-content/70">This proposal was declined{% if cartel.review_note %} — “{{ cartel.review_note }}”{% endif %}.</p>
+  <a href="{% url 'cartels:edit' workgroup.slug %}" class="btn btn-primary btn-sm">Edit &amp; resubmit</a>
+</div>
+{% elif is_generator and cartel.status == "proposed" %}
+<a href="{% url 'cartels:edit' workgroup.slug %}" class="btn btn-ghost btn-sm">Edit proposal</a>
+{% endif %}
+
+<section class="flex flex-wrap items-start gap-2">
+  {% if has_invite %}
+  <form method="post" action="{% url 'cartels:accept_invitation' workgroup.slug %}">
+    {% csrf_token %}<button class="btn btn-primary btn-sm">Accept invitation</button>
+  </form>
+  {% elif can_apply %}
+  <form method="post" action="{% url 'cartels:apply' workgroup.slug %}" class="w-full max-w-md space-y-2">
+    {% csrf_token %}
+    <label class="block text-sm font-medium">Why would you like to join?</label>
+    <textarea name="message" rows="3" class="textarea textarea-bordered w-full"
+              placeholder="A note for the cartel's members (optional)"></textarea>
+    <button class="btn btn-primary btn-sm">Apply to join</button>
+  </form>
+  {% elif already_applied %}
+  <span class="text-sm text-base-content/60">Your application is pending review.</span>
+  {% endif %}
+</section>
+
+{% if pending_requests %}
+<section class="space-y-2">
+  <h2 class="font-serif text-xl">Applications</h2>
+  <ul class="space-y-2">
+    {% for req in pending_requests %}
+    <li class="rounded-md border border-base-300/50 px-3 py-2 space-y-1">
+      <div class="flex items-center justify-between gap-3">
+        <span>{{ req.applicant.get_full_name|default:req.applicant.email }}</span>
+        <form method="post" action="{% url 'cartels:decide_request' workgroup.slug req.pk %}" class="flex gap-2">
+          {% csrf_token %}
+          <button name="decision" value="accept" class="btn btn-primary btn-xs">Accept</button>
+          <button name="decision" value="decline" class="btn btn-ghost btn-xs">Decline</button>
+        </form>
+      </div>
+      {% if req.message %}<p class="text-sm text-base-content/70 italic">“{{ req.message }}”</p>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}

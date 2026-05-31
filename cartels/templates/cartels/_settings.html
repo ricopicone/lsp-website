@@ -1,0 +1,50 @@
+{% comment %}Cartel-specific Settings, composed into the Settings tab.
+Expects: cartel, workgroup, members (active roster).{% endcomment %}
+
+{% if cartel.status == "open" %}
+<section class="space-y-2">
+  <h3 class="font-medium">Membership</h3>
+  <form method="post" action="{% url 'cartels:manage' workgroup.slug %}" class="flex flex-wrap gap-2">
+    {% csrf_token %}
+    {% if cartel.closed %}
+    <button name="action" value="reopen" class="btn btn-ghost btn-sm">Reopen to new members</button>
+    {% else %}
+    <button name="action" value="close" class="btn btn-ghost btn-sm">Close to new members</button>
+    {% endif %}
+    <button name="action" value="archive" class="btn btn-ghost btn-sm"
+            onclick="return confirm('Archive this cartel?')">Archive cartel</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="space-y-2">
+  <h3 class="font-medium">Plus-one</h3>
+  {# Internal: designate an existing member #}
+  <form method="post" action="{% url 'cartels:set_plus_one' workgroup.slug %}" class="flex flex-wrap items-end gap-2">
+    {% csrf_token %}
+    <select name="user" class="select select-bordered select-sm">
+      {% for m in members %}<option value="{{ m.user.pk }}">{{ m.user.get_full_name|default:m.user.email }}{% if m.role == "plus_one" %} (current){% endif %}</option>{% endfor %}
+    </select>
+    <button class="btn btn-ghost btn-sm">Set internal plus-one</button>
+  </form>
+
+  {# External plus-ones #}
+  {% for ext in cartel.external_plus_ones.all %}
+  <div class="flex items-center justify-between rounded-md border border-base-300/50 px-3 py-2 text-sm">
+    <span>{{ ext.name }}{% if ext.affiliation %} · {{ ext.affiliation }}{% endif %} <span class="text-base-content/50">(external)</span></span>
+    {% if ext.email and not ext.invited_at %}
+    <form method="post" action="{% url 'cartels:invite_external_plus_one' workgroup.slug ext.pk %}">
+      {% csrf_token %}<button class="btn btn-ghost btn-xs">Invite to create account</button>
+    </form>
+    {% elif ext.invited_at %}<span class="text-xs text-base-content/50">Invited</span>{% endif %}
+  </div>
+  {% endfor %}
+
+  <form method="post" action="{% url 'cartels:add_external_plus_one' workgroup.slug %}" class="flex flex-wrap items-end gap-2">
+    {% csrf_token %}
+    <input type="text" name="name" placeholder="External plus-one name" class="input input-bordered input-sm" required>
+    <input type="text" name="affiliation" placeholder="Affiliation (optional)" class="input input-bordered input-sm">
+    <input type="email" name="email" placeholder="Email (to invite)" class="input input-bordered input-sm">
+    <button class="btn btn-ghost btn-sm">Add external plus-one</button>
+  </form>
+</section>

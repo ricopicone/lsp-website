@@ -1,0 +1,29 @@
+<div class="space-y-8 pt-2">
+  {% if workgroup.description %}
+  <section class="prose max-w-none text-base-content/80">{{ workgroup.description_html }}</section>
+  {% endif %}
+
+  {% if cartel %}{% include "cartels/_overview.html" %}{% endif %}
+
+  {% if not can_view_content %}
+  <div class="rounded-lg border border-base-300/60 bg-base-200/40 p-6 text-base-content/70">
+    This group's roster is private to its members.
+  </div>
+  {% else %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl">Members</h2>
+    {% if members %}
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {% for m in members %}
+      <li class="flex items-center justify-between rounded-md border border-base-300/50 px-3 py-2">
+        <span>{{ m.user.get_full_name|default:m.user.email }}</span>
+        {% if m.role != "member" %}<span class="badge badge-sm badge-outline">{{ m.get_role_display }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-base-content/60 text-sm">No members listed yet.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
