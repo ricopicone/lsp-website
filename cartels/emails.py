@@ -99,6 +99,19 @@ def notify_members_of_application(cartel, applicant, url: str) -> None:
     )
 
 
+def invite_external_plus_one(external, signup_url: str) -> None:
+    cartel = external.cartel
+    _send(
+        subject=f"[LSP] Invitation to join the cartel '{cartel.workgroup.name}'",
+        body=(
+            f"You've been named the plus-one for the LSP cartel "
+            f"'{cartel.workgroup.name}'.\n\n"
+            f"Create an account to join the cartel's workspace: {signup_url}\n"
+        ),
+        to=[external.email],
+    )
+
+
 def notify_applicant_of_decision(join_request, url: str) -> None:
     cartel = join_request.cartel
     accepted = join_request.status == join_request.Status.ACCEPTED

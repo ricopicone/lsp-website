@@ -289,6 +289,80 @@ def test_my_cartels_and_status_badge_on_kind_list(client):
     assert b"Open \xc2\xb7 Join!" in resp.content   # status badge ("Open · Join!")
 
 
+def test_workspace_tabs_shown_to_member(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    client.force_login(gen)
+    resp = client.get(cartel.workgroup.get_absolute_url())
+    assert resp.status_code == 200
+    for tab in (b"Overview", b"Work", b"Settings"):
+        assert tab in resp.content
+
+
+def test_work_tab_splits_in_progress_and_released(client):
+    from works.models import Work
+
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    wg = cartel.workgroup
+    Work.objects.create(title="Done Paper", slug="done", kind=Work.Kind.CARTEL,
+                        listing_visibility=Work.Visibility.GROUP,
+                        pdf_visibility=Work.Visibility.GROUP, workgroup=wg, in_progress=False)
+    Work.objects.create(title="Draft Paper", slug="draft", kind=Work.Kind.CARTEL,
+                        listing_visibility=Work.Visibility.GROUP,
+                        pdf_visibility=Work.Visibility.GROUP, workgroup=wg, in_progress=True)
+    client.force_login(gen)
+    resp = client.get(f"{wg.get_absolute_url()}?tab=work")
+    assert resp.status_code == 200
+    assert b"In progress" in resp.content
+    assert b"Draft Paper" in resp.content and b"Done Paper" in resp.content
+
+
+def test_settings_dates_and_plus_one_flows(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    wg = cartel.workgroup
+    client.force_login(gen)
+
+    # dates (generic workgroup setting)
+    client.post(f"/groups/{wg.slug}/dates/", {"start_date": "2026-09-01", "end_date": "2027-05-01"})
+    wg.refresh_from_db()
+    assert str(wg.start_date) == "2026-09-01" and str(wg.end_date) == "2027-05-01"
+
+    # internal plus-one
+    p1 = _member("p1@x.test")
+    cartel.add_member(p1)
+    client.post(f"/cartels/{wg.slug}/plus-one/", {"user": p1.pk})
+    assert wg.memberships.filter(
+        user=p1, role=WorkgroupMembership.Role.PLUS_ONE, end_date__isnull=True
+    ).exists()
+
+    # external plus-one + invite
+    client.post(f"/cartels/{wg.slug}/plus-one/external/",
+                {"name": "Jane Ext", "affiliation": "Other Institute", "email": "jane@x.test"})
+    ext = cartel.external_plus_ones.get()
+    assert ext.name == "Jane Ext"
+    client.post(f"/cartels/{wg.slug}/plus-one/external/{ext.pk}/invite/")
+    ext.refresh_from_db()
+    assert ext.invited_at is not None
+
+
+def test_settings_endpoints_gated_to_members(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    wg = cartel.workgroup
+    client.force_login(_member("outsider@x.test"))   # not a member
+    assert client.post(f"/groups/{wg.slug}/dates/", {}).status_code == 404
+    assert client.post(f"/cartels/{wg.slug}/plus-one/external/", {"name": "X"}).status_code == 404
+    # and the Settings tab isn't offered to a non-member
+    resp = client.get(wg.get_absolute_url())
+    assert b"Settings" not in resp.content
+
+
 def test_proposed_cartel_hidden_from_other_members_on_kind_list(client):
     gen = _member("gen@x.test")
     Cartel.objects.propose(generator=gen, name="Secret Proposal")

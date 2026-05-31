@@ -193,6 +193,22 @@ class Cartel(models.Model):
         self.status = self.Status.ARCHIVED
         self.save(update_fields=["status"])
 
+    def set_internal_plus_one(self, user):
+        """Designate an LSP-member plus-one: demote any existing internal
+        plus-one to member, then set ``user`` as the plus-one (joining if
+        needed)."""
+        lead = WorkgroupMembership.Role
+        self.workgroup.memberships.filter(
+            role=lead.PLUS_ONE, end_date__isnull=True
+        ).exclude(user=user).update(role=lead.MEMBER)
+        m = self.workgroup.memberships.filter(user=user, end_date__isnull=True).first()
+        if m:
+            if m.role != lead.PLUS_ONE:
+                m.role = lead.PLUS_ONE
+                m.save(update_fields=["role"])
+            return m
+        return self.add_member(user, plus_one=True)
+
     def accept_invitation(self, user):
         """A seeded invitee joins directly (Generator pre-approved them)."""
         inv = self.invitations.filter(invited_user=user, accepted_at__isnull=True).first()
@@ -250,6 +266,23 @@ class CartelInvitation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.invited_user} invited to {self.cartel}"
+
+
+class ExternalPlusOne(models.Model):
+    """An external (non-LSP) plus-one for a cartel — modeled on
+    ``events.Speaker``. The cartel may invite them to create an account, which
+    converts them to a normal internal plus-one when they sign up."""
+
+    cartel = models.ForeignKey(Cartel, on_delete=models.CASCADE, related_name="external_plus_ones")
+    name = models.CharField(max_length=200)
+    affiliation = models.CharField(max_length=200, blank=True)
+    bio = models.TextField(blank=True)
+    email = models.EmailField(blank=True, help_text="Used to invite account creation.")
+    invited_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.name} (plus-one, external) — {self.cartel}"
 
 
 class CartelJoinRequest(models.Model):

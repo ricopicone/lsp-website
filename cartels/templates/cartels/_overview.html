@@ -1,8 +1,6 @@
-{% comment %}
-Cartel-specific UI composed into the generic Workgroup detail page when the
-workgroup has a cartel. Expects: cartel, is_member, has_invite, already_applied,
-can_apply, pending_requests, is_generator, is_coordinator.
-{% endcomment %}
+{% comment %}Cartel join-flow UI for the Overview tab. Expects: cartel,
+is_member, has_invite, already_applied, can_apply, pending_requests,
+is_generator, is_coordinator, workgroup.{% endcomment %}
 <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-base-content/60">
   {% if cartel.status == "open" and not cartel.closed %}<span class="badge badge-primary">Open · Join!</span>
   {% elif cartel.status == "open" and cartel.closed %}<span class="badge badge-ghost">Closed · Active</span>
@@ -17,7 +15,6 @@ can_apply, pending_requests, is_generator, is_coordinator.
 </section>
 {% endif %}
 
-{% comment %} Generator: edit / resubmit a declined-or-proposed cartel {% endcomment %}
 {% if is_generator and cartel.status == "declined" %}
 <div class="rounded-lg border border-base-300/60 bg-base-200/40 p-4 space-y-2">
   <p class="text-sm text-base-content/70">This proposal was declined{% if cartel.review_note %} — “{{ cartel.review_note }}”{% endif %}.</p>
@@ -27,7 +24,6 @@ can_apply, pending_requests, is_generator, is_coordinator.
 <a href="{% url 'cartels:edit' workgroup.slug %}" class="btn btn-ghost btn-sm">Edit proposal</a>
 {% endif %}
 
-{% comment %} Apply (with a note on why) {% endcomment %}
 <section class="flex flex-wrap items-start gap-2">
   {% if has_invite %}
   <form method="post" action="{% url 'cartels:accept_invitation' workgroup.slug %}">
@@ -65,18 +61,4 @@ can_apply, pending_requests, is_generator, is_coordinator.
     {% endfor %}
   </ul>
 </section>
-{% endif %}
-
-{% comment %} Member management: close to new members / archive {% endcomment %}
-{% if is_member and cartel.status == "open" %}
-<form method="post" action="{% url 'cartels:manage' workgroup.slug %}" class="flex flex-wrap gap-2 border-t border-base-300/50 pt-3">
-  {% csrf_token %}
-  {% if cartel.closed %}
-  <button name="action" value="reopen" class="btn btn-ghost btn-xs">Reopen to new members</button>
-  {% else %}
-  <button name="action" value="close" class="btn btn-ghost btn-xs">Close to new members</button>
-  {% endif %}
-  <button name="action" value="archive" class="btn btn-ghost btn-xs"
-          onclick="return confirm('Archive this cartel?')">Archive</button>
-</form>
 {% endif %}

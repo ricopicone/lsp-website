@@ -83,6 +83,7 @@ class WorkForm(forms.ModelForm):
             "cover_image",
             "external_authors",
             "workgroup",
+            "in_progress",
             "listing_visibility",
             "pdf_visibility",
         )
@@ -111,6 +112,7 @@ class WorkForm(forms.ModelForm):
                 "placeholder": "Co-authors not in our system (free text)",
             }),
             "workgroup": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "in_progress": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "listing_visibility": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "pdf_visibility": forms.Select(attrs={"class": "select select-bordered w-full"}),
         }

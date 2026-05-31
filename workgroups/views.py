@@ -3,10 +3,12 @@ group kind renders through."""
 
 from __future__ import annotations
 
+from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from works.models import Work
 
@@ -94,35 +96,38 @@ def workgroup_kind_list(request, kind):
 
 
 def workgroup_detail(request, slug):
-    """The Workspace — about / roster / works, gated by visibility."""
+    """The Workspace — a tabbed surface (Overview / Work / Settings / …),
+    gated by visibility + membership. Tabs follow the capability toggles."""
     wg = get_object_or_404(Workgroup, slug=slug)
     if not wg.landing_visible_to(request.user):
         raise Http404  # don't reveal that a hidden group exists
 
     can_view = wg.content_visible_to(request.user)
     is_member = wg.is_member(request.user)
-    members = list(wg.active_members()) if can_view else []
-    works = []
-    if can_view and wg.has_works:
-        works = list(
-            Work.listing_for(request.user)
-            .filter(workgroup=wg)
-            .prefetch_related("files")
-        )
-    # Link to the group's discussion channel for members (Parlêtre, Stage 2).
-    channel = wg.channels.first() if is_member else None
+
+    # Available tabs for this workgroup + viewer. (Discuss/Chat → W1b;
+    # Files → W2; Schedule → W3; Tasks → W4.)
+    tabs = [("overview", "Overview")]
+    if wg.has_works and can_view:
+        tabs.append(("work", "Work"))
+    if is_member:
+        tabs.append(("settings", "Settings"))
+    tab_keys = [k for k, _ in tabs]
+    active = request.GET.get("tab", "overview")
+    if active not in tab_keys:
+        active = "overview"
 
     context = {
         "workgroup": wg,
         "can_view_content": can_view,
-        "members": members,
-        "works": works,
         "is_member": is_member,
-        "channel": channel,
+        "members": list(wg.active_members()) if can_view else [],
+        "channel": wg.channels.first() if is_member else None,
+        "tabs": tabs,
+        "active_tab": active,
     }
     # Compose kind-specific UI without importing the concrete app: reach the
     # attached object via its reverse accessor and ask it for its viewer state.
-    # (Cartels today; the same pattern extends to other kinds with their own UI.)
     cartel = _attached(wg, "cartel")
     if cartel is not None:
         from cartels.permissions import is_cartel_coordinator
@@ -131,4 +136,30 @@ def workgroup_detail(request, slug):
         context["is_coordinator"] = is_cartel_coordinator(request.user)
         context.update(cartel.viewer_state(request.user))
 
+    if active == "work" and wg.has_works and can_view:
+        works = (
+            Work.listing_for(request.user).filter(workgroup=wg).prefetch_related("files")
+        )
+        context["works_released"] = [w for w in works if not w.in_progress]
+        context["works_in_progress"] = [w for w in works if w.in_progress]
+    elif active == "settings" and is_member:
+        from .forms import WorkgroupDatesForm
+
+        context["dates_form"] = WorkgroupDatesForm(instance=wg)
+
     return render(request, "workgroups/detail.html", context)
+
+
+@login_required
+@require_POST
+def workgroup_update_dates(request, slug):
+    """Members set the group's start/end dates (Settings tab)."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not wg.is_member(request.user):
+        raise Http404
+    from .forms import WorkgroupDatesForm
+
+    form = WorkgroupDatesForm(request.POST, instance=wg)
+    if form.is_valid():
+        form.save()
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")

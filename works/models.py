@@ -56,6 +56,11 @@ class Work(models.Model):
         help_text="The producing group. Required when a visibility is set to "
         "'Workgroup members only'.",
     )
+    in_progress = models.BooleanField(
+        default=False,
+        help_text="Still being worked on (vs. released). Shown separately on the "
+        "group's Work tab.",
+    )
 
     listing_visibility = models.CharField(
         max_length=16,

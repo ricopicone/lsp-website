@@ -1,0 +1,31 @@
+<div class="space-y-8 pt-2">
+  {% if works_in_progress %}
+  <section class="space-y-2">
+    <h2 class="font-serif text-xl">In progress</h2>
+    <ul class="space-y-2">
+      {% for w in works_in_progress %}
+      <li>
+        <a href="{{ w.get_absolute_url }}" class="link link-hover font-medium">{{ w.title }}</a>
+        <span class="text-base-content/50 text-sm">· {{ w.get_kind_display }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="space-y-2">
+    <h2 class="font-serif text-xl">{% if works_in_progress %}Released{% else %}Work{% endif %}</h2>
+    {% if works_released %}
+    <ul class="space-y-2">
+      {% for w in works_released %}
+      <li>
+        <a href="{{ w.get_absolute_url }}" class="link link-hover font-medium">{{ w.title }}</a>
+        <span class="text-base-content/50 text-sm">· {{ w.get_kind_display }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-base-content/60 text-sm">No released work yet.</p>
+    {% endif %}
+  </section>
+</div>

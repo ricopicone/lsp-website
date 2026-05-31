@@ -159,6 +159,9 @@
         <p class="text-xs text-base-content/60">{{ form.workgroup.help_text }}</p>
         {% if form.workgroup.errors %}<p class="text-error text-xs mt-1">{{ form.workgroup.errors|join:", " }}</p>{% endif %}
       </div>
+      <label class="flex items-center gap-2 text-sm">
+        {{ form.in_progress }} In progress (not yet released)
+      </label>
       {% endif %}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="space-y-1">

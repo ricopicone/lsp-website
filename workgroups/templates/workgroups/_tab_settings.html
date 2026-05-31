@@ -1,0 +1,20 @@
+<div class="max-w-xl space-y-8 pt-2">
+  <section class="space-y-2">
+    <h3 class="font-medium">Dates</h3>
+    <form method="post" action="{% url 'workgroups:update_dates' workgroup.slug %}"
+          class="flex flex-wrap items-end gap-3">
+      {% csrf_token %}
+      <div class="space-y-1">
+        <label for="{{ dates_form.start_date.id_for_label }}" class="block text-xs text-base-content/60">Start</label>
+        {{ dates_form.start_date }}
+      </div>
+      <div class="space-y-1">
+        <label for="{{ dates_form.end_date.id_for_label }}" class="block text-xs text-base-content/60">End</label>
+        {{ dates_form.end_date }}
+      </div>
+      <button class="btn btn-ghost btn-sm">Save dates</button>
+    </form>
+  </section>
+
+  {% if cartel %}{% include "cartels/_settings.html" %}{% endif %}
+</div>
