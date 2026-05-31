@@ -193,6 +193,14 @@
 }
 
 /* --- Parlêtre chat composer (iMessage-style pill; see parletre-chat.js) --- */
+/* Inline SVG icons (see parletre/templatetags/parletre_tags.py). 1em-sized,
+   currentColor; nudge the baseline so they sit with surrounding text. */
+.parletre-icon {
+  display: inline-block;
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+}
+
 .parletre-composer {
   display: flex;
   align-items: flex-end;

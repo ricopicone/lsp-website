@@ -79,7 +79,7 @@
         <a href="{% url 'parletre:notifications' %}"
            class="btn btn-ghost btn-sm btn-circle relative text-base-content/70"
            aria-label="Notifications" title="Notifications">
-          <span aria-hidden="true">🔔</span>
+          {% icon "bell" css="text-base" %}
           {% if parletre_unread %}
           <span class="absolute -top-0.5 -right-0.5 badge badge-xs badge-primary">{{ parletre_unread }}</span>
           {% endif %}

@@ -85,7 +85,7 @@
     fileInput.addEventListener("change", function () {
       if (!attachSummary) return;
       var names = Array.prototype.map.call(fileInput.files, function (f) { return f.name; });
-      attachSummary.textContent = names.length ? "📎 " + names.join(", ") : "";
+      attachSummary.textContent = names.length ? names.join(", ") : "";
     });
   }
 

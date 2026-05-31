@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load parletre_tags %}
 {% block title %}Parlêtre — LSP{% endblock %}
 
 {% block content %}
@@ -16,7 +17,7 @@
 
   {% comment %} The privacy promise, stated plainly: open ≠ public. {% endcomment %}
   <div class="alert bg-base-200 border border-base-300 text-base-content/80 text-sm">
-    <span aria-hidden="true">🔒</span>
+    {% icon "lock" css="text-base-content/60 shrink-0" %}
     <span>
       <strong>Private to the school.</strong>
       Everything in Parlêtre is visible only to members of the Lacanian School —
@@ -45,10 +46,10 @@
               <span class="badge badge-sm badge-ghost">Forum</span>
             {% endif %}
             {% if channel.is_ephemeral %}
-              <span class="badge badge-sm badge-warning badge-outline" title="Messages disappear">⏳ Disappearing</span>
+              <span class="badge badge-sm badge-warning badge-outline gap-1" title="Messages disappear">{% icon "hourglass" %} Disappearing</span>
             {% endif %}
             {% if channel.access == 'private' %}
-              <span class="badge badge-sm" title="Visible only to its named members">🔒 Private</span>
+              <span class="badge badge-sm gap-1" title="Visible only to its named members">{% icon "lock" %} Private</span>
             {% elif channel.access == 'committee' %}
               <span class="badge badge-sm badge-outline">{{ channel.committee.name }}</span>
             {% elif channel.access == 'role' %}

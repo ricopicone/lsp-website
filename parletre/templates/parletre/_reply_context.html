@@ -1,7 +1,7 @@
-{% comment %}"In reply to" line shown above a post that replies to another. Expects: post.{% endcomment %}
+{% load parletre_tags %}{% comment %}"In reply to" line shown above a post that replies to another. Expects: post.{% endcomment %}
 {% if post.reply_to_id %}
 <a href="#post-{{ post.reply_to_id }}"
-   class="block text-xs text-base-content/50 border-l-2 border-base-300 pl-2 mb-1 hover:text-primary truncate">
-  ↳ {% if post.reply_to.author %}{{ post.reply_to.author.get_full_name|default:post.reply_to.author.email }}{% else %}(removed){% endif %}: {{ post.reply_to.excerpt }}
+   class="flex items-center gap-1 text-xs text-base-content/50 border-l-2 border-base-300 pl-2 mb-1 hover:text-primary truncate">
+  {% icon "reply" css="shrink-0" %} <span class="truncate">{% if post.reply_to.author %}{{ post.reply_to.author.get_full_name|default:post.reply_to.author.email }}{% else %}(removed){% endif %}: {{ post.reply_to.excerpt }}</span>
 </a>
 {% endif %}

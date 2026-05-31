@@ -528,7 +528,8 @@ def test_bell_unread_count_in_nav(client):
     client.force_login(member)
     resp = client.get(reverse("parletre:index"))
     assert resp.context["parletre_unread"] == 1
-    assert "🔔" in resp.content.decode()
+    # the bell is now an inline SVG icon, not an emoji
+    assert 'aria-label="Notifications"' in resp.content.decode()
 
 
 # ---- unread tracking ----------------------------------------------------

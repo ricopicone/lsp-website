@@ -1,9 +1,10 @@
 {% extends "core/base.html" %}
+{% load parletre_tags %}
 {% block title %}Parlêtre — Members only{% endblock %}
 
 {% block content %}
 <div class="max-w-xl mx-auto text-center space-y-4 py-10">
-  <div class="text-4xl" aria-hidden="true">🔒</div>
+  <div class="text-4xl text-base-content/40 flex justify-center">{% icon "lock" %}</div>
   <h1 class="font-serif text-2xl tracking-tight text-base-content">Parlêtre is for members of the school</h1>
   <p class="text-base-content/70">
     The discussion board is open only to members of the Lacanian School of
