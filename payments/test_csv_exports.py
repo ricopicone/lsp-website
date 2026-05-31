@@ -125,8 +125,8 @@ def test_roster_csv_excludes_cancelled_and_refunded(
 def test_roster_csv_for_lsp_staff(client, event, tier, random_user):
     """The LSP Staff designation grants roster access for any event."""
     staff_member = User.objects.create_user(email="lsp-staff@example.com")
-    staff_member.profile.is_lsp_staff = True
-    staff_member.profile.save(update_fields=["is_lsp_staff"])
+    from core.models import StaffRole
+    StaffRole.objects.get(key=StaffRole.LSP_STAFF).holders.add(staff_member)
     Registration.objects.create(
         user=random_user, event=event, price_tier=tier,
         quoted_amount=Decimal("100.00"), status=Registration.Status.PAID,

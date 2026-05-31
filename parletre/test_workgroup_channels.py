@@ -126,8 +126,8 @@ def test_is_lsp_staff_designation_grants_board_entry():
 
     staffer = _user("staff@x.test", role=Profile.Role.EXTERNAL)
     assert is_lsp_member(staffer) is False
-    staffer.profile.is_lsp_staff = True
-    staffer.profile.save(update_fields=["is_lsp_staff"])
+    from core.models import StaffRole
+    StaffRole.objects.get(key=StaffRole.LSP_STAFF).holders.add(staffer)
     assert is_lsp_member(staffer) is True
 
 
@@ -138,7 +138,7 @@ def test_lsp_staff_channel_gated_by_designation():
     )
     plain = _user("plain@x.test")                                   # member, not staff
     staffer = _user("desig@x.test", role=Profile.Role.EXTERNAL)
-    staffer.profile.is_lsp_staff = True
-    staffer.profile.save(update_fields=["is_lsp_staff"])
+    from core.models import StaffRole
+    StaffRole.objects.get(key=StaffRole.LSP_STAFF).holders.add(staffer)
     assert channel_visible(ch, staffer) is True
     assert channel_visible(ch, plain) is False

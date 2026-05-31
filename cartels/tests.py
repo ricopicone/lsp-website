@@ -20,9 +20,10 @@ def _member(email):
 
 
 def _coordinator(email="coord@x.test"):
+    from core.models import StaffRole
+
     u = _member(email)
-    u.profile.is_cartel_coordinator = True
-    u.profile.save(update_fields=["is_cartel_coordinator"])
+    StaffRole.objects.get(key=StaffRole.CARTEL_COORDINATOR).holders.add(u)
     return u
 
 

@@ -128,10 +128,12 @@ def channel_visible(channel, user) -> bool:
             return True
         return user.is_staff and wg.kind in _WORKGROUP_STAFF_BYPASS_KINDS
     if access == Access.LSP_STAFF:
-        # The LSP Staff channel: gated by the is_lsp_staff designation
-        # (staff keep oversight).
-        profile = getattr(user, "profile", None)
-        return bool(profile and profile.is_lsp_staff) or user.is_staff
+        # The LSP Staff channel: gated by the LSP Staff role (staff keep
+        # oversight).
+        from core.access import has_staff_role
+        from core.models import StaffRole
+
+        return has_staff_role(user, StaffRole.LSP_STAFF) or user.is_staff
     # Role- and committee-gated channels: staff may always read (moderation,
     # support) — privacy is not the point for those.
     if user.is_staff:

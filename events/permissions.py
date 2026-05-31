@@ -6,8 +6,10 @@ from workgroups.models import WorkgroupMembership
 
 
 def _is_lsp_staff(user) -> bool:
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.is_lsp_staff)
+    from core.access import has_staff_role
+    from core.models import StaffRole
+
+    return has_staff_role(user, StaffRole.LSP_STAFF)
 
 
 def can_edit_event(user, event) -> bool:

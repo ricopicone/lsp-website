@@ -27,9 +27,13 @@ def is_lsp_member(user) -> bool:
         return True
 
     from accounts.models import Profile
+    from core.access import has_staff_role
+    from core.models import StaffRole
 
     profile = getattr(user, "profile", None)
-    if profile is not None and (profile.role in Profile.DIRECTORY_ROLES or profile.is_lsp_staff):
+    if profile is not None and profile.role in Profile.DIRECTORY_ROLES:
+        return True
+    if has_staff_role(user, StaffRole.LSP_STAFF):
         return True
 
     from workgroups.models import Workgroup, WorkgroupMembership

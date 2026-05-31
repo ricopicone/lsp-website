@@ -143,9 +143,13 @@ class Command(BaseCommand):
                         f"  lsp-staff: no User found for {first!r} {last!r}"
                     ))
                     continue
-                if not user.profile.is_lsp_staff:
-                    user.profile.is_lsp_staff = True
-                    user.profile.save(update_fields=["is_lsp_staff"])
+                from core.models import StaffRole
+
+                role, _ = StaffRole.objects.get_or_create(
+                    key=StaffRole.LSP_STAFF, defaults={"name": "LSP Staff"},
+                )
+                if not role.holders.filter(pk=user.pk).exists():
+                    role.holders.add(user)
                     report["staff"] += 1
                     self.stdout.write(f"  lsp-staff: designated {first} {last}")
 

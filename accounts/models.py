@@ -122,21 +122,10 @@ class Profile(models.Model):
         default=False,
         help_text="Faculty axis (USR-6). Orthogonal to role.",
     )
-    is_lsp_staff = models.BooleanField(
-        default=False,
-        help_text=(
-            "LSP Staff designation — distinct from Django's is_staff. Grants "
-            "the Staff Parlêtre channel, board entry, and event-edit rights "
-            "(replaces the former 'LSP Staff' committee). Orthogonal to role."
-        ),
-    )
-    is_cartel_coordinator = models.BooleanField(
-        default=False,
-        help_text=(
-            "Cartel Coordinator designation — reviews/approves cartel proposals "
-            "(CART-4). Orthogonal to role."
-        ),
-    )
+    # LSP Staff and Cartel Coordinator are now unified onto ``core.StaffRole``
+    # (keys ``lsp_staff`` / ``cartel_coordinator``); manage holders there or
+    # check via ``core.access.has_staff_role``. ``is_faculty`` stays a Profile
+    # axis.
     bio = models.TextField(
         blank=True,
         help_text="Short biographical text. Shown on the directory and on event pages.",
