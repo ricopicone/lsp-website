@@ -26,8 +26,11 @@ Planning documents live in the parent `LSP-Web-Coordinator` folder, alongside th
   `>=3.10`, so raising it is free).
 - uv for dependencies and the virtual environment.
 - SQLite for local development; PostgreSQL in production (via `DATABASE_URL`).
-- Stripe (hosted Checkout) for payments and Amazon SES for email — not yet built.
-- Hosting: AWS, on the `register.lacanschool.org` subdomain.
+- Stripe (hosted Checkout) for payments and Amazon SES for email — both built and
+  live (SES still in sandbox pending production-access approval).
+- Realtime chat (Parlêtre) over Django Channels + daphne (ASGI); in-memory channel
+  layer in prod, Redis gated behind `PARLETRE_USE_REDIS`.
+- Hosting: AWS, live on the `app.lacanschool.org` subdomain.
 
 ## Commands
 
@@ -58,12 +61,18 @@ fiddling.
 ```
 config/         project — settings/, urls.py, wsgi.py, asgi.py
   settings/     base.py + development.py (default) + production.py
-accounts/       custom User, Profile (incl. faculty fields), bulk import   <- built
+accounts/       custom User, Profile, directory, profile editor, import   <- built
 committees/     Committee + CommitteeMembership (USR-7)                    <- M2
 events/         Events, Sessions, PriceTier, PricingCode, recurrence helper <- M2
 registrations/  registrations                                              <- M3
-payments/       payments, receipts, Stripe                                 <- M4
+payments/       payments, receipts, Stripe, dues + tuition lifecycle       <- M4/M6/M7.5
 core/           shared utilities, unified calendar (PROG-6)                <- M2/M3
+content/        editable site pages (about, etc.)                          <- Phase 2
+works/          faculty/member publication showcase                        <- Phase 2
+documents/      newsletters / shared documents                            <- Phase 2
+parletre/       Parlêtre members-only discussion board (MEM-3, M13.5)      <- Phase 2
+workgroups/     shared Workgroup layer (cartels/working-groups/seminars)   <- Phase 2
+cartels/        Cartels (CART-1/2/3), built on the Workgroup layer         <- Phase 2
 ```
 
 - Settings are split by environment. `DJANGO_SETTINGS_MODULE` defaults to
@@ -153,7 +162,8 @@ Done (see `git log` for specifics):
   uses restored on cancel.
 - Public landing page at `/`, public events list at `/events/`, calendar
   is now public (drafts visible only to staff).
-- Dues at `/dues/` (login req, $100/year via `DUES_ANNUAL_AMOUNT`),
+- Dues at `/dues/` (login req; amount is role-tiered on `DuesPeriod`
+  — pre-candidate $50 / candidate $100 / analyst·scholar $150),
   donations at `/donate/` (anon OK; `Payment.email` carries the
   receipt address). Receipt template now type-aware.
 - Generic post-payment thanks page at `/payments/<id>/thanks/` for
@@ -229,8 +239,8 @@ Done (see `git log` for specifics):
   verify-before-switch: password re-auth + uniqueness check → emails a
   single-use 24h link to the new address → confirm switches `User.email`
   and notifies the old address. Gated until launch by
-  `EMAIL_CHANGE_ALLOWLIST` (default: rico's address) unless
-  `EMAIL_CHANGE_PUBLIC=true`. `EmailChangeRequest` is admin-auditable.
+  `DJANGO_EMAIL_CHANGE_ALLOWLIST` (default: rico's address) unless
+  `DJANGO_EMAIL_CHANGE_PUBLIC=true`. `EmailChangeRequest` is admin-auditable.
   See `email-change` memory.
 - **M7.5 — per-year tuition lifecycle** (replaces the old single
   `Profile.tuition_paying` boolean, now dropped). `payments.TuitionPeriod`
@@ -247,6 +257,31 @@ Done (see `git log` for specifics):
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
+
+**Phase 2 features already built and deployed (pulled forward — see the
+Phase 2 plan for milestone IDs):**
+
+- **Parlêtre** (`parletre`, MEM-3 / M13.5) — bespoke members-only
+  discussion board at `/parletre/`. Multi-channel forum + realtime chat
+  (Django Channels + daphne), channel access modes Open / Role /
+  Committee / Private (private is private even from staff), reactions,
+  @mentions + notification bell, unread tracking + jump-to-unread,
+  attachments, per-channel subscriptions + email digests, reply-by-email
+  (SES inbound → SNS → webhook, HMAC tokens; on a test domain pending
+  the DNS migration), full-text search, editable/deletable posts +
+  replies, and disappearing-message channels that **redact** on expiry
+  (blackout text + black-box attachments) via `lsp-parletre-purge.timer`.
+  Decorative glyphs use an inline-SVG `{% icon %}` tag. See
+  `discussion-board` memory.
+- **Workgroups** (`workgroups`) — shared collaborative layer; attach one
+  Workgroup to cartels / working groups / seminars and the roster +
+  Parlêtre channel gating live on it (`Channel.workgroup`,
+  `access=workgroup`). **Add features to the Workgroup first.** See
+  `workgroups-architecture` memory.
+- **Cartels** (`cartels`, CART-1/2/3) — built on the Workgroup layer.
+- **Directory** (`/directory/`), **Find an Analyst** map, member
+  self-service **profile editor** (`/accounts/profile/`), **works**
+  showcase (`/works/`), and **documents** (`/documents/`) — all live.
 
 ## Open items (M7 wrap-up)
 
