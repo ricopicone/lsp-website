@@ -50,16 +50,24 @@
   </div>
 
   {% if can_post %}
-  <form id="composer" method="post" enctype="multipart/form-data" data-chat-form class="space-y-2 border-t border-base-300/60 pt-4">
+  <form id="composer" method="post" enctype="multipart/form-data" data-chat-form class="space-y-1 border-t border-base-300/60 pt-4">
     {% csrf_token %}
     {{ form.reply_to }}
     {% include "parletre/_reply_banner.html" %}
-    <div class="mention-host" data-mention-url="{% url 'parletre:mention_search' %}?channel={{ channel.slug }}">{{ form.body }}</div>
-    {% if form.body.errors %}<p class="text-error text-sm">{{ form.body.errors|striptags }}</p>{% endif %}
-    <div class="flex items-center justify-between gap-2">
-      <div>{{ form.attachments }}{% if form.attachments.errors %}<p class="text-error text-sm">{{ form.attachments.errors|striptags }}</p>{% endif %}</div>
-      <button type="submit" class="btn btn-primary btn-sm shrink-0">Send</button>
+    <div class="parletre-composer">
+      <button type="button" class="composer-btn composer-attach" data-attach
+              title="Attach a file" aria-label="Attach a file">📎</button>
+      <div class="mention-host composer-field" data-mention-url="{% url 'parletre:mention_search' %}?channel={{ channel.slug }}">{{ form.body }}</div>
+      <button type="submit" class="composer-btn composer-send"
+              title="Send — Enter (Shift+Enter for a new line)" aria-label="Send">↑</button>
     </div>
+    <div hidden>{{ form.attachments }}</div>
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-xs text-base-content/50" data-attach-summary></span>
+      <span class="text-xs text-base-content/35">↵ Enter to send · ⇧↵ new line</span>
+    </div>
+    {% if form.body.errors %}<p class="text-error text-sm">{{ form.body.errors|striptags }}</p>{% endif %}
+    {% if form.attachments.errors %}<p class="text-error text-sm">{{ form.attachments.errors|striptags }}</p>{% endif %}
   </form>
   {% else %}
   <p class="text-xs text-base-content/50 border-t border-base-300/60 pt-4">Only moderators may post in this channel.</p>

@@ -1,11 +1,14 @@
-/* Parlêtre realtime chat (M13.5b).
+/* Parlêtre realtime chat (M13.5b) + iMessage-style composer.
  *
- * Progressive enhancement over the plain chat form: open a WebSocket to the
- * channel, append broadcast messages live, and send the composer over the
- * socket instead of reloading. With JS/WS unavailable the form posts
- * normally (and the server still broadcasts to other live clients). Posts
- * with file attachments fall back to the multipart form. Message bodies are
- * sanitised server-side, so inserting body_html as HTML is safe. */
+ * WebSocket: open a socket to the channel, append broadcast messages live,
+ * and send the composer over it instead of reloading. With JS/WS unavailable
+ * the form posts normally (server still broadcasts to live clients). Posts
+ * with file attachments fall back to the multipart form. Bodies are sanitised
+ * server-side, so inserting body_html as HTML is safe.
+ *
+ * Composer: Enter sends, Shift+Enter inserts a newline; the textarea
+ * auto-grows; a paperclip opens the hidden file input and shows the picked
+ * files; the round ↑ button submits. */
 (function () {
   "use strict";
   var root = document.querySelector("[data-chat]");
@@ -16,6 +19,8 @@
   var form = document.querySelector("[data-chat-form]");
   var input = form ? form.querySelector("textarea") : null;
   var fileInput = form ? form.querySelector('input[type="file"]') : null;
+  var attachBtn = form ? form.querySelector("[data-attach]") : null;
+  var attachSummary = form ? form.querySelector("[data-attach-summary]") : null;
   var presenceEl = document.querySelector("[data-chat-presence]");
   var proto = location.protocol === "https:" ? "wss" : "ws";
   var online = 0;
@@ -55,6 +60,35 @@
     };
   }
 
+  function autogrow() {
+    if (!input) return;
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 144) + "px";
+  }
+
+  // --- composer enhancements ---
+  if (input) {
+    input.setAttribute("rows", "1");
+    autogrow();
+    input.addEventListener("input", autogrow);
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+        e.preventDefault();
+        if (input.value.trim() && typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+        }
+      }
+    });
+  }
+  if (attachBtn && fileInput) {
+    attachBtn.addEventListener("click", function () { fileInput.click(); });
+    fileInput.addEventListener("change", function () {
+      if (!attachSummary) return;
+      var names = Array.prototype.map.call(fileInput.files, function (f) { return f.name; });
+      attachSummary.textContent = names.length ? "📎 " + names.join(", ") : "";
+    });
+  }
+
   if (form && input) {
     form.addEventListener("submit", function (e) {
       if (!ws || ws.readyState !== 1) return; // fall back to a normal POST
@@ -64,6 +98,7 @@
       e.preventDefault();
       ws.send(JSON.stringify({ body: body }));
       input.value = "";
+      autogrow();
     });
   }
 
