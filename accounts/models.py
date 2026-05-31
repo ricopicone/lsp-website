@@ -130,6 +130,13 @@ class Profile(models.Model):
             "(replaces the former 'LSP Staff' committee). Orthogonal to role."
         ),
     )
+    is_cartel_coordinator = models.BooleanField(
+        default=False,
+        help_text=(
+            "Cartel Coordinator designation — reviews/approves cartel proposals "
+            "(CART-4). Orthogonal to role."
+        ),
+    )
     bio = models.TextField(
         blank=True,
         help_text="Short biographical text. Shown on the directory and on event pages.",
