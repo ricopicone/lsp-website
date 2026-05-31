@@ -193,6 +193,14 @@
 }
 
 /* --- Parlêtre chat composer (iMessage-style pill; see parletre-chat.js) --- */
+/* Inline SVG icons (see parletre/templatetags/parletre_tags.py). 1em-sized,
+   currentColor; nudge the baseline so they sit with surrounding text. */
+.parletre-icon {
+  display: inline-block;
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+}
+
 .parletre-composer {
   display: flex;
   align-items: flex-end;
@@ -248,6 +256,24 @@
   font-weight: 700;
 }
 .composer-send:hover { filter: brightness(1.06); }
+
+/* --- Redacted (disappeared) messages --- */
+.redacted {
+  /* █ blocks render as solid bars; dim slightly and block selection so a
+     redacted message reads as a struck-through document, not live text. */
+  color: var(--color-base-content);
+  opacity: 0.55;
+  user-select: none;
+  word-break: break-word;
+}
+.redacted-box {
+  display: inline-block;
+  width: 8rem;
+  height: 5rem;
+  border-radius: 0.375rem;
+  background: var(--color-base-content);
+  opacity: 0.55;
+}
 
 /* --- Stylistic flourishes (see static/js/flourishes.js) --- */
 

@@ -85,7 +85,7 @@
     fileInput.addEventListener("change", function () {
       if (!attachSummary) return;
       var names = Array.prototype.map.call(fileInput.files, function (f) { return f.name; });
-      attachSummary.textContent = names.length ? "📎 " + names.join(", ") : "";
+      attachSummary.textContent = names.length ? names.join(", ") : "";
     });
   }
 
@@ -93,6 +93,8 @@
     form.addEventListener("submit", function (e) {
       if (!ws || ws.readyState !== 1) return; // fall back to a normal POST
       if (fileInput && fileInput.files && fileInput.files.length) return; // multipart POST
+      var replyField = form.querySelector("[name=reply_to]");
+      if (replyField && replyField.value) return; // replies POST so reply_to + context are saved/rendered
       var body = input.value.trim();
       if (!body) { e.preventDefault(); return; }
       e.preventDefault();

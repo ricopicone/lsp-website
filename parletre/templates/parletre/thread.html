@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% load static %}
+{% load static parletre_tags %}
 {% block title %}{{ thread.title }} — Parlêtre{% endblock %}
 {% block extra_head %}<script defer src="{% static 'js/parletre-mentions.js' %}"></script>{% endblock %}
 
@@ -13,8 +13,8 @@
 
   <header class="space-y-2">
     <h1 class="font-serif text-2xl tracking-tight text-base-content">
-      {% if thread.pinned %}<span title="Pinned" aria-hidden="true">📌</span> {% endif %}
-      {% if thread.locked %}<span title="Locked" aria-hidden="true">🔒</span> {% endif %}
+      {% if thread.pinned %}{% icon "pin" css="text-base-content/50 align-middle" title="Pinned" %} {% endif %}
+      {% if thread.locked %}{% icon "lock" css="text-base-content/50 align-middle" title="Locked" %} {% endif %}
       {{ thread.title }}
       {% if thread.resolved %}<span class="badge badge-success badge-outline align-middle">Resolved</span>{% endif %}
     </h1>
@@ -33,7 +33,7 @@
 
   {% if first_unread_id %}
   <a href="#post-{{ first_unread_id }}" class="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-    ↓ Jump to first unread
+    {% icon "arrow-down" %} Jump to first unread
   </a>
   {% endif %}
 
@@ -48,14 +48,17 @@
       <p class="text-sm mb-2">
         <span class="font-medium text-base-content">{% if post.author %}{{ post.author.get_full_name|default:post.author.email }}{% else %}(removed){% endif %}</span>
         <time class="text-xs text-base-content/40 ml-1" datetime="{{ post.created_at|date:'c' }}">{{ post.created_at|date:"M j, Y, g:i a" }}</time>
-        {% if post.edited_at %}<span class="text-xs text-base-content/40">(edited)</span>{% endif %}
-        {% if post.via_email %}<span class="badge badge-xs badge-ghost" title="Posted by email">✉</span>{% endif %}
+        {% if post.edited_at and not post.is_redacted %}<span class="text-xs text-base-content/40">(edited)</span>{% endif %}
+        {% if post.via_email %}<span class="badge badge-xs badge-ghost gap-0.5" title="Posted by email">{% icon "mail" %}</span>{% endif %}
       </p>
-      {% include "parletre/_reply_context.html" %}
+      {% if not post.is_redacted %}{% include "parletre/_reply_context.html" %}{% endif %}
       <div class="prose prose-sm max-w-none text-base-content/90">
-        {% if post.deleted %}<em class="text-base-content/40">(deleted)</em>{% else %}{{ post.body_html }}{% endif %}
+        {% if post.deleted %}<em class="text-base-content/40">(deleted)</em>
+        {% elif post.is_redacted %}<span class="redacted">{{ post.redacted_display }}</span>
+        {% else %}{{ post.body_html }}{% endif %}
       </div>
-      {% if not post.deleted %}{% include "parletre/_attachments.html" %}{% include "parletre/_reactions.html" %}{% include "parletre/_post_actions.html" %}{% endif %}
+      {% if post.is_redacted %}{% include "parletre/_redacted_attachments.html" %}
+      {% elif not post.deleted %}{% include "parletre/_attachments.html" %}{% include "parletre/_reactions.html" %}{% include "parletre/_post_actions.html" %}{% endif %}
     </li>
     {% endfor %}
   </ol>
@@ -74,7 +77,7 @@
     </div>
   </form>
   {% elif thread.locked %}
-  <p class="text-sm text-base-content/50 border-t border-base-300/60 pt-4">🔒 This thread is locked.</p>
+  <p class="inline-flex items-center gap-1 text-sm text-base-content/50 border-t border-base-300/60 pt-4">{% icon "lock" %} This thread is locked.</p>
   {% endif %}
 </div>
 {% endblock %}

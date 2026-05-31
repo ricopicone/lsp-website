@@ -1,4 +1,4 @@
-{% comment %}Attachment list for one post. Expects: post (attachments prefetched).{% endcomment %}
+{% load parletre_tags %}{% comment %}Attachment list for one post. Expects: post (attachments prefetched).{% endcomment %}
 {% if post.attachments.all %}
 <div class="mt-2 flex flex-wrap gap-2">
   {% for att in post.attachments.all %}
@@ -10,7 +10,7 @@
   {% else %}
   <a href="{% url 'parletre:attachment' att.id %}"
      class="inline-flex items-center gap-2 text-sm rounded-box border border-base-300 bg-base-200/40 px-3 py-1.5 hover:border-base-content/30">
-    <span aria-hidden="true">📎</span>
+    {% icon "paperclip" css="text-base-content/50" %}
     <span class="text-base-content">{{ att.original_name|default:"file" }}</span>
     {% if att.size %}<span class="text-xs text-base-content/50">{{ att.size|filesizeformat }}</span>{% endif %}
   </a>

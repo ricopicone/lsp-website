@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load parletre_tags %}
 {% block title %}{{ channel.name }} — Parlêtre{% endblock %}
 
 {% block content %}
@@ -34,8 +35,8 @@
       <div class="min-w-0">
         <a href="{{ thread.get_absolute_url }}" class="{% if thread.is_unread %}font-semibold{% else %}font-medium{% endif %} text-base-content hover:text-primary">
           {% if thread.is_unread %}<span class="size-2 rounded-full bg-primary inline-block align-middle shrink-0" title="Unread"></span> {% endif %}
-          {% if thread.pinned %}<span title="Pinned" aria-hidden="true">📌</span> {% endif %}
-          {% if thread.locked %}<span title="Locked" aria-hidden="true">🔒</span> {% endif %}
+          {% if thread.pinned %}{% icon "pin" css="text-base-content/50 align-middle" title="Pinned" %} {% endif %}
+          {% if thread.locked %}{% icon "lock" css="text-base-content/50 align-middle" title="Locked" %} {% endif %}
           {{ thread.title }}
           {% if thread.resolved %}<span class="badge badge-sm badge-success badge-outline">Resolved</span>{% endif %}
         </a>

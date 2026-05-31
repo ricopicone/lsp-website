@@ -1,0 +1,8 @@
+{% comment %}Black boxes standing in for a redacted post's (deleted) attachments. Expects: post.{% endcomment %}
+{% if post.attachments.all %}
+<div class="flex flex-wrap gap-2 mt-2">
+  {% for att in post.attachments.all %}
+  <span class="redacted-box" role="img" aria-label="redacted attachment"></span>
+  {% endfor %}
+</div>
+{% endif %}

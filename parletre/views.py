@@ -65,11 +65,12 @@ from .services import notify_new_thread, notify_post
 log = logging.getLogger("parletre")
 
 
-def _attach_reactions(posts, user, can_moderate=False):
-    """Annotate each post with ``reaction_summary`` plus ``can_edit`` /
-    ``can_delete`` flags for the template. ``can_moderate`` is the channel-level
-    moderator status (computed once) so we avoid a per-post permission query.
-    Expects ``reactions`` (and their users) prefetched."""
+def _attach_reactions(posts, user, can_moderate=False, ephemeral_cutoff=None):
+    """Annotate each post with ``reaction_summary``, ``can_edit`` /
+    ``can_delete`` flags, and ``is_redacted`` (already redacted, or past the
+    channel's TTL — so the view blacks it out even before the cron persists
+    the redaction). ``can_moderate`` is the channel-level moderator status
+    (computed once). Expects ``reactions`` prefetched."""
     posts = list(posts)
     uid = user.id if getattr(user, "is_authenticated", False) else None
     for post in posts:
@@ -82,8 +83,12 @@ def _attach_reactions(posts, user, can_moderate=False):
             if reaction.user_id == uid:
                 entry["mine"] = True
         post.reaction_summary = list(summary.values())
-        post.can_edit = not post.deleted and post.author_id is not None and post.author_id == uid
-        post.can_delete = not post.deleted and (post.author_id == uid or can_moderate)
+        post.is_redacted = post.redacted or (
+            ephemeral_cutoff is not None and post.created_at < ephemeral_cutoff
+        )
+        active = not post.deleted and not post.is_redacted
+        post.can_edit = active and post.author_id is not None and post.author_id == uid
+        post.can_delete = active and (post.author_id == uid or can_moderate)
     return posts
 
 
@@ -230,13 +235,19 @@ def channel(request, slug):
 
     # Chat: viewing the stream marks the channel read.
     mark_channel_read(request.user, channel)
+    # Show all messages — expired ones are redacted (blacked out) on read,
+    # not hidden, so the disappearing channel reads as a redacted transcript.
     chat_posts = channel.posts.filter(thread__isnull=True).select_related(
         "author", "reply_to", "reply_to__author"
     ).prefetch_related("reactions", "attachments").order_by("created_at")
-    if channel.is_ephemeral:
-        cutoff = timezone.now() - timedelta(seconds=channel.message_ttl_seconds)
-        chat_posts = chat_posts.filter(created_at__gte=cutoff)
-    context["posts"] = _attach_reactions(chat_posts, request.user, context["can_moderate"])
+    cutoff = (
+        timezone.now() - timedelta(seconds=channel.message_ttl_seconds)
+        if channel.is_ephemeral
+        else None
+    )
+    context["posts"] = _attach_reactions(
+        chat_posts, request.user, context["can_moderate"], cutoff
+    )
     context["reaction_palette"] = REACTION_EMOJI
     return render(request, "parletre/channel_chat.html", context)
 
@@ -309,12 +320,18 @@ def thread(request, slug, thread_slug):
     # point the member at the first post they haven't seen.
     marker_before = thread_marker_at(request.user, thread)
     thread_can_moderate = channel.can_moderate(request.user)
+    thread_cutoff = (
+        timezone.now() - timedelta(seconds=channel.message_ttl_seconds)
+        if channel.is_ephemeral
+        else None
+    )
     posts = _attach_reactions(
         thread.posts.select_related("author", "reply_to", "reply_to__author")
         .prefetch_related("reactions", "attachments")
         .order_by("created_at"),
         request.user,
         thread_can_moderate,
+        thread_cutoff,
     )
     first_unread_id = None
     if marker_before is not None:
@@ -510,6 +527,13 @@ def attachment(request, attachment_id):
         Attachment.objects.select_related("post", "post__channel"), pk=attachment_id
     )
     if not att.post.channel.visible_to(request.user):
+        raise Http404()
+    # Redacted (or past-TTL) attachments are gone — never serve their bytes.
+    ch = att.post.channel
+    if att.post.redacted or (
+        ch.is_ephemeral
+        and att.post.created_at < timezone.now() - timedelta(seconds=ch.message_ttl_seconds)
+    ):
         raise Http404()
     response = FileResponse(
         att.file.open("rb"),

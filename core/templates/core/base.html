@@ -68,20 +68,25 @@
 
       {# Right: theme toggle + auth #}
       <div class="flex items-center gap-1">
+        {% comment %}Logged-in users toggle from the account menu; this header
+        button is the fallback for anonymous visitors, who have no dropdown.{% endcomment %}
+        {% if not user.is_authenticated %}
         <button type="button"
-                id="theme-toggle"
+                data-theme-toggle
                 class="btn btn-ghost btn-sm btn-circle text-base-content/70"
                 aria-label="Toggle light/dark mode"
                 title="Toggle light/dark mode">
-          <span data-theme-icon="silk">☼</span>
-          <span data-theme-icon="abyss" class="hidden">☽</span>
+          {# sun = currently light; moon = currently dark #}
+          <svg data-theme-icon="silk" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+          <svg data-theme-icon="abyss" class="size-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
         </button>
+        {% endif %}
 
         {% if parletre_is_member %}
         <a href="{% url 'parletre:notifications' %}"
            class="btn btn-ghost btn-sm btn-circle relative text-base-content/70"
            aria-label="Notifications" title="Notifications">
-          <span aria-hidden="true">🔔</span>
+          {% icon "bell" css="text-base" %}
           {% if parletre_unread %}
           <span class="absolute -top-0.5 -right-0.5 badge badge-xs badge-primary">{{ parletre_unread }}</span>
           {% endif %}
@@ -140,6 +145,19 @@
             {% endif %}
             <li><a href="{% url 'profile_edit' %}">Edit profile</a></li>
             <li><a href="{% url 'profile_edit' %}#timezone">Time zone</a></li>
+            <li>
+              {# Theme toggle: shows the mode you'll switch to. #}
+              <button type="button" data-theme-toggle class="justify-start gap-2">
+                <span data-theme-icon="silk" class="contents">
+                  <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                  Dark mode
+                </span>
+                <span data-theme-icon="abyss" class="contents hidden">
+                  <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+                  Light mode
+                </span>
+              </button>
+            </li>
 
             {% if user.is_staff or user|is_on_committee:"programming-committee" %}
             <li><hr class="border-base-300/60 my-1"></li>
@@ -226,22 +244,26 @@
   {% endif %}
 
   <script>
-    // Theme toggle: silk <-> abyss, persisted to localStorage.
+    // Theme toggle: silk <-> abyss, persisted to localStorage. Drives every
+    // [data-theme-toggle] trigger (header button + dropdown row) and keeps
+    // their [data-theme-icon] glyphs/labels in sync.
     (function () {
-      var btn = document.getElementById("theme-toggle");
-      if (!btn) return;
+      var triggers = document.querySelectorAll("[data-theme-toggle]");
+      if (!triggers.length) return;
       function sync(theme) {
         document.querySelectorAll("[data-theme-icon]").forEach(function (el) {
           el.classList.toggle("hidden", el.dataset.themeIcon !== theme);
         });
       }
       sync(document.documentElement.getAttribute("data-theme") || "silk");
-      btn.addEventListener("click", function () {
-        var current = document.documentElement.getAttribute("data-theme") || "silk";
-        var next = current === "silk" ? "abyss" : "silk";
-        document.documentElement.setAttribute("data-theme", next);
-        localStorage.setItem("lsp-theme", next);
-        sync(next);
+      triggers.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var current = document.documentElement.getAttribute("data-theme") || "silk";
+          var next = current === "silk" ? "abyss" : "silk";
+          document.documentElement.setAttribute("data-theme", next);
+          localStorage.setItem("lsp-theme", next);
+          sync(next);
+        });
       });
     })();
   </script>
