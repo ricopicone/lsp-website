@@ -8,16 +8,17 @@
   {# ===================== Hero ===================== #}
   <header class="space-y-7 max-w-3xl pt-2 sm:pt-6">
     <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/50">
-      Los Angeles · in the Freudian field
+      A worldwide school · based in San Francisco
     </p>
     <h1 class="font-serif text-4xl sm:text-6xl text-base-content leading-[1.05] tracking-tight">
       Lacanian School<br class="hidden sm:block"> of Psychoanalysis
     </h1>
     <p class="text-lg sm:text-xl text-base-content/75 leading-relaxed max-w-2xl">
-      A community for the practice, transmission, and study of psychoanalysis —
-      Freud's discovery as it was read, and reopened, by Jacques Lacan. We form
-      analysts, hold seminars open to the public, and sustain the work of
-      cartels, reading groups, and clinical inquiry.
+      A community for the practice, transmission, and study of
+      psychoanalysis—Freud's discovery as it was read, and reopened, by Jacques
+      Lacan. We form analysts, transmit psychoanalysis through seminars and
+      special events open to the public, and sustain the clinical practice of
+      psychoanalysis.
     </p>
     <div class="flex flex-wrap items-center gap-3 pt-1">
       <a href="{% url 'find_an_analyst' %}" class="btn btn-primary">Find an analyst</a>
@@ -34,7 +35,7 @@
       <span>
         Your <strong>{{ dues_period_unpaid.name }}</strong> dues
         (${{ dues_amount_owed }}, due {{ dues_period_unpaid.due_date|date:"M j, Y" }})
-        haven't been paid yet — <a href="{% url 'dues' %}" class="link">pay now</a>.
+        haven't been paid yet—<a href="{% url 'dues' %}" class="link">pay now</a>.
       </span>
     </div>
     {% endif %}
@@ -69,7 +70,7 @@
         <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45">Wanting to study</span>
         <h3 class="font-serif text-xl text-base-content mt-2 tracking-tight">Attend the seminars</h3>
         <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">
-          Year-long teaching seminars, reading groups, and special events — many
+          Year-long teaching seminars, reading groups, and special events—many
           open to anyone, no prior background assumed.
         </p>
         <span class="text-sm text-primary mt-4 inline-flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
@@ -82,8 +83,8 @@
         <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45">Toward formation</span>
         <h3 class="font-serif text-xl text-base-content mt-2 tracking-tight">Join the work</h3>
         <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">
-          The formation of analysts proceeds through analysis, study, and the
-          cartel. Learn how candidacy and membership work.
+          Formation proceeds through analysis, study, and the cartel, along two
+          tracks: Analyst and Scholar. Learn how candidacy and membership work.
         </p>
         <span class="text-sm text-primary mt-4 inline-flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
           About the School <span aria-hidden="true">→</span>
@@ -106,13 +107,16 @@
         <a href="{% url 'events:detail' e.slug %}"
            class="group flex items-center gap-5 py-5 hover:bg-base-200/40 -mx-3 px-3 rounded-lg transition-colors">
           <div class="shrink-0 w-14 text-center">
-            <div class="font-mono text-[0.65rem] uppercase tracking-widest text-base-content/45">{{ e.start_date|date:"M" }}</div>
+            <div class="font-mono text-xs uppercase tracking-widest text-primary font-medium">{{ e.start_date|date:"M" }}</div>
             <div class="font-serif text-3xl leading-none text-base-content">{{ e.start_date|date:"j" }}</div>
           </div>
           <div class="min-w-0 flex-1">
+            <span class="inline-flex items-center text-[0.65rem] leading-none font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25 mb-1.5">
+              {{ e.get_event_type_display }}
+            </span>
             <div class="font-serif text-lg text-base-content group-hover:text-primary transition-colors leading-snug">{{ e.title }}</div>
             <div class="text-sm text-base-content/55 mt-0.5">
-              {% if e.end_date != e.start_date %}through {{ e.end_date|date:"M j, Y" }} · {% else %}{{ e.start_date|date:"Y" }} · {% endif %}{{ e.get_format_display }}
+              {% if e.end_date != e.start_date %}{{ e.start_date|date:"M j" }} – {{ e.end_date|date:"M j, Y" }}{% else %}{{ e.start_date|date:"M j, Y" }}{% endif %} · {{ e.get_format_display }}
             </div>
           </div>
           <span class="shrink-0 text-base-content/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all" aria-hidden="true">→</span>
@@ -129,12 +133,13 @@
       <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">What we do</h2>
       <p class="text-base-content/75 leading-relaxed">
         The School is organized around teaching and the formation of analysts.
-        Faculty lead seminars that read Freud and Lacan closely; members gather
-        in <strong>cartels</strong> — small groups formed around a shared
-        question — and in working and reading groups that carry the work
-        forward between meetings.
+        Faculty lead <strong>seminars</strong> that read Freud and Lacan
+        closely; members gather in <strong>cartels</strong>—small groups formed
+        around a shared question.
       </p>
       <p class="text-base-content/75 leading-relaxed">
+        Formation follows two tracks—Analyst and Scholar—each with its own path
+        through candidacy.
         {% if directory_count %}Home to {{ directory_count }} analyst{{ directory_count|pluralize }}, candidate{{ directory_count|pluralize }}, and scholar{{ directory_count|pluralize }}, t{% else %}T{% endif %}he School welcomes
         clinicians, candidates in formation, and scholars from neighboring
         fields. Much of what we do is open to the public; the rest belongs to
