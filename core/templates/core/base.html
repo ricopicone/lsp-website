@@ -66,8 +66,8 @@
 
       {# Right: theme toggle + auth #}
       <div class="flex items-center gap-1">
-        {# Logged-in users toggle from the account menu; this header button is
-           the fallback for anonymous visitors, who have no dropdown. #}
+        {% comment %}Logged-in users toggle from the account menu; this header
+        button is the fallback for anonymous visitors, who have no dropdown.{% endcomment %}
         {% if not user.is_authenticated %}
         <button type="button"
                 data-theme-toggle
