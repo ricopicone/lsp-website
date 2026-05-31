@@ -37,7 +37,7 @@ CATEGORY = {
 
 
 def _unique(model, field, base, cap):
-    base = (base or "x")[:cap]
+    base = (base or "x")[:cap - 6]  # leave room for a "-NNN" disambiguator
     value, n = base, 2
     while model.objects.filter(**{field: value}).exists():
         value = f"{base}-{n}"
@@ -63,7 +63,7 @@ def backfill(apps, schema_editor):
         if kind:
             wg = Workgroup.objects.create(
                 kind=kind,
-                name=event.title,
+                name=event.title[:120],   # Workgroup.name is max_length=120; Event.title is 200
                 slug=_unique(Workgroup, "slug", event.slug, 140),
                 description=event.description or "",
                 landing_visibility="members",
@@ -76,7 +76,7 @@ def backfill(apps, schema_editor):
                     name=cname, defaults={"slug": cname.lower().replace(" ", "-"), "position": cpos}
                 )
             Channel.objects.create(
-                name=event.title,
+                name=event.title[:120],   # Channel.name is max_length=120
                 slug=_unique(Channel, "slug", event.slug, 110),
                 kind="forum",
                 access="workgroup",
