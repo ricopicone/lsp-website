@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from django.db import models
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
@@ -14,12 +15,31 @@ from events.models import Event, Session
 
 
 def landing(request):
-    """Public landing page for app.lacanschool.org."""
+    """Public landing page for app.lacanschool.org — the school's front door."""
+    from accounts.models import Profile
+    from workgroups.models import Visibility, Workgroup
+
     today = timezone.now().date()
     upcoming = (
         Event.objects.filter(published=True, end_date__gte=today)
-        .order_by("start_date", "title")[:5]
+        .order_by("start_date", "title")[:4]
     )
+
+    # Grounded figures woven into the page (each rendered only when positive).
+    directory_count = Profile.objects.filter(
+        role__in=Profile.DIRECTORY_ROLES, public=True
+    ).count()
+    analyst_count = Profile.objects.filter(
+        role=Profile.Role.ANALYST, public=True
+    ).count()
+    seminar_count = (
+        Workgroup.objects.filter(
+            kind=Workgroup.Kind.SEMINAR, landing_visibility=Visibility.PUBLIC
+        )
+        .filter(models.Q(end_date__isnull=True) | models.Q(end_date__gte=today))
+        .count()
+    )
+
     user_registrations_url = None
     dues_period_unpaid = None
     dues_amount_owed = None
@@ -59,6 +79,9 @@ def landing(request):
         "core/landing.html",
         {
             "upcoming_events": upcoming,
+            "directory_count": directory_count,
+            "analyst_count": analyst_count,
+            "seminar_count": seminar_count,
             "user_registrations_url": user_registrations_url,
             "dues_period_unpaid": dues_period_unpaid,
             "dues_amount_owed": dues_amount_owed,

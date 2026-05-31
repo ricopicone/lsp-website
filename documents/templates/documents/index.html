@@ -34,6 +34,9 @@
             {% if doc.summary %}
             <p class="text-sm text-base-content/70 leading-relaxed">{{ doc.summary }}</p>
             {% endif %}
+            {% if doc.owning_workgroup %}
+            <p class="text-xs text-base-content/50">A product of the {{ doc.owning_workgroup.name }}.</p>
+            {% endif %}
           </div>
           <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/60">
             {% if doc.effective_date %}

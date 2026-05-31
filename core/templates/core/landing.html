@@ -1,108 +1,235 @@
 {% extends "core/base.html" %}
-{% block title %}Lacanian School of Psychoanalysis — Member services{% endblock %}
+{% load parletre_tags %}
+{% block title %}Lacanian School of Psychoanalysis{% endblock %}
 
 {% block content %}
-<div class="space-y-12">
+<div class="space-y-16 sm:space-y-24">
 
-  {# ---------- Hero ---------- #}
-  <header class="space-y-3 max-w-3xl">
-    <h1 class="font-serif text-4xl sm:text-5xl text-base-content leading-[1.1] tracking-tight">
-      Lacanian School of Psychoanalysis
-    </h1>
-    <p class="text-base sm:text-lg text-base-content/70 leading-relaxed">
-      Member services and event registration. For the main school site —
-      about, faculty, programs, and resources — visit
-      <a href="https://lacanschool.org/" class="link link-primary">lacanschool.org</a>.
+  {# ===================== Hero ===================== #}
+  <header class="space-y-7 max-w-3xl pt-2 sm:pt-6">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/50">
+      Los Angeles · in the Freudian field
     </p>
+    <h1 class="font-serif text-4xl sm:text-6xl text-base-content leading-[1.05] tracking-tight">
+      Lacanian School<br class="hidden sm:block"> of Psychoanalysis
+    </h1>
+    <p class="text-lg sm:text-xl text-base-content/75 leading-relaxed max-w-2xl">
+      A community for the practice, transmission, and study of psychoanalysis —
+      Freud's discovery as it was read, and reopened, by Jacques Lacan. We form
+      analysts, hold seminars open to the public, and sustain the work of
+      cartels, reading groups, and clinical inquiry.
+    </p>
+    <div class="flex flex-wrap items-center gap-3 pt-1">
+      <a href="{% url 'find_an_analyst' %}" class="btn btn-primary">Find an analyst</a>
+      <a href="{% url 'program' %}" class="btn btn-outline">Explore the program</a>
+      <a href="{% url 'about' %}" class="btn btn-ghost">About the School</a>
+    </div>
   </header>
 
-  {# ---------- Alerts ---------- #}
-  {% if dues_period_unpaid %}
-  <div role="alert" class="alert alert-warning">
-    <span>
-      Your <strong>{{ dues_period_unpaid.name }}</strong> dues
-      (${{ dues_amount_owed }}, due {{ dues_period_unpaid.due_date|date:"M j, Y" }})
-      haven't been paid yet — <a href="{% url 'dues' %}" class="link">pay now</a>.
-    </span>
+  {# ===================== Member alerts (functional) ===================== #}
+  {% if dues_period_unpaid or user_registrations_url %}
+  <div class="space-y-3 -my-4 sm:-my-8">
+    {% if dues_period_unpaid %}
+    <div role="alert" class="alert alert-warning">
+      <span>
+        Your <strong>{{ dues_period_unpaid.name }}</strong> dues
+        (${{ dues_amount_owed }}, due {{ dues_period_unpaid.due_date|date:"M j, Y" }})
+        haven't been paid yet — <a href="{% url 'dues' %}" class="link">pay now</a>.
+      </span>
+    </div>
+    {% endif %}
+    {% if user_registrations_url %}
+    <div role="alert" class="alert alert-info">
+      <span>Welcome back. <a href="{{ user_registrations_url }}" class="link">View your most recent registration</a>.</span>
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 
-  {% if user_registrations_url %}
-  <div role="alert" class="alert alert-info">
-    <span>Welcome back. <a href="{{ user_registrations_url }}" class="link">View your most recent registration</a>.</span>
-  </div>
-  {% endif %}
+  {# ===================== Three doors ===================== #}
+  <section class="space-y-6">
+    <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">However you arrive</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
 
-  {# ---------- Quick links ---------- #}
-  <section class="space-y-5">
-    <h2 class="font-serif text-2xl text-base-content tracking-tight">What you can do here</h2>
-    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <li>
-        <a href="{% url 'events:list' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
-          <div class="font-serif text-lg text-base-content tracking-tight">Upcoming events</div>
-          <div class="text-sm text-base-content/60 mt-1">Seminars and special events</div>
-        </a>
-      </li>
-      <li>
-        <a href="{% url 'core:calendar' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
-          <div class="font-serif text-lg text-base-content tracking-tight">Calendar</div>
-          <div class="text-sm text-base-content/60 mt-1">Month view of all sessions</div>
-        </a>
-      </li>
-      <li>
-        <a href="{% url 'directory' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
-          <div class="font-serif text-lg text-base-content tracking-tight">Directory</div>
-          <div class="text-sm text-base-content/60 mt-1">Analysts, candidates, and scholars</div>
-        </a>
-      </li>
-      <li>
-        <a href="{% url 'dues' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
-          <div class="font-serif text-lg text-base-content tracking-tight">Pay membership dues</div>
-          <div class="text-sm text-base-content/60 mt-1">Annual school dues</div>
-        </a>
-      </li>
-      <li>
-        <a href="{% url 'donate' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
-          <div class="font-serif text-lg text-base-content tracking-tight">Donate</div>
-          <div class="text-sm text-base-content/60 mt-1">Support the school</div>
-        </a>
-      </li>
-      {% if not user.is_authenticated %}
-      <li>
-        <a href="{% url 'login' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
-          <div class="font-serif text-lg text-base-content tracking-tight">Log in or sign up</div>
-          <div class="text-sm text-base-content/60 mt-1">Access your registrations</div>
-        </a>
-      </li>
-      {% endif %}
-      {% if user.is_staff %}
-      <li>
-        <a href="{% url 'treasurer' %}" class="block h-full p-5 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
-          <div class="font-serif text-lg text-base-content tracking-tight">Treasurer dashboard</div>
-          <div class="text-sm text-base-content/60 mt-1">Per-period totals, role breakdown, unpaid</div>
-        </a>
-      </li>
-      {% endif %}
-    </ul>
+      <a href="{% url 'find_an_analyst' %}"
+         class="group flex flex-col rounded-xl border border-base-300 p-6 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+        <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45">Seeking analysis</span>
+        <h3 class="font-serif text-xl text-base-content mt-2 tracking-tight">Find an analyst</h3>
+        <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">
+          Analysts and candidates of the School practice across the country and
+          online. Search by location and language.
+        </p>
+        <span class="text-sm text-primary mt-4 inline-flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
+          Browse practitioners <span aria-hidden="true">→</span>
+        </span>
+      </a>
+
+      <a href="{% url 'program' %}"
+         class="group flex flex-col rounded-xl border border-base-300 p-6 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+        <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45">Wanting to study</span>
+        <h3 class="font-serif text-xl text-base-content mt-2 tracking-tight">Attend the seminars</h3>
+        <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">
+          Year-long teaching seminars, reading groups, and special events — many
+          open to anyone, no prior background assumed.
+        </p>
+        <span class="text-sm text-primary mt-4 inline-flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
+          See the program <span aria-hidden="true">→</span>
+        </span>
+      </a>
+
+      <a href="{% url 'about' %}"
+         class="group flex flex-col rounded-xl border border-base-300 p-6 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+        <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45">Toward formation</span>
+        <h3 class="font-serif text-xl text-base-content mt-2 tracking-tight">Join the work</h3>
+        <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">
+          The formation of analysts proceeds through analysis, study, and the
+          cartel. Learn how candidacy and membership work.
+        </p>
+        <span class="text-sm text-primary mt-4 inline-flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
+          About the School <span aria-hidden="true">→</span>
+        </span>
+      </a>
+
+    </div>
   </section>
 
-  {# ---------- Coming up ---------- #}
+  {# ===================== Coming up ===================== #}
   {% if upcoming_events %}
-  <section class="space-y-4">
-    <h2 class="font-serif text-2xl text-base-content tracking-tight">Coming up</h2>
-    <ul class="divide-y divide-base-300">
+  <section class="space-y-6">
+    <div class="flex flex-wrap items-baseline justify-between gap-4">
+      <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">Coming up</h2>
+      <a href="{% url 'core:calendar' %}" class="link link-hover text-sm text-base-content/60">Full calendar →</a>
+    </div>
+    <ul class="divide-y divide-base-300/70 border-y border-base-300/70">
       {% for e in upcoming_events %}
-      <li class="py-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <a href="{% url 'events:detail' e.slug %}" class="link link-hover font-serif text-lg text-base-content">{{ e.title }}</a>
-        <span class="text-sm text-base-content/60">
-          {{ e.start_date|date:"M j" }}{% if e.end_date != e.start_date %} – {{ e.end_date|date:"M j, Y" }}{% else %}, {{ e.end_date|date:"Y" }}{% endif %}
-          · {{ e.get_format_display }}
-        </span>
+      <li>
+        <a href="{% url 'events:detail' e.slug %}"
+           class="group flex items-center gap-5 py-5 hover:bg-base-200/40 -mx-3 px-3 rounded-lg transition-colors">
+          <div class="shrink-0 w-14 text-center">
+            <div class="font-mono text-[0.65rem] uppercase tracking-widest text-base-content/45">{{ e.start_date|date:"M" }}</div>
+            <div class="font-serif text-3xl leading-none text-base-content">{{ e.start_date|date:"j" }}</div>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="font-serif text-lg text-base-content group-hover:text-primary transition-colors leading-snug">{{ e.title }}</div>
+            <div class="text-sm text-base-content/55 mt-0.5">
+              {% if e.end_date != e.start_date %}through {{ e.end_date|date:"M j, Y" }} · {% else %}{{ e.start_date|date:"Y" }} · {% endif %}{{ e.get_format_display }}
+            </div>
+          </div>
+          <span class="shrink-0 text-base-content/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all" aria-hidden="true">→</span>
+        </a>
       </li>
       {% endfor %}
     </ul>
   </section>
   {% endif %}
+
+  {# ===================== Orientation ===================== #}
+  <section class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 lg:gap-14 items-start border-t border-base-300/60 pt-12">
+    <div class="space-y-5 max-w-2xl">
+      <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">What we do</h2>
+      <p class="text-base-content/75 leading-relaxed">
+        The School is organized around teaching and the formation of analysts.
+        Faculty lead seminars that read Freud and Lacan closely; members gather
+        in <strong>cartels</strong> — small groups formed around a shared
+        question — and in working and reading groups that carry the work
+        forward between meetings.
+      </p>
+      <p class="text-base-content/75 leading-relaxed">
+        {% if directory_count %}Home to {{ directory_count }} analyst{{ directory_count|pluralize }}, candidate{{ directory_count|pluralize }}, and scholar{{ directory_count|pluralize }}, t{% else %}T{% endif %}he School welcomes
+        clinicians, candidates in formation, and scholars from neighboring
+        fields. Much of what we do is open to the public; the rest belongs to
+        the ongoing life of members.
+      </p>
+    </div>
+    <div class="lg:w-56 shrink-0 lg:border-l lg:border-base-300/60 lg:pl-8">
+      <div class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45 mb-3">The groups</div>
+      <ul class="space-y-2 text-sm">
+        <li><a href="{% url 'workgroups:kind_seminars' %}" class="link link-hover text-base-content/80">Seminars{% if seminar_count %} <span class="text-base-content/40">· {{ seminar_count }}</span>{% endif %}</a></li>
+        <li><a href="{% url 'workgroups:kind_cartels' %}" class="link link-hover text-base-content/80">Cartels</a></li>
+        <li><a href="{% url 'workgroups:kind_reading_groups' %}" class="link link-hover text-base-content/80">Reading groups</a></li>
+        <li><a href="{% url 'workgroups:kind_working_groups' %}" class="link link-hover text-base-content/80">Working groups</a></li>
+        <li><a href="{% url 'workgroups:kind_committees' %}" class="link link-hover text-base-content/80">Committees</a></li>
+        <li class="pt-1"><a href="{% url 'workgroups:list' %}" class="link link-hover text-primary">All groups →</a></li>
+      </ul>
+    </div>
+  </section>
+
+  {# ===================== Site index ===================== #}
+  <section class="space-y-6 border-t border-base-300/60 pt-12">
+    <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">Everything here</h2>
+    <ul class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      {% with card="block h-full p-4 rounded-lg border border-base-300 hover:border-primary/60 hover:bg-base-200/40 transition-colors" tt="font-serif text-base text-base-content tracking-tight" td="text-xs text-base-content/55 mt-1" %}
+
+      <li><a href="{% url 'directory' %}" class="{{ card }}">
+        <div class="{{ tt }}">Directory</div>
+        <div class="{{ td }}">Analysts, candidates &amp; scholars</div></a></li>
+
+      <li><a href="{% url 'find_an_analyst' %}" class="{{ card }}">
+        <div class="{{ tt }}">Find an Analyst</div>
+        <div class="{{ td }}">Map of practitioners</div></a></li>
+
+      <li><a href="{% url 'events:list' %}" class="{{ card }}">
+        <div class="{{ tt }}">Events</div>
+        <div class="{{ td }}">Seminars &amp; special events</div></a></li>
+
+      <li><a href="{% url 'core:calendar' %}" class="{{ card }}">
+        <div class="{{ tt }}">Calendar</div>
+        <div class="{{ td }}">Every session, month view</div></a></li>
+
+      <li><a href="{% url 'works:index' %}" class="{{ card }}">
+        <div class="{{ tt }}">Works</div>
+        <div class="{{ td }}">Publications by members</div></a></li>
+
+      <li><a href="{% url 'documents:index' %}" class="{{ card }}">
+        <div class="{{ tt }}">Documents</div>
+        <div class="{{ td }}">Newsletters &amp; shared files</div></a></li>
+
+      <li><a href="{% url 'workgroups:list' %}" class="{{ card }}">
+        <div class="{{ tt }}">Groups</div>
+        <div class="{{ td }}">Cartels, seminars &amp; more</div></a></li>
+
+      <li><a href="{% url 'dues' %}" class="{{ card }}">
+        <div class="{{ tt }}">Membership dues</div>
+        <div class="{{ td }}">Pay your annual dues</div></a></li>
+
+      <li><a href="{% url 'donate' %}" class="{{ card }}">
+        <div class="{{ tt }}">Donate</div>
+        <div class="{{ td }}">Support the School</div></a></li>
+
+      {% if user|is_parletre_member %}
+      <li><a href="{% url 'parletre:index' %}" class="{{ card }}">
+        <div class="{{ tt }}">Parlêtre</div>
+        <div class="{{ td }}">Members' discussion board</div></a></li>
+      {% endif %}
+
+      {% if not user.is_authenticated %}
+      <li><a href="{% url 'login' %}" class="{{ card }}">
+        <div class="{{ tt }}">Log in or sign up</div>
+        <div class="{{ td }}">Access your account</div></a></li>
+      {% endif %}
+
+      {% if user.is_staff %}
+      <li><a href="{% url 'treasurer' %}" class="{{ card }}">
+        <div class="{{ tt }}">Treasurer</div>
+        <div class="{{ td }}">Dashboard &amp; reports</div></a></li>
+      {% endif %}
+
+      {% endwith %}
+    </ul>
+  </section>
+
+  {# ===================== Closing invitation ===================== #}
+  <section class="rounded-xl border border-base-300 bg-base-200/40 px-8 py-10 sm:px-12 sm:py-14 text-center space-y-4">
+    <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">Questions?</h2>
+    <p class="text-base-content/70 leading-relaxed max-w-xl mx-auto">
+      Whether you're seeking analysis, considering candidacy, or wondering how to
+      attend a seminar, we'd be glad to hear from you.
+    </p>
+    <div class="flex flex-wrap items-center justify-center gap-3 pt-1">
+      <a href="mailto:admin@lacanschool.org" class="btn btn-primary btn-sm">admin@lacanschool.org</a>
+      <a href="{% url 'about' %}" class="btn btn-ghost btn-sm">More about the School</a>
+    </div>
+  </section>
 
 </div>
 {% endblock %}

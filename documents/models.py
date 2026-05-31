@@ -13,6 +13,13 @@ while restricting the actual text to members. Same shape as Work.
 Documents support version chains via ``superseded_by`` — an older
 bylaws PDF stays accessible but points to the current version so the
 index only surfaces what's in force.
+
+A document may be *owned* by the group that produced it via
+``owning_workgroup`` — a FK to the shared :class:`workgroups.Workgroup`
+that committees and working groups both attach. That single relation
+expresses "this is a product of the Program Committee" (or any cartel /
+working group) without a per-type link, per the add-to-Workgroup-first
+principle.
 """
 
 from __future__ import annotations
@@ -108,6 +115,18 @@ class Document(models.Model):
         through="DocumentAuthor",
         related_name="authored_documents",
         blank=True,
+    )
+    owning_workgroup = models.ForeignKey(
+        "workgroups.Workgroup",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="documents",
+        help_text=(
+            "The committee or working group that produced / owns this "
+            "document. Both attach a Workgroup, so this one relation covers "
+            "either — e.g. the Program Committee owns its proposal style guide."
+        ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

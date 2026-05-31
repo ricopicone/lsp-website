@@ -241,3 +241,42 @@ def test_detail_lists_older_versions(client):
     body = client.get(reverse("documents:detail", args=["bylaws-2024"])).content.decode()
     assert "Bylaws 2022" in body
     assert "Earlier versions" in body
+
+
+# ---- Ownership (produced by a committee / working group) ----------------
+
+
+@pytest.mark.django_db
+def test_owning_workgroup_links_document_to_its_producing_group():
+    from committees.models import Committee
+
+    pc = Committee.objects.get(name="Program Committee")  # seeded by migrations
+    d = _doc(slug="pp-style", title="Program Proposal Style Guide",
+             owning_workgroup=pc.workgroup)
+    # The relation reads both ways: the document knows its owner, and the
+    # group lists what it produced.
+    assert d.owning_workgroup == pc.workgroup
+    assert list(pc.workgroup.documents.all()) == [d]
+
+
+@pytest.mark.django_db
+def test_owning_group_survives_workgroup_deletion():
+    """SET_NULL keeps the document if its owning group is removed."""
+    from workgroups.models import Workgroup
+
+    wg = Workgroup.objects.create(kind=Workgroup.Kind.WORKING_GROUP, name="WG", slug="wg")
+    d = _doc(slug="owned", owning_workgroup=wg)
+    wg.delete()
+    d.refresh_from_db()
+    assert d.owning_workgroup_id is None
+
+
+@pytest.mark.django_db
+def test_index_card_shows_owning_group(client):
+    from committees.models import Committee
+
+    pc = Committee.objects.get(name="Program Committee")  # seeded by migrations
+    _doc(slug="pp-style", category=Document.Category.REFERENCE,
+         owning_workgroup=pc.workgroup)
+    body = client.get(reverse("documents:index")).content.decode()
+    assert "A product of the Program Committee" in body
