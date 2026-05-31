@@ -48,3 +48,45 @@ class Aphorism(models.Model):
 def _clear_aphorism_cache(**kwargs):
     """Drop the cached active list whenever an aphorism changes."""
     cache.delete(APHORISM_CACHE_KEY)
+
+
+class StaffRole(models.Model):
+    """An operational coordinator role and who holds it.
+
+    A coordinator (Web, Treasurer, Cartel, …) is an *independent capability*,
+    not a committee or workgroup — those model collaborating groups (rosters,
+    Parlêtre channels). This mirrors the ``Profile.is_lsp_staff`` precedent but
+    enumerates several such roles in one place and tracks their holders, so a
+    handoff is just reassigning ``holders`` in the admin.
+
+    ``key`` is the stable identifier code gates on (a control panel is wired to
+    a known key). The well-known keys are constants below; rows are seeded by a
+    data migration. Superusers implicitly hold every role (see ``core.access``).
+    """
+
+    # Well-known keys that code gates on.
+    WEB_COORDINATOR = "web_coordinator"
+    TREASURER = "treasurer"
+    CARTEL_COORDINATOR = "cartel_coordinator"
+    LSP_STAFF = "lsp_staff"
+
+    key = models.SlugField(
+        max_length=50,
+        unique=True,
+        help_text="Stable identifier code uses to gate a control panel. "
+        "Don't rename an existing key — it would orphan its panel.",
+    )
+    name = models.CharField(max_length=80)
+    description = models.TextField(blank=True)
+    holders = models.ManyToManyField(
+        "accounts.User",
+        blank=True,
+        related_name="staff_roles",
+        help_text="Users who hold this role (superusers hold every role).",
+    )
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name

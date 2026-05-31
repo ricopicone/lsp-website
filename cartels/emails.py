@@ -33,9 +33,10 @@ def _send(*, subject: str, body: str, to: list[str]) -> None:
 
 def _coordinator_emails():
     from accounts.models import User
+    from core.models import StaffRole
 
     return list(
-        User.objects.filter(profile__is_cartel_coordinator=True)
+        User.objects.filter(staff_roles__key=StaffRole.CARTEL_COORDINATOR)
         .values_list("email", flat=True)
     )
 

@@ -1,0 +1,57 @@
+{% extends "core/base.html" %}
+{% block title %}Aphorisms — Coordinator — Lacanian School of Psychoanalysis{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <nav class="text-sm"><a href="{% url 'coordinator' %}" class="link link-hover text-base-content/60">← Coordinator</a></nav>
+
+  <header class="flex flex-wrap items-end justify-between gap-4">
+    <div class="space-y-1">
+      <h1 class="font-serif text-3xl text-base-content tracking-tight">Aphorisms</h1>
+      <p class="text-sm text-base-content/65 max-w-xl">One active aphorism is shown at random in the footer of every page.</p>
+    </div>
+    <a href="{% url 'coordinator_aphorism_new' %}" class="btn btn-primary btn-sm">Add aphorism</a>
+  </header>
+
+  {% if messages %}
+    {% for m in messages %}
+    <div role="alert" class="alert {% if m.tags %}alert-{{ m.tags }}{% endif %}"><span>{{ m }}</span></div>
+    {% endfor %}
+  {% endif %}
+
+  <ul class="divide-y divide-base-300/70 border-y border-base-300/70">
+    {% for a in aphorisms %}
+    <li class="py-4 flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 {% if not a.is_active %}opacity-50{% endif %}">
+      <div class="min-w-0 flex-1">
+        <p class="font-serif text-lg text-base-content leading-snug">“{{ a.quote }}”</p>
+        {% if a.short_attribution %}
+        <p class="text-sm text-base-content/55 mt-1"
+           {% if a.full_attribution %}title="{{ a.full_attribution }}"{% endif %}>— {{ a.short_attribution }}</p>
+        {% endif %}
+      </div>
+      <div class="shrink-0 flex items-center gap-1.5">
+        {% if a.is_active %}
+        <span class="inline-flex items-center text-[0.65rem] leading-none font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25">Active</span>
+        {% else %}
+        <span class="inline-flex items-center text-[0.65rem] leading-none font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-base-200 text-base-content/60 border border-base-300">Hidden</span>
+        {% endif %}
+        <form method="post" action="{% url 'coordinator_aphorism_toggle' a.pk %}" style="display:inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-ghost btn-xs">{% if a.is_active %}Hide{% else %}Show{% endif %}</button>
+        </form>
+        <a href="{% url 'coordinator_aphorism_edit' a.pk %}" class="btn btn-ghost btn-xs">Edit</a>
+        <form method="post" action="{% url 'coordinator_aphorism_delete' a.pk %}" style="display:inline"
+              onsubmit="return confirm('Delete this aphorism? This cannot be undone.')">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
+        </form>
+      </div>
+    </li>
+    {% empty %}
+    <li class="py-10 text-center text-base-content/60">
+      No aphorisms yet. <a href="{% url 'coordinator_aphorism_new' %}" class="link link-primary">Add the first one</a>.
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

@@ -331,3 +331,92 @@ def test_landing_footer_renders_aphorism(client):
     response = client.get(reverse("core:landing"))
     assert response.status_code == 200
     assert b"structured like a language" in response.content
+
+
+# ---- Web Coordinator panel (StaffRole-gated) --------------------------
+
+
+@pytest.fixture
+def superuser(db):
+    return User.objects.create_superuser(
+        email="root@example.com", password="not-a-real-password",
+    )
+
+
+@pytest.fixture
+def web_coordinator(db):
+    from core.models import StaffRole
+
+    user = User.objects.create_user(
+        email="webcoord@example.com", password="not-a-real-password",
+    )
+    role, _ = StaffRole.objects.get_or_create(
+        key=StaffRole.WEB_COORDINATOR, defaults={"name": "Web Coordinator"},
+    )
+    role.holders.add(user)
+    return user
+
+
+def test_coordinator_requires_login(client):
+    assert client.get(reverse("coordinator")).status_code == 302
+
+
+def test_coordinator_forbidden_for_plain_member(client, regular_user):
+    client.force_login(regular_user)
+    assert client.get(reverse("coordinator")).status_code == 403
+
+
+def test_coordinator_ok_for_holder(client, web_coordinator):
+    client.force_login(web_coordinator)
+    response = client.get(reverse("coordinator"))
+    assert response.status_code == 200
+    assert b"Aphorisms" in response.content
+
+
+def test_coordinator_ok_for_superuser(client, superuser):
+    client.force_login(superuser)
+    assert client.get(reverse("coordinator")).status_code == 200
+
+
+def test_aphorism_create_via_panel(client, web_coordinator):
+    from core.models import Aphorism
+
+    client.force_login(web_coordinator)
+    before = Aphorism.objects.count()
+    response = client.post(
+        reverse("coordinator_aphorism_new"),
+        {"quote": "A freshly typed aphorism.", "short_attribution": "Test",
+         "full_attribution": "", "is_active": "on"},
+    )
+    assert response.status_code == 302
+    assert Aphorism.objects.count() == before + 1
+    assert Aphorism.objects.filter(quote="A freshly typed aphorism.").exists()
+
+
+def test_aphorism_toggle_and_delete_via_panel(client, web_coordinator):
+    from core.models import Aphorism
+
+    client.force_login(web_coordinator)
+    a = Aphorism.objects.create(quote="Toggle me", is_active=True)
+    client.post(reverse("coordinator_aphorism_toggle", args=[a.pk]))
+    a.refresh_from_db()
+    assert a.is_active is False
+    client.post(reverse("coordinator_aphorism_delete", args=[a.pk]))
+    assert not Aphorism.objects.filter(pk=a.pk).exists()
+
+
+def test_aphorism_edit_forbidden_for_member(client, regular_user):
+    from core.models import Aphorism
+
+    a = Aphorism.objects.create(quote="Members may not edit me.")
+    client.force_login(regular_user)
+    assert client.get(
+        reverse("coordinator_aphorism_edit", args=[a.pk])
+    ).status_code == 403
+
+
+def test_nav_coordinator_link_visibility(client, web_coordinator, regular_user):
+    client.force_login(web_coordinator)
+    assert b"Coordinator panel" in client.get(reverse("core:landing")).content
+    client.force_login(regular_user)
+    assert b"Coordinator panel" not in client.get(reverse("core:landing")).content

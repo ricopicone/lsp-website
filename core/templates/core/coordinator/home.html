@@ -1,0 +1,29 @@
+{% extends "core/base.html" %}
+{% block title %}Coordinator panel — Lacanian School of Psychoanalysis{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+  <header class="space-y-2">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">Web Coordinator</p>
+    <h1 class="font-serif text-3xl sm:text-4xl text-base-content tracking-tight">Control panel</h1>
+    <p class="text-base-content/70 max-w-2xl">Tools for managing the site's content and configuration.</p>
+  </header>
+
+  {% if panels %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {% for p in panels %}
+    <a href="{{ p.url }}"
+       class="group block rounded-xl border border-base-300 p-5 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+      <div class="flex items-baseline justify-between gap-3">
+        <h2 class="font-serif text-xl text-base-content tracking-tight group-hover:text-primary transition-colors">{{ p.title }}</h2>
+        {% if p.count is not None %}<span class="font-mono text-xs text-base-content/50">{{ p.count }} {{ p.count_label }}</span>{% endif %}
+      </div>
+      <p class="text-sm text-base-content/65 mt-1.5">{{ p.blurb }}</p>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-base-content/60">No panels are available to your account.</p>
+  {% endif %}
+</div>
+{% endblock %}
