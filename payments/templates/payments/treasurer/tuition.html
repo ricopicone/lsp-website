@@ -1,37 +1,47 @@
 {% extends "payments/treasurer/base.html" %}
 {% load treasurer_filters %}
 {% block tab_content %}
-<div class="space-y-6">
+<div class="space-y-8">
 
-  <p class="text-sm text-base-content/60">
-    Annual status for in-training students (pre-candidates and candidates).
-  </p>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <p class="text-sm text-base-content/60">
+      Annual tuition status for in-training students (pre-candidates and candidates).
+    </p>
+    {% include "payments/treasurer/_year_selector.html" with periods=tuition_all_periods selected=tuition_selected_period current=tuition_period|default:None url_name="treasurer_tuition" %}
+  </div>
 
-  {% if tuition_period %}
+  {% if tuition_selected_period %}
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">
-      Current academic year: {{ tuition_period.name }}
+      {{ tuition_selected_period.name }}{% if tuition_is_current %} <span class="badge badge-primary badge-sm align-middle">current</span>{% endif %}
     </h2>
     <p class="text-sm text-base-content/70">
-      <strong class="text-base-content">{{ tuition_period.tuition_amount|usd0 }}</strong> per student ·
-      decisions due {{ tuition_period.decision_due_date|date:"M j, Y" }} ·
-      {{ tuition_period.start_date|date:"M j, Y" }} – {{ tuition_period.end_date|date:"M j, Y" }}.
+      <strong class="text-base-content">{{ tuition_selected_period.tuition_amount|usd0 }}</strong> per student ·
+      decisions due {{ tuition_selected_period.decision_due_date|date:"M j, Y" }} ·
+      {{ tuition_selected_period.start_date|date:"M j, Y" }} – {{ tuition_selected_period.end_date|date:"M j, Y" }}.
     </p>
 
     {% comment %}Featured dollar amounts — what's in, what's expected, what's at risk.{% endcomment %}
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-3xl">
+    <div class="grid grid-cols-1 {% if tuition_is_current %}md:grid-cols-3{% else %}md:grid-cols-2{% endif %} gap-3 max-w-3xl">
       {% include "payments/treasurer/_money_tile.html" with label="Collected" value=tuition_total_collected tone="success" %}
       {% include "payments/treasurer/_money_tile.html" with label="Planned, unpaid" value=tuition_committed_remaining tone="info" %}
-      {% include "payments/treasurer/_money_tile.html" with label="Owed, undecided" value=tuition_undecided_owed tone="warning" %}
+      {% if tuition_is_current %}
+        {% include "payments/treasurer/_money_tile.html" with label="Owed, undecided" value=tuition_undecided_owed tone="warning" %}
+      {% endif %}
     </div>
     <div class="rounded-lg border border-base-300 p-4 bg-base-100 max-w-3xl">
       <canvas id="chart-tuition-money" height="58"></canvas>
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-      {% include "core/_stat_card.html" with label="In-training" value=tuition_in_training_count %}
-      {% include "core/_stat_card.html" with label="Outstanding" value=tuition_outstanding|usd hint="planned + undecided" %}
-      {% include "core/_stat_card.html" with label="Reconciliation queue" value=tuition_reconciliation_users|length tone="warning" span="2" hint="undecided + committed-without-payment" %}
+      {% if tuition_is_current %}
+        {% include "core/_stat_card.html" with label="In-training" value=tuition_in_training_count %}
+        {% include "core/_stat_card.html" with label="Outstanding" value=tuition_outstanding|usd hint="planned + undecided" %}
+        {% include "core/_stat_card.html" with label="Reconciliation queue" value=tuition_reconciliation_users|length tone="warning" span="2" hint="undecided + committed-without-payment" %}
+      {% else %}
+        {% include "core/_stat_card.html" with label="Collected" value=tuition_total_collected|usd %}
+        {% include "core/_stat_card.html" with label="Still owed (committed)" value=tuition_committed_remaining|usd tone="warning" %}
+      {% endif %}
     </div>
   </section>
 
@@ -50,6 +60,7 @@
     </div>
   </section>
 
+  {% if tuition_is_current %}
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">By role</h2>
     <div class="overflow-x-auto rounded-lg border border-base-300">
@@ -102,7 +113,7 @@
             <td>
               <div class="flex flex-wrap gap-1.5">
                 <form method="post" action="{% url 'treasurer_tuition_record_offline_payment' row.user.id %}" class="contents"
-                      onsubmit="return confirm('Record an offline tuition payment of ${{ tuition_period.tuition_amount }} for {{ row.user.first_name }} {{ row.user.last_name }}?');">
+                      onsubmit="return confirm('Record an offline tuition payment of {{ tuition_selected_period.tuition_amount|usd0 }} for {{ row.user.first_name }} {{ row.user.last_name }}?');">
                   {% csrf_token %}
                   <button type="submit" class="btn btn-primary btn-xs">Record payment</button>
                 </form>
@@ -120,57 +131,120 @@
     </div>
   </section>
   {% endif %}
+  {% endif %}{# tuition_is_current #}
+
+  {% if tuition_enrollment_rows %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">
+      Students this year
+      <span class="text-base-content/60 text-base font-normal">({{ tuition_enrollment_rows|length }})</span>
+    </h2>
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Name</th><th>Status</th><th class="text-right">Paid</th><th class="text-right">Remaining</th></tr>
+        </thead>
+        <tbody>
+          {% for row in tuition_enrollment_rows %}
+          <tr>
+            <td>{{ row.user.first_name }} {{ row.user.last_name }}</td>
+            <td>{% status_badge row.status %}</td>
+            <td class="text-right whitespace-nowrap">{{ row.paid|usd }}</td>
+            <td class="text-right whitespace-nowrap {% if row.remaining %}text-warning{% endif %}">{{ row.remaining|usd }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
 
   {% else %}
-  <p class="text-base-content/60">No current academic year configured.</p>
+  <p class="text-base-content/60">No academic year configured.</p>
+  {% endif %}
+
+  {% comment %}Longitudinal — always all years.{% endcomment %}
+  {% if tuition_year_rows %}
+  <section class="space-y-4 pt-2 border-t border-base-300/50">
+    <h2 class="font-serif text-2xl text-base-content">All academic years</h2>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
+        <div class="text-sm text-base-content/60 mb-2">Tuition collected per year</div>
+        <canvas id="chart-tuition-collected" height="200"></canvas>
+      </div>
+      <div class="rounded-lg border border-base-300 p-4 bg-base-100">
+        <div class="text-sm text-base-content/60 mb-2">Students by status per year</div>
+        <canvas id="chart-tuition-status" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Academic year</th>
+            <th class="text-right">Full</th>
+            <th class="text-right">Enrolled</th>
+            <th class="text-right">Paid in full</th>
+            <th class="text-right">Payment plan</th>
+            <th class="text-right">Committed</th>
+            <th class="text-right">Skipping</th>
+            <th class="text-right">Collected</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in tuition_year_rows %}
+          <tr>
+            <td class="whitespace-nowrap">
+              <a href="?year={{ r.period.slug }}" class="link link-primary">{{ r.period.name }}</a>
+            </td>
+            <td class="text-right whitespace-nowrap">{{ r.period.tuition_amount|usd0 }}</td>
+            <td class="text-right">{{ r.enrolled }}</td>
+            <td class="text-right text-success">{{ r.paid_in_full }}</td>
+            <td class="text-right">{{ r.payment_plan }}</td>
+            <td class="text-right {% if r.committed %}text-warning{% endif %}">{{ r.committed }}</td>
+            <td class="text-right">{{ r.skipping }}</td>
+            <td class="text-right whitespace-nowrap">{{ r.collected|usd }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
   {% endif %}
 
 </div>
 
-{% if tuition_period %}
 <script id="chart-tuition-money-data" type="application/json">{{ chart_tuition_money_json|safe }}</script>
+<script id="chart-tuition-collected-data" type="application/json">{{ chart_tuition_collected_json|safe }}</script>
+<script id="chart-tuition-status-data" type="application/json">{{ chart_tuition_status_json|safe }}</script>
 <script>
   (function () {
-    function cssVar(name, fallback) {
-      var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-      return v || fallback;
+    var c = LSPCharts.colors();
+    var m = LSPCharts.readJSON("chart-tuition-money-data");
+    if (m) {
+      LSPCharts.moneyBar("chart-tuition-money", [
+        { label: "Collected", value: m.collected, color: c.success },
+        { label: "Planned, unpaid", value: m.planned, color: c.info },
+        { label: "Owed, undecided", value: m.owed, color: c.warning },
+      ]);
     }
-    var success = cssVar("--color-success", "#5f8a5f");
-    var info = cssVar("--color-info", "#6b8fb5");
-    var warning = cssVar("--color-warning", "#d4a017");
-    Chart.defaults.color = cssVar("--color-base-content", "#222");
-    Chart.defaults.borderColor = "rgba(127, 127, 127, 0.15)";
-    var usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-    var t = JSON.parse(document.getElementById("chart-tuition-money-data").textContent);
-    var segments = [
-      { label: "Collected", value: t.collected, color: success },
-      { label: "Planned, unpaid", value: t.planned, color: info },
-      { label: "Owed, undecided", value: t.owed, color: warning },
-    ];
-    var total = segments.reduce(function (a, s) { return a + s.value; }, 0);
-    new Chart(document.getElementById("chart-tuition-money"), {
-      type: "bar",
-      data: {
-        labels: [""],
-        datasets: segments.map(function (s) {
-          return { label: s.label, data: [s.value], backgroundColor: s.color, borderWidth: 0, barThickness: 26 };
-        }),
-      },
-      options: {
-        indexAxis: "y",
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { stacked: true, beginAtZero: true, display: false, max: total || 1 },
-          y: { stacked: true, display: false },
-        },
-        plugins: {
-          legend: { display: true, position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } },
-          tooltip: { callbacks: { label: function (c) { return c.dataset.label + ": " + usd.format(c.parsed.x); } } },
-        },
-      },
-    });
+    var col = LSPCharts.readJSON("chart-tuition-collected-data");
+    if (col) {
+      LSPCharts.bars("chart-tuition-collected", col.labels,
+        [{ label: "Collected", data: col.totals, color: c.primary }],
+        { currency: true });
+    }
+    var st = LSPCharts.readJSON("chart-tuition-status-data");
+    if (st) {
+      LSPCharts.bars("chart-tuition-status", st.labels, [
+        { label: "Paid in full", data: st.paid_in_full, color: c.success },
+        { label: "Payment plan", data: st.payment_plan, color: c.info },
+        { label: "Committed", data: st.committed, color: c.warning },
+        { label: "Skipping", data: st.skipping, color: c.neutral },
+      ], { stacked: true });
+    }
   })();
 </script>
-{% endif %}
 {% endblock %}

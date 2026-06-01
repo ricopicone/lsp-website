@@ -1416,3 +1416,85 @@ def test_tuition_context_money_buckets(current_period):
     assert ctx["tuition_committed_remaining"] == full - paid
     assert ctx["tuition_undecided_owed"] == full  # one undecided in-training student
     assert ctx["tuition_outstanding"] == (full - paid) + full
+
+
+# --- Longitudinal + per-year drill-down ---------------------------------
+
+
+@pytest.mark.django_db
+def test_tuition_longitudinal_aggregates_per_year(current_period):
+    """_treasurer_tuition_longitudinal rolls up collected + status counts per AY."""
+    from payments.models import Payment
+    from payments.views import _treasurer_tuition_longitudinal
+
+    past = TuitionPeriod.objects.create(
+        name="AY past", slug="ay-past-tuition",
+        start_date=date(2000, 9, 1), decision_due_date=date(2000, 8, 31),
+        end_date=date(2001, 8, 31), tuition_amount=Decimal("1000"),
+    )
+    u = _mk_candidate(email="long@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=past, status=TuitionEnrollment.Status.PAID_IN_FULL,
+    )
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1, due_date=past.start_date, amount=Decimal("1000"),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("1000"),
+        status=Payment.Status.SUCCEEDED, tuition_installment=inst,
+    )
+
+    ctx = _treasurer_tuition_longitudinal()
+    rows = {r["period"].slug: r for r in ctx["tuition_year_rows"]}
+    assert rows["ay-past-tuition"]["collected"] == Decimal("1000")
+    assert rows["ay-past-tuition"]["paid_in_full"] == 1
+    assert rows["ay-past-tuition"]["enrolled"] == 1
+    # Both periods represented; current AY present with zero collected.
+    assert current_period.slug in rows
+
+
+@pytest.mark.django_db
+def test_tuition_context_past_year_hides_forward_looking(current_period):
+    """Selecting a past period returns retrospective facts only — no live
+    in-training roster, no reconciliation queue."""
+    from payments.models import Payment
+    from payments.views import _treasurer_tuition_context
+
+    past = TuitionPeriod.objects.create(
+        name="AY past2", slug="ay-past2-tuition",
+        start_date=date(2001, 9, 1), decision_due_date=date(2001, 8, 31),
+        end_date=date(2002, 8, 31), tuition_amount=Decimal("1000"),
+    )
+    u = _mk_candidate(email="past@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=past, status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1, due_date=past.start_date, amount=Decimal("400"),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("400"),
+        status=Payment.Status.SUCCEEDED, tuition_installment=inst,
+    )
+
+    ctx = _treasurer_tuition_context(past)
+    assert ctx["tuition_is_current"] is False
+    assert ctx["tuition_in_training_count"] == 0
+    assert ctx["tuition_reconciliation_users"] == []
+    assert ctx["tuition_undecided_owed"] == Decimal("0")
+    assert ctx["tuition_total_collected"] == Decimal("400")
+    assert ctx["tuition_committed_remaining"] == Decimal("600")  # 1000 - 400
+    assert len(ctx["tuition_enrollment_rows"]) == 1
+
+
+def test_treasurer_tuition_year_selector_loads_past(client, staff_user, current_period):
+    """?year=<slug> renders the selected past year."""
+    TuitionPeriod.objects.create(
+        name="AY 1999", slug="ay-1999-tuition",
+        start_date=date(1999, 9, 1), decision_due_date=date(1999, 8, 31),
+        end_date=date(2000, 8, 31), tuition_amount=Decimal("1000"),
+    )
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_tuition") + "?year=ay-1999-tuition")
+    assert resp.status_code == 200
+    assert b"AY 1999" in resp.content

@@ -112,62 +112,22 @@
 <script id="chart-dues-money-data" type="application/json">{{ chart_dues_money_json|safe }}</script>
 <script>
   (function () {
-    function cssVar(name, fallback) {
-      var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-      return v || fallback;
+    var c = LSPCharts.colors();
+    var t = LSPCharts.readJSON("chart-tuition-money-data");
+    if (t) {
+      LSPCharts.moneyBar("chart-tuition-money", [
+        { label: "Collected", value: t.collected, color: c.success },
+        { label: "Planned, unpaid", value: t.planned, color: c.info },
+        { label: "Owed, undecided", value: t.owed, color: c.warning },
+      ]);
     }
-    var success = cssVar("--color-success", "#5f8a5f");
-    var info = cssVar("--color-info", "#6b8fb5");
-    var warning = cssVar("--color-warning", "#d4a017");
-    var baseContent = cssVar("--color-base-content", "#222");
-    Chart.defaults.color = baseContent;
-    Chart.defaults.borderColor = "rgba(127, 127, 127, 0.15)";
-
-    var usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-
-    // A compact single-row horizontal stacked bar showing dollar segments.
-    function moneyBar(canvasId, segments) {
-      var el = document.getElementById(canvasId);
-      if (!el) return;
-      var total = segments.reduce(function (a, s) { return a + s.value; }, 0);
-      new Chart(el, {
-        type: "bar",
-        data: {
-          labels: [""],
-          datasets: segments.map(function (s) {
-            return { label: s.label, data: [s.value], backgroundColor: s.color, borderWidth: 0, barThickness: 22 };
-          }),
-        },
-        options: {
-          indexAxis: "y",
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { stacked: true, beginAtZero: true, display: false, max: total || 1 },
-            y: { stacked: true, display: false },
-          },
-          plugins: {
-            legend: { display: true, position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } },
-            tooltip: {
-              callbacks: { label: function (c) { return c.dataset.label + ": " + usd.format(c.parsed.x); } },
-            },
-          },
-        },
-      });
+    var d = LSPCharts.readJSON("chart-dues-money-data");
+    if (d) {
+      LSPCharts.moneyBar("chart-dues-money", [
+        { label: "Collected", value: d.collected, color: c.success },
+        { label: "Outstanding", value: d.outstanding, color: c.warning },
+      ]);
     }
-
-    var t = JSON.parse(document.getElementById("chart-tuition-money-data").textContent);
-    moneyBar("chart-tuition-money", [
-      { label: "Collected", value: t.collected, color: success },
-      { label: "Planned, unpaid", value: t.planned, color: info },
-      { label: "Owed, undecided", value: t.owed, color: warning },
-    ]);
-
-    var d = JSON.parse(document.getElementById("chart-dues-money-data").textContent);
-    moneyBar("chart-dues-money", [
-      { label: "Collected", value: d.collected, color: success },
-      { label: "Outstanding", value: d.outstanding, color: warning },
-    ]);
   })();
 </script>
 {% endblock %}
