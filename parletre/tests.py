@@ -301,6 +301,33 @@ def test_index_summarises_workgroup_channels_under_your_groups(client):
 
 
 @pytest.mark.django_db
+def test_private_chats_listed_under_your_spaces(client):
+    """Private chats appear in the "Your groups & private chats" section (with a
+    type badge), not in the board's category listing."""
+    member = make_user("m@x.co", role=Role.ANALYST)
+    regular = make_channel("plans", kind=Channel.Kind.CHAT, access=Access.PRIVATE)
+    regular.members.add(member)
+    poof = make_channel(
+        "poof", kind=Channel.Kind.CHAT, access=Access.PRIVATE, message_ttl_seconds=3600
+    )
+    poof.members.add(member)
+
+    client.force_login(member)
+    body = client.get(reverse("parletre:index")).content.decode()
+    assert "Your groups &amp; private chats" in body
+    assert regular.get_absolute_url() in body and poof.get_absolute_url() in body
+    assert "Private chat" in body          # regular chat badge
+    assert "Disappearing chat" in body     # ephemeral chat badge
+
+    # someone not in the chats sees neither them nor the section.
+    outsider = make_user("out@x.co", role=Role.ANALYST)
+    client.force_login(outsider)
+    body = client.get(reverse("parletre:index")).content.decode()
+    assert regular.get_absolute_url() not in body
+    assert "Your groups" not in body
+
+
+@pytest.mark.django_db
 def test_inaccessible_channel_404s_rather_than_revealing(client):
     make_channel("hush", access=Access.PRIVATE)
     member = make_user("m@x.co", role=Role.ANALYST)

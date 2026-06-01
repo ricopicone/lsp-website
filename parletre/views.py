@@ -176,12 +176,16 @@ def index(request):
     # cartels / committees / seminars without listing their channels here.
     unread = unread_channel_ids(request.user, visible)
 
-    # The board lists only school-wide channels. A workgroup's forum + chat are
-    # private to the group and live on its Workspace page (Groups → the group →
-    # Discuss / Chat); we summarise them under "Your groups" instead of mixing
-    # every group's channels into the board.
-    general = [c for c in visible if c.access != Channel.Access.WORKGROUP]
+    # The board lists only school-wide channels. A member's own spaces — each
+    # workgroup's forum + chat (private to the group, reached via its Workspace)
+    # and their private chats — are summarised under "Your groups & private
+    # chats" instead of being mixed into the board's category listing.
+    general = [
+        c for c in visible
+        if c.access not in (Channel.Access.WORKGROUP, Channel.Access.PRIVATE)
+    ]
     wg_channels = [c for c in visible if c.access == Channel.Access.WORKGROUP]
+    private_chats = [c for c in visible if c.access == Channel.Access.PRIVATE]
 
     # Group into categories, preserving order; uncategorised last.
     groups: list[tuple[str, list[Channel]]] = []
@@ -197,15 +201,15 @@ def index(request):
             groups.append((label, bucket))
         seen[key].append(channel)
 
-    my_groups = _my_groups(wg_channels, unread)
+    my_spaces = _my_spaces(wg_channels, private_chats, unread)
 
     return render(
         request,
         "parletre/index.html",
         {
             "groups": groups,
-            "my_groups": my_groups,
-            "any_channels": bool(general) or bool(my_groups),
+            "my_spaces": my_spaces,
+            "any_channels": bool(general) or bool(my_spaces),
         },
     )
 
@@ -220,10 +224,11 @@ _KIND_ORDER = {
 }
 
 
-def _my_groups(wg_channels, unread):
-    """Collapse the member's visible workgroup channels into one entry per
-    group — name, kind, and whether any of its channels has unread activity —
-    for the "Your groups" links on the board. Sorted by kind then name."""
+def _my_spaces(wg_channels, private_chats, unread):
+    """The member's own spaces for the "Your groups & private chats" section:
+    one tile per workgroup (its forum + chat collapsed) plus one per private
+    chat. Each tile is ``{url, name, label, is_unread}``; groups first (by
+    kind, then name), then private chats (by name)."""
     by_group: dict[int, dict] = {}
     for channel in wg_channels:
         wg = channel.workgroup
@@ -231,14 +236,33 @@ def _my_groups(wg_channels, unread):
             continue
         entry = by_group.get(wg.id)
         if entry is None:
-            entry = {"workgroup": wg, "is_unread": False}
+            entry = {"wg": wg, "is_unread": False}
             by_group[wg.id] = entry
         if channel.id in unread:
             entry["is_unread"] = True
-    return sorted(
-        by_group.values(),
-        key=lambda e: (_KIND_ORDER.get(e["workgroup"].kind, 99), e["workgroup"].name),
-    )
+
+    group_tiles = [
+        {
+            "url": e["wg"].get_absolute_url(),
+            "name": e["wg"].name,
+            "label": e["wg"].get_kind_display(),
+            "is_unread": e["is_unread"],
+        }
+        for e in sorted(
+            by_group.values(),
+            key=lambda e: (_KIND_ORDER.get(e["wg"].kind, 99), e["wg"].name),
+        )
+    ]
+    chat_tiles = [
+        {
+            "url": c.get_absolute_url(),
+            "name": c.name,
+            "label": "Disappearing chat" if c.is_ephemeral else "Private chat",
+            "is_unread": c.id in unread,
+        }
+        for c in sorted(private_chats, key=lambda c: c.name.lower())
+    ]
+    return group_tiles + chat_tiles
 
 
 @login_required
