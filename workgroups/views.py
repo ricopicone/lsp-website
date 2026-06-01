@@ -119,6 +119,8 @@ def workgroup_detail(request, slug):
         tabs.append(("chat", "Chat"))
     if wg.has_works and can_view:
         tabs.append(("work", "Work"))
+    if wg.has_tasks and is_member:
+        tabs.append(("tasks", "Tasks"))
     if is_member:
         tabs.append(("settings", "Settings"))
     tab_keys = [k for k, _ in tabs]
@@ -158,6 +160,8 @@ def workgroup_detail(request, slug):
         )
         context["works_released"] = [w for w in works if not w.in_progress]
         context["works_in_progress"] = [w for w in works if w.in_progress]
+    elif active == "tasks" and wg.has_tasks and is_member:
+        context["tasks"] = list(wg.tasks.select_related("assignee"))
     elif active == "settings" and is_member:
         from .forms import WorkgroupDatesForm
 
@@ -179,3 +183,53 @@ def workgroup_update_dates(request, slug):
     if form.is_valid():
         form.save()
     return redirect(f"{wg.get_absolute_url()}?tab=settings")
+
+
+def _member_or_404(request, slug):
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not wg.is_member(request.user):
+        raise Http404
+    return wg
+
+
+@login_required
+@require_POST
+def task_add(request, slug):
+    """A member adds a task (Tasks tab)."""
+    wg = _member_or_404(request, slug)
+    from .models import WorkgroupMembership, WorkgroupTask
+
+    title = (request.POST.get("title") or "").strip()[:255]
+    if title:
+        assignee = None
+        aid = request.POST.get("assignee")
+        if aid:
+            m = WorkgroupMembership.objects.filter(
+                workgroup=wg, user_id=aid, end_date__isnull=True
+            ).first()
+            assignee = m.user if m else None
+        WorkgroupTask.objects.create(
+            workgroup=wg, title=title, assignee=assignee, created_by=request.user
+        )
+    return redirect(f"{wg.get_absolute_url()}?tab=tasks")
+
+
+@login_required
+@require_POST
+def task_toggle(request, slug, pk):
+    wg = _member_or_404(request, slug)
+    from .models import WorkgroupTask
+
+    task = get_object_or_404(WorkgroupTask, pk=pk, workgroup=wg)
+    task.set_done(not task.done)
+    return redirect(f"{wg.get_absolute_url()}?tab=tasks")
+
+
+@login_required
+@require_POST
+def task_delete(request, slug, pk):
+    wg = _member_or_404(request, slug)
+    from .models import WorkgroupTask
+
+    WorkgroupTask.objects.filter(pk=pk, workgroup=wg).delete()
+    return redirect(f"{wg.get_absolute_url()}?tab=tasks")

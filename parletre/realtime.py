@@ -16,16 +16,25 @@ def chat_group(channel_id: int) -> str:
     return f"parletre_chat_{channel_id}"
 
 
+def _author_name(user) -> str:
+    return (user.get_full_name() or user.email) if user else "(removed)"
+
+
 def message_payload(post) -> dict:
-    author = "(removed)"
-    if post.author:
-        author = post.author.get_full_name() or post.author.email
+    reply_to = None
+    if post.reply_to_id:
+        reply_to = {
+            "id": post.reply_to_id,
+            "author": _author_name(post.reply_to.author),
+            "excerpt": post.reply_to.excerpt,
+        }
     return {
         "type": "chat.message",  # → ChatConsumer.chat_message
         "id": post.id,
-        "author": author,
+        "author": _author_name(post.author),
         "body_html": str(post.body_html),
         "created": post.created_at.isoformat(),
+        "reply_to": reply_to,
     }
 
 

@@ -20,4 +20,7 @@ urlpatterns = [
          name="kind_reading_groups"),
     path("<slug:slug>/", views.workgroup_detail, name="detail"),
     path("<slug:slug>/dates/", views.workgroup_update_dates, name="update_dates"),
+    path("<slug:slug>/tasks/add/", views.task_add, name="task_add"),
+    path("<slug:slug>/tasks/<int:pk>/toggle/", views.task_toggle, name="task_toggle"),
+    path("<slug:slug>/tasks/<int:pk>/delete/", views.task_delete, name="task_delete"),
 ]

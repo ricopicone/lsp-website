@@ -17,6 +17,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
@@ -271,6 +272,39 @@ class WorkgroupMembership(models.Model):
     @property
     def is_active(self) -> bool:
         return self.end_date is None
+
+
+class WorkgroupTask(models.Model):
+    """A simple shared to-do for a workgroup's Tasks tab (has_tasks)."""
+
+    workgroup = models.ForeignKey(
+        Workgroup, on_delete=models.CASCADE, related_name="tasks"
+    )
+    title = models.CharField(max_length=255)
+    done = models.BooleanField(default=False)
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="assigned_workgroup_tasks",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="created_workgroup_tasks",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("done", "-created_at")
+
+    def __str__(self) -> str:
+        return self.title
+
+    def set_done(self, value: bool):
+        self.done = bool(value)
+        self.completed_at = timezone.now() if value else None
+        self.save(update_fields=["done", "completed_at"])
 
 
 def build_workgroup(kind, *, name, **kwargs):

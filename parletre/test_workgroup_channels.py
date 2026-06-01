@@ -142,3 +142,22 @@ def test_lsp_staff_channel_gated_by_designation():
     StaffRole.objects.get(key=StaffRole.LSP_STAFF).holders.add(staffer)
     assert channel_visible(ch, staffer) is True
     assert channel_visible(ch, plain) is False
+
+
+def test_message_payload_includes_reply_context():
+    """Realtime reply: the broadcast payload carries the parent's author +
+    excerpt so live clients render the reply context (no refresh)."""
+    from parletre.models import Post
+    from parletre.realtime import message_payload
+
+    wg = _wg(name="Realtime Cartel")
+    chat = wg.channels.get(kind="chat")
+    author = _user("a@x.test")
+    parent = Post.objects.create(channel=chat, author=author, body="the parent message")
+    reply = Post.objects.create(channel=chat, author=author, body="a reply", reply_to=parent)
+
+    payload = message_payload(reply)
+    assert payload["id"] == reply.id
+    assert payload["reply_to"]["id"] == parent.id
+    assert payload["reply_to"]["author"]  # parent author name present
+    assert message_payload(parent)["reply_to"] is None

@@ -22,9 +22,38 @@
   var attachBtn = form ? form.querySelector("[data-attach]") : null;
   var attachSummary = form ? form.querySelector("[data-attach-summary]") : null;
   var presenceEl = document.querySelector("[data-chat-presence]");
+  var replyField = form ? form.querySelector("[name=reply_to]") : null;
+  var replyBanner = form ? form.querySelector("[data-reply-banner]") : null;
+  var replyName = replyBanner ? replyBanner.querySelector("[data-reply-name]") : null;
   var proto = location.protocol === "https:" ? "wss" : "ws";
   var online = 0;
   var ws;
+
+  function setReply(id, author) {
+    if (!replyField) return;
+    replyField.value = id;
+    if (replyBanner) replyBanner.hidden = false;
+    if (replyName) replyName.textContent = author || "";
+    if (input) input.focus();
+  }
+  function clearReply() {
+    if (replyField) replyField.value = "";
+    if (replyBanner) replyBanner.hidden = true;
+  }
+  // Client-side reply: intercept Reply links (server-rendered + live-appended)
+  // and the cancel button — set the composer instead of reloading.
+  document.addEventListener("click", function (e) {
+    var link = e.target.closest("[data-reply-to]");
+    if (link) {
+      e.preventDefault();
+      setReply(link.getAttribute("data-reply-to"), link.getAttribute("data-reply-author"));
+      return;
+    }
+    if (e.target.closest("[data-reply-cancel]")) {
+      e.preventDefault();
+      clearReply();
+    }
+  });
 
   function replyHref(id) {
     // Preserve the current query (e.g. ?tab=chat when embedded) + add reply_to.
@@ -48,6 +77,17 @@
     t.textContent = "just now";
     t.dateTime = d.created;
     wrap.querySelector("[data-body]").innerHTML = d.body_html;
+    // "In reply to …" context line above the body.
+    if (d.reply_to) {
+      var rc = document.createElement("a");
+      rc.className =
+        "flex items-center gap-1 text-xs text-base-content/50 border-l-2 " +
+        "border-base-300 pl-2 mb-1 hover:text-primary truncate";
+      rc.href = "#post-" + d.reply_to.id;
+      rc.textContent = "↩ " + d.reply_to.author + ": " + d.reply_to.excerpt;
+      var flex = wrap.querySelector(".flex-1");
+      flex.insertBefore(rc, flex.querySelector("[data-body]"));
+    }
     // Give live messages a Reply control immediately (no refresh needed);
     // edit/delete/react render server-side on the next load.
     if (form) {
@@ -57,6 +97,8 @@
       reply.className = "hover:text-primary";
       reply.textContent = "Reply";
       reply.href = replyHref(d.id);
+      reply.setAttribute("data-reply-to", d.id);
+      reply.setAttribute("data-reply-author", d.author);
       actions.appendChild(reply);
       wrap.querySelector(".flex-1").appendChild(actions);
     }
@@ -112,13 +154,14 @@
     form.addEventListener("submit", function (e) {
       if (!ws || ws.readyState !== 1) return; // fall back to a normal POST
       if (fileInput && fileInput.files && fileInput.files.length) return; // multipart POST
-      var replyField = form.querySelector("[name=reply_to]");
-      if (replyField && replyField.value) return; // replies POST so reply_to + context are saved/rendered
       var body = input.value.trim();
       if (!body) { e.preventDefault(); return; }
       e.preventDefault();
-      ws.send(JSON.stringify({ body: body }));
+      var msg = { body: body };
+      if (replyField && replyField.value) msg.reply_to = replyField.value;  // realtime reply
+      ws.send(JSON.stringify(msg));
       input.value = "";
+      clearReply();
       autogrow();
     });
   }

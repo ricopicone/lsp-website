@@ -53,7 +53,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         body = (content.get("body") or "").strip()[:MAX_BODY]
         if not body:
             return
-        payload = await self._create_post(body)
+        payload = await self._create_post(body, content.get("reply_to"))
         if payload is not None:
             await self.channel_layer.group_send(self.group, payload)
 
@@ -67,6 +67,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "author": event["author"],
                 "body_html": event["body_html"],
                 "created": event["created"],
+                "reply_to": event.get("reply_to"),
             }
         )
 
@@ -86,10 +87,17 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         return channel_visible(self.channel_obj, self.user)
 
     @database_sync_to_async
-    def _create_post(self, body):
+    def _create_post(self, body, reply_to_id=None):
         if not channel_can_post(self.channel_obj, self.user):
             return None
-        post = Post.objects.create(channel=self.channel_obj, author=self.user, body=body)
+        reply_to = None
+        if reply_to_id:
+            reply_to = Post.objects.filter(
+                pk=reply_to_id, channel=self.channel_obj
+            ).first()
+        post = Post.objects.create(
+            channel=self.channel_obj, author=self.user, body=body, reply_to=reply_to
+        )
         notify_post(post)
         return message_payload(post)
 

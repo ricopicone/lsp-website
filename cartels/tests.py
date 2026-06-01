@@ -473,6 +473,49 @@ def test_chat_reply_honored_inline_and_returns_via_next(client):
     assert Post.objects.filter(channel=chat, reply_to=post).exists()
 
 
+def test_tasks_tab_add_toggle_delete(client):
+    from workgroups.models import WorkgroupTask
+
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")   # cartel seed has has_tasks=True
+    cartel.approve(_pc_member())
+    wg = cartel.workgroup
+    client.force_login(gen)
+
+    # Tasks tab is offered to a member
+    resp = client.get(wg.get_absolute_url())
+    assert b"tab=tasks" in resp.content
+
+    # add
+    client.post(f"/groups/{wg.slug}/tasks/add/", {"title": "Read Écrits", "assignee": gen.pk})
+    task = WorkgroupTask.objects.get(workgroup=wg)
+    assert task.title == "Read Écrits" and task.assignee == gen and not task.done
+
+    # toggle done
+    client.post(f"/groups/{wg.slug}/tasks/{task.pk}/toggle/")
+    task.refresh_from_db()
+    assert task.done and task.completed_at is not None
+
+    # the tab renders the task
+    resp = client.get(f"{wg.get_absolute_url()}?tab=tasks")
+    assert b"Read \xc3\x89crits" in resp.content
+
+    # delete
+    client.post(f"/groups/{wg.slug}/tasks/{task.pk}/delete/")
+    assert not WorkgroupTask.objects.filter(pk=task.pk).exists()
+
+
+def test_tasks_endpoints_gated_to_members(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_pc_member())
+    wg = cartel.workgroup
+    client.force_login(_member("outsider@x.test"))   # not a member
+    assert client.post(f"/groups/{wg.slug}/tasks/add/", {"title": "x"}).status_code == 404
+    resp = client.get(wg.get_absolute_url())
+    assert b"tab=tasks" not in resp.content
+
+
 def test_proposed_cartel_hidden_from_other_members_on_kind_list(client):
     gen = _member("gen@x.test")
     Cartel.objects.propose(generator=gen, name="Secret Proposal")
