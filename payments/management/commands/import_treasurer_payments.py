@@ -313,6 +313,18 @@ class Command(BaseCommand):
         slug = f"ay-{ds.ay_start}-{ds.ay_start + 1}-tuition"
         period = TuitionPeriod.objects.filter(slug=slug).first()
         if period:
+            # A period created ahead of time by the cron inherits the prior
+            # year's amount, which may not match this year's actual tuition.
+            # The ledger's dataset amount is authoritative — reconcile it.
+            if ds.tuition_amount and period.tuition_amount != ds.tuition_amount:
+                old = period.tuition_amount
+                self.stdout.write(self.style.WARNING(
+                    f"  {period.name} tuition_amount ${old} != ledger ${ds.tuition_amount}"
+                    + ("; updating." if commit else "; would update.")
+                ))
+                if commit:
+                    period.tuition_amount = ds.tuition_amount
+                    period.save(update_fields=["tuition_amount"])
             return period
         if not commit:
             self.stdout.write(f"  would create TuitionPeriod {slug} (${ds.tuition_amount})")

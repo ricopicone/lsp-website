@@ -247,6 +247,21 @@ def test_commit_is_idempotent(source_dir, roster_db):
     assert TuitionInstallment.objects.count() == n_inst
 
 
+def test_reconciles_preexisting_period_amount(source_dir, roster_db):
+    # A period created ahead of time (e.g. by the cron, inheriting the prior
+    # year's amount) gets its tuition_amount corrected to the ledger's value.
+    from datetime import date as _date
+    TuitionPeriod.objects.create(
+        name="AY 2024–2025", slug="ay-2024-2025-tuition",
+        start_date=_date(2024, 9, 1), decision_due_date=_date(2024, 8, 31),
+        end_date=_date(2025, 8, 31), tuition_amount=Decimal("999"),
+    )
+    call_command("import_treasurer_payments", "--source-dir", str(source_dir),
+                 "--datasets", "tuition-24-25", "--commit", stdout=StringIO())
+    period = TuitionPeriod.objects.get(slug="ay-2024-2025-tuition")
+    assert period.tuition_amount == Decimal("2000")
+
+
 def test_commit_dues_and_donation(source_dir, roster_db):
     call_command("import_treasurer_payments", "--source-dir", str(source_dir),
                  "--datasets", "dues-24-25", "--commit", stdout=StringIO())
