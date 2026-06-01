@@ -20,4 +20,19 @@ urlpatterns = [
         views.cancel_registration,
         name="cancel",
     ),
+    path(
+        "registrations/<int:reg_id>/pay/",
+        views.pay_registration,
+        name="pay",
+    ),
+    path(
+        "registrations/<int:reg_id>/approve/",
+        views.approve_registration,
+        name="approve",
+    ),
+    path(
+        "registrations/<int:reg_id>/decline/",
+        views.decline_registration,
+        name="decline",
+    ),
 ]

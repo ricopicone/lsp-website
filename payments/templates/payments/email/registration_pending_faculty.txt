@@ -1,0 +1,17 @@
+Hello,
+
+{{ registration.user.get_full_name|default:registration.user.email }} has requested
+to register for "{{ event.title }}" and is awaiting your approval.
+
+Tier:    {{ registration.price_tier.get_audience_display }}
+Amount:  ${{ registration.quoted_amount }}
+{% if registration.quoted_explanation %}Note:    {{ registration.quoted_explanation }}
+{% endif %}
+Approve or decline here:
+{{ tools_url }}
+
+Once you approve, the registrant is asked to complete payment (if any is due).
+
+Questions? Reply to this email — it goes to {{ support_email }}.
+
+— Lacanian School of Psychoanalysis

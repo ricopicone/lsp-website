@@ -5,14 +5,17 @@ from __future__ import annotations
 from django.conf import settings
 from django.db import models, transaction
 from django.db.models import F
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 
 class Registration(models.Model):
     class Status(models.TextChoices):
+        PENDING_APPROVAL = "pending_approval", _("Pending faculty approval")
         AWAITING_PAYMENT = "awaiting_payment", _("Awaiting payment")
         PAID = "paid", _("Paid")
         COMPED = "comped", _("Comped")
+        DECLINED = "declined", _("Declined by faculty")
         CANCELLED = "cancelled", _("Cancelled")
         REFUNDED = "refunded", _("Refunded")
 
@@ -64,6 +67,20 @@ class Registration(models.Model):
         blank=True,
         help_text="Manual override notes (REG-14).",
     )
+    # Faculty-approval flow (for events with requires_faculty_approval).
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="registration_decisions",
+        help_text="Faculty member who approved / declined this registration.",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decline_reason = models.TextField(blank=True)
+    #: When we last emailed a reminder for this reg's current state (faculty
+    #: approval reminder while PENDING_APPROVAL; payment reminder while an
+    #: approved AWAITING_PAYMENT). Reset on each state transition.
+    reminded_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -76,7 +93,7 @@ class Registration(models.Model):
             models.UniqueConstraint(
                 fields=("user", "event"),
                 condition=~models.Q(
-                    status__in=("cancelled", "refunded")
+                    status__in=("cancelled", "refunded", "declined")
                 ),
                 name="registrations_one_active_per_user_event",
             ),
@@ -139,3 +156,48 @@ class Registration(models.Model):
                 ).update(uses_remaining=F("uses_remaining") + 1)
 
         return refund
+
+    @property
+    def needs_payment(self) -> bool:
+        """Approved (or normal) but unpaid — a Stripe payment is still due."""
+        return self.status == self.Status.AWAITING_PAYMENT and self.quoted_amount > 0
+
+    @transaction.atomic
+    def approve(self, by):
+        """Faculty approves a pending registration. Consumes the pricing code
+        (if any), then moves to PAID ($0 / covered) or AWAITING_PAYMENT.
+        Returns True if a transition happened."""
+        if self.status != self.Status.PENDING_APPROVAL:
+            return False
+        if self.pricing_code_id:
+            from events.models import PricingCode
+            PricingCode.objects.filter(
+                pk=self.pricing_code_id, max_uses__isnull=False,
+            ).update(uses_remaining=F("uses_remaining") - 1)
+        self.approved_by = by
+        self.decided_at = timezone.now()
+        self.reminded_at = None
+        self.status = (
+            self.Status.PAID if self.quoted_amount <= 0
+            else self.Status.AWAITING_PAYMENT
+        )
+        self.save(update_fields=(
+            "approved_by", "decided_at", "reminded_at", "status",
+        ))
+        return True
+
+    @transaction.atomic
+    def decline(self, by, reason=""):
+        """Faculty declines a pending registration. No code/payment side-effects
+        (the code was never consumed). Returns True if a transition happened."""
+        if self.status != self.Status.PENDING_APPROVAL:
+            return False
+        self.approved_by = by
+        self.decided_at = timezone.now()
+        self.decline_reason = reason
+        self.reminded_at = None
+        self.status = self.Status.DECLINED
+        self.save(update_fields=(
+            "approved_by", "decided_at", "decline_reason", "reminded_at", "status",
+        ))
+        return True

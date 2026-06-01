@@ -1,0 +1,18 @@
+{{ registration.user.first_name|default:"Hello" }},
+
+Good news — your registration for "{{ registration.event.title }}" has been
+approved by the faculty.
+
+One step remains: please complete your payment to confirm your place.
+
+Amount due:  ${{ registration.quoted_amount }}
+
+Complete your registration here:
+{{ confirm_url }}
+
+Your place isn't held until payment is complete, so please pay at your earliest
+convenience.
+
+Questions? Reply to this email — it goes to {{ support_email }}.
+
+— Lacanian School of Psychoanalysis

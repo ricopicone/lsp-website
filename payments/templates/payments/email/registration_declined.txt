@@ -1,0 +1,12 @@
+{{ registration.user.first_name|default:"Hello" }},
+
+Thank you for your interest in "{{ registration.event.title }}". After review,
+the faculty were unable to approve your registration at this time.
+{% if registration.decline_reason %}
+Note from the faculty:
+{{ registration.decline_reason }}
+{% endif %}
+If you have questions, reply to this email — it goes to {{ support_email }}, and
+we'll make sure the faculty hear from you.
+
+— Lacanian School of Psychoanalysis

@@ -86,6 +86,7 @@ class ProgramEventForm(forms.ModelForm):
             "start_date", "end_date",
             "format", "status",
             "description", "access_info",
+            "requires_faculty_approval",
         )
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),

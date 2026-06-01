@@ -195,9 +195,14 @@ def event_detail(request, slug: str):
         **event_summary_context(event, request.user),
     }
     if show_faculty_view:
+        from registrations.models import Registration
+
         context["registrations"] = event.registrations.select_related(
             "user", "price_tier"
         ).order_by("created_at")
+        context["pending_registrations"] = event.registrations.filter(
+            status=Registration.Status.PENDING_APPROVAL
+        ).select_related("user")
         context["pricing_code_form"] = PricingCodeForm()
         context["existing_codes"] = event.pricing_codes.order_by("-created_at")
 

@@ -233,10 +233,15 @@ def workgroup_detail(request, slug):
         context.update(event_summary_context(primary_event, request.user))
     elif active == "roster" and can_edit_offering:
         # PROG-8 faculty tooling: registrant roster + pricing-code minting.
+        from registrations.models import Registration
+
         context["event"] = primary_event
         context["registrations"] = primary_event.registrations.select_related(
             "user", "price_tier"
         ).order_by("created_at")
+        context["pending_registrations"] = primary_event.registrations.filter(
+            status=Registration.Status.PENDING_APPROVAL
+        ).select_related("user")
         from events.forms import PricingCodeForm
 
         context["pricing_code_form"] = PricingCodeForm()

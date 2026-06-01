@@ -27,7 +27,13 @@
   {% endif %}
 
   <p class="text-base-content/90">
+    {% if registration.status == "pending_approval" %}
+    Your registration request for <strong>{{ registration.event.title }}</strong> has been received.
+    {% elif registration.status == "declined" %}
+    Registration for <strong>{{ registration.event.title }}</strong>.
+    {% else %}
     You're registered for <strong>{{ registration.event.title }}</strong>.
+    {% endif %}
   </p>
 
   <dl class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-6 gap-y-2 text-sm border-y border-base-300/60 py-5">
@@ -42,30 +48,42 @@
       <span class="badge
         {% if registration.status == 'paid' %}badge-success
         {% elif registration.status == 'comped' %}badge-info
-        {% elif registration.status == 'cancelled' or registration.status == 'refunded' %}badge-ghost
+        {% elif registration.status == 'cancelled' or registration.status == 'refunded' or registration.status == 'declined' %}badge-ghost
         {% else %}badge-warning{% endif %}">
         {{ registration.get_status_display }}
       </span>
     </dd>
   </dl>
 
-  {% if registration.status == "awaiting_payment" %}
-  <div role="alert" class="alert alert-warning">
-    <span>Payment didn't complete. Contact the Web Coordinator to retry or cancel.</span>
+  {% if registration.status == "pending_approval" %}
+  <div role="alert" class="alert alert-info">
+    <span>Your registration is awaiting faculty approval. We'll email you as soon as it's reviewed{% if registration.quoted_amount > 0 %}, and you'll be able to complete payment then{% endif %}.</span>
   </div>
+  {% elif registration.needs_payment %}
+  <div role="alert" class="alert alert-warning">
+    <span>{% if registration.decided_at %}Your registration was approved — complete payment to confirm your place.{% else %}Your place isn't confirmed until payment is complete.{% endif %}</span>
+  </div>
+  <form method="post" action="{% url 'registrations:pay' registration.id %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary btn-lg">Pay ${{ registration.quoted_amount }} →</button>
+  </form>
   {% elif registration.status == "paid" %}
   <p class="text-base-content/80">
     Payment received — you're all set. Access details have been emailed.
   </p>
+  {% elif registration.status == "declined" %}
+  <div role="alert" class="alert">
+    <span>The faculty were unable to approve this registration.{% if registration.decline_reason %} Note: {{ registration.decline_reason }}{% endif %}</span>
+  </div>
   {% endif %}
 
-  {% if registration.status == "awaiting_payment" or registration.status == "paid" %}
+  {% if registration.status == "awaiting_payment" or registration.status == "paid" or registration.status == "pending_approval" %}
   <form method="post"
         action="{% url 'registrations:cancel' registration.id %}"
-        onsubmit="return confirm('{% if registration.status == "paid" %}Cancel this registration and refund your payment?{% else %}Cancel this registration?{% endif %}');">
+        onsubmit="return confirm('{% if registration.status == "paid" %}Cancel this registration and refund your payment?{% elif registration.status == "pending_approval" %}Withdraw this registration request?{% else %}Cancel this registration?{% endif %}');">
     {% csrf_token %}
     <button type="submit" class="btn btn-outline btn-error btn-sm">
-      Cancel registration{% if registration.status == "paid" %} (full refund){% endif %}
+      {% if registration.status == "pending_approval" %}Withdraw request{% else %}Cancel registration{% if registration.status == "paid" %} (full refund){% endif %}{% endif %}
     </button>
   </form>
   {% endif %}

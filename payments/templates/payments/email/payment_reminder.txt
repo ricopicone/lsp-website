@@ -1,0 +1,16 @@
+{{ registration.user.first_name|default:"Hello" }},
+
+Your registration for "{{ registration.event.title }}" was approved, but we
+haven't received your payment yet.
+
+Amount due:  ${{ registration.quoted_amount }}
+
+Complete your registration here:
+{{ confirm_url }}
+
+Your place isn't held until payment is complete. If you no longer wish to
+attend, you can ignore this — or reply to let us know.
+
+Questions? Reply to this email — it goes to {{ support_email }}.
+
+— Lacanian School of Psychoanalysis

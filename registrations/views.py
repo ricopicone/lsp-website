@@ -10,13 +10,21 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import F
-from django.http import Http404
+from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from events.models import Event, PriceTier, PricingCode
-from payments.emails import send_cancellation_email, send_registration_confirmation
+from events.permissions import can_edit_event
+from payments.emails import (
+    send_cancellation_email,
+    send_registration_approved,
+    send_registration_confirmation,
+    send_registration_declined,
+    send_registration_pending_notice,
+)
 from payments.refund import RefundError
 from payments.stripe_checkout import create_checkout_session
 
@@ -61,7 +69,14 @@ def _find_covered_tier(user, event: Event) -> PriceTier | None:
 def _create_registration(
     *, request, event, tier, code, resolution
 ) -> Registration:
+    requires_approval = event.requires_faculty_approval
     with transaction.atomic():
+        if requires_approval:
+            status = Registration.Status.PENDING_APPROVAL
+        elif resolution.amount == Decimal("0"):
+            status = Registration.Status.PAID
+        else:
+            status = Registration.Status.AWAITING_PAYMENT
         reg = Registration.objects.create(
             user=request.user,
             event=event,
@@ -69,13 +84,11 @@ def _create_registration(
             pricing_code=code,
             quoted_amount=resolution.amount,
             quoted_explanation=resolution.explanation,
-            status=(
-                Registration.Status.PAID
-                if resolution.amount == Decimal("0")
-                else Registration.Status.AWAITING_PAYMENT
-            ),
+            status=status,
         )
-        if code and code.max_uses is not None:
+        # Consume the code now only for an immediately-active reg; the approval
+        # flow consumes it on approval (a declined reg shouldn't burn a use).
+        if code and code.max_uses is not None and not requires_approval:
             PricingCode.objects.filter(pk=code.pk).update(
                 uses_remaining=F("uses_remaining") - 1
             )
@@ -170,15 +183,22 @@ def register_for_event(request, event_slug: str):
 
     # --- Tuition-covered short-circuit (REG-4) -----------------------
     if covered_tier and request.method == "POST" and request.POST.get("confirm_covered"):
+        requires_approval = event.requires_faculty_approval
         reg = Registration.objects.create(
             user=request.user,
             event=event,
             price_tier=covered_tier,
             quoted_amount=Decimal("0"),
             quoted_explanation="Covered by tuition (tuition-paying member, REG-4).",
-            status=Registration.Status.PAID,
+            status=(
+                Registration.Status.PENDING_APPROVAL if requires_approval
+                else Registration.Status.PAID
+            ),
         )
-        send_registration_confirmation(reg)
+        if requires_approval:
+            send_registration_pending_notice(reg)
+        else:
+            send_registration_confirmation(reg)
         return redirect("registrations:confirm", reg_id=reg.id)
 
     if covered_tier and request.method == "GET":
@@ -199,6 +219,10 @@ def register_for_event(request, event_slug: str):
                 tier=form.cleaned_data["price_tier"],
                 code=code, resolution=resolution,
             )
+
+            if reg.status == Registration.Status.PENDING_APPROVAL:
+                send_registration_pending_notice(reg)   # notify faculty
+                return redirect("registrations:confirm", reg_id=reg.id)
 
             if reg.quoted_amount == Decimal("0"):
                 send_registration_confirmation(reg)
@@ -281,3 +305,52 @@ def cancel_registration(request, reg_id: int):
     return redirect(
         reverse("registrations:confirm", args=[reg.id]) + "?cancelled=1"
     )
+
+
+def _safe_next(request, fallback: str) -> str:
+    nxt = request.POST.get("next") or ""
+    if nxt and url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return nxt
+    return fallback
+
+
+@login_required
+@require_POST
+def approve_registration(request, reg_id: int):
+    """Faculty approves a pending registration (→ awaiting payment, or paid if
+    $0). Emails the registrant."""
+    reg = get_object_or_404(Registration, pk=reg_id)
+    if not can_edit_event(request.user, reg.event):
+        return HttpResponseForbidden("You can't approve registrations for this event.")
+    if reg.approve(request.user):
+        if reg.needs_payment:
+            send_registration_approved(reg)        # "approved — pay to confirm"
+        else:
+            send_registration_confirmation(reg)    # $0 / covered → confirmed + access
+    return redirect(_safe_next(request, reverse("registrations:confirm", args=[reg.id])))
+
+
+@login_required
+@require_POST
+def decline_registration(request, reg_id: int):
+    """Faculty declines a pending registration. Emails the registrant."""
+    reg = get_object_or_404(Registration, pk=reg_id)
+    if not can_edit_event(request.user, reg.event):
+        return HttpResponseForbidden("You can't decline registrations for this event.")
+    if reg.decline(request.user, (request.POST.get("reason") or "").strip()):
+        send_registration_declined(reg)
+    return redirect(_safe_next(request, reverse("registrations:confirm", args=[reg.id])))
+
+
+@login_required
+@require_POST
+def pay_registration(request, reg_id: int):
+    """The registrant starts (or resumes) Stripe Checkout for an approved /
+    awaiting-payment registration."""
+    reg = get_object_or_404(Registration, pk=reg_id, user=request.user)
+    if not reg.needs_payment:
+        return redirect("registrations:confirm", reg_id=reg.id)
+    _payment, session = create_checkout_session(reg)
+    return redirect(session.url)

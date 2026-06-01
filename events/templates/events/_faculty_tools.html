@@ -3,6 +3,36 @@ CSV, pricing-code minting, existing codes. Shared by the standalone event
 page's faculty view and the seminar Workspace "Roster" tab. Expects: event,
 registrations, pricing_code_form, existing_codes.{% endcomment %}
 <div class="space-y-8">
+  {# Pending approvals (only when the event requires faculty approval) #}
+  {% if pending_registrations %}
+  <div class="space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Pending approvals <span class="text-base-content/60 text-sm font-normal">({{ pending_registrations|length }})</span></h3>
+    <ul class="divide-y divide-base-300/60 rounded-lg border border-base-300">
+      {% for reg in pending_registrations %}
+      <li class="flex flex-wrap items-center justify-between gap-3 p-3">
+        <div class="min-w-0">
+          <p class="text-sm font-medium text-base-content">{{ reg.user.get_full_name|default:reg.user.email }}</p>
+          <p class="text-xs text-base-content/60">{{ reg.price_tier.get_audience_display }} · ${{ reg.quoted_amount }}</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <form method="post" action="{% url 'registrations:approve' reg.id %}" style="display:contents">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button class="btn btn-primary btn-xs">Approve</button>
+          </form>
+          <form method="post" action="{% url 'registrations:decline' reg.id %}" style="display:contents"
+                onsubmit="return confirm('Decline this registration?');">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button class="btn btn-ghost btn-xs text-error">Decline</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
   {# Roster #}
   <div class="space-y-3">
     <div class="flex flex-wrap items-baseline justify-between gap-3">

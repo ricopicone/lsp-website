@@ -1,0 +1,15 @@
+Hello,
+
+A reminder that {{ pending_count }} registration{{ pending_count|pluralize }} for
+"{{ event.title }}" {{ pending_count|pluralize:"is,are" }} still awaiting your
+approval.
+
+Review them here:
+{{ tools_url }}
+
+Registrants can't complete payment until you approve, so a timely review keeps
+things moving for them.
+
+Questions? Reply to this email — it goes to {{ support_email }}.
+
+— Lacanian School of Psychoanalysis

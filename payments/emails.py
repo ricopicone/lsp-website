@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils import timezone
 
 from registrations.models import Registration
@@ -182,6 +183,106 @@ def send_cancellation_email(registration: Registration, refund=None) -> None:
                 "refund_amount": refund_amount,
                 "support_email": settings.SUPPORT_EMAIL,
                 "site_base_url": settings.SITE_BASE_URL,
+            },
+        )
+    _send(subject=subject, body=body, to=[registration.user.email])
+
+
+# --- Faculty-approval flow ----------------------------------------------------
+
+def _faculty_recipients(event) -> list[str]:
+    """Emails of the event's faculty; falls back to support so nothing is lost."""
+    emails = [u.email for u in event.faculty_members() if u.email]
+    return emails or [settings.SUPPORT_EMAIL]
+
+
+def _faculty_tools_url(event) -> str:
+    """Absolute URL to where faculty approve registrations (the Workspace
+    Roster tab for offerings, else the event's faculty view)."""
+    if event.workgroup_id and event.event_type in event.ANNUAL_PROGRAM_TYPES:
+        path = event.workgroup.get_absolute_url() + "?tab=roster"
+    else:
+        path = reverse("events:detail", args=[event.slug]) + "?view=faculty"
+    return settings.SITE_BASE_URL + path
+
+
+def _confirm_url(registration) -> str:
+    return settings.SITE_BASE_URL + reverse(
+        "registrations:confirm", args=[registration.id]
+    )
+
+
+def send_registration_pending_notice(registration: Registration) -> None:
+    """Tell the event's faculty that someone registered and needs approval."""
+    event = registration.event
+    who = registration.user.get_full_name() or registration.user.email
+    subject = f"Approval needed: {who} — {event.title}"
+    body = render_to_string(
+        "payments/email/registration_pending_faculty.txt",
+        {
+            "registration": registration,
+            "event": event,
+            "tools_url": _faculty_tools_url(event),
+            "support_email": settings.SUPPORT_EMAIL,
+        },
+    )
+    _send(subject=subject, body=body, to=_faculty_recipients(event))
+
+
+def send_registration_approved(registration: Registration) -> None:
+    """Tell the registrant their registration was approved and payment is due."""
+    subject = f"Approved — complete your registration: {registration.event.title}"
+    with _recipient_timezone(registration.user):
+        body = render_to_string(
+            "payments/email/registration_approved.txt",
+            {
+                "registration": registration,
+                "confirm_url": _confirm_url(registration),
+                "support_email": settings.SUPPORT_EMAIL,
+            },
+        )
+    _send(subject=subject, body=body, to=[registration.user.email])
+
+
+def send_registration_declined(registration: Registration) -> None:
+    """Tell the registrant their registration was declined."""
+    subject = f"Registration update: {registration.event.title}"
+    with _recipient_timezone(registration.user):
+        body = render_to_string(
+            "payments/email/registration_declined.txt",
+            {
+                "registration": registration,
+                "support_email": settings.SUPPORT_EMAIL,
+            },
+        )
+    _send(subject=subject, body=body, to=[registration.user.email])
+
+
+def send_approval_reminder(event, pending_count: int) -> None:
+    """Remind the event's faculty that registrations await their approval."""
+    subject = f"Reminder: {pending_count} registration(s) await your approval — {event.title}"
+    body = render_to_string(
+        "payments/email/approval_reminder.txt",
+        {
+            "event": event,
+            "pending_count": pending_count,
+            "tools_url": _faculty_tools_url(event),
+            "support_email": settings.SUPPORT_EMAIL,
+        },
+    )
+    _send(subject=subject, body=body, to=_faculty_recipients(event))
+
+
+def send_payment_reminder(registration: Registration) -> None:
+    """Remind an approved registrant to complete payment."""
+    subject = f"Reminder: complete your registration — {registration.event.title}"
+    with _recipient_timezone(registration.user):
+        body = render_to_string(
+            "payments/email/payment_reminder.txt",
+            {
+                "registration": registration,
+                "confirm_url": _confirm_url(registration),
+                "support_email": settings.SUPPORT_EMAIL,
             },
         )
     _send(subject=subject, body=body, to=[registration.user.email])
