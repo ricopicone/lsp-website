@@ -1,0 +1,63 @@
+{% extends "core/base.html" %}
+{% load static parletre_tags %}
+{% block title %}New private chat — Parlêtre{% endblock %}
+{% block extra_head %}<script defer src="{% static 'js/parletre-people-picker.js' %}"></script>{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-5">
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-base-content/70">New private chat</span>
+  </nav>
+
+  <div class="space-y-1">
+    <h1 class="font-serif text-2xl tracking-tight text-base-content">New private chat</h1>
+    <p class="text-sm text-base-content/60 inline-flex items-center gap-1">
+      {% icon "lock" css="text-base-content/50" %}
+      Visible only to the people you add — not staff, not the rest of the school.
+    </p>
+  </div>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div class="space-y-1">
+      <label class="text-sm text-base-content/70" for="{{ form.name.id_for_label }}">Name</label>
+      {{ form.name }}
+      {% if form.name.errors %}<p class="text-error text-sm">{{ form.name.errors|striptags }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label class="text-sm text-base-content/70" for="{{ form.lifetime.id_for_label }}">Messages</label>
+      {{ form.lifetime }}
+      <p class="text-xs text-base-content/40">A disappearing chat blacks out each message once it reaches the chosen age.</p>
+      {% if form.lifetime.errors %}<p class="text-error text-sm">{{ form.lifetime.errors|striptags }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label class="text-sm text-base-content/70">Participants</label>
+      <div class="people-picker"
+           data-search-url="{% url 'parletre:member_search' %}"
+           data-field="participants">
+        <div class="parletre-people" data-people-chips>
+          {% for u in selected %}
+          <span class="parletre-chip" data-id="{{ u.pk }}">
+            {{ u.get_full_name|default:u.email }}
+            <button type="button" data-chip-remove aria-label="Remove">{% icon "x" %}</button>
+            <input type="hidden" name="participants" value="{{ u.pk }}">
+          </span>
+          {% endfor %}
+        </div>
+        <input type="text" class="input input-bordered w-full" data-people-search
+               placeholder="Search members by name…" autocomplete="off">
+      </div>
+      {% if form.participants.errors %}<p class="text-error text-sm">{{ form.participants.errors|striptags }}</p>{% endif %}
+    </div>
+
+    <div class="flex gap-2 justify-end">
+      <a href="{% url 'parletre:index' %}" class="btn btn-ghost btn-sm">Cancel</a>
+      <button type="submit" class="btn btn-primary btn-sm">Create chat</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

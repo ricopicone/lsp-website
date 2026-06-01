@@ -24,6 +24,19 @@
     </div>
     <div class="flex flex-col items-end gap-1">
       {% include "parletre/_subscribe.html" %}
+      {% if channel.access == 'private' and can_moderate %}
+      <a href="{% url 'parletre:manage_participants' channel.slug %}" class="text-xs text-base-content/60 hover:text-primary">Participants</a>
+      {% endif %}
+      {% if can_delete_chat %}
+      <a href="{% url 'parletre:delete_chat' channel.slug %}" class="text-xs text-error/70 hover:text-error">Delete chat</a>
+      {% endif %}
+      {% if can_leave_chat %}
+      <form method="post" action="{% url 'parletre:leave_chat' channel.slug %}"
+            onsubmit="return confirm('Leave this chat? You’ll lose access until someone adds you back.');">
+        {% csrf_token %}
+        <button type="submit" class="text-xs text-error/70 hover:text-error">Leave chat</button>
+      </form>
+      {% endif %}
       <span class="text-xs text-success" data-chat-presence aria-live="polite"></span>
     </div>
   </header>

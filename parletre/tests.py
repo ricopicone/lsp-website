@@ -309,6 +309,175 @@ def test_inaccessible_channel_404s_rather_than_revealing(client):
     assert resp.status_code == 404
 
 
+# ---- member-created private chats ---------------------------------------
+
+
+@pytest.mark.django_db
+def test_member_creates_regular_private_chat(client):
+    creator = make_user("c@x.co", role=Role.ANALYST, first="Cara", last="Creator")
+    other = make_user("o@x.co", role=Role.ANALYST, first="Otto", last="Other")
+    outsider = make_user("out@x.co", role=Role.ANALYST)
+    client.force_login(creator)
+
+    # the form page renders
+    get = client.get(reverse("parletre:create_private_chat"))
+    assert get.status_code == 200 and b"New private chat" in get.content
+
+    resp = client.post(
+        reverse("parletre:create_private_chat"),
+        {"name": "Secret Plans", "lifetime": "", "participants": [other.pk]},
+    )
+    chan = Channel.objects.get(name="Secret Plans")
+    assert resp.status_code == 302 and resp.url == chan.get_absolute_url()
+    assert chan.kind == Channel.Kind.CHAT
+    assert chan.access == Access.PRIVATE
+    assert chan.message_ttl_seconds is None and not chan.is_ephemeral
+    assert set(chan.members.all()) == {creator, other}
+    assert creator in chan.moderators.all()
+    # visibility follows the private-channel rules: members only.
+    assert chan.visible_to(creator) and chan.visible_to(other)
+    assert not chan.visible_to(outsider)
+    # DM-style: both members are subscribed so they're notified of messages.
+    assert Subscription.objects.filter(channel=chan, user=other).exists()
+
+
+@pytest.mark.django_db
+def test_member_creates_disappearing_chat(client):
+    creator = make_user("c@x.co", role=Role.ANALYST)
+    other = make_user("o@x.co", role=Role.ANALYST)
+    client.force_login(creator)
+
+    client.post(
+        reverse("parletre:create_private_chat"),
+        {"name": "Poof", "lifetime": "86400", "participants": [other.pk]},
+    )
+    chan = Channel.objects.get(name="Poof")
+    assert chan.message_ttl_seconds == 86400 and chan.is_ephemeral
+
+
+@pytest.mark.django_db
+def test_private_chat_requires_a_participant(client):
+    creator = make_user("c@x.co", role=Role.ANALYST)
+    client.force_login(creator)
+    resp = client.post(
+        reverse("parletre:create_private_chat"),
+        {"name": "Lonely", "lifetime": ""},
+    )
+    assert resp.status_code == 200  # re-rendered with errors
+    assert not Channel.objects.filter(name="Lonely").exists()
+
+
+@pytest.mark.django_db
+def test_member_search_matches_excludes_self_and_gates_nonmembers(client):
+    me = make_user("me@x.co", role=Role.ANALYST, first="Searcher", last="One")
+    target = make_user("t@x.co", role=Role.ANALYST, first="Findme", last="Target")
+    client.force_login(me)
+
+    results = client.get(reverse("parletre:member_search"), {"q": "Findme"}).json()["results"]
+    assert target.pk in [r["id"] for r in results]
+    mine = client.get(reverse("parletre:member_search"), {"q": "Searcher"}).json()["results"]
+    assert me.pk not in [r["id"] for r in mine]
+
+    guest = make_user("g@x.co", role=Role.EXTERNAL)
+    client.force_login(guest)
+    assert client.get(reverse("parletre:member_search"), {"q": "Findme"}).status_code == 404
+
+
+@pytest.mark.django_db
+def test_creator_manages_participants(client):
+    creator = make_user("c@x.co", role=Role.ANALYST)
+    a = make_user("a@x.co", role=Role.ANALYST)
+    b = make_user("b@x.co", role=Role.ANALYST)
+    chan = make_channel("dm", kind=Channel.Kind.CHAT, access=Access.PRIVATE)
+    chan.members.set([creator, a])
+    chan.moderators.add(creator)
+    Subscription.objects.create(user=a, channel=chan, level=SubscriptionLevel.ALL)
+
+    client.force_login(creator)
+    # the manage page renders for the creator
+    get = client.get(reverse("parletre:manage_participants", args=[chan.slug]))
+    assert get.status_code == 200 and b"Participants" in get.content
+
+    resp = client.post(
+        reverse("parletre:manage_participants", args=[chan.slug]),
+        {"participants": [b.pk]},
+    )
+    assert resp.status_code == 302
+    assert set(chan.members.all()) == {creator, b}  # creator always kept; a removed
+    assert chan.visible_to(b) and not chan.visible_to(a)
+    # the removed member's subscription is cleared so they stop being notified.
+    assert not Subscription.objects.filter(user=a, channel=chan).exists()
+
+    # a plain member (not a moderator) can't reach the manage surface.
+    client.force_login(b)
+    assert client.get(
+        reverse("parletre:manage_participants", args=[chan.slug])
+    ).status_code == 404
+
+
+@pytest.mark.django_db
+def test_created_via_view_records_creator(client):
+    creator = make_user("c@x.co", role=Role.ANALYST)
+    other = make_user("o@x.co", role=Role.ANALYST)
+    client.force_login(creator)
+    client.post(
+        reverse("parletre:create_private_chat"),
+        {"name": "Owned", "lifetime": "", "participants": [other.pk]},
+    )
+    chan = Channel.objects.get(name="Owned")
+    assert chan.created_by == creator
+    assert chan.can_delete(creator) and not chan.can_delete(other)
+    assert chan.can_leave(other) and not chan.can_leave(creator)
+
+
+@pytest.mark.django_db
+def test_participant_can_leave_creator_cannot(client):
+    creator = make_user("c@x.co", role=Role.ANALYST)
+    other = make_user("o@x.co", role=Role.ANALYST)
+    chan = make_channel("dm", kind=Channel.Kind.CHAT, access=Access.PRIVATE)
+    chan.created_by = creator
+    chan.save(update_fields=["created_by"])
+    chan.members.set([creator, other])
+    chan.moderators.add(creator)
+    Subscription.objects.create(user=other, channel=chan, level=SubscriptionLevel.ALL)
+
+    # the creator can't "leave" (they delete instead)
+    client.force_login(creator)
+    assert client.post(reverse("parletre:leave_chat", args=[chan.slug])).status_code == 404
+
+    # a participant leaves: dropped, unsubscribed, and loses access
+    client.force_login(other)
+    resp = client.post(reverse("parletre:leave_chat", args=[chan.slug]))
+    assert resp.status_code == 302
+    assert other not in chan.members.all()
+    assert not chan.visible_to(other)
+    assert not Subscription.objects.filter(user=other, channel=chan).exists()
+
+
+@pytest.mark.django_db
+def test_creator_deletes_chat_others_cannot(client):
+    creator = make_user("c@x.co", role=Role.ANALYST)
+    other = make_user("o@x.co", role=Role.ANALYST)
+    chan = make_channel("dm", kind=Channel.Kind.CHAT, access=Access.PRIVATE)
+    chan.created_by = creator
+    chan.save(update_fields=["created_by"])
+    chan.members.set([creator, other])
+    url = reverse("parletre:delete_chat", args=[chan.slug])
+
+    # a participant who isn't the creator can't delete (even via POST)
+    client.force_login(other)
+    assert client.get(url).status_code == 404
+    assert client.post(url).status_code == 404
+    assert Channel.objects.filter(pk=chan.pk).exists()
+
+    # the creator confirms (GET) then deletes (POST)
+    client.force_login(creator)
+    assert client.get(url).status_code == 200
+    resp = client.post(url)
+    assert resp.status_code == 302
+    assert not Channel.objects.filter(pk=chan.pk).exists()
+
+
 @pytest.mark.django_db
 def test_member_can_start_thread_and_reply(client):
     ch = make_channel("general")

@@ -173,6 +173,15 @@ class Channel(models.Model):
         related_name="parletre_moderated_channels",
         help_text="May pin / lock / move / delete in this channel.",
     )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="parletre_created_channels",
+        help_text="The member who created this chat (member-made private chats "
+        "only); they may manage participants and delete it.",
+    )
 
     post_policy = models.CharField(
         max_length=16,
@@ -252,6 +261,30 @@ class Channel(models.Model):
 
     def can_moderate(self, user) -> bool:
         return permissions.channel_can_moderate(self, user)
+
+    # ---- Member-created private chats (creator manage / delete; leave) ----
+
+    def is_creator(self, user) -> bool:
+        return (
+            self.created_by_id is not None
+            and getattr(user, "is_authenticated", False)
+            and self.created_by_id == user.pk
+        )
+
+    def can_delete(self, user) -> bool:
+        """A member-created private chat may be deleted by its creator."""
+        return self.access == self.Access.PRIVATE and self.is_creator(user)
+
+    def can_leave(self, user) -> bool:
+        """A participant other than the creator may leave a member-created
+        private chat (the creator deletes it instead)."""
+        return (
+            self.access == self.Access.PRIVATE
+            and self.created_by_id is not None
+            and getattr(user, "is_authenticated", False)
+            and self.created_by_id != user.pk
+            and self.members.filter(pk=user.pk).exists()
+        )
 
 
 class Thread(models.Model):

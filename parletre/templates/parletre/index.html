@@ -9,10 +9,13 @@
       <h1 class="font-serif text-3xl tracking-tight text-base-content">Parlêtre</h1>
       <p class="text-base-content/70">The school's discussion board — where the parlêtres speak.</p>
     </div>
-    <form method="get" action="{% url 'parletre:search' %}" class="flex gap-1">
-      <input type="search" name="q" placeholder="Search…" class="input input-bordered input-sm w-44">
-      <button type="submit" class="btn btn-sm">Search</button>
-    </form>
+    <div class="flex items-center gap-2">
+      <a href="{% url 'parletre:create_private_chat' %}" class="btn btn-sm btn-primary gap-1">{% icon "lock" %} New private chat</a>
+      <form method="get" action="{% url 'parletre:search' %}" class="flex gap-1">
+        <input type="search" name="q" placeholder="Search…" class="input input-bordered input-sm w-44">
+        <button type="submit" class="btn btn-sm">Search</button>
+      </form>
+    </div>
   </header>
 
   {% comment %} The privacy promise, stated plainly: open ≠ public. {% endcomment %}
