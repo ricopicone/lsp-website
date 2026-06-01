@@ -63,8 +63,19 @@ def workgroup_list(request):
     return render(request, "workgroups/list.html", {"kinds": kinds})
 
 
+def _group_by_academic_year(groups):
+    """Bucket workgroups by their program academic year, latest first; groups
+    with no program year fall into a trailing ``None`` bucket. Returns a list
+    of ``(ay_label_or_None, [groups])``."""
+    buckets: dict = {}
+    for g in groups:
+        buckets.setdefault(g.program_academic_year(), []).append(g)
+    return sorted(buckets.items(), key=lambda kv: kv[0] or "", reverse=True)
+
+
 def workgroup_kind_list(request, kind):
-    """The per-kind directory — visible workgroups of a single kind."""
+    """The per-kind directory — visible workgroups of a single kind, grouped by
+    program / academic year (latest first)."""
     label = Workgroup.Kind(kind).label
     groups = [
         g for g in Workgroup.objects.filter(kind=kind)
@@ -74,6 +85,7 @@ def workgroup_kind_list(request, kind):
         "kind_label": label,
         "kind_label_plural": f"{label}s",
         "groups": groups,
+        "grouped_groups": _group_by_academic_year(groups),
     }
     # Cartels get formation entry points + a "My cartels" section here
     # (the unified Cartels home).

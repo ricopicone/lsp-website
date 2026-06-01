@@ -272,6 +272,14 @@ class Event(models.Model):
         default=False,
         help_text="Whether the public event page is visible (PROG-1).",
     )
+    requires_faculty_approval = models.BooleanField(
+        default=False,
+        help_text=(
+            "If set, each registration must be approved by the event's faculty "
+            "before it's confirmed (future proposal-flow option). Default off; "
+            "all existing seminars are off."
+        ),
+    )
     visibility = models.CharField(
         max_length=20,
         choices=Visibility.choices,
@@ -308,6 +316,23 @@ class Event(models.Model):
     def academic_year(self) -> str:
         """Academic-year label this event belongs to ("2025-2026")."""
         return academic_year_of(self.start_date)
+
+    @property
+    def registration_badge(self) -> dict:
+        """A small status badge for listings: ``{"label", "css"}`` (DaisyUI
+        badge class). Past events read as Archived; otherwise the registration
+        status drives it."""
+        import datetime as _dt
+
+        if not self.published:
+            return {"label": "Draft", "css": "badge-warning"}
+        if self.end_date and self.end_date < _dt.date.today():
+            return {"label": "Archived", "css": "badge-ghost"}
+        if self.status == self.Status.OPEN:
+            return {"label": "Registration open", "css": "badge-success"}
+        if self.status == self.Status.CLOSED:
+            return {"label": "Registration closed", "css": "badge-ghost"}
+        return {"label": "Opening soon", "css": "badge-outline"}
 
     @property
     def is_offering(self) -> bool:

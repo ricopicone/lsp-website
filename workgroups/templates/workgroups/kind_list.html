@@ -24,15 +24,22 @@
   </section>
   {% endif %}
 
-  <section class="space-y-3">
-    {% if my_cartels %}<h2 class="font-serif text-xl">All {{ kind_label_plural|lower }}</h2>{% endif %}
-    {% if groups %}
-    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {% for g in groups %}{% include "workgroups/_group_card.html" %}{% endfor %}
-    </ul>
-    {% else %}
-    <p class="text-base-content/60">No {{ kind_label_plural|lower }} to show yet.</p>
-    {% endif %}
-  </section>
+  {% if my_cartels %}<h2 class="font-serif text-xl pt-2">All {{ kind_label_plural|lower }}</h2>{% endif %}
+  {% if grouped_groups %}
+    {% for ay, ay_groups in grouped_groups %}
+    <section class="space-y-3">
+      {% if ay %}
+      <h2 class="font-serif text-lg text-base-content/70 border-b border-base-300/60 pb-1.5">{{ ay }}</h2>
+      {% elif grouped_groups|length > 1 %}
+      <h2 class="font-serif text-lg text-base-content/70 border-b border-base-300/60 pb-1.5">Other</h2>
+      {% endif %}
+      <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {% for g in ay_groups %}{% include "workgroups/_group_card.html" %}{% endfor %}
+      </ul>
+    </section>
+    {% endfor %}
+  {% else %}
+  <p class="text-base-content/60">No {{ kind_label_plural|lower }} to show yet.</p>
+  {% endif %}
 </div>
 {% endblock %}

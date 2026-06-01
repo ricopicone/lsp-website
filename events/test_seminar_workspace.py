@@ -182,6 +182,47 @@ def test_workspace_shows_program_and_kind_breadcrumbs(client):
     assert b"/program/?year=2026-2027" in resp.content                   # ← Program
 
 
+def _published_seminar(slug, start, end):
+    return Event.objects.create(
+        title=f"Sem {slug}", slug=slug, event_type=Event.Type.SEMINAR,
+        start_date=start, end_date=end, published=True, status=Event.Status.OPEN,
+    )
+
+
+def test_seminars_kind_list_grouped_by_ay_latest_first(client):
+    older = _published_seminar("older", date(2025, 9, 1), date(2026, 5, 1))
+    newer = _published_seminar("newer", date(2026, 9, 1), date(2027, 5, 1))
+    older.ensure_workgroup()
+    newer.ensure_workgroup()
+
+    body = client.get("/groups/seminars/").content.decode()
+    assert "2025-2026" in body and "2026-2027" in body
+    assert body.index("2026-2027") < body.index("2025-2026")   # latest first
+    assert "Registration open" in body                          # status badge
+
+
+def test_registration_badge_states():
+    from datetime import timedelta
+
+    e = Event(published=False, status=Event.Status.DRAFT,
+              start_date=date.today(), end_date=date.today())
+    assert e.registration_badge["label"] == "Draft"
+    e.published = True
+    e.status = Event.Status.OPEN
+    e.end_date = date.today() + timedelta(days=10)
+    assert e.registration_badge["label"] == "Registration open"
+    e.status = Event.Status.CLOSED
+    assert e.registration_badge["label"] == "Registration closed"
+    e.status = Event.Status.OPEN
+    e.end_date = date.today() - timedelta(days=1)
+    assert e.registration_badge["label"] == "Archived"
+
+
+def test_requires_faculty_approval_defaults_off():
+    e = _seminar()
+    assert e.requires_faculty_approval is False
+
+
 def test_event_url_redirects_to_workspace(client):
     """The standalone event URL 301/302s to the canonical Workspace."""
     event = _seminar()
