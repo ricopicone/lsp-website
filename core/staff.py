@@ -76,11 +76,12 @@ def _panels_for(user) -> list[dict]:
             "url": reverse("treasurer"),
         })
     from cartels.permissions import is_cartel_coordinator
-    if is_cartel_coordinator(user):
+    from events.permissions import is_program_committee
+    if is_cartel_coordinator(user) or is_program_committee(user):
         from cartels.models import Cartel
         panels.append({
             "title": "Cartel review",
-            "blurb": "Review and approve proposed cartels.",
+            "blurb": "Review proposed cartels (the PC approves; the Coordinator advises).",
             "url": reverse("cartels:review_queue"),
             "count": Cartel.objects.filter(status=Cartel.Status.PROPOSED).count(),
             "count_label": "pending",
