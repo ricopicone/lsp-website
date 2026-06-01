@@ -125,11 +125,14 @@ def workgroup_detail(request, slug):
 
     can_view = wg.content_visible_to(request.user)
     is_member = wg.is_member(request.user)
+    # Past-term attendees of an offering keep read-only archive access (channel
+    # history + released Works), but aren't active members (can't post).
+    archive_access = wg.has_archive_access(request.user)
 
-    # Discuss (forum) + Chat channels, for members. (Files → W2; Schedule →
-    # W3; Tasks → W4.)
+    # Discuss (forum) + Chat channels — active members post; archive viewers
+    # read. (Files → W2; Schedule → W3; Tasks → W4.)
     discuss_channel = chat_channel = None
-    if is_member and wg.has_channel:
+    if (is_member or archive_access) and wg.has_channel:
         discuss_channel = wg.channels.filter(kind="forum").first()
         chat_channel = wg.channels.filter(kind="chat").first()
 
@@ -147,7 +150,7 @@ def workgroup_detail(request, slug):
         tabs.append(("discuss", "Discuss"))
     if chat_channel:
         tabs.append(("chat", "Chat"))
-    if wg.has_works and can_view:
+    if wg.has_works and (can_view or archive_access):
         tabs.append(("work", "Work"))
     if wg.has_calendar and is_member:
         tabs.append(("schedule", "Schedule"))
@@ -182,13 +185,14 @@ def workgroup_detail(request, slug):
             program_url = reverse("program") + f"?year={prog.academic_year}"
             program_label = str(prog)
     else:
-        # A cartel is part of the program(s) for the AY(s) it spans (by date
-        # overlap, not an FK) — link the most relevant visible one.
+        # Standing groups (cartels, reading groups) belong to the program(s)
+        # for the AY(s) they span (by date overlap, not an FK) — link the most
+        # relevant visible one.
         cartel_obj = _attached(wg, "cartel")
-        if cartel_obj is not None:
+        year = cartel_obj.program_year() if cartel_obj is not None else wg.program_year()
+        if year is not None:
             from events.models import Program
 
-            year = cartel_obj.program_year()
             prog = Program.for_year(year)
             if prog is not None and prog.is_public_now:
                 program_url = reverse("program") + f"?year={year}"
@@ -204,6 +208,16 @@ def workgroup_detail(request, slug):
     # pickers) when the viewer is a member — so fetch participants for either.
     roster_visible = wg.roster_visible_to(request.user)
     members = wg.participants() if (roster_visible or is_member) else []
+
+    # Open self-join (reading groups): any LSP member joins directly.
+    stored_member = (
+        request.user.is_authenticated
+        and wg.memberships.filter(user=request.user, end_date__isnull=True).exists()
+    )
+    from accounts.permissions import is_lsp_member
+
+    can_join = wg.open_join and is_lsp_member(request.user) and not stored_member
+    can_leave = wg.open_join and stored_member
 
     context = {
         "workgroup": wg,
@@ -221,6 +235,8 @@ def workgroup_detail(request, slug):
         "active_tab": active,
         "primary_event": primary_event,
         "can_edit_offering": can_edit_offering,
+        "can_join": can_join,
+        "can_leave": can_leave,
     }
     # Compose kind-specific UI without importing the concrete app: reach the
     # attached object via its reverse accessor and ask it for its viewer state.
@@ -232,13 +248,15 @@ def workgroup_detail(request, slug):
         context["is_coordinator"] = is_cartel_coordinator(request.user)
         context.update(cartel.viewer_state(request.user))
 
-    if active == "overview" and primary_event is not None:
-        # A seminar / reading-group Workspace shows the generated event's public
-        # summary (faculty, sessions, pricing, Register) inline — the shared
-        # partial keeps it identical to the standalone event page.
-        from events.views import event_summary_context
+    if active == "overview":
+        # Seminars feature their event; a paid reading group features the
+        # current academic year's term (register + pay). The shared partial
+        # keeps it identical to the standalone event page.
+        overview_event = primary_event or wg.current_term()
+        if overview_event is not None:
+            from events.views import event_summary_context
 
-        context.update(event_summary_context(primary_event, request.user))
+            context.update(event_summary_context(overview_event, request.user))
     elif active == "roster" and can_edit_offering:
         # PROG-8 faculty tooling: registrant roster + pricing-code minting.
         from registrations.models import Registration
@@ -262,7 +280,7 @@ def workgroup_detail(request, slug):
         # After posting in the embedded composer, return to this tab (not the
         # standalone Parlêtre channel page).
         context["channel_next"] = f"{wg.get_absolute_url()}?tab={active}"
-    elif active == "work" and wg.has_works and can_view:
+    elif active == "work" and wg.has_works and (can_view or archive_access):
         works = (
             Work.listing_for(request.user).filter(workgroup=wg).prefetch_related("files")
         )
@@ -301,8 +319,88 @@ def workgroup_detail(request, slug):
         from .forms import WorkgroupDatesForm
 
         context["dates_form"] = WorkgroupDatesForm(instance=wg)
+        # Reading-group managers can open a new annual paid term.
+        if wg.kind == Workgroup.Kind.READING_GROUP and _can_manage_workgroup(wg, request.user):
+            from .forms import ReadingGroupTermForm
+
+            context["can_manage_terms"] = True
+            context["term_form"] = ReadingGroupTermForm()
+            context["current_term"] = wg.current_term()
 
     return render(request, "workgroups/detail.html", context)
+
+
+def _can_manage_workgroup(wg, user) -> bool:
+    """Organizer/lead of the group, LSP staff, or Programming Committee — may
+    run management actions like opening a reading-group term."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    from core.access import has_staff_role
+    from core.models import StaffRole
+
+    if has_staff_role(user, StaffRole.LSP_STAFF):
+        return True
+    from events.permissions import is_program_committee
+
+    if is_program_committee(user):
+        return True
+    return wg.memberships.filter(
+        user=user, end_date__isnull=True, role__in=WorkgroupMembership.LEAD_ROLES
+    ).exists()
+
+
+@login_required
+@require_POST
+def open_reading_group_term(request, slug):
+    """Organizer/staff opens a new annual term (paid registration cycle) for a
+    reading group."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if wg.kind != Workgroup.Kind.READING_GROUP or not _can_manage_workgroup(wg, request.user):
+        raise Http404
+    from .forms import ReadingGroupTermForm
+
+    form = ReadingGroupTermForm(request.POST)
+    if form.is_valid():
+        wg.open_reading_group_term(
+            start_date=form.cleaned_data["start_date"],
+            end_date=form.cleaned_data["end_date"],
+            fee=form.cleaned_data["fee"],
+        )
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")
+
+
+@login_required
+@require_POST
+def workgroup_join(request, slug):
+    """Open self-join (reading groups): an LSP member joins directly — one
+    click, no approval or payment."""
+    from django.utils import timezone
+
+    from accounts.permissions import is_lsp_member
+
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not (wg.open_join and is_lsp_member(request.user)):
+        raise Http404
+    if not wg.memberships.filter(user=request.user, end_date__isnull=True).exists():
+        WorkgroupMembership.objects.create(
+            workgroup=wg, user=request.user,
+            role=WorkgroupMembership.Role.MEMBER,
+            start_date=timezone.localdate(),
+        )
+    return redirect(wg.get_absolute_url())
+
+
+@login_required
+@require_POST
+def workgroup_leave(request, slug):
+    """Leave a group you joined (ends your active stored membership)."""
+    from django.utils import timezone
+
+    wg = get_object_or_404(Workgroup, slug=slug)
+    wg.memberships.filter(user=request.user, end_date__isnull=True).update(
+        end_date=timezone.localdate()
+    )
+    return redirect(wg.get_absolute_url())
 
 
 @login_required

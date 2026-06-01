@@ -79,6 +79,19 @@ class ProgramEventForm(forms.ModelForm):
         help_text="LSP-affiliated instructors (can edit the event and mint pricing codes).",
     )
 
+    #: Opt-in continuity: attach this (seminar) event as another term of an
+    #: existing seminar's standing workgroup instead of spawning a new group —
+    #: members of past terms retain workspace/archive access and renew here.
+    continues_seminar = forms.ModelChoiceField(
+        queryset=None, required=False,
+        label="Continue an existing seminar",
+        help_text=(
+            "Optional. Make this a new yearly term of an existing seminar — its "
+            "workspace, channel, and past members carry over (they renew by "
+            "registering for this term). Leave blank for a brand-new seminar."
+        ),
+    )
+
     class Meta:
         model = Event
         fields = (
@@ -112,10 +125,24 @@ class ProgramEventForm(forms.ModelForm):
         if self.instance.pk:
             self.fields["faculty"].initial = self.instance.faculty_members()
 
+        from workgroups.models import Workgroup
+        self.fields["continues_seminar"].queryset = (
+            Workgroup.objects.filter(kind=Workgroup.Kind.SEMINAR).order_by("name")
+        )
+        # Continuity is a create-time choice; an existing event already has its
+        # workgroup, so hide it when editing.
+        if self.instance.pk:
+            del self.fields["continues_seminar"]
+
     def save(self, commit=True):
         instance = super().save(commit=False)
         if self.program is not None:
             instance.program = self.program
+        # New term of an existing seminar → attach to its standing workgroup so
+        # ensure_workgroup() won't spawn a fresh one.
+        continues = self.cleaned_data.get("continues_seminar")
+        if continues is not None and instance.workgroup_id is None:
+            instance.workgroup = continues
         if commit:
             instance.save()
             self.save_m2m()

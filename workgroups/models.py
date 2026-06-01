@@ -91,7 +91,7 @@ class Workgroup(models.Model):
             "has_tasks": True, "has_decisions": True,
         },
         Kind.SEMINAR: {"has_works": False, "has_calendar": True},
-        Kind.READING_GROUP: {"has_calendar": True},
+        Kind.READING_GROUP: {"has_calendar": True, "open_join": True},
     }
 
     kind = models.CharField(max_length=16, choices=Kind.choices)
@@ -135,6 +135,13 @@ class Workgroup(models.Model):
             "If set to a Profile role (e.g. 'analyst'), every active user with "
             "that role is automatically a member of this group — derived, no "
             "roster rows. Used for the Meeting of Analysts."
+        ),
+    )
+    open_join = models.BooleanField(
+        default=False,
+        help_text=(
+            "If set, any LSP member may join this group directly (one click, no "
+            "approval or payment). Default for reading groups."
         ),
     )
 
@@ -201,14 +208,14 @@ class Workgroup(models.Model):
         return getattr(getattr(user, "profile", None), "role", None)
 
     def is_member(self, user) -> bool:
-        """The single access primitive the cross-cutting apps call.
+        """*Active* membership — the access primitive the cross-cutting apps
+        call (channel posting, current roster, full workspace).
 
-        Stored memberships are checked uniformly first — that covers
-        hand-managed members for every kind, including a seminar's *faculty*
-        (``role=FACULTY``). For an offering workgroup (seminar / reading group)
-        access also flows from a paid/comped Registration on any attached
-        ``Event``; that population stays *derived* (computed from the
-        authoritative payment state, never stored as rows). Dispatched via the
+        Stored memberships count for every kind (faculty, organizers, cartel
+        members …). For a term-based offering (seminar / reading group), active
+        members are the paid/comped registrants of the **current term** only —
+        past-term registrants are not active; they must renew to participate
+        (but keep read-only :meth:`has_archive_access`). Dispatched via the
         reverse ``events`` accessor so this app needn't import ``events``.
         """
         if not getattr(user, "is_authenticated", False):
@@ -219,14 +226,24 @@ class Workgroup(models.Model):
             return True
         if self.memberships.filter(user=user, end_date__isnull=True).exists():
             return True
-        # Derive from registrations ONLY for offering workgroups, whose
-        # attached event IS the group. A committee merely *organizes* events
-        # (they link to its workgroup), so its registrants must NOT become
-        # committee members — that would leak its private channel.
-        if self.kind not in self.OFFERING_KINDS:
+        # Term-based offerings: active = current term's paid/comped registrants.
+        if self.kind in self.OFFERING_KINDS:
+            term = self.current_term()
+            return term is not None and term.has_access_registrant(user)
+        return False
+
+    def has_archive_access(self, user) -> bool:
+        """Read-only access to the group's archive (past materials + channel
+        history) for someone who attended *any* term — retained after their
+        term ends. Active membership (:meth:`is_member`) requires renewing the
+        current term; archive viewers may read but not post or participate."""
+        if self.is_member(user):
+            return True
+        if not getattr(user, "is_authenticated", False):
             return False
-        # Event counts per group are tiny, so the per-event check is cheap.
-        return any(e.has_access_registrant(user) for e in self.events.all())
+        if self.kind in self.OFFERING_KINDS:
+            return any(e.has_access_registrant(user) for e in self.events.all())
+        return False
 
     def participants(self):
         """The full roster for enumeration surfaces (roster list, assignee
@@ -252,16 +269,63 @@ class Workgroup(models.Model):
                     seen[u.pk] = Participant(
                         user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
                     )
-        # Derived registrants only for offering workgroups (see ``is_member``) —
-        # a committee's organized-event registrants are not its roster.
+        # The ACTIVE roster of a term-based offering = the current term's
+        # paid/comped registrants (past-term-only attendees are archive-only,
+        # not on the active roster). A committee's organized-event registrants
+        # are never its roster.
+        derived_events = []
         if self.kind in self.OFFERING_KINDS:
-            for event in self.events.all():
-                for u in event.access_registrant_users():
-                    if u.pk not in seen:
-                        seen[u.pk] = Participant(
-                            user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
-                        )
+            term = self.current_term()
+            derived_events = [term] if term is not None else []
+        for event in derived_events:
+            for u in event.access_registrant_users():
+                if u.pk not in seen:
+                    seen[u.pk] = Participant(
+                        user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
+                    )
         return list(seen.values())
+
+    def current_term(self):
+        """For a term-based offering (seminar / reading group), the active-or-
+        upcoming term Event — the cycle members register for (and renew each
+        year). The soonest term that hasn't ended yet; ``None`` once a term
+        ends and no next one is open (active membership lapses to archive-only).
+        ``None`` for a free reading group (no term) or any other kind."""
+        if self.kind not in self.OFFERING_KINDS:
+            return None
+        today = timezone.localdate()
+        active = [e for e in self.events.all() if e.end_date and e.end_date >= today]
+        if not active:
+            return None
+        return min(active, key=lambda e: e.start_date or today)
+
+    def open_reading_group_term(self, *, start_date, end_date, fee):
+        """Open a new annual term for this reading group — a published, open
+        ``Event`` attached to this standing workgroup, with a single all-audience
+        price tier. Members register + pay for it; ``current_term`` picks it up.
+        Returns the term Event."""
+        from decimal import Decimal
+
+        from django.utils.text import slugify
+
+        from events.models import Audience, Event, PriceTier, academic_year_of
+
+        ay = academic_year_of(start_date)
+        base = (slugify(f"{self.slug}-{ay}") or f"{self.slug}-term")[:190]
+        slug, n = base, 2
+        while Event.objects.filter(slug=slug).exists():
+            slug = f"{base}-{n}"
+            n += 1
+        term = Event.objects.create(
+            title=f"{self.name} {ay}"[:200], slug=slug,
+            event_type=Event.Type.READING_GROUP,
+            start_date=start_date, end_date=end_date,
+            published=True, status=Event.Status.OPEN, workgroup=self,
+        )
+        PriceTier.objects.create(
+            event=term, audience=Audience.ALL, base_amount=Decimal(fee)
+        )
+        return term
 
     def primary_event(self):
         """For an offering workgroup (seminar / reading group), the Event to
@@ -279,10 +343,40 @@ class Workgroup(models.Model):
             return min(upcoming, key=lambda e: e.start_date or today)
         return max(events, key=lambda e: e.start_date or today)
 
+    # ---- Program membership by date overlap (standing groups) ----
+
+    def effective_window(self):
+        """The group's active ``(start, end)`` dates from its own fields;
+        ``end`` is ``None`` for an ongoing group. ``start`` may be ``None`` if
+        unset (then it overlaps no specific year)."""
+        return self.start_date, self.end_date
+
+    def overlaps_academic_year(self, year) -> bool:
+        from events.models import academic_year_date_range
+
+        start, end = self.effective_window()
+        if start is None:
+            return False
+        ay_start, ay_end = academic_year_date_range(year)
+        return start <= ay_end and (end is None or end >= ay_start)
+
+    def program_year(self):
+        """The most relevant academic year for this standing group's program
+        link: the current AY if active now, else the AY it started in."""
+        from events.models import academic_year_of, current_academic_year
+
+        if self.start_date is None:
+            return None
+        now_year = current_academic_year()
+        if self.overlaps_academic_year(now_year):
+            return now_year
+        return academic_year_of(self.start_date)
+
     def program_academic_year(self):
         """The academic-year label this group is grouped under in listings — its
-        offering event's AY (seminar / reading group) or its cartel's program
-        year. ``None`` if it belongs to no program year."""
+        offering event's AY (seminar), its cartel's program year, or — for a
+        standing reading group — its own date window. ``None`` if it belongs to
+        no program year."""
         ev = self.primary_event()
         if ev is not None:
             return ev.academic_year
@@ -290,7 +384,11 @@ class Workgroup(models.Model):
             cartel = self.cartel
         except ObjectDoesNotExist:
             cartel = None
-        return cartel.program_year() if cartel is not None else None
+        if cartel is not None:
+            return cartel.program_year()
+        if self.kind == self.Kind.READING_GROUP:
+            return self.program_year()
+        return None
 
     def generate_event(self, **kwargs):
         """Create an Event generated by this workgroup (Workgroup-primary model).
@@ -320,8 +418,11 @@ class Workgroup(models.Model):
             return is_lsp_member(user)
         return self.is_member(user)  # PRIVATE
 
-    #: Kinds whose Workspace is the public face of a registerable offering —
-    #: its landing is publicly visible once the generated event is published.
+    #: Term-based offering kinds: a standing Workgroup with one or more term
+    #: Events. Public landing once a term is published; ACTIVE membership =
+    #: current term's paid/comped registrants (past-term attendees keep
+    #: read-only archive access; see ``has_archive_access``). A *free* reading
+    #: group has no term and uses ``open_join`` instead.
     OFFERING_KINDS = frozenset({Kind.SEMINAR, Kind.READING_GROUP})
 
     def _has_public_event(self) -> bool:
@@ -459,14 +560,16 @@ class WorkgroupMembership(models.Model):
         TREASURER = "treasurer", _("Treasurer")
         PLUS_ONE = "plus_one", _("Plus-one")
         FACULTY = "faculty", _("Faculty")
+        ORGANIZER = "organizer", _("Organizer")
         # Carried for the Stage-4 committee fold-in:
         REFERRAL_COORDINATOR = "referral_coordinator", _("Referral Coordinator")
         WEB_COORDINATOR = "web_coordinator", _("Web Coordinator")
         ADMIN_ASSISTANT = "admin_assistant", _("Admin Assistant")
 
     #: Roles that moderate a workgroup's channel (Stage 2) and manage it.
-    #: Faculty lead their seminar's workspace, so they moderate it too.
-    LEAD_ROLES = (Role.CHAIR, Role.CO_CHAIR, Role.PLUS_ONE, Role.FACULTY)
+    #: Faculty lead their seminar's workspace; organizers lead a reading group.
+    LEAD_ROLES = (Role.CHAIR, Role.CO_CHAIR, Role.PLUS_ONE, Role.FACULTY,
+                  Role.ORGANIZER)
 
     workgroup = models.ForeignKey(
         Workgroup,
@@ -750,5 +853,10 @@ def build_workgroup(kind, *, name, **kwargs):
     logic lives on the Workgroup side (add-to-Workgroup-first principle).
     """
     toggles = Workgroup.kind_toggle_defaults(kind)
+    # Reading groups have a public landing (like seminars) so prospective
+    # members can see the page; the roster + content stay members-only.
+    if kind == Workgroup.Kind.READING_GROUP:
+        toggles.setdefault("landing_visibility", Visibility.PUBLIC)
+        toggles.setdefault("content_visibility", Visibility.MEMBERS)
     toggles.update(kwargs)
     return Workgroup.objects.create(kind=kind, name=name, **toggles)

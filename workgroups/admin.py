@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    Visibility,
     Workgroup,
     WorkgroupInvitation,
     WorkgroupJoinRequest,
@@ -57,6 +58,13 @@ class WorkgroupAdmin(admin.ModelAdmin):
                 # Only seed toggles the user left at the field default.
                 if field not in form.changed_data:
                     setattr(obj, field, value)
+            # Reading groups: public landing (page is visible to all), roster +
+            # content members-only — unless the staffer set them explicitly.
+            if obj.kind == Workgroup.Kind.READING_GROUP:
+                if "landing_visibility" not in form.changed_data:
+                    obj.landing_visibility = Visibility.PUBLIC
+                if "content_visibility" not in form.changed_data:
+                    obj.content_visibility = Visibility.MEMBERS
         super().save_model(request, obj, form, change)
 
 

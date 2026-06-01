@@ -105,6 +105,31 @@
   </section>
   {% endif %}
 
+  {# ----- Reading groups active during this year (standing; by date overlap) ----- #}
+  {% if reading_groups %}
+  <section class="space-y-4">
+    <h2 class="font-serif text-2xl text-base-content border-b border-base-300/60 pb-2">
+      Reading Groups
+    </h2>
+    <ul class="divide-y divide-base-300/60">
+      {% for rg in reading_groups %}
+      <li class="py-4">
+        <a href="{{ rg.get_absolute_url }}"
+           class="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">
+          <h3 class="font-serif text-lg text-base-content group-hover:text-primary transition-colors">
+            {{ rg.name }}
+            <span class="ml-2 text-xs uppercase tracking-wider text-base-content/50 align-middle">Ongoing</span>
+          </h3>
+          {% if rg.description %}
+          <p class="mt-1 text-sm text-base-content/70 line-clamp-2">{{ rg.description_html|striptags }}</p>
+          {% endif %}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   {# ----- Cartels active during this year (self-formed; by date overlap) ----- #}
   {% if cartels %}
   <section class="space-y-4">

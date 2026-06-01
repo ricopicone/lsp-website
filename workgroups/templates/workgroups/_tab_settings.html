@@ -19,5 +19,36 @@
     </form>
   </section>
 
+  {% if can_manage_terms %}
+  <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
+    <div class="space-y-0.5">
+      <h3 class="font-medium text-base-content">Annual term</h3>
+      <p class="text-xs text-base-content/50">
+        Open this year's paid term — a registration cycle members pay for and renew each year.
+        {% if current_term %}<br>Current term: <span class="text-base-content/70">{{ current_term.title }}</span>
+        ({{ current_term.start_date|date:"M Y" }} – {{ current_term.end_date|date:"M Y" }}, {{ current_term.get_status_display }}).{% endif %}
+      </p>
+    </div>
+    <form method="post" action="{% url 'workgroups:open_term' workgroup.slug %}"
+          class="flex flex-wrap items-end gap-3">
+      {% csrf_token %}
+      <div class="space-y-1">
+        <label for="{{ term_form.start_date.id_for_label }}" class="block text-xs text-base-content/60">Starts</label>
+        {{ term_form.start_date }}
+      </div>
+      <div class="space-y-1">
+        <label for="{{ term_form.end_date.id_for_label }}" class="block text-xs text-base-content/60">Ends</label>
+        {{ term_form.end_date }}
+      </div>
+      <div class="space-y-1">
+        <label for="{{ term_form.fee.id_for_label }}" class="block text-xs text-base-content/60">Fee ($)</label>
+        {{ term_form.fee }}
+      </div>
+      <button class="btn btn-primary btn-sm">Open term</button>
+    </form>
+    {% if term_form.errors %}<p class="text-error text-sm">{{ term_form.non_field_errors|striptags }}{{ term_form.end_date.errors|striptags }}{{ term_form.fee.errors|striptags }}</p>{% endif %}
+  </section>
+  {% endif %}
+
   {% if cartel %}{% include "cartels/_settings.html" %}{% endif %}
 </div>

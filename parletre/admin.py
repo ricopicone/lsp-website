@@ -38,14 +38,19 @@ class ChannelAdmin(admin.ModelAdmin):
     search_fields = ("name", "slug", "description")
     prepopulated_fields = {"slug": ("name",)}
     filter_horizontal = ("members", "moderators")
+    raw_id_fields = ("created_by",)
     fieldsets = (
         (None, {"fields": ("name", "slug", "category", "kind", "description")}),
         (
             "Access",
             {
-                "fields": ("access", "allowed_roles", "committee", "members", "moderators"),
+                "fields": (
+                    "access", "allowed_roles", "committee",
+                    "members", "moderators", "created_by",
+                ),
                 "description": "allowed_roles applies when access=Specific roles; "
-                "committee when access=Committee; members when access=Private.",
+                "committee when access=Committee; members when access=Private. "
+                "created_by is the member who made a private chat (may delete it).",
             },
         ),
         (

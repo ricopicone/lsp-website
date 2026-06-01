@@ -163,7 +163,12 @@ class Work(models.Model):
         if level == self.Visibility.PUBLIC:
             return True
         if level == self.Visibility.GROUP:
-            return bool(self.workgroup_id and self.workgroup.is_member(user))
+            # Active members + past-term attendees (read-only archive) of the
+            # producing workgroup.
+            return bool(self.workgroup_id and (
+                self.workgroup.is_member(user)
+                or self.workgroup.has_archive_access(user)
+            ))
         return is_lsp_member(user)  # MEMBERS — an actual LSP member, not just logged in
 
     def listing_visible_to(self, user) -> bool:

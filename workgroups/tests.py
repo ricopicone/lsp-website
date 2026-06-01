@@ -6,6 +6,7 @@ import datetime
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 
 from accounts.models import Profile, User
 from cartels.models import Cartel
@@ -193,6 +194,195 @@ def test_auto_member_role_derives_membership():
     users = [p.user for p in wg.participants()]
     assert analyst in users and other not in users
     assert not WorkgroupMembership.objects.filter(workgroup=wg, user=analyst).exists()
+
+
+def test_reading_group_open_join_and_leave(client):
+    """A reading group is standing + open-join: any LSP member joins directly
+    (stored membership), and can leave."""
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP,
+             landing_visibility=Visibility.MEMBERS, open_join=True)
+    assert wg.open_join is True            # seeded by kind default too
+    member = _user("rg@x.test", role=Profile.Role.ANALYST)   # an LSP member
+    client.force_login(member)
+
+    resp = client.get(wg.get_absolute_url())
+    assert b"Join this group" in resp.content
+
+    client.post(reverse("workgroups:join", args=[wg.slug]))
+    assert wg.is_member(member)
+    assert wg.memberships.filter(user=member, end_date__isnull=True).exists()
+
+    resp = client.get(wg.get_absolute_url())
+    assert b"Leave group" in resp.content
+
+    client.post(reverse("workgroups:leave", args=[wg.slug]))
+    assert not wg.memberships.filter(user=member, end_date__isnull=True).exists()
+
+
+def test_reading_group_public_landing_roster_members_only(client):
+    """Reading group page is public (like seminars), but the roster is hidden
+    from the public and shown to LSP members; anon sees a login-to-join prompt."""
+    from workgroups.models import build_workgroup
+
+    wg = build_workgroup(Workgroup.Kind.READING_GROUP, name="Freud RG", slug="freud-rg")
+    assert wg.landing_visibility == Visibility.PUBLIC
+    assert wg.content_visibility == Visibility.MEMBERS
+    organizer = _user("org@x.test", role=Profile.Role.ANALYST, first="Sabina")
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=organizer, role=WorkgroupMembership.Role.ORGANIZER,
+        start_date=datetime.date(2026, 1, 1),
+    )
+
+    # Anonymous: page visible, no roster, prompted to log in to join.
+    resp = client.get(wg.get_absolute_url())
+    assert resp.status_code == 200
+    assert b"Freud RG" in resp.content
+    assert b"Log in to join" in resp.content
+    assert b"Sabina" not in resp.content          # roster hidden from the public
+    from django.contrib.auth.models import AnonymousUser
+    assert wg.roster_visible_to(AnonymousUser()) is False
+
+    # An LSP member sees the roster (membership visible to logged-in members).
+    viewer = _user("viewer@x.test", role=Profile.Role.ANALYST)
+    client.force_login(viewer)
+    resp = client.get(wg.get_absolute_url())
+    assert b"Sabina" in resp.content
+    assert b"Join this group" in resp.content
+
+
+def _paid_reading_group(slug="freud-rg", term_start=datetime.date(2099, 9, 1),
+                        term_end=datetime.date(2100, 5, 1)):
+    """A standing paid reading group with one current term (Event)."""
+    from decimal import Decimal
+
+    from events.models import Audience, Event, PriceTier
+
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP, name="Freud RG", slug=slug,
+             open_join=False, landing_visibility=Visibility.PUBLIC)
+    term = Event.objects.create(
+        title="Freud RG term", slug=f"{slug}-term",
+        event_type=Event.Type.READING_GROUP, start_date=term_start, end_date=term_end,
+        published=True, status=Event.Status.OPEN, workgroup=wg,
+    )
+    PriceTier.objects.create(event=term, audience=Audience.ALL, base_amount=Decimal("100"))
+    return wg, term
+
+
+def _paid_for(term, user):
+    from decimal import Decimal
+
+    from registrations.models import Registration
+
+    return Registration.objects.create(
+        user=user, event=term, price_tier=term.price_tiers.first(),
+        quoted_amount=Decimal("100"), status=Registration.Status.PAID,
+    )
+
+
+def test_paid_reading_group_membership_from_current_term(client):
+    wg, term = _paid_reading_group()
+    assert wg.current_term() == term
+
+    payer = _user("payer@x.test", role=Profile.Role.ANALYST)
+    _paid_for(term, payer)
+    assert wg.is_member(payer) is True
+    assert payer in [p.user for p in wg.participants()]
+
+    stranger = _user("stranger@x.test", role=Profile.Role.ANALYST)
+    assert wg.is_member(stranger) is False
+
+    # Overview offers the term's register CTA (pay to join), not a free Join.
+    resp = client.get(wg.get_absolute_url())
+    assert reverse("registrations:register", args=[term.slug]).encode() in resp.content
+    assert b"Join this group" not in resp.content
+
+
+def test_reading_group_membership_lapses_when_term_ends(client):
+    # A term that already ended → no current term → registrant lapses.
+    wg, term = _paid_reading_group(
+        slug="freud-old", term_start=datetime.date(2020, 9, 1),
+        term_end=datetime.date(2021, 5, 1),
+    )
+    payer = _user("payer@x.test", role=Profile.Role.ANALYST)
+    _paid_for(term, payer)
+    assert wg.current_term() is None
+    assert wg.is_member(payer) is False
+
+
+def test_organizer_opens_reading_group_term(client):
+    """An organizer opens a new annual paid term in one click → a published,
+    open Event attached to the standing group, with a fee tier."""
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP, name="Freud RG", slug="freud-rg",
+             open_join=False, landing_visibility=Visibility.PUBLIC)
+    organizer = _user("org@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=organizer, role=WorkgroupMembership.Role.ORGANIZER,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    client.force_login(organizer)
+    client.post(reverse("workgroups:open_term", args=[wg.slug]), {
+        "start_date": "2099-09-01", "end_date": "2100-05-01", "fee": "120.00",
+    })
+
+    term = wg.current_term()
+    assert term is not None
+    assert term.published and term.status == "open"
+    assert term.workgroup_id == wg.id
+    assert str(term.price_tiers.first().base_amount) == "120.00"
+
+
+def test_open_term_blocked_for_non_managers(client):
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP, slug="rg2", open_join=False)
+    plain = _user("plain@x.test", role=Profile.Role.ANALYST)  # not an organizer
+    client.force_login(plain)
+    resp = client.post(reverse("workgroups:open_term", args=[wg.slug]),
+                       {"start_date": "2099-09-01", "end_date": "2100-05-01", "fee": "0"})
+    assert resp.status_code == 404
+    assert wg.current_term() is None
+
+
+def test_reading_group_kind_default_open_join():
+    from workgroups.models import build_workgroup
+
+    built = build_workgroup(Workgroup.Kind.READING_GROUP, name="RG", slug="rg-x")
+    assert built.open_join is True
+    cartel_wg = build_workgroup(Workgroup.Kind.CARTEL, name="C", slug="c-x")
+    assert cartel_wg.open_join is False
+
+
+def test_join_blocked_when_not_open_join(client):
+    wg = _wg(kind=Workgroup.Kind.CARTEL)   # open_join False
+    member = _user("a@x.test", role=Profile.Role.ANALYST)
+    client.force_login(member)
+    assert client.post(reverse("workgroups:join", args=[wg.slug])).status_code == 404
+
+
+def test_standing_reading_group_listed_on_program_by_overlap(client):
+    from events.models import Program, academic_year_date_range, current_academic_year
+
+    year = current_academic_year()
+    Program.objects.create(academic_year=year, published=True)
+    ay_start, _ = academic_year_date_range(year)
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP, name="Freud Reading Group",
+             start_date=ay_start)   # ongoing (no end date)
+    assert wg.overlaps_academic_year(year)
+
+    body = client.get(f"/program/?year={year}").content
+    assert b"Reading Groups" in body and b"Freud Reading Group" in body
+
+
+def test_reading_group_workspace_links_to_program(client):
+    from events.models import Program, academic_year_date_range, current_academic_year
+
+    year = current_academic_year()
+    Program.objects.create(academic_year=year, published=True)
+    ay_start, _ = academic_year_date_range(year)
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP, name="Freud RG",
+             start_date=ay_start, landing_visibility=Visibility.MEMBERS)
+    member = _user("m@x.test", role=Profile.Role.ANALYST)
+    client.force_login(member)
+    resp = client.get(wg.get_absolute_url())
+    assert f"/program/?year={year}".encode() in resp.content   # ← Program <year>
 
 
 def test_groups_overview_shows_a_card_per_kind(client):
