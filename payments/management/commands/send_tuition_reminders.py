@@ -23,6 +23,7 @@ from django.utils import timezone
 from accounts.models import Profile
 from payments.emails import send_tuition_reminder
 from payments.models import TuitionEnrollment, TuitionPeriod, TuitionReminder
+from payments.sending import ThrottledSender
 
 User = get_user_model()
 
@@ -76,6 +77,7 @@ class Command(BaseCommand):
         skipped_not_owing = 0
         errored = 0
         dry = opts["dry_run"]
+        sender = ThrottledSender()
 
         eligible_users = User.objects.filter(
             is_active=True, profile__role__in=Profile.IN_TRAINING_ROLES,
@@ -104,7 +106,7 @@ class Command(BaseCommand):
                 sent += 1
                 continue
             try:
-                send_tuition_reminder(user, period, enrollment=enrollment)
+                sender.send(send_tuition_reminder, user, period, enrollment=enrollment)
                 TuitionReminder.objects.create(user=user, tuition_period=period)
                 sent += 1
             except Exception as exc:

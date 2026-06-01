@@ -14,12 +14,13 @@
       {{ current_period.start_date|date:"M j, Y" }} – {{ current_period.end_date|date:"M j, Y" }}.
     </p>
 
-    {% with cur=period_stats.0 %}
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-      {% include "core/_stat_card.html" with label="Obligated" value=obligated_count %}
-      {% include "core/_stat_card.html" with label="Paid"      value=cur.paid_count        tone="success" %}
-      {% include "core/_stat_card.html" with label="Unpaid"    value=cur.unpaid_count      tone="warning" %}
-      {% include "core/_stat_card.html" with label="Collected" value=cur.total_collected|usd %}
+    {% with cur=current_dues_stats %}
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      {% include "core/_stat_card.html" with label="Obligated"   value=obligated_count %}
+      {% include "core/_stat_card.html" with label="Paid"        value=cur.paid_count        tone="success" %}
+      {% include "core/_stat_card.html" with label="Unpaid"      value=cur.unpaid_count      tone="warning" %}
+      {% include "core/_stat_card.html" with label="Collected"   value=dues_collected|usd    tone="success" %}
+      {% include "core/_stat_card.html" with label="Outstanding" value=dues_outstanding|usd  tone="warning" %}
     </div>
     {% endwith %}
   </section>

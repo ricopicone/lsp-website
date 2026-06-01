@@ -142,8 +142,17 @@ def _treasurer_dues_context() -> dict:
         })
 
     current = DuesPeriod.current()
+    # The stats row for the *current* period — NOT period_stats[0], which is the
+    # newest period (the cron provisions next year ahead of time, so [0] is a
+    # future, empty year). The overview/dues headline must use this.
+    current_dues_stats = next(
+        (s for s in period_stats if current and s["period"].id == current.id), None
+    )
+
     role_breakdown = []
     unpaid_users = []
+    dues_collected = Decimal("0")
+    dues_outstanding = Decimal("0")
     if current is not None:
         paid_user_ids = set(
             current.payments
@@ -156,12 +165,16 @@ def _treasurer_dues_context() -> dict:
             )
             total_in_role = users_in_role.count()
             paid_in_role = users_in_role.filter(id__in=paid_user_ids).count()
+            unpaid_in_role = total_in_role - paid_in_role
             role_breakdown.append({
                 "role": role,
                 "total": total_in_role,
                 "paid": paid_in_role,
-                "unpaid": total_in_role - paid_in_role,
+                "unpaid": unpaid_in_role,
             })
+            # Outstanding = what the unpaid obligated members still owe at their tier.
+            rate = current.amount_for_role(role) or Decimal("0")
+            dues_outstanding += rate * unpaid_in_role
         unpaid_users = list(
             User.objects.filter(
                 is_active=True, profile__role__in=obligated_roles,
@@ -170,6 +183,8 @@ def _treasurer_dues_context() -> dict:
             .select_related("profile")
             .order_by("last_name", "first_name", "email")
         )
+        if current_dues_stats:
+            dues_collected = current_dues_stats["total_collected"]
 
     chart_periods = {
         "labels": [s["period"].name for s in reversed(period_stats)],
@@ -180,14 +195,23 @@ def _treasurer_dues_context() -> dict:
         "paid": [r["paid"] for r in role_breakdown],
         "unpaid": [r["unpaid"] for r in role_breakdown],
     }
+    chart_dues_money = {
+        "collected": float(dues_collected),
+        "outstanding": float(dues_outstanding),
+    }
     return {
         "period_stats":   period_stats,
         "current_period": current,
+        "current_dues_stats": current_dues_stats,
         "role_breakdown": role_breakdown,
         "unpaid_users":   unpaid_users,
         "obligated_count": obligated_count,
+        "dues_collected": dues_collected,
+        "dues_outstanding": dues_outstanding,
+        "dues_expected": dues_collected + dues_outstanding,
         "chart_periods_json": json.dumps(chart_periods),
         "chart_roles_json": json.dumps(chart_roles),
+        "chart_dues_money_json": json.dumps(chart_dues_money),
     }
 
 
@@ -571,6 +595,10 @@ def _treasurer_tuition_context() -> dict:
             "tuition_reconciliation_users": [],
             "tuition_in_training_count": 0,
             "tuition_total_collected": Decimal("0"),
+            "tuition_committed_remaining": Decimal("0"),
+            "tuition_undecided_owed": Decimal("0"),
+            "tuition_outstanding": Decimal("0"),
+            "chart_tuition_money_json": json.dumps({"collected": 0, "planned": 0, "owed": 0}),
         }
 
     in_training_qs = User.objects.filter(
@@ -648,16 +676,41 @@ def _treasurer_tuition_context() -> dict:
         key=lambda r: (r["user"].last_name or "", r["user"].first_name or "", r["user"].email)
     )
 
-    # Total collected for the period — Payment of type=TUITION, succeeded,
-    # linked to an installment whose enrollment is in this period.
-    total_collected = (
+    # Per-enrollment paid-so-far for the period (drives collected + remaining).
+    paid_by_enrollment: dict[int, Decimal] = {}
+    for row in (
         Payment.objects.filter(
             payment_type=Payment.Type.TUITION,
             status=Payment.Status.SUCCEEDED,
             tuition_installment__enrollment__tuition_period=period,
         )
-        .aggregate(s=Sum("amount"))["s"] or Decimal("0")
-    )
+        .values("tuition_installment__enrollment")
+        .annotate(s=Sum("amount"))
+    ):
+        paid_by_enrollment[row["tuition_installment__enrollment"]] = row["s"] or Decimal("0")
+
+    total_collected = sum(paid_by_enrollment.values(), Decimal("0"))
+
+    full = period.tuition_amount or Decimal("0")
+    # Money still expected from students who've committed (committed / payment
+    # plan) but haven't fully paid — their remaining balance toward full tuition.
+    committed_remaining = Decimal("0")
+    for e in enrollments:
+        if e.status in (
+            TuitionEnrollment.Status.COMMITTED,
+            TuitionEnrollment.Status.PAYMENT_PLAN,
+        ):
+            paid = paid_by_enrollment.get(e.id, Decimal("0"))
+            committed_remaining += max(full - paid, Decimal("0"))
+    # Money owed by in-training students who haven't recorded a decision yet —
+    # potential, not committed. One full year's tuition each.
+    undecided_owed = full * len(undecided_users)
+
+    chart_tuition_money = {
+        "collected": float(total_collected),
+        "planned": float(committed_remaining),
+        "owed": float(undecided_owed),
+    }
 
     return {
         "tuition_period":              period,
@@ -666,6 +719,10 @@ def _treasurer_tuition_context() -> dict:
         "tuition_reconciliation_users": reconciliation_users,
         "tuition_in_training_count":   in_training_count,
         "tuition_total_collected":     total_collected,
+        "tuition_committed_remaining": committed_remaining,
+        "tuition_undecided_owed":      undecided_owed,
+        "tuition_outstanding":         committed_remaining + undecided_owed,
+        "chart_tuition_money_json":    json.dumps(chart_tuition_money),
     }
 
 
