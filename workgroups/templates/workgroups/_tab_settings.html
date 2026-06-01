@@ -127,5 +127,26 @@
   </section>
   {% endif %}
 
+  {% if charter_form %}
+  <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
+    <div class="space-y-0.5">
+      <h3 class="font-medium text-base-content">Charter</h3>
+      <p class="text-xs text-base-content/50">This committee's one-line summary and longer-form charter.</p>
+    </div>
+    <form method="post" action="{% url 'committees:edit_charter' workgroup.slug %}" class="space-y-3">
+      {% csrf_token %}
+      <div class="space-y-1">
+        <label for="{{ charter_form.description.id_for_label }}" class="block text-xs text-base-content/60">Summary</label>
+        {{ charter_form.description }}
+      </div>
+      <div class="space-y-1">
+        <label for="{{ charter_form.charter.id_for_label }}" class="block text-xs text-base-content/60">Charter</label>
+        {{ charter_form.charter }}
+      </div>
+      <button class="btn btn-primary btn-sm">Save charter</button>
+    </form>
+  </section>
+  {% endif %}
+
   {% if cartel %}{% include "cartels/_settings.html" %}{% endif %}
 </div>

@@ -129,3 +129,90 @@ def test_historical_memberships_allowed():
         ).count()
         == 1
     )
+
+
+# ---- Phase D (charter editing) + Phase E (MoA schedule split) ----------
+
+from django.urls import reverse  # noqa: E402
+
+
+def _analyst(email):
+    from accounts.models import Profile
+
+    u = User.objects.create_user(email=email, password="x")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    return u
+
+
+def _on_committee(slug, user, role=WorkgroupMembership.Role.MEMBER):
+    Committee.objects.get(slug=slug).add_member(
+        user, role=role, start_date=date(2026, 1, 1)
+    )
+
+
+@pytest.mark.django_db
+def test_committee_charter_edit_gated_to_manager(client):
+    committee = Committee.objects.create(name="Ethics D", slug="ethics-d", public=True)
+    wg = committee.workgroup
+    chair = _analyst("chair-d@x.test")
+    committee.add_member(chair, role=WorkgroupMembership.Role.CHAIR, start_date=date(2026, 1, 1))
+
+    client.force_login(_analyst("plain-d@x.test"))   # not a manager
+    assert client.post(f"/committees/{wg.slug}/charter/",
+                       {"description": "x", "charter": "y"}).status_code == 404
+
+    client.force_login(chair)
+    resp = client.post(f"/committees/{wg.slug}/charter/",
+                       {"description": "One-liner", "charter": "Our mandate."})
+    assert resp.status_code == 302
+    committee.refresh_from_db()
+    assert committee.charter == "Our mandate." and committee.description == "One-liner"
+
+
+@pytest.mark.django_db
+def test_committee_charter_form_shown_on_settings_to_manager(client):
+    committee = Committee.objects.create(name="Ethics D2", slug="ethics-d2", public=True)
+    chair = _analyst("chair-d2@x.test")
+    committee.add_member(chair, role=WorkgroupMembership.Role.CHAIR, start_date=date(2026, 1, 1))
+    client.force_login(chair)
+    resp = client.get(f"{committee.workgroup.get_absolute_url()}?tab=settings")
+    assert resp.status_code == 200
+    assert b"Charter" in resp.content
+
+
+@pytest.mark.django_db
+def test_board_can_manage_committee_they_are_not_on(client):
+    board_member = _analyst("boardie@x.test")
+    _on_committee("board", board_member)
+    other = Committee.objects.create(name="Outreach", slug="outreach", public=True)
+    client.force_login(board_member)
+    resp = client.post(f"/committees/{other.workgroup.slug}/charter/",
+                       {"description": "Outreach", "charter": "Spread the word."})
+    assert resp.status_code == 302
+    other.refresh_from_db()
+    assert other.charter == "Spread the word."
+
+
+@pytest.mark.django_db
+def test_meeting_of_analysts_schedule_is_chair_managed(client):
+    from workgroups.models import WorkgroupMeeting
+
+    wg = Committee.objects.get(slug="meeting-of-analysts").workgroup
+
+    # An analyst is an auto-member: sees the Schedule tab, but can't edit cadence.
+    analyst = _analyst("a-moa@x.test")
+    client.force_login(analyst)
+    resp = client.get(f"{wg.get_absolute_url()}?tab=schedule")
+    assert resp.status_code == 200
+    assert b"tab=schedule" in resp.content
+    assert client.post(reverse("workgroups:meeting_add", args=[wg.slug]),
+                       {"starts_at": "2099-01-15T18:00"}).status_code == 404
+
+    # A Board member (manager) can.
+    board_member = _analyst("board-moa@x.test")
+    _on_committee("board", board_member)
+    client.force_login(board_member)
+    assert client.post(reverse("workgroups:meeting_add", args=[wg.slug]),
+                       {"starts_at": "2099-01-15T18:00"}).status_code == 302
+    assert WorkgroupMeeting.objects.filter(workgroup=wg).exists()

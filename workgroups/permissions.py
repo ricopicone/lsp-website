@@ -29,9 +29,12 @@ def can_manage_workgroup(user, workgroup) -> bool:
 
     if is_program_committee(user):
         return True
-    return workgroup.memberships.filter(
+    if workgroup.memberships.filter(
         user=user, end_date__isnull=True, role__in=WorkgroupMembership.LEAD_ROLES,
-    ).exists()
+    ).exists():
+        return True
+    # The Board oversees the school's standing bodies (G4 roster authority).
+    return is_board(user)
 
 
 def is_board(user) -> bool:

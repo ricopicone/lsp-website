@@ -302,6 +302,11 @@ def workgroup_detail(request, slug):
             wg.meetings.filter(starts_at__lt=now).order_by("-starts_at")
         )
         context["meeting_form"] = WorkgroupMeetingForm()
+        # View/manage split: everyone with the tab sees the cadence, but only
+        # those who can schedule (stored members + managers) edit it. This keeps
+        # the Meeting of Analysts' calendar chair-managed, not editable by every
+        # auto-derived analyst.
+        context["can_schedule"] = _can_schedule(wg, request.user)
     elif active == "tasks" and wg.has_tasks and is_member:
         qs = wg.tasks.prefetch_related("assignees")
         q = (request.GET.get("q") or "").strip()
@@ -331,6 +336,13 @@ def workgroup_detail(request, slug):
             context["manage_roster"] = True
             context["stored_members"] = list(wg.active_members())
             context["role_choices"] = WorkgroupMembership.Role.choices
+        # Committee managers can edit the charter (Phase D).
+        committee = _attached(wg, "committee")
+        if committee is not None and can_manage:
+            from committees.forms import CommitteeCharterForm
+
+            context["committee"] = committee
+            context["charter_form"] = CommitteeCharterForm(instance=committee)
         # Reading-group managers can open a new annual paid term.
         if wg.kind == Workgroup.Kind.READING_GROUP and can_manage:
             from .forms import ReadingGroupTermForm
@@ -498,6 +510,26 @@ def _member_or_404(request, slug):
     return wg
 
 
+def _can_schedule(wg, user) -> bool:
+    """Who may add/remove meetings: managers, or any *stored* member. Excludes
+    purely auto-derived members (e.g. analysts in the Meeting of Analysts), so a
+    standing body's cadence stays chair-managed while cartel/working-group
+    members keep their member-open schedule."""
+    if _can_manage_workgroup(wg, user):
+        return True
+    return (
+        getattr(user, "is_authenticated", False)
+        and wg.memberships.filter(user=user, end_date__isnull=True).exists()
+    )
+
+
+def _schedule_or_404(request, slug):
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not _can_schedule(wg, request.user):
+        raise Http404
+    return wg
+
+
 def _member_ids(wg, raw_ids):
     """Filter submitted user ids down to current participants of ``wg`` —
     stored members *and* derived seminar registrants (so a student in the
@@ -579,8 +611,8 @@ def task_delete(request, slug, pk):
 @login_required
 @require_POST
 def meeting_add(request, slug):
-    """A member schedules a meeting (Schedule tab)."""
-    wg = _member_or_404(request, slug)
+    """Schedule a meeting (Schedule tab) — managers or stored members only."""
+    wg = _schedule_or_404(request, slug)
     from .forms import WorkgroupMeetingForm
 
     form = WorkgroupMeetingForm(request.POST)
@@ -595,7 +627,7 @@ def meeting_add(request, slug):
 @login_required
 @require_POST
 def meeting_delete(request, slug, pk):
-    wg = _member_or_404(request, slug)
+    wg = _schedule_or_404(request, slug)
     from .models import WorkgroupMeeting
 
     WorkgroupMeeting.objects.filter(pk=pk, workgroup=wg).delete()
