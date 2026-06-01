@@ -1498,3 +1498,71 @@ def test_treasurer_tuition_year_selector_loads_past(client, staff_user, current_
     resp = client.get(reverse("treasurer_tuition") + "?year=ay-1999-tuition")
     assert resp.status_code == 200
     assert b"AY 1999" in resp.content
+
+
+# --- assume_skip_when_unpaid command ------------------------------------
+
+
+@pytest.mark.django_db
+def test_assume_skip_when_unpaid(current_period):
+    """Non-payers become Skipping; partial payers are preserved; undecided
+    in-training students get a Skipping row (current period only)."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from payments.models import Payment
+
+    full = current_period.tuition_amount
+
+    # A: committed, no payment → should flip to skipping.
+    a = _mk_candidate(email="a@skip.test")
+    enr_a = TuitionEnrollment.objects.create(
+        user=a, tuition_period=current_period, status=TuitionEnrollment.Status.COMMITTED,
+    )
+    # B: payment plan with a partial payment → preserved.
+    b = _mk_candidate(email="b@skip.test")
+    enr_b = TuitionEnrollment.objects.create(
+        user=b, tuition_period=current_period, status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst_b = TuitionInstallment.objects.create(
+        enrollment=enr_b, sequence=1, due_date=current_period.start_date,
+        amount=(full / 2).quantize(Decimal("0.01")),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=b, amount=inst_b.amount,
+        status=Payment.Status.SUCCEEDED, tuition_installment=inst_b,
+    )
+    # C: in-training, no enrollment at all → should get a created skip row.
+    c = _mk_candidate(email="c@skip.test")
+
+    call_command("assume_skip_when_unpaid", "--commit", stdout=StringIO())
+
+    enr_a.refresh_from_db()
+    enr_b.refresh_from_db()
+    assert enr_a.status == TuitionEnrollment.Status.SKIPPING
+    assert enr_b.status == TuitionEnrollment.Status.PAYMENT_PLAN  # partial payer preserved
+    c_enr = TuitionEnrollment.objects.get(user=c, tuition_period=current_period)
+    assert c_enr.status == TuitionEnrollment.Status.SKIPPING
+
+    # Idempotent: a second run changes nothing.
+    before = TuitionEnrollment.objects.count()
+    call_command("assume_skip_when_unpaid", "--commit", stdout=StringIO())
+    assert TuitionEnrollment.objects.count() == before
+
+
+@pytest.mark.django_db
+def test_assume_skip_dry_run_writes_nothing(current_period):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    a = _mk_candidate(email="dry@skip.test")
+    enr = TuitionEnrollment.objects.create(
+        user=a, tuition_period=current_period, status=TuitionEnrollment.Status.COMMITTED,
+    )
+    out = StringIO()
+    call_command("assume_skip_when_unpaid", stdout=out)
+    enr.refresh_from_db()
+    assert enr.status == TuitionEnrollment.Status.COMMITTED  # unchanged
+    assert "DRY-RUN" in out.getvalue()
