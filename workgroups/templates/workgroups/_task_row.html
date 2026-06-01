@@ -1,0 +1,56 @@
+{% comment %}One task row. Expects: workgroup, task, members.{% endcomment %}
+<li class="flex items-start gap-3 p-3">
+  <form method="post" action="{% url 'workgroups:task_toggle' workgroup.slug task.pk %}" style="display:contents">
+    {% csrf_token %}
+    <button type="submit" aria-label="Toggle done" title="Toggle done"
+            class="btn btn-xs btn-circle mt-0.5 shrink-0 {% if task.done %}btn-primary{% else %}btn-outline border-base-content/40{% endif %}">
+      {% if task.done %}✓{% endif %}
+    </button>
+  </form>
+
+  <div class="grow min-w-0">
+    <p class="{% if task.done %}line-through text-base-content/40{% else %}text-base-content{% endif %}">{{ task.title }}</p>
+    <div class="flex flex-wrap items-center gap-1.5 mt-1">
+      {% if task.is_overdue %}
+      <span class="badge badge-sm badge-error gap-1">Overdue · {{ task.due_date|date:"M j" }}</span>
+      {% elif task.due_date %}
+      <span class="badge badge-sm badge-ghost">Due {{ task.due_date|date:"M j" }}</span>
+      {% endif %}
+      {% for a in task.assignees.all %}
+      <span class="badge badge-sm badge-ghost">{{ a.get_full_name|default:a.email }}</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if not task.done %}
+  <details class="dropdown dropdown-end shrink-0">
+    <summary class="btn btn-ghost btn-xs" title="Assign / due date">Edit</summary>
+    <form method="post" action="{% url 'workgroups:task_assign' workgroup.slug task.pk %}"
+          class="dropdown-content z-10 mt-1 w-60 bg-base-100 border border-base-300 rounded-box p-3 shadow space-y-2">
+      {% csrf_token %}
+      <label class="form-control">
+        <span class="label-text text-xs">Due date</span>
+        <input type="date" name="due_date" value="{{ task.due_date|date:'Y-m-d' }}"
+               class="input input-bordered input-sm">
+      </label>
+      <p class="label-text text-xs">Assigned to</p>
+      <div class="max-h-40 overflow-y-auto space-y-1">
+        {% for m in members %}
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="assignees" value="{{ m.user.pk }}" class="checkbox checkbox-xs"
+                 {% if m.user in task.assignees.all %}checked{% endif %}>
+          {{ m.user.get_full_name|default:m.user.email }}
+        </label>
+        {% endfor %}
+      </div>
+      <button class="btn btn-primary btn-xs w-full">Save</button>
+    </form>
+  </details>
+  {% endif %}
+
+  <form method="post" action="{% url 'workgroups:task_delete' workgroup.slug task.pk %}" style="display:contents"
+        onsubmit="return confirm('Delete this task?');">
+    {% csrf_token %}
+    <button type="submit" class="text-xs text-base-content/40 hover:text-error mt-1.5 shrink-0" aria-label="Delete">✕</button>
+  </form>
+</li>

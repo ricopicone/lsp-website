@@ -275,18 +275,20 @@ class WorkgroupMembership(models.Model):
 
 
 class WorkgroupTask(models.Model):
-    """A simple shared to-do for a workgroup's Tasks tab (has_tasks)."""
+    """A shared to-do for a workgroup's Tasks tab (has_tasks). Supports
+    multiple assignees and an optional due date."""
 
     workgroup = models.ForeignKey(
         Workgroup, on_delete=models.CASCADE, related_name="tasks"
     )
     title = models.CharField(max_length=255)
     done = models.BooleanField(default=False)
-    assignee = models.ForeignKey(
+    assignees = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
-        null=True, blank=True, on_delete=models.SET_NULL,
+        blank=True,
         related_name="assigned_workgroup_tasks",
     )
+    due_date = models.DateField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True, blank=True, on_delete=models.SET_NULL,
@@ -296,6 +298,7 @@ class WorkgroupTask(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        # Open tasks first, soonest due date first (nulls last), then newest.
         ordering = ("done", "-created_at")
 
     def __str__(self) -> str:
@@ -305,6 +308,43 @@ class WorkgroupTask(models.Model):
         self.done = bool(value)
         self.completed_at = timezone.now() if value else None
         self.save(update_fields=["done", "completed_at"])
+
+    @property
+    def is_overdue(self) -> bool:
+        return bool(self.due_date and not self.done
+                    and self.due_date < timezone.localdate())
+
+
+class WorkgroupMeeting(models.Model):
+    """A scheduled meeting / session for a workgroup's Schedule tab
+    (has_calendar). Lightweight and internal — distinct from public Events."""
+
+    workgroup = models.ForeignKey(
+        Workgroup, on_delete=models.CASCADE, related_name="meetings"
+    )
+    title = models.CharField(max_length=255, blank=True, help_text="Optional label.")
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField(null=True, blank=True)
+    location = models.CharField(
+        max_length=255, blank=True, help_text="Room or video link."
+    )
+    note = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="created_workgroup_meetings",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("starts_at",)
+
+    def __str__(self) -> str:
+        return f"{self.title or 'Meeting'} — {self.starts_at:%Y-%m-%d %H:%M}"
+
+    @property
+    def is_past(self) -> bool:
+        return self.starts_at < timezone.now()
 
 
 def build_workgroup(kind, *, name, **kwargs):

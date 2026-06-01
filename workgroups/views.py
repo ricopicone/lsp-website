@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -119,6 +120,8 @@ def workgroup_detail(request, slug):
         tabs.append(("chat", "Chat"))
     if wg.has_works and can_view:
         tabs.append(("work", "Work"))
+    if wg.has_calendar and is_member:
+        tabs.append(("schedule", "Schedule"))
     if wg.has_tasks and is_member:
         tabs.append(("tasks", "Tasks"))
     if is_member:
@@ -160,8 +163,35 @@ def workgroup_detail(request, slug):
         )
         context["works_released"] = [w for w in works if not w.in_progress]
         context["works_in_progress"] = [w for w in works if w.in_progress]
+    elif active == "schedule" and wg.has_calendar and is_member:
+        from django.utils import timezone as _tz
+
+        from .forms import WorkgroupMeetingForm
+
+        now = _tz.now()
+        context["upcoming_meetings"] = list(wg.meetings.filter(starts_at__gte=now))
+        context["past_meetings"] = list(
+            wg.meetings.filter(starts_at__lt=now).order_by("-starts_at")
+        )
+        context["meeting_form"] = WorkgroupMeetingForm()
     elif active == "tasks" and wg.has_tasks and is_member:
-        context["tasks"] = list(wg.tasks.select_related("assignee"))
+        qs = wg.tasks.prefetch_related("assignees")
+        q = (request.GET.get("q") or "").strip()
+        if q:
+            qs = qs.filter(title__icontains=q)
+        sort = request.GET.get("sort", "created")
+        open_qs = qs.filter(done=False)
+        if sort == "due":
+            # Soonest due first; tasks with no due date sort to the end.
+            open_qs = open_qs.order_by(F("due_date").asc(nulls_last=True), "-created_at")
+        elif sort == "title":
+            open_qs = open_qs.order_by("title")
+        else:
+            open_qs = open_qs.order_by("-created_at")
+        context["open_tasks"] = list(open_qs)
+        context["done_tasks"] = list(qs.filter(done=True).order_by("-completed_at"))
+        context["task_q"] = q
+        context["task_sort"] = sort
     elif active == "settings" and is_member:
         from .forms import WorkgroupDatesForm
 
@@ -192,25 +222,64 @@ def _member_or_404(request, slug):
     return wg
 
 
+def _member_ids(wg, raw_ids):
+    """Filter a list of submitted user ids down to current members of ``wg``."""
+    from .models import WorkgroupMembership
+
+    valid = set(raw_ids)
+    if not valid:
+        return []
+    return list(
+        WorkgroupMembership.objects.filter(
+            workgroup=wg, user_id__in=valid, end_date__isnull=True
+        ).values_list("user_id", flat=True)
+    )
+
+
+def _parse_due(raw):
+    """Parse a yyyy-mm-dd date string; return None if blank/invalid."""
+    from datetime import date
+
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
 @login_required
 @require_POST
 def task_add(request, slug):
     """A member adds a task (Tasks tab)."""
     wg = _member_or_404(request, slug)
-    from .models import WorkgroupMembership, WorkgroupTask
+    from .models import WorkgroupTask
 
     title = (request.POST.get("title") or "").strip()[:255]
     if title:
-        assignee = None
-        aid = request.POST.get("assignee")
-        if aid:
-            m = WorkgroupMembership.objects.filter(
-                workgroup=wg, user_id=aid, end_date__isnull=True
-            ).first()
-            assignee = m.user if m else None
-        WorkgroupTask.objects.create(
-            workgroup=wg, title=title, assignee=assignee, created_by=request.user
+        task = WorkgroupTask.objects.create(
+            workgroup=wg, title=title, created_by=request.user,
+            due_date=_parse_due(request.POST.get("due_date")),
         )
+        ids = _member_ids(wg, request.POST.getlist("assignees"))
+        if ids:
+            task.assignees.set(ids)
+    return redirect(f"{wg.get_absolute_url()}?tab=tasks")
+
+
+@login_required
+@require_POST
+def task_assign(request, slug, pk):
+    """Reassign an existing task (set its full assignee list) and/or its due date."""
+    wg = _member_or_404(request, slug)
+    from .models import WorkgroupTask
+
+    task = get_object_or_404(WorkgroupTask, pk=pk, workgroup=wg)
+    task.assignees.set(_member_ids(wg, request.POST.getlist("assignees")))
+    if "due_date" in request.POST:
+        task.due_date = _parse_due(request.POST.get("due_date"))
+        task.save(update_fields=["due_date"])
     return redirect(f"{wg.get_absolute_url()}?tab=tasks")
 
 
@@ -233,3 +302,29 @@ def task_delete(request, slug, pk):
 
     WorkgroupTask.objects.filter(pk=pk, workgroup=wg).delete()
     return redirect(f"{wg.get_absolute_url()}?tab=tasks")
+
+
+@login_required
+@require_POST
+def meeting_add(request, slug):
+    """A member schedules a meeting (Schedule tab)."""
+    wg = _member_or_404(request, slug)
+    from .forms import WorkgroupMeetingForm
+
+    form = WorkgroupMeetingForm(request.POST)
+    if form.is_valid():
+        meeting = form.save(commit=False)
+        meeting.workgroup = wg
+        meeting.created_by = request.user
+        meeting.save()
+    return redirect(f"{wg.get_absolute_url()}?tab=schedule")
+
+
+@login_required
+@require_POST
+def meeting_delete(request, slug, pk):
+    wg = _member_or_404(request, slug)
+    from .models import WorkgroupMeeting
+
+    WorkgroupMeeting.objects.filter(pk=pk, workgroup=wg).delete()
+    return redirect(f"{wg.get_absolute_url()}?tab=schedule")

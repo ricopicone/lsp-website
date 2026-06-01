@@ -486,10 +486,14 @@ def test_tasks_tab_add_toggle_delete(client):
     resp = client.get(wg.get_absolute_url())
     assert b"tab=tasks" in resp.content
 
-    # add
-    client.post(f"/groups/{wg.slug}/tasks/add/", {"title": "Read Écrits", "assignee": gen.pk})
+    # add (with an assignee + due date)
+    client.post(f"/groups/{wg.slug}/tasks/add/", {
+        "title": "Read Écrits", "assignees": [gen.pk], "due_date": "2099-03-01",
+    })
     task = WorkgroupTask.objects.get(workgroup=wg)
-    assert task.title == "Read Écrits" and task.assignee == gen and not task.done
+    assert task.title == "Read Écrits" and not task.done
+    assert list(task.assignees.all()) == [gen]
+    assert task.due_date.isoformat() == "2099-03-01"
 
     # toggle done
     client.post(f"/groups/{wg.slug}/tasks/{task.pk}/toggle/")
@@ -514,6 +518,109 @@ def test_tasks_endpoints_gated_to_members(client):
     assert client.post(f"/groups/{wg.slug}/tasks/add/", {"title": "x"}).status_code == 404
     resp = client.get(wg.get_absolute_url())
     assert b"tab=tasks" not in resp.content
+
+
+def test_task_reassign_multiple_and_due_date(client):
+    from workgroups.models import WorkgroupTask
+
+    gen = _member("gen@x.test")
+    other = _member("other@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_pc_member())
+    wg = cartel.workgroup
+    cartel.add_member(other)
+    outsider = _member("outsider@x.test")   # not a member — must be ignored
+    client.force_login(gen)
+
+    client.post(f"/groups/{wg.slug}/tasks/add/", {"title": "T"})
+    task = WorkgroupTask.objects.get(workgroup=wg)
+
+    # Reassign to two members + the outsider; outsider is filtered out.
+    client.post(f"/groups/{wg.slug}/tasks/{task.pk}/assign/", {
+        "assignees": [gen.pk, other.pk, outsider.pk], "due_date": "2099-05-01",
+    })
+    task.refresh_from_db()
+    assert set(task.assignees.all()) == {gen, other}
+    assert task.due_date.isoformat() == "2099-05-01"
+
+    # Clearing the due date and assignees.
+    client.post(f"/groups/{wg.slug}/tasks/{task.pk}/assign/", {"due_date": ""})
+    task.refresh_from_db()
+    assert task.due_date is None and task.assignees.count() == 0
+
+
+def test_task_overdue_and_search(client):
+    from datetime import date, timedelta
+
+    from workgroups.models import WorkgroupTask
+
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_pc_member())
+    wg = cartel.workgroup
+    client.force_login(gen)
+
+    overdue = WorkgroupTask.objects.create(
+        workgroup=wg, title="Overdue item", due_date=date.today() - timedelta(days=1))
+    future = WorkgroupTask.objects.create(
+        workgroup=wg, title="Future item", due_date=date.today() + timedelta(days=30))
+    assert overdue.is_overdue and not future.is_overdue
+
+    # Completed tasks are never flagged overdue.
+    overdue.set_done(True)
+    assert not overdue.is_overdue
+
+    # Search filters the open list by title.
+    resp = client.get(f"{wg.get_absolute_url()}?tab=tasks&q=Future")
+    assert b"Future item" in resp.content and b"Overdue item" not in resp.content
+
+    # The completed section surfaces done tasks.
+    resp = client.get(f"{wg.get_absolute_url()}?tab=tasks")
+    assert b"Completed (1)" in resp.content
+
+
+def test_schedule_tab_add_and_delete(client):
+    from workgroups.models import WorkgroupMeeting
+
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")   # cartel seed has has_calendar=True
+    cartel.approve(_pc_member())
+    wg = cartel.workgroup
+    client.force_login(gen)
+
+    # Schedule tab is offered to a member
+    resp = client.get(wg.get_absolute_url())
+    assert b"tab=schedule" in resp.content
+
+    # add a meeting
+    client.post(f"/groups/{wg.slug}/meetings/add/", {
+        "starts_at": "2099-01-15T18:00",
+        "title": "First session",
+        "location": "https://zoom.example/abc",
+    })
+    meeting = WorkgroupMeeting.objects.get(workgroup=wg)
+    assert meeting.title == "First session" and meeting.created_by == gen
+
+    # it renders under Upcoming (future date)
+    resp = client.get(f"{wg.get_absolute_url()}?tab=schedule")
+    assert b"First session" in resp.content
+
+    # delete
+    client.post(f"/groups/{wg.slug}/meetings/{meeting.pk}/delete/")
+    assert not WorkgroupMeeting.objects.filter(pk=meeting.pk).exists()
+
+
+def test_schedule_endpoints_gated_to_members(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_pc_member())
+    wg = cartel.workgroup
+    client.force_login(_member("outsider@x.test"))   # not a member
+    assert client.post(
+        f"/groups/{wg.slug}/meetings/add/", {"starts_at": "2099-01-15T18:00"}
+    ).status_code == 404
+    resp = client.get(wg.get_absolute_url())
+    assert b"tab=schedule" not in resp.content
 
 
 def test_proposed_cartel_hidden_from_other_members_on_kind_list(client):

@@ -1,0 +1,47 @@
+{% comment %}Schedule tab — lightweight internal meeting list (has_calendar).
+Expects: workgroup, upcoming_meetings, past_meetings, meeting_form.{% endcomment %}
+<div class="max-w-2xl space-y-6 pt-2">
+  <form method="post" action="{% url 'workgroups:meeting_add' workgroup.slug %}"
+        class="space-y-2 rounded-box border border-base-300 bg-base-100 p-4">
+    {% csrf_token %}
+    <div class="flex flex-wrap items-end gap-2">
+      <label class="form-control">
+        <span class="label-text text-xs">Starts</span>
+        {{ meeting_form.starts_at }}
+      </label>
+      <label class="form-control">
+        <span class="label-text text-xs">Ends <span class="text-base-content/40">(optional)</span></span>
+        {{ meeting_form.ends_at }}
+      </label>
+    </div>
+    {{ meeting_form.title }}
+    {{ meeting_form.location }}
+    {{ meeting_form.note }}
+    {% if meeting_form.errors %}
+    <p class="text-error text-sm">{{ meeting_form.starts_at.errors|striptags }}{{ meeting_form.ends_at.errors|striptags }}</p>
+    {% endif %}
+    <div class="flex justify-end">
+      <button class="btn btn-primary btn-sm">Schedule meeting</button>
+    </div>
+  </form>
+
+  <section class="space-y-2">
+    <h3 class="text-sm font-semibold text-base-content/70 uppercase tracking-wider">Upcoming</h3>
+    {% if upcoming_meetings %}
+    <ul class="divide-y divide-base-300/60 rounded-box border border-base-300 bg-base-100">
+      {% for m in upcoming_meetings %}{% include "workgroups/_meeting_row.html" with m=m %}{% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-base-content/60 text-sm">No upcoming meetings.</p>
+    {% endif %}
+  </section>
+
+  {% if past_meetings %}
+  <section class="space-y-2">
+    <h3 class="text-sm font-semibold text-base-content/50 uppercase tracking-wider">Past</h3>
+    <ul class="divide-y divide-base-300/60 rounded-box border border-base-300 bg-base-100 opacity-70">
+      {% for m in past_meetings %}{% include "workgroups/_meeting_row.html" with m=m %}{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</div>

@@ -1,36 +1,61 @@
+{% comment %}Tasks tab. Expects: workgroup, members, open_tasks, done_tasks,
+task_q, task_sort.{% endcomment %}
 <div class="max-w-2xl space-y-5 pt-2">
   <form method="post" action="{% url 'workgroups:task_add' workgroup.slug %}"
-        class="flex flex-wrap items-end gap-2">
+        class="space-y-2 rounded-box border border-base-300 bg-base-100 p-3">
     {% csrf_token %}
-    <input type="text" name="title" placeholder="Add a task…" required
-           class="input input-bordered input-sm grow min-w-[14rem]">
-    <select name="assignee" class="select select-bordered select-sm">
-      <option value="">Unassigned</option>
-      {% for m in members %}<option value="{{ m.user.pk }}">{{ m.user.get_full_name|default:m.user.email }}</option>{% endfor %}
-    </select>
-    <button class="btn btn-primary btn-sm">Add</button>
+    <div class="flex flex-wrap items-end gap-2">
+      <input type="text" name="title" placeholder="Add a task…" required
+             class="input input-bordered input-sm grow min-w-[14rem]">
+      <label class="form-control">
+        <span class="label-text text-xs">Due</span>
+        <input type="date" name="due_date" class="input input-bordered input-sm">
+      </label>
+      <details class="dropdown dropdown-end">
+        <summary class="btn btn-outline btn-sm">Assign…</summary>
+        <div class="dropdown-content z-10 mt-1 w-60 bg-base-100 border border-base-300 rounded-box p-3 shadow max-h-48 overflow-y-auto space-y-1">
+          {% for m in members %}
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="assignees" value="{{ m.user.pk }}" class="checkbox checkbox-xs">
+            {{ m.user.get_full_name|default:m.user.email }}
+          </label>
+          {% empty %}
+          <p class="text-xs text-base-content/50">No members yet.</p>
+          {% endfor %}
+        </div>
+      </details>
+      <button class="btn btn-primary btn-sm">Add</button>
+    </div>
   </form>
 
-  {% if tasks %}
+  <form method="get" class="flex flex-wrap items-center gap-2">
+    <input type="hidden" name="tab" value="tasks">
+    <input type="search" name="q" value="{{ task_q }}" placeholder="Search tasks…"
+           class="input input-bordered input-sm grow min-w-[10rem]">
+    <select name="sort" class="select select-bordered select-sm" onchange="this.form.submit()">
+      <option value="created" {% if task_sort == "created" %}selected{% endif %}>Newest</option>
+      <option value="due" {% if task_sort == "due" %}selected{% endif %}>Due date</option>
+      <option value="title" {% if task_sort == "title" %}selected{% endif %}>Title</option>
+    </select>
+    <button class="btn btn-sm">Apply</button>
+  </form>
+
+  {% if open_tasks %}
   <ul class="divide-y divide-base-300/60 rounded-box border border-base-300 bg-base-100">
-    {% for task in tasks %}
-    <li class="flex items-center gap-3 p-3">
-      <form method="post" action="{% url 'workgroups:task_toggle' workgroup.slug task.pk %}" style="display:contents">
-        {% csrf_token %}
-        <button type="submit" class="checkbox checkbox-sm {% if task.done %}checkbox-primary{% endif %}"
-                aria-label="Toggle done" title="Toggle done">{% if task.done %}✓{% endif %}</button>
-      </form>
-      <span class="grow {% if task.done %}line-through text-base-content/40{% endif %}">{{ task.title }}</span>
-      {% if task.assignee %}<span class="badge badge-sm badge-ghost">{{ task.assignee.get_full_name|default:task.assignee.email }}</span>{% endif %}
-      <form method="post" action="{% url 'workgroups:task_delete' workgroup.slug task.pk %}" style="display:contents"
-            onsubmit="return confirm('Delete this task?');">
-        {% csrf_token %}
-        <button type="submit" class="text-xs text-base-content/40 hover:text-error" aria-label="Delete">✕</button>
-      </form>
-    </li>
-    {% endfor %}
+    {% for task in open_tasks %}{% include "workgroups/_task_row.html" with task=task %}{% endfor %}
   </ul>
   {% else %}
-  <p class="text-base-content/60 text-sm">No tasks yet.</p>
+  <p class="text-base-content/60 text-sm">{% if task_q %}No matching open tasks.{% else %}No open tasks.{% endif %}</p>
+  {% endif %}
+
+  {% if done_tasks %}
+  <details class="rounded-box border border-base-300 bg-base-100" open>
+    <summary class="cursor-pointer p-3 text-sm font-semibold text-base-content/60">
+      Completed ({{ done_tasks|length }})
+    </summary>
+    <ul class="divide-y divide-base-300/60 border-t border-base-300">
+      {% for task in done_tasks %}{% include "workgroups/_task_row.html" with task=task %}{% endfor %}
+    </ul>
+  </details>
   {% endif %}
 </div>
