@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
@@ -365,6 +365,83 @@ class Workgroup(models.Model):
         # A group's own members always see its roster.
         return self.is_member(user)
 
+    # ---- Governance (propose → review → join), generalized from cartels ----
+
+    def _add_member(self, user, *, role=None):
+        """Idempotent: add ``user`` to the stored roster. Returns the active
+        membership row (existing or newly created)."""
+        if role is None:
+            role = WorkgroupMembership.Role.MEMBER
+        existing = self.memberships.filter(user=user, end_date__isnull=True).first()
+        if existing:
+            return existing
+        return WorkgroupMembership.objects.create(
+            workgroup=self, user=user, role=role, start_date=timezone.localdate(),
+        )
+
+    def request_to_join(self, user, message=""):
+        """A member applies to join (member-gated growth). Idempotent on the
+        pending request."""
+        req, created = WorkgroupJoinRequest.objects.get_or_create(
+            workgroup=self, applicant=user,
+            status=WorkgroupJoinRequest.Status.PENDING,
+            defaults={"message": message},
+        )
+        if not created and message and not req.message:
+            req.message = message
+            req.save(update_fields=["message"])
+        return req
+
+    def accept_request(self, join_request, decided_by):
+        join_request.accept(decided_by)
+
+    def decline_request(self, join_request, decided_by):
+        join_request.decline(decided_by)
+
+    def accept_invitation(self, user):
+        """A seeded invitee joins directly. Returns the invitation, or ``None``
+        if the user wasn't invited (or already accepted)."""
+        inv = self.invitations.filter(
+            invited_user=user, accepted_at__isnull=True
+        ).first()
+        if inv is None:
+            return None
+        inv.accept()
+        return inv
+
+    def governance_state(self, user) -> dict:
+        """The proposal/join context shared by every governed kind — the
+        generic subset of the cartel ``viewer_state`` (a concrete type layers
+        its own keys on top)."""
+        authed = getattr(user, "is_authenticated", False)
+        try:
+            proposal = self.proposal
+        except ObjectDoesNotExist:
+            proposal = None
+        is_member = self.is_member(user)
+        has_invite = bool(authed) and self.invitations.filter(
+            invited_user=user, accepted_at__isnull=True
+        ).exists()
+        already_applied = bool(authed) and self.join_requests.filter(
+            applicant=user, status=WorkgroupJoinRequest.Status.PENDING
+        ).exists()
+        is_open = proposal is not None and proposal.status == WorkgroupProposal.Status.OPEN
+        can_apply = (
+            is_open and is_lsp_member(user)
+            and not is_member and not has_invite and not already_applied
+        )
+        pending = (
+            list(self.join_requests.filter(status=WorkgroupJoinRequest.Status.PENDING)
+                 .select_related("applicant"))
+            if is_member else []
+        )
+        return {
+            "has_invite": has_invite,
+            "already_applied": already_applied,
+            "can_apply": can_apply,
+            "pending_requests": pending,
+        }
+
 
 class WorkgroupMembership(models.Model):
     """A user's tenure in a workgroup — the unified roster.
@@ -430,6 +507,166 @@ class WorkgroupMembership(models.Model):
     @property
     def is_active(self) -> bool:
         return self.end_date is None
+
+
+class WorkgroupProposal(models.Model):
+    """The governance record for a workgroup formed by proposal → review →
+    publish (generalized from the cartel CART-4 flow).
+
+    Holds the status + reviewer trail shared by every governed kind; a concrete
+    type layers its own proposal payload on top (a cartel's guiding question, a
+    seminar's proposed dates). One per workgroup.
+    """
+
+    class Status(models.TextChoices):
+        PROPOSED = "proposed", _("Proposed — awaiting review")
+        OPEN = "open", _("Open")
+        DECLINED = "declined", _("Declined")
+        ARCHIVED = "archived", _("Archived")
+
+    workgroup = models.OneToOneField(
+        Workgroup, on_delete=models.CASCADE, related_name="proposal",
+    )
+    proposed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="workgroup_proposals",
+        help_text="The member who proposed the group.",
+    )
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PROPOSED,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="workgroup_proposals_reviewed",
+        help_text="The reviewer (e.g. Program Committee) who approved / declined.",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True, help_text="Decline reason / review notes.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.workgroup} — {self.get_status_display()}"
+
+    @transaction.atomic
+    def approve(self, reviewer, *, publish_visibility=Visibility.MEMBERS):
+        """Approve → publish the landing as Open (visible to the school)."""
+        self.status = self.Status.OPEN
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.workgroup.landing_visibility = publish_visibility
+        self.workgroup.save(update_fields=["landing_visibility"])
+        self.save(update_fields=["status", "reviewed_by", "reviewed_at"])
+
+    @transaction.atomic
+    def decline(self, reviewer, note=""):
+        self.status = self.Status.DECLINED
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.review_note = note
+        self.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
+
+    @transaction.atomic
+    def resubmit(self):
+        """A declined proposal, edited, re-enters review (and re-hides)."""
+        if self.status != self.Status.DECLINED:
+            return
+        self.status = self.Status.PROPOSED
+        self.reviewed_by = None
+        self.reviewed_at = None
+        self.review_note = ""
+        self.workgroup.landing_visibility = Visibility.PRIVATE
+        self.workgroup.save(update_fields=["landing_visibility"])
+        self.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
+
+
+class WorkgroupInvitation(models.Model):
+    """A specific-member invitation seeded by the proposer; accepting joins the
+    group directly (generalized from the cartel's seeded invitations)."""
+
+    workgroup = models.ForeignKey(
+        Workgroup, on_delete=models.CASCADE, related_name="invitations",
+    )
+    invited_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="workgroup_invitations",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="workgroup_invitations_sent",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("workgroup", "invited_user"),
+                name="workgroups_one_invitation_per_user",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.invited_user} invited to {self.workgroup}"
+
+    @transaction.atomic
+    def accept(self):
+        self.workgroup._add_member(self.invited_user)
+        self.accepted_at = timezone.now()
+        self.save(update_fields=["accepted_at"])
+
+
+class WorkgroupJoinRequest(models.Model):
+    """An uninvited member's application to join an Open group; accepted or
+    declined by an existing member (member-gated growth)."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        ACCEPTED = "accepted", _("Accepted")
+        DECLINED = "declined", _("Declined")
+
+    workgroup = models.ForeignKey(
+        Workgroup, on_delete=models.CASCADE, related_name="join_requests",
+    )
+    applicant = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="workgroup_join_requests",
+    )
+    message = models.TextField(
+        blank=True, help_text="Why the applicant would like to join (shown to members)."
+    )
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="workgroup_join_decisions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("workgroup", "applicant"),
+                condition=models.Q(status="pending"),
+                name="workgroups_one_pending_request_per_user",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.applicant} → {self.workgroup} ({self.get_status_display()})"
+
+    @transaction.atomic
+    def accept(self, decided_by):
+        self.workgroup._add_member(self.applicant)
+        self.status = self.Status.ACCEPTED
+        self.decided_by = decided_by
+        self.decided_at = timezone.now()
+        self.save(update_fields=["status", "decided_by", "decided_at"])
+
+    def decline(self, decided_by):
+        self.status = self.Status.DECLINED
+        self.decided_by = decided_by
+        self.decided_at = timezone.now()
+        self.save(update_fields=["status", "decided_by", "decided_at"])
 
 
 class WorkgroupTask(models.Model):

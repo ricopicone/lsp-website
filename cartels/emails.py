@@ -139,7 +139,7 @@ def invite_external_plus_one(external, signup_url: str) -> None:
 
 
 def notify_applicant_of_decision(join_request, url: str) -> None:
-    cartel = join_request.cartel
+    cartel = join_request.workgroup.cartel
     accepted = join_request.status == join_request.Status.ACCEPTED
     _send(
         subject=(

@@ -20,7 +20,7 @@ from events.permissions import is_program_committee
 
 from . import emails
 from .forms import CartelProposalForm
-from .models import Cartel, CartelInvitation, CartelJoinRequest, ExternalPlusOne
+from .models import Cartel, CartelJoinRequest, ExternalPlusOne
 from .permissions import is_cartel_coordinator
 
 
@@ -74,8 +74,8 @@ def review_queue(request):
     if not (can_approve or can_feedback):
         raise Http404
     proposed = (
-        Cartel.objects.filter(status=Cartel.Status.PROPOSED)
-        .select_related("workgroup", "generator")
+        Cartel.objects.filter(workgroup__proposal__status=Cartel.Status.PROPOSED)
+        .select_related("workgroup", "workgroup__proposal", "workgroup__proposal__proposed_by")
         .order_by("created_at")
     )
     return render(request, "cartels/review_queue.html", {
@@ -91,7 +91,9 @@ def review_decide(request, pk):
     """The Program Committee approves (publishes) or declines a proposal."""
     if not is_program_committee(request.user):
         raise Http404
-    cartel = get_object_or_404(Cartel, pk=pk, status=Cartel.Status.PROPOSED)
+    cartel = get_object_or_404(
+        Cartel, pk=pk, workgroup__proposal__status=Cartel.Status.PROPOSED
+    )
     if request.POST.get("decision") == "approve":
         cartel.approve(request.user)
         emails.notify_generator_of_decision(cartel, _abs(request, cartel))
@@ -125,7 +127,9 @@ def coordinator_feedback(request, pk):
 @require_POST
 def apply(request, slug):
     """A member applies to join an open cartel (CART-4 step 5), with a note."""
-    cartel = get_object_or_404(Cartel, workgroup__slug=slug, status=Cartel.Status.OPEN)
+    cartel = get_object_or_404(
+        Cartel, workgroup__slug=slug, workgroup__proposal__status=Cartel.Status.OPEN
+    )
     if not is_lsp_member(request.user) or cartel.closed or cartel.is_member(request.user):
         raise Http404
     cartel.request_to_join(request.user, message=(request.POST.get("message") or "").strip())
@@ -152,7 +156,9 @@ def edit(request, slug):
             cartel.guiding_question = form.cleaned_data["guiding_question"]
             cartel.save(update_fields=["guiding_question"])
             for user in form.cleaned_data["invitees"]:
-                CartelInvitation.objects.get_or_create(cartel=cartel, invited_user=user)
+                cartel.invitations.get_or_create(
+                    invited_user=user, defaults={"created_by": request.user}
+                )
             if cartel.status == Cartel.Status.DECLINED:
                 cartel.resubmit()
                 emails.notify_proposal(cartel, _abs(request, cartel))
@@ -250,7 +256,9 @@ def invite_external_plus_one(request, slug, pk):
 @require_POST
 def accept_invitation(request, slug):
     """A seeded invitee accepts and joins directly."""
-    cartel = get_object_or_404(Cartel, workgroup__slug=slug, status=Cartel.Status.OPEN)
+    cartel = get_object_or_404(
+        Cartel, workgroup__slug=slug, workgroup__proposal__status=Cartel.Status.OPEN
+    )
     if cartel.accept_invitation(request.user) is None:
         raise Http404
     messages.success(request, f"You've joined '{cartel.workgroup.name}'.")
@@ -265,7 +273,8 @@ def decide_request(request, slug, pk):
     if not cartel.is_member(request.user):
         raise Http404
     join_request = get_object_or_404(
-        CartelJoinRequest, pk=pk, cartel=cartel, status=CartelJoinRequest.Status.PENDING
+        CartelJoinRequest, pk=pk, workgroup=cartel.workgroup,
+        status=CartelJoinRequest.Status.PENDING,
     )
     if request.POST.get("decision") == "accept":
         cartel.accept_request(join_request, decided_by=request.user)

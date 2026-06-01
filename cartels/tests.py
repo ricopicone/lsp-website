@@ -212,7 +212,7 @@ def test_apply_and_member_accepts_via_views(client):
     client.force_login(applicant)
     resp = client.post(f"/cartels/{cartel.workgroup.slug}/apply/")
     assert resp.status_code == 302
-    req = CartelJoinRequest.objects.get(cartel=cartel, applicant=applicant)
+    req = CartelJoinRequest.objects.get(workgroup=cartel.workgroup, applicant=applicant)
     assert req.status == CartelJoinRequest.Status.PENDING
 
     client.force_login(gen)   # an existing member gates
@@ -294,7 +294,7 @@ def test_apply_captures_reason_shown_to_members(client):
     applicant = _member("appl@x.test")
     client.force_login(applicant)
     client.post(f"/cartels/{cartel.workgroup.slug}/apply/", {"message": "I work on the letter."})
-    req = CartelJoinRequest.objects.get(cartel=cartel, applicant=applicant)
+    req = CartelJoinRequest.objects.get(workgroup=cartel.workgroup, applicant=applicant)
     assert req.message == "I work on the letter."
     # a member sees the reason on the cartel page
     client.force_login(gen)

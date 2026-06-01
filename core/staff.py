@@ -90,7 +90,9 @@ def _panels_for(user) -> list[dict]:
             "title": "Cartel review",
             "blurb": "Review proposed cartels (the PC approves; the Coordinator advises).",
             "url": reverse("cartels:review_queue"),
-            "count": Cartel.objects.filter(status=Cartel.Status.PROPOSED).count(),
+            "count": Cartel.objects.filter(
+                workgroup__proposal__status=Cartel.Status.PROPOSED
+            ).count(),
             "count_label": "pending",
         })
     # One card per committee the user can reach (member, or staff/superuser).
