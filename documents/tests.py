@@ -54,8 +54,13 @@ def test_public_listing_with_members_pdf_visible_listing_gated_pdf():
     )
     assert d.listing_visible_to(None) is True
     assert d.pdf_visible_to(None) is False
-    u = User.objects.create_user(email="m@x.test")
-    assert d.pdf_visible_to(u) is True
+    member = User.objects.create_user(email="m@x.test")
+    member.profile.role = Profile.Role.ANALYST
+    member.profile.save(update_fields=["role"])
+    assert d.pdf_visible_to(member) is True
+    # An auditor (outside registrant, default role=external) is not a member.
+    auditor = User.objects.create_user(email="a@x.test")
+    assert d.pdf_visible_to(auditor) is False
 
 
 @pytest.mark.django_db
@@ -83,12 +88,25 @@ def test_for_user_anon_only_sees_public_listings():
 
 
 @pytest.mark.django_db
-def test_for_user_authenticated_sees_all_listings():
+def test_for_user_member_sees_all_listings():
     _doc(slug="open")
     _doc(slug="closed", listing_visibility=Document.Visibility.MEMBERS)
     u = User.objects.create_user(email="m@x.test")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save(update_fields=["role"])
     slugs = set(Document.for_user(u).values_list("slug", flat=True))
     assert slugs == {"open", "closed"}
+
+
+@pytest.mark.django_db
+def test_for_user_auditor_only_sees_public_listings():
+    """An authenticated outside registrant (auditor, role=external) is not a
+    member and must not see members-only listings."""
+    _doc(slug="open")
+    _doc(slug="closed", listing_visibility=Document.Visibility.MEMBERS)
+    u = User.objects.create_user(email="ext@x.test")  # default role = external
+    slugs = set(Document.for_user(u).values_list("slug", flat=True))
+    assert slugs == {"open"}
 
 
 @pytest.mark.django_db
@@ -160,10 +178,22 @@ def test_detail_renders_for_anon_when_listing_public_but_pdf_members(client):
 def test_detail_shows_download_for_member_on_members_pdf(client):
     _doc(slug="founding", pdf_visibility=Document.Visibility.MEMBERS)
     u = User.objects.create_user(email="m@x.test", password="x")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save(update_fields=["role"])
     client.force_login(u)
     body = client.get(reverse("documents:detail", args=["founding"])).content.decode()
     assert reverse("documents:download", args=["founding"]) in body
     assert "Download PDF" in body
+
+
+@pytest.mark.django_db
+def test_download_404s_for_auditor_on_members_pdf(client):
+    """A logged-in auditor (outside registrant) cannot download members-only."""
+    _doc(slug="founding", pdf_visibility=Document.Visibility.MEMBERS)
+    u = User.objects.create_user(email="ext@x.test", password="x")  # role=external
+    client.force_login(u)
+    resp = client.get(reverse("documents:download", args=["founding"]))
+    assert resp.status_code == 404
 
 
 @pytest.mark.django_db

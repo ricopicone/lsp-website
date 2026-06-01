@@ -8,7 +8,7 @@ from datetime import timezone as dt_timezone
 import pytest
 from django.urls import reverse
 
-from accounts.models import User
+from accounts.models import Profile, User
 from events.models import Event, Session
 
 
@@ -248,9 +248,18 @@ def test_events_list_hides_members_only_from_anonymous(client, django_user_model
     assert b"Public Talk" in response.content
     assert b"Members Only Talk" not in response.content
 
-    # Authenticated: visible.
-    user = django_user_model.objects.create_user(email="m@example.com", password="x")
-    client.force_login(user)
+    # An authenticated auditor (outside registrant, default role=external) is
+    # not a member — members-only events stay hidden.
+    auditor = django_user_model.objects.create_user(email="ext@example.com", password="x")
+    client.force_login(auditor)
+    response = client.get(reverse("events:list"))
+    assert b"Members Only Talk" not in response.content
+
+    # A member sees it.
+    member = django_user_model.objects.create_user(email="m@example.com", password="x")
+    member.profile.role = Profile.Role.ANALYST
+    member.profile.save(update_fields=["role"])
+    client.force_login(member)
     response = client.get(reverse("events:list"))
     assert b"Members Only Talk" in response.content
 

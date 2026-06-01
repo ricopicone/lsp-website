@@ -15,6 +15,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from accounts.permissions import is_lsp_member
+
 from .forms import EventDescriptionForm, PricingCodeForm
 from .models import (
     Event,
@@ -77,7 +79,8 @@ def event_list(request):
 
     Excludes annual-program types (seminars, reading groups, cartels) —
     those have a dedicated home at /program/, gated by Program visibility.
-    Members-only events are hidden from anonymous visitors.
+    Members-only events are hidden from non-members — anonymous visitors and
+    authenticated outside registrants (auditors) alike.
     """
     today = timezone.now().date()
     events = (
@@ -85,7 +88,7 @@ def event_list(request):
         .exclude(event_type__in=Event.ANNUAL_PROGRAM_TYPES)
         .order_by("start_date", "title")
     )
-    if not request.user.is_authenticated:
+    if not is_lsp_member(request.user):
         events = events.filter(visibility=Event.Visibility.PUBLIC)
     return render(request, "events/event_list.html", {"events": events})
 

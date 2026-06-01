@@ -32,6 +32,8 @@ from django.urls import reverse
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
+from accounts.permissions import is_lsp_member
+
 
 class Document(models.Model):
     class Category(models.TextChoices):
@@ -175,16 +177,21 @@ class Document(models.Model):
     # ---- Visibility helpers ----
 
     def listing_visible_to(self, user) -> bool:
-        """Whether ``user`` may see this document's listing entry."""
+        """Whether ``user`` may see this document's listing entry.
+
+        Members-only documents require full LSP membership — an authenticated
+        outside registrant (an *auditor*, ``role=external``) is not a member
+        and must not see them. Same gate as ``works.Work``.
+        """
         if self.listing_visibility == self.Visibility.PUBLIC:
             return True
-        return bool(user and user.is_authenticated)
+        return is_lsp_member(user)
 
     def pdf_visible_to(self, user) -> bool:
-        """Whether ``user`` may download the PDF."""
+        """Whether ``user`` may download the PDF (members-only ⇒ LSP member)."""
         if self.pdf_visibility == self.Visibility.PUBLIC:
             return True
-        return bool(user and user.is_authenticated)
+        return is_lsp_member(user)
 
     @classmethod
     def for_user(cls, user):
@@ -194,7 +201,7 @@ class Document(models.Model):
         current document to surface its version history.
         """
         qs = cls.objects.filter(superseded_by__isnull=True)
-        if user and user.is_authenticated:
+        if is_lsp_member(user):
             return qs
         return qs.filter(listing_visibility=cls.Visibility.PUBLIC)
 

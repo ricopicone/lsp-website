@@ -1,7 +1,8 @@
 """Parlêtre views — the member-facing discussion board (M13.5a).
 
-All views require login *and* membership (:func:`permissions.is_member`).
-Channels a member can't access 404 rather than reveal their existence.
+All views require login *and* board entry (:func:`permissions.can_enter_parletre`
+— members, plus auditors confined to their seminar channel). Channels a user
+can't access 404 rather than reveal their existence.
 
 Covers the forum loop (browse / start / reply / chat / subscribe), reactions,
 @mentions + notifications, unread tracking, attachments, the digest-settings
@@ -51,7 +52,7 @@ from .models import (
     SubscriptionLevel,
     Thread,
 )
-from .permissions import is_member
+from .permissions import can_enter_parletre
 from .reads import (
     mark_channel_read,
     mark_thread_read,
@@ -144,7 +145,7 @@ def _ensure_auto_subscriptions(user, channels) -> None:
 @login_required
 def index(request):
     """Overview of every channel the member may see, grouped by category."""
-    if not is_member(request.user):
+    if not can_enter_parletre(request.user):
         return render(request, "parletre/not_a_member.html", status=403)
 
     channels = list(
@@ -502,7 +503,7 @@ def delete_post(request, post_id):
 @login_required
 def search(request):
     """Search posts the member can see (DISC-4)."""
-    if not is_member(request.user):
+    if not can_enter_parletre(request.user):
         return render(request, "parletre/not_a_member.html", status=403)
     query = request.GET.get("q", "").strip()
     hits = search_posts(request.user, query)
@@ -526,7 +527,7 @@ def search(request):
 @login_required
 def preferences(request):
     """Member's Parlêtre email settings — the digest cadence."""
-    if not is_member(request.user):
+    if not can_enter_parletre(request.user):
         return render(request, "parletre/not_a_member.html", status=403)
     pref, _ = DigestPreference.objects.get_or_create(user=request.user)
     if request.method == "POST":
@@ -548,7 +549,7 @@ def preferences(request):
 def mention_search(request):
     """Autocomplete for @mentions: members matching ``q`` who can see the
     given channel. Returns the directory slug to insert (``@first-last``)."""
-    if not is_member(request.user):
+    if not can_enter_parletre(request.user):
         raise Http404()
     q = request.GET.get("q", "").strip()
     if not q:
@@ -577,7 +578,7 @@ def mention_search(request):
 def notifications(request):
     """The member's notification feed (the nav bell). Viewing it marks all
     unread notifications read."""
-    if not is_member(request.user):
+    if not can_enter_parletre(request.user):
         return render(request, "parletre/not_a_member.html", status=403)
     items = list(
         Notification.objects.filter(recipient=request.user)

@@ -82,7 +82,7 @@ class Profile(models.Model):
         CANDIDATE_SCHOLAR = "candidate_scholar", _("Candidate Scholar")
         SCHOLAR = "scholar", _("Scholar")
         MEMBER = "member", _("Member")
-        EXTERNAL = "external", _("Guest")
+        EXTERNAL = "external", _("Auditor")
 
     class BillingMode(models.TextChoices):
         PER_CLASS = "per_class", _("Per class")
