@@ -30,6 +30,14 @@ def has_any_staff_role(user) -> bool:
     return user.staff_roles.exists()
 
 
+def can_access_staff_tools(user) -> bool:
+    """The entry gate to the /staff/ hub: any staff role, Django staff (who get
+    the treasurer + admin tools), or a superuser."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.is_superuser or user.is_staff or has_any_staff_role(user)
+
+
 def _guard(view, predicate):
     @wraps(view)
     def _wrapped(request, *args, **kwargs):
@@ -51,6 +59,6 @@ def staff_role_required(*keys: str):
     return decorator
 
 
-def coordinator_required(view):
-    """Decorator: the hub gate — any staff role (superusers always pass)."""
-    return _guard(view, lambda u: u.is_superuser or has_any_staff_role(u))
+def staff_tools_required(view):
+    """Decorator: the /staff/ hub gate (see ``can_access_staff_tools``)."""
+    return _guard(view, can_access_staff_tools)

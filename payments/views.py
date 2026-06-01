@@ -42,7 +42,15 @@ User = get_user_model()
 
 
 def _is_staff(user):
-    return user.is_authenticated and user.is_staff
+    """Gate for the treasurer/financial area: Django staff or the Treasurer role."""
+    if not user.is_authenticated:
+        return False
+    if user.is_staff:
+        return True
+    from core.access import has_staff_role
+    from core.models import StaffRole
+
+    return has_staff_role(user, StaffRole.TREASURER)
 
 
 TREASURER_TABS = [

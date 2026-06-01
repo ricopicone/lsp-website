@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="space-y-6 max-w-2xl">
-  <nav class="text-sm"><a href="{% url 'coordinator_aphorisms' %}" class="link link-hover text-base-content/60">← Aphorisms</a></nav>
+  <nav class="text-sm"><a href="{% url 'staff_aphorisms' %}" class="link link-hover text-base-content/60">← Aphorisms</a></nav>
 
   <h1 class="font-serif text-3xl text-base-content tracking-tight">
     {% if mode == "new" %}Add aphorism{% else %}Edit aphorism{% endif %}
@@ -35,7 +35,7 @@
     {% endfor %}
     <div class="flex items-center gap-3 pt-2">
       <button type="submit" class="btn btn-primary">{% if mode == "new" %}Add{% else %}Save changes{% endif %}</button>
-      <a href="{% url 'coordinator_aphorisms' %}" class="btn btn-ghost">Cancel</a>
+      <a href="{% url 'staff_aphorisms' %}" class="btn btn-ghost">Cancel</a>
     </div>
   </form>
 </div>
