@@ -161,6 +161,18 @@ def workgroup_detail(request, slug):
         if prog.is_public_now or can_edit_offering:
             program_url = reverse("program") + f"?year={prog.academic_year}"
             program_label = str(prog)
+    else:
+        # A cartel is part of the program(s) for the AY(s) it spans (by date
+        # overlap, not an FK) — link the most relevant visible one.
+        cartel_obj = _attached(wg, "cartel")
+        if cartel_obj is not None:
+            from events.models import Program
+
+            year = cartel_obj.program_year()
+            prog = Program.for_year(year)
+            if prog is not None and prog.is_public_now:
+                program_url = reverse("program") + f"?year={year}"
+                program_label = str(prog)
 
     parent_url = parent_label = None
     if wg.parent_id and wg.parent.landing_visible_to(request.user):

@@ -640,6 +640,63 @@ def test_cartel_workspace_shows_kind_breadcrumb(client):
     assert b"/program/?year=" not in resp.content                        # no program for cartels
 
 
+def test_open_cartel_listed_publicly_on_program(client):
+    """An Open cartel active during the AY appears on the public program page
+    (name + guiding question); Proposed cartels and the roster do not."""
+    from events.models import Program, current_academic_year
+
+    year = current_academic_year()
+    Program.objects.create(academic_year=year, published=True)
+
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(
+        generator=gen, name="The Sinthome", guiding_question="What is the sinthome?",
+    )
+    cartel.approve(_pc_member())   # → OPEN, reviewed_at=now → overlaps current AY
+
+    # A still-Proposed cartel must NOT leak onto the program.
+    Cartel.objects.propose(generator=gen, name="Secret Proposal")
+
+    resp = client.get(f"/program/?year={year}")   # anonymous
+    assert resp.status_code == 200
+    assert b"The Sinthome" in resp.content
+    assert b"What is the sinthome?" in resp.content
+    assert b"Secret Proposal" not in resp.content
+
+
+def test_cartel_not_listed_on_non_overlapping_year(client):
+    from datetime import date
+
+    from events.models import Program
+
+    Program.objects.create(academic_year="2099-2100", published=True)
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Past Cartel")
+    cartel.approve(_pc_member())
+    cartel.workgroup.start_date = date(2024, 9, 1)
+    cartel.workgroup.end_date = date(2025, 5, 1)
+    cartel.workgroup.save(update_fields=["start_date", "end_date"])
+
+    resp = client.get("/program/?year=2099-2100")
+    assert resp.status_code == 200
+    assert b"Past Cartel" not in resp.content
+
+
+def test_cartel_workspace_links_to_its_program(client):
+    from events.models import Program, current_academic_year
+
+    year = current_academic_year()
+    Program.objects.create(academic_year=year, published=True)
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_pc_member())
+
+    client.force_login(gen)
+    resp = client.get(cartel.workgroup.get_absolute_url())
+    assert resp.status_code == 200
+    assert f"/program/?year={year}".encode() in resp.content   # ← Program <year>
+
+
 def test_nested_group_links_back_to_parent_workgroup(client):
     """A nested group (e.g. a cartel under a parent working group) shows a
     stable back link to its parent — the cartel analog of seminar→program."""

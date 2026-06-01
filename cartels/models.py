@@ -53,6 +53,23 @@ class CartelManager(models.Manager):
             CartelInvitation.objects.get_or_create(cartel=cartel, invited_user=user)
         return cartel
 
+    def in_academic_year(self, year):
+        """Open / Archived cartels whose active window overlaps academic year
+        ``year`` — i.e. that *existed at any point* during it. These are listed
+        on that year's program (a cartel can span several years). Newest first.
+        """
+        from events.models import academic_year_date_range
+
+        ay_start, ay_end = academic_year_date_range(year)
+        out = [
+            c for c in self.filter(
+                status__in=(Cartel.Status.OPEN, Cartel.Status.ARCHIVED)
+            ).select_related("workgroup")
+            if c._window_overlaps(ay_start, ay_end)
+        ]
+        out.sort(key=lambda c: c.effective_window()[0], reverse=True)
+        return out
+
 
 class Cartel(models.Model):
     class Status(models.TextChoices):
@@ -109,6 +126,35 @@ class Cartel(models.Model):
         # The cartel's canonical page is the generic Workgroup detail
         # (/groups/<slug>/), which composes the cartel actions partial.
         return self.workgroup.get_absolute_url()
+
+    # ---- Program membership (by date overlap — cartels self-form, no FK) ----
+
+    def effective_window(self):
+        """The cartel's active (start, end) dates. Falls back to its review /
+        creation date when no explicit start is set; ``end`` is ``None`` for an
+        open-ended (ongoing) cartel."""
+        wg = self.workgroup
+        start = wg.start_date or (self.reviewed_at or self.created_at).date()
+        return start, wg.end_date
+
+    def _window_overlaps(self, range_start, range_end) -> bool:
+        start, end = self.effective_window()
+        return start <= range_end and (end is None or end >= range_start)
+
+    def overlaps_academic_year(self, year) -> bool:
+        from events.models import academic_year_date_range
+
+        return self._window_overlaps(*academic_year_date_range(year))
+
+    def program_year(self):
+        """The most relevant academic year for this cartel's program link: the
+        current AY if the cartel is active now, else the AY it started in."""
+        from events.models import academic_year_of, current_academic_year
+
+        now_year = current_academic_year()
+        if self.overlaps_academic_year(now_year):
+            return now_year
+        return academic_year_of(self.effective_window()[0])
 
     def viewer_state(self, user) -> dict:
         """Cartel-specific context for the (generic) detail page — so the

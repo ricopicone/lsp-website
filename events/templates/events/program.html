@@ -103,5 +103,39 @@
   </section>
   {% endif %}
 
+  {# ----- Cartels active during this year (self-formed; by date overlap) ----- #}
+  {% if cartels %}
+  <section class="space-y-4">
+    <h2 class="font-serif text-2xl text-base-content border-b border-base-300/60 pb-2">
+      Cartels
+    </h2>
+    <ul class="divide-y divide-base-300/60">
+      {% for c in cartels %}
+      <li class="py-4">
+        <a href="{{ c.get_absolute_url }}"
+           class="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h3 class="font-serif text-lg text-base-content group-hover:text-primary transition-colors">
+              {{ c.workgroup.name }}
+              {% if c.status == "archived" %}
+              <span class="ml-2 text-xs uppercase tracking-wider text-base-content/50 align-middle">Archived</span>
+              {% endif %}
+            </h3>
+            {% with win=c.effective_window %}
+            <span class="text-sm text-base-content/60 whitespace-nowrap">
+              {{ win.0|date:"M Y" }}{% if win.1 %} – {{ win.1|date:"M Y" }}{% else %} – present{% endif %}
+            </span>
+            {% endwith %}
+          </div>
+          {% if c.guiding_question %}
+          <p class="mt-1 text-sm text-base-content/70">{{ c.guiding_question|truncatewords:30 }}</p>
+          {% endif %}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
 </div>
 {% endblock %}

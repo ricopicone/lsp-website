@@ -133,11 +133,20 @@ def program(request):
     if current not in distinct_years:
         distinct_years.insert(0, current)
 
+    # Self-formed cartels that existed at any point during this AY are part of
+    # the program too (publicly — name + guiding question; their roster/content
+    # stay members-only). Cartels aren't program-owned Events, so they're found
+    # by date overlap rather than the Program FK.
+    from cartels.models import Cartel
+
+    cartels = Cartel.objects.in_academic_year(year)
+
     return render(request, "events/program.html", {
         "year":            year,
         "program":         program_obj,
         "seminars":        seminars,
         "offerings":       offerings,
+        "cartels":         cartels,
         "available_years": distinct_years,
         "is_current_year": year == current,
         "is_preview":      not program_obj.is_public_now,
