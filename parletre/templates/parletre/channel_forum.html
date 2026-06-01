@@ -29,29 +29,6 @@
   <p class="text-xs text-base-content/50">This is a read-only channel — only moderators may post.</p>
   {% endif %}
 
-  <ul class="divide-y divide-base-300/60 rounded-box border border-base-300 bg-base-100">
-    {% for thread in threads %}
-    <li class="p-4 flex items-center justify-between gap-3 hover:bg-base-200/40">
-      <div class="min-w-0">
-        <a href="{{ thread.get_absolute_url }}" class="{% if thread.is_unread %}font-semibold{% else %}font-medium{% endif %} text-base-content hover:text-primary">
-          {% if thread.is_unread %}<span class="size-2 rounded-full bg-primary inline-block align-middle shrink-0" title="Unread"></span> {% endif %}
-          {% if thread.pinned %}{% icon "pin" css="text-base-content/50 align-middle" title="Pinned" %} {% endif %}
-          {% if thread.locked %}{% icon "lock" css="text-base-content/50 align-middle" title="Locked" %} {% endif %}
-          {{ thread.title }}
-          {% if thread.resolved %}<span class="badge badge-sm badge-success badge-outline">Resolved</span>{% endif %}
-        </a>
-        <p class="text-xs text-base-content/50">
-          {% if thread.author %}{{ thread.author.get_full_name|default:thread.author.email }}{% else %}(removed){% endif %}
-          · {{ thread.reply_count }} post{{ thread.reply_count|pluralize }}
-        </p>
-      </div>
-      <time class="text-xs text-base-content/40 whitespace-nowrap" datetime="{{ thread.last_activity_at|date:'c' }}">
-        {{ thread.last_activity_at|date:"M j, g:i a" }}
-      </time>
-    </li>
-    {% empty %}
-    <li class="p-6 text-center text-base-content/50 italic">No threads yet.{% if can_post %} Start one.{% endif %}</li>
-    {% endfor %}
-  </ul>
+  {% include "parletre/_forum_threads.html" %}
 </div>
 {% endblock %}

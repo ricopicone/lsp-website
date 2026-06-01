@@ -24,8 +24,8 @@ _CATEGORY_FOR_KIND = {
 }
 
 
-def _unique_channel_slug(workgroup) -> str:
-    base = (slugify(workgroup.slug or workgroup.name) or "group")[:110]
+def _unique_channel_slug(workgroup, suffix="") -> str:
+    base = (slugify(workgroup.slug or workgroup.name) or "group")[: 105 - len(suffix)] + suffix
     slug = base
     n = 2
     while Channel.objects.filter(slug=slug).exists():
@@ -34,30 +34,41 @@ def _unique_channel_slug(workgroup) -> str:
     return slug
 
 
-@receiver(post_save, sender=Workgroup, dispatch_uid="parletre_provision_workgroup_channel")
-def provision_workgroup_channel(sender, instance, **kwargs):
-    """Give a workgroup a forum channel when it wants one and lacks it.
+def _category_for(kind):
+    catinfo = _CATEGORY_FOR_KIND.get(kind)
+    if not catinfo:
+        return None
+    name, position = catinfo
+    cat, _ = ChannelCategory.objects.get_or_create(
+        name=name, defaults={"slug": slugify(name), "position": position}
+    )
+    return cat
 
-    Idempotent: skips when ``has_channel`` is off or a channel already exists,
-    so toggling ``has_channel`` on later provisions one without duplicating.
-    """
-    if not instance.has_channel or instance.channels.exists():
+
+def provision_channels(workgroup):
+    """Ensure the workgroup has its Discuss (forum) + Chat channels, per kind.
+    Idempotent per kind — creates only the ones missing."""
+    if not workgroup.has_channel:
         return
-
-    category = None
-    catinfo = _CATEGORY_FOR_KIND.get(instance.kind)
-    if catinfo:
-        name, position = catinfo
-        category, _ = ChannelCategory.objects.get_or_create(
-            name=name, defaults={"slug": slugify(name), "position": position}
+    existing = set(workgroup.channels.values_list("kind", flat=True))
+    category = _category_for(workgroup.kind)
+    if Channel.Kind.FORUM not in existing:
+        Channel.objects.create(
+            name=workgroup.name, slug=_unique_channel_slug(workgroup),
+            kind=Channel.Kind.FORUM, access=Channel.Access.WORKGROUP,
+            workgroup=workgroup, category=category,
+            description=f"Discussion for {workgroup.name}.",
+        )
+    if Channel.Kind.CHAT not in existing:
+        Channel.objects.create(
+            name=f"{workgroup.name} chat"[:120], slug=_unique_channel_slug(workgroup, "-chat"),
+            kind=Channel.Kind.CHAT, access=Channel.Access.WORKGROUP,
+            workgroup=workgroup, category=category,
+            description=f"Chat for {workgroup.name}.",
         )
 
-    Channel.objects.create(
-        name=instance.name,
-        slug=_unique_channel_slug(instance),
-        kind=Channel.Kind.FORUM,
-        access=Channel.Access.WORKGROUP,
-        workgroup=instance,
-        category=category,
-        description=f"Discussion for {instance.name}.",
-    )
+
+@receiver(post_save, sender=Workgroup, dispatch_uid="parletre_provision_workgroup_channel")
+def provision_workgroup_channel(sender, instance, **kwargs):
+    """Auto-provision the workgroup's Discuss + Chat channels on save."""
+    provision_channels(instance)

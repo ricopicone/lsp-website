@@ -230,8 +230,8 @@
             <li><a href="{% url 'program_admin_programs' %}">Program Committee admin</a></li>
             {% endif %}
 
-            {% if user|is_coordinator %}
-            <li><a href="{% url 'coordinator' %}">Coordinator panel</a></li>
+            {% if user|has_staff_tools %}
+            <li><a href="{% url 'staff' %}">Staff tools</a></li>
             {% endif %}
 
             {% if user.is_staff %}

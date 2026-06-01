@@ -105,9 +105,18 @@ def workgroup_detail(request, slug):
     can_view = wg.content_visible_to(request.user)
     is_member = wg.is_member(request.user)
 
-    # Available tabs for this workgroup + viewer. (Discuss/Chat → W1b;
-    # Files → W2; Schedule → W3; Tasks → W4.)
+    # Discuss (forum) + Chat channels, for members. (Files → W2; Schedule →
+    # W3; Tasks → W4.)
+    discuss_channel = chat_channel = None
+    if is_member and wg.has_channel:
+        discuss_channel = wg.channels.filter(kind="forum").first()
+        chat_channel = wg.channels.filter(kind="chat").first()
+
     tabs = [("overview", "Overview")]
+    if discuss_channel:
+        tabs.append(("discuss", "Discuss"))
+    if chat_channel:
+        tabs.append(("chat", "Chat"))
     if wg.has_works and can_view:
         tabs.append(("work", "Work"))
     if is_member:
@@ -122,7 +131,6 @@ def workgroup_detail(request, slug):
         "can_view_content": can_view,
         "is_member": is_member,
         "members": list(wg.active_members()) if can_view else [],
-        "channel": wg.channels.first() if is_member else None,
         "tabs": tabs,
         "active_tab": active,
     }
@@ -136,7 +144,12 @@ def workgroup_detail(request, slug):
         context["is_coordinator"] = is_cartel_coordinator(request.user)
         context.update(cartel.viewer_state(request.user))
 
-    if active == "work" and wg.has_works and can_view:
+    if active in ("discuss", "chat"):
+        from parletre.views import channel_inline_context
+
+        ch = discuss_channel if active == "discuss" else chat_channel
+        context.update(channel_inline_context(request, ch))
+    elif active == "work" and wg.has_works and can_view:
         works = (
             Work.listing_for(request.user).filter(workgroup=wg).prefetch_related("files")
         )

@@ -5,7 +5,7 @@
 <script defer src="{% static 'js/parletre-chat.js' %}"></script>{% endblock %}
 
 {% block content %}
-<div class="space-y-5" data-chat="{{ channel.slug }}">
+<div class="space-y-5">
   <nav class="text-sm text-base-content/50">
     <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
     <span aria-hidden="true">/</span>
@@ -28,52 +28,6 @@
     </div>
   </header>
 
-  <div class="space-y-4" data-chat-stream>
-    {% for post in posts %}
-    <div class="flex gap-3" id="post-{{ post.id }}">
-      <div class="flex-1 min-w-0">
-        <p class="text-sm">
-          <span class="font-medium text-base-content">{% if post.author %}{{ post.author.get_full_name|default:post.author.email }}{% else %}(removed){% endif %}</span>
-          <time class="text-xs text-base-content/40 ml-1" datetime="{{ post.created_at|date:'c' }}">{{ post.created_at|date:"M j, g:i a" }}</time>
-          {% if post.edited_at and not post.is_redacted %}<span class="text-xs text-base-content/40">(edited)</span>{% endif %}
-        </p>
-        {% if not post.is_redacted %}{% include "parletre/_reply_context.html" %}{% endif %}
-        <div class="prose prose-sm max-w-none text-base-content/90">
-          {% if post.deleted %}<em class="text-base-content/40">(deleted)</em>
-          {% elif post.is_redacted %}<span class="redacted">{{ post.redacted_display }}</span>
-          {% else %}{{ post.body_html }}{% endif %}
-        </div>
-        {% if post.is_redacted %}{% include "parletre/_redacted_attachments.html" %}
-        {% elif not post.deleted %}{% include "parletre/_attachments.html" %}{% include "parletre/_reactions.html" %}{% include "parletre/_post_actions.html" %}{% endif %}
-      </div>
-    </div>
-    {% empty %}
-    <p class="text-base-content/50 italic">No messages yet.</p>
-    {% endfor %}
-  </div>
-
-  {% if can_post %}
-  <form id="composer" method="post" enctype="multipart/form-data" data-chat-form class="space-y-1 border-t border-base-300/60 pt-4">
-    {% csrf_token %}
-    {{ form.reply_to }}
-    {% include "parletre/_reply_banner.html" %}
-    <div class="parletre-composer">
-      <button type="button" class="composer-btn composer-attach" data-attach
-              title="Attach a file" aria-label="Attach a file">{% icon "paperclip" %}</button>
-      <div class="mention-host composer-field" data-mention-url="{% url 'parletre:mention_search' %}?channel={{ channel.slug }}">{{ form.body }}</div>
-      <button type="submit" class="composer-btn composer-send"
-              title="Send — Enter (Shift+Enter for a new line)" aria-label="Send">{% icon "arrow-up" %}</button>
-    </div>
-    <div hidden>{{ form.attachments }}</div>
-    <div class="flex items-center justify-between gap-2">
-      <span class="text-xs text-base-content/50" data-attach-summary></span>
-      <span class="text-xs text-base-content/35">↵ Enter to send · ⇧↵ new line</span>
-    </div>
-    {% if form.body.errors %}<p class="text-error text-sm">{{ form.body.errors|striptags }}</p>{% endif %}
-    {% if form.attachments.errors %}<p class="text-error text-sm">{{ form.attachments.errors|striptags }}</p>{% endif %}
-  </form>
-  {% else %}
-  <p class="text-xs text-base-content/50 border-t border-base-300/60 pt-4">Only moderators may post in this channel.</p>
-  {% endif %}
+  {% include "parletre/_chat_body.html" %}
 </div>
 {% endblock %}

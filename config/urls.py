@@ -19,7 +19,7 @@ from django.urls import include, path
 
 from accounts import views as _account_views
 from content import views as _content_views
-from core import coordinator as _coordinator_views
+from core import staff as _staff_views
 from events import views as _event_views
 from payments import views as _payment_views
 
@@ -46,17 +46,15 @@ urlpatterns = [
     path("program-admin/<str:academic_year>/events/<slug:slug>/edit/",
          _event_views.program_admin_event_edit,
          name="program_admin_event_edit"),
-    path("coordinator/", _coordinator_views.home, name="coordinator"),
-    path("coordinator/aphorisms/", _coordinator_views.aphorism_list,
-         name="coordinator_aphorisms"),
-    path("coordinator/aphorisms/new/", _coordinator_views.aphorism_create,
-         name="coordinator_aphorism_new"),
-    path("coordinator/aphorisms/<int:pk>/edit/", _coordinator_views.aphorism_edit,
-         name="coordinator_aphorism_edit"),
-    path("coordinator/aphorisms/<int:pk>/delete/", _coordinator_views.aphorism_delete,
-         name="coordinator_aphorism_delete"),
-    path("coordinator/aphorisms/<int:pk>/toggle/", _coordinator_views.aphorism_toggle,
-         name="coordinator_aphorism_toggle"),
+    path("staff/", _staff_views.home, name="staff"),
+    path("staff/aphorisms/", _staff_views.aphorism_list, name="staff_aphorisms"),
+    path("staff/aphorisms/new/", _staff_views.aphorism_create, name="staff_aphorism_new"),
+    path("staff/aphorisms/<int:pk>/edit/", _staff_views.aphorism_edit,
+         name="staff_aphorism_edit"),
+    path("staff/aphorisms/<int:pk>/delete/", _staff_views.aphorism_delete,
+         name="staff_aphorism_delete"),
+    path("staff/aphorisms/<int:pk>/toggle/", _staff_views.aphorism_toggle,
+         name="staff_aphorism_toggle"),
     path("events/", include("events.urls")),
     path("documents/", include("documents.urls")),
     path("works/", include("works.urls")),
