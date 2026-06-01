@@ -26,36 +26,43 @@ PANEL_ROLES = (
     StaffRole.CARTEL_COORDINATOR,
 )
 
-#: Committee control panels: (committee slug, title, blurb, url name). A
-#: committee member (or Django staff) sees its card. Board of Directors and
-#: Meeting of Analysts slot in here once their admin surfaces are built.
-COMMITTEE_PANELS = [
-    ("programming-committee", "Program Committee",
-     "Solicit and review proposals; mint events into a program.",
-     "program_admin_programs"),
-]
+#: Committees with a bespoke admin tool. Every other committee's card links to
+#: its workgroup page (where its roster, minutes, decisions, and discussion
+#: live). Add a bespoke admin here only when one exists.
+COMMITTEE_ADMIN_URLS = {"programming-committee": "program_admin_programs"}
+
+_COMMITTEE_BLURBS = {
+    "programming-committee": "Solicit and review proposals; mint events into a program.",
+}
+_DEFAULT_COMMITTEE_BLURB = "Roster, minutes, decisions, and discussion."
 
 
 def _can_treasurer(user) -> bool:
     return user.is_superuser or user.is_staff or has_staff_role(user, StaffRole.TREASURER)
 
 
-def _on_committee(user, slug: str) -> bool:
-    from committees.permissions import is_on_committee
-    return is_on_committee(user, slug)
+def _member_committee_slugs(user) -> set[str]:
+    """Slugs of committees the user is a current member of."""
+    from workgroups.models import WorkgroupMembership
+
+    return set(
+        WorkgroupMembership.objects.filter(
+            user=user, end_date__isnull=True, workgroup__committee__isnull=False,
+        ).values_list("workgroup__committee__slug", flat=True)
+    )
 
 
 def can_access_staff_tools(user) -> bool:
     """Entry gate to /staff/: true iff the user would see at least one tool —
-    a panel-bearing staff role, Django staff, a superuser, or membership of a
-    committee that has a panel. Kept cheap (no count queries) for the nav."""
+    a panel-bearing staff role, Django staff, a superuser, or membership of any
+    committee. Kept cheap (no count queries) for the nav link."""
     if not getattr(user, "is_authenticated", False):
         return False
     if user.is_superuser or user.is_staff:
         return True
     if has_staff_role(user, *PANEL_ROLES):
         return True
-    return any(_on_committee(user, slug) for slug, *_ in COMMITTEE_PANELS)
+    return bool(_member_committee_slugs(user))
 
 
 def _panels_for(user) -> list[dict]:
@@ -86,9 +93,25 @@ def _panels_for(user) -> list[dict]:
             "count": Cartel.objects.filter(status=Cartel.Status.PROPOSED).count(),
             "count_label": "pending",
         })
-    for slug, title, blurb, url_name in COMMITTEE_PANELS:
-        if user.is_superuser or user.is_staff or _on_committee(user, slug):
-            panels.append({"title": title, "blurb": blurb, "url": reverse(url_name)})
+    # One card per committee the user can reach (member, or staff/superuser).
+    from committees.models import Committee
+
+    member_slugs = _member_committee_slugs(user)
+    sees_all = user.is_superuser or user.is_staff
+    for c in Committee.objects.select_related("workgroup").order_by("name"):
+        if not (sees_all or c.slug in member_slugs):
+            continue
+        if c.slug in COMMITTEE_ADMIN_URLS:
+            url = reverse(COMMITTEE_ADMIN_URLS[c.slug])
+        elif c.workgroup_id:
+            url = reverse("workgroups:detail", args=[c.workgroup.slug])
+        else:
+            continue
+        panels.append({
+            "title": c.name,
+            "blurb": _COMMITTEE_BLURBS.get(c.slug, _DEFAULT_COMMITTEE_BLURB),
+            "url": url,
+        })
     if user.is_staff:
         panels.append({
             "title": "Django admin",

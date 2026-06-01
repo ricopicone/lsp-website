@@ -474,3 +474,25 @@ def test_committee_member_sees_committee_panel(client, pc_member):
     assert b"Program Committee" in hub.content
     assert b"Aphorisms" not in hub.content  # not a web coordinator
     assert client.get(reverse("program_admin_programs")).status_code == 200
+
+
+def test_board_member_sees_board_card(db, client):
+    """A Board member (no role, not Django staff) sees the Board card, which
+    links to the committee's workgroup page."""
+    from committees.models import Committee
+
+    user = User.objects.create_user(email="board@example.com", password="x")
+    board = Committee.objects.get(slug="board")
+    board.add_member(user, start_date=date(2026, 1, 1))
+    client.force_login(user)
+    body = client.get(reverse("staff")).content
+    assert b"Board" in body
+    assert reverse("workgroups:detail", args=[board.workgroup.slug]).encode() in body
+
+
+def test_meeting_of_analysts_committee_seeded(db):
+    """The Meeting of Analysts committee exists with a backing workgroup."""
+    from committees.models import Committee
+
+    c = Committee.objects.get(slug="meeting-of-analysts")
+    assert c.workgroup_id is not None
