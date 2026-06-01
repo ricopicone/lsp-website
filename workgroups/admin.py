@@ -22,7 +22,8 @@ class WorkgroupAdmin(admin.ModelAdmin):
     autocomplete_fields = ("parent",)
     inlines = (WorkgroupMembershipInline,)
     fieldsets = (
-        (None, {"fields": ("kind", "name", "slug", "description", "parent")}),
+        (None, {"fields": ("kind", "name", "slug", "description", "parent",
+                           "auto_member_role")}),
         ("Visibility", {"fields": ("landing_visibility", "content_visibility")}),
         ("Term", {"fields": ("start_date", "end_date")}),
         ("Capabilities", {

@@ -127,6 +127,16 @@ class Workgroup(models.Model):
         related_name="children",
         help_text="Optional parent group (e.g. a committee that spawned this).",
     )
+    auto_member_role = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        help_text=(
+            "If set to a Profile role (e.g. 'analyst'), every active user with "
+            "that role is automatically a member of this group — derived, no "
+            "roster rows. Used for the Meeting of Analysts."
+        ),
+    )
 
     # Capability toggles — defaulted per kind at creation, fully editable after.
     has_channel = models.BooleanField(default=True)
@@ -186,6 +196,10 @@ class Workgroup(models.Model):
         :meth:`participants`."""
         return self.memberships.filter(end_date__isnull=True).select_related("user")
 
+    @staticmethod
+    def _user_role(user):
+        return getattr(getattr(user, "profile", None), "role", None)
+
     def is_member(self, user) -> bool:
         """The single access primitive the cross-cutting apps call.
 
@@ -199,6 +213,10 @@ class Workgroup(models.Model):
         """
         if not getattr(user, "is_authenticated", False):
             return False
+        # Role-derived membership (e.g. every Analyst belongs to the Meeting of
+        # Analysts) — automatic, no stored row.
+        if self.auto_member_role and self._user_role(user) == self.auto_member_role:
+            return True
         if self.memberships.filter(user=user, end_date__isnull=True).exists():
             return True
         # Derive from registrations ONLY for offering workgroups, whose
@@ -222,6 +240,18 @@ class Workgroup(models.Model):
                 user=m.user, role=m.role,
                 is_lead=m.role in WorkgroupMembership.LEAD_ROLES, membership=m,
             )
+        # Role-derived members (e.g. all Analysts in the Meeting of Analysts).
+        if self.auto_member_role:
+            from django.contrib.auth import get_user_model
+
+            users = (get_user_model().objects
+                     .filter(profile__role=self.auto_member_role, is_active=True)
+                     .select_related("profile"))
+            for u in users:
+                if u.pk not in seen:
+                    seen[u.pk] = Participant(
+                        user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
+                    )
         # Derived registrants only for offering workgroups (see ``is_member``) —
         # a committee's organized-event registrants are not its roster.
         if self.kind in self.OFFERING_KINDS:

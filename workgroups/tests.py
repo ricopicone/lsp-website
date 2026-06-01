@@ -181,6 +181,20 @@ def test_roster_visibility_policy_by_kind(kind, public, members_only):
     assert wg.roster_visible_to(lsp_member) is members_only
 
 
+def test_auto_member_role_derives_membership():
+    """A workgroup with auto_member_role makes every user of that Profile role
+    a member — derived, with no stored roster row."""
+    wg = _wg(kind=Workgroup.Kind.COMMITTEE, auto_member_role="analyst")
+    analyst = _user("a@x.test", role=Profile.Role.ANALYST)
+    other = _user("m@x.test", role=Profile.Role.MEMBER)
+
+    assert wg.is_member(analyst) is True
+    assert wg.is_member(other) is False
+    users = [p.user for p in wg.participants()]
+    assert analyst in users and other not in users
+    assert not WorkgroupMembership.objects.filter(workgroup=wg, user=analyst).exists()
+
+
 def test_groups_overview_shows_a_card_per_kind(client):
     """The /groups/ overview lists the kinds, not individual groups."""
     resp = client.get("/groups/")

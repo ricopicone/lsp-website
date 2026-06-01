@@ -33,6 +33,25 @@ def test_committee_has_backing_workgroup():
 
 
 @pytest.mark.django_db
+def test_every_analyst_is_member_of_meeting_of_analysts():
+    from accounts.models import Profile
+
+    c = Committee.objects.get(slug="meeting-of-analysts")
+    assert c.workgroup.auto_member_role == Profile.Role.ANALYST
+
+    analyst = User.objects.create_user(email="analyst@x.test")
+    analyst.profile.role = Profile.Role.ANALYST
+    analyst.profile.save()
+    non_analyst = User.objects.create_user(email="scholar@x.test")
+    non_analyst.profile.role = Profile.Role.SCHOLAR
+    non_analyst.profile.save()
+
+    assert c.workgroup.is_member(analyst) is True
+    assert c.workgroup.is_member(non_analyst) is False
+    assert analyst in [p.user for p in c.workgroup.participants()]
+
+
+@pytest.mark.django_db
 def test_committee_does_not_derive_from_organized_events():
     """A committee *organizes* events (they link to its workgroup) but does not
     *offer* them. Its roster / membership / Overview must NOT derive from those
