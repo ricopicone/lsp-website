@@ -1,0 +1,77 @@
+{% extends "events/program_admin/base.html" %}
+{% block tab_content %}
+<div class="space-y-8">
+  <p class="text-sm text-base-content/60">
+    Seminar proposals from faculty. Approving one mints its seminar into the
+    proposed academic year's program (you still publish the program separately).
+  </p>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Pending</h2>
+    {% if pending %}
+    <ul class="space-y-3">
+      {% for p in pending %}
+      <li class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-4">
+        <div class="space-y-1">
+          <p class="font-medium text-base-content">{{ p.title }}
+            <span class="text-xs font-normal text-base-content/55">· {{ p.academic_year }}
+              · {{ p.get_format_display }}
+              {% if p.continues_seminar %}· continues “{{ p.continues_seminar.name }}”{% endif %}</span>
+          </p>
+          <p class="text-xs text-base-content/60">
+            Proposed by {{ p.proposed_by.get_full_name|default:p.proposed_by.email }}
+            · {{ p.start_date|date:"M j, Y" }} – {{ p.end_date|date:"M j, Y" }}
+            {% with names=p.faculty.all %}{% if names %}· faculty:
+              {% for f in names %}{{ f.get_full_name|default:f.email }}{% if not forloop.last %}, {% endif %}{% endfor %}
+            {% endif %}{% endwith %}
+          </p>
+          {% if p.description %}<p class="text-sm text-base-content/70 whitespace-pre-line">{{ p.description }}</p>{% endif %}
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <form method="post" action="{% url 'seminar_proposal_decide' p.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="decision" value="approve">
+            <button class="btn btn-primary btn-sm">Approve &amp; mint</button>
+          </form>
+          <form method="post" action="{% url 'seminar_proposal_decide' p.pk %}"
+                class="flex items-center gap-2">
+            {% csrf_token %}
+            <input type="hidden" name="decision" value="decline">
+            <input type="text" name="note" placeholder="Reason (optional)"
+                   class="input input-bordered input-sm">
+            <button class="btn btn-ghost btn-sm">Decline</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="py-4 text-base-content/55">No proposals awaiting review.</p>
+    {% endif %}
+  </section>
+
+  {% if decided %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Decided</h2>
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead><tr><th>Title</th><th>Year</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {% for p in decided %}
+          <tr>
+            <td class="font-medium">{{ p.title }}</td>
+            <td class="text-base-content/70">{{ p.academic_year }}</td>
+            <td>
+              {% if p.status == "approved" %}<span class="badge badge-success badge-sm">Approved</span>
+              {% else %}<span class="badge badge-ghost badge-sm">Declined</span>{% endif %}
+            </td>
+            <td>{% if p.minted_event %}<a href="{% url 'events:detail' p.minted_event.slug %}" class="link link-primary text-sm">View →</a>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

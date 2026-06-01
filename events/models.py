@@ -17,7 +17,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 
 # Excludes visually ambiguous characters (0/O, 1/I/L).
@@ -752,3 +752,128 @@ class PricingCode(models.Model):
         # (issued_by's faculty standing is enforced at mint time via
         # can_edit_event → Event.is_faculty, not re-checked on redemption.)
         return True
+
+
+class SeminarProposal(models.Model):
+    """A faculty member's proposal to run a seminar (M12.5).
+
+    The Programming Committee reviews it; on approval it mints a SEMINAR
+    ``Event`` — a brand-new standing seminar, or a new yearly term of an
+    existing one via ``continues_seminar`` — attached to the target academic
+    year's ``Program``. Direct PC event creation (``program_admin_event_new``)
+    remains the other path (dual-path, G1).
+
+    A standalone typed record rather than a ``workgroups.WorkgroupProposal``:
+    that model is one-per-workgroup, which a *continuing* seminar (whose
+    workgroup already exists and carries its own proposal) can't satisfy, and a
+    pre-approval proposal has no workgroup yet.
+    """
+
+    class Status(models.TextChoices):
+        PROPOSED = "proposed", _("Proposed — under review")
+        APPROVED = "approved", _("Approved")
+        DECLINED = "declined", _("Declined")
+
+    proposed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="seminar_proposals",
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    format = models.CharField(
+        max_length=20, choices=Event.Format.choices, default=Event.Format.ONLINE,
+    )
+    continues_seminar = models.ForeignKey(
+        "workgroups.Workgroup", on_delete=models.SET_NULL, null=True, blank=True,
+        limit_choices_to={"kind": "seminar"}, related_name="seminar_proposals",
+        help_text="Optional: propose a new yearly term of this existing seminar.",
+    )
+    faculty = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, blank=True, related_name="proposed_seminars",
+    )
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PROPOSED,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="seminar_proposals_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True, help_text="Decline reason / review notes.")
+    minted_event = models.ForeignKey(
+        "events.Event", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="from_proposal",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.title} ({self.get_status_display()})"
+
+    @property
+    def academic_year(self) -> str:
+        return academic_year_of(self.start_date)
+
+    def _unique_event_slug(self) -> str:
+        from django.utils.text import slugify
+
+        base = (slugify(self.title) or "seminar")[:200]
+        slug, n = base, 2
+        while Event.objects.filter(slug=slug).exists():
+            slug = f"{base[:194]}-{n}"
+            n += 1
+        return slug
+
+    @transaction.atomic
+    def approve(self, reviewer):
+        """Mint the seminar Event (+ standing workgroup, faculty, program).
+        Idempotent: returns the already-minted event if not PROPOSED."""
+        if self.status != self.Status.PROPOSED:
+            return self.minted_event
+        from django.utils import timezone
+
+        program, _created = Program.objects.get_or_create(academic_year=self.academic_year)
+        event = Event.objects.create(
+            title=self.title[:200], slug=self._unique_event_slug(),
+            event_type=Event.Type.SEMINAR,
+            start_date=self.start_date, end_date=self.end_date,
+            format=self.format, status=Event.Status.OPEN,
+            description=self.description, program=program,
+        )
+        # Continuing seminar → attach its existing standing workgroup so
+        # ensure_workgroup() adds a new term rather than spawning a fresh group.
+        if self.continues_seminar_id and event.workgroup_id is None:
+            event.workgroup_id = self.continues_seminar_id
+            event.save(update_fields=["workgroup"])
+        # set_faculty() calls ensure_workgroup() — for a brand-new seminar that
+        # creates the standing SEMINAR workgroup (and its channel).
+        event.set_faculty(list(self.faculty.all()))
+        self.status = self.Status.APPROVED
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.minted_event = event
+        self.save(update_fields=["status", "reviewed_by", "reviewed_at", "minted_event"])
+        return event
+
+    def decline(self, reviewer, note=""):
+        from django.utils import timezone
+
+        self.status = self.Status.DECLINED
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.review_note = note
+        self.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
+
+    def resubmit(self):
+        """A declined proposal, edited, re-enters review."""
+        if self.status != self.Status.DECLINED:
+            return
+        self.status = self.Status.PROPOSED
+        self.reviewed_by = None
+        self.reviewed_at = None
+        self.review_note = ""
+        self.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
