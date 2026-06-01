@@ -250,6 +250,65 @@ def test_reading_group_public_landing_roster_members_only(client):
     assert b"Join this group" in resp.content
 
 
+def _paid_reading_group(slug="freud-rg", term_start=datetime.date(2099, 9, 1),
+                        term_end=datetime.date(2100, 5, 1)):
+    """A standing paid reading group with one current term (Event)."""
+    from decimal import Decimal
+
+    from events.models import Audience, Event, PriceTier
+
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP, name="Freud RG", slug=slug,
+             open_join=False, landing_visibility=Visibility.PUBLIC)
+    term = Event.objects.create(
+        title="Freud RG term", slug=f"{slug}-term",
+        event_type=Event.Type.READING_GROUP, start_date=term_start, end_date=term_end,
+        published=True, status=Event.Status.OPEN, workgroup=wg,
+    )
+    PriceTier.objects.create(event=term, audience=Audience.ALL, base_amount=Decimal("100"))
+    return wg, term
+
+
+def _paid_for(term, user):
+    from decimal import Decimal
+
+    from registrations.models import Registration
+
+    return Registration.objects.create(
+        user=user, event=term, price_tier=term.price_tiers.first(),
+        quoted_amount=Decimal("100"), status=Registration.Status.PAID,
+    )
+
+
+def test_paid_reading_group_membership_from_current_term(client):
+    wg, term = _paid_reading_group()
+    assert wg.current_term() == term
+
+    payer = _user("payer@x.test", role=Profile.Role.ANALYST)
+    _paid_for(term, payer)
+    assert wg.is_member(payer) is True
+    assert payer in [p.user for p in wg.participants()]
+
+    stranger = _user("stranger@x.test", role=Profile.Role.ANALYST)
+    assert wg.is_member(stranger) is False
+
+    # Overview offers the term's register CTA (pay to join), not a free Join.
+    resp = client.get(wg.get_absolute_url())
+    assert reverse("registrations:register", args=[term.slug]).encode() in resp.content
+    assert b"Join this group" not in resp.content
+
+
+def test_reading_group_membership_lapses_when_term_ends(client):
+    # A term that already ended → no current term → registrant lapses.
+    wg, term = _paid_reading_group(
+        slug="freud-old", term_start=datetime.date(2020, 9, 1),
+        term_end=datetime.date(2021, 5, 1),
+    )
+    payer = _user("payer@x.test", role=Profile.Role.ANALYST)
+    _paid_for(term, payer)
+    assert wg.current_term() is None
+    assert wg.is_member(payer) is False
+
+
 def test_reading_group_kind_default_open_join():
     from workgroups.models import build_workgroup
 

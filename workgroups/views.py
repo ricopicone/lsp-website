@@ -237,13 +237,15 @@ def workgroup_detail(request, slug):
         context["is_coordinator"] = is_cartel_coordinator(request.user)
         context.update(cartel.viewer_state(request.user))
 
-    if active == "overview" and primary_event is not None:
-        # A seminar / reading-group Workspace shows the generated event's public
-        # summary (faculty, sessions, pricing, Register) inline — the shared
-        # partial keeps it identical to the standalone event page.
-        from events.views import event_summary_context
+    if active == "overview":
+        # Seminars feature their event; a paid reading group features the
+        # current academic year's term (register + pay). The shared partial
+        # keeps it identical to the standalone event page.
+        overview_event = primary_event or wg.current_term()
+        if overview_event is not None:
+            from events.views import event_summary_context
 
-        context.update(event_summary_context(primary_event, request.user))
+            context.update(event_summary_context(overview_event, request.user))
     elif active == "roster" and can_edit_offering:
         # PROG-8 faculty tooling: registrant roster + pricing-code minting.
         from registrations.models import Registration

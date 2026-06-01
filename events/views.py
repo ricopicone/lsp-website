@@ -121,9 +121,9 @@ def program(request):
         .order_by("start_date", "title")
     )
     seminars = list(events_qs.filter(event_type=Event.Type.SEMINAR))
-    offerings = list(events_qs.filter(
-        event_type__in=[Event.Type.READING_GROUP, Event.Type.CARTEL]
-    ))
+    # Reading groups are listed below as standing workgroups (their term events
+    # aren't shown here); cartels likewise have their own section.
+    offerings = list(events_qs.filter(event_type=Event.Type.CARTEL))
 
     # Year-picker options: every Program that's publicly visible right
     # now, plus all programs if the viewer can preview. Always include the

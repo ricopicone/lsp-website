@@ -226,6 +226,12 @@ class Workgroup(models.Model):
             return True
         if self.memberships.filter(user=user, end_date__isnull=True).exists():
             return True
+        # A paid reading group's current members = paid/comped registrants of
+        # the CURRENT academic year's term (they renew each year; past-term
+        # registrants lapse).
+        if self.kind == self.Kind.READING_GROUP:
+            term = self.current_term()
+            return term is not None and term.has_access_registrant(user)
         # Derive from registrations ONLY for offering workgroups, whose
         # attached event IS the group. A committee merely *organizes* events
         # (they link to its workgroup), so its registrants must NOT become
@@ -261,14 +267,33 @@ class Workgroup(models.Model):
                     )
         # Derived registrants only for offering workgroups (see ``is_member``) —
         # a committee's organized-event registrants are not its roster.
+        derived_events = []
         if self.kind in self.OFFERING_KINDS:
-            for event in self.events.all():
-                for u in event.access_registrant_users():
-                    if u.pk not in seen:
-                        seen[u.pk] = Participant(
-                            user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
-                        )
+            derived_events = list(self.events.all())
+        elif self.kind == self.Kind.READING_GROUP:
+            term = self.current_term()
+            derived_events = [term] if term is not None else []
+        for event in derived_events:
+            for u in event.access_registrant_users():
+                if u.pk not in seen:
+                    seen[u.pk] = Participant(
+                        user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
+                    )
         return list(seen.values())
+
+    def current_term(self):
+        """For a paid reading group, the active-or-upcoming term Event — the
+        annual paid cycle members register for (and renew each year). The
+        soonest term that hasn't ended yet; ``None`` once a term ends and no
+        next one is open (members lapse until the next term). ``None`` for a
+        free reading group (no term) or any other kind."""
+        if self.kind != self.Kind.READING_GROUP:
+            return None
+        today = timezone.localdate()
+        active = [e for e in self.events.all() if e.end_date and e.end_date >= today]
+        if not active:
+            return None
+        return min(active, key=lambda e: e.start_date or today)
 
     def primary_event(self):
         """For an offering workgroup (seminar / reading group), the Event to
