@@ -13,14 +13,24 @@
       Current academic year: {{ tuition_period.name }}
     </h2>
     <p class="text-sm text-base-content/70">
-      <strong class="text-base-content">${{ tuition_period.tuition_amount }}</strong> per student ·
+      <strong class="text-base-content">{{ tuition_period.tuition_amount|usd0 }}</strong> per student ·
       decisions due {{ tuition_period.decision_due_date|date:"M j, Y" }} ·
       {{ tuition_period.start_date|date:"M j, Y" }} – {{ tuition_period.end_date|date:"M j, Y" }}.
     </p>
 
+    {% comment %}Featured dollar amounts — what's in, what's expected, what's at risk.{% endcomment %}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-3xl">
+      {% include "payments/treasurer/_money_tile.html" with label="Collected" value=tuition_total_collected tone="success" %}
+      {% include "payments/treasurer/_money_tile.html" with label="Planned, unpaid" value=tuition_committed_remaining tone="info" %}
+      {% include "payments/treasurer/_money_tile.html" with label="Owed, undecided" value=tuition_undecided_owed tone="warning" %}
+    </div>
+    <div class="rounded-lg border border-base-300 p-4 bg-base-100 max-w-3xl">
+      <canvas id="chart-tuition-money" height="58"></canvas>
+    </div>
+
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
       {% include "core/_stat_card.html" with label="In-training" value=tuition_in_training_count %}
-      {% include "core/_stat_card.html" with label="Collected"   value=tuition_total_collected|usd %}
+      {% include "core/_stat_card.html" with label="Outstanding" value=tuition_outstanding|usd hint="planned + undecided" %}
       {% include "core/_stat_card.html" with label="Reconciliation queue" value=tuition_reconciliation_users|length tone="warning" span="2" hint="undecided + committed-without-payment" %}
     </div>
   </section>
@@ -116,4 +126,51 @@
   {% endif %}
 
 </div>
+
+{% if tuition_period %}
+<script id="chart-tuition-money-data" type="application/json">{{ chart_tuition_money_json|safe }}</script>
+<script>
+  (function () {
+    function cssVar(name, fallback) {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return v || fallback;
+    }
+    var success = cssVar("--color-success", "#5f8a5f");
+    var info = cssVar("--color-info", "#6b8fb5");
+    var warning = cssVar("--color-warning", "#d4a017");
+    Chart.defaults.color = cssVar("--color-base-content", "#222");
+    Chart.defaults.borderColor = "rgba(127, 127, 127, 0.15)";
+    var usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    var t = JSON.parse(document.getElementById("chart-tuition-money-data").textContent);
+    var segments = [
+      { label: "Collected", value: t.collected, color: success },
+      { label: "Planned, unpaid", value: t.planned, color: info },
+      { label: "Owed, undecided", value: t.owed, color: warning },
+    ];
+    var total = segments.reduce(function (a, s) { return a + s.value; }, 0);
+    new Chart(document.getElementById("chart-tuition-money"), {
+      type: "bar",
+      data: {
+        labels: [""],
+        datasets: segments.map(function (s) {
+          return { label: s.label, data: [s.value], backgroundColor: s.color, borderWidth: 0, barThickness: 26 };
+        }),
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, beginAtZero: true, display: false, max: total || 1 },
+          y: { stacked: true, display: false },
+        },
+        plugins: {
+          legend: { display: true, position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } },
+          tooltip: { callbacks: { label: function (c) { return c.dataset.label + ": " + usd.format(c.parsed.x); } } },
+        },
+      },
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}
