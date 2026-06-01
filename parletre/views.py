@@ -31,6 +31,7 @@ from django.http import (
 )
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -206,6 +207,13 @@ def channel(request, slug):
             _save_attachments(post, form.cleaned_data.get("attachments"))
             notify_post(post)
             broadcast_chat_post(post)  # reach any live WebSocket clients
+            # Return to the embedding page (e.g. a workgroup Workspace chat tab)
+            # when a safe ?next was provided; otherwise the channel page.
+            nxt = request.POST.get("next") or ""
+            if nxt and url_has_allowed_host_and_scheme(
+                nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+            ):
+                return redirect(nxt)
             return redirect(channel)
     else:
         form = PostForm(initial={"reply_to": request.GET.get("reply_to") or None})
@@ -288,7 +296,9 @@ def channel_inline_context(request, channel) -> dict:
         chat_posts, request.user, context["can_moderate"], cutoff
     )
     context["reaction_palette"] = REACTION_EMOJI
-    context["form"] = PostForm(initial={"reply_to": None})
+    reply_to = request.GET.get("reply_to")
+    context["reply_parent"] = _reply_parent(reply_to, channel)
+    context["form"] = PostForm(initial={"reply_to": reply_to or None})
     return context
 
 

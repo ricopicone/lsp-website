@@ -1,5 +1,7 @@
-{% comment %}Reaction row for one post. Expects: post (with reaction_summary),
-reaction_palette.{% endcomment %}
+{% comment %}Existing-reaction tallies for one post. Expects: post (with
+reaction_summary). The "add a reaction" picker lives in _post_actions.html.
+Renders nothing until there are reactions.{% endcomment %}
+{% if post.reaction_summary %}
 <div class="flex items-center gap-1 mt-2 flex-wrap">
   {% for r in post.reaction_summary %}
   <form method="post" action="{% url 'parletre:react' post.id %}" style="display:contents">
@@ -10,16 +12,5 @@ reaction_palette.{% endcomment %}
             title="{% if r.mine %}Remove your reaction{% else %}React{% endif %}">{{ r.emoji }} {{ r.count }}</button>
   </form>
   {% endfor %}
-  <details class="dropdown">
-    <summary class="badge badge-sm badge-ghost cursor-pointer list-none" title="Add a reaction">＋</summary>
-    <div class="dropdown-content z-10 mt-1 bg-base-100 border border-base-300 rounded-box p-1 flex gap-1 shadow">
-      {% for e in reaction_palette %}
-      <form method="post" action="{% url 'parletre:react' post.id %}" style="display:contents">
-        {% csrf_token %}
-        <input type="hidden" name="emoji" value="{{ e }}">
-        <button type="submit" class="btn btn-ghost btn-xs">{{ e }}</button>
-      </form>
-      {% endfor %}
-    </div>
-  </details>
 </div>
+{% endif %}

@@ -1,7 +1,11 @@
-{% comment %}Reply / Edit / Delete for one post. Expects: post, can_post.{% endcomment %}
+{% comment %}Reply / Edit / Delete / React for one post. Expects: post,
+can_post, reaction_palette. The Reply link preserves the current ?tab= so it
+works when the chat is embedded in a workgroup Workspace.{% endcomment %}
+{% load parletre_tags %}
 <div class="flex items-center gap-3 mt-1 text-xs text-base-content/40">
   {% if can_post %}
-  <a href="?reply_to={{ post.id }}#composer" class="hover:text-primary">Reply</a>
+  <a href="?{% if request.GET.tab %}tab={{ request.GET.tab }}&{% endif %}reply_to={{ post.id }}#composer"
+     class="hover:text-primary">Reply</a>
   {% endif %}
   {% if post.can_edit %}
   <a href="{% url 'parletre:edit_post' post.id %}" class="hover:text-primary">Edit</a>
@@ -12,5 +16,20 @@
     {% csrf_token %}
     <button type="submit" class="hover:text-error">Delete</button>
   </form>
+  {% endif %}
+  {% if can_post %}
+  <details class="dropdown">
+    <summary class="cursor-pointer hover:text-primary list-none inline-flex items-center"
+             title="Add a reaction">{% icon "smile" %}</summary>
+    <div class="dropdown-content z-10 mt-1 bg-base-100 border border-base-300 rounded-box p-1 flex gap-1 shadow">
+      {% for e in reaction_palette %}
+      <form method="post" action="{% url 'parletre:react' post.id %}" style="display:contents">
+        {% csrf_token %}
+        <input type="hidden" name="emoji" value="{{ e }}">
+        <button type="submit" class="btn btn-ghost btn-xs">{{ e }}</button>
+      </form>
+      {% endfor %}
+    </div>
+  </details>
   {% endif %}
 </div>

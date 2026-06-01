@@ -149,6 +149,9 @@ def workgroup_detail(request, slug):
 
         ch = discuss_channel if active == "discuss" else chat_channel
         context.update(channel_inline_context(request, ch))
+        # After posting in the embedded composer, return to this tab (not the
+        # standalone Parlêtre channel page).
+        context["channel_next"] = f"{wg.get_absolute_url()}?tab={active}"
     elif active == "work" and wg.has_works and can_view:
         works = (
             Work.listing_for(request.user).filter(workgroup=wg).prefetch_related("files")
