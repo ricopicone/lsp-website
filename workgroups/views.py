@@ -161,7 +161,16 @@ def workgroup_detail(request, slug):
         context["is_coordinator"] = is_cartel_coordinator(request.user)
         context.update(cartel.viewer_state(request.user))
 
-    if active in ("discuss", "chat"):
+    if active == "overview":
+        # A seminar / reading-group Workspace shows the generated event's public
+        # summary (faculty, sessions, pricing, Register) inline — the shared
+        # partial keeps it identical to the standalone event page.
+        event = wg.primary_event()
+        if event is not None:
+            from events.views import event_summary_context
+
+            context.update(event_summary_context(event, request.user))
+    elif active in ("discuss", "chat"):
         from parletre.views import channel_inline_context
 
         ch = discuss_channel if active == "discuss" else chat_channel

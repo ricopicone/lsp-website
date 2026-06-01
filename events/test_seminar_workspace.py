@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from django.urls import reverse
 
 from accounts.models import Profile, User
 from events.models import Audience, Event, PriceTier
@@ -139,6 +140,27 @@ def test_roster_derives_from_faculty_and_paid_registrants():
     assert roster[teacher].role == "faculty" and roster[teacher].is_lead
     assert roster[paid].membership is None       # derived, not a stored row
     assert roster[paid].role == "member"
+
+
+def test_workspace_overview_shows_event_summary(client):
+    """The seminar Workspace Overview renders the generated event's public
+    summary (faculty + Register CTA) — same content as the event page."""
+    event = _seminar()
+    event.published = True
+    event.status = Event.Status.OPEN
+    event.save(update_fields=["published", "status"])
+    wg = event.ensure_workgroup()
+
+    teacher = _user("teach@x.test", is_faculty=True)
+    teacher.first_name, teacher.last_name = "Jacques", "Lacan"
+    teacher.save(update_fields=["first_name", "last_name"])
+    event.add_faculty(teacher)
+
+    client.force_login(teacher)
+    resp = client.get(wg.get_absolute_url())
+    assert resp.status_code == 200
+    assert b"Jacques Lacan" in resp.content                 # faculty on Overview
+    assert reverse("registrations:register", args=[event.slug]).encode() in resp.content
 
 
 def test_paid_student_can_be_assigned_a_task(client):

@@ -29,6 +29,42 @@ def _faculty_view_url(event: Event) -> str:
     return reverse("events:detail", args=[event.slug]) + "?view=faculty"
 
 
+def event_summary_context(event, user) -> dict:
+    """Context for the shared ``events/_event_summary.html`` partial (faculty,
+    about, sessions, pricing, register/your-status CTA). Used by the standalone
+    event page *and* the seminar Workspace Overview so they never drift."""
+    from registrations.models import Registration
+
+    user_registration = None
+    if getattr(user, "is_authenticated", False):
+        user_registration = (
+            Registration.objects.filter(user=user, event=event)
+            .exclude(status__in=(
+                Registration.Status.CANCELLED,
+                Registration.Status.REFUNDED,
+            ))
+            .order_by("-created_at")
+            .first()
+        )
+    # PAID and COMPED both grant access — comp means the fee was waived.
+    has_paid_registration = bool(
+        user_registration
+        and user_registration.status in (
+            Registration.Status.PAID,
+            Registration.Status.COMPED,
+        )
+    )
+    return {
+        "event": event,
+        "sessions": event.sessions.order_by("start_at"),
+        "price_tiers": event.price_tiers.select_related("session").order_by(
+            "session", "audience"
+        ),
+        "user_registration": user_registration,
+        "has_paid_registration": has_paid_registration,
+    }
+
+
 def event_list(request):
     """Public chronological list of upcoming standalone events (PROG-1).
 
@@ -109,8 +145,6 @@ def event_detail(request, slug: str):
     ``published``. If the current user has a *paid* Registration for the
     event, the page additionally shows the ``access_info`` block (REG-8).
     """
-    from registrations.models import Registration
-
     event = get_object_or_404(
         Event.objects
         .prefetch_related("sessions", "price_tiers")
@@ -125,37 +159,19 @@ def event_detail(request, slug: str):
         can_edit and request.GET.get("view") == "faculty"
     )
 
-    user_registration = None
-    if request.user.is_authenticated:
-        user_registration = (
-            Registration.objects.filter(user=request.user, event=event)
-            .exclude(status__in=(
-                Registration.Status.CANCELLED,
-                Registration.Status.REFUNDED,
-            ))
-            .order_by("-created_at")
-            .first()
-        )
-    # PAID and COMPED both grant access — comp means the fee was waived,
-    # not that they're excluded.
-    has_paid_registration = bool(
-        user_registration
-        and user_registration.status in (
-            Registration.Status.PAID,
-            Registration.Status.COMPED,
-        )
-    )
+    # Cross-link to the Workspace for offering events (seminar / reading group)
+    # that the viewer may see — the durable collaborative home.
+    workspace_url = None
+    wg = event.workgroup
+    if (wg and event.event_type in Event.ANNUAL_PROGRAM_TYPES
+            and wg.landing_visible_to(request.user)):
+        workspace_url = wg.get_absolute_url()
 
     context = {
-        "event": event,
-        "sessions": event.sessions.order_by("start_at"),
-        "price_tiers": event.price_tiers.select_related("session").order_by(
-            "session", "audience"
-        ),
         "can_edit": can_edit,
         "show_faculty_view": show_faculty_view,
-        "user_registration": user_registration,
-        "has_paid_registration": has_paid_registration,
+        "workspace_url": workspace_url,
+        **event_summary_context(event, request.user),
     }
     if show_faculty_view:
         context["registrations"] = event.registrations.select_related(

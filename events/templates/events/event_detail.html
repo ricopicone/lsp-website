@@ -26,6 +26,12 @@
       {% endif %}
     </div>
 
+    {% if workspace_url %}
+    <nav class="pt-1 text-sm">
+      <a href="{{ workspace_url }}" class="link link-hover text-primary">Open workspace →</a>
+    </nav>
+    {% endif %}
+
     {% if can_edit %}
     <nav class="flex flex-wrap gap-2 pt-2 text-sm">
       {% if show_faculty_view %}
@@ -38,177 +44,7 @@
     {% endif %}
   </header>
 
-  {# ---------- Your registration status (members) ---------- #}
-  {% if user_registration %}
-  <div role="alert" class="alert alert-info">
-    <span>
-      You're registered: <strong>{{ user_registration.get_status_display }}</strong> ·
-      <a href="{% url 'registrations:confirm' user_registration.id %}" class="link">View / manage</a>
-    </span>
-  </div>
-  {% endif %}
-
-  {# ---------- Faculty / Speakers ---------- #}
-  {% with faculty_list=event.faculty_members %}
-  {% if faculty_list or event.speakers.all or event.member_speakers.all %}
-  <section class="space-y-5">
-    <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">
-      {% if event.event_type == "seminar" %}Faculty{% else %}Speakers{% endif %}
-    </h2>
-    <div class="space-y-6">
-      {% for f in faculty_list %}
-        <article class="flex flex-col sm:flex-row gap-4 items-start">
-          {% if f.profile.headshot %}
-          <img src="{{ f.profile.headshot.url }}"
-               alt="{{ f.first_name }} {{ f.last_name }}"
-               class="w-24 h-24 rounded-full object-cover shrink-0">
-          {% endif %}
-          <div class="flex-1">
-            <h3 class="font-serif text-lg text-base-content mb-1">{{ f.first_name }} {{ f.last_name }}</h3>
-            {% if f.profile.bio %}<div class="text-sm text-base-content/80 leading-relaxed">{{ f.profile.bio|linebreaks }}</div>{% endif %}
-          </div>
-        </article>
-      {% endfor %}
-      {% for u in event.member_speakers.all %}
-        {% if u not in faculty_list %}
-        <article class="flex flex-col sm:flex-row gap-4 items-start">
-          {% if u.profile.headshot %}
-          <img src="{{ u.profile.headshot.url }}"
-               alt="{{ u.first_name }} {{ u.last_name }}"
-               class="w-24 h-24 rounded-full object-cover shrink-0">
-          {% endif %}
-          <div class="flex-1">
-            <h3 class="font-serif text-lg text-base-content mb-1">{{ u.first_name }} {{ u.last_name }}</h3>
-            {% if u.profile.display_event_bio %}<div class="text-sm text-base-content/80 leading-relaxed">{{ u.profile.display_event_bio|linebreaks }}</div>{% endif %}
-          </div>
-        </article>
-        {% endif %}
-      {% endfor %}
-      {% for s in event.speakers.all %}
-        {% if s.public %}
-        <article class="flex flex-col sm:flex-row gap-4 items-start">
-          {% if s.headshot %}
-          <img src="{{ s.headshot.url }}" alt="{{ s.name }}" class="w-24 h-24 rounded-full object-cover shrink-0">
-          {% endif %}
-          <div class="flex-1">
-            <h3 class="font-serif text-lg text-base-content mb-1">
-              {{ s.name }}{% if s.affiliation %}<span class="text-base-content/60 font-normal text-base"> — {{ s.affiliation }}</span>{% endif %}
-            </h3>
-            {% if s.bio %}<div class="text-sm text-base-content/80 leading-relaxed">{{ s.bio|linebreaks }}</div>{% endif %}
-          </div>
-        </article>
-        {% endif %}
-      {% endfor %}
-    </div>
-  </section>
-  {% endif %}
-  {% endwith %}
-
-  {# ---------- About ---------- #}
-  {% if event.description %}
-  <section class="space-y-3">
-    <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">About</h2>
-    <div class="text-base-content/90 leading-relaxed">{{ event.description|linebreaks }}</div>
-  </section>
-  {% endif %}
-
-  {# ---------- Access details (paid users only) ---------- #}
-  {% if has_paid_registration and event.access_info %}
-  <div role="alert" class="alert alert-success">
-    <div>
-      <h3 class="font-medium mb-1">Your access details</h3>
-      <p class="whitespace-pre-wrap text-sm">{{ event.access_info }}</p>
-    </div>
-  </div>
-  {% endif %}
-
-  {# ---------- Sessions OR single-session "Event details" ---------- #}
-  {% if sessions %}
-    {% if event.event_type == "seminar" %}
-    <section class="space-y-3">
-      <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Sessions</h2>
-      <div class="overflow-x-auto rounded-lg border border-base-300">
-        <table class="table">
-          <thead>
-            <tr><th class="w-12">#</th><th>Date</th><th>Time</th><th>Location</th></tr>
-          </thead>
-          <tbody>
-            {% for s in sessions %}
-            <tr>
-              <td class="text-base-content/60">{{ s.sequence }}</td>
-              <td>{{ s.start_at|user_datetime }}</td>
-              <td class="whitespace-nowrap">{{ s.start_at|user_time }}–{{ s.end_at|user_time }}</td>
-              <td>{{ s.location }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </section>
-    {% else %}
-      {% with first=sessions.0 %}
-      <section class="space-y-3">
-        <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Event details</h2>
-        <dl class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Date</dt>
-          <dd class="m-0">{{ first.start_at|user_datetime }}</dd>
-          <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Time</dt>
-          <dd class="m-0">{{ first.start_at|user_time }}–{{ first.end_at|user_time }}</dd>
-          {% if first.location %}
-          <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Location</dt>
-          <dd class="m-0">{{ first.location }}</dd>
-          {% endif %}
-        </dl>
-      </section>
-      {% endwith %}
-    {% endif %}
-  {% endif %}
-
-  {# ---------- Pricing ---------- #}
-  {% if price_tiers %}
-  <section class="space-y-3">
-    <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Pricing</h2>
-    <div class="overflow-x-auto rounded-lg border border-base-300">
-      <table class="table">
-        <thead>
-          <tr><th>Audience</th><th>Amount</th><th>Notes</th></tr>
-        </thead>
-        <tbody>
-          {% for tier in price_tiers %}
-          <tr>
-            <td>
-              {{ tier.get_audience_display }}
-              {% if tier.session %}<span class="text-base-content/60 text-sm">(session #{{ tier.session.sequence }})</span>{% endif %}
-            </td>
-            <td class="whitespace-nowrap">
-              ${{ tier.base_amount }}
-              {% if tier.sliding_scale %}<span class="text-base-content/60 text-sm">(sliding from ${{ tier.minimum_amount }})</span>{% endif %}
-            </td>
-            <td class="text-sm text-base-content/70">
-              {% if tier.covered_by_tuition %}Included in tuition for tuition-paying members.{% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
-  {% endif %}
-
-  {# ---------- Registration CTA ---------- #}
-  <section class="pt-2">
-    {% if event.status == "open" and event.published %}
-      {% if user_registration %}
-        <a href="{% url 'registrations:confirm' user_registration.id %}" class="btn btn-primary btn-lg">View your registration →</a>
-      {% else %}
-        <a href="{% url 'registrations:register' event.slug %}" class="btn btn-primary btn-lg">Register →</a>
-      {% endif %}
-    {% elif event.status == "draft" %}
-      <p class="text-base-content/60">Registration not yet open.</p>
-    {% elif event.status == "closed" %}
-      <p class="text-base-content/60">Registration is closed.</p>
-    {% endif %}
-  </section>
+  {% include "events/_event_summary.html" %}
 
   {# ---------------------------------------------------------- #}
   {# Faculty view (PROG-8): roster + pricing-code generation   #}
