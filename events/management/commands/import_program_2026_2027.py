@@ -569,8 +569,9 @@ class Command(BaseCommand):
                 event, was_created = Event.objects.update_or_create(
                     slug=s["slug"], defaults=defaults,
                 )
-                # Replace faculty M2M wholesale (idempotent re-runs are predictable).
-                event.faculty.set(faculty_users)
+                # Reconcile faculty as a role on the event's workgroup
+                # (idempotent re-runs are predictable).
+                event.set_faculty(faculty_users)
 
             if was_created:
                 created += 1

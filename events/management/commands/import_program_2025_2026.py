@@ -407,7 +407,7 @@ class Command(BaseCommand):
                 event, created = Event.objects.update_or_create(
                     slug=s["slug"], defaults=defaults,
                 )
-                event.faculty.set(faculty)
+                event.set_faculty(faculty)   # FACULTY role on the event's workgroup
                 report["created" if created else "updated"] += 1
                 self.stdout.write(
                     f"  {'created' if created else 'updated'}: {event.slug} "

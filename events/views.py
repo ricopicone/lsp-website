@@ -41,7 +41,6 @@ def event_list(request):
         Event.objects.filter(published=True, end_date__gte=today)
         .exclude(event_type__in=Event.ANNUAL_PROGRAM_TYPES)
         .order_by("start_date", "title")
-        .prefetch_related("faculty")
     )
     if not request.user.is_authenticated:
         events = events.filter(visibility=Event.Visibility.PUBLIC)
@@ -74,7 +73,6 @@ def program(request):
     events_qs = (
         program_obj.events.all()
         .order_by("start_date", "title")
-        .prefetch_related("faculty")
     )
     seminars = list(events_qs.filter(event_type=Event.Type.SEMINAR))
     offerings = list(events_qs.filter(
@@ -115,8 +113,8 @@ def event_detail(request, slug: str):
 
     event = get_object_or_404(
         Event.objects
-        .prefetch_related("faculty", "sessions", "price_tiers")
-        .select_related("program"),
+        .prefetch_related("sessions", "price_tiers")
+        .select_related("program", "workgroup"),
         slug=slug,
     )
     can_edit = can_edit_event(request.user, event)
@@ -368,7 +366,6 @@ def program_admin_detail(request, academic_year: str):
     events = list(
         program.events.all()
         .order_by("event_type", "start_date", "title")
-        .prefetch_related("faculty")
     )
     seminars = [e for e in events if e.event_type == Event.Type.SEMINAR]
     offerings = [e for e in events if e.event_type in (

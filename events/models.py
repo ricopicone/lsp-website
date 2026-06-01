@@ -135,8 +135,9 @@ class Speaker(models.Model):
 
     Use this for guest speakers, visiting faculty from other institutions,
     or anyone who shouldn't have an LSP login. For LSP-affiliated faculty
-    who teach a seminar, use ``Event.faculty`` (M2M to User) instead so
-    they can edit the event and see the roster.
+    who teach a seminar, add them as faculty (``Event.set_faculty`` — a
+    FACULTY role on the event's workgroup) instead so they can edit the event
+    and see the roster.
     """
 
     name = models.CharField(max_length=200)
@@ -207,13 +208,11 @@ class Event(models.Model):
         choices=Type.choices,
         default=Type.SEMINAR,
     )
-    faculty = models.ManyToManyField(
-        settings.AUTH_USER_MODEL,
-        related_name="events_taught",
-        blank=True,
-        limit_choices_to={"profile__is_faculty": True},
-        help_text="LSP-affiliated instructors (User accounts). Restricted to is_faculty (USR-6).",
-    )
+    # Faculty (LSP-affiliated instructors) are no longer a field on Event:
+    # they live on the generated seminar Workgroup as
+    # ``WorkgroupMembership(role=FACULTY)`` — the single source of truth for the
+    # roster. Read/write via ``faculty_members()`` / ``set_faculty()`` /
+    # ``is_faculty()`` below.
     speakers = models.ManyToManyField(
         "events.Speaker",
         related_name="events",
@@ -222,7 +221,8 @@ class Event(models.Model):
             "External presenters with no LSP account. For LSP-affiliated "
             "presenters with a User account, use ``member_speakers`` instead "
             "so we don't duplicate their bio/headshot. For instructors who "
-            "should be able to edit the event, use ``faculty``."
+            "should be able to edit the event, add them as faculty (a role on "
+            "the event's workgroup)."
         ),
     )
     member_speakers = models.ManyToManyField(
@@ -337,19 +337,101 @@ class Event(models.Model):
 
     # ---- Workgroup attachment (Stage 5) ----
 
-    def is_workgroup_member(self, user) -> bool:
-        """Roster for this event's attached workspace: faculty + registrants
-        who have access (paid or comped)."""
+    # ---- Faculty (stored as a role on the generated workgroup) ----
+
+    def _faculty_memberships(self):
+        """Active FACULTY memberships on this event's workgroup (empty if the
+        event has no workgroup yet)."""
+        from workgroups.models import WorkgroupMembership
+
+        if not self.workgroup_id:
+            return WorkgroupMembership.objects.none()
+        return WorkgroupMembership.objects.filter(
+            workgroup_id=self.workgroup_id,
+            role=WorkgroupMembership.Role.FACULTY,
+            end_date__isnull=True,
+        ).select_related("user")
+
+    def faculty_members(self):
+        """The event's faculty (LSP instructors), read from the workgroup
+        roster. List of User objects — usable directly in templates."""
+        return [m.user for m in self._faculty_memberships()]
+
+    def is_faculty(self, user) -> bool:
         if not getattr(user, "is_authenticated", False):
             return False
-        if self.faculty.filter(pk=user.pk).exists():
-            return True
+        return self._faculty_memberships().filter(user=user).exists()
+
+    def add_faculty(self, user):
+        """Idempotent: give ``user`` the FACULTY role on this event's workgroup."""
+        from django.utils import timezone
+
+        from workgroups.models import WorkgroupMembership
+
+        wg = self.ensure_workgroup()
+        if wg is None:
+            return None
+        existing = wg.memberships.filter(user=user, end_date__isnull=True).first()
+        if existing:
+            if existing.role != WorkgroupMembership.Role.FACULTY:
+                existing.role = WorkgroupMembership.Role.FACULTY
+                existing.save(update_fields=["role"])
+            return existing
+        return WorkgroupMembership.objects.create(
+            workgroup=wg, user=user, role=WorkgroupMembership.Role.FACULTY,
+            start_date=timezone.now().date(),
+        )
+
+    def set_faculty(self, users):
+        """Reconcile the faculty roster to exactly ``users``: add missing
+        FACULTY memberships, end-date faculty no longer in the set. Members
+        with a *non-faculty* role on the workgroup are left untouched."""
+        from django.utils import timezone
+
+        wg = self.ensure_workgroup()
+        if wg is None:
+            return
+        target = {u.pk: u for u in users}
+        current = {m.user_id: m for m in self._faculty_memberships()}
+        for uid, m in current.items():
+            if uid not in target:
+                m.end_date = timezone.now().date()
+                m.save(update_fields=["end_date"])
+        for uid, user in target.items():
+            if uid not in current:
+                self.add_faculty(user)
+
+    # ---- Workspace roster (faculty + registrants) ----
+
+    def has_access_registrant(self, user) -> bool:
+        """True if ``user`` has a paid/comped Registration for this event — the
+        *derived* portion of the workspace roster (kept out of the workgroup's
+        stored memberships; see ``Workgroup.is_member``)."""
+        if not getattr(user, "is_authenticated", False):
+            return False
         from registrations.models import Registration
 
         return self.registrations.filter(
             user=user,
             status__in=(Registration.Status.PAID, Registration.Status.COMPED),
         ).exists()
+
+    def access_registrant_users(self):
+        """Users with a paid/comped Registration — the derived participants for
+        ``Workgroup.participants()``."""
+        from registrations.models import Registration
+
+        return [
+            r.user for r in self.registrations.filter(
+                status__in=(Registration.Status.PAID, Registration.Status.COMPED),
+            ).select_related("user")
+            if r.user_id
+        ]
+
+    def is_workgroup_member(self, user) -> bool:
+        """Roster for this event's attached workspace: faculty + registrants
+        who have access (paid or comped)."""
+        return self.is_faculty(user) or self.has_access_registrant(user)
 
     #: Event types organized by the Programming Committee (not their own group).
     PC_OWNED_TYPES = frozenset({
@@ -642,5 +724,6 @@ class PricingCode(models.Model):
             and user.pk != self.restricted_to_user_id
         ):
             return False
-        # Faculty must be active on this event (issued_by still in Event.faculty).
+        # (issued_by's faculty standing is enforced at mint time via
+        # can_edit_event → Event.is_faculty, not re-checked on redemption.)
         return True

@@ -24,11 +24,13 @@
         <div class="flex flex-wrap gap-2 mb-3">
           <span class="badge badge-sm badge-ghost">{{ e.get_event_type_display }}</span>
           <span class="badge badge-sm badge-ghost">{{ e.get_format_display }}</span>
-          {% if e.faculty.all %}
+          {% with faculty_list=e.faculty_members %}
+          {% if faculty_list %}
           <span class="text-xs text-base-content/60 self-center ml-1">
-            {% for f in e.faculty.all %}{{ f.first_name }} {{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+            {% for f in faculty_list %}{{ f.first_name }} {{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
           </span>
           {% endif %}
+          {% endwith %}
         </div>
         {% if e.description %}
         <p class="text-sm text-base-content/80 line-clamp-3">{{ e.description|truncatewords:40 }}</p>

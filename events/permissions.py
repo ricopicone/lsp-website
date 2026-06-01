@@ -23,7 +23,7 @@ def can_edit_event(user, event) -> bool:
         return False
     if user.is_staff or _is_lsp_staff(user):
         return True
-    if event.faculty.filter(pk=user.pk).exists():
+    if event.is_faculty(user):
         return True
     return WorkgroupMembership.objects.filter(
         user=user,

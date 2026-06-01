@@ -255,21 +255,33 @@ def test_pricing_code_restricted_to_user():
     assert pc.is_redeemable(user=other) is False
 
 
-# --- Faculty M2M --------------------------------------------------------
+# --- Faculty (a role on the event's workgroup) --------------------------
 
 
 @pytest.mark.django_db
-def test_event_faculty_m2m_attaches_users():
+def test_event_faculty_is_a_workgroup_role():
     faculty = User.objects.create_user(email="fac@example.com")
     faculty.profile.is_faculty = True
     faculty.profile.save()
     e = Event.objects.create(
         title="X", slug="x",
         start_date=date(2026, 9, 1), end_date=date(2026, 12, 15),
-    )
-    e.faculty.add(faculty)
-    assert list(e.faculty.all()) == [faculty]
-    assert list(faculty.events_taught.all()) == [e]
+    )  # event_type defaults to SEMINAR → gets an offering workgroup
+    e.add_faculty(faculty)
+    assert e.faculty_members() == [faculty]
+    assert e.is_faculty(faculty)
+    # Faculty is stored as a FACULTY role on the generated workgroup.
+    from workgroups.models import WorkgroupMembership
+    assert WorkgroupMembership.objects.filter(
+        workgroup=e.workgroup, user=faculty, role=WorkgroupMembership.Role.FACULTY,
+        end_date__isnull=True,
+    ).exists()
+    # ...and the workgroup roster reflects them.
+    assert e.workgroup.is_member(faculty)
+
+    # set_faculty([]) ends the membership.
+    e.set_faculty([])
+    assert e.faculty_members() == [] and not e.is_faculty(faculty)
 
 
 @pytest.mark.django_db
@@ -307,7 +319,7 @@ def test_event_detail_renders_someone_in_both_faculty_and_member_speakers_once(c
         start_date=date(2026, 9, 6), end_date=date(2026, 9, 6),
         published=True, status=Event.Status.OPEN,
     )
-    e.faculty.add(u)
+    e.add_faculty(u)
     e.member_speakers.add(u)
     resp = client.get(f"/events/{e.slug}/")
     assert resp.status_code == 200

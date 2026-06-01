@@ -61,7 +61,7 @@ def faculty(db, event):
     u = User.objects.create_user(email="fac@example.com")
     u.profile.is_faculty = True
     u.profile.save()
-    event.faculty.add(u)
+    event.add_faculty(u)
     return u
 
 

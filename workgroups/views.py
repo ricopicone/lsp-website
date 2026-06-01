@@ -139,7 +139,7 @@ def workgroup_detail(request, slug):
         reverse(f"workgroups:kind_{kind_url_suffix}") if kind_url_suffix else None
     )
 
-    members = list(wg.active_members()) if can_view else []
+    members = wg.participants() if can_view else []
 
     context = {
         "workgroup": wg,
@@ -235,17 +235,13 @@ def _member_or_404(request, slug):
 
 
 def _member_ids(wg, raw_ids):
-    """Filter a list of submitted user ids down to current members of ``wg``."""
-    from .models import WorkgroupMembership
-
-    valid = set(raw_ids)
-    if not valid:
+    """Filter submitted user ids down to current participants of ``wg`` —
+    stored members *and* derived seminar registrants (so a student in the
+    roster can be assigned a task), matching what the picker offers."""
+    submitted = {str(i) for i in raw_ids}
+    if not submitted:
         return []
-    return list(
-        WorkgroupMembership.objects.filter(
-            workgroup=wg, user_id__in=valid, end_date__isnull=True
-        ).values_list("user_id", flat=True)
-    )
+    return [p.user.pk for p in wg.participants() if str(p.user.pk) in submitted]
 
 
 def _parse_due(raw):

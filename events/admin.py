@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin
 
 from .models import (
@@ -9,6 +10,31 @@ from .models import (
     Session,
     Speaker,
 )
+
+
+class EventAdminForm(forms.ModelForm):
+    """Adds a ``faculty`` editor backed by the workgroup roster (faculty is no
+    longer a model field — see ``Event.set_faculty``)."""
+
+    faculty = forms.ModelMultipleChoiceField(
+        queryset=None, required=False,
+        widget=admin.widgets.FilteredSelectMultiple("faculty", is_stacked=False),
+        help_text="LSP instructors — stored as a FACULTY role on the event's workgroup.",
+    )
+
+    class Meta:
+        model = Event
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from accounts.models import User
+
+        self.fields["faculty"].queryset = User.objects.filter(
+            is_active=True
+        ).order_by("last_name", "first_name")
+        if self.instance.pk:
+            self.fields["faculty"].initial = self.instance.faculty_members()
 
 
 class SessionInline(admin.TabularInline):
@@ -46,6 +72,7 @@ class EventMemberSpeakerInline(admin.TabularInline):
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
+    form = EventAdminForm
     list_display = (
         "title",
         "event_type",
@@ -58,9 +85,15 @@ class EventAdmin(admin.ModelAdmin):
     list_filter = ("event_type", "visibility", "status", "published", "format", "program")
     search_fields = ("title", "slug", "description")
     prepopulated_fields = {"slug": ("title",)}
-    filter_horizontal = ("faculty", "speakers")
+    filter_horizontal = ("speakers",)
     inlines = [SessionInline, PriceTierInline, EventMemberSpeakerInline]
     actions = ("create_workspace",)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        # Faculty is roster-backed; reconcile after the instance + m2m are saved
+        # (ensure_workgroup needs a pk).
+        form.instance.set_faculty(form.cleaned_data.get("faculty", []))
 
     @admin.display(description="Sessions")
     def session_count(self, obj):

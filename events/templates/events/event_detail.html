@@ -49,13 +49,14 @@
   {% endif %}
 
   {# ---------- Faculty / Speakers ---------- #}
-  {% if event.faculty.all or event.speakers.all or event.member_speakers.all %}
+  {% with faculty_list=event.faculty_members %}
+  {% if faculty_list or event.speakers.all or event.member_speakers.all %}
   <section class="space-y-5">
     <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">
       {% if event.event_type == "seminar" %}Faculty{% else %}Speakers{% endif %}
     </h2>
     <div class="space-y-6">
-      {% for f in event.faculty.all %}
+      {% for f in faculty_list %}
         <article class="flex flex-col sm:flex-row gap-4 items-start">
           {% if f.profile.headshot %}
           <img src="{{ f.profile.headshot.url }}"
@@ -69,7 +70,7 @@
         </article>
       {% endfor %}
       {% for u in event.member_speakers.all %}
-        {% if u not in event.faculty.all %}
+        {% if u not in faculty_list %}
         <article class="flex flex-col sm:flex-row gap-4 items-start">
           {% if u.profile.headshot %}
           <img src="{{ u.profile.headshot.url }}"
@@ -101,6 +102,7 @@
     </div>
   </section>
   {% endif %}
+  {% endwith %}
 
   {# ---------- About ---------- #}
   {% if event.description %}

@@ -117,7 +117,7 @@ def test_roster_derives_from_faculty_and_paid_registrants():
     wg = event.ensure_workgroup()
 
     teacher = _user("teacher@x.test", is_faculty=True)
-    event.faculty.add(teacher)
+    event.add_faculty(teacher)
     paid = _user("paid@x.test")
     _register(paid, event, status=Registration.Status.PAID)
     comped = _user("comped@x.test")
@@ -131,6 +131,41 @@ def test_roster_derives_from_faculty_and_paid_registrants():
     assert wg.is_member(comped) is True
     assert wg.is_member(awaiting) is False
     assert wg.is_member(stranger) is False
+
+    # The unified roster (participants) shows faculty + paid/comped, deduped,
+    # with no awaiting/stranger — students included so they get full tooling.
+    roster = {p.user: p for p in wg.participants()}
+    assert set(roster) == {teacher, paid, comped}
+    assert roster[teacher].role == "faculty" and roster[teacher].is_lead
+    assert roster[paid].membership is None       # derived, not a stored row
+    assert roster[paid].role == "member"
+
+
+def test_paid_student_can_be_assigned_a_task(client):
+    """A derived registrant (no stored membership row) is still a real
+    participant: it shows in the assignee picker and can be assigned a task
+    once the seminar workspace enables Tasks."""
+    event = _seminar()
+    wg = event.ensure_workgroup()
+    wg.has_tasks = True
+    wg.save(update_fields=["has_tasks"])
+
+    student = _user("student@x.test")
+    _register(student, event, status=Registration.Status.PAID)
+
+    client.force_login(student)
+    # The student (a member via payment) can add and self-assign a task.
+    client.post(
+        f"/groups/{wg.slug}/tasks/add/",
+        {"title": "Read the seminar", "assignees": [student.pk]},
+    )
+    from workgroups.models import WorkgroupTask
+    task = WorkgroupTask.objects.get(workgroup=wg)
+    assert list(task.assignees.all()) == [student]
+
+    # The picker offers the student even though there's no membership row.
+    resp = client.get(f"{wg.get_absolute_url()}?tab=tasks")
+    assert f'value="{student.pk}"'.encode() in resp.content
 
 
 def test_seminar_channel_visible_to_registrant_not_to_stranger():

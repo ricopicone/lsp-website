@@ -71,6 +71,14 @@ class ProgramEventForm(forms.ModelForm):
     target program on save.
     """
 
+    #: Faculty is no longer a model field — it's a role on the event's
+    #: generated workgroup. Edit it here as a plain multi-select and reconcile
+    #: via ``Event.set_faculty`` on save.
+    faculty = forms.ModelMultipleChoiceField(
+        queryset=None, required=False,
+        help_text="LSP-affiliated instructors (can edit the event and mint pricing codes).",
+    )
+
     class Meta:
         model = Event
         fields = (
@@ -78,7 +86,6 @@ class ProgramEventForm(forms.ModelForm):
             "start_date", "end_date",
             "format", "status",
             "description", "access_info",
-            "faculty",
         )
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),
@@ -101,6 +108,8 @@ class ProgramEventForm(forms.ModelForm):
         self.fields["faculty"].queryset = User.objects.filter(
             profile__is_faculty=True, is_active=True,
         ).order_by("last_name", "first_name")
+        if self.instance.pk:
+            self.fields["faculty"].initial = self.instance.faculty_members()
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -109,4 +118,5 @@ class ProgramEventForm(forms.ModelForm):
         if commit:
             instance.save()
             self.save_m2m()
+            instance.set_faculty(self.cleaned_data.get("faculty", []))
         return instance

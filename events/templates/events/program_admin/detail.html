@@ -75,7 +75,7 @@
           {% for e in seminars %}
           <tr>
             <td>{{ e.title }}</td>
-            <td class="text-xs text-base-content/70">{% for f in e.faculty.all %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td class="text-xs text-base-content/70">{% for f in e.faculty_members %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
             <td class="text-xs text-base-content/70 whitespace-nowrap">{{ e.start_date|date:"M j" }} – {{ e.end_date|date:"M j, Y" }}</td>
             <td>
               <a href="{% url 'program_admin_event_edit' program.academic_year e.slug %}" class="link link-primary text-sm">Edit →</a>
@@ -99,7 +99,7 @@
           <tr>
             <td>{{ e.title }}</td>
             <td class="text-xs">{{ e.get_event_type_display }}</td>
-            <td class="text-xs text-base-content/70">{% for f in e.faculty.all %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td class="text-xs text-base-content/70">{% for f in e.faculty_members %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
             <td class="text-xs text-base-content/70 whitespace-nowrap">{{ e.start_date|date:"M j" }} – {{ e.end_date|date:"M j, Y" }}</td>
             <td>
               <a href="{% url 'program_admin_event_edit' program.academic_year e.slug %}" class="link link-primary text-sm">Edit →</a>

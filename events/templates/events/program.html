@@ -48,7 +48,7 @@
               · {{ e.get_format_display }}
             </span>
           </div>
-          {% with faculty_list=e.faculty.all %}
+          {% with faculty_list=e.faculty_members %}
           {% if faculty_list %}
           <div class="mt-1 text-sm text-base-content/70">
             {% for f in faculty_list %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
@@ -89,7 +89,7 @@
               · {{ e.get_format_display }}
             </span>
           </div>
-          {% with faculty_list=e.faculty.all %}
+          {% with faculty_list=e.faculty_members %}
           {% if faculty_list %}
           <div class="mt-1 text-sm text-base-content/70">
             {% for f in faculty_list %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
