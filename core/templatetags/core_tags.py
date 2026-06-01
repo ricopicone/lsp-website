@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from django import template
 
-from core.access import has_any_staff_role
+from core.access import can_access_staff_tools
 
 register = template.Library()
 
 
-@register.filter(name="is_coordinator")
-def is_coordinator(user) -> bool:
-    """True if the user can reach the Coordinator hub (any staff role, or superuser)."""
-    return getattr(user, "is_superuser", False) or has_any_staff_role(user)
+@register.filter(name="has_staff_tools")
+def has_staff_tools(user) -> bool:
+    """True if the user can reach the /staff/ hub (any staff role, Django staff, or superuser)."""
+    return can_access_staff_tools(user)

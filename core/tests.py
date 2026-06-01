@@ -358,24 +358,24 @@ def web_coordinator(db):
 
 
 def test_coordinator_requires_login(client):
-    assert client.get(reverse("coordinator")).status_code == 302
+    assert client.get(reverse("staff")).status_code == 302
 
 
 def test_coordinator_forbidden_for_plain_member(client, regular_user):
     client.force_login(regular_user)
-    assert client.get(reverse("coordinator")).status_code == 403
+    assert client.get(reverse("staff")).status_code == 403
 
 
 def test_coordinator_ok_for_holder(client, web_coordinator):
     client.force_login(web_coordinator)
-    response = client.get(reverse("coordinator"))
+    response = client.get(reverse("staff"))
     assert response.status_code == 200
     assert b"Aphorisms" in response.content
 
 
 def test_coordinator_ok_for_superuser(client, superuser):
     client.force_login(superuser)
-    assert client.get(reverse("coordinator")).status_code == 200
+    assert client.get(reverse("staff")).status_code == 200
 
 
 def test_aphorism_create_via_panel(client, web_coordinator):
@@ -384,7 +384,7 @@ def test_aphorism_create_via_panel(client, web_coordinator):
     client.force_login(web_coordinator)
     before = Aphorism.objects.count()
     response = client.post(
-        reverse("coordinator_aphorism_new"),
+        reverse("staff_aphorism_new"),
         {"quote": "A freshly typed aphorism.", "short_attribution": "Test",
          "full_attribution": "", "is_active": "on"},
     )
@@ -398,10 +398,10 @@ def test_aphorism_toggle_and_delete_via_panel(client, web_coordinator):
 
     client.force_login(web_coordinator)
     a = Aphorism.objects.create(quote="Toggle me", is_active=True)
-    client.post(reverse("coordinator_aphorism_toggle", args=[a.pk]))
+    client.post(reverse("staff_aphorism_toggle", args=[a.pk]))
     a.refresh_from_db()
     assert a.is_active is False
-    client.post(reverse("coordinator_aphorism_delete", args=[a.pk]))
+    client.post(reverse("staff_aphorism_delete", args=[a.pk]))
     assert not Aphorism.objects.filter(pk=a.pk).exists()
 
 
@@ -411,12 +411,44 @@ def test_aphorism_edit_forbidden_for_member(client, regular_user):
     a = Aphorism.objects.create(quote="Members may not edit me.")
     client.force_login(regular_user)
     assert client.get(
-        reverse("coordinator_aphorism_edit", args=[a.pk])
+        reverse("staff_aphorism_edit", args=[a.pk])
     ).status_code == 403
 
 
-def test_nav_coordinator_link_visibility(client, web_coordinator, regular_user):
+def test_nav_staff_tools_link_visibility(client, web_coordinator, regular_user):
     client.force_login(web_coordinator)
-    assert b"Coordinator panel" in client.get(reverse("core:landing")).content
+    assert b"Staff tools" in client.get(reverse("core:landing")).content
     client.force_login(regular_user)
-    assert b"Coordinator panel" not in client.get(reverse("core:landing")).content
+    assert b"Staff tools" not in client.get(reverse("core:landing")).content
+
+
+@pytest.fixture
+def treasurer_member(db):
+    from core.models import StaffRole
+
+    user = User.objects.create_user(
+        email="treasurer@example.com", password="not-a-real-password",
+    )
+    StaffRole.objects.get(key=StaffRole.TREASURER).holders.add(user)
+    return user
+
+
+def test_treasurer_role_reaches_hub_and_dashboard(client, treasurer_member):
+    """A Treasurer-role holder (not Django staff) sees the hub + Treasurer tool
+    and can open the dashboard."""
+    client.force_login(treasurer_member)
+    hub = client.get(reverse("staff"))
+    assert hub.status_code == 200
+    assert b"Treasurer" in hub.content
+    assert b"Aphorisms" not in hub.content  # not a web coordinator
+    assert client.get(reverse("treasurer")).status_code == 200
+
+
+def test_cartel_coordinator_sees_review_card(client, web_coordinator):
+    """Granting the cartel-coordinator role surfaces the Cartel review card."""
+    from core.models import StaffRole
+
+    StaffRole.objects.get(key=StaffRole.CARTEL_COORDINATOR).holders.add(web_coordinator)
+    client.force_login(web_coordinator)
+    body = client.get(reverse("staff")).content
+    assert b"Cartel review" in body
