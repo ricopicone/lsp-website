@@ -66,7 +66,14 @@ proposal→PC-approval flow (M12.5) is fully *designed* but not built. Decide:
 is the proposal path the **only** way to mint a seminar, or does direct PC
 creation remain alongside it? (Cartel makes proposal mandatory; seminars may
 warrant the escape hatch.)
-**Decision:** _pending._
+**Decision (2026-06-01, SHIPPED):** dual path. Direct PC creation
+(`program_admin_event_new`) stays; a faculty proposal flow (M12.5) was added on
+top. Built as a standalone `events.SeminarProposal` (its own status), *not* a
+`WorkgroupProposal` — that model is one-per-workgroup, which a continuing
+seminar (workgroup already exists) and a pre-approval proposal (no workgroup
+yet) can't satisfy. `approve()` mints the `Event` + `ensure_workgroup` +
+`set_faculty`, handling new vs continuing (`continues_seminar`). See commit
+`8ec49d9` (Phase F).
 
 ### G2 — Reading Group: pick one canonical model
 The single biggest *inconsistency*, not just a silence. A reading group is
@@ -79,7 +86,14 @@ currently expressible **two** ways with no rule:
 Decide the canonical shape (Event-backed-per-term like seminars/cartels, vs
 standing self-join body), document when the other path is allowed (if ever),
 and reconcile joining (paid registration vs `open_join`) and cadence to match.
-**Decision:** _pending._
+**Decision (2026-06-01, SHIPPED):** canonical model is a **standing self-join
+`Workgroup(kind=reading_group)`** with `open_join`; it may also carry optional
+annual paid *terms* (`open_reading_group_term` → an `Event`) for fee-based
+years. Built in the `keen-booping-ladybug` line and merged here (`4c95e3a`):
+free standing groups use one-click join; a term, when opened, is the
+registration cycle that `current_term`/active-vs-archive keys off. The
+standalone Event-without-a-standing-group path is no longer how reading groups
+are created.
 
 ### G3 — Working Group: full lifecycle
 "Board creates" is the only documented bit and it's encoded nowhere. Define
@@ -89,7 +103,12 @@ the whole row:
 - **Roster authority** — who appoints the chair and members.
 - **Approval** — is there any, or is Board creation self-authorizing?
 - **Scheduling** — does `WorkgroupMeeting` get a member-facing UI?
-**Decision:** _pending._
+**Decision (2026-06-01, SHIPPED):** Board-gated, member-facing creation
+(`WorkingGroup.objects.create_with_chair`): a Board-committee member (or LSP
+staff) names the group, sets its chair, and seeds members — no approval step,
+self-authorizing. Roster/leave/archive inherited from the generic Workgroup
+manage surface (Phase B); scheduling via the existing `WorkgroupMeeting` tab
+(chair/members manage — see G4/E). Commits `d042080` (Phase C) + `1c87cb3`.
 
 ### G4 — Roster authority across standing bodies (cross-cutting)
 `WorkgroupMembership` has 11 roles (chair, co-chair, secretary, treasurer,
@@ -98,20 +117,35 @@ plus-one, faculty, organizer, referral/web-coordinator, admin-assistant) but
 seminar-faculty. Define a single rule (likely: a group's chair + LSP Staff/Board
 manage that group's roster) and a permission helper to back it, rather than
 solving it per-app.
-**Decision:** _pending._
+**Decision (2026-06-01, SHIPPED):** one primitive,
+`workgroups.permissions.can_manage_workgroup(user, wg)` = Django superuser **|**
+LSP Staff **|** Programming Committee **|** an active lead-role member (chair,
+co-chair, plus-one, faculty, organizer) **|** Board. Used everywhere (roster
+mutation, archive, charter, scheduling); `views._can_manage_workgroup` is a thin
+adapter over it. A **last-lead orphan guard** forbids removing/demoting the sole
+lead. Commits `1c87cb3` (Phase B) + `f907478` (Board folded in).
 
 ### G5 — Meeting of Analysts: reconcile built-vs-spec
 Built in code (`Workgroup`, `auto_member_role=analyst`) but absent from every
 planning doc. Define its administration (who chairs it), its cadence, and
 whether it **is** the spring `DAY_OF_ASSEMBLY` or a distinct standing body.
-**Decision:** _pending._
+**Decision (2026-06-01, SHIPPED):** a **distinct standing body** — the seeded
+`meeting-of-analysts` committee with `auto_member_role=analyst` (every Analyst
+auto-member). Day of Assembly stays a separate `Event(DAY_OF_ASSEMBLY)`; no
+Event is attached to the MoA workgroup. Its chair is appointed via the generic
+roster UI (no invented seed data), and its calendar is chair/Board-managed via
+the schedule view/manage split (auto-derived analysts see it read-only). Commit
+`f907478` (Phase E).
 
 ### G6 — Cartel scheduling
 Cartels have no meeting cadence — time-window only, optional one-off
 `generate_event`. Decide whether that's deliberate (self-directed study groups
 don't need scheduling — a fine answer worth *recording*) or whether cartels
 should gain a meeting concept.
-**Decision:** _pending._
+**Decision (2026-06-01):** deliberate **non-feature**. Cartels stay
+self-directed — no `Session`/cadence concept; the optional one-off
+`workgroup.generate_event` remains the only escape hatch. Recorded so it isn't
+re-litigated as an oversight.
 
 ### G7 — Member exit (cross-cutting)
 Leaving is uneven: standing groups have `leave`/end-date, **Cartel has no
@@ -119,13 +153,26 @@ member-leave UI** (only generator-archive), committees/working groups are
 admin-only. Decide whether self-service leaving is a universal Workgroup
 capability (put it on `Workgroup`, per the layer principle) and which kinds opt
 out.
-**Decision:** _pending._
+**Decision (2026-06-01, SHIPPED):** universal `Workgroup.can_leave`/`leave`
+(end-dates the stored membership). Only **stored** members can leave; purely
+auto-derived rosters opt out by construction (seminar/reading-group registrants
+lapse via the term axis; Meeting-of-Analysts analysts lose membership only by
+losing the role). The **sole remaining lead cannot leave** (orphan guard).
+Surfaced on every group's masthead. Commit `1c87cb3` (Phase B).
 
 ### G8 — Dissolution / archival (cross-cutting)
 Only Cartel can be archived. Define how every other group *ends* (or is
 explicitly standing-forever), and what happens to its channel/works/files on
 archival.
-**Decision:** _pending._
+**Decision (2026-06-01, SHIPPED):** a universal lifecycle axis —
+`Workgroup.status` ∈ {active, archived} with `archive(by)`/`unarchive(by)`.
+Archiving **freezes** the group read-only (`is_member` → False for everyone, so
+posting/active-roster/workspace all freeze) **without** ending memberships or
+deleting the channel/works/files; past members keep read-only access via
+`has_archive_access`. The manage surface stays reachable to managers after
+archive (gated on `can_manage_workgroup`, not membership) so it can be
+reversed. `Cartel.archive` composes this with its proposal-status ARCHIVED so
+the cartel stays listed on its program year. Commit `1c87cb3` (Phase B).
 
 ## Provenance
 
