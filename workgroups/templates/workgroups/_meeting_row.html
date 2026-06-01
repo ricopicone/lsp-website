@@ -1,0 +1,19 @@
+{% comment %}One meeting in the Schedule list. Expects: workgroup, m.{% endcomment %}
+<li class="group flex items-start gap-3 px-3.5 py-3 transition-colors hover:bg-base-200/40">
+  <div class="grow min-w-0">
+    <p class="text-sm">
+      <span class="font-medium text-base-content">{{ m.starts_at|date:"D, M j · g:i a" }}</span>
+      {% if m.ends_at %}<span class="text-base-content/50">– {{ m.ends_at|date:"g:i a" }}</span>{% endif %}
+      {% if m.title %}<span class="text-base-content/80">— {{ m.title }}</span>{% endif %}
+    </p>
+    {% if m.location %}<p class="text-xs text-base-content/60 truncate">{{ m.location|urlize }}</p>{% endif %}
+    {% if m.note %}<p class="text-xs text-base-content/60 mt-1 whitespace-pre-line">{{ m.note }}</p>{% endif %}
+  </div>
+  <form method="post" action="{% url 'workgroups:meeting_delete' workgroup.slug m.pk %}" style="display:contents"
+        onsubmit="return confirm('Remove this meeting?');">
+    {% csrf_token %}
+    <button type="submit" class="mt-0.5 shrink-0 text-base-content/30 opacity-0 transition group-hover:opacity-100 hover:text-error" aria-label="Remove">
+      <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </form>
+</li>
