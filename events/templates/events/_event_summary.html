@@ -20,7 +20,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
 {% if faculty_list or event.speakers.all or event.member_speakers.all %}
 <section class="space-y-5">
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">
-    {% if event.event_type == "seminar" %}Faculty{% else %}Speakers{% endif %}
+    {% if event.event_type == "seminar" %}Faculty{% elif event.event_type == "reading_group" %}Organizers{% else %}Speakers{% endif %}
   </h2>
   <div class="space-y-6">
     {% for f in faculty_list %}

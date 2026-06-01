@@ -57,11 +57,23 @@
 
         <h1 class="font-serif text-3xl sm:text-4xl leading-tight text-base-content">{{ workgroup.name }}</h1>
 
-        {% if can_edit_offering and primary_event %}
-        <nav class="flex flex-wrap gap-2 pt-1 text-sm">
+        <nav class="flex flex-wrap items-center gap-2 pt-1 text-sm">
+          {% if can_join %}
+          <form method="post" action="{% url 'workgroups:join' workgroup.slug %}" style="display:contents">
+            {% csrf_token %}
+            <button class="btn btn-primary btn-sm">Join this group</button>
+          </form>
+          {% elif can_leave %}
+          <form method="post" action="{% url 'workgroups:leave' workgroup.slug %}" style="display:contents"
+                onsubmit="return confirm('Leave this group?');">
+            {% csrf_token %}
+            <button class="btn btn-ghost btn-sm">Leave group</button>
+          </form>
+          {% endif %}
+          {% if can_edit_offering and primary_event %}
           <a href="{% url 'events:edit' primary_event.slug %}" class="btn btn-ghost btn-sm">Edit description</a>
+          {% endif %}
         </nav>
-        {% endif %}
       </div>
     </div>
   </header>

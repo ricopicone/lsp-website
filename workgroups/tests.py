@@ -6,6 +6,7 @@ import datetime
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 
 from accounts.models import Profile, User
 from cartels.models import Cartel
@@ -193,6 +194,73 @@ def test_auto_member_role_derives_membership():
     users = [p.user for p in wg.participants()]
     assert analyst in users and other not in users
     assert not WorkgroupMembership.objects.filter(workgroup=wg, user=analyst).exists()
+
+
+def test_reading_group_open_join_and_leave(client):
+    """A reading group is standing + open-join: any LSP member joins directly
+    (stored membership), and can leave."""
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP,
+             landing_visibility=Visibility.MEMBERS, open_join=True)
+    assert wg.open_join is True            # seeded by kind default too
+    member = _user("rg@x.test", role=Profile.Role.ANALYST)   # an LSP member
+    client.force_login(member)
+
+    resp = client.get(wg.get_absolute_url())
+    assert b"Join this group" in resp.content
+
+    client.post(reverse("workgroups:join", args=[wg.slug]))
+    assert wg.is_member(member)
+    assert wg.memberships.filter(user=member, end_date__isnull=True).exists()
+
+    resp = client.get(wg.get_absolute_url())
+    assert b"Leave group" in resp.content
+
+    client.post(reverse("workgroups:leave", args=[wg.slug]))
+    assert not wg.memberships.filter(user=member, end_date__isnull=True).exists()
+
+
+def test_reading_group_kind_default_open_join():
+    from workgroups.models import build_workgroup
+
+    built = build_workgroup(Workgroup.Kind.READING_GROUP, name="RG", slug="rg-x")
+    assert built.open_join is True
+    cartel_wg = build_workgroup(Workgroup.Kind.CARTEL, name="C", slug="c-x")
+    assert cartel_wg.open_join is False
+
+
+def test_join_blocked_when_not_open_join(client):
+    wg = _wg(kind=Workgroup.Kind.CARTEL)   # open_join False
+    member = _user("a@x.test", role=Profile.Role.ANALYST)
+    client.force_login(member)
+    assert client.post(reverse("workgroups:join", args=[wg.slug])).status_code == 404
+
+
+def test_standing_reading_group_listed_on_program_by_overlap(client):
+    from events.models import Program, academic_year_date_range, current_academic_year
+
+    year = current_academic_year()
+    Program.objects.create(academic_year=year, published=True)
+    ay_start, _ = academic_year_date_range(year)
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP, name="Freud Reading Group",
+             start_date=ay_start)   # ongoing (no end date)
+    assert wg.overlaps_academic_year(year)
+
+    body = client.get(f"/program/?year={year}").content
+    assert b"Reading Groups" in body and b"Freud Reading Group" in body
+
+
+def test_reading_group_workspace_links_to_program(client):
+    from events.models import Program, academic_year_date_range, current_academic_year
+
+    year = current_academic_year()
+    Program.objects.create(academic_year=year, published=True)
+    ay_start, _ = academic_year_date_range(year)
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP, name="Freud RG",
+             start_date=ay_start, landing_visibility=Visibility.MEMBERS)
+    member = _user("m@x.test", role=Profile.Role.ANALYST)
+    client.force_login(member)
+    resp = client.get(wg.get_absolute_url())
+    assert f"/program/?year={year}".encode() in resp.content   # ← Program <year>
 
 
 def test_groups_overview_shows_a_card_per_kind(client):

@@ -174,13 +174,14 @@ def workgroup_detail(request, slug):
             program_url = reverse("program") + f"?year={prog.academic_year}"
             program_label = str(prog)
     else:
-        # A cartel is part of the program(s) for the AY(s) it spans (by date
-        # overlap, not an FK) — link the most relevant visible one.
+        # Standing groups (cartels, reading groups) belong to the program(s)
+        # for the AY(s) they span (by date overlap, not an FK) — link the most
+        # relevant visible one.
         cartel_obj = _attached(wg, "cartel")
-        if cartel_obj is not None:
+        year = cartel_obj.program_year() if cartel_obj is not None else wg.program_year()
+        if year is not None:
             from events.models import Program
 
-            year = cartel_obj.program_year()
             prog = Program.for_year(year)
             if prog is not None and prog.is_public_now:
                 program_url = reverse("program") + f"?year={year}"
@@ -196,6 +197,16 @@ def workgroup_detail(request, slug):
     # pickers) when the viewer is a member — so fetch participants for either.
     roster_visible = wg.roster_visible_to(request.user)
     members = wg.participants() if (roster_visible or is_member) else []
+
+    # Open self-join (reading groups): any LSP member joins directly.
+    stored_member = (
+        request.user.is_authenticated
+        and wg.memberships.filter(user=request.user, end_date__isnull=True).exists()
+    )
+    from accounts.permissions import is_lsp_member
+
+    can_join = wg.open_join and is_lsp_member(request.user) and not stored_member
+    can_leave = wg.open_join and stored_member
 
     context = {
         "workgroup": wg,
@@ -213,6 +224,8 @@ def workgroup_detail(request, slug):
         "active_tab": active,
         "primary_event": primary_event,
         "can_edit_offering": can_edit_offering,
+        "can_join": can_join,
+        "can_leave": can_leave,
     }
     # Compose kind-specific UI without importing the concrete app: reach the
     # attached object via its reverse accessor and ask it for its viewer state.
@@ -295,6 +308,40 @@ def workgroup_detail(request, slug):
         context["dates_form"] = WorkgroupDatesForm(instance=wg)
 
     return render(request, "workgroups/detail.html", context)
+
+
+@login_required
+@require_POST
+def workgroup_join(request, slug):
+    """Open self-join (reading groups): an LSP member joins directly — one
+    click, no approval or payment."""
+    from django.utils import timezone
+
+    from accounts.permissions import is_lsp_member
+
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not (wg.open_join and is_lsp_member(request.user)):
+        raise Http404
+    if not wg.memberships.filter(user=request.user, end_date__isnull=True).exists():
+        WorkgroupMembership.objects.create(
+            workgroup=wg, user=request.user,
+            role=WorkgroupMembership.Role.MEMBER,
+            start_date=timezone.localdate(),
+        )
+    return redirect(wg.get_absolute_url())
+
+
+@login_required
+@require_POST
+def workgroup_leave(request, slug):
+    """Leave a group you joined (ends your active stored membership)."""
+    from django.utils import timezone
+
+    wg = get_object_or_404(Workgroup, slug=slug)
+    wg.memberships.filter(user=request.user, end_date__isnull=True).update(
+        end_date=timezone.localdate()
+    )
+    return redirect(wg.get_absolute_url())
 
 
 @login_required

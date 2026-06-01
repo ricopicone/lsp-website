@@ -138,8 +138,15 @@ def program(request):
     # stay members-only). Cartels aren't program-owned Events, so they're found
     # by date overlap rather than the Program FK.
     from cartels.models import Cartel
+    from workgroups.models import Workgroup
 
     cartels = Cartel.objects.in_academic_year(year)
+    # Standing reading groups that span this academic year (by date overlap —
+    # they're continuous workgroups now, not per-year events).
+    reading_groups = [
+        wg for wg in Workgroup.objects.filter(kind=Workgroup.Kind.READING_GROUP)
+        if wg.overlaps_academic_year(year)
+    ]
 
     return render(request, "events/program.html", {
         "year":            year,
@@ -147,6 +154,7 @@ def program(request):
         "seminars":        seminars,
         "offerings":       offerings,
         "cartels":         cartels,
+        "reading_groups":  reading_groups,
         "available_years": distinct_years,
         "is_current_year": year == current,
         "is_preview":      not program_obj.is_public_now,
