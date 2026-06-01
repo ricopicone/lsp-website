@@ -33,6 +33,47 @@ def test_committee_has_backing_workgroup():
 
 
 @pytest.mark.django_db
+def test_committee_does_not_derive_from_organized_events():
+    """A committee *organizes* events (they link to its workgroup) but does not
+    *offer* them. Its roster / membership / Overview must NOT derive from those
+    events — otherwise a special-event registrant would become a committee
+    "member" and could read its private channel. Regression for the crossed
+    wire where the PC Overview showed the Masochism special event.
+    """
+    from decimal import Decimal
+
+    from events.models import Audience, Event, PriceTier
+    from registrations.models import Registration
+
+    pc = Committee.objects.get(slug="programming-committee")
+    wg = pc.workgroup
+
+    event = Event.objects.create(
+        title="Working with Masochism", slug="masochism",
+        event_type="special_event",
+        start_date=date(2026, 11, 1), end_date=date(2026, 11, 1),
+    )
+    event.ensure_workgroup()
+    assert event.workgroup_id == wg.id          # links to the PC committee workgroup
+
+    registrant = User.objects.create_user(email="reg@x.test")
+    tier = PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal("0.00")
+    )
+    Registration.objects.create(
+        user=registrant, event=event, price_tier=tier,
+        quoted_amount=Decimal("0.00"), status=Registration.Status.PAID,
+    )
+
+    # The leak: the registrant must NOT be a member of the committee workgroup.
+    assert wg.is_member(registrant) is False
+    # The Overview must not feature the organized event…
+    assert wg.primary_event() is None
+    # …and the registrant must not appear in the committee roster.
+    assert registrant not in [p.user for p in wg.participants()]
+
+
+@pytest.mark.django_db
 def test_add_member_and_active_members_excludes_ended():
     committee = Committee.objects.get(slug="board")
     u_active = User.objects.create_user(email="active@example.com")

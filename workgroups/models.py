@@ -201,6 +201,12 @@ class Workgroup(models.Model):
             return False
         if self.memberships.filter(user=user, end_date__isnull=True).exists():
             return True
+        # Derive from registrations ONLY for offering workgroups, whose
+        # attached event IS the group. A committee merely *organizes* events
+        # (they link to its workgroup), so its registrants must NOT become
+        # committee members — that would leak its private channel.
+        if self.kind not in self.OFFERING_KINDS:
+            return False
         # Event counts per group are tiny, so the per-event check is cheap.
         return any(e.has_access_registrant(user) for e in self.events.all())
 
@@ -216,18 +222,24 @@ class Workgroup(models.Model):
                 user=m.user, role=m.role,
                 is_lead=m.role in WorkgroupMembership.LEAD_ROLES, membership=m,
             )
-        for event in self.events.all():
-            for u in event.access_registrant_users():
-                if u.pk not in seen:
-                    seen[u.pk] = Participant(
-                        user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
-                    )
+        # Derived registrants only for offering workgroups (see ``is_member``) —
+        # a committee's organized-event registrants are not its roster.
+        if self.kind in self.OFFERING_KINDS:
+            for event in self.events.all():
+                for u in event.access_registrant_users():
+                    if u.pk not in seen:
+                        seen[u.pk] = Participant(
+                            user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
+                        )
         return list(seen.values())
 
     def primary_event(self):
-        """For an offering workgroup, the Event to feature on Overview: the
-        soonest current/upcoming one (end_date today or later), else the most
-        recent. ``None`` if this workgroup generates no events."""
+        """For an offering workgroup (seminar / reading group), the Event to
+        feature on Overview: the soonest current/upcoming one (end_date today
+        or later), else the most recent. ``None`` for non-offering workgroups
+        (a committee organizes events but offers none) or if there are none."""
+        if self.kind not in self.OFFERING_KINDS:
+            return None
         events = list(self.events.all())
         if not events:
             return None
