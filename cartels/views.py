@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from accounts.permissions import is_lsp_member
+from events.permissions import is_program_committee
 
 from . import emails
 from .forms import CartelProposalForm
@@ -52,11 +53,11 @@ def propose(request):
                 description=form.cleaned_data["description"],
                 invitees=form.cleaned_data["invitees"],
             )
-            emails.notify_coordinator_of_proposal(cartel, _abs(request, cartel))
+            emails.notify_proposal(cartel, _abs(request, cartel))
             messages.success(
                 request,
-                "Cartel proposed. The Cartel Coordinator will review it before it's "
-                "published.",
+                "Cartel proposed. The Cartel Coordinator (for feedback) and the "
+                "Program Committee (for approval) have been notified.",
             )
             return redirect(cartel.get_absolute_url())
     else:
@@ -66,22 +67,29 @@ def propose(request):
 
 @login_required
 def review_queue(request):
-    """Coordinator's queue of proposed cartels."""
-    if not is_cartel_coordinator(request.user):
+    """Proposed-cartel queue. The Program Committee approves/declines; the
+    Cartel Coordinator advises (feedback/advocacy) in parallel."""
+    can_approve = is_program_committee(request.user)
+    can_feedback = is_cartel_coordinator(request.user)
+    if not (can_approve or can_feedback):
         raise Http404
     proposed = (
         Cartel.objects.filter(status=Cartel.Status.PROPOSED)
         .select_related("workgroup", "generator")
         .order_by("created_at")
     )
-    return render(request, "cartels/review_queue.html", {"proposed": proposed})
+    return render(request, "cartels/review_queue.html", {
+        "proposed": proposed,
+        "can_approve": can_approve,
+        "can_feedback": can_feedback,
+    })
 
 
 @login_required
 @require_POST
 def review_decide(request, pk):
-    """Coordinator approves or declines a proposed cartel."""
-    if not is_cartel_coordinator(request.user):
+    """The Program Committee approves (publishes) or declines a proposal."""
+    if not is_program_committee(request.user):
         raise Http404
     cartel = get_object_or_404(Cartel, pk=pk, status=Cartel.Status.PROPOSED)
     if request.POST.get("decision") == "approve":
@@ -94,6 +102,22 @@ def review_decide(request, pk):
         cartel.decline(request.user, note=request.POST.get("note", ""))
         emails.notify_generator_of_decision(cartel, _abs(request, cartel))
         messages.success(request, f"Declined '{cartel.workgroup.name}'.")
+    return redirect("cartels:review_queue")
+
+
+@login_required
+@require_POST
+def coordinator_feedback(request, pk):
+    """The Cartel Coordinator records feedback / advocacy (advisory — does not
+    gate; the PC approves). Notifies the generator + the PC."""
+    if not is_cartel_coordinator(request.user):
+        raise Http404
+    cartel = get_object_or_404(Cartel, pk=pk)
+    cartel.coordinator_feedback = (request.POST.get("feedback") or "").strip()
+    cartel.save(update_fields=["coordinator_feedback"])
+    if cartel.coordinator_feedback:
+        emails.notify_coordinator_feedback(cartel, _abs(request, cartel))
+    messages.success(request, f"Feedback recorded for '{cartel.workgroup.name}'.")
     return redirect("cartels:review_queue")
 
 
@@ -131,7 +155,7 @@ def edit(request, slug):
                 CartelInvitation.objects.get_or_create(cartel=cartel, invited_user=user)
             if cartel.status == Cartel.Status.DECLINED:
                 cartel.resubmit()
-                emails.notify_coordinator_of_proposal(cartel, _abs(request, cartel))
+                emails.notify_proposal(cartel, _abs(request, cartel))
                 messages.success(request, "Edited and resubmitted for review.")
             else:
                 messages.success(request, "Proposal updated.")

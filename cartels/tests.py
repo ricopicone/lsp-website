@@ -27,6 +27,15 @@ def _coordinator(email="coord@x.test"):
     return u
 
 
+def _pc_member(email="pc@x.test"):
+    """A Programming Committee member (the cartel approver)."""
+    from committees.models import Committee
+
+    u = _member(email)
+    Committee.objects.get(slug="programming-committee").add_member(u)
+    return u
+
+
 # ---- propose ----------------------------------------------------------
 
 def test_propose_creates_proposed_cartel_with_generator_as_member():
@@ -146,23 +155,52 @@ def test_propose_view_blocks_non_members(client):
     assert not Cartel.objects.filter(workgroup__name="X").exists()
 
 
-def test_review_queue_gated_to_coordinator(client):
-    plain = _member("plain@x.test")
-    client.force_login(plain)
+def test_review_queue_open_to_pc_and_coordinator_not_plain(client):
+    cartel = Cartel.objects.propose(generator=_member("gen@x.test"), name="C")  # noqa: F841
+    client.force_login(_member("plain@x.test"))
     assert client.get("/cartels/review/").status_code == 404
     client.force_login(_coordinator())
-    assert client.get("/cartels/review/").status_code == 200
+    assert client.get("/cartels/review/").status_code == 200   # CC advises
+    client.force_login(_pc_member())
+    assert client.get("/cartels/review/").status_code == 200   # PC approves
 
 
-def test_coordinator_approves_via_view(client):
+def test_pc_approves_but_coordinator_cannot(client):
     gen = _member("gen@x.test")
     cartel = Cartel.objects.propose(generator=gen, name="C")
-    coord = _coordinator()
-    client.force_login(coord)
+
+    # The Cartel Coordinator may NOT approve (advisory only).
+    client.force_login(_coordinator())
+    assert client.post(
+        f"/cartels/review/{cartel.pk}/decide/", {"decision": "approve"}
+    ).status_code == 404
+    cartel.refresh_from_db()
+    assert cartel.status == Cartel.Status.PROPOSED
+
+    # The Program Committee approves & publishes.
+    client.force_login(_pc_member())
     resp = client.post(f"/cartels/review/{cartel.pk}/decide/", {"decision": "approve"})
     assert resp.status_code == 302
     cartel.refresh_from_db()
     assert cartel.status == Cartel.Status.OPEN
+
+
+def test_coordinator_feedback_is_advisory(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    client.force_login(_coordinator())
+    resp = client.post(
+        f"/cartels/review/{cartel.pk}/feedback/",
+        {"feedback": "Consider merging with the Letter cartel."},
+    )
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert "Letter cartel" in cartel.coordinator_feedback
+    assert cartel.status == Cartel.Status.PROPOSED   # feedback does not gate
+    # a PC member can't leave coordinator feedback
+    client.force_login(_pc_member())
+    r = client.post(f"/cartels/review/{cartel.pk}/feedback/", {"feedback": "x"})
+    assert r.status_code == 404
 
 
 def test_apply_and_member_accepts_via_views(client):

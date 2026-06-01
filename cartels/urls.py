@@ -9,6 +9,7 @@ urlpatterns = [
     path("propose/", views.propose, name="propose"),
     path("review/", views.review_queue, name="review_queue"),
     path("review/<int:pk>/decide/", views.review_decide, name="review_decide"),
+    path("review/<int:pk>/feedback/", views.coordinator_feedback, name="coordinator_feedback"),
     path("<slug:slug>/", views.detail, name="detail"),
     path("<slug:slug>/edit/", views.edit, name="edit"),
     path("<slug:slug>/manage/", views.manage, name="manage"),

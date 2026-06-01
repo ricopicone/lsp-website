@@ -10,17 +10,52 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from .access import has_staff_role, staff_role_required, staff_tools_required
+from .access import has_staff_role, staff_role_required
 from .forms import AphorismForm
 from .models import Aphorism, StaffRole
+
+#: Roles that map to a tool in the hub (NB: lsp_staff has no panel of its own).
+PANEL_ROLES = (
+    StaffRole.WEB_COORDINATOR,
+    StaffRole.TREASURER,
+    StaffRole.CARTEL_COORDINATOR,
+)
+
+#: Committee control panels: (committee slug, title, blurb, url name). A
+#: committee member (or Django staff) sees its card. Board of Directors and
+#: Meeting of Analysts slot in here once their admin surfaces are built.
+COMMITTEE_PANELS = [
+    ("programming-committee", "Program Committee",
+     "Solicit and review proposals; mint events into a program.",
+     "program_admin_programs"),
+]
 
 
 def _can_treasurer(user) -> bool:
     return user.is_superuser or user.is_staff or has_staff_role(user, StaffRole.TREASURER)
+
+
+def _on_committee(user, slug: str) -> bool:
+    from committees.permissions import is_on_committee
+    return is_on_committee(user, slug)
+
+
+def can_access_staff_tools(user) -> bool:
+    """Entry gate to /staff/: true iff the user would see at least one tool —
+    a panel-bearing staff role, Django staff, a superuser, or membership of a
+    committee that has a panel. Kept cheap (no count queries) for the nav."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser or user.is_staff:
+        return True
+    if has_staff_role(user, *PANEL_ROLES):
+        return True
+    return any(_on_committee(user, slug) for slug, *_ in COMMITTEE_PANELS)
 
 
 def _panels_for(user) -> list[dict]:
@@ -50,6 +85,9 @@ def _panels_for(user) -> list[dict]:
             "count": Cartel.objects.filter(status=Cartel.Status.PROPOSED).count(),
             "count_label": "pending",
         })
+    for slug, title, blurb, url_name in COMMITTEE_PANELS:
+        if user.is_superuser or user.is_staff or _on_committee(user, slug):
+            panels.append({"title": title, "blurb": blurb, "url": reverse(url_name)})
     if user.is_staff:
         panels.append({
             "title": "Django admin",
@@ -60,9 +98,12 @@ def _panels_for(user) -> list[dict]:
 
 
 @login_required
-@staff_tools_required
 def home(request):
-    return render(request, "core/staff/home.html", {"panels": _panels_for(request.user)})
+    # Authoritative gate: you reach the hub iff you have at least one tool.
+    panels = _panels_for(request.user)
+    if not panels:
+        raise PermissionDenied
+    return render(request, "core/staff/home.html", {"panels": panels})
 
 
 # ---- Aphorisms panel --------------------------------------------------------

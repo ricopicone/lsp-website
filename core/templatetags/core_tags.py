@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django import template
 
-from core.access import can_access_staff_tools
+from core.staff import can_access_staff_tools
 
 register = template.Library()
 
