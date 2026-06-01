@@ -150,14 +150,22 @@ def workgroup_detail(request, slug):
         reverse(f"workgroups:kind_{kind_url_suffix}") if kind_url_suffix else None
     )
 
-    # A seminar also lives in its annual Program — show that as a second,
-    # stable context link (not referrer-based) when the program is visible.
+    # Stable context links (not referrer-based) for the other "homes" a group
+    # lives in:
+    #  · a seminar / reading group belongs to its annual Program;
+    #  · a nested group (e.g. a cartel under the Working Group on Cartels)
+    #    belongs to its parent workgroup.
     program_url = program_label = None
     if primary_event is not None and primary_event.program_id:
         prog = primary_event.program
         if prog.is_public_now or can_edit_offering:
             program_url = reverse("program") + f"?year={prog.academic_year}"
             program_label = str(prog)
+
+    parent_url = parent_label = None
+    if wg.parent_id and wg.parent.landing_visible_to(request.user):
+        parent_url = wg.parent.get_absolute_url()
+        parent_label = wg.parent.name
 
     members = wg.participants() if can_view else []
 
@@ -170,6 +178,8 @@ def workgroup_detail(request, slug):
         "kind_index_url": kind_index_url,
         "program_url": program_url,
         "program_label": program_label,
+        "parent_url": parent_url,
+        "parent_label": parent_label,
         "tabs": tabs,
         "active_tab": active,
         "primary_event": primary_event,

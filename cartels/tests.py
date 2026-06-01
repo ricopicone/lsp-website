@@ -623,6 +623,46 @@ def test_schedule_endpoints_gated_to_members(client):
     assert b"tab=schedule" not in resp.content
 
 
+def test_cartel_workspace_shows_kind_breadcrumb(client):
+    """A cartel Workspace links back to the Cartels directory (its only
+    structural parent — cartels self-form, so there's no program link)."""
+    from django.urls import reverse
+
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_pc_member())
+    wg = cartel.workgroup
+    client.force_login(gen)
+
+    resp = client.get(wg.get_absolute_url())
+    assert resp.status_code == 200
+    assert reverse("workgroups:kind_cartels").encode() in resp.content   # ← Cartels
+    assert b"/program/?year=" not in resp.content                        # no program for cartels
+
+
+def test_nested_group_links_back_to_parent_workgroup(client):
+    """A nested group (e.g. a cartel under a parent working group) shows a
+    stable back link to its parent — the cartel analog of seminar→program."""
+    from workgroups.models import Workgroup, build_workgroup
+
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_pc_member())
+    wg = cartel.workgroup
+    parent = build_workgroup(
+        Workgroup.Kind.WORKING_GROUP, name="Working Group on Cartels",
+        slug="wg-on-cartels", landing_visibility="members",
+    )
+    wg.parent = parent
+    wg.save(update_fields=["parent"])
+
+    client.force_login(gen)
+    resp = client.get(wg.get_absolute_url())
+    assert resp.status_code == 200
+    assert parent.get_absolute_url().encode() in resp.content
+    assert b"Working Group on Cartels" in resp.content
+
+
 def test_proposed_cartel_hidden_from_other_members_on_kind_list(client):
     gen = _member("gen@x.test")
     Cartel.objects.propose(generator=gen, name="Secret Proposal")

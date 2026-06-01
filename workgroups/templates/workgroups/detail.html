@@ -6,10 +6,13 @@
 {% block content %}
 <div class="space-y-8">
 
-  {% if kind_index_url or program_url %}
+  {% if kind_index_url or program_url or parent_url %}
   <nav class="flex flex-wrap gap-x-5 gap-y-1 text-sm">
     {% if kind_index_url %}
     <a href="{{ kind_index_url }}" class="link link-hover text-base-content/55">← {{ workgroup.get_kind_display }}s</a>
+    {% endif %}
+    {% if parent_url %}
+    <a href="{{ parent_url }}" class="link link-hover text-base-content/55">← {{ parent_label }}</a>
     {% endif %}
     {% if program_url %}
     <a href="{{ program_url }}" class="link link-hover text-base-content/55">← {{ program_label }}</a>
