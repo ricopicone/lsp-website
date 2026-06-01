@@ -295,6 +295,34 @@ class Workgroup(models.Model):
             return None
         return min(active, key=lambda e: e.start_date or today)
 
+    def open_reading_group_term(self, *, start_date, end_date, fee):
+        """Open a new annual term for this reading group — a published, open
+        ``Event`` attached to this standing workgroup, with a single all-audience
+        price tier. Members register + pay for it; ``current_term`` picks it up.
+        Returns the term Event."""
+        from decimal import Decimal
+
+        from django.utils.text import slugify
+
+        from events.models import Audience, Event, PriceTier, academic_year_of
+
+        ay = academic_year_of(start_date)
+        base = (slugify(f"{self.slug}-{ay}") or f"{self.slug}-term")[:190]
+        slug, n = base, 2
+        while Event.objects.filter(slug=slug).exists():
+            slug = f"{base}-{n}"
+            n += 1
+        term = Event.objects.create(
+            title=f"{self.name} {ay}"[:200], slug=slug,
+            event_type=Event.Type.READING_GROUP,
+            start_date=start_date, end_date=end_date,
+            published=True, status=Event.Status.OPEN, workgroup=self,
+        )
+        PriceTier.objects.create(
+            event=term, audience=Audience.ALL, base_amount=Decimal(fee)
+        )
+        return term
+
     def primary_event(self):
         """For an offering workgroup (seminar / reading group), the Event to
         feature on Overview: the soonest current/upcoming one (end_date today

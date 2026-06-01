@@ -309,6 +309,38 @@ def test_reading_group_membership_lapses_when_term_ends(client):
     assert wg.is_member(payer) is False
 
 
+def test_organizer_opens_reading_group_term(client):
+    """An organizer opens a new annual paid term in one click → a published,
+    open Event attached to the standing group, with a fee tier."""
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP, name="Freud RG", slug="freud-rg",
+             open_join=False, landing_visibility=Visibility.PUBLIC)
+    organizer = _user("org@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=organizer, role=WorkgroupMembership.Role.ORGANIZER,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    client.force_login(organizer)
+    client.post(reverse("workgroups:open_term", args=[wg.slug]), {
+        "start_date": "2099-09-01", "end_date": "2100-05-01", "fee": "120.00",
+    })
+
+    term = wg.current_term()
+    assert term is not None
+    assert term.published and term.status == "open"
+    assert term.workgroup_id == wg.id
+    assert str(term.price_tiers.first().base_amount) == "120.00"
+
+
+def test_open_term_blocked_for_non_managers(client):
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP, slug="rg2", open_join=False)
+    plain = _user("plain@x.test", role=Profile.Role.ANALYST)  # not an organizer
+    client.force_login(plain)
+    resp = client.post(reverse("workgroups:open_term", args=[wg.slug]),
+                       {"start_date": "2099-09-01", "end_date": "2100-05-01", "fee": "0"})
+    assert resp.status_code == 404
+    assert wg.current_term() is None
+
+
 def test_reading_group_kind_default_open_join():
     from workgroups.models import build_workgroup
 

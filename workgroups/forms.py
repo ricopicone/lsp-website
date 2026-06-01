@@ -2,9 +2,34 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django import forms
 
 from .models import Workgroup, WorkgroupMeeting
+
+
+class ReadingGroupTermForm(forms.Form):
+    """Open a new annual term for a reading group (date range + per-person fee)."""
+
+    start_date = forms.DateField(
+        widget=forms.DateInput(attrs={"type": "date", "class": "input input-bordered input-sm"})
+    )
+    end_date = forms.DateField(
+        widget=forms.DateInput(attrs={"type": "date", "class": "input input-bordered input-sm"})
+    )
+    fee = forms.DecimalField(
+        min_value=Decimal("0"), max_digits=8, decimal_places=2,
+        widget=forms.NumberInput(attrs={"class": "input input-bordered input-sm", "step": "0.01"}),
+        help_text="Per-person fee for the year ($0 for a free term).",
+    )
+
+    def clean(self):
+        data = super().clean()
+        start, end = data.get("start_date"), data.get("end_date")
+        if start and end and end < start:
+            self.add_error("end_date", "End date must be on or after the start date.")
+        return data
 
 
 class WorkgroupDatesForm(forms.ModelForm):

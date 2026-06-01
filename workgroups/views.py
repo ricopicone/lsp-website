@@ -308,8 +308,54 @@ def workgroup_detail(request, slug):
         from .forms import WorkgroupDatesForm
 
         context["dates_form"] = WorkgroupDatesForm(instance=wg)
+        # Reading-group managers can open a new annual paid term.
+        if wg.kind == Workgroup.Kind.READING_GROUP and _can_manage_workgroup(wg, request.user):
+            from .forms import ReadingGroupTermForm
+
+            context["can_manage_terms"] = True
+            context["term_form"] = ReadingGroupTermForm()
+            context["current_term"] = wg.current_term()
 
     return render(request, "workgroups/detail.html", context)
+
+
+def _can_manage_workgroup(wg, user) -> bool:
+    """Organizer/lead of the group, LSP staff, or Programming Committee — may
+    run management actions like opening a reading-group term."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    from core.access import has_staff_role
+    from core.models import StaffRole
+
+    if has_staff_role(user, StaffRole.LSP_STAFF):
+        return True
+    from events.permissions import is_program_committee
+
+    if is_program_committee(user):
+        return True
+    return wg.memberships.filter(
+        user=user, end_date__isnull=True, role__in=WorkgroupMembership.LEAD_ROLES
+    ).exists()
+
+
+@login_required
+@require_POST
+def open_reading_group_term(request, slug):
+    """Organizer/staff opens a new annual term (paid registration cycle) for a
+    reading group."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if wg.kind != Workgroup.Kind.READING_GROUP or not _can_manage_workgroup(wg, request.user):
+        raise Http404
+    from .forms import ReadingGroupTermForm
+
+    form = ReadingGroupTermForm(request.POST)
+    if form.is_valid():
+        wg.open_reading_group_term(
+            start_date=form.cleaned_data["start_date"],
+            end_date=form.cleaned_data["end_date"],
+            fee=form.cleaned_data["fee"],
+        )
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")
 
 
 @login_required
