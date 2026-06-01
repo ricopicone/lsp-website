@@ -1,8 +1,9 @@
 """Stage 2 — Parlêtre × Workgroups integration.
 
 Auto-provisioning of a workgroup's channel, and the WORKGROUP access rules:
-membership gates entry; intimate kinds (cartel / working group) get no staff
-bypass, while committee / seminar channels keep staff oversight.
+membership gates entry, and a workgroup channel is private to its group — no
+staff bypass for any kind (cartel, working group, committee, seminar, reading
+group).
 """
 
 from __future__ import annotations
@@ -86,12 +87,22 @@ def test_cartel_channel_has_no_staff_bypass():
     assert channel_can_moderate(ch, staff) is False
 
 
-def test_committee_channel_keeps_staff_bypass():
+def test_committee_channel_has_no_staff_bypass():
+    # Workgroup channels are private to the group: no outsider, staff included,
+    # may read or moderate them. (Previously committee/seminar kept a bypass.)
     wg = _wg(kind=Workgroup.Kind.COMMITTEE, name="Ethics Committee")
     ch = wg.channels.first()
     staff = _user("staff@x.test", is_staff=True)
-    assert channel_visible(ch, staff) is True
-    assert channel_can_moderate(ch, staff) is True
+    assert channel_visible(ch, staff) is False
+    assert channel_can_moderate(ch, staff) is False
+
+
+def test_seminar_channel_has_no_staff_bypass():
+    wg = _wg(kind=Workgroup.Kind.SEMINAR, name="Clinic Seminar")
+    ch = wg.channels.first()
+    staff = _user("staff@x.test", is_staff=True)
+    assert channel_visible(ch, staff) is False
+    assert channel_can_moderate(ch, staff) is False
 
 
 # ---- WORKGROUP moderation ---------------------------------------------

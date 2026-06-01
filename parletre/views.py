@@ -148,7 +148,7 @@ def index(request):
         return render(request, "parletre/not_a_member.html", status=403)
 
     channels = list(
-        Channel.objects.select_related("category", "committee")
+        Channel.objects.select_related("category", "committee", "workgroup")
         .prefetch_related("members", "moderators")
         .order_by("category__position", "position", "name")
     )
@@ -161,12 +161,22 @@ def index(request):
         s.channel_id: s.level
         for s in Subscription.objects.filter(user=request.user)
     }
+    # Unread is computed over every visible channel — including workgroup ones —
+    # so the "Your groups" section can surface unread activity in a member's
+    # cartels / committees / seminars without listing their channels here.
     unread = unread_channel_ids(request.user, visible)
+
+    # The board lists only school-wide channels. A workgroup's forum + chat are
+    # private to the group and live on its Workspace page (Groups → the group →
+    # Discuss / Chat); we summarise them under "Your groups" instead of mixing
+    # every group's channels into the board.
+    general = [c for c in visible if c.access != Channel.Access.WORKGROUP]
+    wg_channels = [c for c in visible if c.access == Channel.Access.WORKGROUP]
 
     # Group into categories, preserving order; uncategorised last.
     groups: list[tuple[str, list[Channel]]] = []
     seen: dict[object, list[Channel]] = {}
-    for channel in visible:
+    for channel in general:
         channel.user_sub_level = subs.get(channel.id)
         channel.is_unread = channel.id in unread
         key = channel.category_id
@@ -177,10 +187,47 @@ def index(request):
             groups.append((label, bucket))
         seen[key].append(channel)
 
+    my_groups = _my_groups(wg_channels, unread)
+
     return render(
         request,
         "parletre/index.html",
-        {"groups": groups, "any_channels": bool(visible)},
+        {
+            "groups": groups,
+            "my_groups": my_groups,
+            "any_channels": bool(general) or bool(my_groups),
+        },
+    )
+
+
+#: Display order for "Your groups", mirroring the Groups overview (KIND_META).
+_KIND_ORDER = {
+    "seminar": 0,
+    "cartel": 1,
+    "committee": 2,
+    "working_group": 3,
+    "reading_group": 4,
+}
+
+
+def _my_groups(wg_channels, unread):
+    """Collapse the member's visible workgroup channels into one entry per
+    group — name, kind, and whether any of its channels has unread activity —
+    for the "Your groups" links on the board. Sorted by kind then name."""
+    by_group: dict[int, dict] = {}
+    for channel in wg_channels:
+        wg = channel.workgroup
+        if wg is None:
+            continue
+        entry = by_group.get(wg.id)
+        if entry is None:
+            entry = {"workgroup": wg, "is_unread": False}
+            by_group[wg.id] = entry
+        if channel.id in unread:
+            entry["is_unread"] = True
+    return sorted(
+        by_group.values(),
+        key=lambda e: (_KIND_ORDER.get(e["workgroup"].kind, 99), e["workgroup"].name),
     )
 
 

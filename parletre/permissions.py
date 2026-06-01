@@ -14,11 +14,15 @@ Two layers:
 
 ``is_staff`` is god-mode for *open*, *role*, and *committee* channels —
 matching the rest of the site, where staff need reach for moderation and
-support. **Private channels are the exception:** they are genuinely private,
-visible and moderable only to their named members / moderators, with no staff
-bypass. This is application-level privacy, not cryptographic — a database
-administrator can still read the rows — but the product never surfaces a
-private channel to someone who isn't in it.
+support. **Private and workgroup channels are the exception:** they are
+genuinely private, visible and moderable only to their members / moderators,
+with no staff bypass. A workgroup's forum and chat belong to that group
+(cartel, seminar, committee, working group, reading group) and no outsider —
+staff included — may read or moderate them; only its members, leads (chair /
+co-chair / plus-one / faculty), and named moderators can. This is
+application-level privacy, not cryptographic — a database administrator can
+still read the rows — but the product never surfaces such a channel to someone
+who isn't in it.
 
 Every channel, of every access mode, still sits behind :func:`is_member`:
 Parlêtre as a whole is members-only and never public.
@@ -27,13 +31,8 @@ Parlêtre as a whole is members-only and never public.
 from __future__ import annotations
 
 from accounts.permissions import is_lsp_member as _is_lsp_member
-from workgroups.models import Workgroup, WorkgroupMembership
+from workgroups.models import WorkgroupMembership
 
-#: Workgroup kinds whose channels allow the staff read/moderate bypass.
-#: Cartels and working groups are intimate — genuinely private, no bypass
-#: (like a PRIVATE channel). Committees and seminars keep staff oversight,
-#: matching the legacy COMMITTEE access mode.
-_WORKGROUP_STAFF_BYPASS_KINDS = (Workgroup.Kind.COMMITTEE, Workgroup.Kind.SEMINAR)
 
 def _authenticated(user) -> bool:
     return bool(getattr(user, "is_authenticated", False))
@@ -67,9 +66,9 @@ def _can_moderate_workgroup_channel(channel, user) -> bool:
     wg = channel.workgroup
     if wg is None:
         return False
-    if _workgroup_lead(wg, user):
-        return True
-    return user.is_staff and wg.kind in _WORKGROUP_STAFF_BYPASS_KINDS
+    # No staff bypass: a workgroup channel is moderated only from within the
+    # group (its leads + named moderators).
+    return _workgroup_lead(wg, user)
 
 
 def channel_can_moderate(channel, user) -> bool:
@@ -119,14 +118,13 @@ def channel_visible(channel, user) -> bool:
             or channel.moderators.filter(pk=user.pk).exists()
         )
     if access == Access.WORKGROUP:
-        # Gated by workgroup membership. Intimate kinds (cartel / working group)
-        # get no staff bypass — checked before the staff shortcut below.
+        # Private to the group: members only, no staff bypass — checked before
+        # the staff shortcut below, so a workgroup channel stays private even
+        # to staff who aren't in the group.
         wg = channel.workgroup
         if wg is None:
             return False
-        if wg.is_member(user):
-            return True
-        return user.is_staff and wg.kind in _WORKGROUP_STAFF_BYPASS_KINDS
+        return wg.is_member(user)
     if access == Access.LSP_STAFF:
         # The LSP Staff channel: gated by the LSP Staff role (staff keep
         # oversight).

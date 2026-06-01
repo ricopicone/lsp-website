@@ -30,6 +30,30 @@
     <p class="text-base-content/60 italic">No channels yet. Check back soon.</p>
   {% endif %}
 
+  {% if my_groups %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-lg text-base-content/80 border-b border-base-300/60 pb-1">Your groups</h2>
+    <p class="text-sm text-base-content/60">
+      Each group's discussion and chat are private to its members and live on the
+      group's page.
+    </p>
+    <ul class="grid gap-3 sm:grid-cols-2">
+      {% for g in my_groups %}
+      <li class="rounded-box border border-base-300 bg-base-100 p-4 hover:border-base-content/30 transition-colors">
+        <a href="{{ g.workgroup.get_absolute_url }}" class="block space-y-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            {% if g.is_unread %}<span class="size-2 rounded-full bg-primary inline-block shrink-0" title="Unread activity"></span>{% endif %}
+            <span class="font-medium text-base-content">{{ g.workgroup.name }}</span>
+            <span class="badge badge-sm badge-outline">{{ g.workgroup.get_kind_display }}</span>
+          </div>
+          <p class="text-sm text-base-content/60">Discussion &amp; chat →</p>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   {% for label, channels in groups %}
   <section class="space-y-3">
     <h2 class="font-serif text-lg text-base-content/80 border-b border-base-300/60 pb-1">{{ label }}</h2>

@@ -271,6 +271,36 @@ def test_index_lists_open_channel_but_not_inaccessible_private(client):
 
 
 @pytest.mark.django_db
+def test_index_summarises_workgroup_channels_under_your_groups(client):
+    """A workgroup's forum/chat are not listed among the board's channels; the
+    group instead appears once under "Your groups" for its members, and not at
+    all for non-members."""
+    from workgroups.models import Workgroup
+
+    wg = Workgroup.objects.create(kind=Workgroup.Kind.CARTEL, name="Sinthome Cartel")
+    forum = wg.channels.get(kind=Channel.Kind.FORUM)
+
+    member = make_user("in@x.co", role=Role.ANALYST)
+    wg.memberships.create(
+        user=member, role=WorkgroupMembership.Role.MEMBER,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    client.force_login(member)
+    body = client.get(reverse("parletre:index")).content.decode()
+    assert "Your groups" in body
+    assert wg.name in body
+    assert wg.get_absolute_url() in body
+    # the group's channel itself is not listed as a board channel
+    assert forum.get_absolute_url() not in body
+
+    other = make_user("out@x.co", role=Role.ANALYST)
+    client.force_login(other)
+    body = client.get(reverse("parletre:index")).content.decode()
+    assert wg.name not in body
+    assert "Your groups" not in body
+
+
+@pytest.mark.django_db
 def test_inaccessible_channel_404s_rather_than_revealing(client):
     make_channel("hush", access=Access.PRIVATE)
     member = make_user("m@x.co", role=Role.ANALYST)
