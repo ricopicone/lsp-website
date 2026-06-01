@@ -144,14 +144,16 @@ def test_public_event_shows_no_faculty_link_to_random_user(client, event, random
     assert b"Edit description" not in response.content
 
 
-def test_public_event_shows_faculty_link_to_faculty(client, event, faculty_member):
+def test_workspace_offers_roster_tab_to_faculty(client, event, faculty_member):
+    """Faculty see a Roster tab on the seminar Workspace (PROG-8 tooling moved
+    here from the event page's ?view=faculty)."""
     client.force_login(faculty_member)
-    response = client.get(reverse("events:detail", args=[event.slug]))
-    assert b"Faculty view" in response.content
-    assert b"Edit description" in response.content
+    response = client.get(event.workgroup.get_absolute_url())
+    assert response.status_code == 200
+    assert b"tab=roster" in response.content
 
 
-def test_faculty_view_param_renders_roster_for_faculty(
+def test_roster_tab_renders_roster_for_faculty(
     client, event, faculty_member, random_user,
 ):
     tier = PriceTier.objects.create(
@@ -162,7 +164,7 @@ def test_faculty_view_param_renders_roster_for_faculty(
         quoted_amount=Decimal("100.00"),
     )
     client.force_login(faculty_member)
-    response = client.get(reverse("events:detail", args=[event.slug]) + "?view=faculty")
+    response = client.get(event.workgroup.get_absolute_url() + "?tab=roster")
     assert response.status_code == 200
     assert b"Roster" in response.content
     assert b"rando@example.com" in response.content

@@ -163,6 +163,44 @@ def test_workspace_overview_shows_event_summary(client):
     assert reverse("registrations:register", args=[event.slug]).encode() in resp.content
 
 
+def test_event_url_redirects_to_workspace(client):
+    """The standalone event URL 301/302s to the canonical Workspace."""
+    event = _seminar()
+    event.published = True
+    event.status = Event.Status.OPEN
+    event.save(update_fields=["published", "status"])
+    wg = event.ensure_workgroup()
+    resp = client.get(reverse("events:detail", args=[event.slug]))
+    assert resp.status_code == 302 and resp.url == wg.get_absolute_url()
+
+
+def test_published_seminar_workspace_is_public(client):
+    """A published seminar's Workspace landing is publicly viewable (Overview
+    summary), but the roster stays private to members."""
+    event = _seminar()
+    event.published = True
+    event.status = Event.Status.OPEN
+    event.save(update_fields=["published", "status"])
+    wg = event.ensure_workgroup()
+    teacher = _user("teach@x.test", is_faculty=True)
+    teacher.first_name, teacher.last_name = "Jacques", "Lacan"
+    teacher.save(update_fields=["first_name", "last_name"])
+    event.add_faculty(teacher)
+
+    # Anonymous: landing visible, faculty summary shown, roster gated.
+    resp = client.get(wg.get_absolute_url())
+    assert resp.status_code == 200
+    assert b"Jacques Lacan" in resp.content
+    assert b"private to its members" in resp.content
+
+
+def test_draft_seminar_workspace_not_public(client):
+    """An unpublished seminar's Workspace is NOT public (no leak before launch)."""
+    event = _seminar()              # published defaults False
+    wg = event.ensure_workgroup()
+    assert client.get(wg.get_absolute_url()).status_code == 404
+
+
 def test_paid_student_can_be_assigned_a_task(client):
     """A derived registrant (no stored membership row) is still a real
     participant: it shows in the assignee picker and can be assigned a task

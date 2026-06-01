@@ -85,7 +85,8 @@ def test_published_event_shows_faculty_names(client, published_event):
     faculty.profile.is_faculty = True
     faculty.profile.save()
     published_event.add_faculty(faculty)
-    response = client.get(reverse("events:detail", args=["lacan-seminar-xi"]))
+    # Event URL redirects to the Workspace; faculty render on its Overview.
+    response = client.get(reverse("events:detail", args=["lacan-seminar-xi"]), follow=True)
     assert b"Jane Doe" in response.content
 
 
@@ -222,7 +223,7 @@ def test_faculty_section_label_for_seminar(client, published_event):
     user.profile.bio = "Jane has a teaching bio."
     user.profile.save()
     published_event.add_faculty(user)
-    response = client.get(reverse("events:detail", args=["lacan-seminar-xi"]))
+    response = client.get(reverse("events:detail", args=["lacan-seminar-xi"]), follow=True)
     body = response.content
     assert b"Faculty" in body
     assert b"teaching bio" in body

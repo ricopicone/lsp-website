@@ -113,6 +113,15 @@ def workgroup_detail(request, slug):
         discuss_channel = wg.channels.filter(kind="forum").first()
         chat_channel = wg.channels.filter(kind="chat").first()
 
+    # Offering Workspaces (seminar / reading group) feature their generated
+    # event; faculty/editors get its PROG-8 tooling on a Roster tab.
+    primary_event = wg.primary_event()
+    can_edit_offering = False
+    if primary_event is not None:
+        from events.permissions import can_edit_event
+
+        can_edit_offering = can_edit_event(request.user, primary_event)
+
     tabs = [("overview", "Overview")]
     if discuss_channel:
         tabs.append(("discuss", "Discuss"))
@@ -124,6 +133,8 @@ def workgroup_detail(request, slug):
         tabs.append(("schedule", "Schedule"))
     if wg.has_tasks and is_member:
         tabs.append(("tasks", "Tasks"))
+    if can_edit_offering:
+        tabs.append(("roster", "Roster"))
     if is_member:
         tabs.append(("settings", "Settings"))
     tab_keys = [k for k, _ in tabs]
@@ -161,15 +172,23 @@ def workgroup_detail(request, slug):
         context["is_coordinator"] = is_cartel_coordinator(request.user)
         context.update(cartel.viewer_state(request.user))
 
-    if active == "overview":
+    if active == "overview" and primary_event is not None:
         # A seminar / reading-group Workspace shows the generated event's public
         # summary (faculty, sessions, pricing, Register) inline — the shared
         # partial keeps it identical to the standalone event page.
-        event = wg.primary_event()
-        if event is not None:
-            from events.views import event_summary_context
+        from events.views import event_summary_context
 
-            context.update(event_summary_context(event, request.user))
+        context.update(event_summary_context(primary_event, request.user))
+    elif active == "roster" and can_edit_offering:
+        # PROG-8 faculty tooling: registrant roster + pricing-code minting.
+        context["event"] = primary_event
+        context["registrations"] = primary_event.registrations.select_related(
+            "user", "price_tier"
+        ).order_by("created_at")
+        from events.forms import PricingCodeForm
+
+        context["pricing_code_form"] = PricingCodeForm()
+        context["existing_codes"] = primary_event.pricing_codes.order_by("-created_at")
     elif active in ("discuss", "chat"):
         from parletre.views import channel_inline_context
 

@@ -265,7 +265,21 @@ class Workgroup(models.Model):
             return is_lsp_member(user)
         return self.is_member(user)  # PRIVATE
 
+    #: Kinds whose Workspace is the public face of a registerable offering —
+    #: its landing is publicly visible once the generated event is published.
+    OFFERING_KINDS = frozenset({Kind.SEMINAR, Kind.READING_GROUP})
+
+    def _has_public_event(self) -> bool:
+        if self.kind not in self.OFFERING_KINDS:
+            return False
+        return any(getattr(e, "is_public_now", False) for e in self.events.all())
+
     def landing_visible_to(self, user) -> bool:
+        # A seminar / reading-group Workspace is the canonical page for its
+        # offering: once the event is public, so is the landing (Overview shows
+        # the public summary; content/roster stays gated by content_visibility).
+        if self._has_public_event():
+            return True
         return self._visible_at(self.landing_visibility, user)
 
     def content_visible_to(self, user) -> bool:

@@ -321,9 +321,10 @@ def test_event_detail_renders_someone_in_both_faculty_and_member_speakers_once(c
     )
     e.add_faculty(u)
     e.member_speakers.add(u)
-    resp = client.get(f"/events/{e.slug}/")
+    # The seminar page is the Workspace now; the event URL redirects there.
+    resp = client.get(f"/events/{e.slug}/", follow=True)
     assert resp.status_code == 200
-    assert resp.content.count(b"Stephanie Swales") == 1
+    assert resp.content.count(b"Stephanie Swales") == 1   # deduped in the shared summary
 
 
 @pytest.mark.django_db

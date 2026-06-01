@@ -155,6 +155,11 @@ def event_detail(request, slug: str):
     if not event.is_public_now and not can_edit:
         raise Http404("Event not found.")
 
+    # Offering events (seminar / reading group) live in their Workspace now —
+    # that's the canonical page (faculty tooling moved to its Roster tab).
+    if event.event_type in Event.ANNUAL_PROGRAM_TYPES and event.workgroup_id:
+        return redirect(event.workgroup.get_absolute_url())
+
     show_faculty_view = (
         can_edit and request.GET.get("view") == "faculty"
     )
