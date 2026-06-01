@@ -33,6 +33,7 @@ works identically when embedded.{% endcomment %}
         action="{% url 'parletre:channel' channel.slug %}"
         class="space-y-1 border-t border-base-300/60 pt-4">
     {% csrf_token %}
+    {% if channel_next %}<input type="hidden" name="next" value="{{ channel_next }}">{% endif %}
     {{ form.reply_to }}
     {% include "parletre/_reply_banner.html" %}
     <div class="parletre-composer">

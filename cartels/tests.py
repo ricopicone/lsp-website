@@ -393,6 +393,48 @@ def test_discuss_chat_tabs_hidden_from_non_member(client):
     assert b"tab=discuss" not in resp.content and b"tab=chat" not in resp.content
 
 
+def test_chat_inline_has_reply_and_reaction_in_action_row(client):
+    from parletre.models import Post
+
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    chat = cartel.workgroup.channels.get(kind="chat")
+    Post.objects.create(channel=chat, author=gen, body="hello")
+    client.force_login(gen)
+    resp = client.get(f"{cartel.workgroup.get_absolute_url()}?tab=chat")
+    assert resp.status_code == 200
+    assert b">Reply<" in resp.content              # reply in the action row
+    assert b"Add a reaction" in resp.content        # reaction picker moved into the row
+    assert b"reply_to=" in resp.content             # reply link present
+
+
+def test_chat_reply_honored_inline_and_returns_via_next(client):
+    from parletre.models import Post
+
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    wg = cartel.workgroup
+    chat = wg.channels.get(kind="chat")
+    post = Post.objects.create(channel=chat, author=gen, body="hi")
+    client.force_login(gen)
+
+    # ?reply_to is honored inline — the composer's hidden reply_to is set.
+    g = client.get(f"{wg.get_absolute_url()}?tab=chat&reply_to={post.id}")
+    assert g.status_code == 200
+    assert f'value="{post.id}"'.encode() in g.content
+
+    # Posting a reply returns to the workspace chat tab (next), not Parlêtre.
+    nxt = f"{wg.get_absolute_url()}?tab=chat"
+    r = client.post(
+        f"/parletre/{chat.slug}/",
+        {"body": "a reply", "reply_to": post.id, "next": nxt},
+    )
+    assert r.status_code == 302 and r.url == nxt
+    assert Post.objects.filter(channel=chat, reply_to=post).exists()
+
+
 def test_proposed_cartel_hidden_from_other_members_on_kind_list(client):
     gen = _member("gen@x.test")
     Cartel.objects.propose(generator=gen, name="Secret Proposal")

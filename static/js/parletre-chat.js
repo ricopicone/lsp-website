@@ -26,6 +26,13 @@
   var online = 0;
   var ws;
 
+  function replyHref(id) {
+    // Preserve the current query (e.g. ?tab=chat when embedded) + add reply_to.
+    var params = new URLSearchParams(location.search);
+    params.set("reply_to", id);
+    return location.pathname + "?" + params.toString() + "#composer";
+  }
+
   function appendMessage(d) {
     if (!stream || document.getElementById("post-" + d.id)) return; // dedupe
     var wrap = document.createElement("div");
@@ -41,6 +48,18 @@
     t.textContent = "just now";
     t.dateTime = d.created;
     wrap.querySelector("[data-body]").innerHTML = d.body_html;
+    // Give live messages a Reply control immediately (no refresh needed);
+    // edit/delete/react render server-side on the next load.
+    if (form) {
+      var actions = document.createElement("div");
+      actions.className = "flex items-center gap-3 mt-1 text-xs text-base-content/40";
+      var reply = document.createElement("a");
+      reply.className = "hover:text-primary";
+      reply.textContent = "Reply";
+      reply.href = replyHref(d.id);
+      actions.appendChild(reply);
+      wrap.querySelector(".flex-1").appendChild(actions);
+    }
     stream.appendChild(wrap);
     wrap.scrollIntoView({ block: "nearest" });
   }
