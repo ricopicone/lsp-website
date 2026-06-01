@@ -77,6 +77,10 @@ class Workgroup(models.Model):
         SEMINAR = "seminar", _("Seminar")
         READING_GROUP = "reading_group", _("Reading group")
 
+    class Lifecycle(models.TextChoices):
+        ACTIVE = "active", _("Active")
+        ARCHIVED = "archived", _("Archived — dissolved, read-only")
+
     #: Per-kind seed for the capability toggles, applied at creation (the
     #: Table A defaults from the design worksheet). Every group can still turn
     #: the full suite on afterward — these are defaults, not limits.
@@ -143,6 +147,15 @@ class Workgroup(models.Model):
             "If set, any LSP member may join this group directly (one click, no "
             "approval or payment). Default for reading groups."
         ),
+    )
+    status = models.CharField(
+        max_length=12, choices=Lifecycle.choices, default=Lifecycle.ACTIVE,
+        help_text="Archived groups are dissolved: read-only, no new posts or members.",
+    )
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="archived_workgroups",
     )
 
     # Capability toggles — defaulted per kind at creation, fully editable after.
@@ -220,6 +233,11 @@ class Workgroup(models.Model):
         """
         if not getattr(user, "is_authenticated", False):
             return False
+        # An archived (dissolved) group has no active members — everyone is
+        # frozen to read-only (see has_archive_access); posting/roster/workspace
+        # all gate on this, so the freeze is site-wide.
+        if self.is_archived:
+            return False
         # Role-derived membership (e.g. every Analyst belongs to the Meeting of
         # Analysts) — automatic, no stored row.
         if self.auto_member_role and self._user_role(user) == self.auto_member_role:
@@ -241,6 +259,13 @@ class Workgroup(models.Model):
             return True
         if not getattr(user, "is_authenticated", False):
             return False
+        # A dissolved (archived) group stays readable to its still-active
+        # roster — membership rows aren't ended by archiving, so past members
+        # keep read-only access to the channel history + released works.
+        if self.is_archived and self.memberships.filter(
+            user=user, end_date__isnull=True
+        ).exists():
+            return True
         if self.kind in self.OFFERING_KINDS:
             return any(e.has_access_registrant(user) for e in self.events.all())
         return False
@@ -542,6 +567,93 @@ class Workgroup(models.Model):
             "can_apply": can_apply,
             "pending_requests": pending,
         }
+
+    # ---- Lifecycle: archive / dissolution ----
+
+    @property
+    def is_archived(self) -> bool:
+        return self.status == self.Lifecycle.ARCHIVED
+
+    def archive(self, by=None):
+        """Dissolve the group: freeze it read-only (``is_member`` → False for
+        everyone) without ending memberships or deleting its channel / works /
+        files — past members keep read-only :meth:`has_archive_access`."""
+        if self.is_archived:
+            return
+        self.status = self.Lifecycle.ARCHIVED
+        self.archived_at = timezone.now()
+        self.archived_by = by
+        self.save(update_fields=["status", "archived_at", "archived_by"])
+
+    def unarchive(self, by=None):
+        if not self.is_archived:
+            return
+        self.status = self.Lifecycle.ACTIVE
+        self.archived_at = None
+        self.save(update_fields=["status", "archived_at"])
+
+    # ---- Roster mutation + self-service leave ----
+
+    def lead_members(self):
+        """Active members holding a lead role (chair / co-chair / plus-one /
+        faculty / organizer) — those who manage the group."""
+        return self.memberships.filter(
+            end_date__isnull=True, role__in=WorkgroupMembership.LEAD_ROLES
+        )
+
+    def _would_orphan(self, user) -> bool:
+        """True if removing/demoting ``user`` would leave the group with no
+        lead — we forbid that (staff can still recover via the admin)."""
+        m = self.memberships.filter(user=user, end_date__isnull=True).first()
+        return (
+            m is not None
+            and m.role in WorkgroupMembership.LEAD_ROLES
+            and self.lead_members().count() <= 1
+        )
+
+    def can_leave(self, user) -> bool:
+        """Whether ``user`` may leave on their own. Only stored members can
+        (derived/auto rosters — seminar registrants, the Meeting of Analysts —
+        lapse by their own mechanism). The sole remaining lead may not leave."""
+        if not getattr(user, "is_authenticated", False):
+            return False
+        if not self.memberships.filter(user=user, end_date__isnull=True).exists():
+            return False
+        return not self._would_orphan(user)
+
+    def leave(self, user) -> bool:
+        if not self.can_leave(user):
+            return False
+        self.memberships.filter(user=user, end_date__isnull=True).update(
+            end_date=timezone.localdate()
+        )
+        return True
+
+    def add_member(self, user, *, role=None):
+        """Manager adds ``user`` to the stored roster (idempotent)."""
+        return self._add_member(user, role=role)
+
+    def remove_member(self, user) -> bool:
+        """Manager removes a stored member (end-dates the row). Refuses to
+        orphan the group's last lead."""
+        if self._would_orphan(user):
+            return False
+        ended = self.memberships.filter(user=user, end_date__isnull=True).update(
+            end_date=timezone.localdate()
+        )
+        return bool(ended)
+
+    def set_role(self, user, role) -> bool:
+        """Manager changes a stored member's role. Refuses to demote the sole
+        lead out of a lead role."""
+        m = self.memberships.filter(user=user, end_date__isnull=True).first()
+        if m is None:
+            return False
+        if (role not in WorkgroupMembership.LEAD_ROLES) and self._would_orphan(user):
+            return False
+        m.role = role
+        m.save(update_fields=["role"])
+        return True
 
 
 class WorkgroupMembership(models.Model):

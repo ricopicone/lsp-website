@@ -128,6 +128,9 @@ def workgroup_detail(request, slug):
     # Past-term attendees of an offering keep read-only archive access (channel
     # history + released Works), but aren't active members (can't post).
     archive_access = wg.has_archive_access(request.user)
+    # Leads / LSP staff / PC may manage the group (roster, archive) — kept
+    # reachable even when is_member is False (e.g. after the group is archived).
+    can_manage = _can_manage_workgroup(wg, request.user)
 
     # Discuss (forum) + Chat channels — active members post; archive viewers
     # read. (Files → W2; Schedule → W3; Tasks → W4.)
@@ -158,7 +161,7 @@ def workgroup_detail(request, slug):
         tabs.append(("tasks", "Tasks"))
     if can_edit_offering:
         tabs.append(("roster", "Roster"))
-    if is_member:
+    if is_member or can_manage:
         tabs.append(("settings", "Settings"))
     tab_keys = [k for k, _ in tabs]
     active = request.GET.get("tab", "overview")
@@ -217,7 +220,9 @@ def workgroup_detail(request, slug):
     from accounts.permissions import is_lsp_member
 
     can_join = wg.open_join and is_lsp_member(request.user) and not stored_member
-    can_leave = wg.open_join and stored_member
+    # Any stored member may leave (not just open-join groups), unless they're
+    # the sole remaining lead.
+    can_leave = wg.can_leave(request.user)
 
     context = {
         "workgroup": wg,
@@ -315,12 +320,19 @@ def workgroup_detail(request, slug):
         context["done_tasks"] = list(qs.filter(done=True).order_by("-completed_at"))
         context["task_q"] = q
         context["task_sort"] = sort
-    elif active == "settings" and is_member:
+    elif active == "settings" and (is_member or can_manage):
         from .forms import WorkgroupDatesForm
 
         context["dates_form"] = WorkgroupDatesForm(instance=wg)
+        context["can_manage"] = can_manage
+        # Manager roster tools (add/remove/role) for non-cartel groups — cartels
+        # manage membership through their own apply/plus-one flow.
+        if can_manage and _attached(wg, "cartel") is None:
+            context["manage_roster"] = True
+            context["stored_members"] = list(wg.active_members())
+            context["role_choices"] = WorkgroupMembership.Role.choices
         # Reading-group managers can open a new annual paid term.
-        if wg.kind == Workgroup.Kind.READING_GROUP and _can_manage_workgroup(wg, request.user):
+        if wg.kind == Workgroup.Kind.READING_GROUP and can_manage:
             from .forms import ReadingGroupTermForm
 
             context["can_manage_terms"] = True
@@ -331,22 +343,11 @@ def workgroup_detail(request, slug):
 
 
 def _can_manage_workgroup(wg, user) -> bool:
-    """Organizer/lead of the group, LSP staff, or Programming Committee — may
-    run management actions like opening a reading-group term."""
-    if not getattr(user, "is_authenticated", False):
-        return False
-    from core.access import has_staff_role
-    from core.models import StaffRole
+    """Thin (wg, user) adapter over the canonical
+    :func:`workgroups.permissions.can_manage_workgroup`."""
+    from .permissions import can_manage_workgroup
 
-    if has_staff_role(user, StaffRole.LSP_STAFF):
-        return True
-    from events.permissions import is_program_committee
-
-    if is_program_committee(user):
-        return True
-    return wg.memberships.filter(
-        user=user, end_date__isnull=True, role__in=WorkgroupMembership.LEAD_ROLES
-    ).exists()
+    return can_manage_workgroup(user, wg)
 
 
 @login_required
@@ -393,14 +394,86 @@ def workgroup_join(request, slug):
 @login_required
 @require_POST
 def workgroup_leave(request, slug):
-    """Leave a group you joined (ends your active stored membership)."""
-    from django.utils import timezone
-
+    """Leave a group you're a stored member of (ends your active membership).
+    Refused for the sole remaining lead (would orphan the group)."""
     wg = get_object_or_404(Workgroup, slug=slug)
-    wg.memberships.filter(user=request.user, end_date__isnull=True).update(
-        end_date=timezone.localdate()
-    )
+    if not wg.leave(request.user):
+        raise Http404
     return redirect(wg.get_absolute_url())
+
+
+@login_required
+@require_POST
+def workgroup_archive(request, slug):
+    """A manager dissolves the group: read-only, no new posts or members."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not _can_manage_workgroup(wg, request.user):
+        raise Http404
+    cartel = _attached(wg, "cartel")
+    # Cartels keep their proposal status in sync via their own archive().
+    (cartel or wg).archive(by=request.user)
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")
+
+
+@login_required
+@require_POST
+def workgroup_unarchive(request, slug):
+    """A manager reactivates a dissolved group."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not _can_manage_workgroup(wg, request.user):
+        raise Http404
+    cartel = _attached(wg, "cartel")
+    if cartel is not None:
+        proposal = wg.proposal
+        proposal.status = proposal.Status.OPEN
+        proposal.save(update_fields=["status"])
+    wg.unarchive(by=request.user)
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")
+
+
+@login_required
+@require_POST
+def roster_add(request, slug):
+    """Manager adds an LSP member to the stored roster."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not _can_manage_workgroup(wg, request.user):
+        raise Http404
+    from cartels.forms import _resolve_member
+
+    user = _resolve_member(request.POST.get("member", ""))
+    if user is not None:
+        wg.add_member(user)
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")
+
+
+@login_required
+@require_POST
+def roster_remove(request, slug):
+    """Manager removes a stored member (refused for the sole lead)."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not _can_manage_workgroup(wg, request.user):
+        raise Http404
+    from accounts.models import User
+
+    member = get_object_or_404(User, pk=request.POST.get("user"))
+    wg.remove_member(member)
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")
+
+
+@login_required
+@require_POST
+def roster_set_role(request, slug):
+    """Manager changes a stored member's role (refused if it orphans the lead)."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not _can_manage_workgroup(wg, request.user):
+        raise Http404
+    from accounts.models import User
+
+    member = get_object_or_404(User, pk=request.POST.get("user"))
+    role = request.POST.get("role", "")
+    if role in WorkgroupMembership.Role.values:
+        wg.set_role(member, role)
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")
 
 
 @login_required

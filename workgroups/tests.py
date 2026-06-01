@@ -422,3 +422,100 @@ def test_cartels_listed_under_unified_groups_kind_page(client):
     resp = client.get("/groups/cartels/")
     assert resp.status_code == 200
     assert b"Speech and Writing" in resp.content
+
+
+# ---- Phase B: lifecycle (leave / archive / roster management) ----------
+
+def _chair(wg, email="chair@x.test"):
+    u = _user(email, role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=u, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    return u
+
+
+def _plain_member(wg, email):
+    u = _user(email, role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=u, role=WorkgroupMembership.Role.MEMBER,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    return u
+
+
+def test_archive_freezes_membership_keeps_archive_access():
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Archive")
+    chair = _chair(wg)
+    member = _plain_member(wg, "m@x.test")
+    assert wg.is_member(member) is True
+    wg.archive(by=chair)
+    wg.refresh_from_db()
+    assert wg.is_archived is True
+    assert wg.is_member(member) is False           # frozen — can't post
+    assert wg.has_archive_access(member) is True    # read-only retained
+    assert wg.has_archive_access(_user("out@x.test", role=Profile.Role.ANALYST)) is False
+    wg.unarchive()
+    wg.refresh_from_db()
+    assert wg.is_member(member) is True
+
+
+def test_can_leave_but_sole_lead_cannot():
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Leave")
+    chair = _chair(wg)
+    member = _plain_member(wg, "m@x.test")
+    assert wg.can_leave(member) is True
+    assert wg.can_leave(chair) is False             # sole remaining lead
+    assert wg.leave(member) is True
+    assert wg.is_member(member) is False
+    assert wg.leave(chair) is False                 # refused
+    assert wg.is_member(chair) is True
+
+
+def test_remove_member_and_sole_lead_protected():
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Remove")
+    chair = _chair(wg)
+    member = _plain_member(wg, "m@x.test")
+    assert wg.remove_member(member) is True
+    assert wg.is_member(member) is False
+    assert wg.remove_member(chair) is False         # would orphan the group
+    assert wg.is_member(chair) is True
+
+
+def test_set_role_protects_last_lead():
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Roles")
+    chair = _chair(wg)
+    assert wg.set_role(chair, WorkgroupMembership.Role.MEMBER) is False  # sole lead
+    member = _plain_member(wg, "m@x.test")
+    assert wg.set_role(member, WorkgroupMembership.Role.CO_CHAIR) is True
+    assert wg.set_role(chair, WorkgroupMembership.Role.MEMBER) is True   # now ok
+
+
+def test_roster_add_gated_to_manager(client):
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Gate",
+             landing_visibility=Visibility.PUBLIC)
+    chair = _chair(wg)
+    client.force_login(_user("plain@x.test", role=Profile.Role.ANALYST))
+    assert client.post(reverse("workgroups:roster_add", args=[wg.slug]),
+                       {"member": "new@x.test"}).status_code == 404
+    newbie = _user("new@x.test", role=Profile.Role.ANALYST, first="New", last="Person")
+    client.force_login(chair)
+    assert client.post(reverse("workgroups:roster_add", args=[wg.slug]),
+                       {"member": "new@x.test"}).status_code == 302
+    assert wg.is_member(newbie) is True
+
+
+def test_archive_view_gated_and_settings_reachable_after_archive(client):
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Lifecycle",
+             landing_visibility=Visibility.PUBLIC)
+    chair = _chair(wg)
+    client.force_login(_user("plain@x.test", role=Profile.Role.ANALYST))
+    assert client.post(reverse("workgroups:archive", args=[wg.slug])).status_code == 404
+    client.force_login(chair)
+    assert client.post(reverse("workgroups:archive", args=[wg.slug])).status_code == 302
+    wg.refresh_from_db()
+    assert wg.is_archived is True
+    # The chair is frozen out of active membership but can still manage.
+    resp = client.get(f"{wg.get_absolute_url()}?tab=settings")
+    assert resp.status_code == 200
+    assert b"Reactivate group" in resp.content

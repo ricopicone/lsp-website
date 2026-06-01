@@ -229,10 +229,13 @@ class Cartel(models.Model):
         self.closed = bool(value)
         self.save(update_fields=["closed"])
 
-    def archive(self):
+    def archive(self, by=None):
         proposal = self.workgroup.proposal
         proposal.status = proposal.Status.ARCHIVED
         proposal.save(update_fields=["status"])
+        # Freeze the workspace read-only too (the shared lifecycle archive),
+        # while keeping the cartel listed on its program year by proposal status.
+        self.workgroup.archive(by=by)
 
     def set_internal_plus_one(self, user):
         """Designate an LSP-member plus-one: demote any existing internal

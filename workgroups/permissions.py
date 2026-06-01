@@ -12,20 +12,26 @@ from .models import WorkgroupMembership
 
 def can_manage_workgroup(user, workgroup) -> bool:
     """Whether ``user`` may manage ``workgroup`` — edit its roster/settings,
-    archive it. True for Django staff, any lead-role member (chair, co-chair,
-    plus-one, faculty), and Programming Committee members."""
+    archive it. True for a Django superuser, LSP Staff, Programming Committee
+    members, and any lead-role member (chair, co-chair, plus-one, faculty,
+    organizer). The single source of truth used across the group surfaces."""
     if not getattr(user, "is_authenticated", False):
         return False
-    if user.is_staff:
+    if user.is_superuser:
         return True
-    if workgroup.memberships.filter(
-        user=user, end_date__isnull=True, role__in=WorkgroupMembership.LEAD_ROLES,
-    ).exists():
+    # Lazy imports: events/core import workgroups, so import here to avoid a cycle.
+    from core.access import has_staff_role
+    from core.models import StaffRole
+
+    if has_staff_role(user, StaffRole.LSP_STAFF):
         return True
-    # Lazy import: events imports workgroups, so import here to avoid a cycle.
     from events.permissions import is_program_committee
 
-    return is_program_committee(user)
+    if is_program_committee(user):
+        return True
+    return workgroup.memberships.filter(
+        user=user, end_date__isnull=True, role__in=WorkgroupMembership.LEAD_ROLES,
+    ).exists()
 
 
 def is_board(user) -> bool:
