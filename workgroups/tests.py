@@ -138,16 +138,17 @@ def test_detail_404_when_landing_not_visible(client):
     assert resp.status_code == 404
 
 
-def test_detail_hides_roster_when_content_private(client):
+def test_detail_hides_roster_from_non_members_for_members_only_kind(client):
+    # A cartel's roster is open to LSP members, not the public.
     wg = _wg(landing_visibility=Visibility.PUBLIC, content_visibility=Visibility.PRIVATE)
-    secret = _user("secret@x.test", role=Profile.Role.ANALYST)
+    secret = _user("secret@x.test", role=Profile.Role.ANALYST, first="Verena")
     WorkgroupMembership.objects.create(
         workgroup=wg, user=secret, start_date=datetime.date(2026, 1, 1)
     )
-    resp = client.get(wg.get_absolute_url())   # anonymous: landing public, content private
+    resp = client.get(wg.get_absolute_url())   # anonymous: not an LSP member
     assert resp.status_code == 200
-    assert b"private to its members" in resp.content
-    assert secret.email.encode() not in resp.content
+    assert b"visible to LSP members" in resp.content
+    assert b"Verena" not in resp.content
 
 
 def test_detail_shows_roster_to_group_member(client):
@@ -160,6 +161,24 @@ def test_detail_shows_roster_to_group_member(client):
     resp = client.get(wg.get_absolute_url())
     assert resp.status_code == 200
     assert b"Vera" in resp.content
+
+
+@pytest.mark.parametrize("kind,public,members_only", [
+    (Workgroup.Kind.COMMITTEE, True, True),
+    (Workgroup.Kind.WORKING_GROUP, True, True),
+    (Workgroup.Kind.CARTEL, False, True),
+    (Workgroup.Kind.READING_GROUP, False, True),
+    (Workgroup.Kind.SEMINAR, False, False),
+])
+def test_roster_visibility_policy_by_kind(kind, public, members_only):
+    """Committees / working groups: roster public. Cartels / reading groups:
+    LSP members. Seminars: never."""
+    from django.contrib.auth.models import AnonymousUser
+
+    wg = _wg(kind=kind, landing_visibility=Visibility.PUBLIC)
+    lsp_member = _user("analyst@x.test", role=Profile.Role.ANALYST)
+    assert wg.roster_visible_to(AnonymousUser()) is public
+    assert wg.roster_visible_to(lsp_member) is members_only
 
 
 def test_groups_overview_shows_a_card_per_kind(client):

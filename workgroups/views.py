@@ -179,12 +179,17 @@ def workgroup_detail(request, slug):
         parent_url = wg.parent.get_absolute_url()
         parent_label = wg.parent.name
 
-    members = wg.participants() if can_view else []
+    # The roster is shown per a kind-based policy (roster_visible_to), distinct
+    # from content_visibility. Members are also needed functionally (assignee
+    # pickers) when the viewer is a member — so fetch participants for either.
+    roster_visible = wg.roster_visible_to(request.user)
+    members = wg.participants() if (roster_visible or is_member) else []
 
     context = {
         "workgroup": wg,
         "can_view_content": can_view,
         "is_member": is_member,
+        "roster_visible": roster_visible,
         "members": members,
         "member_count": len(members),
         "kind_index_url": kind_index_url,

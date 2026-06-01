@@ -297,6 +297,31 @@ class Workgroup(models.Model):
     def content_visible_to(self, user) -> bool:
         return self._visible_at(self.content_visibility, user)
 
+    #: Who may see a group's *membership list* (the roster), by kind —
+    #: independent of ``content_visibility``. Committees and working groups are
+    #: public; cartels and reading groups are open to any LSP member; seminars
+    #: never show a student roster (their faculty appear via the attached
+    #: event's summary instead).
+    ROSTER_VISIBILITY = {
+        Kind.COMMITTEE: Visibility.PUBLIC,
+        Kind.WORKING_GROUP: Visibility.PUBLIC,
+        Kind.CARTEL: Visibility.MEMBERS,
+        Kind.READING_GROUP: Visibility.MEMBERS,
+        Kind.SEMINAR: None,
+    }
+
+    def roster_visible_to(self, user) -> bool:
+        """Whether ``user`` may see this group's membership list (see
+        :attr:`ROSTER_VISIBILITY`). Page access is still gated by
+        :meth:`landing_visible_to` — this only governs the roster itself."""
+        level = self.ROSTER_VISIBILITY.get(self.kind)
+        if level is None:           # seminar — no student roster, ever
+            return False
+        if self._visible_at(level, user):
+            return True
+        # A group's own members always see its roster.
+        return self.is_member(user)
+
 
 class WorkgroupMembership(models.Model):
     """A user's tenure in a workgroup — the unified roster.

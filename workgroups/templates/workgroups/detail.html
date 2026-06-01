@@ -42,7 +42,7 @@
           <span class="text-base-content/30">·</span>
           <span class="normal-case tracking-normal">{{ workgroup.start_date|date:"Y" }}{% if workgroup.end_date %}–{{ workgroup.end_date|date:"Y" }}{% else %}–present{% endif %}</span>
           {% endif %}
-          {% if can_view_content and member_count %}
+          {% if roster_visible and member_count %}
           <span class="text-base-content/30">·</span>
           <span class="normal-case tracking-normal">{{ member_count }} member{{ member_count|pluralize }}</span>
           {% endif %}

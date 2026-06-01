@@ -193,9 +193,9 @@ def test_event_url_redirects_to_workspace(client):
     assert resp.status_code == 302 and resp.url == wg.get_absolute_url()
 
 
-def test_published_seminar_workspace_is_public(client):
-    """A published seminar's Workspace landing is publicly viewable (Overview
-    summary), but the roster stays private to members."""
+def test_published_seminar_workspace_shows_faculty_not_roster(client):
+    """A seminar shows its faculty (via the event summary) but never a student
+    roster — to anyone, including members."""
     event = _seminar()
     event.published = True
     event.status = Event.Status.OPEN
@@ -206,11 +206,19 @@ def test_published_seminar_workspace_is_public(client):
     teacher.save(update_fields=["first_name", "last_name"])
     event.add_faculty(teacher)
 
-    # Anonymous: landing visible, faculty summary shown, roster gated.
+    student = _user("student@x.test")
+    student.first_name, student.last_name = "Sabina", "Spielrein"
+    student.save(update_fields=["first_name", "last_name"])
+    _register(student, event, status=Registration.Status.PAID)
+
+    # The roster is hidden for seminars — even from an enrolled member.
+    assert wg.roster_visible_to(student) is False
+
+    # Anonymous view: faculty shown, no student in any roster.
     resp = client.get(wg.get_absolute_url())
     assert resp.status_code == 200
-    assert b"Jacques Lacan" in resp.content
-    assert b"private to its members" in resp.content
+    assert b"Jacques Lacan" in resp.content          # faculty shown
+    assert b"Sabina Spielrein" not in resp.content   # student roster hidden
 
 
 def test_draft_seminar_workspace_not_public(client):
