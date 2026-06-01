@@ -1,0 +1,50 @@
+{% extends "core/base.html" %}
+{% load static parletre_tags %}
+{% block title %}Participants — {{ channel.name }}{% endblock %}
+{% block extra_head %}<script defer src="{% static 'js/parletre-people-picker.js' %}"></script>{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-5">
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
+    <span aria-hidden="true">/</span>
+    <a href="{{ channel.get_absolute_url }}" class="hover:text-primary">{{ channel.name }}</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-base-content/70">Participants</span>
+  </nav>
+
+  <h1 class="font-serif text-2xl tracking-tight text-base-content">Participants</h1>
+  <p class="text-sm text-base-content/60">
+    You’re always a member of a chat you created. Add or remove others below —
+    removing someone immediately revokes their access.
+  </p>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div class="space-y-1">
+      <label class="text-sm text-base-content/70">Members</label>
+      <div class="people-picker"
+           data-search-url="{% url 'parletre:member_search' %}"
+           data-field="participants">
+        <div class="parletre-people" data-people-chips>
+          {% for u in selected %}
+          <span class="parletre-chip" data-id="{{ u.pk }}">
+            {{ u.get_full_name|default:u.email }}
+            <button type="button" data-chip-remove aria-label="Remove">{% icon "x" %}</button>
+            <input type="hidden" name="participants" value="{{ u.pk }}">
+          </span>
+          {% endfor %}
+        </div>
+        <input type="text" class="input input-bordered w-full" data-people-search
+               placeholder="Search members by name…" autocomplete="off">
+      </div>
+      {% if form.participants.errors %}<p class="text-error text-sm">{{ form.participants.errors|striptags }}</p>{% endif %}
+    </div>
+
+    <div class="flex gap-2 justify-end">
+      <a href="{{ channel.get_absolute_url }}" class="btn btn-ghost btn-sm">Cancel</a>
+      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

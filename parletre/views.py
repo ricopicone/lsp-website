@@ -21,6 +21,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Count, Max, Q
 from django.http import (
     FileResponse,
@@ -38,12 +39,19 @@ from django.views.decorators.http import require_POST
 
 from accounts.models import Profile
 
-from .forms import EditPostForm, NewThreadForm, PostForm
+from .forms import (
+    EditPostForm,
+    NewPrivateChatForm,
+    NewThreadForm,
+    ParticipantsForm,
+    PostForm,
+)
 from .inbound import process_inbound_email
 from .models import (
     REACTION_EMOJI,
     Attachment,
     Channel,
+    ChannelCategory,
     DigestPreference,
     Notification,
     Post,
@@ -51,8 +59,9 @@ from .models import (
     Subscription,
     SubscriptionLevel,
     Thread,
+    _unique_slug,
 )
-from .permissions import can_enter_parletre
+from .permissions import can_enter_parletre, is_member
 from .reads import (
     mark_channel_read,
     mark_thread_read,
@@ -305,6 +314,9 @@ def channel(request, slug):
         chat_posts, request.user, context["can_moderate"], cutoff
     )
     context["reaction_palette"] = REACTION_EMOJI
+    # Member-created private chats: the creator manages / deletes; others leave.
+    context["can_delete_chat"] = channel.can_delete(request.user)
+    context["can_leave_chat"] = channel.can_leave(request.user)
     return render(request, "parletre/channel_chat.html", context)
 
 
@@ -572,6 +584,171 @@ def mention_search(request):
         if len(results) >= 8:
             break
     return JsonResponse({"results": results})
+
+
+# ---- member-created private chats --------------------------------------
+
+
+@login_required
+def member_search(request):
+    """Autocomplete for the private-chat participant picker: members matching
+    ``q`` (excluding the searcher). Returns user ids + names."""
+    if not is_member(request.user):
+        raise Http404()
+    q = request.GET.get("q", "").strip()
+    if not q:
+        return JsonResponse({"results": []})
+
+    qs = (
+        get_user_model()
+        .objects.filter(profile__role__in=Profile.DIRECTORY_ROLES)
+        .exclude(pk=request.user.pk)
+    )
+    for term in q.split()[:3]:
+        qs = qs.filter(Q(first_name__icontains=term) | Q(last_name__icontains=term))
+    candidates = qs.order_by("first_name", "last_name")[:8]
+    results = [
+        {"id": u.pk, "name": u.get_full_name() or u.email} for u in candidates
+    ]
+    return JsonResponse({"results": results})
+
+
+def _private_chats_category():
+    """The board category member-created private chats live under (created on
+    demand, sitting above the workgroup categories)."""
+    cat, _ = ChannelCategory.objects.get_or_create(
+        name="Private chats", defaults={"slug": "private-chats", "position": 15}
+    )
+    return cat
+
+
+def _subscribe_all(users, channel) -> None:
+    """Give each user an ALL-level subscription to a private chat so they're
+    notified of new messages (the DM expectation). Idempotent."""
+    for user in users:
+        Subscription.objects.get_or_create(
+            user=user, channel=channel, defaults={"level": SubscriptionLevel.ALL}
+        )
+
+
+def _selected_participants(form):
+    """The participant User objects currently chosen on a participants form —
+    submitted values on a bound form, ``initial`` otherwise — so the picker can
+    re-render its chips (e.g. after a validation error)."""
+    field = form.fields["participants"]
+    if form.is_bound:
+        data = form.data
+        ids = data.getlist("participants") if hasattr(data, "getlist") else []
+    else:
+        ids = [getattr(u, "pk", u) for u in (form.initial.get("participants") or [])]
+    return list(field.queryset.filter(pk__in=ids))
+
+
+@login_required
+def create_private_chat(request):
+    """A member starts a private chat — regular or disappearing — with the
+    members they pick. They become its moderator (so they can manage it)."""
+    if not is_member(request.user):
+        return render(request, "parletre/not_a_member.html", status=403)
+
+    if request.method == "POST":
+        form = NewPrivateChatForm(request.POST, creator=request.user)
+        if form.is_valid():
+            participants = list(form.cleaned_data["participants"])
+            with transaction.atomic():
+                chan = Channel.objects.create(
+                    name=form.cleaned_data["name"],
+                    slug=_unique_slug(Channel, form.cleaned_data["name"], fallback="chat"),
+                    kind=Channel.Kind.CHAT,
+                    access=Channel.Access.PRIVATE,
+                    category=_private_chats_category(),
+                    message_ttl_seconds=form.cleaned_data["lifetime"],
+                    created_by=request.user,
+                )
+                members = [request.user, *participants]
+                chan.members.set(members)
+                chan.moderators.add(request.user)
+                _subscribe_all(members, chan)
+            return redirect(chan)
+    else:
+        form = NewPrivateChatForm(creator=request.user)
+    return render(
+        request,
+        "parletre/create_private_chat.html",
+        {"form": form, "selected": _selected_participants(form)},
+    )
+
+
+def _private_chat_or_404(user, slug):
+    """A private channel ``user`` may moderate (its creator / a moderator);
+    404 otherwise — the manage surface for member-created chats."""
+    channel = _visible_channel_or_404(user, slug)
+    if channel.access != Channel.Access.PRIVATE or not channel.can_moderate(user):
+        raise Http404("No such channel.")
+    return channel
+
+
+@login_required
+def manage_participants(request, slug):
+    """Add or remove a private chat's participants (creator/moderator only).
+    The creator stays a member; people dropped lose access and notifications."""
+    channel = _private_chat_or_404(request.user, slug)
+
+    if request.method == "POST":
+        form = ParticipantsForm(request.POST, creator=request.user)
+        if form.is_valid():
+            members = [request.user, *form.cleaned_data["participants"]]
+            with transaction.atomic():
+                channel.members.set(members)
+                _subscribe_all(members, channel)
+                # Drop subscriptions for anyone no longer in the chat, so they
+                # stop being notified / digested about a channel they can't see.
+                member_ids = [u.pk for u in members]
+                Subscription.objects.filter(channel=channel).exclude(
+                    user_id__in=member_ids
+                ).delete()
+            return redirect(channel)
+    else:
+        current = list(channel.members.exclude(pk=request.user.pk))
+        form = ParticipantsForm(
+            creator=request.user, initial={"participants": current}
+        )
+    return render(
+        request,
+        "parletre/manage_participants.html",
+        {"form": form, "channel": channel, "selected": _selected_participants(form)},
+    )
+
+
+@login_required
+@require_POST
+def leave_chat(request, slug):
+    """A participant (not the creator) leaves a private chat: dropped from the
+    member list, their subscription cleared, and they lose access."""
+    channel = _visible_channel_or_404(request.user, slug)
+    if not channel.can_leave(request.user):
+        raise Http404("No such channel.")
+    with transaction.atomic():
+        channel.members.remove(request.user)
+        channel.moderators.remove(request.user)
+        Subscription.objects.filter(channel=channel, user=request.user).delete()
+    messages.success(request, f"You’ve left “{channel.name}.”")
+    return redirect("parletre:index")
+
+
+@login_required
+def delete_chat(request, slug):
+    """The creator deletes a private chat (GET confirms, POST deletes). Removes
+    the channel and everything in it."""
+    channel = _visible_channel_or_404(request.user, slug)
+    if not channel.can_delete(request.user):
+        raise Http404("No such channel.")
+    if request.method == "POST":
+        name = channel.name
+        channel.delete()
+        messages.success(request, f"Deleted “{name}.”")
+        return redirect("parletre:index")
+    return render(request, "parletre/delete_chat.html", {"channel": channel})
 
 
 @login_required

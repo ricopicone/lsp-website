@@ -1,0 +1,31 @@
+{% extends "core/base.html" %}
+{% load parletre_tags %}
+{% block title %}Delete {{ channel.name }} — Parlêtre{% endblock %}
+
+{% block content %}
+<div class="max-w-lg space-y-5">
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
+    <span aria-hidden="true">/</span>
+    <a href="{{ channel.get_absolute_url }}" class="hover:text-primary">{{ channel.name }}</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-base-content/70">Delete</span>
+  </nav>
+
+  <h1 class="font-serif text-2xl tracking-tight text-base-content">Delete this chat?</h1>
+
+  <div class="alert bg-base-200 border border-base-300 text-base-content/80 text-sm">
+    {% icon "lock" css="text-base-content/60 shrink-0" %}
+    <span>
+      Deleting <strong>“{{ channel.name }}”</strong> removes the chat and every
+      message in it for all participants. This can’t be undone.
+    </span>
+  </div>
+
+  <form method="post" class="flex gap-2 justify-end">
+    {% csrf_token %}
+    <a href="{{ channel.get_absolute_url }}" class="btn btn-ghost btn-sm">Cancel</a>
+    <button type="submit" class="btn btn-error btn-sm">Delete chat</button>
+  </form>
+</div>
+{% endblock %}
