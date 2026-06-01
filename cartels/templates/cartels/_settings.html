@@ -2,8 +2,8 @@
 Expects: cartel, workgroup, members (active roster).{% endcomment %}
 
 {% if cartel.status == "open" %}
-<section class="space-y-2">
-  <h3 class="font-medium">Membership</h3>
+<section class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-5">
+  <h3 class="font-medium text-base-content">Membership</h3>
   <form method="post" action="{% url 'cartels:manage' workgroup.slug %}" class="flex flex-wrap gap-2">
     {% csrf_token %}
     {% if cartel.closed %}
@@ -17,8 +17,8 @@ Expects: cartel, workgroup, members (active roster).{% endcomment %}
 </section>
 {% endif %}
 
-<section class="space-y-2">
-  <h3 class="font-medium">Plus-one</h3>
+<section class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-5">
+  <h3 class="font-medium text-base-content">Plus-one</h3>
   {# Internal: designate an existing member #}
   <form method="post" action="{% url 'cartels:set_plus_one' workgroup.slug %}" class="flex flex-wrap items-end gap-2">
     {% csrf_token %}

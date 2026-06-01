@@ -128,11 +128,23 @@ def workgroup_detail(request, slug):
     if active not in tab_keys:
         active = "overview"
 
+    # Breadcrumb back to this kind's directory (e.g. "Cartels").
+    kind_url_suffix = next(
+        (name for k, name, *_ in KIND_META if k == wg.kind), None
+    )
+    kind_index_url = (
+        reverse(f"workgroups:kind_{kind_url_suffix}") if kind_url_suffix else None
+    )
+
+    members = list(wg.active_members()) if can_view else []
+
     context = {
         "workgroup": wg,
         "can_view_content": can_view,
         "is_member": is_member,
-        "members": list(wg.active_members()) if can_view else [],
+        "members": members,
+        "member_count": len(members),
+        "kind_index_url": kind_index_url,
         "tabs": tabs,
         "active_tab": active,
     }
@@ -161,7 +173,9 @@ def workgroup_detail(request, slug):
         context["works_released"] = [w for w in works if not w.in_progress]
         context["works_in_progress"] = [w for w in works if w.in_progress]
     elif active == "tasks" and wg.has_tasks and is_member:
-        context["tasks"] = list(wg.tasks.select_related("assignee"))
+        tasks = list(wg.tasks.select_related("assignee"))
+        context["tasks"] = tasks
+        context["tasks_done"] = sum(1 for t in tasks if t.done)
     elif active == "settings" and is_member:
         from .forms import WorkgroupDatesForm
 

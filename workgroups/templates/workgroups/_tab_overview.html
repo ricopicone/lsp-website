@@ -1,28 +1,37 @@
-<div class="space-y-8 pt-2">
+<div class="space-y-10">
   {% if workgroup.description %}
-  <section class="prose max-w-none text-base-content/80">{{ workgroup.description_html }}</section>
+  <section class="lsp-prose max-w-none">{{ workgroup.description_html }}</section>
   {% endif %}
 
   {% if cartel %}{% include "cartels/_overview.html" %}{% endif %}
 
   {% if not can_view_content %}
-  <div class="rounded-lg border border-base-300/60 bg-base-200/40 p-6 text-base-content/70">
-    This group's roster is private to its members.
+  <div class="flex items-start gap-3 rounded-xl border border-base-300/60 bg-base-200/40 p-5 text-sm text-base-content/70">
+    <svg class="size-5 shrink-0 mt-0.5 text-base-content/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+    <p>This group's roster is private to its members.</p>
   </div>
   {% else %}
-  <section class="space-y-3">
-    <h2 class="font-serif text-xl">Members</h2>
+  <section class="space-y-4">
+    <div class="flex items-baseline gap-2.5">
+      <h2 class="font-serif text-xl text-base-content">Members</h2>
+      {% if members %}<span class="text-sm text-base-content/45">{{ member_count }}</span>{% endif %}
+    </div>
     {% if members %}
-    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
       {% for m in members %}
-      <li class="flex items-center justify-between rounded-md border border-base-300/50 px-3 py-2">
-        <span>{{ m.user.get_full_name|default:m.user.email }}</span>
-        {% if m.role != "member" %}<span class="badge badge-sm badge-outline">{{ m.get_role_display }}</span>{% endif %}
+      <li class="group flex items-center gap-3 rounded-xl border border-base-300/50 bg-base-100 px-3.5 py-3 transition-colors hover:border-base-300 hover:bg-base-200/40">
+        {% include "workgroups/_avatar.html" with person=m.user css="size-10 text-sm" %}
+        <div class="min-w-0 flex-1">
+          <p class="truncate font-medium text-base-content">{{ m.user.get_full_name|default:m.user.email }}</p>
+          {% if m.role != "member" %}
+          <p class="text-xs uppercase tracking-wider text-primary/80">{{ m.get_role_display }}</p>
+          {% endif %}
+        </div>
       </li>
       {% endfor %}
     </ul>
     {% else %}
-    <p class="text-base-content/60 text-sm">No members listed yet.</p>
+    <p class="text-sm text-base-content/55">No members listed yet.</p>
     {% endif %}
   </section>
   {% endif %}

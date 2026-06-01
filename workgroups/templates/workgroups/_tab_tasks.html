@@ -1,9 +1,9 @@
-<div class="max-w-2xl space-y-5 pt-2">
+<div class="max-w-2xl space-y-5">
   <form method="post" action="{% url 'workgroups:task_add' workgroup.slug %}"
-        class="flex flex-wrap items-end gap-2">
+        class="flex flex-wrap items-center gap-2 rounded-xl border border-base-300/50 bg-base-200/40 p-2.5">
     {% csrf_token %}
     <input type="text" name="title" placeholder="Add a task…" required
-           class="input input-bordered input-sm grow min-w-[14rem]">
+           class="input input-sm input-ghost grow min-w-[14rem] bg-transparent focus:bg-base-100">
     <select name="assignee" class="select select-bordered select-sm">
       <option value="">Unassigned</option>
       {% for m in members %}<option value="{{ m.user.pk }}">{{ m.user.get_full_name|default:m.user.email }}</option>{% endfor %}
@@ -12,25 +12,46 @@
   </form>
 
   {% if tasks %}
-  <ul class="divide-y divide-base-300/60 rounded-box border border-base-300 bg-base-100">
+  <div class="flex items-center justify-between text-xs text-base-content/55">
+    <span>{{ tasks_done }} of {{ tasks|length }} done</span>
+    <div class="ml-3 h-1.5 flex-1 max-w-[12rem] overflow-hidden rounded-full bg-base-300/60">
+      <div class="h-full rounded-full bg-primary transition-all"
+           style="width:{% widthratio tasks_done tasks|length 100 %}%"></div>
+    </div>
+  </div>
+
+  <ul class="divide-y divide-base-300/50 overflow-hidden rounded-xl border border-base-300/60 bg-base-100">
     {% for task in tasks %}
-    <li class="flex items-center gap-3 p-3">
+    <li class="group flex items-center gap-3 px-3.5 py-3 transition-colors hover:bg-base-200/40">
       <form method="post" action="{% url 'workgroups:task_toggle' workgroup.slug task.pk %}" style="display:contents">
         {% csrf_token %}
-        <button type="submit" class="checkbox checkbox-sm {% if task.done %}checkbox-primary{% endif %}"
-                aria-label="Toggle done" title="Toggle done">{% if task.done %}✓{% endif %}</button>
+        <button type="submit"
+                class="flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors
+                       {% if task.done %}border-primary bg-primary text-primary-content{% else %}border-base-300 hover:border-primary{% endif %}"
+                aria-label="Toggle done" title="Toggle done">
+          {% if task.done %}<svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-11"/></svg>{% endif %}
+        </button>
       </form>
-      <span class="grow {% if task.done %}line-through text-base-content/40{% endif %}">{{ task.title }}</span>
-      {% if task.assignee %}<span class="badge badge-sm badge-ghost">{{ task.assignee.get_full_name|default:task.assignee.email }}</span>{% endif %}
+      <span class="grow {% if task.done %}line-through text-base-content/40{% else %}text-base-content{% endif %}">{{ task.title }}</span>
+      {% if task.assignee %}
+      <span class="inline-flex items-center gap-1.5 rounded-full bg-base-200 px-2 py-0.5 text-xs text-base-content/70">
+        {% include "workgroups/_avatar.html" with person=task.assignee css="size-5 text-[0.6rem]" %}
+        <span class="hidden sm:inline">{{ task.assignee.get_full_name|default:task.assignee.email }}</span>
+      </span>
+      {% endif %}
       <form method="post" action="{% url 'workgroups:task_delete' workgroup.slug task.pk %}" style="display:contents"
             onsubmit="return confirm('Delete this task?');">
         {% csrf_token %}
-        <button type="submit" class="text-xs text-base-content/40 hover:text-error" aria-label="Delete">✕</button>
+        <button type="submit" class="text-base-content/30 opacity-0 transition group-hover:opacity-100 hover:text-error" aria-label="Delete">
+          <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
       </form>
     </li>
     {% endfor %}
   </ul>
   {% else %}
-  <p class="text-base-content/60 text-sm">No tasks yet.</p>
+  <div class="rounded-xl border border-dashed border-base-300/70 bg-base-200/30 p-8 text-center text-sm text-base-content/55">
+    No tasks yet — add the first one above.
+  </div>
   {% endif %}
 </div>

@@ -1,6 +1,9 @@
-<div class="max-w-xl space-y-8 pt-2">
-  <section class="space-y-2">
-    <h3 class="font-medium">Dates</h3>
+<div class="max-w-xl space-y-4">
+  <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
+    <div class="space-y-0.5">
+      <h3 class="font-medium text-base-content">Dates</h3>
+      <p class="text-xs text-base-content/50">When this group runs. Leave the end date blank for a standing group.</p>
+    </div>
     <form method="post" action="{% url 'workgroups:update_dates' workgroup.slug %}"
           class="flex flex-wrap items-end gap-3">
       {% csrf_token %}
@@ -12,7 +15,7 @@
         <label for="{{ dates_form.end_date.id_for_label }}" class="block text-xs text-base-content/60">End</label>
         {{ dates_form.end_date }}
       </div>
-      <button class="btn btn-ghost btn-sm">Save dates</button>
+      <button class="btn btn-primary btn-sm">Save dates</button>
     </form>
   </section>
 

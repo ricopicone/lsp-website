@@ -4,34 +4,77 @@
 {% block extra_head %}{% if active_tab == "chat" %}<script defer src="{% static 'js/parletre-mentions.js' %}"></script>
 <script defer src="{% static 'js/parletre-chat.js' %}"></script>{% endif %}{% endblock %}
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-8">
 
-  <header class="space-y-2">
-    <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-base-content/60">
-      <span class="badge badge-ghost">{{ workgroup.get_kind_display }}</span>
-      {% if workgroup.start_date %}
-        <span>{{ workgroup.start_date|date:"Y" }}{% if workgroup.end_date %}–{{ workgroup.end_date|date:"Y" }}{% else %}–present{% endif %}</span>
-      {% endif %}
+  {% if kind_index_url %}
+  <p class="text-sm">
+    <a href="{{ kind_index_url }}" class="link link-hover text-base-content/55">← {{ workgroup.get_kind_display }}s</a>
+  </p>
+  {% endif %}
+
+  {# ── Masthead ───────────────────────────────────────────────── #}
+  <header class="relative overflow-hidden rounded-2xl border border-base-300/60 bg-base-200/40">
+    {# faint diagonal field for depth — pure tokens, theme-safe #}
+    <div aria-hidden="true"
+         class="pointer-events-none absolute inset-0 opacity-5 text-base-content"
+         style="background-image:linear-gradient(135deg,currentColor 1px,transparent 1px);background-size:14px 14px"></div>
+
+    <div class="relative p-6 sm:p-8 flex items-start gap-5">
+      <span class="hidden sm:flex shrink-0 size-14 items-center justify-center rounded-xl bg-base-100 text-primary ring-1 ring-base-300/60 shadow-sm">
+        {% include "workgroups/_kind_glyph.html" with kind=workgroup.kind css="size-7" %}
+      </span>
+
+      <div class="min-w-0 flex-1 space-y-3">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs uppercase tracking-wider text-base-content/55">
+          <span class="inline-flex items-center gap-1.5 font-medium text-base-content/70">
+            <span class="sm:hidden text-primary">{% include "workgroups/_kind_glyph.html" with kind=workgroup.kind css="size-4" %}</span>
+            {{ workgroup.get_kind_display }}
+          </span>
+          {% if workgroup.start_date %}
+          <span class="text-base-content/30">·</span>
+          <span class="normal-case tracking-normal">{{ workgroup.start_date|date:"Y" }}{% if workgroup.end_date %}–{{ workgroup.end_date|date:"Y" }}{% else %}–present{% endif %}</span>
+          {% endif %}
+          {% if can_view_content and member_count %}
+          <span class="text-base-content/30">·</span>
+          <span class="normal-case tracking-normal">{{ member_count }} member{{ member_count|pluralize }}</span>
+          {% endif %}
+          {% if workgroup.content_visibility == "private" %}
+          <span class="text-base-content/30">·</span>
+          <span class="inline-flex items-center gap-1 normal-case tracking-normal text-base-content/50">
+            <svg class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+            Private
+          </span>
+          {% endif %}
+        </div>
+
+        <h1 class="font-serif text-3xl sm:text-4xl leading-tight text-base-content">{{ workgroup.name }}</h1>
+      </div>
     </div>
-    <h1 class="font-serif text-3xl text-base-content">{{ workgroup.name }}</h1>
   </header>
 
-  <div role="tablist" class="tabs tabs-bordered">
+  {# ── Tabs ───────────────────────────────────────────────────── #}
+  <div role="tablist"
+       class="no-scrollbar -mx-1 flex gap-1 overflow-x-auto border-b border-base-300/60 px-1">
     {% for key, label in tabs %}
     <a href="?tab={{ key }}" role="tab"
-       class="tab {% if key == active_tab %}tab-active{% endif %}">{{ label }}</a>
+       class="relative shrink-0 px-3.5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors
+              {% if key == active_tab %}text-primary{% else %}text-base-content/55 hover:text-base-content{% endif %}">
+      {{ label }}
+      {% if key == active_tab %}<span class="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary"></span>{% endif %}
+    </a>
     {% endfor %}
   </div>
 
+  {# ── Panels ─────────────────────────────────────────────────── #}
   {% if active_tab == "overview" %}{% include "workgroups/_tab_overview.html" %}
   {% elif active_tab == "discuss" %}
-    <div class="space-y-4 pt-2">
+    <div class="space-y-4">
       {% if can_post %}<div class="flex justify-end"><a href="{% url 'parletre:new_thread' channel.slug %}" class="btn btn-primary btn-sm">New thread</a></div>{% endif %}
       {% include "parletre/_forum_threads.html" %}
       <p class="text-xs text-base-content/50"><a href="{{ channel.get_absolute_url }}" class="link">Open full discussion ↗</a></p>
     </div>
   {% elif active_tab == "chat" %}
-    <div class="pt-2">{% include "parletre/_chat_body.html" %}</div>
+    <div>{% include "parletre/_chat_body.html" %}</div>
   {% elif active_tab == "work" %}{% include "workgroups/_tab_work.html" %}
   {% elif active_tab == "tasks" %}{% include "workgroups/_tab_tasks.html" %}
   {% elif active_tab == "settings" %}{% include "workgroups/_tab_settings.html" %}

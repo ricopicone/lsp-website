@@ -48,6 +48,12 @@
   }
 }
 
+/* Hide the scrollbar on horizontally-scrollable strips (e.g. the Workspace
+   tab bar) while keeping them scrollable. Authored here because Tailwind's
+   production build scans templates, not arbitrary-variant utilities. */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* --- lsp-prose: Markdown body content styling -----------------------------
    Used by the content app's rendered HTML so we don't need
    @tailwindcss/typography for a small set of pages. */

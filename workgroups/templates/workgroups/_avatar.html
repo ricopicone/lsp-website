@@ -1,0 +1,13 @@
+{% comment %}A circular avatar for a User. Expects `person` (a User) and an
+optional `css` for the ring sizing (default size-10). Uses the member's
+headshot when present, else serif initials on a tinted disc — the same
+fallback pattern as the account menu in base.html.{% endcomment %}
+<span class="shrink-0 inline-flex items-center justify-center overflow-hidden rounded-full bg-base-200 ring-1 ring-base-300/70 {{ css|default:'size-10' }}">
+  {% if person.profile.headshot %}
+    <img src="{{ person.profile.headshot.url }}" alt="" class="size-full object-cover">
+  {% else %}
+    <span class="font-serif text-base-content/70 tracking-tight leading-none">
+      {% if person.first_name or person.last_name %}{{ person.first_name|slice:":1" }}{{ person.last_name|slice:":1" }}{% else %}{{ person.email|slice:":1"|upper }}{% endif %}
+    </span>
+  {% endif %}
+</span>

@@ -1,31 +1,42 @@
-<div class="space-y-8 pt-2">
+<div class="space-y-10">
   {% if works_in_progress %}
-  <section class="space-y-2">
-    <h2 class="font-serif text-xl">In progress</h2>
-    <ul class="space-y-2">
+  <section class="space-y-4">
+    <h2 class="font-serif text-xl text-base-content">In progress</h2>
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {% for w in works_in_progress %}
       <li>
-        <a href="{{ w.get_absolute_url }}" class="link link-hover font-medium">{{ w.title }}</a>
-        <span class="text-base-content/50 text-sm">· {{ w.get_kind_display }}</span>
+        <a href="{{ w.get_absolute_url }}"
+           class="group flex h-full flex-col gap-2 rounded-xl border border-base-300/50 bg-base-100 p-4 transition-colors hover:border-primary/40 hover:bg-base-200/40">
+          <span class="inline-flex w-fit items-center gap-1.5 rounded-full bg-warning/15 px-2 py-0.5 text-[0.65rem] font-medium uppercase tracking-wider text-warning">
+            <span class="size-1.5 rounded-full bg-warning"></span>In progress
+          </span>
+          <span class="font-medium text-base-content group-hover:text-primary transition-colors">{{ w.title }}</span>
+          <span class="text-xs text-base-content/50">{{ w.get_kind_display }}</span>
+        </a>
       </li>
       {% endfor %}
     </ul>
   </section>
   {% endif %}
 
-  <section class="space-y-2">
-    <h2 class="font-serif text-xl">{% if works_in_progress %}Released{% else %}Work{% endif %}</h2>
+  <section class="space-y-4">
+    <h2 class="font-serif text-xl text-base-content">{% if works_in_progress %}Released{% else %}Work{% endif %}</h2>
     {% if works_released %}
-    <ul class="space-y-2">
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {% for w in works_released %}
       <li>
-        <a href="{{ w.get_absolute_url }}" class="link link-hover font-medium">{{ w.title }}</a>
-        <span class="text-base-content/50 text-sm">· {{ w.get_kind_display }}</span>
+        <a href="{{ w.get_absolute_url }}"
+           class="group flex h-full flex-col gap-2 rounded-xl border border-base-300/50 bg-base-100 p-4 transition-colors hover:border-primary/40 hover:bg-base-200/40">
+          <span class="font-medium text-base-content group-hover:text-primary transition-colors">{{ w.title }}</span>
+          <span class="text-xs text-base-content/50">{{ w.get_kind_display }}</span>
+        </a>
       </li>
       {% endfor %}
     </ul>
     {% else %}
-    <p class="text-base-content/60 text-sm">No released work yet.</p>
+    <div class="rounded-xl border border-dashed border-base-300/70 bg-base-200/30 p-8 text-center text-sm text-base-content/55">
+      No released work yet.
+    </div>
     {% endif %}
   </section>
 </div>
