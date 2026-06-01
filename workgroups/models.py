@@ -559,5 +559,10 @@ def build_workgroup(kind, *, name, **kwargs):
     logic lives on the Workgroup side (add-to-Workgroup-first principle).
     """
     toggles = Workgroup.kind_toggle_defaults(kind)
+    # Reading groups have a public landing (like seminars) so prospective
+    # members can see the page; the roster + content stay members-only.
+    if kind == Workgroup.Kind.READING_GROUP:
+        toggles.setdefault("landing_visibility", Visibility.PUBLIC)
+        toggles.setdefault("content_visibility", Visibility.MEMBERS)
     toggles.update(kwargs)
     return Workgroup.objects.create(kind=kind, name=name, **toggles)

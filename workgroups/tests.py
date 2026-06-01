@@ -219,6 +219,37 @@ def test_reading_group_open_join_and_leave(client):
     assert not wg.memberships.filter(user=member, end_date__isnull=True).exists()
 
 
+def test_reading_group_public_landing_roster_members_only(client):
+    """Reading group page is public (like seminars), but the roster is hidden
+    from the public and shown to LSP members; anon sees a login-to-join prompt."""
+    from workgroups.models import build_workgroup
+
+    wg = build_workgroup(Workgroup.Kind.READING_GROUP, name="Freud RG", slug="freud-rg")
+    assert wg.landing_visibility == Visibility.PUBLIC
+    assert wg.content_visibility == Visibility.MEMBERS
+    organizer = _user("org@x.test", role=Profile.Role.ANALYST, first="Sabina")
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=organizer, role=WorkgroupMembership.Role.ORGANIZER,
+        start_date=datetime.date(2026, 1, 1),
+    )
+
+    # Anonymous: page visible, no roster, prompted to log in to join.
+    resp = client.get(wg.get_absolute_url())
+    assert resp.status_code == 200
+    assert b"Freud RG" in resp.content
+    assert b"Log in to join" in resp.content
+    assert b"Sabina" not in resp.content          # roster hidden from the public
+    from django.contrib.auth.models import AnonymousUser
+    assert wg.roster_visible_to(AnonymousUser()) is False
+
+    # An LSP member sees the roster (membership visible to logged-in members).
+    viewer = _user("viewer@x.test", role=Profile.Role.ANALYST)
+    client.force_login(viewer)
+    resp = client.get(wg.get_absolute_url())
+    assert b"Sabina" in resp.content
+    assert b"Join this group" in resp.content
+
+
 def test_reading_group_kind_default_open_join():
     from workgroups.models import build_workgroup
 
