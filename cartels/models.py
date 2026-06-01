@@ -86,10 +86,15 @@ class Cartel(models.Model):
         null=True,
         blank=True,
         related_name="cartels_reviewed",
-        help_text="The Cartel Coordinator who approved / declined.",
+        help_text="The Program Committee member who approved / declined.",
     )
     reviewed_at = models.DateTimeField(null=True, blank=True)
-    review_note = models.TextField(blank=True, help_text="Decline reason / review notes.")
+    review_note = models.TextField(blank=True, help_text="Decline reason / PC review notes.")
+    coordinator_feedback = models.TextField(
+        blank=True,
+        help_text="Cartel Coordinator's feedback / advocacy (advisory — the "
+        "Program Committee approves).",
+    )
     closed = models.BooleanField(
         default=False, help_text="Closed to new members (members may toggle)."
     )

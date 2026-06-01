@@ -4,7 +4,10 @@
 <div class="max-w-3xl space-y-6">
   <header class="space-y-1">
     <h1 class="font-serif text-3xl text-base-content">Cartel proposals</h1>
-    <p class="text-base-content/70">Proposals awaiting review.</p>
+    <p class="text-base-content/70">
+      The Program Committee approves &amp; publishes; the Cartel Coordinator
+      offers feedback and advocacy.
+    </p>
   </header>
 
   {% for cartel in proposed %}
@@ -23,7 +26,20 @@
     {% if cartel.invitations.all %}
     <p class="text-xs text-base-content/60">Seeded invitations: {{ cartel.invitations.count }}</p>
     {% endif %}
+    {% if cartel.coordinator_feedback %}
+    <p class="text-sm rounded-md bg-base-200/50 px-3 py-2"><span class="text-base-content/50">Coordinator feedback:</span> {{ cartel.coordinator_feedback }}</p>
+    {% endif %}
 
+    {% if can_feedback %}
+    <form method="post" action="{% url 'cartels:coordinator_feedback' cartel.pk %}" class="space-y-1 border-t border-base-300/50 pt-3">
+      {% csrf_token %}
+      <label class="text-sm text-base-content/60">Coordinator feedback / advocacy</label>
+      <textarea name="feedback" rows="2" class="textarea textarea-bordered textarea-sm w-full">{{ cartel.coordinator_feedback }}</textarea>
+      <button type="submit" class="btn btn-ghost btn-sm">Save feedback</button>
+    </form>
+    {% endif %}
+
+    {% if can_approve %}
     <form method="post" action="{% url 'cartels:review_decide' cartel.pk %}" class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
       {% csrf_token %}
       <input type="text" name="note" placeholder="Decline reason (optional)"
@@ -31,6 +47,7 @@
       <button type="submit" name="decision" value="approve" class="btn btn-primary btn-sm">Approve &amp; publish</button>
       <button type="submit" name="decision" value="decline" class="btn btn-ghost btn-sm">Decline</button>
     </form>
+    {% endif %}
   </article>
   {% empty %}
   <p class="text-base-content/60">No proposals awaiting review.</p>

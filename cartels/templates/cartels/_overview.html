@@ -15,9 +15,15 @@ is_generator, is_coordinator, workgroup.{% endcomment %}
 </section>
 {% endif %}
 
+{% if is_generator and cartel.coordinator_feedback %}
+<div class="rounded-lg border border-base-300/60 bg-base-200/40 p-4">
+  <p class="text-sm"><span class="text-base-content/50">Cartel Coordinator feedback:</span> {{ cartel.coordinator_feedback }}</p>
+</div>
+{% endif %}
+
 {% if is_generator and cartel.status == "declined" %}
 <div class="rounded-lg border border-base-300/60 bg-base-200/40 p-4 space-y-2">
-  <p class="text-sm text-base-content/70">This proposal was declined{% if cartel.review_note %} — “{{ cartel.review_note }}”{% endif %}.</p>
+  <p class="text-sm text-base-content/70">The Program Committee declined this proposal{% if cartel.review_note %} — “{{ cartel.review_note }}”{% endif %}.</p>
   <a href="{% url 'cartels:edit' workgroup.slug %}" class="btn btn-primary btn-sm">Edit &amp; resubmit</a>
 </div>
 {% elif is_generator and cartel.status == "proposed" %}

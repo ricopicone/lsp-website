@@ -41,17 +41,42 @@ def _coordinator_emails():
     )
 
 
-def notify_coordinator_of_proposal(cartel, url: str) -> None:
+def _pc_emails():
+    """Active Programming Committee members (the cartel approvers)."""
+    from accounts.models import User
+
+    return list(
+        User.objects.filter(
+            workgroup_memberships__end_date__isnull=True,
+            workgroup_memberships__workgroup__committee__slug="programming-committee",
+        ).values_list("email", flat=True).distinct()
+    )
+
+
+def notify_proposal(cartel, url: str) -> None:
+    """Notify the Cartel Coordinator (feedback/advocacy) AND the Programming
+    Committee (publishing approval) of a new proposal — in parallel."""
+    who = cartel.generator.get_full_name() or cartel.generator.email
+    body = (
+        f"{who} proposed a cartel.\n\n"
+        f"Name: {cartel.workgroup.name}\n"
+        f"Guiding question: {cartel.guiding_question or '(none)'}\n\n"
+        f"Review it: {url}\n"
+    )
+    _send(subject=f"[LSP] Cartel proposal: {cartel.workgroup.name}",
+          body=body, to=_coordinator_emails() + _pc_emails())
+
+
+def notify_coordinator_feedback(cartel, url: str) -> None:
+    """The Cartel Coordinator left feedback — tell the generator + the PC."""
+    to = [cartel.generator.email] if cartel.generator else []
     _send(
-        subject=f"[LSP] Cartel proposal: {cartel.workgroup.name}",
+        subject=f"[LSP] Cartel Coordinator feedback: {cartel.workgroup.name}",
         body=(
-            f"{cartel.generator.get_full_name() or cartel.generator.email} proposed a "
-            f"cartel for review.\n\n"
-            f"Name: {cartel.workgroup.name}\n"
-            f"Guiding question: {cartel.guiding_question or '(none)'}\n\n"
-            f"Review it: {url}\n"
+            f"The Cartel Coordinator left feedback on '{cartel.workgroup.name}':\n\n"
+            f"{cartel.coordinator_feedback}\n\n{url}\n"
         ),
-        to=_coordinator_emails(),
+        to=to + _pc_emails(),
     )
 
 
