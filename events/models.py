@@ -586,7 +586,7 @@ class Audience(models.TextChoices):
     CANDIDATE_SCHOLAR = "candidate_scholar", _("Candidate Scholar")
     SCHOLAR = "scholar", _("Scholar")
     MEMBER = "member", _("Member")
-    EXTERNAL = "external", _("Guest")
+    EXTERNAL = "external", _("Auditor")
 
 
 class PriceTier(models.Model):

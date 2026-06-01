@@ -2,10 +2,15 @@
 
 Two layers:
 
-* :func:`is_member` — the board-wide gate (MEM-1). Decides whether a user
-  may enter Parlêtre at all. A "member" is anyone holding one of the LSP
-  member roles, anyone on an active committee (Board / Programming
-  Committee / LSP Staff), or any Django staff user.
+* :func:`can_enter_parletre` — the board-entry gate (MEM-1). Decides whether
+  a user may open Parlêtre at all: full members (:func:`is_member`) plus
+  *auditors* (outside registrants with a paid/comped seminar/reading-group
+  registration, confined by the per-channel checks to that offering's own
+  workgroup channel).
+* :func:`is_member` — full LSP membership. A "member" is anyone holding one
+  of the LSP member roles, anyone on an active committee (Board / Programming
+  Committee / LSP Staff), or any Django staff user. OPEN ("every member") and
+  ROLE channels gate on this, so auditors never reach them.
 * Per-channel access — :func:`channel_visible`, :func:`channel_can_post`,
   and :func:`channel_can_moderate` — layered on top, keyed off the
   channel's ``access`` and ``post_policy`` fields. ``Channel`` exposes
@@ -24,14 +29,14 @@ application-level privacy, not cryptographic — a database administrator can
 still read the rows — but the product never surfaces such a channel to someone
 who isn't in it.
 
-Every channel, of every access mode, still sits behind :func:`is_member`:
-Parlêtre as a whole is members-only and never public.
+Every channel, of every access mode, still sits behind
+:func:`can_enter_parletre`: Parlêtre as a whole is gated and never public.
 """
 
 from __future__ import annotations
 
 from accounts.permissions import is_lsp_member as _is_lsp_member
-from workgroups.models import WorkgroupMembership
+from workgroups.models import Workgroup, WorkgroupMembership
 
 
 def _authenticated(user) -> bool:
@@ -39,14 +44,45 @@ def _authenticated(user) -> bool:
 
 
 def is_member(user) -> bool:
-    """Whether ``user`` may enter Parlêtre at all (the MEM-1 gate).
+    """Whether ``user`` counts as a full LSP member (the MEM-1 gate).
 
     Consolidated onto :func:`accounts.permissions.is_lsp_member` (Stage-4
     fold-in): Django staff, a directory/member role, the LSP Staff
     designation, or active membership in a committee-kind workgroup
-    (Board / PC) all grant entry.
+    (Board / PC) all qualify. This is *membership*, not mere board entry —
+    OPEN ("every member") and ROLE channels gate on it. For "may this user
+    open Parlêtre at all" use :func:`can_enter_parletre`, which also admits
+    auditors.
     """
     return _is_lsp_member(user)
+
+
+def _is_offering_registrant(user) -> bool:
+    """Whether ``user`` holds a paid/comped registration on a seminar or
+    reading group — an *auditor* who belongs to at least one offering's
+    workspace even though they are not an LSP member."""
+    if not _authenticated(user):
+        return False
+    from registrations.models import Registration
+
+    return Registration.objects.filter(
+        user=user,
+        status__in=(Registration.Status.PAID, Registration.Status.COMPED),
+        event__workgroup__kind__in=Workgroup.OFFERING_KINDS,
+    ).exists()
+
+
+def can_enter_parletre(user) -> bool:
+    """Whether ``user`` may open Parlêtre at all (the board-entry gate).
+
+    Full members (:func:`is_member`) reach the whole board. *Auditors* —
+    outside registrants (``role=external``) with a paid/comped registration on
+    a seminar or reading group — may enter too, but :func:`channel_visible`
+    confines them to that offering's own workgroup channel: OPEN and ROLE
+    channels re-check real membership, so an auditor sees only the seminar(s)
+    they're enrolled in and nothing the wider membership can see.
+    """
+    return is_member(user) or _is_offering_registrant(user)
 
 
 def _workgroup_lead(workgroup, user) -> bool:
@@ -99,7 +135,7 @@ def channel_can_moderate(channel, user) -> bool:
 
 def channel_visible(channel, user) -> bool:
     """Whether ``user`` may see and read ``channel``."""
-    if not is_member(user):
+    if not can_enter_parletre(user):
         return False
     # Archived channels linger for moderators/staff only.
     if channel.archived and not channel_can_moderate(channel, user):
@@ -108,7 +144,9 @@ def channel_visible(channel, user) -> bool:
     access = channel.access
     Access = channel.Access
     if access == Access.OPEN:
-        return True
+        # "Every member" — auditors pass the board gate above but are not
+        # members, so they don't get the open channels.
+        return is_member(user)
     if access == Access.PRIVATE:
         # Genuinely private: named members or moderators only. Checked before
         # the staff bypass, so staff cannot read a private channel they aren't

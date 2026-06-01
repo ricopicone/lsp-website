@@ -155,6 +155,71 @@ def test_lsp_staff_channel_gated_by_designation():
     assert channel_visible(ch, plain) is False
 
 
+# ---- Auditors: outside registrants confined to their seminar channel --
+
+def _paid_seminar(name, slug, auditor):
+    """A seminar workgroup with an attached event and a PAID registration for
+    ``auditor`` — the derived-membership path for offering workgroups."""
+    from datetime import date
+    from decimal import Decimal
+
+    from events.models import Audience, Event, PriceTier
+    from registrations.models import Registration
+
+    wg = _wg(kind=Workgroup.Kind.SEMINAR, name=name)
+    event = Event.objects.create(
+        title=name, slug=slug,
+        start_date=date(2026, 9, 1), end_date=date(2026, 12, 15),
+        workgroup=wg,
+    )
+    tier = PriceTier.objects.create(
+        event=event, audience=Audience.EXTERNAL, base_amount=Decimal("0.00"),
+    )
+    Registration.objects.create(
+        user=auditor, event=event, price_tier=tier,
+        quoted_amount=Decimal("0.00"), status=Registration.Status.PAID,
+    )
+    return wg
+
+
+def test_auditor_with_paid_seminar_registration_is_confined_to_that_channel():
+    from parletre.permissions import (
+        can_enter_parletre,
+        channel_can_post,
+        channel_visible,
+    )
+
+    auditor = _user("aud@x.test", role=Profile.Role.EXTERNAL)
+    # No registration yet: not a member, can't enter Parlêtre.
+    assert can_enter_parletre(auditor) is False
+
+    wg = _paid_seminar("Masochism Seminar", "masochism", auditor)
+    seminar_ch = wg.channels.get(kind=Channel.Kind.FORUM)
+
+    # Now they may enter — and post in — exactly their seminar's channel.
+    assert can_enter_parletre(auditor) is True
+    assert channel_visible(seminar_ch, auditor) is True
+    assert channel_can_post(seminar_ch, auditor) is True
+
+    # But nothing the wider membership sees: not an OPEN ("every member") channel,
+    open_ch = Channel.objects.create(
+        name="Commons", slug="commons", kind=Channel.Kind.FORUM,
+        access=Channel.Access.OPEN,
+    )
+    assert channel_visible(open_ch, auditor) is False
+
+    # not a ROLE-gated channel (external isn't an allowed role),
+    role_ch = Channel.objects.create(
+        name="Analysts", slug="analysts", kind=Channel.Kind.FORUM,
+        access=Channel.Access.ROLE, allowed_roles=[Profile.Role.ANALYST],
+    )
+    assert channel_visible(role_ch, auditor) is False
+
+    # and not another seminar's channel they aren't registered for.
+    other = _wg(kind=Workgroup.Kind.SEMINAR, name="Other Seminar")
+    assert channel_visible(other.channels.get(kind=Channel.Kind.FORUM), auditor) is False
+
+
 def test_message_payload_includes_reply_context():
     """Realtime reply: the broadcast payload carries the parent's author +
     excerpt so live clients render the reply context (no refresh)."""

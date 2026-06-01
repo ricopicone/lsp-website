@@ -4,15 +4,16 @@ from django import template
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
-from parletre.permissions import is_member
+from parletre.permissions import can_enter_parletre
 
 register = template.Library()
 
 
 @register.filter(name="is_parletre_member")
 def is_parletre_member(user) -> bool:
-    """True if ``user`` may enter Parlêtre (drives the nav link)."""
-    return is_member(user)
+    """True if ``user`` may enter Parlêtre (drives the nav link) — members plus
+    auditors, who are then confined to their seminar channel."""
+    return can_enter_parletre(user)
 
 
 # --- inline SVG icons ----------------------------------------------------
