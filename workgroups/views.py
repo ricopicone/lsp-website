@@ -105,6 +105,14 @@ def workgroup_kind_list(request, kind):
                 g for g in Workgroup.objects.filter(id__in=mine_ids)
                 if g not in groups  # include ones not in the visible list (e.g. proposed)
             ]
+    # Working groups are chartered by the Board (G3); offer the entry point.
+    elif kind == Workgroup.Kind.WORKING_GROUP:
+        from workgroups.permissions import is_board
+
+        context["can_create_working_group"] = (
+            request.user.is_authenticated
+            and (request.user.is_staff or is_board(request.user))
+        )
     return render(request, "workgroups/kind_list.html", context)
 
 
