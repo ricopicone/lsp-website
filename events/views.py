@@ -26,6 +26,13 @@ from .permissions import can_edit_event
 
 
 def _faculty_view_url(event: Event) -> str:
+    """Where the faculty tools (roster + pricing codes) live for an event.
+
+    Offering events (seminar / reading group) now host these on their
+    Workspace Roster tab; everything else keeps the event page's faculty view.
+    """
+    if event.event_type in Event.ANNUAL_PROGRAM_TYPES and event.workgroup_id:
+        return event.workgroup.get_absolute_url() + "?tab=roster"
     return reverse("events:detail", args=[event.slug]) + "?view=faculty"
 
 

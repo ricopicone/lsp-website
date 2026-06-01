@@ -163,6 +163,25 @@ def test_workspace_overview_shows_event_summary(client):
     assert reverse("registrations:register", args=[event.slug]).encode() in resp.content
 
 
+def test_workspace_shows_program_and_kind_breadcrumbs(client):
+    """A seminar Workspace links back to BOTH its kind directory and its
+    (visible) annual Program — stable context, not referrer-based."""
+    from events.models import Program
+
+    program = Program.objects.create(academic_year="2026-2027", published=True)
+    event = _seminar()
+    event.published = True
+    event.status = Event.Status.OPEN
+    event.program = program
+    event.save(update_fields=["published", "status", "program"])
+    wg = event.ensure_workgroup()
+
+    resp = client.get(wg.get_absolute_url())
+    assert resp.status_code == 200
+    assert reverse("workgroups:kind_seminars").encode() in resp.content  # ← Seminars
+    assert b"/program/?year=2026-2027" in resp.content                   # ← Program
+
+
 def test_event_url_redirects_to_workspace(client):
     """The standalone event URL 301/302s to the canonical Workspace."""
     event = _seminar()

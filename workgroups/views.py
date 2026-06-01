@@ -150,6 +150,15 @@ def workgroup_detail(request, slug):
         reverse(f"workgroups:kind_{kind_url_suffix}") if kind_url_suffix else None
     )
 
+    # A seminar also lives in its annual Program — show that as a second,
+    # stable context link (not referrer-based) when the program is visible.
+    program_url = program_label = None
+    if primary_event is not None and primary_event.program_id:
+        prog = primary_event.program
+        if prog.is_public_now or can_edit_offering:
+            program_url = reverse("program") + f"?year={prog.academic_year}"
+            program_label = str(prog)
+
     members = wg.participants() if can_view else []
 
     context = {
@@ -159,8 +168,12 @@ def workgroup_detail(request, slug):
         "members": members,
         "member_count": len(members),
         "kind_index_url": kind_index_url,
+        "program_url": program_url,
+        "program_label": program_label,
         "tabs": tabs,
         "active_tab": active,
+        "primary_event": primary_event,
+        "can_edit_offering": can_edit_offering,
     }
     # Compose kind-specific UI without importing the concrete app: reach the
     # attached object via its reverse accessor and ask it for its viewer state.

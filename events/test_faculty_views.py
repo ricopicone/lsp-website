@@ -151,6 +151,7 @@ def test_workspace_offers_roster_tab_to_faculty(client, event, faculty_member):
     response = client.get(event.workgroup.get_absolute_url())
     assert response.status_code == 200
     assert b"tab=roster" in response.content
+    assert b"Edit description" in response.content   # edit affordance on the masthead
 
 
 def test_roster_tab_renders_roster_for_faculty(
@@ -249,7 +250,8 @@ def test_get_to_generate_code_redirects_to_faculty_view(client, event, faculty_m
     client.force_login(faculty_member)
     response = client.get(reverse("events:generate_code", args=[event.slug]))
     assert response.status_code == 302
-    assert "view=faculty" in response.url
+    # Offering events host faculty tools on the Workspace Roster tab now.
+    assert response.url == event.workgroup.get_absolute_url() + "?tab=roster"
 
 
 # ---- /events/<slug>/check-code/ ----------------------------------------

@@ -1,8 +1,8 @@
 <div class="space-y-10">
   {% if event %}
-  {# Seminar / reading-group: show the generated event's public summary
-     (faculty, about, sessions, pricing, Register) — same partial as the
-     standalone event page. #}
+  {% comment %}Seminar / reading-group: show the generated event's public
+  summary (faculty, about, sessions, pricing, Register) — same partial as the
+  standalone event page.{% endcomment %}
   {% include "events/_event_summary.html" %}
   {% elif workgroup.description %}
   <section class="lsp-prose max-w-none">{{ workgroup.description_html }}</section>

@@ -6,10 +6,15 @@
 {% block content %}
 <div class="space-y-8">
 
-  {% if kind_index_url %}
-  <p class="text-sm">
+  {% if kind_index_url or program_url %}
+  <nav class="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+    {% if kind_index_url %}
     <a href="{{ kind_index_url }}" class="link link-hover text-base-content/55">← {{ workgroup.get_kind_display }}s</a>
-  </p>
+    {% endif %}
+    {% if program_url %}
+    <a href="{{ program_url }}" class="link link-hover text-base-content/55">← {{ program_label }}</a>
+    {% endif %}
+  </nav>
   {% endif %}
 
   {# ── Masthead ───────────────────────────────────────────────── #}
@@ -48,6 +53,12 @@
         </div>
 
         <h1 class="font-serif text-3xl sm:text-4xl leading-tight text-base-content">{{ workgroup.name }}</h1>
+
+        {% if can_edit_offering and primary_event %}
+        <nav class="flex flex-wrap gap-2 pt-1 text-sm">
+          <a href="{% url 'events:edit' primary_event.slug %}" class="btn btn-ghost btn-sm">Edit description</a>
+        </nav>
+        {% endif %}
       </div>
     </div>
   </header>
