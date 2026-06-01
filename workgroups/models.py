@@ -208,14 +208,14 @@ class Workgroup(models.Model):
         return getattr(getattr(user, "profile", None), "role", None)
 
     def is_member(self, user) -> bool:
-        """The single access primitive the cross-cutting apps call.
+        """*Active* membership — the access primitive the cross-cutting apps
+        call (channel posting, current roster, full workspace).
 
-        Stored memberships are checked uniformly first — that covers
-        hand-managed members for every kind, including a seminar's *faculty*
-        (``role=FACULTY``). For an offering workgroup (seminar / reading group)
-        access also flows from a paid/comped Registration on any attached
-        ``Event``; that population stays *derived* (computed from the
-        authoritative payment state, never stored as rows). Dispatched via the
+        Stored memberships count for every kind (faculty, organizers, cartel
+        members …). For a term-based offering (seminar / reading group), active
+        members are the paid/comped registrants of the **current term** only —
+        past-term registrants are not active; they must renew to participate
+        (but keep read-only :meth:`has_archive_access`). Dispatched via the
         reverse ``events`` accessor so this app needn't import ``events``.
         """
         if not getattr(user, "is_authenticated", False):
@@ -226,20 +226,24 @@ class Workgroup(models.Model):
             return True
         if self.memberships.filter(user=user, end_date__isnull=True).exists():
             return True
-        # A paid reading group's current members = paid/comped registrants of
-        # the CURRENT academic year's term (they renew each year; past-term
-        # registrants lapse).
-        if self.kind == self.Kind.READING_GROUP:
+        # Term-based offerings: active = current term's paid/comped registrants.
+        if self.kind in self.OFFERING_KINDS:
             term = self.current_term()
             return term is not None and term.has_access_registrant(user)
-        # Derive from registrations ONLY for offering workgroups, whose
-        # attached event IS the group. A committee merely *organizes* events
-        # (they link to its workgroup), so its registrants must NOT become
-        # committee members — that would leak its private channel.
-        if self.kind not in self.OFFERING_KINDS:
+        return False
+
+    def has_archive_access(self, user) -> bool:
+        """Read-only access to the group's archive (past materials + channel
+        history) for someone who attended *any* term — retained after their
+        term ends. Active membership (:meth:`is_member`) requires renewing the
+        current term; archive viewers may read but not post or participate."""
+        if self.is_member(user):
+            return True
+        if not getattr(user, "is_authenticated", False):
             return False
-        # Event counts per group are tiny, so the per-event check is cheap.
-        return any(e.has_access_registrant(user) for e in self.events.all())
+        if self.kind in self.OFFERING_KINDS:
+            return any(e.has_access_registrant(user) for e in self.events.all())
+        return False
 
     def participants(self):
         """The full roster for enumeration surfaces (roster list, assignee
@@ -265,12 +269,12 @@ class Workgroup(models.Model):
                     seen[u.pk] = Participant(
                         user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
                     )
-        # Derived registrants only for offering workgroups (see ``is_member``) —
-        # a committee's organized-event registrants are not its roster.
+        # The ACTIVE roster of a term-based offering = the current term's
+        # paid/comped registrants (past-term-only attendees are archive-only,
+        # not on the active roster). A committee's organized-event registrants
+        # are never its roster.
         derived_events = []
         if self.kind in self.OFFERING_KINDS:
-            derived_events = list(self.events.all())
-        elif self.kind == self.Kind.READING_GROUP:
             term = self.current_term()
             derived_events = [term] if term is not None else []
         for event in derived_events:
@@ -282,12 +286,12 @@ class Workgroup(models.Model):
         return list(seen.values())
 
     def current_term(self):
-        """For a paid reading group, the active-or-upcoming term Event — the
-        annual paid cycle members register for (and renew each year). The
-        soonest term that hasn't ended yet; ``None`` once a term ends and no
-        next one is open (members lapse until the next term). ``None`` for a
-        free reading group (no term) or any other kind."""
-        if self.kind != self.Kind.READING_GROUP:
+        """For a term-based offering (seminar / reading group), the active-or-
+        upcoming term Event — the cycle members register for (and renew each
+        year). The soonest term that hasn't ended yet; ``None`` once a term
+        ends and no next one is open (active membership lapses to archive-only).
+        ``None`` for a free reading group (no term) or any other kind."""
+        if self.kind not in self.OFFERING_KINDS:
             return None
         today = timezone.localdate()
         active = [e for e in self.events.all() if e.end_date and e.end_date >= today]
@@ -414,12 +418,12 @@ class Workgroup(models.Model):
             return is_lsp_member(user)
         return self.is_member(user)  # PRIVATE
 
-    #: Kinds whose Workspace is the public face of a registerable offering —
-    #: its landing is publicly visible once the generated event is published,
-    #: and membership derives from the event's registrations. Reading groups
-    #: are NOT here: they're standing, directly-joinable groups (open_join)
-    #: with a stored roster, listed on the program by date overlap.
-    OFFERING_KINDS = frozenset({Kind.SEMINAR})
+    #: Term-based offering kinds: a standing Workgroup with one or more term
+    #: Events. Public landing once a term is published; ACTIVE membership =
+    #: current term's paid/comped registrants (past-term attendees keep
+    #: read-only archive access; see ``has_archive_access``). A *free* reading
+    #: group has no term and uses ``open_join`` instead.
+    OFFERING_KINDS = frozenset({Kind.SEMINAR, Kind.READING_GROUP})
 
     def _has_public_event(self) -> bool:
         if self.kind not in self.OFFERING_KINDS:

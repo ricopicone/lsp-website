@@ -117,11 +117,14 @@ def workgroup_detail(request, slug):
 
     can_view = wg.content_visible_to(request.user)
     is_member = wg.is_member(request.user)
+    # Past-term attendees of an offering keep read-only archive access (channel
+    # history + released Works), but aren't active members (can't post).
+    archive_access = wg.has_archive_access(request.user)
 
-    # Discuss (forum) + Chat channels, for members. (Files → W2; Schedule →
-    # W3; Tasks → W4.)
+    # Discuss (forum) + Chat channels — active members post; archive viewers
+    # read. (Files → W2; Schedule → W3; Tasks → W4.)
     discuss_channel = chat_channel = None
-    if is_member and wg.has_channel:
+    if (is_member or archive_access) and wg.has_channel:
         discuss_channel = wg.channels.filter(kind="forum").first()
         chat_channel = wg.channels.filter(kind="chat").first()
 
@@ -139,7 +142,7 @@ def workgroup_detail(request, slug):
         tabs.append(("discuss", "Discuss"))
     if chat_channel:
         tabs.append(("chat", "Chat"))
-    if wg.has_works and can_view:
+    if wg.has_works and (can_view or archive_access):
         tabs.append(("work", "Work"))
     if wg.has_calendar and is_member:
         tabs.append(("schedule", "Schedule"))
@@ -269,7 +272,7 @@ def workgroup_detail(request, slug):
         # After posting in the embedded composer, return to this tab (not the
         # standalone Parlêtre channel page).
         context["channel_next"] = f"{wg.get_absolute_url()}?tab={active}"
-    elif active == "work" and wg.has_works and can_view:
+    elif active == "work" and wg.has_works and (can_view or archive_access):
         works = (
             Work.listing_for(request.user).filter(workgroup=wg).prefetch_related("files")
         )

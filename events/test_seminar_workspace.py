@@ -223,6 +223,52 @@ def test_requires_faculty_approval_defaults_off():
     assert e.requires_faculty_approval is False
 
 
+def test_continuing_seminar_active_vs_archive_and_renewal():
+    """Opt-in continuity: a new term attaches to the existing seminar's standing
+    workgroup. A past-term registrant keeps READ-ONLY archive access (can read
+    the channel, not post) but is NOT an active member until they renew the
+    current term."""
+    from events.forms import ProgramEventForm
+    from events.models import Program
+    from parletre.permissions import channel_can_post, channel_visible
+
+    y1 = Event.objects.create(
+        title="Lacan Seminar — Year 1", slug="lacan-y1", event_type=Event.Type.SEMINAR,
+        start_date=date(2025, 9, 1), end_date=date(2026, 5, 1),   # already ended
+        published=True, status=Event.Status.OPEN,
+    )
+    wg = y1.ensure_workgroup()
+    payer = _user("p@x.test")
+    _register(payer, y1, status=Registration.Status.PAID)
+
+    # Year 1 ended → archive-only, not active.
+    assert wg.is_member(payer) is False
+    assert wg.has_archive_access(payer) is True
+
+    chat = wg.channels.filter(kind="chat").first()
+    assert channel_visible(chat, payer) is True        # can read the archive
+    assert channel_can_post(chat, payer) is False      # but cannot post
+
+    # Year 2 term continues the SAME standing workgroup.
+    program2 = Program.objects.create(academic_year="2026-2027", published=True)
+    form = ProgramEventForm({
+        "title": "Lacan Seminar — Year 2", "slug": "lacan-y2",
+        "event_type": "seminar", "start_date": "2099-09-01", "end_date": "2100-05-01",
+        "format": "online", "status": "open", "description": "", "access_info": "",
+        "requires_faculty_approval": False, "continues_seminar": wg.pk, "faculty": [],
+    }, program=program2)
+    assert form.is_valid(), form.errors
+    y2 = form.save()
+    assert y2.workgroup_id == wg.id              # one standing group, not a new one
+    assert wg.primary_event() == y2              # the upcoming term is current
+
+    # Still archive-only until they renew for the new term.
+    assert wg.is_member(payer) is False
+    _register(payer, y2, status=Registration.Status.PAID)
+    assert wg.is_member(payer) is True           # renewed → active
+    assert channel_can_post(chat, payer) is True
+
+
 def test_event_url_redirects_to_workspace(client):
     """The standalone event URL 301/302s to the canonical Workspace."""
     event = _seminar()

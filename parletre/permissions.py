@@ -158,11 +158,13 @@ def channel_visible(channel, user) -> bool:
     if access == Access.WORKGROUP:
         # Private to the group: members only, no staff bypass — checked before
         # the staff shortcut below, so a workgroup channel stays private even
-        # to staff who aren't in the group.
+        # to staff who aren't in the group. Past-term attendees of an offering
+        # keep read-only archive access (they can see, not post — see
+        # channel_can_post).
         wg = channel.workgroup
         if wg is None:
             return False
-        return wg.is_member(user)
+        return wg.is_member(user) or wg.has_archive_access(user)
     if access == Access.LSP_STAFF:
         # The LSP Staff channel: gated by the LSP Staff role (staff keep
         # oversight).
@@ -191,4 +193,9 @@ def channel_can_post(channel, user) -> bool:
         return False
     if channel.post_policy == channel.PostPolicy.STAFF_ONLY:
         return channel_can_moderate(channel, user)
+    if channel.access == channel.Access.WORKGROUP:
+        # Archive viewers (past-term attendees) can read but not post — posting
+        # needs ACTIVE membership (current term / stored).
+        wg = channel.workgroup
+        return wg is not None and wg.is_member(user)
     return True
