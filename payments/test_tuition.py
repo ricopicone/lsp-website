@@ -1380,3 +1380,39 @@ def test_complete_payment_is_idempotent_for_tuition(current_period):
     enr.refresh_from_db()
     assert inst.paid_at == first_paid_at
     assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL
+
+
+# --- Treasurer dashboard money buckets ----------------------------------
+
+
+@pytest.mark.django_db
+def test_tuition_context_money_buckets(current_period):
+    """_treasurer_tuition_context exposes collected / committed-remaining /
+    undecided-owed dollar buckets for the current period."""
+    from payments.models import Payment
+    from payments.views import _treasurer_tuition_context
+
+    full = current_period.tuition_amount
+    paid = (full / 2).quantize(Decimal("0.01"))
+
+    # Candidate A: on a payment plan, paid half.
+    a = _mk_candidate(email="a@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=a, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1, due_date=current_period.start_date, amount=paid,
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=a, amount=paid,
+        status=Payment.Status.SUCCEEDED, tuition_installment=inst,
+    )
+    # Candidate B: in-training but no decision recorded → undecided.
+    _mk_candidate(email="b@x.test")
+
+    ctx = _treasurer_tuition_context()
+    assert ctx["tuition_total_collected"] == paid
+    assert ctx["tuition_committed_remaining"] == full - paid
+    assert ctx["tuition_undecided_owed"] == full  # one undecided in-training student
+    assert ctx["tuition_outstanding"] == (full - paid) + full

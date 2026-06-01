@@ -1,4 +1,5 @@
 {% extends "payments/treasurer/base.html" %}
+{% load treasurer_filters %}
 {% block tab_content %}
 <div class="space-y-8">
 
@@ -7,75 +8,32 @@
     for the full per-section views.
   </p>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-    {% comment %}Dues card{% endcomment %}
-    <section class="rounded-lg border border-base-300 p-5 space-y-3">
-      <header class="flex items-baseline justify-between">
-        <h2 class="font-serif text-xl text-base-content">Dues</h2>
-        <a href="{% url 'treasurer_dues' %}" class="text-sm link link-primary">Details →</a>
-      </header>
-      {% if current_period %}
-      <p class="text-sm text-base-content/70">
-        <strong>{{ current_period.name }}</strong>, due
-        {{ current_period.due_date|date:"M j, Y" }}.
-      </p>
-      <div class="grid grid-cols-3 gap-2 text-sm">
-        <div class="rounded border border-base-300 p-2">
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Pre-cand</div>
-          <div class="font-serif text-lg">${{ current_period.dues_amount_pre_candidate }}</div>
-        </div>
-        <div class="rounded border border-base-300 p-2">
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Cand</div>
-          <div class="font-serif text-lg">${{ current_period.dues_amount_candidate }}</div>
-        </div>
-        <div class="rounded border border-base-300 p-2">
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Analyst</div>
-          <div class="font-serif text-lg">${{ current_period.dues_amount_analyst }}</div>
-        </div>
-      </div>
-      {% with cur=period_stats.0 %}
-      <div class="grid grid-cols-3 gap-2 text-sm">
-        <div>
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Obligated</div>
-          <div class="font-serif text-lg">{{ obligated_count }}</div>
-        </div>
-        <div>
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Paid</div>
-          <div class="font-serif text-lg text-success">{{ cur.paid_count }}</div>
-        </div>
-        <div>
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Unpaid</div>
-          <div class="font-serif text-lg {% if cur.unpaid_count %}text-warning{% endif %}">{{ cur.unpaid_count }}</div>
-        </div>
-      </div>
-      <div class="text-xs text-base-content/60 pt-1 border-t border-base-300/40">
-        Collected this academic year: <strong>${{ cur.total_collected }}</strong>
-      </div>
-      {% endwith %}
-      {% else %}
-      <p class="text-sm text-base-content/60">No current academic year configured.</p>
-      {% endif %}
-    </section>
-
-    {% comment %}Tuition card{% endcomment %}
-    <section class="rounded-lg border border-base-300 p-5 space-y-3">
+    {% comment %}Tuition card (left){% endcomment %}
+    <section class="rounded-lg border border-base-300 p-5 space-y-4">
       <header class="flex items-baseline justify-between">
         <h2 class="font-serif text-xl text-base-content">Tuition</h2>
         <a href="{% url 'treasurer_tuition' %}" class="text-sm link link-primary">Details →</a>
       </header>
       {% if tuition_period %}
       <p class="text-sm text-base-content/70">
-        <strong>{{ tuition_period.name }}</strong>,
-        <span class="whitespace-nowrap">decisions due {{ tuition_period.decision_due_date|date:"M j, Y" }}</span>.
+        <strong>{{ tuition_period.name }}</strong> · {{ tuition_period.tuition_amount|usd0 }}/yr ·
+        <span class="whitespace-nowrap">decisions due {{ tuition_period.decision_due_date|date:"M j, Y" }}</span>
       </p>
-      <div class="grid grid-cols-2 gap-2 text-sm">
-        <div class="rounded border border-base-300 p-2 col-span-2">
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Annual amount</div>
-          <div class="font-serif text-lg">${{ tuition_period.tuition_amount }}</div>
-        </div>
+
+      {% comment %}Featured dollar amounts{% endcomment %}
+      <div class="grid grid-cols-3 gap-2">
+        {% include "payments/treasurer/_money_tile.html" with label="Collected" value=tuition_total_collected tone="success" %}
+        {% include "payments/treasurer/_money_tile.html" with label="Planned, unpaid" value=tuition_committed_remaining tone="info" %}
+        {% include "payments/treasurer/_money_tile.html" with label="Owed, undecided" value=tuition_undecided_owed tone="warning" %}
       </div>
-      <div class="grid grid-cols-3 gap-2 text-sm">
+
+      <div>
+        <canvas id="chart-tuition-money" height="46"></canvas>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2 text-sm pt-1 border-t border-base-300/40">
         <div>
           <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">In-training</div>
           <div class="font-serif text-lg">{{ tuition_in_training_count }}</div>
@@ -85,8 +43,51 @@
           <div class="font-serif text-lg {% if tuition_reconciliation_users|length %}text-warning{% endif %}">{{ tuition_reconciliation_users|length }}</div>
         </div>
         <div>
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Collected</div>
-          <div class="font-serif text-lg">${{ tuition_total_collected|floatformat:2 }}</div>
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Outstanding</div>
+          <div class="font-serif text-lg">{{ tuition_outstanding|usd }}</div>
+        </div>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/60">No current academic year configured.</p>
+      {% endif %}
+    </section>
+
+    {% comment %}Dues card (right){% endcomment %}
+    <section class="rounded-lg border border-base-300 p-5 space-y-4">
+      <header class="flex items-baseline justify-between">
+        <h2 class="font-serif text-xl text-base-content">Dues</h2>
+        <a href="{% url 'treasurer_dues' %}" class="text-sm link link-primary">Details →</a>
+      </header>
+      {% if current_period %}
+      <p class="text-sm text-base-content/70">
+        <strong>{{ current_period.name }}</strong> ·
+        {{ current_period.dues_amount_pre_candidate|usd0 }}/{{ current_period.dues_amount_candidate|usd0 }}/{{ current_period.dues_amount_analyst|usd0 }}
+        pre-cand·cand·analyst ·
+        due {{ current_period.due_date|date:"M j, Y" }}
+      </p>
+
+      {% comment %}Featured dollar amounts{% endcomment %}
+      <div class="grid grid-cols-2 gap-2">
+        {% include "payments/treasurer/_money_tile.html" with label="Collected" value=dues_collected tone="success" %}
+        {% include "payments/treasurer/_money_tile.html" with label="Outstanding" value=dues_outstanding tone="warning" %}
+      </div>
+
+      <div>
+        <canvas id="chart-dues-money" height="46"></canvas>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2 text-sm pt-1 border-t border-base-300/40">
+        <div>
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Obligated</div>
+          <div class="font-serif text-lg">{{ obligated_count }}</div>
+        </div>
+        <div>
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Paid</div>
+          <div class="font-serif text-lg text-success">{{ current_dues_stats.paid_count|default:0 }}</div>
+        </div>
+        <div>
+          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Unpaid</div>
+          <div class="font-serif text-lg {% if current_dues_stats.unpaid_count %}text-warning{% endif %}">{{ current_dues_stats.unpaid_count|default:0 }}</div>
         </div>
       </div>
       {% else %}
@@ -106,4 +107,67 @@
   </p>
 
 </div>
+
+<script id="chart-tuition-money-data" type="application/json">{{ chart_tuition_money_json|safe }}</script>
+<script id="chart-dues-money-data" type="application/json">{{ chart_dues_money_json|safe }}</script>
+<script>
+  (function () {
+    function cssVar(name, fallback) {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return v || fallback;
+    }
+    var success = cssVar("--color-success", "#5f8a5f");
+    var info = cssVar("--color-info", "#6b8fb5");
+    var warning = cssVar("--color-warning", "#d4a017");
+    var baseContent = cssVar("--color-base-content", "#222");
+    Chart.defaults.color = baseContent;
+    Chart.defaults.borderColor = "rgba(127, 127, 127, 0.15)";
+
+    var usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+    // A compact single-row horizontal stacked bar showing dollar segments.
+    function moneyBar(canvasId, segments) {
+      var el = document.getElementById(canvasId);
+      if (!el) return;
+      var total = segments.reduce(function (a, s) { return a + s.value; }, 0);
+      new Chart(el, {
+        type: "bar",
+        data: {
+          labels: [""],
+          datasets: segments.map(function (s) {
+            return { label: s.label, data: [s.value], backgroundColor: s.color, borderWidth: 0, barThickness: 22 };
+          }),
+        },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { stacked: true, beginAtZero: true, display: false, max: total || 1 },
+            y: { stacked: true, display: false },
+          },
+          plugins: {
+            legend: { display: true, position: "bottom", labels: { boxWidth: 10, font: { size: 11 } } },
+            tooltip: {
+              callbacks: { label: function (c) { return c.dataset.label + ": " + usd.format(c.parsed.x); } },
+            },
+          },
+        },
+      });
+    }
+
+    var t = JSON.parse(document.getElementById("chart-tuition-money-data").textContent);
+    moneyBar("chart-tuition-money", [
+      { label: "Collected", value: t.collected, color: success },
+      { label: "Planned, unpaid", value: t.planned, color: info },
+      { label: "Owed, undecided", value: t.owed, color: warning },
+    ]);
+
+    var d = JSON.parse(document.getElementById("chart-dues-money-data").textContent);
+    moneyBar("chart-dues-money", [
+      { label: "Collected", value: d.collected, color: success },
+      { label: "Outstanding", value: d.outstanding, color: warning },
+    ]);
+  })();
+</script>
 {% endblock %}

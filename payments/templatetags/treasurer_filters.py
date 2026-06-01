@@ -24,7 +24,19 @@ def usd(value):
     if value is None or value == "":
         return ""
     try:
-        return f"${float(value):.2f}"
+        return f"${float(value):,.2f}"
+    except (ValueError, TypeError):
+        return f"${value}"
+
+
+@register.filter
+def usd0(value):
+    """Format as a whole-dollar USD string with thousands commas, no cents
+    (e.g. ``$2,500``). For compact rate/headline displays."""
+    if value is None or value == "":
+        return ""
+    try:
+        return f"${float(value):,.0f}"
     except (ValueError, TypeError):
         return f"${value}"
 
