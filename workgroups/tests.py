@@ -670,3 +670,180 @@ def test_ical_feeds(client):
     mine = client.get(reverse("workgroups:my_calendar_ics", args=["tok-abc"]))
     assert mine.status_code == 200 and b"BEGIN:VCALENDAR" in mine.content
     assert client.get(reverse("workgroups:my_calendar_ics", args=["bogus"])).status_code == 404
+
+
+# ---- Collaborative working documents (Work tab) ------------------------
+
+def _member_of(wg, email="docmember@x.test"):
+    u = _user(email)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=u, start_date=datetime.date(2000, 1, 1)
+    )
+    return u
+
+
+def test_draft_create_redirects_to_editor(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    u = _member_of(wg)
+    client.force_login(u)
+    resp = client.post(reverse("workgroups:draft_create", args=[wg.slug]),
+                       {"title": "My Draft"})
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.get(workgroup=wg)
+    assert draft.title == "My Draft"
+    assert resp.status_code == 302
+    assert resp.url == reverse("workgroups:draft_edit", args=[wg.slug, draft.pk])
+
+
+def test_draft_create_linked_google_doc(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    u = _member_of(wg)
+    client.force_login(u)
+    resp = client.post(reverse("workgroups:draft_create", args=[wg.slug]),
+                       {"title": "Linked", "google_doc_url": "https://docs.google.com/x"})
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.get(workgroup=wg)
+    assert draft.is_linked
+    assert "tab=work" in resp.url
+
+
+def test_non_member_cannot_create_draft(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    outsider = _user("outsider@x.test")
+    client.force_login(outsider)
+    resp = client.post(reverse("workgroups:draft_create", args=[wg.slug]),
+                       {"title": "Nope"})
+    assert resp.status_code == 404
+
+
+def test_draft_autosave_saves_content(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    u = _member_of(wg)
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.create(workgroup=wg, title="D", created_by=u)
+    client.force_login(u)
+    resp = client.post(
+        reverse("workgroups:draft_autosave", args=[wg.slug, draft.pk]),
+        {"content": "<p>hello</p>"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    draft.refresh_from_db()
+    assert draft.content_html == "<p>hello</p>"
+
+
+def test_draft_autosave_blocked_when_locked_by_other(client):
+    from django.utils import timezone
+    wg = _wg(name="Doc Group", slug="doc-group")
+    holder = _member_of(wg, "holder@x.test")
+    other = _member_of(wg, "other@x.test")
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.create(
+        workgroup=wg, title="D", locked_by=holder, locked_at=timezone.now()
+    )
+    client.force_login(other)
+    resp = client.post(
+        reverse("workgroups:draft_autosave", args=[wg.slug, draft.pk]),
+        {"content": "<p>stomp</p>"},
+    )
+    assert resp.status_code == 409
+    draft.refresh_from_db()
+    assert draft.content_html == ""
+
+
+def test_draft_publish_creates_work_with_pdf(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    manager = _member_of(wg, "mgr@x.test")
+    manager.is_superuser = True
+    manager.save()
+    from works.models import Work, WorkDraft
+    draft = WorkDraft.objects.create(
+        workgroup=wg, title="Findings",
+        content_html="<h1>Title</h1><p>Body</p><script>alert(1)</script>",
+    )
+    client.force_login(manager)
+    resp = client.post(
+        reverse("workgroups:draft_publish", args=[wg.slug, draft.pk]),
+        {"visibility": "members"},
+    )
+    assert resp.status_code == 302
+    work = Work.objects.get(workgroup=wg, kind=Work.Kind.DOCUMENT)
+    assert work.title == "Findings"
+    assert "<script>" not in work.body_html       # sanitized
+    assert "alert(1)" not in work.body_html
+    assert work.files.filter(label="Published PDF").count() == 1
+    draft.refresh_from_db()
+    assert draft.published_work_id == work.pk
+
+
+def test_draft_publish_blocked_for_plain_member(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    plain = _member_of(wg, "plain@x.test")
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.create(workgroup=wg, title="D")
+    client.force_login(plain)
+    resp = client.post(
+        reverse("workgroups:draft_publish", args=[wg.slug, draft.pk]),
+        {"visibility": "members"},
+    )
+    assert resp.status_code == 404
+
+
+def test_draft_republish_updates_same_work(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    manager = _member_of(wg, "mgr@x.test")
+    manager.is_superuser = True
+    manager.save()
+    from works.models import Work, WorkDraft
+    draft = WorkDraft.objects.create(workgroup=wg, title="V1", content_html="<p>one</p>")
+    client.force_login(manager)
+    client.post(reverse("workgroups:draft_publish", args=[wg.slug, draft.pk]),
+                {"visibility": "members"})
+    draft.refresh_from_db()
+    draft.title = "V2"
+    draft.content_html = "<p>two</p>"
+    draft.save()
+    client.post(reverse("workgroups:draft_publish", args=[wg.slug, draft.pk]),
+                {"visibility": "members"})
+    assert Work.objects.filter(workgroup=wg, kind=Work.Kind.DOCUMENT).count() == 1
+    work = Work.objects.get(workgroup=wg, kind=Work.Kind.DOCUMENT)
+    assert work.title == "V2"
+    assert "two" in work.body_html
+    assert work.files.filter(label="Published PDF").count() == 1   # not duplicated
+
+
+def test_draft_delete(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    u = _member_of(wg)
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.create(workgroup=wg, title="D")
+    client.force_login(u)
+    resp = client.post(reverse("workgroups:draft_delete", args=[wg.slug, draft.pk]))
+    assert resp.status_code == 302
+    assert not WorkDraft.objects.filter(pk=draft.pk).exists()
+
+
+def test_draft_edit_page_renders_and_acquires_lock(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    u = _member_of(wg)
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.create(workgroup=wg, title="D", content_html="<p>hi</p>")
+    client.force_login(u)
+    resp = client.get(reverse("workgroups:draft_edit", args=[wg.slug, draft.pk]))
+    assert resp.status_code == 200
+    assert b"@tiptap/core" in resp.content
+    draft.refresh_from_db()
+    assert draft.locked_by_id == u.pk
+
+
+def test_work_tab_lists_drafts_for_member(client):
+    wg = _wg(name="Doc Group", slug="doc-group", has_works=True,
+             content_visibility=Visibility.MEMBERS)
+    u = _member_of(wg)
+    from works.models import WorkDraft
+    WorkDraft.objects.create(workgroup=wg, title="Shared notes")
+    client.force_login(u)
+    resp = client.get(f"{wg.get_absolute_url()}?tab=work")
+    assert resp.status_code == 200
+    assert b"Shared notes" in resp.content
+    assert b"Working documents" in resp.content

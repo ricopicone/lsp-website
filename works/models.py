@@ -37,6 +37,7 @@ class Work(models.Model):
         CARTEL     = "cartel",     _("Cartel work")
         PALIMPSEST = "palimpsest", _("Palimpsest")
         PASSAGE    = "passage",    _("Passage")
+        DOCUMENT   = "document",   _("Document")
 
     class Visibility(models.TextChoices):
         PUBLIC  = "public",  _("Public")
@@ -99,6 +100,10 @@ class Work(models.Model):
         blank=True,
         null=True,
     )
+    #: Published web version (rendered HTML) when this Work was produced by
+    #: publishing a WorkDraft. Shown on the Work page; the generated PDF is
+    #: attached as a WorkFile (so existing download + visibility apply).
+    body_html = models.TextField(blank=True)
 
     external_authors = models.CharField(
         max_length=255,
@@ -305,3 +310,98 @@ class WorkFile(models.Model):
 
     def __str__(self) -> str:
         return self.label or self.file.name.rsplit("/", 1)[-1]
+
+
+class WorkDraft(models.Model):
+    """A collaborative working document in a workgroup's Work tab — drafted
+    in-browser (TipTap, autosaved, versioned) and eventually *published* into a
+    :class:`Work` (web page + PDF). Either native (``content_html``) or a link
+    to an external Google Doc (``google_doc_url``)."""
+
+    workgroup = models.ForeignKey(
+        "workgroups.Workgroup", on_delete=models.CASCADE, related_name="drafts"
+    )
+    title = models.CharField(max_length=200, default="Untitled document")
+    content_html = models.TextField(blank=True)
+    google_doc_url = models.URLField(
+        blank=True, help_text="If set, this is a linked Google Doc (no in-app editing)."
+    )
+    #: Soft, advisory edit lock — who's currently editing + when last seen.
+    locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="locked_drafts",
+    )
+    locked_at = models.DateTimeField(null=True, blank=True)
+    published_work = models.OneToOneField(
+        "works.Work", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="source_draft",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="created_drafts",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="edited_drafts",
+    )
+
+    #: A held lock is considered active for this long since the last heartbeat.
+    LOCK_TTL_SECONDS = 180
+
+    class Meta:
+        ordering = ("-updated_at",)
+
+    def __str__(self) -> str:
+        return self.title
+
+    def get_absolute_url(self) -> str:
+        return reverse("workgroups:draft_edit", args=[self.workgroup.slug, self.pk])
+
+    @property
+    def is_linked(self) -> bool:
+        return bool(self.google_doc_url)
+
+    def active_lock_holder(self):
+        """The user currently holding a live edit lock, or None (stale/unlocked)."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+        if self.locked_by_id is None or self.locked_at is None:
+            return None
+        if timezone.now() - self.locked_at > timedelta(seconds=self.LOCK_TTL_SECONDS):
+            return None
+        return self.locked_by
+
+    def can_edit_now(self, user) -> bool:
+        """True if ``user`` may write (lock free / stale / theirs)."""
+        holder = self.active_lock_holder()
+        return holder is None or holder.pk == user.pk
+
+    def acquire_lock(self, user):
+        from django.utils import timezone
+        self.locked_by = user
+        self.locked_at = timezone.now()
+        self.save(update_fields=["locked_by", "locked_at"])
+
+
+class WorkDraftVersion(models.Model):
+    """A named snapshot of a draft's content (manual save-version + on publish)."""
+
+    draft = models.ForeignKey(
+        WorkDraft, on_delete=models.CASCADE, related_name="versions"
+    )
+    content_html = models.TextField(blank=True)
+    label = models.CharField(max_length=120, blank=True)
+    saved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="saved_draft_versions",
+    )
+    saved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-saved_at",)
+
+    def __str__(self) -> str:
+        return f"{self.draft.title} @ {self.saved_at:%Y-%m-%d %H:%M}"

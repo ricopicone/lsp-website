@@ -1,4 +1,68 @@
 <div class="space-y-10">
+  {% if can_edit_docs %}
+  <section class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="font-serif text-xl text-base-content">Working documents</h2>
+      <details class="dropdown dropdown-end">
+        <summary class="btn btn-sm btn-primary">New document</summary>
+        <div class="dropdown-content z-10 mt-2 w-80 space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-4 shadow-lg">
+          <form method="post" action="{% url 'workgroups:draft_create' workgroup.slug %}" class="space-y-2">
+            {% csrf_token %}
+            <label class="text-xs font-medium uppercase tracking-wider text-base-content/55">Title</label>
+            <input name="title" type="text" placeholder="Untitled document"
+                   class="input input-sm input-bordered w-full" />
+            <button type="submit" class="btn btn-sm btn-primary w-full">Create &amp; edit</button>
+          </form>
+          <div class="divider my-0 text-[0.65rem] uppercase tracking-wider text-base-content/40">or</div>
+          <form method="post" action="{% url 'workgroups:draft_create' workgroup.slug %}" class="space-y-2">
+            {% csrf_token %}
+            <label class="text-xs font-medium uppercase tracking-wider text-base-content/55">Link a Google Doc</label>
+            <input name="title" type="text" placeholder="Document title"
+                   class="input input-sm input-bordered w-full" />
+            <input name="google_doc_url" type="url" required placeholder="https://docs.google.com/…"
+                   class="input input-sm input-bordered w-full" />
+            <button type="submit" class="btn btn-sm btn-outline w-full">Link</button>
+          </form>
+        </div>
+      </details>
+    </div>
+
+    {% if drafts %}
+    <ul class="divide-y divide-base-300/40 rounded-xl border border-base-300/50 bg-base-100">
+      {% for d in drafts %}
+      <li class="flex flex-wrap items-center gap-3 p-3">
+        {% if d.is_linked %}
+        <a href="{{ d.google_doc_url }}" target="_blank" rel="noopener"
+           class="min-w-0 flex-1 font-medium text-base-content hover:text-primary">
+          {{ d.title }}
+          <span class="ml-1 align-middle inline-flex items-center gap-1 rounded-full bg-base-200 px-2 py-0.5 text-[0.6rem] font-medium uppercase tracking-wider text-base-content/55">Google Doc ↗</span>
+        </a>
+        {% else %}
+        <a href="{% url 'workgroups:draft_edit' workgroup.slug d.pk %}"
+           class="min-w-0 flex-1 font-medium text-base-content hover:text-primary">
+          {{ d.title }}
+          {% if d.published_work_id %}
+          <span class="ml-1 align-middle inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[0.6rem] font-medium uppercase tracking-wider text-success">Published</span>
+          {% endif %}
+        </a>
+        {% endif %}
+        <span class="text-xs text-base-content/45">edited {{ d.updated_at|date:"M j, Y" }}</span>
+        <form method="post" action="{% url 'workgroups:draft_delete' workgroup.slug d.pk %}"
+              onsubmit="return confirm('Delete “{{ d.title|escapejs }}”? This cannot be undone.');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="rounded-xl border border-dashed border-base-300/70 bg-base-200/30 p-6 text-center text-sm text-base-content/55">
+      No working documents yet. Draft one here, then publish it to Work when it's ready.
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {% if works_in_progress %}
   <section class="space-y-4">
     <h2 class="font-serif text-xl text-base-content">In progress</h2>

@@ -1,0 +1,206 @@
+{% extends "core/base.html" %}
+{% block title %}{{ draft.title }} — {{ workgroup.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .pm-editor .ProseMirror {
+    min-height: 60vh; outline: none; line-height: 1.7;
+  }
+  .pm-editor .ProseMirror > * + * { margin-top: 0.85em; }
+  .pm-editor .ProseMirror h1 { font-size: 1.6rem; font-weight: 600; }
+  .pm-editor .ProseMirror h2 { font-size: 1.3rem; font-weight: 600; }
+  .pm-editor .ProseMirror h3 { font-size: 1.1rem; font-weight: 600; }
+  .pm-editor .ProseMirror ul { list-style: disc; padding-left: 1.4em; }
+  .pm-editor .ProseMirror ol { list-style: decimal; padding-left: 1.4em; }
+  .pm-editor .ProseMirror blockquote {
+    border-left: 3px solid currentColor; opacity: .8; padding-left: 1em; font-style: italic;
+  }
+  .pm-editor .ProseMirror a { text-decoration: underline; }
+  .pm-editor .ProseMirror pre {
+    background: rgba(0,0,0,.06); border-radius: .5rem; padding: .75em 1em; overflow-x: auto;
+  }
+  .pm-editor .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder); color: rgba(0,0,0,.35); float: left; height: 0; pointer-events: none;
+  }
+  .pm-btn { padding: .25rem .55rem; border-radius: .375rem; font-size: .8rem; }
+  .pm-btn.is-active { background: var(--color-primary, #570df8); color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5" data-draft-url="{% url 'workgroups:draft_autosave' workgroup.slug draft.pk %}">
+  <input type="hidden" id="csrf" value="{{ csrf_token }}">
+
+  <nav class="text-sm">
+    <a href="{{ workgroup.get_absolute_url }}?tab=work" class="link link-hover text-base-content/55">← {{ workgroup.name }} · Work</a>
+  </nav>
+
+  <header class="flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0">
+      <input id="doc-title" type="text" value="{{ draft.title }}"
+             class="w-full bg-transparent font-serif text-2xl text-base-content outline-none"
+             {% if not can_edit %}readonly{% endif %} />
+      <p id="save-status" class="mt-1 text-xs text-base-content/45">
+        {% if can_edit %}Saved{% else %}Read-only — {{ lock_holder.get_full_name|default:lock_holder.email }} is editing{% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      {% if can_edit %}
+      <form method="post" action="{% url 'workgroups:draft_save_version' workgroup.slug draft.pk %}" class="flex items-center gap-1">
+        {% csrf_token %}
+        <input name="label" type="text" placeholder="Snapshot label (optional)"
+               class="input input-xs input-bordered w-44" id="version-label">
+        <button type="submit" class="btn btn-xs btn-outline">Save version</button>
+      </form>
+      {% endif %}
+      {% if can_publish %}
+      <details class="dropdown dropdown-end">
+        <summary class="btn btn-xs btn-primary">Publish →&nbsp;Works</summary>
+        <form method="post" action="{% url 'workgroups:draft_publish' workgroup.slug draft.pk %}"
+              class="dropdown-content z-10 mt-2 w-72 space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-4 shadow-lg">
+          {% csrf_token %}
+          <p class="text-xs text-base-content/55">Publishing renders this document into a Work — a web page plus a downloadable PDF.</p>
+          <label class="text-xs font-medium uppercase tracking-wider text-base-content/55">Visibility</label>
+          <select name="visibility" class="select select-sm select-bordered w-full">
+            <option value="members" selected>LSP members</option>
+            <option value="public">Public</option>
+            <option value="group">This group only</option>
+          </select>
+          <button type="submit" class="btn btn-sm btn-primary w-full">Publish</button>
+          {% if draft.published_work_id %}<p class="text-[0.65rem] text-base-content/45">Re-publishing updates the existing Work.</p>{% endif %}
+        </form>
+      </details>
+      {% endif %}
+    </div>
+  </header>
+
+  {% if can_edit %}
+  <div class="pm-editor rounded-xl border border-base-300/60 bg-base-100">
+    <div id="toolbar" class="flex flex-wrap gap-1 border-b border-base-300/50 p-2 text-base-content/80"></div>
+    <div id="editor" class="p-5"></div>
+  </div>
+  {% else %}
+  <article class="pm-editor rounded-xl border border-base-300/60 bg-base-100 p-5">
+    <div class="ProseMirror">{{ draft.content_html|safe }}</div>
+  </article>
+  {% endif %}
+
+  {% if versions %}
+  <section class="space-y-2">
+    <h2 class="font-serif text-lg text-base-content">Version history</h2>
+    <ul class="divide-y divide-base-300/40 rounded-xl border border-base-300/50 bg-base-100 text-sm">
+      {% for v in versions %}
+      <li class="flex items-center gap-3 p-3">
+        <span class="flex-1 text-base-content">{{ v.label|default:"(autosnapshot)" }}</span>
+        <span class="text-xs text-base-content/45">{{ v.saved_at|date:"M j, Y g:i A" }}{% if v.saved_by %} · {{ v.saved_by.get_full_name|default:v.saved_by.email }}{% endif %}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</div>
+
+{% if can_edit %}
+<script type="module">
+  import { Editor } from 'https://esm.sh/@tiptap/core@2.11.5';
+  import StarterKit from 'https://esm.sh/@tiptap/starter-kit@2.11.5';
+  import Link from 'https://esm.sh/@tiptap/extension-link@2.11.5';
+  import Placeholder from 'https://esm.sh/@tiptap/extension-placeholder@2.11.5';
+
+  const root = document.querySelector('[data-draft-url]');
+  const url = root.dataset.draftUrl;
+  const csrf = document.getElementById('csrf').value;
+  const status = document.getElementById('save-status');
+  const titleEl = document.getElementById('doc-title');
+
+  const editor = new Editor({
+    element: document.getElementById('editor'),
+    extensions: [
+      StarterKit.configure({ link: false }),
+      Link.configure({ openOnClick: false }),
+      Placeholder.configure({ placeholder: 'Start writing…' }),
+    ],
+    content: '',
+  });
+  editor.commands.setContent(`{{ draft.content_html|escapejs }}`);
+
+  // Toolbar
+  const tb = document.getElementById('toolbar');
+  const buttons = [
+    ['Bold', () => editor.chain().focus().toggleBold().run(), () => editor.isActive('bold')],
+    ['Italic', () => editor.chain().focus().toggleItalic().run(), () => editor.isActive('italic')],
+    ['H1', () => editor.chain().focus().toggleHeading({level:1}).run(), () => editor.isActive('heading',{level:1})],
+    ['H2', () => editor.chain().focus().toggleHeading({level:2}).run(), () => editor.isActive('heading',{level:2})],
+    ['H3', () => editor.chain().focus().toggleHeading({level:3}).run(), () => editor.isActive('heading',{level:3})],
+    ['• List', () => editor.chain().focus().toggleBulletList().run(), () => editor.isActive('bulletList')],
+    ['1. List', () => editor.chain().focus().toggleOrderedList().run(), () => editor.isActive('orderedList')],
+    ['Quote', () => editor.chain().focus().toggleBlockquote().run(), () => editor.isActive('blockquote')],
+    ['Code', () => editor.chain().focus().toggleCodeBlock().run(), () => editor.isActive('codeBlock')],
+    ['Link', () => {
+      const prev = editor.getAttributes('link').href || '';
+      const href = window.prompt('Link URL', prev);
+      if (href === null) return;
+      if (href === '') { editor.chain().focus().unsetLink().run(); return; }
+      editor.chain().focus().extendMarkRange('link').setLink({ href }).run();
+    }, () => editor.isActive('link')],
+    ['↶', () => editor.chain().focus().undo().run(), () => false],
+    ['↷', () => editor.chain().focus().redo().run(), () => false],
+  ];
+  const els = buttons.map(([label, cmd]) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label; b.className = 'pm-btn hover:bg-base-200';
+    b.addEventListener('click', () => cmd());
+    tb.appendChild(b);
+    return b;
+  });
+  function refreshToolbar() {
+    buttons.forEach(([, , active], i) => els[i].classList.toggle('is-active', active()));
+  }
+
+  // Autosave (debounced) — doubles as the lock heartbeat.
+  let timer = null, dirty = false;
+  async function save() {
+    dirty = false;
+    status.textContent = 'Saving…';
+    const body = new URLSearchParams({ content: editor.getHTML() });
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+      const data = await r.json();
+      if (r.status === 409) { status.textContent = 'Locked — ' + data.locked_by + ' is editing. Your changes are not being saved.'; return; }
+      status.textContent = 'Saved ' + (data.saved_at || '');
+    } catch (e) {
+      status.textContent = 'Offline — will retry';
+      dirty = true;
+    }
+  }
+  function scheduleSave() {
+    dirty = true;
+    clearTimeout(timer);
+    timer = setTimeout(save, 1200);
+  }
+  editor.on('update', () => { scheduleSave(); refreshToolbar(); });
+  editor.on('selectionUpdate', refreshToolbar);
+  refreshToolbar();
+
+  // Heartbeat every 60s keeps the soft lock alive while idle.
+  setInterval(() => { if (!dirty) save(); }, 60000);
+
+  // Keep the title in sync via the same endpoint isn't wired (title saved on
+  // version/publish); persist title edits through autosave content only. To
+  // also save the title, send it along:
+  titleEl.addEventListener('blur', () => {
+    const body = new URLSearchParams({ content: editor.getHTML(), title: titleEl.value });
+    fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+  });
+
+  // Best-effort lock release on navigate away.
+  window.addEventListener('beforeunload', () => {
+    if (dirty) navigator.sendBeacon(url, new URLSearchParams({ content: editor.getHTML() }));
+  });
+</script>
+{% endif %}
+{% endblock %}

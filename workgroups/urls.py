@@ -43,4 +43,12 @@ urlpatterns = [
          name="meeting_reschedule"),
     path("<slug:slug>/meetings/<int:pk>/edit/", views.meeting_edit, name="meeting_edit"),
     path("<slug:slug>/meetings/<int:pk>/minutes/", views.meeting_minutes, name="meeting_minutes"),
+    # Collaborative working documents (Work tab)
+    path("<slug:slug>/docs/new/", views.draft_create, name="draft_create"),
+    path("<slug:slug>/docs/<int:pk>/", views.draft_edit, name="draft_edit"),
+    path("<slug:slug>/docs/<int:pk>/autosave/", views.draft_autosave, name="draft_autosave"),
+    path("<slug:slug>/docs/<int:pk>/version/", views.draft_save_version, name="draft_save_version"),
+    path("<slug:slug>/docs/<int:pk>/release/", views.draft_release_lock, name="draft_release_lock"),
+    path("<slug:slug>/docs/<int:pk>/publish/", views.draft_publish, name="draft_publish"),
+    path("<slug:slug>/docs/<int:pk>/delete/", views.draft_delete, name="draft_delete"),
 ]

@@ -291,6 +291,10 @@ def workgroup_detail(request, slug):
         )
         context["works_released"] = [w for w in works if not w.in_progress]
         context["works_in_progress"] = [w for w in works if w.in_progress]
+        # Collaborative working documents (drafts) — for active members.
+        if is_member:
+            context["drafts"] = list(wg.drafts.select_related("locked_by", "published_work"))
+            context["can_edit_docs"] = True
     elif active == "schedule" and wg.has_calendar and (is_member or archive_access):
         from django.utils import timezone as _tz
 
@@ -808,3 +812,189 @@ def my_calendar_ics(request, token):
     ]
     meetings = _ics_window(WorkgroupMeeting.objects.filter(workgroup_id__in=wg_ids))
     return _ics_response("LSP — my meetings", meetings, request.get_host())
+
+
+# --- Collaborative working documents (Work tab) -----------------------------
+
+#: Tags/attributes a published document may contain — matches TipTap StarterKit
+#: output. Editor content is member-authored but may be published publicly, so
+#: it's sanitized at publish time.
+_DOC_TAGS = {
+    "p", "br", "hr", "strong", "em", "b", "i", "u", "s", "h1", "h2", "h3",
+    "h4", "h5", "h6", "ul", "ol", "li", "blockquote", "pre", "code", "a",
+}
+_DOC_ATTRS = {"a": {"href", "title", "target"}}
+
+
+def _sanitize_document_html(html: str) -> str:
+    import nh3
+
+    return nh3.clean(html or "", tags=_DOC_TAGS, attributes=_DOC_ATTRS)
+
+
+def _doc_member_or_404(request, slug):
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not wg.is_member(request.user):
+        raise Http404
+    return wg
+
+
+def _get_draft(request, slug, pk):
+    from works.models import WorkDraft
+
+    wg = _doc_member_or_404(request, slug)
+    return wg, get_object_or_404(WorkDraft, pk=pk, workgroup=wg)
+
+
+@login_required
+@require_POST
+def draft_create(request, slug):
+    """Create a working document — native (editor) or a linked Google Doc."""
+    from works.models import WorkDraft
+
+    wg = _doc_member_or_404(request, slug)
+    title = (request.POST.get("title") or "").strip()[:200] or "Untitled document"
+    google_doc_url = (request.POST.get("google_doc_url") or "").strip()
+    draft = WorkDraft.objects.create(
+        workgroup=wg, title=title, google_doc_url=google_doc_url,
+        created_by=request.user, updated_by=request.user,
+    )
+    if draft.is_linked:
+        return redirect(f"{wg.get_absolute_url()}?tab=work")
+    return redirect("workgroups:draft_edit", slug=wg.slug, pk=draft.pk)
+
+
+@login_required
+def draft_edit(request, slug, pk):
+    """Full-page TipTap editor for one native document."""
+    wg, draft = _get_draft(request, slug, pk)
+    if draft.is_linked:
+        return redirect(draft.google_doc_url)
+    holder = draft.active_lock_holder()
+    can_edit = holder is None or holder.pk == request.user.pk
+    if can_edit:
+        draft.acquire_lock(request.user)
+    return render(request, "workgroups/draft_edit.html", {
+        "workgroup": wg, "draft": draft, "can_edit": can_edit,
+        "lock_holder": None if can_edit else holder,
+        "versions": list(draft.versions.select_related("saved_by")[:20]),
+        "can_publish": _can_manage_workgroup(wg, request.user),
+    })
+
+
+@login_required
+@require_POST
+def draft_autosave(request, slug, pk):
+    """Save the document body (debounced). Honours the soft edit lock."""
+    from django.http import JsonResponse
+    from django.utils import timezone
+
+    wg, draft = _get_draft(request, slug, pk)
+    holder = draft.active_lock_holder()
+    if holder is not None and holder.pk != request.user.pk:
+        return JsonResponse(
+            {"ok": False, "locked_by": holder.get_full_name() or holder.email},
+            status=409,
+        )
+    draft.content_html = request.POST.get("content", "")
+    fields = ["content_html", "updated_by", "locked_by", "locked_at", "updated_at"]
+    title = (request.POST.get("title") or "").strip()
+    if title:
+        draft.title = title[:200]
+        fields.append("title")
+    draft.updated_by = request.user
+    draft.locked_by = request.user
+    draft.locked_at = timezone.now()
+    draft.save(update_fields=fields)
+    saved_at = timezone.localtime(draft.updated_at).strftime("%-I:%M %p")
+    return JsonResponse({"ok": True, "saved_at": saved_at})
+
+
+@login_required
+@require_POST
+def draft_save_version(request, slug, pk):
+    from works.models import WorkDraftVersion
+
+    wg, draft = _get_draft(request, slug, pk)
+    WorkDraftVersion.objects.create(
+        draft=draft, content_html=draft.content_html,
+        label=(request.POST.get("label") or "").strip()[:120], saved_by=request.user,
+    )
+    return redirect("workgroups:draft_edit", slug=wg.slug, pk=draft.pk)
+
+
+@login_required
+@require_POST
+def draft_release_lock(request, slug, pk):
+    wg, draft = _get_draft(request, slug, pk)
+    if draft.locked_by_id == request.user.pk:
+        draft.locked_by = None
+        draft.locked_at = None
+        draft.save(update_fields=["locked_by", "locked_at"])
+    return redirect(f"{wg.get_absolute_url()}?tab=work")
+
+
+@login_required
+@require_POST
+def draft_delete(request, slug, pk):
+    wg, draft = _get_draft(request, slug, pk)
+    draft.delete()
+    return redirect(f"{wg.get_absolute_url()}?tab=work")
+
+
+@login_required
+@require_POST
+def draft_publish(request, slug, pk):
+    """Publish the document into a Work: rendered web version + attached PDF."""
+    from django.core.files.base import ContentFile
+    from django.utils.text import slugify
+
+    from works.models import Work, WorkDraftVersion, WorkFile
+    from works.pdf import render_document_pdf
+
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not _can_manage_workgroup(wg, request.user):
+        raise Http404
+    from works.models import WorkDraft
+
+    draft = get_object_or_404(WorkDraft, pk=pk, workgroup=wg)
+    if draft.is_linked:
+        return redirect(f"{wg.get_absolute_url()}?tab=work")
+
+    vis = request.POST.get("visibility")
+    if vis not in dict(Work.Visibility.choices):
+        vis = Work.Visibility.MEMBERS
+
+    work = draft.published_work
+    if work is None:
+        base = slugify(draft.title)[:200] or "document"
+        sslug, n = base, 2
+        while Work.objects.filter(slug=sslug).exists():
+            sslug = f"{base}-{n}"
+            n += 1
+        work = Work(slug=sslug, kind=Work.Kind.DOCUMENT, workgroup=wg,
+                    submitted_by=request.user)
+    safe_html = _sanitize_document_html(draft.content_html)
+    work.title = draft.title
+    work.body_html = safe_html
+    work.kind = Work.Kind.DOCUMENT
+    work.in_progress = False
+    work.listing_visibility = vis
+    work.pdf_visibility = vis
+    work.save()
+
+    # (Re)generate the attached PDF.
+    work.files.filter(label="Published PDF").delete()
+    pdf = render_document_pdf(title=draft.title, body_html=safe_html)
+    WorkFile.objects.create(
+        work=work, label="Published PDF",
+        file=ContentFile(pdf, name=f"{work.slug}.pdf"),
+    )
+
+    draft.published_work = work
+    draft.save(update_fields=["published_work"])
+    WorkDraftVersion.objects.create(
+        draft=draft, content_html=draft.content_html, label="Published",
+        saved_by=request.user,
+    )
+    return redirect(work.get_absolute_url())

@@ -1,5 +1,18 @@
 {% extends "core/base.html" %}
 {% block title %}{{ work.title }} — Works — LSP{% endblock %}
+{% block extra_head %}
+<style>
+  .pm-content > * + * { margin-top: 0.85em; }
+  .pm-content h1 { font-size: 1.6rem; font-weight: 600; }
+  .pm-content h2 { font-size: 1.3rem; font-weight: 600; }
+  .pm-content h3 { font-size: 1.1rem; font-weight: 600; }
+  .pm-content ul { list-style: disc; padding-left: 1.4em; }
+  .pm-content ol { list-style: decimal; padding-left: 1.4em; }
+  .pm-content blockquote { border-left: 3px solid currentColor; opacity: .8; padding-left: 1em; font-style: italic; }
+  .pm-content a { text-decoration: underline; }
+  .pm-content pre { background: rgba(0,0,0,.06); border-radius: .5rem; padding: .75em 1em; overflow-x: auto; }
+</style>
+{% endblock %}
 {% block content %}
 <article class="max-w-3xl mx-auto space-y-8">
 
@@ -136,6 +149,12 @@
   {% if work.abstract %}
   <div class="prose max-w-none">
     {{ work.abstract_html }}
+  </div>
+  {% endif %}
+
+  {% if work.body_html %}
+  <div class="pm-content max-w-none border-t border-base-300/50 pt-8 leading-relaxed space-y-4">
+    {{ work.body_html|safe }}
   </div>
   {% endif %}
 
