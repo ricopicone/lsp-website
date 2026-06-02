@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    MeetingSeries,
     Visibility,
     Workgroup,
     WorkgroupInvitation,
@@ -86,9 +87,17 @@ class WorkgroupTaskAdmin(admin.ModelAdmin):
 
 @admin.register(WorkgroupMeeting)
 class WorkgroupMeetingAdmin(admin.ModelAdmin):
-    list_display = ("__str__", "workgroup", "starts_at", "ends_at")
-    list_filter = ("workgroup__kind",)
+    list_display = ("__str__", "workgroup", "starts_at", "ends_at", "cancelled")
+    list_filter = ("workgroup__kind", "cancelled")
     search_fields = ("title", "workgroup__name", "location")
+    autocomplete_fields = ("workgroup", "series", "created_by")
+
+
+@admin.register(MeetingSeries)
+class MeetingSeriesAdmin(admin.ModelAdmin):
+    list_display = ("__str__", "workgroup", "frequency", "start_date", "end_date")
+    list_filter = ("frequency", "workgroup__kind")
+    search_fields = ("title", "workgroup__name")
     autocomplete_fields = ("workgroup", "created_by")
 
 

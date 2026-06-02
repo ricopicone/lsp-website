@@ -307,6 +307,8 @@ class Profile(models.Model):
         ),
     )
     notes = models.TextField(blank=True)
+    #: Opaque token for the member's private iCal feed (generated on first use).
+    calendar_token = models.CharField(max_length=64, blank=True, default="", db_index=True)
     is_persona = models.BooleanField(
         default=False,
         help_text=(

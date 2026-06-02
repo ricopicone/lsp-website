@@ -68,11 +68,15 @@ def generate_weekly(
     weekdays: Iterable[str],
     start_time: time,
     end_time: time,
+    interval: int = 1,
 ) -> list[SessionWindow]:
-    """Every occurrence of ``weekdays`` between ``start_date`` and ``end_date``."""
+    """Every occurrence of ``weekdays`` between ``start_date`` and ``end_date``.
+
+    ``interval`` is the week step (1 = weekly, 2 = biweekly, …)."""
     _check_dates(start_date, end_date, start_time, end_time)
     rule = rrule.rrule(
         freq=rrule.WEEKLY,
+        interval=interval,
         dtstart=datetime.combine(start_date, start_time),
         until=datetime.combine(end_date, end_time),
         byweekday=_validate_weekdays(weekdays),

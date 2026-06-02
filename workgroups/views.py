@@ -13,7 +13,7 @@ from django.views.decorators.http import require_POST
 
 from works.models import Work
 
-from .models import Workgroup, WorkgroupMembership
+from .models import Visibility, Workgroup, WorkgroupMeeting, WorkgroupMembership
 
 
 def _attached(workgroup, accessor):
@@ -291,22 +291,25 @@ def workgroup_detail(request, slug):
         )
         context["works_released"] = [w for w in works if not w.in_progress]
         context["works_in_progress"] = [w for w in works if w.in_progress]
-    elif active == "schedule" and wg.has_calendar and is_member:
+    elif active == "schedule" and wg.has_calendar and (is_member or archive_access):
         from django.utils import timezone as _tz
 
-        from .forms import WorkgroupMeetingForm
+        from .forms import MeetingSeriesForm, WorkgroupMeetingForm
 
         now = _tz.now()
-        context["upcoming_meetings"] = list(wg.meetings.filter(starts_at__gte=now))
+        context["upcoming_meetings"] = list(
+            wg.meetings.filter(starts_at__gte=now).select_related("series")
+        )
         context["past_meetings"] = list(
-            wg.meetings.filter(starts_at__lt=now).order_by("-starts_at")
+            wg.meetings.filter(starts_at__lt=now)
+            .select_related("series").order_by("-starts_at")[:50]
         )
         context["meeting_form"] = WorkgroupMeetingForm()
+        context["series_form"] = MeetingSeriesForm()
         # View/manage split: everyone with the tab sees the cadence, but only
-        # those who can schedule (stored members + managers) edit it. This keeps
-        # the Meeting of Analysts' calendar chair-managed, not editable by every
-        # auto-derived analyst.
+        # those who can schedule (stored members + managers) edit it.
         context["can_schedule"] = _can_schedule(wg, request.user)
+        context["calendar_feed_url"] = _calendar_feed_url(request, wg)
     elif active == "tasks" and wg.has_tasks and is_member:
         qs = wg.tasks.prefetch_related("assignees")
         q = (request.GET.get("q") or "").strip()
@@ -635,3 +638,173 @@ def meeting_delete(request, slug, pk):
 
     WorkgroupMeeting.objects.filter(pk=pk, workgroup=wg).delete()
     return redirect(f"{wg.get_absolute_url()}?tab=schedule")
+
+
+@login_required
+@require_POST
+def series_add(request, slug):
+    """Create a recurring meeting series and materialize its occurrences."""
+    wg = _schedule_or_404(request, slug)
+    from .forms import MeetingSeriesForm
+
+    form = MeetingSeriesForm(request.POST)
+    if form.is_valid():
+        series = form.save(commit=False)
+        series.workgroup = wg
+        series.weekdays = form.cleaned_data["weekdays"]
+        series.created_by = request.user
+        series.save()
+        series.generate()
+    return redirect(f"{wg.get_absolute_url()}?tab=schedule")
+
+
+@login_required
+@require_POST
+def series_delete(request, slug, pk):
+    """Delete a series and its future, un-minuted occurrences; keep the past."""
+    from django.utils import timezone
+
+    from .models import MeetingSeries
+
+    wg = _schedule_or_404(request, slug)
+    series = get_object_or_404(MeetingSeries, pk=pk, workgroup=wg)
+    series.meetings.filter(starts_at__gte=timezone.now(), minutes="").delete()
+    series.delete()   # remaining (past / minuted) occurrences detach (SET_NULL)
+    return redirect(f"{wg.get_absolute_url()}?tab=schedule")
+
+
+def _get_meeting(request, slug, pk):
+    wg = _schedule_or_404(request, slug)
+    from .models import WorkgroupMeeting
+
+    return wg, get_object_or_404(WorkgroupMeeting, pk=pk, workgroup=wg)
+
+
+@login_required
+@require_POST
+def meeting_cancel(request, slug, pk):
+    """Cancel (or restore) a single occurrence — kept as a record."""
+    wg, m = _get_meeting(request, slug, pk)
+    m.cancelled = not m.cancelled
+    m.cancellation_reason = (request.POST.get("reason") or "").strip()[:255] if m.cancelled else ""
+    m.is_override = True
+    m.save(update_fields=["cancelled", "cancellation_reason", "is_override"])
+    return redirect(f"{wg.get_absolute_url()}?tab=schedule")
+
+
+@login_required
+@require_POST
+def meeting_reschedule(request, slug, pk):
+    """Move a single occurrence to a new time."""
+    wg, m = _get_meeting(request, slug, pk)
+    from .forms import MeetingRescheduleForm
+
+    form = MeetingRescheduleForm(request.POST, instance=m)
+    if form.is_valid():
+        m = form.save(commit=False)
+        m.is_override = True
+        m.save()
+    return redirect(f"{wg.get_absolute_url()}?tab=schedule")
+
+
+@login_required
+@require_POST
+def meeting_edit(request, slug, pk):
+    """Edit a single occurrence's details (title / location / link / agenda)."""
+    wg, m = _get_meeting(request, slug, pk)
+    from .forms import WorkgroupMeetingForm
+
+    form = WorkgroupMeetingForm(request.POST, instance=m)
+    if form.is_valid():
+        m = form.save(commit=False)
+        m.is_override = True
+        m.save()
+    return redirect(f"{wg.get_absolute_url()}?tab=schedule")
+
+
+@login_required
+@require_POST
+def meeting_minutes(request, slug, pk):
+    """Record / update minutes for a meeting."""
+    wg, m = _get_meeting(request, slug, pk)
+    from .forms import MeetingMinutesForm
+
+    form = MeetingMinutesForm(request.POST, instance=m)
+    if form.is_valid():
+        form.save()
+    return redirect(f"{wg.get_absolute_url()}?tab=schedule")
+
+
+# --- iCal feeds (subscribe) -------------------------------------------------
+
+def _ensure_calendar_token(user) -> str:
+    profile = user.profile
+    if not profile.calendar_token:
+        import secrets
+        profile.calendar_token = secrets.token_urlsafe(24)
+        profile.save(update_fields=["calendar_token"])
+    return profile.calendar_token
+
+
+def _calendar_feed_url(request, wg):
+    """The iCal subscribe URL for this group's Schedule tab — open for a public
+    group, else the viewer's token-authed feed. None while impersonating (so we
+    don't mint a token for someone we're only viewing as)."""
+    base = request.build_absolute_uri(reverse("workgroups:calendar_ics", args=[wg.slug]))
+    if wg.landing_visibility == Visibility.PUBLIC:
+        return base
+    if request.user.is_authenticated and not getattr(request, "impersonator", None):
+        return f"{base}?token={_ensure_calendar_token(request.user)}"
+    return None
+
+
+def _ics_response(name, meetings, host):
+    from django.http import HttpResponse
+
+    from .icalendar import build_ics
+
+    resp = HttpResponse(
+        build_ics(name, meetings, host=host),
+        content_type="text/calendar; charset=utf-8",
+    )
+    resp["Content-Disposition"] = 'inline; filename="lsp.ics"'
+    return resp
+
+
+def _ics_window(qs):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    return (qs.filter(starts_at__gte=timezone.now() - timedelta(days=90))
+            .select_related("workgroup").order_by("starts_at"))
+
+
+def workgroup_calendar_ics(request, slug):
+    """iCal feed for one group's meetings. Open for a public group; otherwise
+    requires ``?token=`` of a member's calendar token."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if wg.landing_visibility != Visibility.PUBLIC:
+        from accounts.models import Profile
+
+        token = request.GET.get("token") or ""
+        profile = Profile.objects.filter(calendar_token=token).first() if token else None
+        if profile is None or not wg.is_member(profile.user):
+            raise Http404
+    return _ics_response(wg.name, _ics_window(wg.meetings), request.get_host())
+
+
+def my_calendar_ics(request, token):
+    """Personal iCal feed: every meeting of every group the token's owner is in."""
+    from accounts.models import Profile
+
+    profile = Profile.objects.filter(calendar_token=token).first() if token else None
+    if profile is None:
+        raise Http404
+    user = profile.user
+    wg_ids = [
+        wg.id for wg in Workgroup.objects.filter(has_calendar=True)
+        if wg.is_member(user)
+    ]
+    meetings = _ics_window(WorkgroupMeeting.objects.filter(workgroup_id__in=wg_ids))
+    return _ics_response("LSP — my meetings", meetings, request.get_host())

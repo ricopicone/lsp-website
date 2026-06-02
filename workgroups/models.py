@@ -935,20 +935,124 @@ class WorkgroupTask(models.Model):
                     and self.due_date < timezone.localdate())
 
 
+class MeetingSeries(models.Model):
+    """A recurring schedule that materializes :class:`WorkgroupMeeting`
+    occurrences (weekly / biweekly / monthly-ordinal). Editable defaults
+    (time, location, links) flow to the occurrences it generates."""
+
+    class Frequency(models.TextChoices):
+        WEEKLY = "weekly", _("Weekly")
+        BIWEEKLY = "biweekly", _("Every 2 weeks")
+        MONTHLY = "monthly", _("Monthly (nth weekday)")
+
+    workgroup = models.ForeignKey(
+        Workgroup, on_delete=models.CASCADE, related_name="meeting_series"
+    )
+    title = models.CharField(max_length=255, blank=True)
+    frequency = models.CharField(max_length=12, choices=Frequency.choices,
+                                 default=Frequency.WEEKLY)
+    #: Weekday codes, comma-separated: MO,TU,WE,TH,FR,SA,SU.
+    weekdays = models.CharField(max_length=32, default="MO")
+    #: Ordinal week-in-month for MONTHLY (1=first … 5, -1=last).
+    week_position = models.SmallIntegerField(default=1)
+    start_date = models.DateField()
+    end_date = models.DateField(help_text="The series runs through this date.")
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    location = models.CharField(max_length=255, blank=True)
+    online_url = models.URLField(blank=True)
+    access_info = models.CharField(
+        max_length=255, blank=True, help_text="Passcode / dial-in / room notes."
+    )
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="created_meeting_series",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-start_date",)
+        verbose_name_plural = "meeting series"
+
+    def __str__(self) -> str:
+        return f"{self.title or 'Series'} ({self.get_frequency_display()})"
+
+    def _windows(self):
+        from events.scheduling import (
+            generate_monthly_ordinal,
+            generate_weekly,
+        )
+
+        weekdays = [w.strip() for w in self.weekdays.split(",") if w.strip()]
+        if self.frequency == self.Frequency.MONTHLY:
+            return generate_monthly_ordinal(
+                start_date=self.start_date, end_date=self.end_date,
+                weekdays=weekdays, week_positions=[self.week_position],
+                start_time=self.start_time, end_time=self.end_time,
+            )
+        interval = 2 if self.frequency == self.Frequency.BIWEEKLY else 1
+        return generate_weekly(
+            start_date=self.start_date, end_date=self.end_date, weekdays=weekdays,
+            start_time=self.start_time, end_time=self.end_time, interval=interval,
+        )
+
+    @transaction.atomic
+    def generate(self):
+        """(Re)materialize FUTURE occurrences from the rule. Past occurrences
+        and per-occurrence overrides (rescheduled / cancelled / with minutes)
+        are preserved; only future, untouched rows are replaced."""
+        now = timezone.now()
+        self.meetings.filter(
+            starts_at__gte=now, is_override=False, cancelled=False, minutes="",
+        ).delete()
+        existing = set(
+            self.meetings.values_list("starts_at", flat=True)
+        )
+        created = []
+        for w in self._windows():
+            if w.start_at < now or w.start_at in existing:
+                continue
+            created.append(WorkgroupMeeting(
+                workgroup=self.workgroup, series=self,
+                title=self.title, starts_at=w.start_at, ends_at=w.end_at,
+                location=self.location, online_url=self.online_url,
+                access_info=self.access_info, note=self.description,
+                created_by=self.created_by,
+            ))
+        WorkgroupMeeting.objects.bulk_create(created)
+        return len(created)
+
+
 class WorkgroupMeeting(models.Model):
-    """A scheduled meeting / session for a workgroup's Schedule tab
-    (has_calendar). Lightweight and internal — distinct from public Events."""
+    """A single meeting occurrence on a workgroup's Schedule tab (has_calendar).
+    Standalone, or one occurrence of a :class:`MeetingSeries`. Lightweight and
+    internal — distinct from public Events."""
 
     workgroup = models.ForeignKey(
         Workgroup, on_delete=models.CASCADE, related_name="meetings"
+    )
+    series = models.ForeignKey(
+        MeetingSeries, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="meetings",
     )
     title = models.CharField(max_length=255, blank=True, help_text="Optional label.")
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField(null=True, blank=True)
     location = models.CharField(
-        max_length=255, blank=True, help_text="Room or video link."
+        max_length=255, blank=True, help_text="Room or short location."
     )
-    note = models.TextField(blank=True)
+    online_url = models.URLField(blank=True, help_text="Video-call link (Zoom, etc.).")
+    access_info = models.CharField(
+        max_length=255, blank=True, help_text="Passcode / dial-in / access notes."
+    )
+    note = models.TextField(blank=True, help_text="Agenda / description.")
+    minutes = models.TextField(blank=True, help_text="Minutes / notes recorded after.")
+    cancelled = models.BooleanField(default=False)
+    cancellation_reason = models.CharField(max_length=255, blank=True)
+    #: True once this occurrence is individually edited, so series regeneration
+    #: won't overwrite it.
+    is_override = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True, blank=True, on_delete=models.SET_NULL,

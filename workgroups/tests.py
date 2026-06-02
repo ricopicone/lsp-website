@@ -555,3 +555,118 @@ def test_reading_group_schedule_is_organizer_only(client):
     client.force_login(organizer)
     assert client.post(reverse("workgroups:meeting_add", args=[wg.slug]),
                        {"starts_at": "2099-01-15T18:00"}).status_code == 302
+
+
+# --- Meeting scheduler -------------------------------------------------------
+
+def _scheduler_wg_and_lead():
+    wg = _wg(kind=Workgroup.Kind.COMMITTEE, name="Sched WG", slug="sched-wg")
+    wg.has_calendar = True
+    wg.save()
+    lead = _user("lead@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=lead, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    return wg, lead
+
+
+def test_series_materializes_weekly_occurrences(client):
+    from workgroups.models import MeetingSeries, WorkgroupMeeting
+
+    wg, lead = _scheduler_wg_and_lead()
+    client.force_login(lead)
+    client.post(reverse("workgroups:series_add", args=[wg.slug]), {
+        "title": "Weekly seminar", "frequency": "weekly", "weekdays": ["TH"],
+        "week_position": "1", "start_date": "2099-01-01", "end_date": "2099-01-31",
+        "start_time": "18:00", "end_time": "19:30",
+        "location": "Online", "online_url": "https://zoom.example/x",
+        "access_info": "", "description": "",
+    })
+    series = MeetingSeries.objects.get(workgroup=wg)
+    occ = WorkgroupMeeting.objects.filter(series=series)
+    assert occ.count() >= 4                       # the Thursdays of Jan 2099
+    assert all(m.online_url == "https://zoom.example/x" for m in occ)
+
+
+def test_meeting_cancel_reschedule_minutes(client):
+    from workgroups.models import WorkgroupMeeting
+
+    wg, lead = _scheduler_wg_and_lead()
+    m = WorkgroupMeeting.objects.create(
+        workgroup=wg, starts_at=datetime.datetime(2099, 3, 1, 18, 0, tzinfo=datetime.timezone.utc),
+    )
+    client.force_login(lead)
+
+    client.post(reverse("workgroups:meeting_cancel", args=[wg.slug, m.pk]), {"reason": "Holiday"})
+    m.refresh_from_db()
+    assert m.cancelled and m.cancellation_reason == "Holiday" and m.is_override
+
+    client.post(reverse("workgroups:meeting_reschedule", args=[wg.slug, m.pk]),
+                {"starts_at": "2099-03-08T18:00", "ends_at": "2099-03-08T19:30"})
+    m.refresh_from_db()
+    from django.utils import timezone as _tz
+    assert _tz.localtime(m.starts_at).date() == datetime.date(2099, 3, 8)
+
+    client.post(reverse("workgroups:meeting_minutes", args=[wg.slug, m.pk]),
+                {"minutes": "We discussed the Sinthome."})
+    m.refresh_from_db()
+    assert "Sinthome" in m.minutes
+
+
+def test_series_delete_keeps_past_and_minuted(client):
+    from workgroups.models import MeetingSeries, WorkgroupMeeting
+
+    wg, lead = _scheduler_wg_and_lead()
+    series = MeetingSeries.objects.create(
+        workgroup=wg, frequency="weekly", weekdays="TH",
+        start_date=datetime.date(2099, 1, 1), end_date=datetime.date(2099, 1, 31),
+        start_time=datetime.time(18), end_time=datetime.time(19),
+    )
+    past = WorkgroupMeeting.objects.create(
+        workgroup=wg, series=series,
+        starts_at=datetime.datetime(2020, 1, 1, 18, tzinfo=datetime.timezone.utc),
+    )
+    future = WorkgroupMeeting.objects.create(
+        workgroup=wg, series=series,
+        starts_at=datetime.datetime(2099, 6, 1, 18, tzinfo=datetime.timezone.utc),
+    )
+    client.force_login(lead)
+    client.post(reverse("workgroups:series_delete", args=[wg.slug, series.pk]))
+
+    assert not MeetingSeries.objects.filter(pk=series.pk).exists()
+    past.refresh_from_db()
+    assert past.series_id is None                 # kept (record), detached
+    assert not WorkgroupMeeting.objects.filter(pk=future.pk).exists()   # future removed
+
+
+def test_ical_feeds(client):
+    from workgroups.models import Visibility, WorkgroupMeeting, build_workgroup
+
+    # Public reading group → open feed.
+    pub = build_workgroup(Workgroup.Kind.READING_GROUP, name="Freud RG", slug="freud-ical")
+    assert pub.landing_visibility == Visibility.PUBLIC
+    WorkgroupMeeting.objects.create(
+        workgroup=pub, title="Session",
+        starts_at=datetime.datetime(2099, 2, 1, 18, tzinfo=datetime.timezone.utc),
+    )
+    resp = client.get(reverse("workgroups:calendar_ics", args=[pub.slug]))
+    assert resp.status_code == 200
+    assert resp["Content-Type"].startswith("text/calendar")
+    assert b"BEGIN:VCALENDAR" in resp.content and b"Session" in resp.content
+
+    # Members-only group → needs a member's token.
+    wg, lead = _scheduler_wg_and_lead()
+    WorkgroupMeeting.objects.create(
+        workgroup=wg, starts_at=datetime.datetime(2099, 2, 2, 18, tzinfo=datetime.timezone.utc),
+    )
+    assert client.get(reverse("workgroups:calendar_ics", args=[wg.slug])).status_code == 404
+    lead.profile.calendar_token = "tok-abc"
+    lead.profile.save()
+    ok = client.get(reverse("workgroups:calendar_ics", args=[wg.slug]) + "?token=tok-abc")
+    assert ok.status_code == 200
+
+    # Personal feed via token → the member's group meetings.
+    mine = client.get(reverse("workgroups:my_calendar_ics", args=["tok-abc"]))
+    assert mine.status_code == 200 and b"BEGIN:VCALENDAR" in mine.content
+    assert client.get(reverse("workgroups:my_calendar_ics", args=["bogus"])).status_code == 404
