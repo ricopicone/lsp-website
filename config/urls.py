@@ -55,6 +55,7 @@ urlpatterns = [
          _event_views.program_admin_event_edit,
          name="program_admin_event_edit"),
     path("staff/", _staff_views.home, name="staff"),
+    path("staff/docs/<slug:slug>/", _staff_views.doc, name="staff_doc"),
     path("staff/aphorisms/", _staff_views.aphorism_list, name="staff_aphorisms"),
     path("staff/aphorisms/new/", _staff_views.aphorism_create, name="staff_aphorism_new"),
     path("staff/aphorisms/<int:pk>/edit/", _staff_views.aphorism_edit,

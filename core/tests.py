@@ -505,3 +505,34 @@ def test_meeting_of_analysts_committee_seeded(db):
 
     c = Committee.objects.get(slug="meeting-of-analysts")
     assert c.workgroup_id is not None
+
+
+# ---- Staff hub Documentation section ----------------------------------
+
+@pytest.mark.django_db
+def test_staff_docs_section_and_groups_guide(client):
+    from accounts.models import User
+
+    admin = User.objects.create_user(
+        email="admin-docs@x.test", password="x", is_staff=True, is_superuser=True
+    )
+    client.force_login(admin)
+    home = client.get("/staff/")
+    assert home.status_code == 200
+    assert b"Documentation" in home.content
+    assert b"/staff/docs/groups-guide/" in home.content
+
+    guide = client.get("/staff/docs/groups-guide/")
+    assert guide.status_code == 200
+    assert b"A guide to Groups" in guide.content        # the doc's H1, rendered
+
+    assert client.get("/staff/docs/does-not-exist/").status_code == 404
+
+
+@pytest.mark.django_db
+def test_staff_doc_denied_without_hub_access(client):
+    from accounts.models import User
+
+    nobody = User.objects.create_user(email="nobody-docs@x.test", password="x")
+    client.force_login(nobody)
+    assert client.get("/staff/docs/groups-guide/").status_code == 403
