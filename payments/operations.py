@@ -15,6 +15,7 @@ import logging
 
 from django.db import transaction
 
+from accounts.models import Source
 from registrations.models import Registration
 
 from .emails import send_paid_emails, send_payment_receipt
@@ -32,6 +33,12 @@ def complete_payment(payment: Payment) -> None:
     """
     with transaction.atomic():
         payment.mark_succeeded()
+        # A completed Stripe payment is real money confirmed → verified
+        # provenance. Offline/manual completions keep their existing source
+        # (STAFF by default).
+        if payment.method == Payment.Method.STRIPE and payment.source != Source.VERIFIED:
+            payment.source = Source.VERIFIED
+            payment.save(update_fields=("source",))
         if payment.registration_id:
             Registration.objects.filter(
                 pk=payment.registration_id,
