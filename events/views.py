@@ -163,6 +163,7 @@ def program(request):
         "available_years": distinct_years,
         "is_current_year": year == current,
         "is_preview":      not program_obj.is_public_now,
+        "can_propose_seminar": is_lsp_member(request.user),
     })
 
 
@@ -499,17 +500,13 @@ def program_admin_event_edit(request, academic_year: str, slug: str):
 
 # ---- Seminar proposals (M12.5) ----------------------------------------
 
-def _is_faculty(user) -> bool:
-    profile = getattr(user, "profile", None)
-    return bool(getattr(user, "is_authenticated", False)
-                and profile is not None and profile.is_faculty)
-
-
 @login_required
 def seminar_propose(request):
-    """A faculty member proposes a seminar (new or a new term of an existing
-    one). The page also lists the proposer's own proposals + statuses."""
-    if not _is_faculty(request.user):
+    """Any LSP member proposes a seminar (new, or a new year of an existing
+    one); the page also lists the proposer's own proposals + statuses. Teaching
+    a seminar is what confers faculty standing, so proposing doesn't require it —
+    the faculty flag is granted to a seminar's instructors when it's approved."""
+    if not is_lsp_member(request.user):
         raise Http404()
     from .forms import SeminarProposalForm
     from .models import SeminarProposal

@@ -519,3 +519,26 @@ def test_archive_view_gated_and_settings_reachable_after_archive(client):
     resp = client.get(f"{wg.get_absolute_url()}?tab=settings")
     assert resp.status_code == 200
     assert b"Reactivate group" in resp.content
+
+
+def test_reading_group_schedule_is_organizer_only(client):
+    """Open-join reading-group members can't manage the calendar — only
+    organizers (leads) / staff do."""
+    wg = _wg(kind=Workgroup.Kind.READING_GROUP, name="RG Schedule",
+             open_join=True, landing_visibility=Visibility.PUBLIC)
+    organizer = _user("rg-org@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=organizer, role=WorkgroupMembership.Role.ORGANIZER,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    member = _user("rg-member@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=member, role=WorkgroupMembership.Role.MEMBER,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    client.force_login(member)
+    assert client.post(reverse("workgroups:meeting_add", args=[wg.slug]),
+                       {"starts_at": "2099-01-15T18:00"}).status_code == 404
+    client.force_login(organizer)
+    assert client.post(reverse("workgroups:meeting_add", args=[wg.slug]),
+                       {"starts_at": "2099-01-15T18:00"}).status_code == 302

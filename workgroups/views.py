@@ -511,12 +511,15 @@ def _member_or_404(request, slug):
 
 
 def _can_schedule(wg, user) -> bool:
-    """Who may add/remove meetings: managers, or any *stored* member. Excludes
-    purely auto-derived members (e.g. analysts in the Meeting of Analysts), so a
-    standing body's cadence stays chair-managed while cartel/working-group
-    members keep their member-open schedule."""
+    """Who may add/remove meetings. Managers always. Reading groups are
+    scheduled by their **organizers (managers) only** — open-join members don't
+    manage the calendar. Other kinds also let any *stored* member schedule;
+    purely auto-derived members (e.g. analysts in the Meeting of Analysts) are
+    not stored members, so its cadence stays chair-managed."""
     if _can_manage_workgroup(wg, user):
         return True
+    if wg.kind == Workgroup.Kind.READING_GROUP:
+        return False
     return (
         getattr(user, "is_authenticated", False)
         and wg.memberships.filter(user=user, end_date__isnull=True).exists()

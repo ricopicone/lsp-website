@@ -26,7 +26,7 @@
       {% if is_current_year %}current{% else %}{{ year }}{% endif %} academic year.
       Click any title for full details, dates, and registration.
     </p>
-    {% if user.profile.is_faculty %}
+    {% if can_propose_seminar %}
     <p><a href="{% url 'seminar_propose' %}" class="btn btn-outline btn-sm">Propose a seminar →</a></p>
     {% endif %}
   </header>

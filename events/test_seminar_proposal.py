@@ -24,6 +24,14 @@ def _faculty(email="fac@x.test"):
     return u
 
 
+def _member(email="member@x.test"):
+    """An LSP member who is NOT (yet) faculty."""
+    u = User.objects.create_user(email=email, password="x")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    return u
+
+
 def _pc_member(email="pc@x.test"):
     u = User.objects.create_user(email=email, password="x")
     u.profile.role = Profile.Role.ANALYST
@@ -47,11 +55,28 @@ def _register(user, event):
     )
 
 
-def test_propose_gated_to_faculty(client):
-    client.force_login(_pc_member("plain@x.test"))   # PC but not faculty
-    assert client.get("/propose-seminar/").status_code == 404
-    client.force_login(_faculty())
+def test_propose_open_to_any_member_not_outsiders(client):
+    # Any LSP member may propose (teaching is what makes you faculty, not a
+    # prerequisite for proposing).
+    client.force_login(_member())
     assert client.get("/propose-seminar/").status_code == 200
+    # A non-member (external role) may not.
+    outsider = User.objects.create_user(email="ext@x.test", password="x")
+    client.force_login(outsider)
+    assert client.get("/propose-seminar/").status_code == 404
+
+
+def test_approving_seminar_confers_faculty_on_instructors(client):
+    member = _member("teacher@x.test")
+    assert member.profile.is_faculty is False
+    start, end = _future()
+    p = SeminarProposal.objects.create(
+        proposed_by=member, title="First Seminar", start_date=start, end_date=end,
+    )
+    p.faculty.add(member)
+    p.approve(_pc_member())
+    member.profile.refresh_from_db()
+    assert member.profile.is_faculty is True   # teaching a seminar made them faculty
 
 
 def test_propose_creates_proposal(client):
