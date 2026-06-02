@@ -41,7 +41,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from accounts.models import User
+from accounts.models import Source, User
 from payments.models import (
     DuesPeriod,
     Payment,
@@ -228,6 +228,7 @@ class Command(BaseCommand):
                 enrollment, _ = TuitionEnrollment.objects.get_or_create(
                     user_id=uid, tuition_period=period,
                     defaults={"status": status,
+                              "source": Source.IMPORTED,
                               "notes": f"Backfilled from {ds.rel_path}."},
                 )
                 # Refresh status from the (possibly more complete) ledger total.
@@ -270,6 +271,7 @@ class Command(BaseCommand):
                     amount=r.amount,
                     status=Payment.Status.SUCCEEDED,
                     method=method,
+                    source=Source.IMPORTED,
                     tuition_installment=installment,
                     paid_at=_aware(r.paid_on),
                     notes=" | ".join(b for b in note_bits if b),
@@ -300,6 +302,7 @@ class Command(BaseCommand):
                 amount=r.amount,
                 status=Payment.Status.SUCCEEDED,
                 method=method,
+                source=Source.IMPORTED,
                 dues_period=(None if is_donation else period),
                 paid_at=_aware(r.paid_on),
                 notes=" | ".join(b for b in note_bits if b),

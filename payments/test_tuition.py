@@ -1538,12 +1538,16 @@ def test_assume_skip_when_unpaid(current_period):
 
     call_command("assume_skip_when_unpaid", "--commit", stdout=StringIO())
 
+    from accounts.models import Source
+
     enr_a.refresh_from_db()
     enr_b.refresh_from_db()
     assert enr_a.status == TuitionEnrollment.Status.SKIPPING
+    assert enr_a.source == Source.ASSUMED
     assert enr_b.status == TuitionEnrollment.Status.PAYMENT_PLAN  # partial payer preserved
     c_enr = TuitionEnrollment.objects.get(user=c, tuition_period=current_period)
     assert c_enr.status == TuitionEnrollment.Status.SKIPPING
+    assert c_enr.source == Source.ASSUMED
 
     # Idempotent: a second run changes nothing.
     before = TuitionEnrollment.objects.count()

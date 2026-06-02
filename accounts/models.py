@@ -498,3 +498,103 @@ class EmailChangeRequest(models.Model):
     @property
     def is_pending(self) -> bool:
         return self.confirmed_at is None and not self.is_expired()
+
+
+class Source(models.TextChoices):
+    """Provenance of a tuition/dues/membership record.
+
+    Lets a later authoritative import *promote* a value (e.g. self-reported →
+    verified) instead of clobbering it, and lets the treasurer see how much of
+    the history is confirmed vs assumed. Shared by ``MembershipTenure`` and the
+    ``payments`` models (``TuitionEnrollment`` / ``Payment``)."""
+
+    VERIFIED = "verified", _("Verified against records")
+    IMPORTED = "imported", _("Imported from treasurer ledger")
+    SELF_REPORTED = "self_reported", _("Member-reported (survey)")
+    ASSUMED = "assumed", _("Assumed")
+    STAFF = "staff", _("Entered by staff")
+
+
+class MembershipTenure(models.Model):
+    """One stint in one role, in academic-year terms.
+
+    A member's tenures (ordered by ``start_ay``) reconstruct which role they
+    held in any past academic year — the missing timeline that lets us derive
+    per-year tuition/dues obligations instead of proxying. ``Profile.role``
+    stays the live cache for present-day access/pricing; the open tenure
+    (``end_ay is None``) mirrors it.
+    """
+
+    user = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="tenures",
+    )
+    role = models.CharField(max_length=32, choices=Profile.Role.choices)
+    start_ay = models.PositiveSmallIntegerField(
+        help_text="Academic-year start year, e.g. 2019 for AY 2019–2020.",
+    )
+    end_ay = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text="AY start year this role ended (inclusive); blank = ongoing.",
+    )
+    source = models.CharField(
+        max_length=20, choices=Source.choices, default=Source.STAFF,
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("user", "start_ay")
+        indexes = [models.Index(fields=("user", "start_ay"))]
+
+    def __str__(self):
+        end = self.end_ay if self.end_ay is not None else "present"
+        return f"{self.user} — {self.get_role_display()} ({self.start_ay}–{end})"
+
+    @classmethod
+    def role_at(cls, user, ay: int):
+        """The role ``user`` held in academic year ``ay`` (start year), or None."""
+        tenure = (
+            cls.objects.filter(user=user, start_ay__lte=ay)
+            .filter(models.Q(end_ay__gte=ay) | models.Q(end_ay__isnull=True))
+            .order_by("-start_ay")
+            .first()
+        )
+        return tenure.role if tenure else None
+
+    @classmethod
+    def was_in_training(cls, user, ay: int) -> bool:
+        """True if ``user`` was in an in-training (tuition-owing) role in ``ay``."""
+        return cls.role_at(user, ay) in Profile.IN_TRAINING_ROLES
+
+
+class MemberIntakeSurvey(models.Model):
+    """Raw capture of a member's launch intake survey.
+
+    Stored verbatim so we can re-derive the structured records (tenures,
+    enrollments, dues payments) if our logic changes, and keep an audit trail
+    separate from those records. ``grid`` holds the per-year answers, e.g.
+    ``{"2024": {"tuition": true, "dues": true}}``.
+    """
+
+    user = models.OneToOneField(
+        "accounts.User", on_delete=models.CASCADE, related_name="intake_survey",
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    year_joined = models.PositiveSmallIntegerField(null=True, blank=True)
+    payment_names = models.CharField(
+        max_length=255, blank=True,
+        help_text="Alternate name(s) the member used on payments.",
+    )
+    payment_emails = models.CharField(
+        max_length=255, blank=True,
+        help_text="Other email(s) used for Stripe / PayPal.",
+    )
+    grid = models.JSONField(default=dict, blank=True)
+    applied_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the answers were reconciled into structured records.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        state = "submitted" if self.submitted_at else "draft"
+        return f"Intake survey: {self.user} ({state})"

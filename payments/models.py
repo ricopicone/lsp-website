@@ -7,6 +7,8 @@ from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from accounts.models import Source  # provenance flag, shared with MembershipTenure
+
 
 class DuesPeriod(models.Model):
     """An academic year's dues cycle (REG-12).
@@ -186,6 +188,13 @@ class Payment(models.Model):
         help_text="The tuition installment this payment satisfies — set for type=TUITION.",
     )
     notes = models.TextField(blank=True, help_text="Staff notes — e.g. for offline payments.")
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.STAFF,
+        db_index=True,
+        help_text="Provenance — how this record entered the system.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)
 
@@ -370,6 +379,13 @@ class TuitionEnrollment(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices)
     decided_at = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True, help_text="Staff notes — overrides, special arrangements.")
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.STAFF,
+        db_index=True,
+        help_text="Provenance — how this enrollment record entered the system.",
+    )
 
     class Meta:
         constraints = [

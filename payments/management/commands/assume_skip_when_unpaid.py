@@ -29,7 +29,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from accounts.models import Profile, User
+from accounts.models import Profile, Source, User
 from payments.models import Payment, TuitionEnrollment, TuitionPeriod
 
 
@@ -90,8 +90,9 @@ class Command(BaseCommand):
                     period_flipped += 1
                     if commit:
                         e.status = TuitionEnrollment.Status.SKIPPING
+                        e.source = Source.ASSUMED
                         e.notes = (e.notes + "\n" + note).strip() if e.notes else note
-                        e.save(update_fields=["status", "notes"])
+                        e.save(update_fields=["status", "source", "notes"])
 
                 period_created = 0
                 if do_backfill:
@@ -109,6 +110,7 @@ class Command(BaseCommand):
                             TuitionEnrollment.objects.create(
                                 user=u, tuition_period=period,
                                 status=TuitionEnrollment.Status.SKIPPING,
+                                source=Source.ASSUMED,
                                 notes=row_note,
                             )
 
