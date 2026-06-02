@@ -810,6 +810,30 @@ def test_draft_republish_updates_same_work(client):
     assert work.title == "V2"
     assert "two" in work.body_html
     assert work.files.filter(label="Published PDF").count() == 1   # not duplicated
+    assert work.publication_date is not None                       # stamped on publish
+    # Two publishes → two "Published" snapshots (revision history).
+    assert draft.versions.filter(label="Published").count() == 2
+
+
+def test_published_work_page_shows_provenance_and_revisions(client):
+    wg = _wg(name="The Letter", slug="the-letter")
+    manager = _member_of(wg, "mgr@x.test")
+    manager.is_superuser = True
+    manager.save()
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.create(workgroup=wg, title="Findings",
+                                     content_html="<p>body</p>")
+    client.force_login(manager)
+    client.post(reverse("workgroups:draft_publish", args=[wg.slug, draft.pk]),
+                {"visibility": "public"})
+    draft.refresh_from_db()
+    resp = client.get(draft.published_work.get_absolute_url())
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "Published by" in body
+    assert "The Letter" in body              # group name (provenance)
+    assert "Revision history" in body
+    assert "Revision 1" in body
 
 
 def test_draft_delete(client):
@@ -831,7 +855,8 @@ def test_draft_edit_page_renders_and_acquires_lock(client):
     client.force_login(u)
     resp = client.get(reverse("workgroups:draft_edit", args=[wg.slug, draft.pk]))
     assert resp.status_code == 200
-    assert b"@tiptap/core" in resp.content
+    assert b"js/vendor/doc-editor.js" in resp.content   # vendored bundle, no CDN
+    assert b"LSPDocEditor.init" in resp.content
     draft.refresh_from_db()
     assert draft.locked_by_id == u.pk
 

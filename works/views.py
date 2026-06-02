@@ -75,10 +75,23 @@ def detail(request, slug):
     work = get_object_or_404(_annotated_qs(request.user), slug=slug)
     if not work.listing_visible_to(request.user):
         raise Http404()
+    # Publication revisions — the "Published" snapshots of the source draft,
+    # oldest → newest, so each carries a stable revision number.
+    revisions = []
+    draft = getattr(work, "source_draft", None)
+    if draft is not None:
+        pubs = list(draft.versions.filter(label="Published")
+                    .select_related("saved_by").order_by("saved_at"))
+        revisions = [
+            {"number": i + 1, "saved_at": v.saved_at, "saved_by": v.saved_by}
+            for i, v in enumerate(pubs)
+        ]
+        revisions.reverse()  # newest first for display
     return render(request, "works/detail.html", {
         "work": work,
         "can_edit": work.editable_by(request.user),
         "pdf_visible": work.pdf_visible_to(request.user),
+        "revisions": revisions,
     })
 
 

@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load static %}
 {% block title %}{{ draft.title }} — {{ workgroup.name }}{% endblock %}
 
 {% block extra_head %}
@@ -101,105 +102,16 @@
 </div>
 
 {% if can_edit %}
-<script type="module">
-  import { Editor } from 'https://esm.sh/@tiptap/core@2.11.5';
-  import StarterKit from 'https://esm.sh/@tiptap/starter-kit@2.11.5';
-  import Link from 'https://esm.sh/@tiptap/extension-link@2.11.5';
-  import Placeholder from 'https://esm.sh/@tiptap/extension-placeholder@2.11.5';
-
-  const root = document.querySelector('[data-draft-url]');
-  const url = root.dataset.draftUrl;
-  const csrf = document.getElementById('csrf').value;
-  const status = document.getElementById('save-status');
-  const titleEl = document.getElementById('doc-title');
-
-  const editor = new Editor({
-    element: document.getElementById('editor'),
-    extensions: [
-      StarterKit.configure({ link: false }),
-      Link.configure({ openOnClick: false }),
-      Placeholder.configure({ placeholder: 'Start writing…' }),
-    ],
-    content: '',
-  });
-  editor.commands.setContent(`{{ draft.content_html|escapejs }}`);
-
-  // Toolbar
-  const tb = document.getElementById('toolbar');
-  const buttons = [
-    ['Bold', () => editor.chain().focus().toggleBold().run(), () => editor.isActive('bold')],
-    ['Italic', () => editor.chain().focus().toggleItalic().run(), () => editor.isActive('italic')],
-    ['H1', () => editor.chain().focus().toggleHeading({level:1}).run(), () => editor.isActive('heading',{level:1})],
-    ['H2', () => editor.chain().focus().toggleHeading({level:2}).run(), () => editor.isActive('heading',{level:2})],
-    ['H3', () => editor.chain().focus().toggleHeading({level:3}).run(), () => editor.isActive('heading',{level:3})],
-    ['• List', () => editor.chain().focus().toggleBulletList().run(), () => editor.isActive('bulletList')],
-    ['1. List', () => editor.chain().focus().toggleOrderedList().run(), () => editor.isActive('orderedList')],
-    ['Quote', () => editor.chain().focus().toggleBlockquote().run(), () => editor.isActive('blockquote')],
-    ['Code', () => editor.chain().focus().toggleCodeBlock().run(), () => editor.isActive('codeBlock')],
-    ['Link', () => {
-      const prev = editor.getAttributes('link').href || '';
-      const href = window.prompt('Link URL', prev);
-      if (href === null) return;
-      if (href === '') { editor.chain().focus().unsetLink().run(); return; }
-      editor.chain().focus().extendMarkRange('link').setLink({ href }).run();
-    }, () => editor.isActive('link')],
-    ['↶', () => editor.chain().focus().undo().run(), () => false],
-    ['↷', () => editor.chain().focus().redo().run(), () => false],
-  ];
-  const els = buttons.map(([label, cmd]) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.textContent = label; b.className = 'pm-btn hover:bg-base-200';
-    b.addEventListener('click', () => cmd());
-    tb.appendChild(b);
-    return b;
-  });
-  function refreshToolbar() {
-    buttons.forEach(([, , active], i) => els[i].classList.toggle('is-active', active()));
-  }
-
-  // Autosave (debounced) — doubles as the lock heartbeat.
-  let timer = null, dirty = false;
-  async function save() {
-    dirty = false;
-    status.textContent = 'Saving…';
-    const body = new URLSearchParams({ content: editor.getHTML() });
-    try {
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/x-www-form-urlencoded' },
-        body,
-      });
-      const data = await r.json();
-      if (r.status === 409) { status.textContent = 'Locked — ' + data.locked_by + ' is editing. Your changes are not being saved.'; return; }
-      status.textContent = 'Saved ' + (data.saved_at || '');
-    } catch (e) {
-      status.textContent = 'Offline — will retry';
-      dirty = true;
-    }
-  }
-  function scheduleSave() {
-    dirty = true;
-    clearTimeout(timer);
-    timer = setTimeout(save, 1200);
-  }
-  editor.on('update', () => { scheduleSave(); refreshToolbar(); });
-  editor.on('selectionUpdate', refreshToolbar);
-  refreshToolbar();
-
-  // Heartbeat every 60s keeps the soft lock alive while idle.
-  setInterval(() => { if (!dirty) save(); }, 60000);
-
-  // Keep the title in sync via the same endpoint isn't wired (title saved on
-  // version/publish); persist title edits through autosave content only. To
-  // also save the title, send it along:
-  titleEl.addEventListener('blur', () => {
-    const body = new URLSearchParams({ content: editor.getHTML(), title: titleEl.value });
-    fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/x-www-form-urlencoded' }, body });
-  });
-
-  // Best-effort lock release on navigate away.
-  window.addEventListener('beforeunload', () => {
-    if (dirty) navigator.sendBeacon(url, new URLSearchParams({ content: editor.getHTML() }));
+<script src="{% static 'js/vendor/doc-editor.js' %}"></script>
+<script>
+  window.LSPDocEditor.init({
+    mount: "#editor",
+    toolbar: "#toolbar",
+    statusEl: "#save-status",
+    titleEl: "#doc-title",
+    autosaveUrl: "{% url 'workgroups:draft_autosave' workgroup.slug draft.pk %}",
+    csrf: document.getElementById("csrf").value,
+    initialHTML: `{{ draft.content_html|escapejs }}`,
   });
 </script>
 {% endif %}

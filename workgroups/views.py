@@ -974,6 +974,8 @@ def draft_publish(request, slug, pk):
             n += 1
         work = Work(slug=sslug, kind=Work.Kind.DOCUMENT, workgroup=wg,
                     submitted_by=request.user)
+    from django.utils import timezone
+
     safe_html = _sanitize_document_html(draft.content_html)
     work.title = draft.title
     work.body_html = safe_html
@@ -981,11 +983,20 @@ def draft_publish(request, slug, pk):
     work.in_progress = False
     work.listing_visibility = vis
     work.pdf_visibility = vis
+    # First publish stamps the publication date; re-publishes bump the revision.
+    if work.publication_date is None:
+        work.publication_date = timezone.localdate()
     work.save()
 
-    # (Re)generate the attached PDF.
+    revision = draft.versions.filter(label="Published").count() + 1
+
+    # (Re)generate the attached PDF with the document's provenance block.
     work.files.filter(label="Published PDF").delete()
-    pdf = render_document_pdf(title=draft.title, body_html=safe_html)
+    pdf = render_document_pdf(
+        title=draft.title, body_html=safe_html,
+        group_kind=wg.get_kind_display(), group_name=wg.name,
+        published_date=work.publication_date, revision=revision,
+    )
     WorkFile.objects.create(
         work=work, label="Published PDF",
         file=ContentFile(pdf, name=f"{work.slug}.pdf"),

@@ -50,8 +50,15 @@
       <p class="text-sm text-base-content/70">
         {% if work.publication_info %}{{ work.publication_info }}{% endif %}
         {% if work.publication_date %}
-          {% if work.publication_info %} · {% endif %}{{ work.publication_date|date:"F Y" }}
+          {% if work.publication_info %} · {% endif %}{{ work.publication_date|date:"F j, Y" }}
         {% endif %}
+      </p>
+      {% endif %}
+      {% if work.workgroup %}
+      <p class="text-sm text-base-content/70">
+        <span class="text-base-content/50">Published by</span>
+        {{ work.workgroup.get_kind_display }} ·
+        <a href="{{ work.workgroup.get_absolute_url }}" class="hover:text-primary border-b border-dotted border-base-content/40">{{ work.workgroup.name }}</a>
       </p>
       {% endif %}
       <div class="flex flex-wrap items-center gap-2 text-xs">
@@ -156,6 +163,22 @@
   <div class="pm-content max-w-none border-t border-base-300/50 pt-8 leading-relaxed space-y-4">
     {{ work.body_html|safe }}
   </div>
+  {% endif %}
+
+  {% if revisions %}
+  <section class="border-t border-base-300/50 pt-6 space-y-3">
+    <h2 class="text-xs uppercase tracking-wider text-base-content/60">Revision history</h2>
+    <ul class="space-y-1.5 text-sm">
+      {% for r in revisions %}
+      <li class="flex flex-wrap items-baseline gap-x-2 text-base-content/70">
+        <span class="font-medium text-base-content">Revision {{ r.number }}</span>
+        <span>· {{ r.saved_at|date:"F j, Y" }}</span>
+        {% if r.saved_by %}<span>· {{ r.saved_by.get_full_name|default:r.saved_by.email }}</span>{% endif %}
+        {% if forloop.first %}<span class="badge badge-ghost badge-sm">current</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
   {% endif %}
 
 </article>
