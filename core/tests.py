@@ -524,7 +524,7 @@ def test_staff_docs_section_and_groups_guide(client):
 
     guide = client.get("/staff/docs/groups-guide/")
     assert guide.status_code == 200
-    assert b"A guide to Groups" in guide.content        # the doc's H1, rendered
+    assert b"Groups at the LSP" in guide.content        # the doc's H1, rendered
 
     assert client.get("/staff/docs/does-not-exist/").status_code == 404
 
