@@ -505,3 +505,80 @@ def test_meeting_of_analysts_committee_seeded(db):
 
     c = Committee.objects.get(slug="meeting-of-analysts")
     assert c.workgroup_id is not None
+
+
+# --- Impersonation ("View as") -----------------------------------------------
+
+@pytest.mark.django_db
+def test_superuser_impersonates_persona_and_exits(client):
+    from core.models import ImpersonationLog
+
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    persona = User.objects.create_user(email="persona@x.test",
+                                       first_name="Test", last_name="Persona")
+    persona.profile.is_persona = True
+    persona.profile.role = Profile.Role.ANALYST
+    persona.profile.save()
+
+    client.force_login(su)
+    resp = client.post(reverse("core:impersonate_start", args=[persona.id]))
+    assert resp.status_code == 302
+    home = client.get("/")
+    assert b"Viewing as" in home.content and b"Test Persona" in home.content
+    assert ImpersonationLog.objects.filter(impersonator=su, target=persona).exists()
+
+    client.post(reverse("core:impersonate_stop"))
+    assert b"Viewing as" not in client.get("/").content
+
+
+@pytest.mark.django_db
+def test_non_superuser_cannot_impersonate(client):
+    u = User.objects.create_user(email="u@x.test", password="x")
+    other = User.objects.create_user(email="o@x.test")
+    client.force_login(u)
+    assert client.get(reverse("core:impersonate_picker")).status_code == 404
+    assert client.post(reverse("core:impersonate_start", args=[other.id])).status_code == 404
+
+
+@pytest.mark.django_db
+def test_cannot_impersonate_a_superuser(client):
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    su2 = User.objects.create_superuser(email="su2@x.test", password="x")
+    client.force_login(su)
+    client.post(reverse("core:impersonate_start", args=[su2.id]))
+    assert b"Viewing as" not in client.get("/").content   # refused
+
+
+@pytest.mark.django_db
+def test_real_member_impersonation_is_read_only_persona_is_writable(client):
+    from workgroups.models import Visibility, Workgroup, build_workgroup
+
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    wg = build_workgroup(
+        Workgroup.Kind.READING_GROUP, name="RG", slug="rg-imp",
+        landing_visibility=Visibility.PUBLIC,
+    )
+
+    def _analyst(email, persona):
+        u = User.objects.create_user(email=email)
+        u.profile.role = Profile.Role.ANALYST
+        u.profile.is_persona = persona
+        u.profile.save()
+        return u
+
+    real = _analyst("real@x.test", persona=False)
+    persona = _analyst("persona@x.test", persona=True)
+
+    client.force_login(su)
+
+    # Real member → read-only: the join write is blocked.
+    client.post(reverse("core:impersonate_start", args=[real.id]))
+    r = client.post(reverse("workgroups:join", args=[wg.slug]))
+    assert r.status_code == 302
+    assert not wg.memberships.filter(user=real).exists()
+    client.post(reverse("core:impersonate_stop"))
+
+    # Persona → writable: the join goes through.
+    client.post(reverse("core:impersonate_start", args=[persona.id]))
+    client.post(reverse("workgroups:join", args=[wg.slug]))
+    assert wg.memberships.filter(user=persona, end_date__isnull=True).exists()

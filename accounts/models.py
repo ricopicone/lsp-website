@@ -307,6 +307,14 @@ class Profile(models.Model):
         ),
     )
     notes = models.TextField(blank=True)
+    is_persona = models.BooleanField(
+        default=False,
+        help_text=(
+            "A disposable test persona (not a real member). The Web Coordinator "
+            "may impersonate personas with full write access; impersonating a "
+            "real member is read-only. Seeded by `manage.py seed_personas`."
+        ),
+    )
 
     def __str__(self):
         return f"{self.user.email} ({self.get_role_display()})"

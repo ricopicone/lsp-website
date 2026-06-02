@@ -83,6 +83,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "accounts.middleware.TimezoneMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "core.middleware.ImpersonationMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
