@@ -1,9 +1,9 @@
 {% extends "core/base.html" %}
-{% block title %}{{ title }} — Staff{% endblock %}
+{% block title %}{{ title }} — Admin Tools{% endblock %}
 {% block content %}
 <div class="space-y-6">
   <p class="text-sm">
-    <a href="{% url 'staff' %}" class="link link-hover text-base-content/60">← Staff tools</a>
+    <a href="{% url 'admin_tools' %}" class="link link-hover text-base-content/60">← Admin Tools</a>
   </p>
   <article class="lsp-prose max-w-3xl">
     {{ rendered_html|safe }}

@@ -69,6 +69,8 @@ class StaffRole(models.Model):
     TREASURER = "treasurer"
     CARTEL_COORDINATOR = "cartel_coordinator"
     LSP_STAFF = "lsp_staff"
+    ADMIN_ASSISTANT = "admin_assistant"
+    WEB_DEVELOPER = "web_developer"
 
     key = models.SlugField(
         max_length=50,

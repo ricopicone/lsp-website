@@ -1,0 +1,11 @@
+{% extends "core/staff/admin/_base.html" %}
+{% block admin_heading_title %}Board Admin{% endblock %}
+{% block admin_kicker %}Governance · Board{% endblock %}
+{% block admin_heading %}Board Admin{% endblock %}
+{% block admin_intro %}Tools for the Board of Directors. The Board's roster, minutes, and discussion live in its workspace; the items below will gather Board-level administration as they're built.{% endblock %}
+{% block admin_sections %}
+  {% include "core/staff/admin/_section.html" with title="Board roster & terms" status="Planned" body="See and manage who sits on the Board and their term dates." %}
+  {% include "core/staff/admin/_section.html" with title="Board documents" status="Planned" body="Charter, bylaws, policies, and shared Board files in one place." %}
+  {% include "core/staff/admin/_section.html" with title="Meeting minutes" status="Planned" body="Agendas and minutes for Board meetings." %}
+  {% include "core/staff/admin/_section.html" with title="Membership decisions" status="Planned" body="Admissions, role transitions, and standing changes the Board ratifies." %}
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "core/staff/admin/_base.html" %}
+{% block admin_heading_title %}Administrative Assistant Admin{% endblock %}
+{% block admin_kicker %}Staff · Administrative Assistant to the Board{% endblock %}
+{% block admin_heading %}Administrative Assistant Admin{% endblock %}
+{% block admin_intro %}Support tools for the Administrative Assistant to the Board — member records, communications, and scheduling. Sections fill in as they're built.{% endblock %}
+{% block admin_sections %}
+  {% include "core/staff/admin/_section.html" with title="Member directory" body="Look up members and their contact details." link="/directory/" link_label="Open the directory" %}
+  {% include "core/staff/admin/_section.html" with title="Membership records" status="Planned" body="Maintain joins, role changes, and standing alongside the Board." %}
+  {% include "core/staff/admin/_section.html" with title="Communications" status="Planned" body="Announcements and mailings to the membership on the Board's behalf." %}
+  {% include "core/staff/admin/_section.html" with title="Scheduling" status="Planned" body="Coordinate Board and committee meeting times." %}
+{% endblock %}

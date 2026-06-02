@@ -1,9 +1,14 @@
-"""Staff tools — one hub for every staff-role-gated control panel.
+"""Admin Tools — one hub linking each governance body / staff role to its own
+admin page.
 
-``home`` lists the tools the current user can reach (by ``core.StaffRole``,
-plus Django staff for the financial tools). Some tools live here (aphorisms);
-others are links to existing dashboards (treasurer, cartel review). Built to
-grow: gate a card in ``_panels_for`` by the relevant role.
+``home`` lists the admin pages the current user can reach, one card each:
+the **Board** and **Program Committee** (governance bodies), and the staff
+roles (**Treasurer**, **Cartel Coordinator**, **Administrative Assistant**,
+**Web Coordinator**, **Web Developer**). Each card is gated to its body/role,
+so a user sees only their own. Some pages live here (web-coordinator,
+web-developer, admin-assistant, board); others link to existing dashboards
+(treasurer, program-committee, cartel review). Built to grow: gate a card in
+``_panels_for`` by the relevant body/role.
 """
 
 from __future__ import annotations
@@ -20,72 +25,77 @@ from .access import has_staff_role, staff_role_required
 from .forms import AphorismForm
 from .models import Aphorism, StaffRole
 
-#: Roles that map to a tool in the hub (NB: lsp_staff has no panel of its own).
+#: Staff roles that map to their own admin page in the hub (NB: lsp_staff has no
+#: page of its own — it's a general designation, not an admin area).
 PANEL_ROLES = (
     StaffRole.WEB_COORDINATOR,
     StaffRole.TREASURER,
     StaffRole.CARTEL_COORDINATOR,
+    StaffRole.ADMIN_ASSISTANT,
+    StaffRole.WEB_DEVELOPER,
 )
-
-#: Committees with a bespoke admin tool. Every other committee's card links to
-#: its workgroup page (where its roster, minutes, decisions, and discussion
-#: live). Add a bespoke admin here only when one exists.
-COMMITTEE_ADMIN_URLS = {"programming-committee": "program_admin_programs"}
-
-_COMMITTEE_BLURBS = {
-    "programming-committee": "Solicit and review proposals; mint events into a program.",
-}
-_DEFAULT_COMMITTEE_BLURB = "Roster, minutes, decisions, and discussion."
 
 
 def _can_treasurer(user) -> bool:
     return user.is_superuser or user.is_staff or has_staff_role(user, StaffRole.TREASURER)
 
 
-def _member_committee_slugs(user) -> set[str]:
-    """Slugs of committees the user is a current member of."""
-    from workgroups.models import WorkgroupMembership
-
-    return set(
-        WorkgroupMembership.objects.filter(
-            user=user, end_date__isnull=True, workgroup__committee__isnull=False,
-        ).values_list("workgroup__committee__slug", flat=True)
-    )
+def _can_board(user) -> bool:
+    from committees.permissions import is_on_committee
+    return user.is_superuser or user.is_staff or is_on_committee(user, "board")
 
 
-def can_access_staff_tools(user) -> bool:
-    """Entry gate to /staff/: true iff the user would see at least one tool —
-    a panel-bearing staff role, Django staff, a superuser, or membership of any
-    committee. Kept cheap (no count queries) for the nav link."""
+def _can_program_committee(user) -> bool:
+    from events.permissions import is_program_committee
+    return user.is_superuser or user.is_staff or is_program_committee(user)
+
+
+def _can_cartel_coordinator(user) -> bool:
+    from cartels.permissions import is_cartel_coordinator
+    return user.is_superuser or user.is_staff or is_cartel_coordinator(user)
+
+
+def can_access_admin_tools(user) -> bool:
+    """Entry gate to /admin-tools/: staff-role holders, Board members, and
+    Program Committee members (plus Django staff / superusers). Members of
+    *other* committees reach their workspace via Groups, not here. Kept cheap
+    for the nav link."""
     if not getattr(user, "is_authenticated", False):
         return False
     if user.is_superuser or user.is_staff:
         return True
     if has_staff_role(user, *PANEL_ROLES):
         return True
-    return bool(_member_committee_slugs(user))
+    return _can_board(user) or _can_program_committee(user)
 
 
 def _panels_for(user) -> list[dict]:
-    """The staff tools ``user`` may reach, in display order."""
+    """The admin pages ``user`` may reach, in display order. One card per
+    governance body / staff role the user belongs to."""
     panels = []
-    if user.is_superuser or has_staff_role(user, StaffRole.WEB_COORDINATOR):
+
+    # --- Governance bodies ---
+    if _can_board(user):
         panels.append({
-            "title": "Aphorisms",
-            "blurb": "Edit the Lacanian aphorisms that rotate in the footer.",
-            "url": reverse("staff_aphorisms"),
-            "count": Aphorism.objects.filter(is_active=True).count(),
-            "count_label": "active",
+            "title": "Board Admin",
+            "blurb": "Board membership, documents, and meeting records.",
+            "url": reverse("board_admin"),
         })
+    if _can_program_committee(user):
+        panels.append({
+            "title": "Program Committee Admin",
+            "blurb": "Solicit and review proposals; mint events into a program.",
+            "url": reverse("program_admin_programs"),
+        })
+
+    # --- Staff roles ---
     if _can_treasurer(user):
         panels.append({
             "title": "Treasurer Admin",
             "blurb": "Dues and tuition dashboards, member ledgers, and exports.",
             "url": reverse("treasurer"),
         })
-    from cartels.permissions import is_cartel_coordinator
-    from events.permissions import is_program_committee
-    if is_cartel_coordinator(user) or is_program_committee(user):
+    if _can_cartel_coordinator(user):
         from cartels.models import Cartel
         panels.append({
             "title": "Cartel Coordinator Admin",
@@ -96,25 +106,25 @@ def _panels_for(user) -> list[dict]:
             ).count(),
             "count_label": "pending",
         })
-    # One card per committee the user can reach (member, or staff/superuser).
-    from committees.models import Committee
-
-    member_slugs = _member_committee_slugs(user)
-    sees_all = user.is_superuser or user.is_staff
-    for c in Committee.objects.select_related("workgroup").order_by("name"):
-        if not (sees_all or c.slug in member_slugs):
-            continue
-        if c.slug in COMMITTEE_ADMIN_URLS:
-            url = reverse(COMMITTEE_ADMIN_URLS[c.slug])
-        elif c.workgroup_id:
-            url = reverse("workgroups:detail", args=[c.workgroup.slug])
-        else:
-            continue
+    if user.is_superuser or has_staff_role(user, StaffRole.ADMIN_ASSISTANT):
         panels.append({
-            "title": c.name,
-            "blurb": _COMMITTEE_BLURBS.get(c.slug, _DEFAULT_COMMITTEE_BLURB),
-            "url": url,
+            "title": "Administrative Assistant Admin",
+            "blurb": "Board support: membership records, communications, scheduling.",
+            "url": reverse("admin_assistant_admin"),
         })
+    if user.is_superuser or has_staff_role(user, StaffRole.WEB_COORDINATOR):
+        panels.append({
+            "title": "Web Coordinator Admin",
+            "blurb": "Editable site content — aphorisms and more.",
+            "url": reverse("web_coordinator_admin"),
+        })
+    if user.is_superuser or has_staff_role(user, StaffRole.WEB_DEVELOPER):
+        panels.append({
+            "title": "Web Developer Admin",
+            "blurb": "Technical operations: the Django back office, deploys, internals.",
+            "url": reverse("web_developer_admin"),
+        })
+
     if user.is_staff:
         panels.append({
             "title": "Django admin",
@@ -166,6 +176,41 @@ def doc(request, slug):
         "title": meta["title"],
         "rendered_html": render_doc(slug),
     })
+
+
+# ---- Per-body / per-role admin landing pages --------------------------------
+
+
+@login_required
+def board_admin(request):
+    """Board's admin landing. Gated to Board members (+ staff/superuser)."""
+    if not _can_board(request.user):
+        raise PermissionDenied
+    return render(request, "core/staff/admin/board.html", {})
+
+
+@login_required
+@staff_role_required(StaffRole.ADMIN_ASSISTANT)
+def admin_assistant_admin(request):
+    """Administrative Assistant to the Board admin landing."""
+    return render(request, "core/staff/admin/admin_assistant.html", {})
+
+
+@login_required
+@staff_role_required(StaffRole.WEB_COORDINATOR)
+def web_coordinator_admin(request):
+    """Web Coordinator admin landing — site content tools (aphorisms + more)."""
+    return render(request, "core/staff/admin/web_coordinator.html", {
+        "active_aphorisms": Aphorism.objects.filter(is_active=True).count(),
+        "total_aphorisms": Aphorism.objects.count(),
+    })
+
+
+@login_required
+@staff_role_required(StaffRole.WEB_DEVELOPER)
+def web_developer_admin(request):
+    """Web Developer admin landing — technical operations."""
+    return render(request, "core/staff/admin/web_developer.html", {})
 
 
 # ---- Aphorisms panel --------------------------------------------------------
