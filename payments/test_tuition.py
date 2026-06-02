@@ -1566,3 +1566,59 @@ def test_assume_skip_dry_run_writes_nothing(current_period):
     enr.refresh_from_db()
     assert enr.status == TuitionEnrollment.Status.COMMITTED  # unchanged
     assert "DRY-RUN" in out.getvalue()
+
+
+@pytest.mark.django_db
+def test_assume_skip_backfill_roster_for_past_period(current_period):
+    """--backfill-roster-for creates Skipping rows in a past period for the
+    current in-training roster (proxy), leaving past payers untouched."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from payments.models import Payment
+
+    past = TuitionPeriod.objects.create(
+        name="AY 2024-2025", slug="ay-2024-2025-tuition",
+        start_date=date(2024, 9, 1), decision_due_date=date(2024, 8, 31),
+        end_date=date(2025, 8, 31), tuition_amount=Decimal("2000"),
+    )
+    # A: in-training now, paid the past year (real payment) → keep.
+    a = _mk_candidate(email="paid-past@x.test")
+    enr_a = TuitionEnrollment.objects.create(
+        user=a, tuition_period=past, status=TuitionEnrollment.Status.PAID_IN_FULL,
+    )
+    inst_a = TuitionInstallment.objects.create(
+        enrollment=enr_a, sequence=1, due_date=past.start_date, amount=Decimal("2000"),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=a, amount=Decimal("2000"),
+        status=Payment.Status.SUCCEEDED, tuition_installment=inst_a,
+    )
+    # B: in-training now, no past enrollment → should get a proxied skip row.
+    b = _mk_candidate(email="nopast@x.test")
+
+    call_command(
+        "assume_skip_when_unpaid", "--commit",
+        "--backfill-roster-for", "ay-2024-2025-tuition", stdout=StringIO(),
+    )
+
+    assert not TuitionEnrollment.objects.filter(
+        user=b, tuition_period=past,
+    ).exclude(status=TuitionEnrollment.Status.SKIPPING).exists()
+    b_enr = TuitionEnrollment.objects.get(user=b, tuition_period=past)
+    assert b_enr.status == TuitionEnrollment.Status.SKIPPING
+    assert "proxied" in b_enr.notes
+    # A's paid enrollment is untouched.
+    assert TuitionEnrollment.objects.get(user=a, tuition_period=past).status == (
+        TuitionEnrollment.Status.PAID_IN_FULL
+    )
+
+    # Without the flag, the past period would NOT get created rows.
+    past2 = TuitionPeriod.objects.create(
+        name="AY 2023-2024", slug="ay-2023-2024-tuition",
+        start_date=date(2023, 9, 1), decision_due_date=date(2023, 8, 31),
+        end_date=date(2024, 8, 31), tuition_amount=Decimal("2000"),
+    )
+    call_command("assume_skip_when_unpaid", "--commit", stdout=StringIO())
+    assert not TuitionEnrollment.objects.filter(tuition_period=past2).exists()
