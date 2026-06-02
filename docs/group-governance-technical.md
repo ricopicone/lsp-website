@@ -115,8 +115,8 @@ access; `Work.listing_for` scopes GROUP works to member groups).
 | **Cartel** | Any LSP member proposes (`cartels.propose`) | PC `approve/decline`; Cartel Coordinator advisory feedback | Seeded invitation · open application (member-gated) · plus-one (internal/external) | Members; close/reopen; set plus-one | None (deliberate, G6); optional one-off `generate_event` | Member `archive()` → proposal ARCHIVED + `workgroup.archive` |
 | **Working Group** | Board-gated `WorkingGroup.objects.create_with_chair` (name, chair, seed members) | None — Board creation self-authorizes | Manager adds to roster (`roster_add`) | Chair + Board + staff via Settings tab | `WorkgroupMeeting` (members + managers) | `leave` (orphan-guarded) · `archive` |
 | **Committee** | Seed migration / staff (foundational) | N/A | Appointed (`add_member`) | Charter edit (`committees.edit_charter`) + roster via Settings, `can_manage` | `WorkgroupMeeting` | `archive` (manager) |
-| **Seminar** | Dual path: PC builds in program admin **or** faculty propose → PC approve (`events.SeminarProposal.approve` mints the Event) | Per-seminar: PC on the proposal. Per-registrant: optional `requires_faculty_approval` | Registration (paid/comped → derived roster); faculty stored as `FACULTY` | Faculty edit copy + mint pricing codes + roster CSV; PC full edit | `Session` + `generate_sessions` (public event); `WorkgroupMeeting` (workspace) | Term axis: re-enroll yearly, else archive-only; standing workgroup persists |
-| **Reading Group** | Standing self-join `Workgroup(kind=reading_group)`; optional annual paid term (`open_reading_group_term`) | None (free) / N/A | One-click `open_join` (free) · registration (paid term) | Organizers + staff/PC; open terms | `WorkgroupMeeting`; term `Session`s if paid | `leave` · term lapse · `archive` |
+| **Seminar** | Dual path: PC builds in program admin **or** any member proposes → PC approve (`events.SeminarProposal.approve` mints the Event) | Per-seminar: PC on the proposal. Per-registrant: optional `requires_faculty_approval` | Registration (paid/comped → derived roster); faculty stored as `FACULTY` | Faculty edit copy + mint pricing codes + roster CSV; PC full edit | `Session` + `generate_sessions` (public event); `WorkgroupMeeting` (workspace) | Term axis: re-enroll yearly, else archive-only; standing workgroup persists |
+| **Reading Group** | Standing self-join `Workgroup(kind=reading_group)`; optional annual paid term (`open_reading_group_term`) | None (free) / N/A | One-click `open_join` (free) · registration (paid term) | Organizers + staff/PC; open terms | `WorkgroupMeeting` (organizers only); term `Session`s if paid | `leave` · term lapse · `archive` |
 
 Committee instances (Board, PC, Meeting of Analysts) follow the committee row;
 the Meeting of Analysts adds `auto_member_role=analyst`, so its roster is
@@ -124,11 +124,12 @@ derived and joining is automatic.
 
 ### Scheduling gate
 
-`views._can_schedule(wg, user)` = manager **or** stored member. This keeps the
-Meeting of Analysts (auto-derived analysts) chair-managed while
-cartel/working-group/committee members keep their member-open schedule. The
-Schedule tab shows the cadence to anyone with the tab; the add form + delete are
-gated on `can_schedule`.
+`views._can_schedule(wg, user)`: managers always; **reading groups are
+organizer-only** (open-join members don't manage the calendar); other kinds
+also allow any stored member. The Meeting of Analysts' auto-derived analysts
+aren't stored members, so its cadence stays chair-managed. The Schedule tab
+shows the cadence to anyone with the tab; the add form + delete are gated on
+`can_schedule`.
 
 ### Seminar proposal flow (M12.5 — `events/`)
 
@@ -145,8 +146,11 @@ yet) can't satisfy. `approve(reviewer)`:
 4. Record `minted_event`, flip to APPROVED.
 
 `SeminarProposalForm.clean` requires `end_date > start_date` and not in the past
-(else `current_term()` never activates the term). Gating: propose =
-`profile.is_faculty`; decide = `is_program_committee`. The PC review queue is a
+(else `current_term()` never activates the term). Gating: propose = any LSP
+member (`is_lsp_member`); decide = `is_program_committee`. **Teaching confers
+faculty:** `Event.add_faculty` sets `Profile.is_faculty` for a SEMINAR's
+instructors, so approving a proposal grants its instructors faculty standing
+(the first seminar you teach gives you the flag). The PC review queue is a
 "Proposals" tab in the program admin.
 
 ## Migrations of record

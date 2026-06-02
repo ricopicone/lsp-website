@@ -388,7 +388,11 @@ class Event(models.Model):
         return self._faculty_memberships().filter(user=user).exists()
 
     def add_faculty(self, user):
-        """Idempotent: give ``user`` the FACULTY role on this event's workgroup."""
+        """Idempotent: give ``user`` the FACULTY role on this event's workgroup.
+
+        Teaching a seminar confers faculty standing: the first time a user is
+        made faculty of a SEMINAR, set ``Profile.is_faculty``.
+        """
         from django.utils import timezone
 
         from workgroups.models import WorkgroupMembership
@@ -401,11 +405,18 @@ class Event(models.Model):
             if existing.role != WorkgroupMembership.Role.FACULTY:
                 existing.role = WorkgroupMembership.Role.FACULTY
                 existing.save(update_fields=["role"])
-            return existing
-        return WorkgroupMembership.objects.create(
-            workgroup=wg, user=user, role=WorkgroupMembership.Role.FACULTY,
-            start_date=timezone.now().date(),
-        )
+            membership = existing
+        else:
+            membership = WorkgroupMembership.objects.create(
+                workgroup=wg, user=user, role=WorkgroupMembership.Role.FACULTY,
+                start_date=timezone.now().date(),
+            )
+        if self.event_type == self.Type.SEMINAR:
+            profile = getattr(user, "profile", None)
+            if profile is not None and not profile.is_faculty:
+                profile.is_faculty = True
+                profile.save(update_fields=["is_faculty"])
+        return membership
 
     def set_faculty(self, users):
         """Reconcile the faculty roster to exactly ``users``: add missing

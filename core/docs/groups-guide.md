@@ -82,7 +82,7 @@ works this way: every Analyst belongs to it automatically.
 ### Seminars
 
 - **Create—two ways:** the *Program Committee* builds a seminar directly
-  in the Program admin; or faculty click **Propose a seminar** (on the
+  in the Program admin; or **any member** clicks **Propose a seminar** (on the
   Program page) with the title, dates, format, and instructors—optionally as a
   *new year of an existing seminar*.
 - **Approve a proposal:** the *Program Committee*, on the **Proposals**
@@ -95,6 +95,9 @@ works this way: every Analyst belongs to it automatically.
   to past materials.
 - **Run:** the faculty (edit the description, set pricing codes, see the roster)
   and the Program Committee.
+- **Faculty standing:** teaching a seminar is what makes someone faculty—when a
+  seminar is approved, its instructors are granted faculty standing
+  automatically (the first seminar you teach gives you the faculty flag).
 - **End:** a seminar runs year to year as long as faculty open a new year; when
   none is opened, the last year ends and its Workspace stays a read-only
   archive. A leader can also archive the whole seminar.
@@ -129,7 +132,7 @@ works this way: every Analyst belongs to it automatically.
 
 ## How do I…?
 
-- **Propose a seminar** (faculty)—**Program page → Propose a seminar**; track
+- **Propose a seminar** (any member)—**Program page → Propose a seminar**; track
   or resubmit it on the same page.
 - **Propose a cartel** (any member)—**Groups → Cartels → Propose a cartel**.
 - **Start a working group** (Board)—**Groups → Working Groups → New working
