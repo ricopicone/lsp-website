@@ -26,12 +26,14 @@ discussion forum, a private chat, shared works and files, a schedule, tasks, and
 
 ## Two ideas that apply to every Group
 
-**Managers.** A Group's *managers* are the people who can edit its roster,
-settings, and schedule (and, for committees, its charter). You manage a Group
-if you are: one of its leaders (chair, co-chair, plus-one, faculty, or
-organizer); on the Program Committee or LSP Staff; on the Board; or a site
-administrator. One safeguard: a Group must always keep at least one leader—
-the last leader can't leave or be removed until another is in place.
+**Leaders.** A Group's *leaders* are the people who run it—they can edit its
+roster, settings, and schedule (and, for committees, its charter). You lead a
+Group if you are one of its named leaders (chair, co-chair, faculty, or
+organizer), or you're on the Program Committee, LSP Staff, or the Board, or a
+site administrator. **Cartels are the exception:** a cartel has no chair—every
+member leads it together, *except* the plus-one, who is a guest, not a leader.
+One safeguard: a Group must always keep at least one leader—the last leader
+can't leave or be removed until another is in place.
 
 **Access.** Active members of a Group take part fully. For some kinds
 of Group, after a person leaves it, they retain *archive-only access*, which is read-only—you can read past discussion and released works but not post. 
@@ -50,11 +52,14 @@ in the app, not necessarily how they function in general. The app is just a vehi
 ### Committees
 
 Committees are foundational—set up by staff, not proposed. Members are
-**appointed**: a manager adds them on the Settings tab and sets each role
-(chair, secretary, treasurer, …). Managers—the chair, the Board, the
+**appointed**: a leader adds them on the Settings tab and sets each role
+(chair, secretary, treasurer, …). Leaders—the chair, the Board, the
 Program Committee, and LSP Staff—can edit the committee's **charter**
-right on the Settings tab. Committee members and managers schedule meetings on
+right on the Settings tab. Committee members and leaders schedule meetings on
 the Schedule tab.
+
+**End.** Committees are standing, so they rarely close; a leader can archive
+one (read-only, reversible) if it is dissolved.
 
 **Existing committees.** The Board, the Program Committee, and the Meeting of
 Analysts already exist as committees.
@@ -71,7 +76,8 @@ works this way: every Analyst belongs to it automatically.
 - **Join:** managers add people from the Workspace **Settings** tab. No open
   join.
 - **Run:** the chair, plus the Board and LSP Staff.
-- **Schedule:** members and managers add meetings on the Schedule tab.
+- **Schedule:** members and leaders add meetings on the Schedule tab.
+- **End:** the chair or the Board archives it once its work is done.
 
 ### Seminars
 
@@ -89,20 +95,26 @@ works this way: every Analyst belongs to it automatically.
   to past materials.
 - **Run:** the faculty (edit the description, set pricing codes, see the roster)
   and the Program Committee.
+- **End:** a seminar runs year to year as long as faculty open a new year; when
+  none is opened, the last year ends and its Workspace stays a read-only
+  archive. A leader can also archive the whole seminar.
 
 ### Cartels
 
 - **Create:** any member clicks **Propose a cartel**, describes the guiding
-  question and other information, and can name people to receive special invitations, although an invitation goes out to the entire school as well, once the Cartel is approved.
-- **Approve:** the *Program Committee* will see the proposal in a queue for review.
-  They approve or decline the proposal. The *Cartel Coordinator* can add feedback, but the PC decides. 
-  A declined proposal can be edited and resubmitted.
+  question and other information, and can name people to receive special
+  invitations. Once approved, the cartel is published to the whole school, so
+  any member can find it and apply.
+- **Approve:** the *Program Committee* sees the proposal in a review queue and
+  approves or declines it. The *Cartel Coordinator* can add feedback, but the PC
+  decides. A declined proposal can be edited and resubmitted.
 - **Join:** accept an invitation; *apply* to an open cartel (a member then
-  accepts you); or be invited to be its *plus-one* (who may be someone outside the
-  school, invited to create an account).
-- **Run:** the members. Any member can close it to new applicants, reopen it, or
-  archive it.
-- **Schedule:** meeting schedules can be managed by any member of the Cartel.
+  accepts you); or be invited to be its *plus-one* (who may be someone outside
+  the school, invited to create an account).
+- **Run:** the members together — the plus-one is a guest, not a leader. Any
+  member can close it to new applicants, reopen it, or archive it.
+- **Schedule:** any member of the cartel can manage its meetings.
+- **End:** any member archives it when the cartel has run its course.
 
 ### Reading Groups
 
@@ -113,10 +125,11 @@ works this way: every Analyst belongs to it automatically.
 - **Run:** *organizers* (plus LSP Staff and the Program Committee), who can
   open a new paid year.
 - **Schedule:** organizers add meetings on the Schedule tab.
+- **End:** an organizer archives it when it winds down; otherwise it stands.
 
 ## How do I…?
 
-- **Propose a seminar** (any member)—**Program page → Propose a seminar**; track
+- **Propose a seminar** (faculty)—**Program page → Propose a seminar**; track
   or resubmit it on the same page.
 - **Propose a cartel** (any member)—**Groups → Cartels → Propose a cartel**.
 - **Start a working group** (Board)—**Groups → Working Groups → New working
@@ -127,10 +140,10 @@ works this way: every Analyst belongs to it automatically.
   Approve & mint** (or Decline with a reason), then publish the program.
 - **Edit a committee's charter** (chair / Board / staff)—the committee's
   Workspace → **Settings** tab.
-- **Add or remove a member** (managers)—the Group's **Settings** tab →
+- **Add or remove a member** (leaders)—the Group's **Settings** tab →
   **Members** (you can't remove the last leader without naming another first).
 - **Leave a Group** (any member)—**Leave group** at the top of the Workspace.
-- **Archive or reactivate a Group** (managers)—the **Settings** tab.
+- **Archive or reactivate a Group** (leaders)—the **Settings** tab.
 
 ---
 

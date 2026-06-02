@@ -81,9 +81,12 @@ can_manage_workgroup(user, wg)  # superuser | LSP Staff | Programming Committee
 is_board(user)                  # active member of the `board` committee
 ```
 
-`LEAD_ROLES` = chair, co-chair, plus-one, faculty, organizer.
-`views._can_manage_workgroup(wg, user)` is a thin adapter. Every management
-action (roster mutation, archive, charter, scheduling) routes through this.
+`LEAD_ROLES` = chair, co-chair, faculty, organizer. The cartel **plus-one is
+not a lead** — it's a guest; a cartel is run collectively by its members
+(cartel close/archive/accept gate on `cartel.is_member`, not on a lead role).
+`views._can_manage_workgroup(wg, user)` is a thin adapter. Every generic
+management action (roster mutation, archive, charter, scheduling) routes through
+`can_manage_workgroup`.
 
 ## Lifecycle, exit, roster mutation (Phase B — `workgroups/models.py`)
 

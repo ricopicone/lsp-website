@@ -680,8 +680,10 @@ class WorkgroupMembership(models.Model):
 
     #: Roles that moderate a workgroup's channel (Stage 2) and manage it.
     #: Faculty lead their seminar's workspace; organizers lead a reading group.
-    LEAD_ROLES = (Role.CHAIR, Role.CO_CHAIR, Role.PLUS_ONE, Role.FACULTY,
-                  Role.ORGANIZER)
+    #: The cartel plus-one is a guest, NOT a leader — a cartel is run
+    #: collectively by its members (cartel actions gate on membership, not on a
+    #: lead role), so PLUS_ONE is deliberately absent here.
+    LEAD_ROLES = (Role.CHAIR, Role.CO_CHAIR, Role.FACULTY, Role.ORGANIZER)
 
     workgroup = models.ForeignKey(
         Workgroup,
