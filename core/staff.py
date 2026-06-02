@@ -11,6 +11,7 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -90,7 +91,9 @@ def _panels_for(user) -> list[dict]:
             "title": "Cartel review",
             "blurb": "Review proposed cartels (the PC approves; the Coordinator advises).",
             "url": reverse("cartels:review_queue"),
-            "count": Cartel.objects.filter(status=Cartel.Status.PROPOSED).count(),
+            "count": Cartel.objects.filter(
+                workgroup__proposal__status=Cartel.Status.PROPOSED
+            ).count(),
             "count_label": "pending",
         })
     # One card per committee the user can reach (member, or staff/superuser).
@@ -121,13 +124,48 @@ def _panels_for(user) -> list[dict]:
     return panels
 
 
+#: Reference guides surfaced in the staff hub's Documentation section. Each is
+#: a Markdown file under ``core/docs/`` rendered by :func:`core.docs.render_doc`.
+STAFF_DOCS = [
+    {
+        "slug": "groups-guide",
+        "title": "Groups — a guide",
+        "blurb": (
+            "How cartels, working groups, committees, seminars, reading groups, "
+            "and the Meeting of Analysts work — who creates, approves, joins, "
+            "runs, and ends each, with step-by-step recipes."
+        ),
+    },
+]
+_STAFF_DOCS_BY_SLUG = {d["slug"]: d for d in STAFF_DOCS}
+
+
 @login_required
 def home(request):
     # Authoritative gate: you reach the hub iff you have at least one tool.
     panels = _panels_for(request.user)
     if not panels:
         raise PermissionDenied
-    return render(request, "core/staff/home.html", {"panels": panels})
+    docs = [
+        {**d, "url": reverse("staff_doc", args=[d["slug"]])} for d in STAFF_DOCS
+    ]
+    return render(request, "core/staff/home.html", {"panels": panels, "docs": docs})
+
+
+@login_required
+def doc(request, slug):
+    """Render a staff documentation guide (Documentation section of the hub)."""
+    if not _panels_for(request.user):
+        raise PermissionDenied
+    meta = _STAFF_DOCS_BY_SLUG.get(slug)
+    if meta is None:
+        raise Http404
+    from core.docs import render_doc
+
+    return render(request, "core/staff/doc.html", {
+        "title": meta["title"],
+        "rendered_html": render_doc(slug),
+    })
 
 
 # ---- Aphorisms panel --------------------------------------------------------

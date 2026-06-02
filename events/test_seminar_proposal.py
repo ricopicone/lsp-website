@@ -1,0 +1,169 @@
+"""Tests for the M12.5 faculty seminar-proposal flow."""
+
+from __future__ import annotations
+
+import datetime as dt
+from decimal import Decimal
+
+import pytest
+
+from accounts.models import Profile, User
+from committees.models import Committee
+from events.models import Audience, Event, PriceTier, SeminarProposal
+from registrations.models import Registration
+from workgroups.models import Workgroup
+
+pytestmark = pytest.mark.django_db
+
+
+def _faculty(email="fac@x.test"):
+    u = User.objects.create_user(email=email, password="x")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.is_faculty = True
+    u.profile.save()
+    return u
+
+
+def _pc_member(email="pc@x.test"):
+    u = User.objects.create_user(email=email, password="x")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    Committee.objects.get(slug="programming-committee").add_member(u)
+    return u
+
+
+def _future(start_days=30, end_days=200):
+    today = dt.date.today()
+    return today + dt.timedelta(days=start_days), today + dt.timedelta(days=end_days)
+
+
+def _register(user, event):
+    tier = event.price_tiers.first() or PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal("0.00")
+    )
+    return Registration.objects.create(
+        user=user, event=event, price_tier=tier,
+        quoted_amount=Decimal("0.00"), status=Registration.Status.PAID,
+    )
+
+
+def test_propose_gated_to_faculty(client):
+    client.force_login(_pc_member("plain@x.test"))   # PC but not faculty
+    assert client.get("/propose-seminar/").status_code == 404
+    client.force_login(_faculty())
+    assert client.get("/propose-seminar/").status_code == 200
+
+
+def test_propose_creates_proposal(client):
+    fac = _faculty()
+    start, end = _future()
+    client.force_login(fac)
+    resp = client.post("/propose-seminar/", {
+        "title": "Reading Seminar XI",
+        "description": "Four fundamental concepts.",
+        "start_date": start.isoformat(), "end_date": end.isoformat(),
+        "format": Event.Format.ONLINE,
+    })
+    assert resp.status_code == 302
+    p = SeminarProposal.objects.get(title="Reading Seminar XI")
+    assert p.proposed_by == fac and p.status == SeminarProposal.Status.PROPOSED
+
+
+def test_approve_mints_new_standing_seminar(client):
+    fac = _faculty()
+    start, end = _future()
+    p = SeminarProposal.objects.create(
+        proposed_by=fac, title="A New Seminar", start_date=start, end_date=end,
+        format=Event.Format.ONLINE,
+    )
+    p.faculty.add(fac)
+    client.force_login(_pc_member())
+    resp = client.post(f"/program-admin/proposals/{p.pk}/decide/", {"decision": "approve"})
+    assert resp.status_code == 302
+    p.refresh_from_db()
+    assert p.status == SeminarProposal.Status.APPROVED
+    event = p.minted_event
+    assert event is not None and event.event_type == Event.Type.SEMINAR
+    assert event.program.academic_year == p.academic_year
+    wg = event.workgroup
+    assert wg is not None and wg.kind == Workgroup.Kind.SEMINAR
+    assert event.is_faculty(fac)              # faculty seeded onto the workgroup
+    assert wg.current_term() == event          # the minted event is the active term
+
+
+def test_approve_continuing_seminar_adds_term_and_lapses_prior(client):
+    fac = _faculty()
+    pc = _pc_member()
+    # First term (past) of an existing seminar, with a paid student.
+    first = SeminarProposal.objects.create(
+        proposed_by=fac, title="Ongoing Seminar",
+        start_date=dt.date(2024, 9, 1), end_date=dt.date(2025, 5, 1),
+    )
+    first_event = first.approve(pc)
+    wg = first_event.workgroup
+    student = User.objects.create_user(email="stud@x.test", password="x")
+    student.profile.role = Profile.Role.ANALYST
+    student.profile.save()
+    _register(student, first_event)
+    assert wg.has_archive_access(student) is True
+
+    # Continuing term (future) attached to the same standing workgroup.
+    start, end = _future()
+    cont = SeminarProposal.objects.create(
+        proposed_by=fac, title="Ongoing Seminar 2026",
+        start_date=start, end_date=end, continues_seminar=wg,
+    )
+    new_event = cont.approve(pc)
+    assert new_event.workgroup_id == wg.id        # same standing group, new term
+    assert wg.current_term() == new_event
+    # The prior-term student is archive-only until they re-enroll.
+    assert wg.is_member(student) is False
+    assert wg.has_archive_access(student) is True
+
+
+def test_decline_then_resubmit(client):
+    fac = _faculty()
+    start, end = _future()
+    p = SeminarProposal.objects.create(
+        proposed_by=fac, title="Maybe Seminar", start_date=start, end_date=end,
+    )
+    client.force_login(_pc_member())
+    client.post(f"/program-admin/proposals/{p.pk}/decide/",
+                {"decision": "decline", "note": "Sharpen the focus."})
+    p.refresh_from_db()
+    assert p.status == SeminarProposal.Status.DECLINED and "Sharpen" in p.review_note
+
+    client.force_login(fac)
+    resp = client.post(f"/propose-seminar/{p.pk}/edit/", {
+        "title": "Maybe Seminar v2", "start_date": start.isoformat(),
+        "end_date": end.isoformat(), "format": Event.Format.ONLINE,
+    })
+    assert resp.status_code == 302
+    p.refresh_from_db()
+    assert p.status == SeminarProposal.Status.PROPOSED and p.title == "Maybe Seminar v2"
+
+
+def test_form_rejects_end_before_start(client):
+    fac = _faculty()
+    start, _ = _future()
+    client.force_login(fac)
+    resp = client.post("/propose-seminar/", {
+        "title": "Bad Dates", "start_date": start.isoformat(),
+        "end_date": (start - dt.timedelta(days=5)).isoformat(),
+        "format": Event.Format.ONLINE,
+    })
+    assert resp.status_code == 200                 # re-rendered with errors
+    assert not SeminarProposal.objects.filter(title="Bad Dates").exists()
+
+
+def test_decide_gated_to_pc(client):
+    fac = _faculty()
+    start, end = _future()
+    p = SeminarProposal.objects.create(
+        proposed_by=fac, title="Gate Test", start_date=start, end_date=end,
+    )
+    client.force_login(_faculty("other@x.test"))   # faculty, but not PC
+    assert client.post(f"/program-admin/proposals/{p.pk}/decide/",
+                       {"decision": "approve"}).status_code == 404
+    p.refresh_from_db()
+    assert p.status == SeminarProposal.Status.PROPOSED

@@ -9,6 +9,7 @@
     {% if m.location %}<p class="text-xs text-base-content/60 truncate">{{ m.location|urlize }}</p>{% endif %}
     {% if m.note %}<p class="text-xs text-base-content/60 mt-1 whitespace-pre-line">{{ m.note }}</p>{% endif %}
   </div>
+  {% if can_schedule %}
   <form method="post" action="{% url 'workgroups:meeting_delete' workgroup.slug m.pk %}" style="display:contents"
         onsubmit="return confirm('Remove this meeting?');">
     {% csrf_token %}
@@ -16,4 +17,5 @@
       <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
     </button>
   </form>
+  {% endif %}
 </li>

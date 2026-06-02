@@ -25,5 +25,20 @@
   {% else %}
   <p class="text-base-content/60">No panels are available to your account.</p>
   {% endif %}
+
+  {% if docs %}
+  <section class="space-y-3 pt-2">
+    <h2 class="font-serif text-2xl text-base-content tracking-tight border-b border-base-300/60 pb-2">Documentation</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {% for d in docs %}
+      <a href="{{ d.url }}"
+         class="group block rounded-xl border border-base-300 p-5 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+        <h3 class="font-serif text-xl text-base-content tracking-tight group-hover:text-primary transition-colors">{{ d.title }}</h3>
+        <p class="text-sm text-base-content/65 mt-1.5">{{ d.blurb }}</p>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

@@ -582,3 +582,34 @@ def test_real_member_impersonation_is_read_only_persona_is_writable(client):
     client.post(reverse("core:impersonate_start", args=[persona.id]))
     client.post(reverse("workgroups:join", args=[wg.slug]))
     assert wg.memberships.filter(user=persona, end_date__isnull=True).exists()
+
+
+# ---- Staff hub Documentation section ----------------------------------
+
+@pytest.mark.django_db
+def test_staff_docs_section_and_groups_guide(client):
+    from accounts.models import User
+
+    admin = User.objects.create_user(
+        email="admin-docs@x.test", password="x", is_staff=True, is_superuser=True
+    )
+    client.force_login(admin)
+    home = client.get("/staff/")
+    assert home.status_code == 200
+    assert b"Documentation" in home.content
+    assert b"/staff/docs/groups-guide/" in home.content
+
+    guide = client.get("/staff/docs/groups-guide/")
+    assert guide.status_code == 200
+    assert b"Groups at the LSP" in guide.content        # the doc's H1, rendered
+
+    assert client.get("/staff/docs/does-not-exist/").status_code == 404
+
+
+@pytest.mark.django_db
+def test_staff_doc_denied_without_hub_access(client):
+    from accounts.models import User
+
+    nobody = User.objects.create_user(email="nobody-docs@x.test", password="x")
+    client.force_login(nobody)
+    assert client.get("/staff/docs/groups-guide/").status_code == 403

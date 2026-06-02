@@ -1,0 +1,13 @@
+{% load treasurer_filters %}
+{% comment %}
+A featured dollar-amount tile. Params:
+  label  — short caption
+  value  — a numeric/Decimal dollar amount
+  tone   — optional DaisyUI tone: success | warning | info | error (colors the number)
+{% endcomment %}
+{% comment %}Literal tone classes (not text-{{ tone }}) so Tailwind's template
+scan generates them — interpolated class names are invisible to it.{% endcomment %}
+<div class="rounded border border-base-300 p-2.5">
+  <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">{{ label }}</div>
+  <div class="font-serif text-xl leading-tight {% if tone == 'success' %}text-success{% elif tone == 'warning' %}text-warning{% elif tone == 'info' %}text-info{% elif tone == 'error' %}text-error{% endif %}">{{ value|usd }}</div>
+</div>

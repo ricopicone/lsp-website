@@ -107,14 +107,18 @@ def test_seminar_channel_has_no_staff_bypass():
 
 # ---- WORKGROUP moderation ---------------------------------------------
 
-def test_plus_one_and_chair_moderate_plain_member_does_not():
+def test_chair_moderates_plus_one_and_plain_member_do_not():
     wg = _wg()
     ch = wg.channels.first()
+    chair = _user("chair@x.test")
     plus_one = _user("plusone@x.test")
     plain = _user("plain@x.test")
+    _join(wg, chair, role=WorkgroupMembership.Role.CHAIR)
     _join(wg, plus_one, role=WorkgroupMembership.Role.PLUS_ONE)
     _join(wg, plain)
-    assert channel_can_moderate(ch, plus_one) is True
+    assert channel_can_moderate(ch, chair) is True
+    # The plus-one is a guest, not a leader — it does not moderate.
+    assert channel_can_moderate(ch, plus_one) is False
     assert channel_can_moderate(ch, plain) is False
 
 

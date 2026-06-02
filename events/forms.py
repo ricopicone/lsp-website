@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import Event, PricingCode, Program
+from .models import Event, PricingCode, Program, SeminarProposal
 
 
 class EventDescriptionForm(forms.ModelForm):
@@ -62,6 +62,53 @@ class ProgramPublishForm(forms.ModelForm):
                 attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M",
             ),
         }
+
+
+class SeminarProposalForm(forms.ModelForm):
+    """Faculty-facing seminar proposal (M12.5)."""
+
+    class Meta:
+        model = SeminarProposal
+        fields = (
+            "title", "description", "start_date", "end_date",
+            "format", "continues_seminar", "faculty",
+        )
+        widgets = {
+            "start_date": forms.DateInput(attrs={"type": "date"}),
+            "end_date": forms.DateInput(attrs={"type": "date"}),
+            "description": forms.Textarea(attrs={"rows": 6}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from accounts.models import User
+        from workgroups.models import Workgroup
+
+        self.fields["faculty"].required = False
+        self.fields["faculty"].queryset = User.objects.filter(
+            profile__is_faculty=True, is_active=True,
+        ).order_by("last_name", "first_name")
+        self.fields["faculty"].help_text = "Instructors who will teach it."
+        self.fields["continues_seminar"].required = False
+        self.fields["continues_seminar"].queryset = (
+            Workgroup.objects.filter(kind=Workgroup.Kind.SEMINAR).order_by("name")
+        )
+
+    def clean(self):
+        data = super().clean()
+        start, end = data.get("start_date"), data.get("end_date")
+        if start and end:
+            if end <= start:
+                self.add_error("end_date", "End date must be after the start date.")
+            else:
+                import datetime as _dt
+
+                if end < _dt.date.today():
+                    self.add_error(
+                        "end_date",
+                        "End date can't be in the past — the term wouldn't be active.",
+                    )
+        return data
 
 
 class ProgramEventForm(forms.ModelForm):

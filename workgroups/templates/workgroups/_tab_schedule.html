@@ -1,6 +1,7 @@
 {% comment %}Schedule tab — lightweight internal meeting list (has_calendar).
-Expects: workgroup, upcoming_meetings, past_meetings, meeting_form.{% endcomment %}
+Expects: workgroup, upcoming_meetings, past_meetings, meeting_form, can_schedule.{% endcomment %}
 <div class="max-w-2xl space-y-6">
+  {% if can_schedule %}
   <form method="post" action="{% url 'workgroups:meeting_add' workgroup.slug %}"
         class="space-y-2 rounded-xl border border-base-300/50 bg-base-200/40 p-4">
     {% csrf_token %}
@@ -24,6 +25,7 @@ Expects: workgroup, upcoming_meetings, past_meetings, meeting_form.{% endcomment
       <button class="btn btn-primary btn-sm">Schedule meeting</button>
     </div>
   </form>
+  {% endif %}
 
   <section class="space-y-3">
     <h3 class="text-xs font-semibold uppercase tracking-wider text-base-content/55">Upcoming</h3>

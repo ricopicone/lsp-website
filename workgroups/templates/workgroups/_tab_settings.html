@@ -1,4 +1,12 @@
 <div class="max-w-xl space-y-4">
+  {% if workgroup.is_archived %}
+  <div class="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+    This group is <strong>archived</strong> — read-only. Its discussion, works, and
+    files remain visible to past members, but no one can post or join.
+  </div>
+  {% endif %}
+
+  {% if is_member %}
   <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
     <div class="space-y-0.5">
       <h3 class="font-medium text-base-content">Dates</h3>
@@ -18,6 +26,7 @@
       <button class="btn btn-primary btn-sm">Save dates</button>
     </form>
   </section>
+  {% endif %}
 
   {% if can_manage_terms %}
   <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
@@ -47,6 +56,95 @@
       <button class="btn btn-primary btn-sm">Open term</button>
     </form>
     {% if term_form.errors %}<p class="text-error text-sm">{{ term_form.non_field_errors|striptags }}{{ term_form.end_date.errors|striptags }}{{ term_form.fee.errors|striptags }}</p>{% endif %}
+  </section>
+  {% endif %}
+
+  {% if manage_roster %}
+  <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
+    <div class="space-y-0.5">
+      <h3 class="font-medium text-base-content">Members</h3>
+      <p class="text-xs text-base-content/50">Add or remove members and set roles. A group must keep at least one lead.</p>
+    </div>
+    <ul class="divide-y divide-base-300/50">
+      {% for m in stored_members %}
+      <li class="flex flex-wrap items-center gap-2 py-2">
+        <span class="min-w-0 flex-1 text-sm text-base-content">
+          {{ m.user.get_full_name|default:m.user.email }}
+        </span>
+        <form method="post" action="{% url 'workgroups:roster_set_role' workgroup.slug %}"
+              class="flex items-center gap-1">
+          {% csrf_token %}
+          <input type="hidden" name="user" value="{{ m.user.pk }}">
+          <select name="role" class="select select-bordered select-xs">
+            {% for value, label in role_choices %}
+            <option value="{{ value }}" {% if value == m.role %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-ghost btn-xs">Set</button>
+        </form>
+        <form method="post" action="{% url 'workgroups:roster_remove' workgroup.slug %}"
+              onsubmit="return confirm('Remove this member?');">
+          {% csrf_token %}
+          <input type="hidden" name="user" value="{{ m.user.pk }}">
+          <button class="btn btn-ghost btn-xs text-error">Remove</button>
+        </form>
+      </li>
+      {% empty %}
+      <li class="py-2 text-sm text-base-content/50">No stored members yet.</li>
+      {% endfor %}
+    </ul>
+    <form method="post" action="{% url 'workgroups:roster_add' workgroup.slug %}"
+          class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
+      {% csrf_token %}
+      <div class="flex-1 space-y-1">
+        <label for="add-member" class="block text-xs text-base-content/60">Add member (email or “First Last”)</label>
+        <input id="add-member" name="member" type="text" class="input input-bordered input-sm w-full">
+      </div>
+      <button class="btn btn-primary btn-sm">Add</button>
+    </form>
+  </section>
+
+  <section class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-5">
+    <div class="space-y-0.5">
+      <h3 class="font-medium text-base-content">Lifecycle</h3>
+      <p class="text-xs text-base-content/50">
+        Archiving dissolves the group: it becomes read-only (no new posts or members)
+        but stays readable to past members. You can reactivate it later.
+      </p>
+    </div>
+    {% if workgroup.is_archived %}
+    <form method="post" action="{% url 'workgroups:unarchive' workgroup.slug %}">
+      {% csrf_token %}
+      <button class="btn btn-outline btn-sm">Reactivate group</button>
+    </form>
+    {% else %}
+    <form method="post" action="{% url 'workgroups:archive' workgroup.slug %}"
+          onsubmit="return confirm('Archive (dissolve) this group? It becomes read-only.');">
+      {% csrf_token %}
+      <button class="btn btn-outline btn-sm text-error">Archive group</button>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if charter_form %}
+  <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
+    <div class="space-y-0.5">
+      <h3 class="font-medium text-base-content">Charter</h3>
+      <p class="text-xs text-base-content/50">This committee's one-line summary and longer-form charter.</p>
+    </div>
+    <form method="post" action="{% url 'committees:edit_charter' workgroup.slug %}" class="space-y-3">
+      {% csrf_token %}
+      <div class="space-y-1">
+        <label for="{{ charter_form.description.id_for_label }}" class="block text-xs text-base-content/60">Summary</label>
+        {{ charter_form.description }}
+      </div>
+      <div class="space-y-1">
+        <label for="{{ charter_form.charter.id_for_label }}" class="block text-xs text-base-content/60">Charter</label>
+        {{ charter_form.charter }}
+      </div>
+      <button class="btn btn-primary btn-sm">Save charter</button>
+    </form>
   </section>
   {% endif %}
 

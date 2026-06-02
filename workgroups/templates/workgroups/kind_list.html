@@ -11,6 +11,7 @@
       <div class="flex flex-col gap-1 shrink-0">
         {% if can_propose_cartel %}<a href="{% url 'cartels:propose' %}" class="btn btn-primary btn-sm">Propose a cartel</a>{% endif %}
         {% if is_cartel_coordinator %}<a href="{% url 'cartels:review_queue' %}" class="btn btn-ghost btn-sm">Review proposals</a>{% endif %}
+        {% if can_create_working_group %}<a href="{% url 'workinggroups:create' %}" class="btn btn-primary btn-sm">New working group</a>{% endif %}
       </div>
     </div>
   </header>

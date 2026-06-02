@@ -186,6 +186,14 @@ EMAIL_CHANGE_ALLOWLIST = env.list(
     "DJANGO_EMAIL_CHANGE_ALLOWLIST", default=["dr@ricopic.one"]
 )
 
+# Max sustained send rate (messages/second) for the batch reminder jobs
+# (payments.sending.ThrottledSender). SES caps sends — 1/s in the sandbox,
+# higher once production access is granted — and returns a transient 454
+# "Throttling failure" when exceeded. Keep this at or below the SES
+# MaxSendRate (`aws sesv2 get-account`); the default is sandbox-safe. Raise
+# via DJANGO_EMAIL_MAX_SEND_RATE once out of the sandbox.
+EMAIL_MAX_SEND_RATE = env.float("DJANGO_EMAIL_MAX_SEND_RATE", default=1.0)
+
 # --- Parlêtre (discussion board) email -----------------------------------
 # Reply-by-email: when enabled, notification emails carry a signed Reply-To
 # at PARLETRE_REPLY_DOMAIN so a member's reply posts back to the thread.

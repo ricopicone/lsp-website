@@ -1,0 +1,12 @@
+{% extends "core/base.html" %}
+{% block title %}{{ title }} — Staff{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <p class="text-sm">
+    <a href="{% url 'staff' %}" class="link link-hover text-base-content/60">← Staff tools</a>
+  </p>
+  <article class="lsp-prose max-w-3xl">
+    {{ rendered_html|safe }}
+  </article>
+</div>
+{% endblock %}

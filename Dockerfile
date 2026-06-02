@@ -31,6 +31,7 @@ COPY registrations/templates ./registrations/templates
 COPY works/templates ./works/templates
 COPY workgroups/templates ./workgroups/templates
 COPY cartels/templates ./cartels/templates
+COPY workinggroups/templates ./workinggroups/templates
 RUN npx tailwindcss -i ./assets/css/input.css -o ./static/css/site.css --minify
 
 # --- Stage 3: runtime --------------------------------------------------------

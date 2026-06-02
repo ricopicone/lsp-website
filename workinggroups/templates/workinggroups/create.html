@@ -1,0 +1,38 @@
+{% extends "core/base.html" %}
+{% block title %}New working group — LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl space-y-6">
+  <header class="space-y-2">
+    <p class="text-sm">
+      <a href="{% url 'workgroups:kind_working_groups' %}" class="link link-hover text-base-content/60">← Working Groups</a>
+    </p>
+    <h1 class="font-serif text-3xl text-base-content">New working group</h1>
+    <p class="text-base-content/70">
+      Charter a standing working group, name its chair, and seed any initial
+      members. The chair manages the roster and schedule from the group's
+      Workspace.
+    </p>
+  </header>
+
+  <form method="post" class="space-y-5">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert-error text-sm">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    {% for field in form %}
+    <div class="space-y-1">
+      <label for="{{ field.id_for_label }}" class="block text-sm font-medium">{{ field.label }}</label>
+      {{ field }}
+      {% if field.help_text %}<p class="text-xs text-base-content/60">{{ field.help_text }}</p>{% endif %}
+      {% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="flex items-center justify-between border-t border-base-300/60 pt-5">
+      <a href="{% url 'workgroups:kind_working_groups' %}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">Create working group</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

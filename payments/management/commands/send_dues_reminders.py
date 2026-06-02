@@ -23,6 +23,7 @@ from django.utils import timezone
 from payments.dues import is_dues_obligated, user_paid_for_period
 from payments.emails import send_dues_reminder
 from payments.models import DuesPeriod, DuesReminder
+from payments.sending import ThrottledSender
 
 User = get_user_model()
 
@@ -58,6 +59,7 @@ class Command(BaseCommand):
         skipped_not_obligated = 0
         errored = 0
         dry = opts["dry_run"]
+        sender = ThrottledSender()
 
         for user in User.objects.filter(is_active=True).select_related("profile"):
             if not is_dues_obligated(user):
@@ -77,7 +79,7 @@ class Command(BaseCommand):
                 sent += 1
                 continue
             try:
-                send_dues_reminder(user, period)
+                sender.send(send_dues_reminder, user, period)
                 DuesReminder.objects.create(user=user, dues_period=period)
                 sent += 1
             except Exception as exc:

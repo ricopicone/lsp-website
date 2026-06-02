@@ -3,8 +3,11 @@ from django.contrib import admin
 from .models import (
     Visibility,
     Workgroup,
+    WorkgroupInvitation,
+    WorkgroupJoinRequest,
     WorkgroupMeeting,
     WorkgroupMembership,
+    WorkgroupProposal,
     WorkgroupTask,
 )
 
@@ -87,3 +90,29 @@ class WorkgroupMeetingAdmin(admin.ModelAdmin):
     list_filter = ("workgroup__kind",)
     search_fields = ("title", "workgroup__name", "location")
     autocomplete_fields = ("workgroup", "created_by")
+
+
+@admin.register(WorkgroupProposal)
+class WorkgroupProposalAdmin(admin.ModelAdmin):
+    list_display = ("workgroup", "status", "proposed_by", "reviewed_by",
+                    "reviewed_at", "created_at")
+    list_filter = ("status", "workgroup__kind")
+    search_fields = ("workgroup__name", "workgroup__slug")
+    autocomplete_fields = ("workgroup", "proposed_by", "reviewed_by")
+
+
+@admin.register(WorkgroupInvitation)
+class WorkgroupInvitationAdmin(admin.ModelAdmin):
+    list_display = ("invited_user", "workgroup", "created_by", "created_at", "accepted_at")
+    list_filter = ("workgroup__kind",)
+    search_fields = ("invited_user__email", "workgroup__name")
+    autocomplete_fields = ("workgroup", "invited_user", "created_by")
+
+
+@admin.register(WorkgroupJoinRequest)
+class WorkgroupJoinRequestAdmin(admin.ModelAdmin):
+    list_display = ("applicant", "workgroup", "status", "decided_by",
+                    "created_at", "decided_at")
+    list_filter = ("status", "workgroup__kind")
+    search_fields = ("applicant__email", "workgroup__name")
+    autocomplete_fields = ("workgroup", "applicant", "decided_by")

@@ -410,6 +410,49 @@ def test_treasurer_dashboard_excludes_external_users_from_obligated_count(
     assert b"external@example.com" not in response.content
 
 
+def test_dues_context_headlines_current_not_future_period(current_period, member):
+    """Regression: with a future period present (the cron provisions next year
+    ahead), the dashboard headline must reflect the *current* period, not the
+    newest/empty one. Previously the overview used period_stats[0]."""
+    from payments.views import _treasurer_dues_context
+
+    # A future period, newer start_date than current → sorts to period_stats[0].
+    nxt = current_period.start_date.year + 1
+    DuesPeriod.objects.create(
+        name=f"AY {nxt}-{nxt + 1}", slug=f"ay-{nxt}-{nxt + 1}",
+        start_date=date(nxt, 9, 1), due_date=date(nxt, 10, 1),
+        end_date=date(nxt + 1, 8, 31),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES, user=member,
+        amount=current_period.amount_for_role("candidate"),
+        status=Payment.Status.SUCCEEDED, dues_period=current_period,
+    )
+    ctx = _treasurer_dues_context()
+    assert ctx["current_dues_stats"]["period"].id == current_period.id
+    assert ctx["current_dues_stats"]["paid_count"] == 1
+    assert ctx["dues_collected"] == Decimal("100")
+
+
+def test_dues_context_outstanding_sums_unpaid_at_tier(current_period):
+    """dues_outstanding = unpaid obligated members × their tier rate."""
+    from payments.views import _treasurer_dues_context
+
+    cand = User.objects.create_user(email="c1@example.com")
+    cand.profile.role = Profile.Role.CANDIDATE  # $100 tier
+    cand.profile.save()
+    analyst = User.objects.create_user(email="a1@example.com")
+    analyst.profile.role = Profile.Role.ANALYST  # $150 tier
+    analyst.profile.save()
+    # Nobody paid → outstanding should include both at their tiers.
+    ctx = _treasurer_dues_context()
+    assert ctx["dues_collected"] == Decimal("0")
+    assert ctx["dues_outstanding"] >= Decimal("250")  # 100 + 150 (+ any other obligated)
+
+
 @override_settings(DUES_OBLIGATED_ROLES=["analyst"])
 def test_treasurer_dashboard_respects_obligated_roles_setting(
     client, staff_user, current_period, external_user,
@@ -427,3 +470,57 @@ def test_treasurer_dashboard_respects_obligated_roles_setting(
     response = client.get(reverse("treasurer_dues"))
     assert b"analyst-x@example.com" in response.content
     assert b"cand@example.com" not in response.content
+
+
+def test_dues_context_past_year_drilldown(current_period, member):
+    """Selecting a past dues period shows the paid-members list and hides the
+    forward-looking unpaid/role sections; historical unpaid is None."""
+    from payments.views import _treasurer_dues_context
+
+    past = DuesPeriod.objects.create(
+        name="AY 2000-2001", slug="ay-2000-2001",
+        start_date=date(2000, 9, 1), due_date=date(2000, 10, 1),
+        end_date=date(2001, 8, 31),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES, user=member, amount=Decimal("100"),
+        status=Payment.Status.SUCCEEDED, dues_period=past,
+    )
+    ctx = _treasurer_dues_context(past)
+    assert ctx["dues_is_current"] is False
+    assert ctx["role_breakdown"] == []
+    assert ctx["unpaid_users"] == []
+    assert len(ctx["paid_members"]) == 1
+    assert ctx["dues_collected"] == Decimal("100")
+    assert ctx["selected_dues_stats"]["paid_count"] == 1
+    # Historical row's unpaid is not meaningful → None.
+    past_row = next(s for s in ctx["period_stats"] if s["period"].id == past.id)
+    assert past_row["unpaid_count"] is None
+    assert past_row["is_current"] is False
+
+
+def test_dues_context_has_participation_chart(current_period):
+    import json as _json
+
+    from payments.views import _treasurer_dues_context
+    ctx = _treasurer_dues_context()
+    data = _json.loads(ctx["chart_participation_json"])
+    assert "labels" in data and "counts" in data
+
+
+def test_treasurer_dues_year_selector_loads_past(client, staff_user, current_period):
+    DuesPeriod.objects.create(
+        name="AY 1998-1999", slug="ay-1998-1999",
+        start_date=date(1998, 9, 1), due_date=date(1998, 10, 1),
+        end_date=date(1999, 8, 31),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"),
+    )
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_dues") + "?year=ay-1998-1999")
+    assert resp.status_code == 200
+    assert b"AY 1998-1999" in resp.content

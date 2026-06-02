@@ -1380,3 +1380,245 @@ def test_complete_payment_is_idempotent_for_tuition(current_period):
     enr.refresh_from_db()
     assert inst.paid_at == first_paid_at
     assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL
+
+
+# --- Treasurer dashboard money buckets ----------------------------------
+
+
+@pytest.mark.django_db
+def test_tuition_context_money_buckets(current_period):
+    """_treasurer_tuition_context exposes collected / committed-remaining /
+    undecided-owed dollar buckets for the current period."""
+    from payments.models import Payment
+    from payments.views import _treasurer_tuition_context
+
+    full = current_period.tuition_amount
+    paid = (full / 2).quantize(Decimal("0.01"))
+
+    # Candidate A: on a payment plan, paid half.
+    a = _mk_candidate(email="a@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=a, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1, due_date=current_period.start_date, amount=paid,
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=a, amount=paid,
+        status=Payment.Status.SUCCEEDED, tuition_installment=inst,
+    )
+    # Candidate B: in-training but no decision recorded → undecided.
+    _mk_candidate(email="b@x.test")
+
+    ctx = _treasurer_tuition_context()
+    assert ctx["tuition_total_collected"] == paid
+    assert ctx["tuition_committed_remaining"] == full - paid
+    assert ctx["tuition_undecided_owed"] == full  # one undecided in-training student
+    assert ctx["tuition_outstanding"] == (full - paid) + full
+
+
+# --- Longitudinal + per-year drill-down ---------------------------------
+
+
+@pytest.mark.django_db
+def test_tuition_longitudinal_aggregates_per_year(current_period):
+    """_treasurer_tuition_longitudinal rolls up collected + status counts per AY."""
+    from payments.models import Payment
+    from payments.views import _treasurer_tuition_longitudinal
+
+    past = TuitionPeriod.objects.create(
+        name="AY past", slug="ay-past-tuition",
+        start_date=date(2000, 9, 1), decision_due_date=date(2000, 8, 31),
+        end_date=date(2001, 8, 31), tuition_amount=Decimal("1000"),
+    )
+    u = _mk_candidate(email="long@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=past, status=TuitionEnrollment.Status.PAID_IN_FULL,
+    )
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1, due_date=past.start_date, amount=Decimal("1000"),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("1000"),
+        status=Payment.Status.SUCCEEDED, tuition_installment=inst,
+    )
+
+    ctx = _treasurer_tuition_longitudinal()
+    rows = {r["period"].slug: r for r in ctx["tuition_year_rows"]}
+    assert rows["ay-past-tuition"]["collected"] == Decimal("1000")
+    assert rows["ay-past-tuition"]["paid_in_full"] == 1
+    assert rows["ay-past-tuition"]["enrolled"] == 1
+    # Both periods represented; current AY present with zero collected.
+    assert current_period.slug in rows
+
+
+@pytest.mark.django_db
+def test_tuition_context_past_year_hides_forward_looking(current_period):
+    """Selecting a past period returns retrospective facts only — no live
+    in-training roster, no reconciliation queue."""
+    from payments.models import Payment
+    from payments.views import _treasurer_tuition_context
+
+    past = TuitionPeriod.objects.create(
+        name="AY past2", slug="ay-past2-tuition",
+        start_date=date(2001, 9, 1), decision_due_date=date(2001, 8, 31),
+        end_date=date(2002, 8, 31), tuition_amount=Decimal("1000"),
+    )
+    u = _mk_candidate(email="past@x.test")
+    enr = TuitionEnrollment.objects.create(
+        user=u, tuition_period=past, status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1, due_date=past.start_date, amount=Decimal("400"),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("400"),
+        status=Payment.Status.SUCCEEDED, tuition_installment=inst,
+    )
+
+    ctx = _treasurer_tuition_context(past)
+    assert ctx["tuition_is_current"] is False
+    assert ctx["tuition_in_training_count"] == 0
+    assert ctx["tuition_reconciliation_users"] == []
+    assert ctx["tuition_undecided_owed"] == Decimal("0")
+    assert ctx["tuition_total_collected"] == Decimal("400")
+    assert ctx["tuition_committed_remaining"] == Decimal("600")  # 1000 - 400
+    assert len(ctx["tuition_enrollment_rows"]) == 1
+
+
+def test_treasurer_tuition_year_selector_loads_past(client, staff_user, current_period):
+    """?year=<slug> renders the selected past year."""
+    TuitionPeriod.objects.create(
+        name="AY 1999", slug="ay-1999-tuition",
+        start_date=date(1999, 9, 1), decision_due_date=date(1999, 8, 31),
+        end_date=date(2000, 8, 31), tuition_amount=Decimal("1000"),
+    )
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_tuition") + "?year=ay-1999-tuition")
+    assert resp.status_code == 200
+    assert b"AY 1999" in resp.content
+
+
+# --- assume_skip_when_unpaid command ------------------------------------
+
+
+@pytest.mark.django_db
+def test_assume_skip_when_unpaid(current_period):
+    """Non-payers become Skipping; partial payers are preserved; undecided
+    in-training students get a Skipping row (current period only)."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from payments.models import Payment
+
+    full = current_period.tuition_amount
+
+    # A: committed, no payment → should flip to skipping.
+    a = _mk_candidate(email="a@skip.test")
+    enr_a = TuitionEnrollment.objects.create(
+        user=a, tuition_period=current_period, status=TuitionEnrollment.Status.COMMITTED,
+    )
+    # B: payment plan with a partial payment → preserved.
+    b = _mk_candidate(email="b@skip.test")
+    enr_b = TuitionEnrollment.objects.create(
+        user=b, tuition_period=current_period, status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    inst_b = TuitionInstallment.objects.create(
+        enrollment=enr_b, sequence=1, due_date=current_period.start_date,
+        amount=(full / 2).quantize(Decimal("0.01")),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=b, amount=inst_b.amount,
+        status=Payment.Status.SUCCEEDED, tuition_installment=inst_b,
+    )
+    # C: in-training, no enrollment at all → should get a created skip row.
+    c = _mk_candidate(email="c@skip.test")
+
+    call_command("assume_skip_when_unpaid", "--commit", stdout=StringIO())
+
+    enr_a.refresh_from_db()
+    enr_b.refresh_from_db()
+    assert enr_a.status == TuitionEnrollment.Status.SKIPPING
+    assert enr_b.status == TuitionEnrollment.Status.PAYMENT_PLAN  # partial payer preserved
+    c_enr = TuitionEnrollment.objects.get(user=c, tuition_period=current_period)
+    assert c_enr.status == TuitionEnrollment.Status.SKIPPING
+
+    # Idempotent: a second run changes nothing.
+    before = TuitionEnrollment.objects.count()
+    call_command("assume_skip_when_unpaid", "--commit", stdout=StringIO())
+    assert TuitionEnrollment.objects.count() == before
+
+
+@pytest.mark.django_db
+def test_assume_skip_dry_run_writes_nothing(current_period):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    a = _mk_candidate(email="dry@skip.test")
+    enr = TuitionEnrollment.objects.create(
+        user=a, tuition_period=current_period, status=TuitionEnrollment.Status.COMMITTED,
+    )
+    out = StringIO()
+    call_command("assume_skip_when_unpaid", stdout=out)
+    enr.refresh_from_db()
+    assert enr.status == TuitionEnrollment.Status.COMMITTED  # unchanged
+    assert "DRY-RUN" in out.getvalue()
+
+
+@pytest.mark.django_db
+def test_assume_skip_backfill_roster_for_past_period(current_period):
+    """--backfill-roster-for creates Skipping rows in a past period for the
+    current in-training roster (proxy), leaving past payers untouched."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from payments.models import Payment
+
+    past = TuitionPeriod.objects.create(
+        name="AY 2024-2025", slug="ay-2024-2025-tuition",
+        start_date=date(2024, 9, 1), decision_due_date=date(2024, 8, 31),
+        end_date=date(2025, 8, 31), tuition_amount=Decimal("2000"),
+    )
+    # A: in-training now, paid the past year (real payment) → keep.
+    a = _mk_candidate(email="paid-past@x.test")
+    enr_a = TuitionEnrollment.objects.create(
+        user=a, tuition_period=past, status=TuitionEnrollment.Status.PAID_IN_FULL,
+    )
+    inst_a = TuitionInstallment.objects.create(
+        enrollment=enr_a, sequence=1, due_date=past.start_date, amount=Decimal("2000"),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=a, amount=Decimal("2000"),
+        status=Payment.Status.SUCCEEDED, tuition_installment=inst_a,
+    )
+    # B: in-training now, no past enrollment → should get a proxied skip row.
+    b = _mk_candidate(email="nopast@x.test")
+
+    call_command(
+        "assume_skip_when_unpaid", "--commit",
+        "--backfill-roster-for", "ay-2024-2025-tuition", stdout=StringIO(),
+    )
+
+    assert not TuitionEnrollment.objects.filter(
+        user=b, tuition_period=past,
+    ).exclude(status=TuitionEnrollment.Status.SKIPPING).exists()
+    b_enr = TuitionEnrollment.objects.get(user=b, tuition_period=past)
+    assert b_enr.status == TuitionEnrollment.Status.SKIPPING
+    assert "proxied" in b_enr.notes
+    # A's paid enrollment is untouched.
+    assert TuitionEnrollment.objects.get(user=a, tuition_period=past).status == (
+        TuitionEnrollment.Status.PAID_IN_FULL
+    )
+
+    # Without the flag, the past period would NOT get created rows.
+    past2 = TuitionPeriod.objects.create(
+        name="AY 2023-2024", slug="ay-2023-2024-tuition",
+        start_date=date(2023, 9, 1), decision_due_date=date(2023, 8, 31),
+        end_date=date(2024, 8, 31), tuition_amount=Decimal("2000"),
+    )
+    call_command("assume_skip_when_unpaid", "--commit", stdout=StringIO())
+    assert not TuitionEnrollment.objects.filter(tuition_period=past2).exists()

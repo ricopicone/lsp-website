@@ -130,8 +130,9 @@ Done (see `git log` for specifics):
   Linux 2023, `~/lsp-website/`) running the Django app in Docker via
   `compose.yml`, fronted by host-level nginx with a Let's Encrypt cert
   (auto-renewed via a systemd timer). Postgres 16 on RDS `lsp-db`
-  (db.t4g.micro, private). Email on SES (DKIM-verified; production-access
-  request submitted 2026-05-30, status PENDING). See `aws-infra` memory for endpoints, SG IDs, and the
+  (db.t4g.micro, private). Email on SES (DKIM-verified; **still in sandbox —
+  production-access case 178015607900328 awaiting AWS re-review, not a final
+  denial; monitor `ProductionAccessEnabled`**; see `ses-status` memory). See `aws-infra` memory for endpoints, SG IDs, and the
   Secrets Manager ARN for the RDS master password.
 - Milestone 1 complete (USR-1 through USR-5).
 - Profile extension (USR-6) — `is_faculty` orthogonal axis plus `bio`,
@@ -327,13 +328,36 @@ Phase 2 plan for milestone IDs):**
   cases require manual edits.
 - **Set the actual Zoom link** in `Event.access_info` for the Working with
   Masochism event (currently a placeholder).
-- **SES production access** — request submitted 2026-05-30 (the prior
-  "pending" note was stale: the SES API showed no request on file, so it
-  was (re)submitted with a transactional use-case; status now PENDING,
-  ~24h review). Until it lands, SES only delivers to *verified
-  identities*. `dr@ricopic.one` and the `lacanschool.org` domain are
-  already verified, so to test login-email-change end-to-end now, verify a
-  *second* address you control and change `dr@ricopic.one` to it.
+- **SES production access — awaiting AWS re-review (still sandboxed).** The
+  account is **still in the sandbox** (`ProductionAccessEnabled: false`).
+  `aws sesv2 get-account` shows `ReviewDetails.Status: DENIED`, but that
+  reflects AWS's *automated first-pass* (auto-deny + request more info), not
+  a final verdict: the support case 178015607900328 status is "Customer
+  action completed" — AWS asked for detail on 2026-05-30, Rico replied the
+  same day with a full transactional use-case, and it's now in AWS's queue.
+  Monitor `ProductionAccessEnabled` (flips to `true` when granted); nudge the
+  case if AWS is silent for a few days. **Do not resubmit.** Until granted,
+  SES only delivers to *verified identities*. `dr@ricopic.one` and the
+  `lacanschool.org` domain are already verified, so to test
+  login-email-change end-to-end now, verify a *second* address you control
+  and change `dr@ricopic.one` to it. See `ses-status` memory.
+- **Re-enable member-facing notification timers at launch.** On 2026-06-01
+  the three member-facing host timers were disabled
+  (`sudo systemctl disable --now lsp-dues-cron.timer
+  lsp-registration-reminders.timer lsp-parletre-digests.timer`) because the
+  dues cron's first real Monday run emailed reminders (only the sandbox
+  contained it — see above). `lsp-parletre-purge.timer` stays on. At launch:
+  `sudo systemctl enable --now lsp-dues-cron.timer
+  lsp-registration-reminders.timer lsp-parletre-digests.timer`. Note these
+  timers live only on the host, not the repo (see `host-cron-timers` memory).
+- **Reminder send rate-limiting — DONE.** `payments.sending.ThrottledSender`
+  paces the batch reminder jobs to `EMAIL_MAX_SEND_RATE` (msgs/sec, default
+  1.0 — sandbox-safe; raise via `DJANGO_EMAIL_MAX_SEND_RATE` once out of the
+  sandbox to match the SES `MaxSendRate`) and retries transient `454`
+  throttling with backoff. Wired into `send_dues_reminders`,
+  `send_tuition_reminders`, and `send_registration_reminders`. **Action at
+  launch:** set `DJANGO_EMAIL_MAX_SEND_RATE` in the host `.env` to the SES
+  production send rate so an ~80-member batch isn't paced at 1/s unnecessarily.
 - **Open login-email change to all members at launch** — set
   `DJANGO_EMAIL_CHANGE_PUBLIC=true` in the host `.env` (currently gated to
   `DJANGO_EMAIL_CHANGE_ALLOWLIST`, default rico's address).
