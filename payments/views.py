@@ -133,7 +133,7 @@ def _treasurer_dues_context(selected_period=None) -> dict:
     """
     obligated_roles = list(settings.DUES_OBLIGATED_ROLES)
     obligated_count = User.objects.filter(
-        is_active=True, profile__role__in=obligated_roles,
+        is_active=True, profile__is_persona=False, profile__role__in=obligated_roles,
     ).count()
 
     current = DuesPeriod.current()
@@ -186,7 +186,7 @@ def _treasurer_dues_context(selected_period=None) -> dict:
         if is_current:
             for role in obligated_roles:
                 users_in_role = User.objects.filter(
-                    is_active=True, profile__role=role,
+                    is_active=True, profile__is_persona=False, profile__role=role,
                 )
                 total_in_role = users_in_role.count()
                 paid_in_role = users_in_role.filter(id__in=paid_user_ids).count()
@@ -201,7 +201,7 @@ def _treasurer_dues_context(selected_period=None) -> dict:
                 dues_outstanding += rate * unpaid_in_role
             unpaid_users = list(
                 User.objects.filter(
-                    is_active=True, profile__role__in=obligated_roles,
+                    is_active=True, profile__is_persona=False, profile__role__in=obligated_roles,
                 )
                 .exclude(id__in=paid_user_ids)
                 .select_related("profile")
@@ -261,6 +261,7 @@ def treasurer_members(request):
                 | Q(first_name__icontains=q)
                 | Q(last_name__icontains=q),
             )
+            .exclude(profile__is_persona=True)   # personas aren't real members
             .select_related("profile")
             .order_by("last_name", "first_name", "email")[:50]
         )
@@ -710,7 +711,7 @@ def _treasurer_tuition_context(selected_period=None) -> dict:
     undecided_owed = Decimal("0")
     if is_current:
         in_training_qs = User.objects.filter(
-            is_active=True, profile__role__in=Profile.IN_TRAINING_ROLES,
+            is_active=True, profile__is_persona=False, profile__role__in=Profile.IN_TRAINING_ROLES,
         )
         in_training_count = in_training_qs.count()
         undecided_users = list(in_training_qs.exclude(id__in=decided_user_ids))

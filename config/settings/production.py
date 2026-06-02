@@ -76,8 +76,10 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # --- Email: Amazon SES over SMTP ----------------------------------------
+# EMAIL_BACKEND stays the persona-safe wrapper (from base); it delivers through
+# this SMTP backend for everyone except persona test accounts.
 
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+PERSONA_SAFE_INNER_EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = env("DJANGO_EMAIL_HOST", default="email-smtp.us-west-2.amazonaws.com")
 EMAIL_PORT = env.int("DJANGO_EMAIL_PORT", default=587)
 EMAIL_USE_TLS = True

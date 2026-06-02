@@ -176,6 +176,12 @@ PARLETRE_ATTACHMENTS_ROOT = env(
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")
 SUPPORT_EMAIL = env("DJANGO_SUPPORT_EMAIL", default="website@lacanschool.org")
 
+# All mail flows through a persona-safe wrapper that never delivers to persona
+# test accounts (their addresses aren't real mailboxes). Each environment sets
+# the *inner* backend it wraps.
+EMAIL_BACKEND = "core.email.PersonaSafeEmailBackend"
+PERSONA_SAFE_INNER_EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
 # Self-service login-email change (accounts.views.email_change). Gated until
 # launch: until EMAIL_CHANGE_PUBLIC is True, only addresses in
 # EMAIL_CHANGE_ALLOWLIST see the option and may initiate a change. Default

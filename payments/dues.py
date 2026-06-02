@@ -19,8 +19,8 @@ def is_dues_obligated(user) -> bool:
     if not user.is_authenticated:
         return False
     profile = getattr(user, "profile", None)
-    if profile is None:
-        return False
+    if profile is None or profile.is_persona:
+        return False  # personas are test accounts — never financially obligated
     return profile.role in set(settings.DUES_OBLIGATED_ROLES)
 
 

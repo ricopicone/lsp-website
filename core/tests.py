@@ -613,3 +613,47 @@ def test_staff_doc_denied_without_hub_access(client):
     nobody = User.objects.create_user(email="nobody-docs@x.test", password="x")
     client.force_login(nobody)
     assert client.get("/staff/docs/groups-guide/").status_code == 403
+
+
+# --- Persona exemptions: treasurer/financial + email -------------------------
+
+@pytest.mark.django_db
+def test_personas_are_not_financially_obligated():
+    from payments.dues import is_dues_obligated
+
+    persona = User.objects.create_user(email="persona+analyst@x.test")
+    persona.profile.role = Profile.Role.ANALYST       # dues-obligated role
+    persona.profile.is_persona = True
+    persona.profile.save()
+    assert is_dues_obligated(persona) is False
+
+    cand = User.objects.create_user(email="persona+cand@x.test")
+    cand.profile.role = Profile.Role.CANDIDATE        # tuition (in-training) role
+    cand.profile.is_persona = True
+    cand.profile.save()
+    assert cand.profile.owes_tuition is False
+
+
+@pytest.mark.django_db
+def test_persona_safe_email_backend_drops_persona_recipients(settings):
+    from django.core import mail
+    from django.core.mail import EmailMessage
+
+    from core.email import PersonaSafeEmailBackend
+
+    settings.PERSONA_SAFE_INNER_EMAIL_BACKEND = (
+        "django.core.mail.backends.locmem.EmailBackend"
+    )
+    persona = User.objects.create_user(email="persona+x@lacanschool.org")
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    mail.outbox = []
+    backend = PersonaSafeEmailBackend()
+    backend.send_messages([
+        EmailMessage("s", "b", "from@x.test", ["persona+x@lacanschool.org"]),
+        EmailMessage("s", "b", "from@x.test", ["real@x.test"]),
+    ])
+    delivered = [addr for m in mail.outbox for addr in m.to]
+    assert "real@x.test" in delivered
+    assert "persona+x@lacanschool.org" not in delivered
