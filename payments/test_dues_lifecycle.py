@@ -369,7 +369,7 @@ def test_treasurer_dashboard_renders_for_staff(
     client.force_login(staff_user)
     response = client.get(reverse("treasurer"))
     assert response.status_code == 200
-    assert b"Treasurer dashboard" in response.content
+    assert b"Treasurer Admin" in response.content
     assert bytes(current_period.name, "utf-8") in response.content
     # Total collected reflects the one paid Payment.
     assert b"$100.00" in response.content

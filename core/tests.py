@@ -454,13 +454,13 @@ def test_treasurer_role_reaches_hub_and_dashboard(client, treasurer_member):
 
 
 def test_cartel_coordinator_sees_review_card(client, web_coordinator):
-    """Granting the cartel-coordinator role surfaces the Cartel review card."""
+    """Granting the cartel-coordinator role surfaces the Cartel Coordinator Admin card."""
     from core.models import StaffRole
 
     StaffRole.objects.get(key=StaffRole.CARTEL_COORDINATOR).holders.add(web_coordinator)
     client.force_login(web_coordinator)
     body = client.get(reverse("staff")).content
-    assert b"Cartel review" in body
+    assert b"Cartel Coordinator Admin" in body
 
 
 @pytest.fixture
