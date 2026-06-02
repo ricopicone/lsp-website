@@ -243,7 +243,7 @@
 
             {% if user.is_staff or user|is_on_committee:"programming-committee" %}
             <li><hr class="border-base-300/60 my-1"></li>
-            <li><a href="{% url 'program_admin_programs' %}">Program Committee admin</a></li>
+            <li><a href="{% url 'program_admin_programs' %}">Program Committee Admin</a></li>
             {% endif %}
 
             {% if user|has_staff_tools %}
@@ -252,7 +252,7 @@
 
             {% if user.is_staff %}
             <li><a href="/admin/">Admin</a></li>
-            <li><a href="{% url 'treasurer' %}">Treasurer dashboard</a></li>
+            <li><a href="{% url 'treasurer' %}">Treasurer Admin</a></li>
             {% endif %}
 
             {% if not request.impersonator and user.is_superuser %}

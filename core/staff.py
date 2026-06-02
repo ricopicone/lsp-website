@@ -79,7 +79,7 @@ def _panels_for(user) -> list[dict]:
         })
     if _can_treasurer(user):
         panels.append({
-            "title": "Treasurer",
+            "title": "Treasurer Admin",
             "blurb": "Dues and tuition dashboards, member ledgers, and exports.",
             "url": reverse("treasurer"),
         })
@@ -88,7 +88,7 @@ def _panels_for(user) -> list[dict]:
     if is_cartel_coordinator(user) or is_program_committee(user):
         from cartels.models import Cartel
         panels.append({
-            "title": "Cartel review",
+            "title": "Cartel Coordinator Admin",
             "blurb": "Review proposed cartels (the PC approves; the Coordinator advises).",
             "url": reverse("cartels:review_queue"),
             "count": Cartel.objects.filter(
