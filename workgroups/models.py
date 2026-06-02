@@ -214,7 +214,9 @@ class Workgroup(models.Model):
         """Stored ``WorkgroupMembership`` rows (hand-managed roster). For the
         full roster including derived seminar registrants, use
         :meth:`participants`."""
-        return self.memberships.filter(end_date__isnull=True).select_related("user")
+        return self.memberships.filter(end_date__isnull=True).select_related(
+            "user", "user__profile"
+        )
 
     @staticmethod
     def _user_role(user):
@@ -287,7 +289,8 @@ class Workgroup(models.Model):
             from django.contrib.auth import get_user_model
 
             users = (get_user_model().objects
-                     .filter(profile__role=self.auto_member_role, is_active=True)
+                     .filter(profile__role=self.auto_member_role, is_active=True,
+                             profile__is_persona=False)
                      .select_related("profile"))
             for u in users:
                 if u.pk not in seen:
@@ -308,7 +311,12 @@ class Workgroup(models.Model):
                     seen[u.pk] = Participant(
                         user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
                     )
-        return list(seen.values())
+        # Personas are test accounts — keep them off every roster (they retain
+        # their memberships for impersonation fidelity, just not shown here).
+        return [
+            p for p in seen.values()
+            if not getattr(getattr(p.user, "profile", None), "is_persona", False)
+        ]
 
     def current_term(self):
         """For a term-based offering (seminar / reading group), the active-or-

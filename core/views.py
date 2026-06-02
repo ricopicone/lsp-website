@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.db import models
-from django.http import JsonResponse
-from django.shortcuts import render
+from django.http import Http404, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.views.decorators.http import require_POST
 
 from events.models import Event, Session
 
@@ -171,3 +174,71 @@ def _parse(value: str) -> datetime | None:
         except ValueError:
             return None
     return timezone.make_aware(dt) if timezone.is_naive(dt) else dt
+
+
+# --- Impersonation ("View as") — superuser-only -----------------------------
+
+def _real_superuser(request):
+    """The real acting superuser (the impersonator if already viewing-as, else
+    the logged-in user), or None if not a superuser."""
+    real = getattr(request, "impersonator", None) or request.user
+    return real if (real.is_authenticated and real.is_superuser) else None
+
+
+def impersonate_picker(request):
+    """Pick a persona (or search a real member) to view the site as."""
+    if _real_superuser(request) is None:
+        raise Http404
+    from accounts.models import Profile
+
+    User = get_user_model()
+    personas = (
+        User.objects.filter(profile__is_persona=True, is_active=True)
+        .select_related("profile").order_by("first_name", "last_name", "email")
+    )
+    q = (request.GET.get("q") or "").strip()
+    matches = []
+    if q:
+        matches = list(
+            User.objects.filter(is_active=True, is_superuser=False, profile__is_persona=False)
+            .filter(
+                models.Q(first_name__icontains=q) | models.Q(last_name__icontains=q)
+                | models.Q(email__icontains=q)
+            ).select_related("profile").order_by("last_name", "first_name")[:20]
+        )
+    return render(request, "core/impersonate.html", {
+        "personas": personas, "matches": matches, "q": q,
+        "directory_roles": Profile.DIRECTORY_ROLES,
+    })
+
+
+@require_POST
+def impersonate_start(request, user_id: int):
+    real = _real_superuser(request)
+    if real is None:
+        raise Http404
+    target = get_object_or_404(get_user_model(), pk=user_id, is_active=True)
+    if target.is_superuser or target.pk == real.pk:
+        messages.error(request, "Can't view as that account.")
+        return redirect("core:impersonate_picker")
+    from core.models import ImpersonationLog
+
+    read_only = not getattr(getattr(target, "profile", None), "is_persona", False)
+    request.session["impersonate_user_id"] = target.pk
+    ImpersonationLog.objects.create(
+        impersonator=real, target=target, read_only=read_only
+    )
+    return redirect("/")
+
+
+@require_POST
+def impersonate_stop(request):
+    request.session.pop("impersonate_user_id", None)
+    impersonator = getattr(request, "impersonator", None)
+    if impersonator is not None:
+        from core.models import ImpersonationLog
+
+        (ImpersonationLog.objects
+         .filter(impersonator=impersonator, ended_at__isnull=True)
+         .order_by("-started_at").update(ended_at=timezone.now()))
+    return redirect("/")

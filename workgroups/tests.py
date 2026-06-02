@@ -385,6 +385,19 @@ def test_reading_group_workspace_links_to_program(client):
     assert f"/program/?year={year}".encode() in resp.content   # ← Program <year>
 
 
+def test_personas_have_membership_but_are_hidden_from_roster():
+    wg = _wg(kind=Workgroup.Kind.COMMITTEE)
+    persona = _user("persona@x.test", role=Profile.Role.ANALYST)
+    persona.profile.is_persona = True
+    persona.profile.save()
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=persona, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    assert wg.is_member(persona) is True            # real membership (for impersonation)
+    assert persona not in [p.user for p in wg.participants()]   # hidden from roster
+
+
 def test_groups_overview_shows_a_card_per_kind(client):
     """The /groups/ overview lists the kinds, not individual groups."""
     resp = client.get("/groups/")

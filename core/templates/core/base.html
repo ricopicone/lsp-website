@@ -29,6 +29,22 @@
 </head>
 <body class="min-h-screen flex flex-col bg-base-100 text-base-content antialiased">
 
+  {% if request.impersonator %}
+  <div class="sticky top-0 z-50 bg-warning text-warning-content text-sm">
+    <div class="mx-auto max-w-5xl px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2">
+      <span>
+        ⚠ Viewing as <strong>{{ user.get_full_name|default:user.email }}</strong>
+        ({{ user.profile.get_role_display }}){% if request.impersonation_readonly %} — <strong>read-only</strong>{% endif %}.
+        You are {{ request.impersonator.get_full_name|default:request.impersonator.email }}.
+      </span>
+      <form method="post" action="{% url 'core:impersonate_stop' %}" style="display:contents">
+        {% csrf_token %}
+        <button class="btn btn-xs">Exit</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
   {% block nav %}
   <header class="border-b border-base-300/60 bg-base-100/95 backdrop-blur supports-backdrop-blur:bg-base-100/70 sticky top-0 z-20">
     <div class="mx-auto max-w-5xl px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
@@ -237,6 +253,10 @@
             {% if user.is_staff %}
             <li><a href="/admin/">Admin</a></li>
             <li><a href="{% url 'treasurer' %}">Treasurer dashboard</a></li>
+            {% endif %}
+
+            {% if not request.impersonator and user.is_superuser %}
+            <li><a href="{% url 'core:impersonate_picker' %}">View as…</a></li>
             {% endif %}
 
             <li><hr class="border-base-300/60 my-1"></li>
