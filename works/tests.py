@@ -657,3 +657,32 @@ def test_directory_detail_omits_members_only_works_for_anon(client):
     WorkAuthor.objects.create(work=w, user=u, display_order=0)
     body = client.get(reverse("directory_detail", args=[u.profile.directory_slug])).content.decode()
     assert "Secret paper" not in body
+
+
+# ---- PDF rendering (fpdf2, vendored Unicode fonts) ---------------------
+
+def test_render_document_pdf_basics_and_unicode():
+    """PDF renders with provenance + members, Unicode text, and lists without
+    crashing the (latin-1) core fonts — the vendored DejaVu fonts handle it."""
+    import datetime
+
+    from works.pdf import render_document_pdf
+
+    pdf = render_document_pdf(
+        title="On the Symptom — café & ψυχή",
+        body_html=("<p>café, naïve, Œdipe, Лакан, ψυχή</p>"
+                   "<ul><li><p>first</p></li><li><p>second</p></li></ul>"
+                   "<ol><li><p>one</p></li><li><p>two</p></li></ol>"),
+        group_kind="Cartel", group_name="The Letter",
+        members=["Jane Analyst", "Carlos Jiménez"],
+        published_date=datetime.date(2026, 6, 2), revision=2,
+    )
+    assert pdf[:5] == b"%PDF-"
+    assert len(pdf) > 1000
+
+
+def test_unwrap_list_paragraphs():
+    from works.pdf import _unwrap_list_paragraphs
+
+    assert (_unwrap_list_paragraphs("<ul><li><p>a</p></li><li><p>b</p></li></ul>")
+            == "<ul><li>a</li><li>b</li></ul>")

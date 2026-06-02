@@ -989,12 +989,17 @@ def draft_publish(request, slug, pk):
     work.save()
 
     revision = draft.versions.filter(label="Published").count() + 1
+    member_names = [
+        p.user.get_full_name() or p.user.email
+        for p in wg.participants() if p.user is not None
+    ]
 
     # (Re)generate the attached PDF with the document's provenance block.
     work.files.filter(label="Published PDF").delete()
     pdf = render_document_pdf(
         title=draft.title, body_html=safe_html,
         group_kind=wg.get_kind_display(), group_name=wg.name,
+        members=member_names,
         published_date=work.publication_date, revision=revision,
     )
     WorkFile.objects.create(
