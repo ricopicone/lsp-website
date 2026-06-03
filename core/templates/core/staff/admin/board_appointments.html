@@ -1,0 +1,83 @@
+{% extends "core/base.html" %}
+{% block title %}Appointments — Admin Tools{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+  <nav class="text-sm">
+    <a href="{% url 'board_admin' %}" class="link link-hover text-base-content/60">← Board Admin</a>
+  </nav>
+  <header class="space-y-2">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">Board · Governance</p>
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Appointments</h1>
+    <p class="text-base-content/70">
+      Appoint and reassign the school's operational staff roles. A role can be
+      held by more than one person; superusers implicitly hold every role.
+    </p>
+  </header>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  {% comment %}Appoint someone to a role.{% endcomment %}
+  <form method="post" class="rounded-xl border border-base-300 p-5 space-y-3">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="appoint">
+    <h2 class="font-medium text-base-content">Appoint a member</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+      <div class="space-y-1">
+        <label class="block text-xs text-base-content/60">Member</label>
+        <select name="user" class="select select-bordered w-full" required>
+          <option value="" disabled selected>Choose a member…</option>
+          {% for u in appointable %}
+          <option value="{{ u.pk }}">{{ u.get_full_name|default:u.email }}{% if u.get_full_name %} · {{ u.email }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="space-y-1">
+        <label class="block text-xs text-base-content/60">Role</label>
+        <select name="role" class="select select-bordered w-full" required>
+          <option value="" disabled selected>Choose a role…</option>
+          {% for r in roles %}
+          <option value="{{ r.key }}">{{ r.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn btn-primary btn-sm">Appoint</button>
+    </div>
+  </form>
+
+  {% comment %}Current holders, per role.{% endcomment %}
+  <div class="space-y-3">
+    {% for r in roles %}
+    <section class="rounded-xl border border-base-300 p-4 space-y-2">
+      <div class="flex items-baseline justify-between gap-2">
+        <h3 class="font-medium text-base-content">{{ r.name }}</h3>
+        <span class="font-mono text-xs text-base-content/45">{{ r.holders.all|length }} holder{{ r.holders.all|length|pluralize }}</span>
+      </div>
+      {% if r.description %}<p class="text-sm text-base-content/60">{{ r.description }}</p>{% endif %}
+      <div class="flex flex-wrap gap-2 pt-1">
+        {% for h in r.holders.all %}
+        <span class="badge badge-outline gap-1 py-3">
+          {{ h.get_full_name|default:h.email }}
+          <form method="post" class="inline" onsubmit="return confirm('Remove {{ h.get_full_name|default:h.email|escapejs }} from {{ r.name|escapejs }}?');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="remove">
+            <input type="hidden" name="role" value="{{ r.key }}">
+            <input type="hidden" name="user" value="{{ h.pk }}">
+            <button class="text-error/70 hover:text-error" title="Remove" aria-label="Remove">✕</button>
+          </form>
+        </span>
+        {% empty %}
+        <span class="text-sm text-base-content/40">No holders.</span>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+
+  <p class="text-xs text-base-content/50">
+    Committee chairs and officers are roster roles — set those in each
+    committee's workspace from <a href="{% url 'board_committees' %}" class="link">Committees</a>.
+  </p>
+</div>
+{% endblock %}
