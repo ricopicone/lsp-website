@@ -309,11 +309,32 @@ Phase 2 plan for milestone IDs):**
   working_group, committee, seminar, reading_group). `/groups/` is a
   per-kind overview; each kind has its own index at `/groups/<kind>/`
   (`workgroups:kind_*`). **Add features to the Workgroup first.** See
-  `workgroups-architecture` memory.
+  `workgroups-architecture` memory. The Workspace (`/groups/<slug>/`) is a
+  tabbed surface driven by capability toggles — **every toggle is now backed
+  by a real feature**: Overview, Discuss + Chat, **Work** (see below),
+  **Files** (versioned shared files; 30 MB/file, 200 MB/group quota raisable
+  in admin; private-S3-stored, gated download), Schedule (meetings/series/
+  iCal), **Minutes** (the meeting record — minutes + the decisions from each),
+  Tasks, **Decisions** (lightweight register; leaders record, or any member in
+  leaderless groups like cartels; linked to the meeting that produced them),
+  Roster, Settings.
+- **Work-tab document editor** (`works.WorkDraft`/`WorkDraftVersion`) — a
+  collaborative document center on each Workgroup's Work tab. Three draft
+  kinds: a native in-browser editor (vendored TipTap — `npm run build:js` →
+  `static/js/vendor/doc-editor.js`; autosave + version history + soft edit
+  lock), a linked Google Doc, or an uploaded PDF (static until published).
+  **Publish → Works** renders/attaches a PDF (fpdf2, DejaVu Unicode fonts,
+  provenance title block) + a sanitized HTML body, bylined to the group's
+  members; unpublish/delete supported. Comments/track-changes deferred
+  (TipTap Pro). See `document-editor` memory.
 - **Cartels** (`cartels`, CART-1/2/3) — built on the Workgroup layer.
 - **Directory** (`/directory/`), **Find an Analyst** map, member
   self-service **profile editor** (`/accounts/profile/`), **works**
   showcase (`/works/`), and **documents** (`/documents/`) — all live.
+  `Work`/`Document` visibility is two-axis: `listing_visibility` (catalog) +
+  **`content_visibility`** (the PDF *and* the published HTML body; renamed
+  from `pdf_visibility`). Gated content lives in the private S3 bucket and is
+  served only via access-checked download views — see `media-storage` memory.
 
 ## Open items (M7 wrap-up)
 
