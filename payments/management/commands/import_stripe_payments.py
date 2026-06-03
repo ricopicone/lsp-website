@@ -64,6 +64,13 @@ class Command(BaseCommand):
                             "others are held back. Reconciles are unaffected.")
         parser.add_argument("--allow-overlaps", action="store_true",
                             help="Create rows even when they look like a ledger duplicate.")
+        parser.add_argument("--sweep-unknown", action="store_true",
+                            help="Provisionally type the leftover unknown charges "
+                            "(source=ASSUMED): tuition for current students, "
+                            "registration for those who've completed tuition.")
+        parser.add_argument("--sweep-min", type=float, default=25.0,
+                            help="Skip unknown charges below this amount when "
+                            "sweeping (default 25, ignores card-test charges).")
         parser.add_argument("--verbose-rows", action="store_true",
                             help="List every charge and its planned action.")
         parser.add_argument("--dump-unknown", action="store_true",
@@ -112,10 +119,13 @@ class Command(BaseCommand):
 
     # -- context from the DB -------------------------------------------------
 
-    def build_context(self, default_type, only_types=None):
+    def build_context(self, default_type, only_types=None,
+                      sweep_unknown=False, sweep_min=25.0):
+        from decimal import Decimal
+
         from accounts.membership import current_academic_year_start
         from accounts.models import MembershipTenure, Profile, User
-        from payments.models import DuesPeriod, TuitionPeriod
+        from payments.models import DuesPeriod, TuitionEnrollment, TuitionPeriod
         from payments.stripe_import import TAG_RE, ay_of
         from payments.treasurer_import import NameMatcher
 
@@ -159,11 +169,13 @@ class Command(BaseCommand):
 
         # Per-year dues tiers + tuition amounts, for data-driven type inference.
         dues_amounts_by_ay: dict = {}
+        dues_period_by_ay: dict = {}
         for dp in DuesPeriod.objects.all():
             ay = ay_of(dp.start_date)
             amts = {dp.dues_amount_pre_candidate, dp.dues_amount_candidate,
                     dp.dues_amount_analyst}
             dues_amounts_by_ay.setdefault(ay, set()).update(a for a in amts if a)
+            dues_period_by_ay.setdefault(ay, dp.pk)
         tuition_by_ay = {
             ay_of(tp.start_date): tp.tuition_amount
             for tp in TuitionPeriod.objects.all()
@@ -178,6 +190,30 @@ class Command(BaseCommand):
             last = t.end_ay if t.end_ay is not None else cur_ay
             for ay in range(t.start_ay, last + 1):
                 non_student_user_ays.add((t.user_id, ay))
+
+        # Members who have *completed* tuition — analysts/scholars (finished
+        # training) or anyone with ≥4 tuition years on record. Used by the
+        # --sweep-unknown pass: their leftover charges are assumed to be seminar
+        # registrations, not tuition.
+        completed_tuition_user_ids: set = {
+            u.pk for u in users
+            if getattr(getattr(u, "profile", None), "role", None)
+            in (Profile.Role.ANALYST, Profile.Role.SCHOLAR)
+        }
+        tuition_years: dict = {}
+        for te in (TuitionEnrollment.objects
+                   .exclude(status=TuitionEnrollment.Status.SKIPPING)
+                   .select_related("tuition_period")):
+            tuition_years.setdefault(te.user_id, set()).add(
+                ay_of(te.tuition_period.start_date)
+            )
+        for p in payments:
+            if (p.payment_type == Payment.Type.TUITION and p.user_id
+                    and p.status == Payment.Status.SUCCEEDED and p.paid_at):
+                tuition_years.setdefault(p.user_id, set()).add(ay_of(p.paid_at.date()))
+        completed_tuition_user_ids |= {
+            uid for uid, yrs in tuition_years.items() if len(yrs) >= 4
+        }
 
         return PlanContext(
             valid_types=set(Payment.Type.values),
@@ -195,9 +231,13 @@ class Command(BaseCommand):
             matcher=NameMatcher.from_queryset(users),
             overlaps_by_user=overlaps_by_user,
             dues_amounts_by_ay={k: frozenset(v) for k, v in dues_amounts_by_ay.items()},
+            dues_period_by_ay=dues_period_by_ay,
             tuition_by_ay=tuition_by_ay,
             existing_dues_ay=existing_dues_ay,
             non_student_user_ays=non_student_user_ays,
+            completed_tuition_user_ids=completed_tuition_user_ids,
+            sweep_unknown=sweep_unknown,
+            sweep_min=Decimal(str(sweep_min)),
             only_types=only_types,
             default_type=default_type,
         )
@@ -220,7 +260,10 @@ class Command(BaseCommand):
                 raise CommandError(f"Unknown --only-types: {', '.join(sorted(bad))}")
 
         rows = [normalize_charge(c, sessions_by_pi=sessions_by_pi) for c in charges]
-        ctx = self.build_context(opts["default_type"], only_types=only_types)
+        ctx = self.build_context(
+            opts["default_type"], only_types=only_types,
+            sweep_unknown=opts["sweep_unknown"], sweep_min=opts["sweep_min"],
+        )
         plans = plan_charges(rows, ctx, allow_overlaps=opts["allow_overlaps"])
 
         self._report(plans, committing=opts["commit"])
@@ -281,6 +324,13 @@ class Command(BaseCommand):
             self.stdout.write("\nNew rows by type:")
             for ptype, (n, total) in sorted(by_type.items()):
                 self.stdout.write(f"  {n:>4}  {ptype:<13} ${total:,.2f}")
+        provisional = [p for p in creates if p.provisional]
+        if provisional:
+            prov_total = sum((p.row.amount for p in provisional), Decimal("0"))
+            self.stdout.write(
+                f"  ({len(provisional)} of these are provisional sweeps, "
+                f"${prov_total:,.2f}, recorded as source=ASSUMED)"
+            )
         self.stdout.write(f"\n  New money to record: ${created_total:,.2f}")
 
         # Amount histogram for the still-unknown charges (helps pick a sweep).

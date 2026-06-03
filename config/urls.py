@@ -104,6 +104,8 @@ urlpatterns = [
     path("treasurer/", _payment_views.treasurer_dashboard, name="treasurer"),
     path("treasurer/tuition/", _payment_views.treasurer_tuition, name="treasurer_tuition"),
     path("treasurer/dues/", _payment_views.treasurer_dues, name="treasurer_dues"),
+    path("treasurer/reconcile/", _payment_views.treasurer_reconcile,
+         name="treasurer_reconcile"),
     path("treasurer/settings/", _payment_views.treasurer_settings, name="treasurer_settings"),
     path("treasurer/tuition/<int:user_id>/set-status/",
          _payment_views.treasurer_tuition_set_status,

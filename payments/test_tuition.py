@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -1675,3 +1675,34 @@ def test_treasurer_in_training_count_excludes_on_leave(current_period):
 
     ctx = _treasurer_tuition_context()
     assert ctx["tuition_in_training_count"] == 1  # only the active candidate
+
+
+# --- Backfilled (installment-less) tuition shows on the dashboard -------
+
+@pytest.mark.django_db
+def test_backfilled_tuition_counts_toward_collected():
+    """Imported tuition with no installment link (Stripe/treasurer backfill)
+    still counts as collected for its academic year."""
+    from payments.models import Payment
+    from payments.views import (
+        _treasurer_tuition_context,
+        _treasurer_tuition_longitudinal,
+    )
+
+    period = TuitionPeriod.objects.create(
+        name="AY 2022–2023", slug="ay-2022-2023",
+        start_date=date(2022, 9, 1), decision_due_date=date(2022, 10, 1),
+        end_date=date(2023, 8, 31), tuition_amount=Decimal("2000.00"),
+    )
+    u = _mk_candidate("backfill@example.com")
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("2000.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        paid_at=timezone.make_aware(datetime(2022, 10, 15, 12, 0)),
+    )
+    ctx = _treasurer_tuition_context(period)
+    assert ctx["tuition_total_collected"] == Decimal("2000.00")
+
+    longi = _treasurer_tuition_longitudinal()
+    row = next(r for r in longi["tuition_year_rows"] if r["period"].id == period.id)
+    assert row["collected"] == Decimal("2000.00")

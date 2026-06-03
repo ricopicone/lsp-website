@@ -71,6 +71,10 @@ def matcher():
         ("Christopher Chamberlain", 8),  # verified alias (ledger typo)
         ("Christopher Scott", 9),
         ("Kiran Shah", 11),              # middle name stands in for first -> subset
+        ("Shanna Carlson PhD", 4),       # professional credential dropped
+        ("Garret Barnwell LMFT", 1),     # credential dropped
+        ("Christopher Scott LCSW", 9),   # credential dropped
+        ("Julien Fischer, PsyD", 2),     # credential + punctuation dropped
     ],
 )
 def test_high_confidence_matches(matcher, raw, expected):
@@ -125,6 +129,13 @@ def test_clean_raw_name():
 
 def test_name_tokens_drops_honorifics():
     assert name_tokens("Dr. Robert Beshara Jr.") == ["robert", "beshara"]
+
+
+def test_name_tokens_drops_credentials_but_keeps_real_surnames():
+    assert name_tokens("Annie G Rogers PhD") == ["annie", "g", "rogers"]
+    assert name_tokens("Nathan Lupo LMFT") == ["nathan", "lupo"]
+    # "Ma" is a surname, not the MA degree — must survive.
+    assert name_tokens("Karen Ma") == ["karen", "ma"]
 
 
 # ---------------------------------------------------------------------------
