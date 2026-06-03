@@ -1095,3 +1095,61 @@ def test_set_member_term_future_end_editable_again():
     later = datetime.date.today() + datetime.timedelta(days=600)
     assert wg.set_member_term(u, start_date=datetime.date(2024, 1, 1), end_date=later) is True
     assert wg.memberships.get(user=u).end_date == later
+
+
+def test_create_file_draft_redirects_to_work_tab(client):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    wg = _wg(name="Filey", slug="filey")
+    u = _member_of(wg)
+    client.force_login(u)
+    pdf = SimpleUploadedFile("paper.pdf", b"%PDF-1.4\n%data\n", content_type="application/pdf")
+    resp = client.post(reverse("workgroups:draft_create", args=[wg.slug]),
+                       {"title": "Static Paper", "file": pdf})
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.get(workgroup=wg)
+    assert draft.is_file
+    assert not draft.is_native
+    assert "tab=work" in resp.url          # not the editor
+
+
+def test_publish_file_draft_attaches_pdf_no_body(client):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    wg = _wg(name="Filey", slug="filey")
+    mgr = _member_of(wg, "mgr@x.test")
+    mgr.is_superuser = True
+    mgr.save()
+    from works.models import Work, WorkDraft
+    draft = WorkDraft.objects.create(
+        workgroup=wg, title="Static Paper",
+        file=SimpleUploadedFile("paper.pdf", b"%PDF-1.4\n%uploaded\n",
+                                content_type="application/pdf"),
+    )
+    client.force_login(mgr)
+    resp = client.post(reverse("workgroups:draft_publish", args=[wg.slug, draft.pk]),
+                       {"visibility": "members"})
+    assert resp.status_code == 302
+    work = Work.objects.get(workgroup=wg, kind=Work.Kind.DOCUMENT)
+    assert work.body_html == ""                          # static PDF, no web body
+    pf = work.files.get(label="Published PDF")
+    assert pf.file.read() == b"%PDF-1.4\n%uploaded\n"     # the uploaded bytes
+    draft.refresh_from_db()
+    assert draft.published_work_id == work.pk
+    assert work.authorships.filter(user=mgr).exists()    # bylined to members
+
+
+def test_work_tab_renders_file_draft_row(client):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    wg = _wg(name="Filey", slug="filey", has_works=True,
+             content_visibility=Visibility.MEMBERS)
+    u = _member_of(wg)
+    from works.models import WorkDraft
+    WorkDraft.objects.create(
+        workgroup=wg, title="Static Paper",
+        file=SimpleUploadedFile("paper.pdf", b"%PDF-1.4\n", content_type="application/pdf"),
+    )
+    client.force_login(u)
+    resp = client.get(f"{wg.get_absolute_url()}?tab=work")
+    assert resp.status_code == 200
+    assert b"Static Paper" in resp.content
+    assert b"Upload a PDF" in resp.content       # the new create option
+    assert b"PDF \xe2\x86\x97" in resp.content   # "PDF ↗" badge

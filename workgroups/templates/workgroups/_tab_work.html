@@ -14,6 +14,16 @@
             <button type="submit" class="btn btn-sm btn-primary w-full">Create &amp; edit</button>
           </form>
           <div class="divider my-0 text-[0.65rem] uppercase tracking-wider text-base-content/40">or</div>
+          <form method="post" enctype="multipart/form-data" action="{% url 'workgroups:draft_create' workgroup.slug %}" class="space-y-2">
+            {% csrf_token %}
+            <label class="text-xs font-medium uppercase tracking-wider text-base-content/55">Upload a PDF</label>
+            <input name="title" type="text" placeholder="Document title"
+                   class="input input-sm input-bordered w-full" />
+            <input name="file" type="file" accept="application/pdf,.pdf" required
+                   class="file-input file-input-sm file-input-bordered w-full" />
+            <button type="submit" class="btn btn-sm btn-outline w-full">Upload</button>
+          </form>
+          <div class="divider my-0 text-[0.65rem] uppercase tracking-wider text-base-content/40">or</div>
           <form method="post" action="{% url 'workgroups:draft_create' workgroup.slug %}" class="space-y-2">
             {% csrf_token %}
             <label class="text-xs font-medium uppercase tracking-wider text-base-content/55">Link a Google Doc</label>
@@ -37,6 +47,15 @@
           {{ d.title }}
           <span class="ml-1 align-middle inline-flex items-center gap-1 rounded-full bg-base-200 px-2 py-0.5 text-[0.6rem] font-medium uppercase tracking-wider text-base-content/55">Google Doc ↗</span>
         </a>
+        {% elif d.is_file %}
+        <a href="{{ d.file.url }}" target="_blank" rel="noopener"
+           class="min-w-0 flex-1 font-medium text-base-content hover:text-primary">
+          {{ d.title }}
+          <span class="ml-1 align-middle inline-flex items-center gap-1 rounded-full bg-base-200 px-2 py-0.5 text-[0.6rem] font-medium uppercase tracking-wider text-base-content/55">PDF ↗</span>
+          {% if d.published_work_id %}
+          <span class="ml-1 align-middle inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[0.6rem] font-medium uppercase tracking-wider text-success">Published</span>
+          {% endif %}
+        </a>
         {% else %}
         <a href="{% url 'workgroups:draft_edit' workgroup.slug d.pk %}"
            class="min-w-0 flex-1 font-medium text-base-content hover:text-primary">
@@ -46,7 +65,23 @@
           {% endif %}
         </a>
         {% endif %}
-        <span class="text-xs text-base-content/45">edited {{ d.updated_at|date:"M j, Y" }}</span>
+        <span class="text-xs text-base-content/45">{% if d.is_native %}edited{% else %}added{% endif %} {{ d.updated_at|date:"M j, Y" }}</span>
+        {% if can_publish_docs and d.is_file %}
+        <details class="dropdown dropdown-end">
+          <summary class="btn btn-ghost btn-xs">{% if d.published_work_id %}Re-publish{% else %}Publish{% endif %}</summary>
+          <form method="post" action="{% url 'workgroups:draft_publish' workgroup.slug d.pk %}"
+                class="dropdown-content z-10 mt-2 w-64 space-y-2 rounded-xl border border-base-300/60 bg-base-100 p-3 shadow-lg">
+            {% csrf_token %}
+            <p class="text-[0.7rem] text-base-content/55">Publish this PDF to Works.</p>
+            <select name="visibility" class="select select-xs select-bordered w-full">
+              <option value="members" selected>LSP members</option>
+              <option value="public">Public</option>
+              <option value="group">This group only</option>
+            </select>
+            <button type="submit" class="btn btn-xs btn-primary w-full">Publish</button>
+          </form>
+        </details>
+        {% endif %}
         <form method="post" action="{% url 'workgroups:draft_delete' workgroup.slug d.pk %}"
               onsubmit="return confirm('Delete “{{ d.title|escapejs }}”? This cannot be undone.');">
           {% csrf_token %}

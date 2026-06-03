@@ -313,10 +313,11 @@ class WorkFile(models.Model):
 
 
 class WorkDraft(models.Model):
-    """A collaborative working document in a workgroup's Work tab — drafted
-    in-browser (TipTap, autosaved, versioned) and eventually *published* into a
-    :class:`Work` (web page + PDF). Either native (``content_html``) or a link
-    to an external Google Doc (``google_doc_url``)."""
+    """A collaborative working document in a workgroup's Work tab — eventually
+    *published* into a :class:`Work`. One of three kinds: a *native* doc drafted
+    in-browser (``content_html``, TipTap, autosaved + versioned); a *linked*
+    external Google Doc (``google_doc_url``); or an uploaded *file* (``file``,
+    e.g. a PDF that sits as a static working document until published)."""
 
     workgroup = models.ForeignKey(
         "workgroups.Workgroup", on_delete=models.CASCADE, related_name="drafts"
@@ -325,6 +326,11 @@ class WorkDraft(models.Model):
     content_html = models.TextField(blank=True)
     google_doc_url = models.URLField(
         blank=True, help_text="If set, this is a linked Google Doc (no in-app editing)."
+    )
+    file = models.FileField(
+        upload_to="workdrafts/%Y/", blank=True,
+        help_text="If set, this is an uploaded file (e.g. a PDF) — a static "
+        "working document, not edited in-app.",
     )
     #: Soft, advisory edit lock — who's currently editing + when last seen.
     locked_by = models.ForeignKey(
@@ -362,6 +368,19 @@ class WorkDraft(models.Model):
     @property
     def is_linked(self) -> bool:
         return bool(self.google_doc_url)
+
+    @property
+    def is_file(self) -> bool:
+        return bool(self.file)
+
+    @property
+    def is_native(self) -> bool:
+        """Drafted in-browser (the only kind with an in-app editor)."""
+        return not self.is_linked and not self.is_file
+
+    @property
+    def filename(self) -> str:
+        return self.file.name.rsplit("/", 1)[-1] if self.file else ""
 
     def active_lock_holder(self):
         """The user currently holding a live edit lock, or None (stale/unlocked)."""

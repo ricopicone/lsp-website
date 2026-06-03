@@ -295,6 +295,7 @@ def workgroup_detail(request, slug):
         if is_member:
             context["drafts"] = list(wg.drafts.select_related("locked_by", "published_work"))
             context["can_edit_docs"] = True
+            context["can_publish_docs"] = can_manage
     elif active == "schedule" and wg.has_calendar and (is_member or archive_access):
         from django.utils import timezone as _tz
 
@@ -877,19 +878,22 @@ def _get_draft(request, slug, pk):
 @login_required
 @require_POST
 def draft_create(request, slug):
-    """Create a working document — native (editor) or a linked Google Doc."""
+    """Create a working document — an uploaded file (e.g. a PDF), a linked
+    Google Doc, or a native in-browser doc (the default)."""
     from works.models import WorkDraft
 
     wg = _doc_member_or_404(request, slug)
     title = (request.POST.get("title") or "").strip()[:200] or "Untitled document"
     google_doc_url = (request.POST.get("google_doc_url") or "").strip()
+    upload = request.FILES.get("file")
     draft = WorkDraft.objects.create(
         workgroup=wg, title=title, google_doc_url=google_doc_url,
-        created_by=request.user, updated_by=request.user,
+        file=upload or "", created_by=request.user, updated_by=request.user,
     )
-    if draft.is_linked:
-        return redirect(f"{wg.get_absolute_url()}?tab=work")
-    return redirect("workgroups:draft_edit", slug=wg.slug, pk=draft.pk)
+    # Only native docs open the in-app editor; uploads and links sit in the list.
+    if draft.is_native:
+        return redirect("workgroups:draft_edit", slug=wg.slug, pk=draft.pk)
+    return redirect(f"{wg.get_absolute_url()}?tab=work")
 
 
 @login_required
@@ -898,6 +902,8 @@ def draft_edit(request, slug, pk):
     wg, draft = _get_draft(request, slug, pk)
     if draft.is_linked:
         return redirect(draft.google_doc_url)
+    if draft.is_file:
+        return redirect(draft.file.url)
     holder = draft.active_lock_holder()
     can_edit = holder is None or holder.pk == request.user.pk
     if can_edit:
@@ -1004,7 +1010,9 @@ def draft_publish(request, slug, pk):
                     submitted_by=request.user)
     from django.utils import timezone
 
-    safe_html = _sanitize_document_html(draft.content_html)
+    # An uploaded-file draft publishes as a static PDF (no rendered web body);
+    # a native draft renders its HTML to both the web body and a generated PDF.
+    safe_html = "" if draft.is_file else _sanitize_document_html(draft.content_html)
     work.title = draft.title
     work.body_html = safe_html
     work.kind = Work.Kind.DOCUMENT
@@ -1032,18 +1040,20 @@ def draft_publish(request, slug, pk):
         for i, p in enumerate(participants)
     ])
 
-    # (Re)generate the attached PDF with the document's provenance block.
+    # (Re)attach the document PDF: the uploaded file as-is, or one we render
+    # from the native HTML with a provenance title block.
     work.files.filter(label="Published PDF").delete()
-    pdf = render_document_pdf(
-        title=draft.title, body_html=safe_html,
-        group_kind=wg.get_kind_display(), group_name=wg.name,
-        members=member_names,
-        published_date=work.publication_date, revision=revision,
-    )
-    WorkFile.objects.create(
-        work=work, label="Published PDF",
-        file=ContentFile(pdf, name=f"{work.slug}.pdf"),
-    )
+    if draft.is_file:
+        pdf_file = ContentFile(draft.file.read(), name=draft.filename or f"{work.slug}.pdf")
+    else:
+        pdf = render_document_pdf(
+            title=draft.title, body_html=safe_html,
+            group_kind=wg.get_kind_display(), group_name=wg.name,
+            members=member_names,
+            published_date=work.publication_date, revision=revision,
+        )
+        pdf_file = ContentFile(pdf, name=f"{work.slug}.pdf")
+    WorkFile.objects.create(work=work, label="Published PDF", file=pdf_file)
 
     draft.published_work = work
     draft.save(update_fields=["published_work"])
