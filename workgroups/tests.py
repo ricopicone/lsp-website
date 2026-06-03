@@ -1396,3 +1396,47 @@ def test_decisions_tab_renders(client):
     assert resp.status_code == 200
     assert b"Adopt the charter" in resp.content
     assert b"Record a decision" in resp.content
+
+
+# ---- Minutes (meeting record) tab --------------------------------------
+
+def test_minutes_tab_shows_record_and_decisions(client):
+    from workgroups.models import WorkgroupDecision, WorkgroupMeeting
+    wg = _wg(name="Cmte M", slug="cmte-m", kind=Workgroup.Kind.COMMITTEE,
+             has_minutes=True, has_decisions=True,
+             content_visibility=Visibility.MEMBERS)
+    m = _member_of(wg, "m@x.test")
+    past = WorkgroupMeeting.objects.create(
+        workgroup=wg, title="March meeting",
+        starts_at=datetime.datetime(2020, 3, 1, 18, 0, tzinfo=datetime.timezone.utc),
+        minutes="Discussed the budget.")
+    WorkgroupDecision.objects.create(workgroup=wg, title="Adopt the budget",
+                                     meeting=past, status="adopted", created_by=m)
+    WorkgroupMeeting.objects.create(            # future, no minutes → excluded
+        workgroup=wg, title="Future planning",
+        starts_at=datetime.datetime(2099, 1, 1, 18, 0, tzinfo=datetime.timezone.utc))
+    client.force_login(m)
+    resp = client.get(f"{wg.get_absolute_url()}?tab=minutes")
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "March meeting" in body
+    assert "Discussed the budget." in body
+    assert "Adopt the budget" in body          # the decision that came out of it
+    assert "Future planning" not in body       # upcoming with no minutes
+
+
+def test_minutes_save_returns_to_minutes_tab(client):
+    from workgroups.models import WorkgroupMeeting
+    wg = _wg(name="Cmte M", slug="cmte-m", kind=Workgroup.Kind.COMMITTEE,
+             has_minutes=True)
+    lead = _chair_of(wg)                        # a chair can schedule/record
+    mt = WorkgroupMeeting.objects.create(
+        workgroup=wg,
+        starts_at=datetime.datetime(2020, 3, 1, 18, 0, tzinfo=datetime.timezone.utc))
+    client.force_login(lead)
+    resp = client.post(reverse("workgroups:meeting_minutes", args=[wg.slug, mt.pk]),
+                       {"minutes": "Recorded here.", "tab": "minutes"})
+    assert resp.status_code == 302
+    assert "tab=minutes" in resp.url            # returns to the record, not Schedule
+    mt.refresh_from_db()
+    assert mt.minutes == "Recorded here."

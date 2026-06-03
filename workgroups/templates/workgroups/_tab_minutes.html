@@ -1,0 +1,71 @@
+{% comment %}
+The meeting record. Expects: workgroup, minutes_meetings (each with .decisions),
+can_schedule, can_register_decisions.
+{% endcomment %}
+<div class="space-y-6">
+  <div>
+    <h2 class="font-serif text-xl text-base-content">Minutes</h2>
+    <p class="text-xs text-base-content/55">The group's meeting record — notes and the decisions that came out of each.</p>
+  </div>
+
+  {% if minutes_meetings %}
+  <ul class="space-y-4">
+    {% for m in minutes_meetings %}
+    <li class="rounded-xl border border-base-300/50 bg-base-100 p-4 space-y-3 {% if m.cancelled %}opacity-70{% endif %}">
+      <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h3 class="font-medium text-base-content">
+          {{ m.starts_at|date:"l, F j, Y" }}<span class="text-base-content/50"> · {{ m.starts_at|date:"g:i a" }}</span>
+          {% if m.title %}<span class="text-base-content/80"> — {{ m.title }}</span>{% endif %}
+        </h3>
+        {% if m.cancelled %}<span class="badge badge-error badge-sm">Cancelled</span>
+        {% elif not m.minutes %}<span class="badge badge-ghost badge-sm">No minutes yet</span>{% endif %}
+      </div>
+
+      {% if m.minutes %}
+      <div class="whitespace-pre-line border-l-2 border-base-300 pl-3 text-sm text-base-content/80">{{ m.minutes }}</div>
+      {% endif %}
+
+      {% with decs=m.decisions.all %}
+      {% if decs %}
+      <div class="space-y-1">
+        <p class="text-xs uppercase tracking-wider text-base-content/45">Decisions</p>
+        <ul class="space-y-1">
+          {% for d in decs %}
+          <li class="flex flex-wrap items-center gap-2 text-sm">
+            <span class="badge badge-xs {% if d.status == 'adopted' %}badge-success{% elif d.status == 'rejected' %}badge-error{% elif d.status == 'tabled' %}badge-warning{% else %}badge-ghost{% endif %}">{{ d.get_status_display }}</span>
+            <a href="{{ workgroup.get_absolute_url }}?tab=decisions" class="link link-hover text-base-content/80">{{ d.title }}</a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      {% endwith %}
+
+      {% if can_schedule or workgroup.has_decisions and can_register_decisions %}
+      <div class="flex flex-wrap items-center gap-3 pt-1">
+        {% if can_schedule %}
+        <details class="dropdown">
+          <summary class="btn btn-ghost btn-xs">{% if m.minutes %}Edit minutes{% else %}Add minutes{% endif %}</summary>
+          <form method="post" action="{% url 'workgroups:meeting_minutes' workgroup.slug m.pk %}"
+                class="dropdown-content z-50 mt-2 w-96 max-w-[90vw] space-y-2 rounded-xl border border-base-300/60 bg-base-100 p-3 shadow-lg">
+            {% csrf_token %}
+            <input type="hidden" name="tab" value="minutes">
+            <textarea name="minutes" rows="6" class="textarea textarea-sm textarea-bordered w-full" placeholder="Minutes / notes…">{{ m.minutes }}</textarea>
+            <button type="submit" class="btn btn-sm btn-primary w-full">Save minutes</button>
+          </form>
+        </details>
+        {% endif %}
+        {% if workgroup.has_decisions and can_register_decisions %}
+        <a href="{{ workgroup.get_absolute_url }}?tab=decisions&meeting={{ m.pk }}" class="link link-hover text-xs text-primary">Record a decision from this meeting →</a>
+        {% endif %}
+      </div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="rounded-xl border border-dashed border-base-300/70 bg-base-200/30 p-6 text-center text-sm text-base-content/55">
+    No meetings on record yet. Minutes appear here once a meeting has taken place{% if workgroup.has_calendar %} (schedule meetings in the Schedule tab){% endif %}.
+  </div>
+  {% endif %}
+</div>
