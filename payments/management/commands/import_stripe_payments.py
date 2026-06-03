@@ -59,6 +59,9 @@ class Command(BaseCommand):
         parser.add_argument("--default-type", default=None,
                             choices=Payment.Type.values,
                             help="Type for charges whose type can't be inferred.")
+        parser.add_argument("--only-types", default=None,
+                            help="Comma list of types to create (e.g. 'tuition'); "
+                            "others are held back. Reconciles are unaffected.")
         parser.add_argument("--allow-overlaps", action="store_true",
                             help="Create rows even when they look like a ledger duplicate.")
         parser.add_argument("--verbose-rows", action="store_true",
@@ -106,9 +109,11 @@ class Command(BaseCommand):
 
     # -- context from the DB -------------------------------------------------
 
-    def build_context(self, default_type):
-        from accounts.models import User
-        from payments.stripe_import import TAG_RE
+    def build_context(self, default_type, only_types=None):
+        from accounts.membership import current_academic_year_start
+        from accounts.models import MembershipTenure, Profile, User
+        from payments.models import DuesPeriod, TuitionPeriod
+        from payments.stripe_import import TAG_RE, ay_of
         from payments.treasurer_import import NameMatcher
 
         payments = list(Payment.objects.all().only(
@@ -142,6 +147,27 @@ class Command(BaseCommand):
             if pub:
                 email_to_user.setdefault(pub.lower(), u.pk)
 
+        # Per-year dues tiers + tuition amounts, for data-driven type inference.
+        dues_amounts_by_ay: dict = {}
+        for dp in DuesPeriod.objects.all():
+            ay = ay_of(dp.start_date)
+            amts = {dp.dues_amount_pre_candidate, dp.dues_amount_candidate,
+                    dp.dues_amount_analyst}
+            dues_amounts_by_ay.setdefault(ay, set()).update(a for a in amts if a)
+        tuition_by_ay = {
+            ay_of(tp.start_date): tp.tuition_amount
+            for tp in TuitionPeriod.objects.all()
+        }
+
+        # {(user_id, ay)} the member held a tuition-paying role — gates the
+        # "multiple charges in an AY = installments" rule to actual students.
+        cur_ay = current_academic_year_start()
+        tuition_user_ays: set = set()
+        for t in MembershipTenure.objects.filter(role__in=Profile.IN_TRAINING_ROLES):
+            last = t.end_ay if t.end_ay is not None else cur_ay
+            for ay in range(t.start_ay, last + 1):
+                tuition_user_ays.add((t.user_id, ay))
+
         return PlanContext(
             valid_types=set(Payment.Type.values),
             tags_seen=tags_seen,
@@ -157,6 +183,10 @@ class Command(BaseCommand):
             email_to_user=email_to_user,
             matcher=NameMatcher.from_queryset(users),
             overlaps_by_user=overlaps_by_user,
+            dues_amounts_by_ay={k: frozenset(v) for k, v in dues_amounts_by_ay.items()},
+            tuition_by_ay=tuition_by_ay,
+            tuition_user_ays=tuition_user_ays,
+            only_types=only_types,
             default_type=default_type,
         )
 
@@ -170,8 +200,15 @@ class Command(BaseCommand):
         except Exception as exc:  # network / auth / SDK
             raise CommandError(f"Stripe fetch failed: {exc}") from exc
 
+        only_types = None
+        if opts["only_types"]:
+            only_types = {t.strip() for t in opts["only_types"].split(",") if t.strip()}
+            bad = only_types - set(Payment.Type.values)
+            if bad:
+                raise CommandError(f"Unknown --only-types: {', '.join(sorted(bad))}")
+
         rows = [normalize_charge(c, sessions_by_pi=sessions_by_pi) for c in charges]
-        ctx = self.build_context(opts["default_type"])
+        ctx = self.build_context(opts["default_type"], only_types=only_types)
         plans = plan_charges(rows, ctx, allow_overlaps=opts["allow_overlaps"])
 
         self._report(plans, committing=opts["commit"])
@@ -189,14 +226,12 @@ class Command(BaseCommand):
             ))
 
     def _report(self, plans, *, committing):
-        from collections import Counter
+        from collections import Counter, defaultdict
         from decimal import Decimal
 
         counts = Counter(p.action for p in plans)
-        created_total = sum(
-            (p.row.amount for p in plans if p.action in ("create", "create_unmatched")),
-            Decimal("0"),
-        )
+        creates = [p for p in plans if p.action in ("create", "create_unmatched")]
+        created_total = sum((p.row.amount for p in creates), Decimal("0"))
         self.stdout.write("")
         self.stdout.write(f"Charges examined: {len(plans)}")
         labels = {
@@ -206,27 +241,48 @@ class Command(BaseCommand):
             "reconcile_flag": "site payment pending/failed — COMPLETE via admin",
             "overlap": "skipped: likely ledger duplicate",
             "needs_type": "skipped: type unknown (use --default-type)",
+            "skip_filtered": "skipped: held back by --only-types",
             "skip_already": "skipped: already imported",
             "skip_not_paid": "skipped: not a paid charge",
         }
         for action, label in labels.items():
             if counts.get(action):
                 self.stdout.write(f"  {counts[action]:>4}  {label}")
+
+        # Breakdown of what would be created, by inferred type.
+        by_type: dict = defaultdict(lambda: [0, Decimal("0")])
+        for p in creates:
+            by_type[p.payment_type][0] += 1
+            by_type[p.payment_type][1] += p.row.amount
+        if by_type:
+            self.stdout.write("\nNew rows by type:")
+            for ptype, (n, total) in sorted(by_type.items()):
+                self.stdout.write(f"  {n:>4}  {ptype:<13} ${total:,.2f}")
         self.stdout.write(f"\n  New money to record: ${created_total:,.2f}")
 
-        # Detail the rows that need a human eye.
+        # Amount histogram for the still-unknown charges (helps pick a sweep).
+        unknown = [p for p in plans if p.action == "needs_type"]
+        if unknown:
+            hist = Counter(str(p.row.amount) for p in unknown)
+            self.stdout.write(f"\nType still unknown ({len(unknown)}), by amount:")
+            for amt, n in hist.most_common(15):
+                self.stdout.write(f"  {n:>4}  ${amt}")
+
+        # Detail the rows that need a human eye (cap the noisy ones).
         attention = [p for p in plans if p.action in (
-            "reconcile_flag", "overlap", "create_unmatched", "needs_type",
+            "reconcile_flag", "create_unmatched",
         )]
         if attention:
             self.stdout.write("\nNeeds review:")
-            for p in attention:
+            for p in attention[:60]:
                 r = p.row
                 who = r.name or r.email or "?"
                 self.stdout.write(
                     f"  [{p.action}] {r.charge_id}  ${r.amount}  {r.created:%Y-%m-%d}  "
                     f"{who} — {p.reason}"
                 )
+            if len(attention) > 60:
+                self.stdout.write(f"  … and {len(attention) - 60} more")
 
 
 def _ts(date_str: str, *, end_of_day=False) -> int:

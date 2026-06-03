@@ -8,7 +8,7 @@ from decimal import Decimal
 
 import pytest
 
-from accounts.models import Source, User
+from accounts.models import Profile, Source, User
 from payments.management.commands.import_stripe_payments import Command
 from payments.models import Payment
 from payments.stripe_import import (
@@ -109,7 +109,8 @@ def test_create_unmatched_member():
 
 def test_needs_type_when_uninferable():
     _user("ann@x.test")
-    plans = _plan([_charge(description="mystery")])
+    # $77 is not a dues tier, tuition amount, or keyword — genuinely unknown.
+    plans = _plan([_charge(amount=7700, description="mystery")])
     assert plans[0].action == "needs_type"
     apply_plan(plans)
     assert not Payment.objects.filter(stripe_payment_intent_id="pi_1").exists()
@@ -117,12 +118,87 @@ def test_needs_type_when_uninferable():
 
 def test_default_type_sweeps_unknown():
     _user("ann@x.test")
-    plans = _plan([_charge(description="mystery")], default_type="donation")
+    plans = _plan([_charge(amount=7700, description="mystery")], default_type="donation")
     assert plans[0].action == "create"
     apply_plan(plans)
     p = Payment.objects.get(stripe_payment_intent_id="pi_1")
     assert p.payment_type == Payment.Type.DONATION
     assert "type defaulted" in p.notes
+
+
+# ---- amount-based type inference ------------------------------------------
+
+def test_amount_infers_dues_tier():
+    _user("ann@x.test")
+    # $150 with no description → standard analyst/scholar dues tier.
+    plans = _plan([_charge(amount=15000, description="")])
+    assert plans[0].action == "create"
+    assert plans[0].payment_type == "dues"
+    assert plans[0].type_inferred
+
+
+def test_amount_infers_tuition_from_period():
+    from datetime import date
+
+    from payments.models import TuitionPeriod
+    TuitionPeriod.objects.create(
+        start_date=date(2023, 9, 1), decision_due_date=date(2023, 10, 1),
+        end_date=date(2024, 8, 31), tuition_amount=Decimal("2500.00"),
+    )
+    _user("ann@x.test")
+    plans = _plan([_charge(amount=250000, description="")])  # $2500, AY 2023
+    assert plans[0].action == "create"
+    assert plans[0].payment_type == "tuition"
+
+
+def _in_training(user, start_ay=2023, end_ay=None):
+    from accounts.models import MembershipTenure
+    MembershipTenure.objects.create(
+        user=user, role=Profile.Role.PRE_CANDIDATE,
+        standing=Profile.Standing.ACTIVE, start_ay=start_ay, end_ay=end_ay,
+        source=Source.IMPORTED,
+    )
+
+
+def test_multiple_charges_in_ay_are_tuition_installments():
+    u = _user("ann@x.test")
+    _in_training(u)  # a tuition-paying member in AY 2023
+    # Two non-tier charges from the same payer in one AY → payment plan.
+    plans = _plan([
+        _charge(cid="ch_a", pi="pi_a", amount=50000, description=""),   # $500
+        _charge(cid="ch_b", pi="pi_b", amount=50000, description=""),   # $500
+    ])
+    assert {p.action for p in plans} == {"create"}
+    assert all(p.payment_type == "tuition" for p in plans)
+    assert all("installment" in p.reason for p in plans)
+
+
+def test_multiple_charges_from_non_student_not_tuition():
+    _user("ann@x.test")  # no in-training tenure → not a tuition payer
+    plans = _plan([
+        _charge(cid="ch_a", pi="pi_a", amount=50000, description=""),
+        _charge(cid="ch_b", pi="pi_b", amount=50000, description=""),
+    ])
+    assert {p.action for p in plans} == {"needs_type"}
+
+
+def test_single_nontier_charge_stays_unknown():
+    u = _user("ann@x.test")
+    _in_training(u)
+    plans = _plan([_charge(amount=50000, description="")])  # lone $500
+    assert plans[0].action == "needs_type"
+
+
+# ---- only-types filter ----------------------------------------------------
+
+def test_only_types_holds_back_other_types():
+    _user("ann@x.test")
+    rows = [normalize_charge(_charge(amount=15000, description=""))]  # $150 dues
+    ctx = Command().build_context(None, only_types={"tuition"})
+    plans = plan_charges(rows, ctx)
+    assert plans[0].action == "skip_filtered"
+    apply_plan(plans)
+    assert not Payment.objects.filter(stripe_payment_intent_id="pi_1").exists()
 
 
 def test_skip_failed_charge():
