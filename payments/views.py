@@ -20,6 +20,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from accounts.membership import current_academic_year_start as ay_of
 from registrations.models import Registration
 
 from .forms import DonationForm, TuitionDecisionForm
@@ -614,6 +615,23 @@ _TUITION_STATUS_ORDER = [
 ]
 
 
+def _backfilled_tuition_collected(period) -> Decimal:
+    """Succeeded tuition payments with no installment link (historical Stripe /
+    treasurer-ledger imports), summed for ``period`` by payment date. The
+    payment-plan flow links tuition via ``tuition_installment``; backfilled lump
+    payments don't, so they'd otherwise be invisible on the tuition dashboard."""
+    return (
+        Payment.objects.filter(
+            payment_type=Payment.Type.TUITION,
+            status=Payment.Status.SUCCEEDED,
+            tuition_installment__isnull=True,
+            paid_at__date__gte=period.start_date,
+            paid_at__date__lte=period.end_date,
+        ).aggregate(s=Sum("amount"))["s"]
+        or Decimal("0")
+    )
+
+
 def _treasurer_tuition_context(selected_period=None) -> dict:
     """Build the tuition-section context for a selected TuitionPeriod.
 
@@ -667,6 +685,10 @@ def _treasurer_tuition_context(selected_period=None) -> dict:
     ):
         paid_by_enrollment[row["tuition_installment__enrollment"]] = row["s"] or Decimal("0")
     total_collected = sum(paid_by_enrollment.values(), Decimal("0"))
+    # Plus historical backfill: tuition payments with no installment link
+    # (imported from Stripe / the treasurer ledger), attributed to the period
+    # whose academic year contains the payment date.
+    total_collected += _backfilled_tuition_collected(period)
 
     full = period.tuition_amount or Decimal("0")
     # Remaining balance for students who committed / are on a plan but haven't
@@ -804,6 +826,21 @@ def _treasurer_tuition_longitudinal() -> dict:
         pid = row["tuition_installment__enrollment__tuition_period"]
         if pid is not None:
             collected_by_period[pid] = row["s"] or Decimal("0")
+
+    # Fold in installment-less backfill (Stripe/treasurer imports), bucketed by
+    # the academic year of each payment — one query, no per-period fan-out.
+    period_id_by_ay = {ay_of(p.start_date): p.id for p in periods}
+    for paid_at, amount in (
+        Payment.objects.filter(
+            payment_type=Payment.Type.TUITION,
+            status=Payment.Status.SUCCEEDED,
+            tuition_installment__isnull=True,
+            paid_at__isnull=False,
+        ).values_list("paid_at", "amount")
+    ):
+        pid = period_id_by_ay.get(ay_of(paid_at.date()))
+        if pid is not None:
+            collected_by_period[pid] = collected_by_period.get(pid, Decimal("0")) + amount
 
     rows = []
     for p in periods:
