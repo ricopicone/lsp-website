@@ -21,9 +21,9 @@
       <p class="font-medium">Use this only to make corrections.</p>
       <p class="text-base-content/80">
         Adjust a member's <strong>formation stage</strong>, <strong>start academic year</strong>,
-        <strong>advisor</strong>, or <strong>standing</strong> (e.g. on leave, resigned,
-        emeritus) when the record is wrong or needs a manual fix. The standard
-        path for <strong>formation progression</strong> (admission, palimpsest, passage) is the
+        or <strong>standing</strong> (e.g. on leave, resigned, emeritus) when the
+        record is wrong or needs a manual fix. The standard path for
+        <strong>formation progression</strong> (admission, palimpsest, passage) is the
         <a href="{% url 'meeting_of_analysts_admin' %}" class="link">Meeting of the Analysts process</a>,
         which advances the member and writes this history automatically.
       </p>
@@ -79,14 +79,6 @@
         <span class="badge {% if member.profile.standing == 'active' %}badge-success{% elif member.profile.standing == 'on_leave' %}badge-warning{% else %}badge-ghost{% endif %}">{{ member.profile.get_standing_display }}</span>
       </div>
     </div>
-    {% if member.profile.needs_advisor %}
-    <p class="text-sm text-base-content/60">
-      Advisor:
-      {% if advisor %}<span class="text-base-content">{{ advisor.get_full_name|default:advisor.email }}</span>
-      {% else %}<span class="text-warning">none chosen yet</span>{% endif %}
-    </p>
-    {% endif %}
-
     {% comment %}Record a change{% endcomment %}
     <form method="post" class="space-y-3 border-t border-base-300/50 pt-4">
       {% csrf_token %}

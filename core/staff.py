@@ -287,13 +287,10 @@ def board_membership_admin(request):
         )
 
     timeline = []
-    advisor = None
     if member is not None:
-        from accounts.advisor import current_advisor
         timeline = list(
             MembershipTenure.objects.filter(user=member).order_by("-start_ay")
         )
-        advisor = current_advisor(member)
         if form is None:
             form = MembershipChangeForm(initial={
                 "role": member.profile.role,
@@ -303,7 +300,7 @@ def board_membership_admin(request):
 
     return render(request, "core/staff/admin/board_membership.html", {
         "q": q, "results": results, "member": member,
-        "timeline": timeline, "form": form, "advisor": advisor,
+        "timeline": timeline, "form": form,
     })
 
 
