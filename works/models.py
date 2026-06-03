@@ -69,14 +69,14 @@ class Work(models.Model):
         default=Visibility.PUBLIC,
         help_text="Who can see this work exists in the catalog.",
     )
-    pdf_visibility = models.CharField(
+    content_visibility = models.CharField(
         max_length=16,
         choices=Visibility.choices,
         default=Visibility.MEMBERS,
         help_text=(
-            "Who can download the PDFs attached to this work. Cannot be "
-            "more public than the listing — listing=Members blocks a "
-            "Public PDF setting."
+            "Who can access the contents — the attached PDFs and the published "
+            "HTML body. Cannot be more public than the listing — listing=Members "
+            "blocks a Public contents setting."
         ),
     )
 
@@ -146,14 +146,14 @@ class Work(models.Model):
 
     def clean(self):
         rank = self._VISIBILITY_RANK
-        if rank[self.pdf_visibility] > rank[self.listing_visibility]:
+        if rank[self.content_visibility] > rank[self.listing_visibility]:
             raise ValidationError({
-                "pdf_visibility": _(
-                    "The PDF can't be more public than the listing."
+                "content_visibility": _(
+                    "The contents can't be more public than the listing."
                 ),
             })
         if (
-            self.Visibility.GROUP in (self.listing_visibility, self.pdf_visibility)
+            self.Visibility.GROUP in (self.listing_visibility, self.content_visibility)
             and self.workgroup_id is None
         ):
             raise ValidationError({
@@ -179,11 +179,11 @@ class Work(models.Model):
     def listing_visible_to(self, user) -> bool:
         return self._visible_at(self.listing_visibility, user)
 
-    def pdf_visible_to(self, user) -> bool:
-        """True only when (a) visibility permits and (b) at least one file exists."""
-        if not self.files.exists():
-            return False
-        return self._visible_at(self.pdf_visibility, user)
+    def content_visible_to(self, user) -> bool:
+        """Whether ``user`` may access the contents — the published HTML body and
+        any attached PDFs. A pure visibility-level check; callers that render a
+        download button also check that a file exists (the template does)."""
+        return self._visible_at(self.content_visibility, user)
 
     @classmethod
     def listing_for(cls, user):

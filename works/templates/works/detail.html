@@ -65,8 +65,10 @@
         {% if work.listing_visibility == "members" %}
         <span class="badge badge-ghost badge-sm">Listing: Members only</span>
         {% endif %}
-        {% if work.pdf_visibility == "members" and work.files.all %}
-        <span class="badge badge-ghost badge-sm">PDF: Members only</span>
+        {% if work.content_visibility == "members" %}
+        <span class="badge badge-ghost badge-sm">Contents: Members only</span>
+        {% elif work.content_visibility == "group" %}
+        <span class="badge badge-ghost badge-sm">Contents: Group only</span>
         {% endif %}
       </div>
     </div>
@@ -98,7 +100,7 @@
   {# ---- Files section ---- #}
   {% with files=work.files.all %}
   {% if files %}
-    {% if pdf_visible %}
+    {% if content_visible %}
       {% if files|length == 1 %}
         {% with f=files.0 %}
         <div class="flex flex-wrap gap-3">
@@ -183,9 +185,24 @@
   {% endif %}
 
   {% if work.body_html %}
-  <div class="pm-content max-w-none border-t border-base-300/50 pt-8 leading-relaxed space-y-4">
-    {{ work.body_html|safe }}
-  </div>
+    {% if content_visible %}
+    <div class="pm-content max-w-none border-t border-base-300/50 pt-8 leading-relaxed space-y-4">
+      {{ work.body_html|safe }}
+    </div>
+    {% else %}
+    <div class="border-t border-base-300/50 pt-8">
+      <div class="rounded-xl border border-dashed border-base-300/70 bg-base-200/30 p-6 text-center text-sm text-base-content/60">
+        {% if work.content_visibility == "group" %}
+        The contents of this work are available to its group only.
+        {% elif not user.is_authenticated %}
+        The contents of this work are available to LSP members.
+        <a href="{% url 'login' %}?next={{ request.path }}" class="link link-primary">Log in</a> to read.
+        {% else %}
+        The contents of this work are available to LSP members.
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
   {% endif %}
 
   {% if revisions %}

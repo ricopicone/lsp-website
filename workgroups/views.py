@@ -982,7 +982,7 @@ def draft_publish(request, slug, pk):
     work.kind = Work.Kind.DOCUMENT
     work.in_progress = False
     work.listing_visibility = vis
-    work.pdf_visibility = vis
+    work.content_visibility = vis
     # First publish stamps the publication date; re-publishes bump the revision.
     if work.publication_date is None:
         work.publication_date = timezone.localdate()

@@ -22,12 +22,12 @@ def _make_user(email="m@x.test", first="Mara", last="Smith", role=Profile.Role.M
 
 def _make_work(
     title="A Work", slug="a-work",
-    listing=Work.Visibility.PUBLIC, pdf_vis=Work.Visibility.MEMBERS,
+    listing=Work.Visibility.PUBLIC, content_vis=Work.Visibility.MEMBERS,
     files=None, kind=Work.Kind.EXTERNAL, submitted_by=None,
 ):
     w = Work.objects.create(
         title=title, slug=slug, kind=kind,
-        listing_visibility=listing, pdf_visibility=pdf_vis,
+        listing_visibility=listing, content_visibility=content_vis,
         submitted_by=submitted_by,
     )
     if files:
@@ -56,32 +56,35 @@ def test_listing_hidden_from_anonymous_when_members_only():
 
 
 @pytest.mark.django_db
-def test_pdf_visible_requires_at_least_one_file():
-    """A work with no files reports pdf_visible_to=False regardless of visibility."""
-    w = _make_work(pdf_vis=Work.Visibility.PUBLIC, files=None)
-    assert w.pdf_visible_to(None) is False
-    u = _make_user()
-    assert w.pdf_visible_to(u) is False
+def test_content_visible_is_a_pure_level_check():
+    """content_visible_to is independent of whether a file exists — it gates the
+    HTML body too. (File existence is checked separately where a download is
+    rendered.)"""
+    pub = _make_work(content_vis=Work.Visibility.PUBLIC, files=None)
+    assert pub.content_visible_to(None) is True
+    mem = _make_work(slug="mem", content_vis=Work.Visibility.MEMBERS, files=None)
+    assert mem.content_visible_to(None) is False
+    assert mem.content_visible_to(_make_user()) is True
 
 
 @pytest.mark.django_db
-def test_pdf_visible_to_anon_when_public_and_file_present():
+def test_content_visible_to_anon_when_public_and_file_present():
     w = _make_work(
-        pdf_vis=Work.Visibility.PUBLIC,
+        content_vis=Work.Visibility.PUBLIC,
         files=[("", _fake_pdf())],
     )
-    assert w.pdf_visible_to(None) is True
+    assert w.content_visible_to(None) is True
 
 
 @pytest.mark.django_db
 def test_pdf_members_only_blocks_anon_but_allows_member():
     w = _make_work(
-        pdf_vis=Work.Visibility.MEMBERS,
+        content_vis=Work.Visibility.MEMBERS,
         files=[("", _fake_pdf())],
     )
-    assert w.pdf_visible_to(None) is False
+    assert w.content_visible_to(None) is False
     u = _make_user()
-    assert w.pdf_visible_to(u) is True
+    assert w.content_visible_to(u) is True
 
 
 @pytest.mark.django_db
@@ -107,11 +110,11 @@ def test_pdf_public_with_members_listing_invalid():
     w = Work(
         title="X", slug="x", kind=Work.Kind.EXTERNAL,
         listing_visibility=Work.Visibility.MEMBERS,
-        pdf_visibility=Work.Visibility.PUBLIC,
+        content_visibility=Work.Visibility.PUBLIC,
     )
     with pytest.raises(ValidationError) as exc:
         w.full_clean()
-    assert "pdf_visibility" in exc.value.error_dict
+    assert "content_visibility" in exc.value.error_dict
 
 
 @pytest.mark.django_db
@@ -119,7 +122,7 @@ def test_group_visibility_requires_workgroup():
     w = Work(
         title="X", slug="x", kind=Work.Kind.CARTEL,
         listing_visibility=Work.Visibility.GROUP,
-        pdf_visibility=Work.Visibility.GROUP,
+        content_visibility=Work.Visibility.GROUP,
     )
     with pytest.raises(ValidationError) as exc:
         w.full_clean()
@@ -144,7 +147,7 @@ def test_group_work_visible_only_to_group_members():
     w = _make_work(
         kind=Work.Kind.CARTEL,
         listing=Work.Visibility.GROUP,
-        pdf_vis=Work.Visibility.GROUP,
+        content_vis=Work.Visibility.GROUP,
     )
     w.workgroup = wg
     w.save()
@@ -220,7 +223,7 @@ def test_index_has_pdf_filter_excludes_works_with_no_files(client):
 @pytest.mark.django_db
 def test_download_public_pdf_works_anonymous(client):
     w = _make_work(
-        slug="open", pdf_vis=Work.Visibility.PUBLIC,
+        slug="open", content_vis=Work.Visibility.PUBLIC,
         files=[("", _fake_pdf())],
     )
     f = w.files.first()
@@ -231,7 +234,7 @@ def test_download_public_pdf_works_anonymous(client):
 @pytest.mark.django_db
 def test_download_members_pdf_404s_anonymous(client):
     w = _make_work(
-        slug="closed", pdf_vis=Work.Visibility.MEMBERS,
+        slug="closed", content_vis=Work.Visibility.MEMBERS,
         files=[("", _fake_pdf())],
     )
     f = w.files.first()
@@ -256,7 +259,7 @@ def test_download_cross_work_file_id_404s(client):
     resp = client.get(reverse("works:download", args=["w1", f_from_w2.pk]))
     assert resp.status_code == 404
     # And via w1's own file — should 200 (when public).
-    w1.pdf_visibility = Work.Visibility.PUBLIC
+    w1.content_visibility = Work.Visibility.PUBLIC
     w1.save()
     f_w1 = w1.files.first()
     resp = client.get(reverse("works:download", args=["w1", f_w1.pk]))
@@ -270,7 +273,7 @@ def test_download_cross_work_file_id_404s(client):
 def test_detail_single_file_renders_single_button(client):
     _make_work(
         slug="single",
-        pdf_vis=Work.Visibility.PUBLIC,
+        content_vis=Work.Visibility.PUBLIC,
         files=[("", _fake_pdf())],
     )
     body = client.get(reverse("works:detail", args=["single"])).content.decode()
@@ -283,7 +286,7 @@ def test_detail_single_file_renders_single_button(client):
 def test_detail_single_file_with_label_uses_it(client):
     _make_work(
         slug="lbl",
-        pdf_vis=Work.Visibility.PUBLIC,
+        content_vis=Work.Visibility.PUBLIC,
         files=[("Author's cut", _fake_pdf())],
     )
     body = client.get(reverse("works:detail", args=["lbl"])).content.decode()
@@ -294,7 +297,7 @@ def test_detail_single_file_with_label_uses_it(client):
 def test_detail_multiple_files_renders_list(client):
     _make_work(
         slug="multi",
-        pdf_vis=Work.Visibility.PUBLIC,
+        content_vis=Work.Visibility.PUBLIC,
         files=[("Draft", _fake_pdf("d.pdf")), ("Final", _fake_pdf("f.pdf"))],
     )
     body = client.get(reverse("works:detail", args=["multi"])).content.decode()
@@ -327,7 +330,7 @@ def test_add_creates_work_with_submitter_as_first_author(client):
         "url": "",
         "publication_date": "",
         "listing_visibility": Work.Visibility.PUBLIC,
-        "pdf_visibility": Work.Visibility.MEMBERS,
+        "content_visibility": Work.Visibility.MEMBERS,
         "new_file_label": "",
     })
     assert resp.status_code == 302
@@ -350,7 +353,7 @@ def test_add_with_single_file_creates_workfile():
             "url": "",
             "publication_date": "",
             "listing_visibility": Work.Visibility.PUBLIC,
-            "pdf_visibility": Work.Visibility.PUBLIC,
+            "content_visibility": Work.Visibility.PUBLIC,
             "new_file_label": "",
         },
         files={"new_file": _fake_pdf()},
@@ -377,7 +380,7 @@ def test_edit_adding_second_file_without_labels_invalid():
             "lsp_authors": "", "external_authors": "",
             "abstract": "", "publication_info": "", "url": "", "publication_date": "",
             "listing_visibility": Work.Visibility.PUBLIC,
-            "pdf_visibility": Work.Visibility.MEMBERS,
+            "content_visibility": Work.Visibility.MEMBERS,
             f"file_{existing.pk}_label": "",
             "new_file_label": "",
         },
@@ -402,7 +405,7 @@ def test_edit_adding_second_file_with_labels_valid():
             "lsp_authors": "", "external_authors": "",
             "abstract": "", "publication_info": "", "url": "", "publication_date": "",
             "listing_visibility": Work.Visibility.PUBLIC,
-            "pdf_visibility": Work.Visibility.MEMBERS,
+            "content_visibility": Work.Visibility.MEMBERS,
             f"file_{existing.pk}_label": "Draft",
             "new_file_label": "Final",
         },
@@ -428,7 +431,7 @@ def test_edit_relabel_existing_file():
             "lsp_authors": "", "external_authors": "",
             "abstract": "", "publication_info": "", "url": "", "publication_date": "",
             "listing_visibility": Work.Visibility.PUBLIC,
-            "pdf_visibility": Work.Visibility.MEMBERS,
+            "content_visibility": Work.Visibility.MEMBERS,
             f"file_{existing.pk}_label": "New label",
             "new_file_label": "",
         },
@@ -456,7 +459,7 @@ def test_edit_remove_existing_file():
             "lsp_authors": "", "external_authors": "",
             "abstract": "", "publication_info": "", "url": "", "publication_date": "",
             "listing_visibility": Work.Visibility.PUBLIC,
-            "pdf_visibility": Work.Visibility.MEMBERS,
+            "content_visibility": Work.Visibility.MEMBERS,
             f"file_{file_a.pk}_label": "A",
             f"file_{file_a.pk}_remove": "on",
             f"file_{file_b.pk}_label": "B",
@@ -489,7 +492,7 @@ def test_edit_remove_dropping_to_single_file_drops_label_requirement():
             "lsp_authors": "", "external_authors": "",
             "abstract": "", "publication_info": "", "url": "", "publication_date": "",
             "listing_visibility": Work.Visibility.PUBLIC,
-            "pdf_visibility": Work.Visibility.MEMBERS,
+            "content_visibility": Work.Visibility.MEMBERS,
             # Clear file_a's label and remove file_b — file_a becomes the only file.
             f"file_{file_a.pk}_label": "",
             f"file_{file_b.pk}_label": "Final",
@@ -520,7 +523,7 @@ def test_form_resolves_lsp_author_by_name():
             "url": "",
             "publication_date": "",
             "listing_visibility": Work.Visibility.PUBLIC,
-            "pdf_visibility": Work.Visibility.MEMBERS,
+            "content_visibility": Work.Visibility.MEMBERS,
             "new_file_label": "",
         },
         current_user=u,
@@ -549,7 +552,7 @@ def test_form_rejects_unknown_author():
             "url": "",
             "publication_date": "",
             "listing_visibility": Work.Visibility.PUBLIC,
-            "pdf_visibility": Work.Visibility.MEMBERS,
+            "content_visibility": Work.Visibility.MEMBERS,
             "new_file_label": "",
         },
         current_user=u,
@@ -559,7 +562,7 @@ def test_form_rejects_unknown_author():
 
 
 @pytest.mark.django_db
-def test_form_pdf_visibility_constraint_surfaces_on_field():
+def test_form_content_visibility_constraint_surfaces_on_field():
     u = _make_user()
     form = WorkForm(
         data={
@@ -572,13 +575,13 @@ def test_form_pdf_visibility_constraint_surfaces_on_field():
             "url": "",
             "publication_date": "",
             "listing_visibility": Work.Visibility.MEMBERS,
-            "pdf_visibility": Work.Visibility.PUBLIC,
+            "content_visibility": Work.Visibility.PUBLIC,
             "new_file_label": "",
         },
         current_user=u,
     )
     assert not form.is_valid()
-    assert "pdf_visibility" in form.errors
+    assert "content_visibility" in form.errors
 
 
 # ---- Edit permission via view -------------------------------------------
@@ -723,3 +726,37 @@ def test_delete_work_requires_post(client):
     resp = client.get(reverse("works:delete", args=[w.slug]))
     assert resp.status_code == 405                      # require_POST
     assert Work.objects.filter(pk=w.pk).exists()
+
+
+# ---- Published HTML body respects content visibility -------------------
+
+@pytest.mark.django_db
+def test_body_html_hidden_when_contents_members_but_listing_public(client):
+    """Public listing + members-only contents: the catalog page is visible to
+    anyone, but the published HTML body is not (the bug this guards against)."""
+    w = _make_work(
+        slug="doc", listing=Work.Visibility.PUBLIC,
+        content_vis=Work.Visibility.MEMBERS,
+    )
+    w.body_html = "<p>SECRET BODY TEXT</p>"
+    w.save()
+    # Anonymous: sees the listing/detail, not the body.
+    resp = client.get(w.get_absolute_url())
+    assert resp.status_code == 200
+    assert b"SECRET BODY TEXT" not in resp.content
+    assert b"available to LSP members" in resp.content
+    # LSP member: sees the body.
+    u = _make_user()
+    client.force_login(u)
+    resp = client.get(w.get_absolute_url())
+    assert b"SECRET BODY TEXT" in resp.content
+
+
+@pytest.mark.django_db
+def test_body_html_public_when_contents_public(client):
+    w = _make_work(slug="open-doc", listing=Work.Visibility.PUBLIC,
+                   content_vis=Work.Visibility.PUBLIC)
+    w.body_html = "<p>OPEN BODY TEXT</p>"
+    w.save()
+    resp = client.get(w.get_absolute_url())
+    assert b"OPEN BODY TEXT" in resp.content

@@ -98,7 +98,7 @@ def detail(request, slug):
     return render(request, "works/detail.html", {
         "work": work,
         "can_edit": work.editable_by(request.user),
-        "pdf_visible": work.pdf_visible_to(request.user),
+        "content_visible": work.content_visible_to(request.user),
         "revisions": revisions,
         "source_draft": draft,
         "can_unpublish": can_unpublish,
@@ -107,7 +107,7 @@ def detail(request, slug):
 
 def download(request, slug, file_id):
     work = get_object_or_404(Work, slug=slug)
-    if not work.pdf_visible_to(request.user):
+    if not work.content_visible_to(request.user):
         raise Http404()
     wf = get_object_or_404(WorkFile, pk=file_id, work=work)
     filename = wf.file.name.rsplit("/", 1)[-1]

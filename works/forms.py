@@ -85,7 +85,7 @@ class WorkForm(forms.ModelForm):
             "workgroup",
             "in_progress",
             "listing_visibility",
-            "pdf_visibility",
+            "content_visibility",
         )
         widgets = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
@@ -114,7 +114,16 @@ class WorkForm(forms.ModelForm):
             "workgroup": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "in_progress": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "listing_visibility": forms.Select(attrs={"class": "select select-bordered w-full"}),
-            "pdf_visibility": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "content_visibility": forms.Select(attrs={"class": "select select-bordered w-full"}),
+        }
+        labels = {
+            "content_visibility": "Contents (PDFs & HTML)",
+        }
+        help_texts = {
+            "content_visibility": (
+                "Who can open the contents — attached PDFs and the published "
+                "HTML body. Can't be more public than the listing."
+            ),
         }
 
     def __init__(self, *args, current_user=None, **kwargs):
