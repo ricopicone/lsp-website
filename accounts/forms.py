@@ -382,3 +382,23 @@ class MembershipChangeForm(forms.Form):
             "placeholder": "e.g. Board minutes 2026-05-12",
         }),
     )
+
+
+class AdvisorSelectForm(forms.Form):
+    """An in-training member picks their Advisor from the eligible pool."""
+
+    advisor = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        label="Your advisor",
+    )
+
+    def __init__(self, *args, advisee=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.advisee = advisee
+        if advisee is not None:
+            from .advisor import eligible_advisors
+            self.fields["advisor"].queryset = eligible_advisors(advisee)
+        self.fields["advisor"].label_from_instance = lambda u: (
+            f"{u.get_full_name() or u.email} — {u.profile.get_role_display()}"
+        )

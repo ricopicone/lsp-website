@@ -63,6 +63,13 @@
         <span class="badge {% if member.profile.standing == 'active' %}badge-success{% elif member.profile.standing == 'on_leave' %}badge-warning{% else %}badge-ghost{% endif %}">{{ member.profile.get_standing_display }}</span>
       </div>
     </div>
+    {% if member.profile.needs_advisor %}
+    <p class="text-sm text-base-content/60">
+      Advisor:
+      {% if advisor %}<span class="text-base-content">{{ advisor.get_full_name|default:advisor.email }}</span>
+      {% else %}<span class="text-warning">none chosen yet</span>{% endif %}
+    </p>
+    {% endif %}
 
     {% comment %}Record a change{% endcomment %}
     <form method="post" class="space-y-3 border-t border-base-300/50 pt-4">

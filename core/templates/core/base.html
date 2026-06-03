@@ -225,6 +225,9 @@
             {% if user.profile.owes_tuition %}
             <li><a href="{% url 'tuition' %}">Your tuition decision</a></li>
             {% endif %}
+            {% if user.profile.needs_advisor %}
+            <li><a href="{% url 'advisor_select' %}">Your advisor</a></li>
+            {% endif %}
             {% if user.application %}
             <li><a href="{% url 'admissions:status' %}">Your application</a></li>
             {% elif user.profile.role == 'external' or user.profile.role == 'prospective_applicant' %}

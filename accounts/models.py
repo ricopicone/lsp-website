@@ -423,6 +423,17 @@ class Profile(models.Model):
         "candidate_scholar",
     })
 
+    #: Formation tracks — used to determine who may advise whom.
+    ANALYST_TRACK_ROLES = frozenset({"pre_candidate", "candidate", "analyst"})
+    SCHOLAR_TRACK_ROLES = frozenset({
+        "pre_candidate_scholar", "candidate_scholar", "scholar",
+    })
+
+    @property
+    def needs_advisor(self) -> bool:
+        """In-training members (Precandidates / Candidates) choose an Advisor."""
+        return self.role in self.IN_TRAINING_ROLES
+
     @property
     def is_in_directory(self) -> bool:
         """Whether this profile's *role* is eligible for /directory/."""
@@ -605,6 +616,37 @@ class MembershipTenure(models.Model):
     def was_in_training(cls, user, ay: int) -> bool:
         """True if ``user`` was in an in-training (tuition-owing) role in ``ay``."""
         return cls.role_at(user, ay) in Profile.IN_TRAINING_ROLES
+
+
+class Advisorship(models.Model):
+    """An in-training member's Advisor — an Analyst (analyst track) or a Scholar
+    or Analyst (scholar track). Precandidates and Candidates choose one as soon
+    as they're admitted; it can change over time (the open row, ``end_date``
+    null, is the current advisor). See the formation guidelines."""
+
+    advisee = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="advisorships",
+    )
+    advisor = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="advisees",
+    )
+    start_date = models.DateField(default=timezone.localdate)
+    end_date = models.DateField(null=True, blank=True, help_text="Null = current advisor.")
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("advisee", "-start_date")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("advisee",),
+                condition=models.Q(end_date__isnull=True),
+                name="accounts_one_current_advisor_per_advisee",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.advisee} ← advised by {self.advisor}"
 
 
 class MemberIntakeSurvey(models.Model):
