@@ -25,9 +25,8 @@ def can_edit_event(user, event) -> bool:
         return True
     if event.is_faculty(user):
         return True
-    return WorkgroupMembership.objects.filter(
+    return WorkgroupMembership.objects.serving().filter(
         user=user,
-        end_date__isnull=True,
         workgroup__committee__slug="programming-committee",
     ).exists()
 
@@ -40,8 +39,7 @@ def is_program_committee(user) -> bool:
     """
     if not getattr(user, "is_authenticated", False):
         return False
-    return WorkgroupMembership.objects.filter(
+    return WorkgroupMembership.objects.serving().filter(
         user=user,
-        end_date__isnull=True,
         workgroup__committee__slug="programming-committee",
     ).exists()

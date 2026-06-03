@@ -38,8 +38,7 @@ def is_lsp_member(user) -> bool:
 
     from workgroups.models import Workgroup, WorkgroupMembership
 
-    return WorkgroupMembership.objects.filter(
+    return WorkgroupMembership.objects.serving().filter(
         user=user,
-        end_date__isnull=True,
         workgroup__kind=Workgroup.Kind.COMMITTEE,
     ).exists()

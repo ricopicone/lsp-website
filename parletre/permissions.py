@@ -88,10 +88,9 @@ def can_enter_parletre(user) -> bool:
 def _workgroup_lead(workgroup, user) -> bool:
     """Whether ``user`` holds a leading role (chair / co-chair / plus-one) in
     ``workgroup`` — the roles that moderate its channel."""
-    return WorkgroupMembership.objects.filter(
+    return WorkgroupMembership.objects.serving().filter(
         workgroup=workgroup,
         user=user,
-        end_date__isnull=True,
         role__in=WorkgroupMembership.LEAD_ROLES,
     ).exists()
 
@@ -124,9 +123,8 @@ def channel_can_moderate(channel, user) -> bool:
     # Legacy committee-access channels: chairs of the gating committee
     # moderate, read via the committee's workgroup roster.
     if channel.committee_id is not None:
-        return WorkgroupMembership.objects.filter(
+        return WorkgroupMembership.objects.serving().filter(
             user=user,
-            end_date__isnull=True,
             workgroup__committee__pk=channel.committee_id,
             role__in=WorkgroupMembership.LEAD_ROLES,
         ).exists()
@@ -181,8 +179,8 @@ def channel_visible(channel, user) -> bool:
         return profile is not None and profile.role in (channel.allowed_roles or [])
     if access == Access.COMMITTEE:
         # Legacy committee-access channels, read via the committee's workgroup.
-        return channel.committee_id is not None and WorkgroupMembership.objects.filter(
-            user=user, end_date__isnull=True, workgroup__committee__pk=channel.committee_id
+        return channel.committee_id is not None and WorkgroupMembership.objects.serving().filter(
+            user=user, workgroup__committee__pk=channel.committee_id
         ).exists()
     return False
 

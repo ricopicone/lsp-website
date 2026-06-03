@@ -26,6 +26,22 @@ from django.utils.translation import gettext_lazy as _
 from accounts.permissions import is_lsp_member
 
 
+def serving_membership_q(prefix: str = "", on=None):
+    """Q for a *currently-serving* membership: open-ended (``end_date`` null) or
+    a term that ends in the future (``end_date > on``, default today).
+
+    This is the single definition of "active membership" — a member with a
+    future-dated term end is still serving until that date. ``end_date`` is the
+    day the membership ends (exclusive): a member is *not* serving on or after
+    it, so ``remove``/``leave`` (which set ``end_date`` to today) take effect
+    immediately, exactly as before. ``prefix`` filters through a relation, e.g.
+    ``serving_membership_q("workgroup_memberships__")``.
+    """
+    on = on or timezone.localdate()
+    field = f"{prefix}end_date"
+    return models.Q(**{f"{field}__isnull": True}) | models.Q(**{f"{field}__gt": on})
+
+
 class Visibility(models.TextChoices):
     PUBLIC = "public", _("Public — anyone")
     MEMBERS = "members", _("Members — any LSP member")
@@ -221,7 +237,7 @@ class Workgroup(models.Model):
         """Stored ``WorkgroupMembership`` rows (hand-managed roster). For the
         full roster including derived seminar registrants, use
         :meth:`participants`."""
-        return self.memberships.filter(end_date__isnull=True).select_related(
+        return self.memberships.serving().select_related(
             "user", "user__profile"
         )
 
@@ -251,7 +267,7 @@ class Workgroup(models.Model):
         # Analysts) — automatic, no stored row.
         if self.auto_member_role and self._user_role(user) == self.auto_member_role:
             return True
-        if self.memberships.filter(user=user, end_date__isnull=True).exists():
+        if self.memberships.serving().filter(user=user).exists():
             return True
         # Term-based offerings: active = current term's paid/comped registrants.
         if self.kind in self.OFFERING_KINDS:
@@ -271,8 +287,8 @@ class Workgroup(models.Model):
         # A dissolved (archived) group stays readable to its still-active
         # roster — membership rows aren't ended by archiving, so past members
         # keep read-only access to the channel history + released works.
-        if self.is_archived and self.memberships.filter(
-            user=user, end_date__isnull=True
+        if self.is_archived and self.memberships.serving().filter(
+            user=user
         ).exists():
             return True
         if self.kind in self.OFFERING_KINDS:
@@ -513,7 +529,7 @@ class Workgroup(models.Model):
         membership row (existing or newly created)."""
         if role is None:
             role = WorkgroupMembership.Role.MEMBER
-        existing = self.memberships.filter(user=user, end_date__isnull=True).first()
+        existing = self.memberships.serving().filter(user=user).first()
         if existing:
             return existing
         return WorkgroupMembership.objects.create(
@@ -612,14 +628,14 @@ class Workgroup(models.Model):
     def lead_members(self):
         """Active members holding a lead role (chair / co-chair / plus-one /
         faculty / organizer) — those who manage the group."""
-        return self.memberships.filter(
-            end_date__isnull=True, role__in=WorkgroupMembership.LEAD_ROLES
+        return self.memberships.serving().filter(
+            role__in=WorkgroupMembership.LEAD_ROLES
         )
 
     def _would_orphan(self, user) -> bool:
         """True if removing/demoting ``user`` would leave the group with no
         lead — we forbid that (staff can still recover via the admin)."""
-        m = self.memberships.filter(user=user, end_date__isnull=True).first()
+        m = self.memberships.serving().filter(user=user).first()
         return (
             m is not None
             and m.role in WorkgroupMembership.LEAD_ROLES
@@ -632,14 +648,14 @@ class Workgroup(models.Model):
         lapse by their own mechanism). The sole remaining lead may not leave."""
         if not getattr(user, "is_authenticated", False):
             return False
-        if not self.memberships.filter(user=user, end_date__isnull=True).exists():
+        if not self.memberships.serving().filter(user=user).exists():
             return False
         return not self._would_orphan(user)
 
     def leave(self, user) -> bool:
         if not self.can_leave(user):
             return False
-        self.memberships.filter(user=user, end_date__isnull=True).update(
+        self.memberships.serving().filter(user=user).update(
             end_date=timezone.localdate()
         )
         return True
@@ -653,7 +669,7 @@ class Workgroup(models.Model):
         orphan the group's last lead."""
         if self._would_orphan(user):
             return False
-        ended = self.memberships.filter(user=user, end_date__isnull=True).update(
+        ended = self.memberships.serving().filter(user=user).update(
             end_date=timezone.localdate()
         )
         return bool(ended)
@@ -661,7 +677,7 @@ class Workgroup(models.Model):
     def set_role(self, user, role) -> bool:
         """Manager changes a stored member's role. Refuses to demote the sole
         lead out of a lead role."""
-        m = self.memberships.filter(user=user, end_date__isnull=True).first()
+        m = self.memberships.serving().filter(user=user).first()
         if m is None:
             return False
         if (role not in WorkgroupMembership.LEAD_ROLES) and self._would_orphan(user):
@@ -682,7 +698,7 @@ class Workgroup(models.Model):
             return False
         if end_date is not None and end_date < start_date:
             return False
-        m = self.memberships.filter(user=user, end_date__isnull=True).first()
+        m = self.memberships.serving().filter(user=user).first()
         if m is None:
             return False
         m.start_date = start_date
@@ -691,13 +707,26 @@ class Workgroup(models.Model):
         return True
 
 
+class WorkgroupMembershipQuerySet(models.QuerySet):
+    def serving(self, on=None):
+        """Currently-serving memberships (open-ended or term not yet ended)."""
+        return self.filter(serving_membership_q(on=on))
+
+
 class WorkgroupMembership(models.Model):
     """A user's tenure in a workgroup — the unified roster.
 
     Generalizes ``committees.CommitteeMembership`` (same shape, same
     one-active-per-pair constraint). The cartel "plus-one" is just
     ``role=PLUS_ONE`` — no field on the Cartel model.
+
+    "Active"/"serving" means ``end_date`` is null *or* in the future — a
+    committee officer with a future-dated term end is still serving until then.
+    Use ``.serving()`` (or :func:`serving_membership_q`) rather than testing
+    ``end_date__isnull`` directly.
     """
+
+    objects = WorkgroupMembershipQuerySet.as_manager()
 
     class Role(models.TextChoices):
         MEMBER = "member", _("Member")
