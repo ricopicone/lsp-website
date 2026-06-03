@@ -176,3 +176,32 @@ def test_reconcile_links_unmatched_payer(client):
     assert resp.status_code == 302
     p.refresh_from_db()
     assert p.user == member and p.payment_type == "registration"
+
+
+# ---- audit_finances (read-only diagnostic) --------------------------------
+
+def test_audit_runs_and_flags_duplicate_dues():
+    from io import StringIO
+
+    from payments.models import DuesPeriod
+
+    DuesPeriod.objects.create(
+        name="AY 2023–2024", slug="ay-2023-2024",
+        start_date=date(2023, 9, 1), end_date=date(2024, 8, 31),
+        due_date=date(2023, 12, 1),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"), dues_amount_analyst=Decimal("150"),
+    )
+    u = _student("dup@x.test")
+    for when in (datetime(2023, 10, 1, 12), datetime(2023, 11, 1, 12)):
+        Payment.objects.create(
+            payment_type=Payment.Type.DUES, user=u, amount=Decimal("100.00"),
+            status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+            source=Source.IMPORTED, paid_at=timezone.make_aware(when),
+        )
+    out = StringIO()
+    call_command("audit_finances", stdout=out)
+    text = out.getvalue()
+    assert "audit complete" in text
+    # The two same-year dues payments should be flagged.
+    assert "1  ⚠  members with >1 dues payment" in text
