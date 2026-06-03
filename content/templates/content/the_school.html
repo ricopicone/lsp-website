@@ -1,0 +1,94 @@
+{% extends "core/base.html" %}
+{% block title %}The School — LSP{% endblock %}
+
+{% block content %}
+<div class="space-y-14 sm:space-y-20">
+
+  {# ===================== Header ===================== #}
+  <header class="space-y-4 max-w-3xl">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/50">An orientation</p>
+    <h1 class="font-serif text-3xl sm:text-5xl text-base-content leading-[1.08] tracking-tight">
+      The School, gathered in one map
+    </h1>
+    <p class="text-base sm:text-lg text-base-content/70 leading-relaxed">
+      From the one-by-one of analysis to the bodies that carry the School's
+      common life, these are the parts of the School and how they fit together.
+      Select any block to read what it is — and, where there is one, to go to it.
+    </p>
+  </header>
+
+  {# ===================== The graphic (visual table of contents) ===================== #}
+  {% comment %}
+    One source of truth (content/the_school.py) drives this grid and the entry
+    sections below. Each block is a real <a> anchor-jumping to its entry, so the
+    graphic is keyboard-navigable and reflows on small screens — the row label
+    sits left on desktop and stacks above its blocks on mobile.
+  {% endcomment %}
+  <section id="map" aria-labelledby="map-heading" class="scroll-mt-24">
+    <h2 id="map-heading" class="sr-only">Map of the School</h2>
+    <div class="space-y-5">
+      {% for row in rows %}
+      <div class="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-2 sm:gap-6 sm:items-stretch">
+        <div class="font-serif text-lg sm:text-right text-base-content/70 leading-tight sm:pt-3">
+          {{ row.label }}
+        </div>
+        <div class="flex flex-wrap gap-3">
+          {% for entry in row.entries %}
+          <a href="#{{ entry.slug }}"
+             class="group flex-1 min-w-[8.5rem] flex items-center justify-center text-center
+                    rounded-2xl border-2 border-base-content/25 bg-base-100 px-5 py-5
+                    hover:border-primary hover:bg-primary/5 transition-colors">
+            <span class="font-serif text-lg text-base-content group-hover:text-primary leading-tight transition-colors">
+              {{ entry.title }}
+            </span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ===================== Entries ===================== #}
+  <section aria-labelledby="entries-heading" class="border-t border-base-300/60 pt-12 sm:pt-16">
+    <h2 id="entries-heading" class="sr-only">The parts of the School</h2>
+    <div class="space-y-14">
+      {% for row in rows %}
+      <div class="space-y-8">
+        <h3 class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">{{ row.label }}</h3>
+        <div class="space-y-10">
+          {% for entry in row.entries %}
+          <article id="{{ entry.slug }}" class="scroll-mt-24 max-w-3xl">
+            <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <h4 class="font-serif text-2xl text-base-content tracking-tight">{{ entry.title }}</h4>
+              <a href="#map" class="font-mono text-[0.7rem] uppercase tracking-[0.15em] text-base-content/35 hover:text-primary transition-colors">
+                ↑ Map
+              </a>
+            </div>
+            {% if entry.author %}
+            <p class="text-sm text-base-content/55 mt-1">By {{ entry.author }}</p>
+            {% endif %}
+            <div class="lsp-prose mt-3">
+              {{ entry.body_html|safe }}
+            </div>
+            {% if entry.destination %}
+            <a href="{{ entry.destination }}"
+               class="group inline-flex items-center gap-1.5 text-sm text-primary mt-4 hover:gap-2.5 transition-all">
+              Go to {{ entry.title }} <span aria-hidden="true">→</span>
+            </a>
+            {% endif %}
+          </article>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <p class="text-xs text-base-content/45 leading-relaxed max-w-2xl">
+    This map reflects one way of picturing the School. Its groupings and
+    descriptions are a starting point, open to revision by the School's members.
+  </p>
+
+</div>
+{% endblock %}

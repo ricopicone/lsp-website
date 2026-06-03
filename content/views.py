@@ -11,6 +11,7 @@ from django.template.loader import render_to_string
 from committees.models import Committee
 
 from . import loader
+from . import the_school as the_school_index
 
 ROSTER_PLACEHOLDER_RE = re.compile(r"<!--\s*ROSTER:([\w-]+)\s*-->")
 
@@ -39,4 +40,16 @@ def about(request):
     return render(request, "content/about.html", {
         "page": page,
         "body_html": body_html,
+    })
+
+
+def the_school(request):
+    """The School: a graphical index — visual table of contents over the
+    School's concepts and bodies, with an encyclopedia-style entry per block.
+
+    The graphic and the entries are both built from one taxonomy, so they can
+    never disagree. See ``content/the_school.py``.
+    """
+    return render(request, "content/the_school.html", {
+        "rows": the_school_index.build_rows(),
     })

@@ -28,6 +28,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("accounts.urls")),
     path("about/", _content_views.about, name="about"),
+    path("the-school/", _content_views.the_school, name="the_school"),
     path("directory/", _account_views.directory, name="directory"),
     path("directory/<slug:slug>/", _account_views.directory_detail, name="directory_detail"),
     path("find-an-analyst/", _account_views.find_an_analyst, name="find_an_analyst"),
