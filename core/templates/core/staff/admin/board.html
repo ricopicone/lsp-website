@@ -12,7 +12,8 @@
   {% endif %}
 
   {% comment %}Genuinely board-specific governance — not in the workspace.{% endcomment %}
-  {% include "core/staff/admin/_section.html" with title="Membership administration" status="Planned" body="Admit members and record role/standing transitions across the school — student → pre-candidate → candidate → analyst, leaves, and resignations. Each change writes the member's role-timeline entry." %}
+  {% url 'board_membership_admin' as membership_url %}
+  {% include "core/staff/admin/_section.html" with title="Membership administration" body="Admit members and record role/standing transitions across the school — student → pre-candidate → candidate → analyst, leaves, and resignations. Each change writes the member's role-timeline entry." link=membership_url link_label="Open membership administration" %}
   {% include "core/staff/admin/_section.html" with title="Appointments" status="Planned" body="Appoint and reassign staff roles (Treasurer, Web Coordinator, Cartel Coordinator, Administrative Assistant, Web Developer) and committee chairs." %}
   {% include "core/staff/admin/_section.html" with title="Committees" status="Planned" body="Create and oversee committees and their charge — each gets a workspace for its own roster, minutes, and discussion." %}
   {% include "core/staff/admin/_section.html" with title="Governance overview" status="Planned" body="Membership by standing, pending decisions, and a link through to the Treasurer's finances — the Board's at-a-glance dashboard." %}

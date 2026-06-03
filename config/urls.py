@@ -60,6 +60,8 @@ urlpatterns = [
     path("staff/", RedirectView.as_view(pattern_name="admin_tools", permanent=False)),
     path("admin-tools/docs/<slug:slug>/", _staff_views.doc, name="staff_doc"),
     path("admin-tools/board/", _staff_views.board_admin, name="board_admin"),
+    path("admin-tools/board/membership/", _staff_views.board_membership_admin,
+         name="board_membership_admin"),
     path("admin-tools/assistant/", _staff_views.admin_assistant_admin,
          name="admin_assistant_admin"),
     path("admin-tools/web-coordinator/", _staff_views.web_coordinator_admin,

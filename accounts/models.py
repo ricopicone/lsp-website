@@ -84,6 +84,15 @@ class Profile(models.Model):
         MEMBER = "member", _("Member")
         EXTERNAL = "external", _("Auditor")
 
+    class Standing(models.TextChoices):
+        """Membership standing — orthogonal to role. Active is the default; the
+        Board records transitions (on-leave, resigned, emeritus) via Membership
+        administration."""
+        ACTIVE = "active", _("Active")
+        ON_LEAVE = "on_leave", _("On leave")
+        RESIGNED = "resigned", _("Resigned")
+        EMERITUS = "emeritus", _("Emeritus")
+
     class BillingMode(models.TextChoices):
         PER_CLASS = "per_class", _("Per class")
         PER_SEMINAR = "per_seminar", _("Per seminar")
@@ -108,6 +117,13 @@ class Profile(models.Model):
         choices=Role.choices,
         default=Role.EXTERNAL,
         help_text="LSP standing; drives event pricing and members-only access.",
+    )
+    standing = models.CharField(
+        max_length=16,
+        choices=Standing.choices,
+        default=Standing.ACTIVE,
+        help_text="Membership standing (active / on leave / resigned / emeritus). "
+        "Live cache; the Board sets it via Membership administration.",
     )
     timezone = models.CharField(
         max_length=64,
@@ -531,6 +547,10 @@ class MembershipTenure(models.Model):
         "accounts.User", on_delete=models.CASCADE, related_name="tenures",
     )
     role = models.CharField(max_length=32, choices=Profile.Role.choices)
+    standing = models.CharField(
+        max_length=16, choices=Profile.Standing.choices,
+        default=Profile.Standing.ACTIVE,
+    )
     start_ay = models.PositiveSmallIntegerField(
         help_text="Academic-year start year, e.g. 2019 for AY 2019–2020.",
     )
@@ -550,6 +570,21 @@ class MembershipTenure(models.Model):
     def __str__(self):
         end = self.end_ay if self.end_ay is not None else "present"
         return f"{self.user} — {self.get_role_display()} ({self.start_ay}–{end})"
+
+    @property
+    def ay_label(self) -> str:
+        """e.g. 'AY 2019–2020' or 'AY 2019–2020 – 2021–2022'."""
+        start = f"AY {self.start_ay}–{self.start_ay + 1}"
+        if self.end_ay is None:
+            return f"{start} – present"
+        if self.end_ay == self.start_ay:
+            return start
+        return f"{start} – {self.end_ay}–{self.end_ay + 1}"
+
+    @classmethod
+    def open_for(cls, user):
+        """The member's current open tenure (``end_ay`` null), or None."""
+        return cls.objects.filter(user=user, end_ay__isnull=True).order_by("-start_ay").first()
 
     @classmethod
     def role_at(cls, user, ay: int):
