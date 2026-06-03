@@ -166,6 +166,8 @@ def workgroup_detail(request, slug):
         tabs.append(("files", "Files"))
     if wg.has_calendar and is_member:
         tabs.append(("schedule", "Schedule"))
+    if wg.has_minutes and (is_member or archive_access):
+        tabs.append(("minutes", "Minutes"))
     if wg.has_tasks and is_member:
         tabs.append(("tasks", "Tasks"))
     if wg.has_decisions and (is_member or archive_access):
@@ -347,6 +349,25 @@ def workgroup_detail(request, slug):
         context["can_schedule"] = _can_schedule(wg, request.user)
         context["calendar_feed_url"] = _calendar_feed_url(request, wg)
         # Minutes → decisions: offer "record a decision from this meeting".
+        if wg.has_decisions:
+            from .permissions import can_register_decision
+
+            context["can_register_decisions"] = can_register_decision(request.user, wg)
+    elif active == "minutes" and wg.has_minutes and (is_member or archive_access):
+        from django.db.models import Q
+        from django.utils import timezone as _tz
+
+        # The meeting record: meetings that have happened or already carry
+        # minutes, newest first — with the decisions that came out of each.
+        now = _tz.now()
+        meetings = (
+            wg.meetings.filter(Q(starts_at__lte=now) | ~Q(minutes=""))
+            .select_related("series")
+            .prefetch_related("decisions")
+            .order_by("-starts_at")[:100]
+        )
+        context["minutes_meetings"] = list(meetings)
+        context["can_schedule"] = _can_schedule(wg, request.user)
         if wg.has_decisions:
             from .permissions import can_register_decision
 
@@ -825,7 +846,11 @@ def meeting_minutes(request, slug, pk):
     form = MeetingMinutesForm(request.POST, instance=m)
     if form.is_valid():
         form.save()
-    return redirect(f"{wg.get_absolute_url()}?tab=schedule")
+    # Return to the tab the edit came from (Schedule or the Minutes record).
+    tab = request.POST.get("tab")
+    if tab not in ("schedule", "minutes"):
+        tab = "schedule"
+    return redirect(f"{wg.get_absolute_url()}?tab={tab}")
 
 
 # --- iCal feeds (subscribe) -------------------------------------------------
