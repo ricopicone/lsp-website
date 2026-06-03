@@ -367,24 +367,24 @@ def web_coordinator(db):
 
 
 def test_coordinator_requires_login(client):
-    assert client.get(reverse("staff")).status_code == 302
+    assert client.get(reverse("admin_tools")).status_code == 302
 
 
 def test_coordinator_forbidden_for_plain_member(client, regular_user):
     client.force_login(regular_user)
-    assert client.get(reverse("staff")).status_code == 403
+    assert client.get(reverse("admin_tools")).status_code == 403
 
 
 def test_coordinator_ok_for_holder(client, web_coordinator):
     client.force_login(web_coordinator)
-    response = client.get(reverse("staff"))
+    response = client.get(reverse("admin_tools"))
     assert response.status_code == 200
-    assert b"Aphorisms" in response.content
+    assert b"Web Coordinator Admin" in response.content
 
 
 def test_coordinator_ok_for_superuser(client, superuser):
     client.force_login(superuser)
-    assert client.get(reverse("staff")).status_code == 200
+    assert client.get(reverse("admin_tools")).status_code == 200
 
 
 def test_aphorism_create_via_panel(client, web_coordinator):
@@ -426,9 +426,9 @@ def test_aphorism_edit_forbidden_for_member(client, regular_user):
 
 def test_nav_staff_tools_link_visibility(client, web_coordinator, regular_user):
     client.force_login(web_coordinator)
-    assert b"Staff tools" in client.get(reverse("core:landing")).content
+    assert b"Admin Tools" in client.get(reverse("core:landing")).content
     client.force_login(regular_user)
-    assert b"Staff tools" not in client.get(reverse("core:landing")).content
+    assert b"Admin Tools" not in client.get(reverse("core:landing")).content
 
 
 @pytest.fixture
@@ -446,7 +446,7 @@ def test_treasurer_role_reaches_hub_and_dashboard(client, treasurer_member):
     """A Treasurer-role holder (not Django staff) sees the hub + Treasurer tool
     and can open the dashboard."""
     client.force_login(treasurer_member)
-    hub = client.get(reverse("staff"))
+    hub = client.get(reverse("admin_tools"))
     assert hub.status_code == 200
     assert b"Treasurer" in hub.content
     assert b"Aphorisms" not in hub.content  # not a web coordinator
@@ -459,7 +459,7 @@ def test_cartel_coordinator_sees_review_card(client, web_coordinator):
 
     StaffRole.objects.get(key=StaffRole.CARTEL_COORDINATOR).holders.add(web_coordinator)
     client.force_login(web_coordinator)
-    body = client.get(reverse("staff")).content
+    body = client.get(reverse("admin_tools")).content
     assert b"Cartel Coordinator Admin" in body
 
 
@@ -478,7 +478,7 @@ def test_committee_member_sees_committee_panel(client, pc_member):
     """A Programming Committee member (not Django staff, no StaffRole) reaches
     the hub, sees the Program Committee card, and can open the PC admin."""
     client.force_login(pc_member)
-    hub = client.get(reverse("staff"))
+    hub = client.get(reverse("admin_tools"))
     assert hub.status_code == 200
     assert b"Program Committee" in hub.content
     assert b"Aphorisms" not in hub.content  # not a web coordinator
@@ -486,17 +486,18 @@ def test_committee_member_sees_committee_panel(client, pc_member):
 
 
 def test_board_member_sees_board_card(db, client):
-    """A Board member (no role, not Django staff) sees the Board card, which
-    links to the committee's workgroup page."""
+    """A Board member (no role, not Django staff) reaches the hub, sees the
+    Board Admin card, and can open the Board Admin page."""
     from committees.models import Committee
 
     user = User.objects.create_user(email="board@example.com", password="x")
     board = Committee.objects.get(slug="board")
     board.add_member(user, start_date=date(2026, 1, 1))
     client.force_login(user)
-    body = client.get(reverse("staff")).content
-    assert b"Board" in body
-    assert reverse("workgroups:detail", args=[board.workgroup.slug]).encode() in body
+    body = client.get(reverse("admin_tools")).content
+    assert b"Board Admin" in body
+    assert reverse("board_admin").encode() in body
+    assert client.get(reverse("board_admin")).status_code == 200
 
 
 def test_meeting_of_analysts_committee_seeded(db):
@@ -594,16 +595,16 @@ def test_staff_docs_section_and_groups_guide(client):
         email="admin-docs@x.test", password="x", is_staff=True, is_superuser=True
     )
     client.force_login(admin)
-    home = client.get("/staff/")
+    home = client.get("/admin-tools/")
     assert home.status_code == 200
     assert b"Documentation" in home.content
-    assert b"/staff/docs/groups-guide/" in home.content
+    assert b"/admin-tools/docs/groups-guide/" in home.content
 
-    guide = client.get("/staff/docs/groups-guide/")
+    guide = client.get("/admin-tools/docs/groups-guide/")
     assert guide.status_code == 200
     assert b"Groups at the LSP" in guide.content        # the doc's H1, rendered
 
-    assert client.get("/staff/docs/does-not-exist/").status_code == 404
+    assert client.get("/admin-tools/docs/does-not-exist/").status_code == 404
 
 
 @pytest.mark.django_db
@@ -612,7 +613,7 @@ def test_staff_doc_denied_without_hub_access(client):
 
     nobody = User.objects.create_user(email="nobody-docs@x.test", password="x")
     client.force_login(nobody)
-    assert client.get("/staff/docs/groups-guide/").status_code == 403
+    assert client.get("/admin-tools/docs/groups-guide/").status_code == 403
 
 
 # --- Persona exemptions: treasurer/financial + email -------------------------
@@ -657,3 +658,62 @@ def test_persona_safe_email_backend_drops_persona_recipients(settings):
     delivered = [addr for m in mail.outbox for addr in m.to]
     assert "real@x.test" in delivered
     assert "persona+x@lacanschool.org" not in delivered
+
+
+def _grant_role(user, key):
+    from core.models import StaffRole
+    StaffRole.objects.get(key=key).holders.add(user)
+
+
+def test_admin_assistant_role_page_and_card(db, client):
+    from core.models import StaffRole
+    user = User.objects.create_user(email="aa@example.com", password="x")
+    _grant_role(user, StaffRole.ADMIN_ASSISTANT)
+    client.force_login(user)
+    body = client.get(reverse("admin_tools")).content
+    assert b"Administrative Assistant Admin" in body
+    assert b"Web Coordinator Admin" not in body  # only their own card
+    assert client.get(reverse("admin_assistant_admin")).status_code == 200
+
+
+def test_web_developer_role_page_and_card(db, client):
+    from core.models import StaffRole
+    user = User.objects.create_user(email="wd@example.com", password="x")
+    _grant_role(user, StaffRole.WEB_DEVELOPER)
+    client.force_login(user)
+    body = client.get(reverse("admin_tools")).content
+    assert b"Web Developer Admin" in body
+    assert client.get(reverse("web_developer_admin")).status_code == 200
+
+
+def test_web_coordinator_landing_shows_aphorisms(client, web_coordinator):
+    client.force_login(web_coordinator)
+    resp = client.get(reverse("web_coordinator_admin"))
+    assert resp.status_code == 200
+    assert b"Aphorisms" in resp.content
+
+
+def test_role_pages_forbidden_without_role(client, regular_user):
+    client.force_login(regular_user)
+    for name in ("admin_assistant_admin", "web_developer_admin",
+                 "web_coordinator_admin", "board_admin"):
+        assert client.get(reverse(name)).status_code == 403
+
+
+def test_other_committee_member_no_longer_reaches_hub(db, client):
+    """Narrowed access: a member of a committee other than Board / Programming
+    Committee no longer gets the Admin Tools hub."""
+    from committees.models import Committee
+    user = User.objects.create_user(email="moa@example.com", password="x")
+    Committee.objects.get(slug="meeting-of-analysts").add_member(
+        user, start_date=date(2026, 1, 1)
+    )
+    client.force_login(user)
+    assert client.get(reverse("admin_tools")).status_code == 403
+
+
+def test_staff_url_redirects_to_admin_tools(client, superuser):
+    client.force_login(superuser)
+    resp = client.get("/staff/")
+    assert resp.status_code == 302
+    assert resp.url == reverse("admin_tools")

@@ -1,0 +1,20 @@
+{% extends "core/base.html" %}
+{% comment %}
+Shared base for the per-body / per-role admin landing pages under /admin-tools/.
+Child templates fill: admin_heading, admin_kicker, admin_intro, admin_sections.
+Section cards use the markup in _section.html.
+{% endcomment %}
+{% block title %}{% block admin_heading_title %}Admin{% endblock %} — Admin Tools{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <nav class="text-sm"><a href="{% url 'admin_tools' %}" class="link link-hover text-base-content/60">← Admin Tools</a></nav>
+  <header class="space-y-2">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">{% block admin_kicker %}Admin{% endblock %}</p>
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">{% block admin_heading %}{% endblock %}</h1>
+    <p class="text-base-content/70 max-w-2xl">{% block admin_intro %}{% endblock %}</p>
+  </header>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {% block admin_sections %}{% endblock %}
+  </div>
+</div>
+{% endblock %}
