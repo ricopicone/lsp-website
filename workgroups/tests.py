@@ -1034,3 +1034,64 @@ def test_publish_authors_exclude_personas(client):
     draft.refresh_from_db()
     ids = set(draft.published_work.authorships.values_list("user_id", flat=True))
     assert ids == {pub.pk}                          # persona not credited
+
+
+# ---- Serving membership (future-dated term ends) -----------------------
+
+
+@pytest.mark.django_db
+def test_future_term_end_still_serving():
+    """A member whose term ends in the future is still an active member;
+    a past end is not."""
+    wg = _wg(kind=Workgroup.Kind.COMMITTEE, name="Serving WG", has_terms=True)
+    future = _user("future@x.test", role=Profile.Role.ANALYST)
+    past = _user("past@x.test", role=Profile.Role.ANALYST)
+    today = datetime.date.today()
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=future, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2024, 1, 1),
+        end_date=today + datetime.timedelta(days=400),
+    )
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=past, role=WorkgroupMembership.Role.MEMBER,
+        start_date=datetime.date(2020, 1, 1),
+        end_date=today - datetime.timedelta(days=1),
+    )
+    assert wg.is_member(future) is True
+    assert wg.is_member(past) is False
+    member_ids = {m.user_id for m in wg.active_members()}
+    assert future.pk in member_ids
+    assert past.pk not in member_ids
+
+
+@pytest.mark.django_db
+def test_remove_member_takes_effect_today_not_tomorrow():
+    """Removing a member (end_date=today) drops them from serving immediately —
+    end_date is exclusive (end > today)."""
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="Remove WG")
+    chair = _chair(wg)
+    m = _user("m@x.test", role=Profile.Role.ANALYST)
+    wg.add_member(m)
+    assert wg.is_member(m) is True
+    assert wg.remove_member(m) is True
+    assert wg.is_member(m) is False  # not "serving through today"
+    # chair untouched
+    assert wg.is_member(chair) is True
+
+
+@pytest.mark.django_db
+def test_set_member_term_future_end_editable_again():
+    """A member with a future-dated end can still be found + edited (the lookup
+    uses serving semantics, not end_date IS NULL)."""
+    wg = _wg(kind=Workgroup.Kind.COMMITTEE, name="Edit WG", has_terms=True)
+    u = _user("u@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=u, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2024, 1, 1),
+    )
+    fut = datetime.date.today() + datetime.timedelta(days=300)
+    assert wg.set_member_term(u, start_date=datetime.date(2024, 1, 1), end_date=fut) is True
+    # Now they have a future end; we can still edit them (find via serving).
+    later = datetime.date.today() + datetime.timedelta(days=600)
+    assert wg.set_member_term(u, start_date=datetime.date(2024, 1, 1), end_date=later) is True
+    assert wg.memberships.get(user=u).end_date == later

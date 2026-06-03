@@ -204,8 +204,8 @@ class Work(models.Model):
 
         from workgroups.models import WorkgroupMembership
 
-        member_group_ids = WorkgroupMembership.objects.filter(
-            user=user, end_date__isnull=True
+        member_group_ids = WorkgroupMembership.objects.serving().filter(
+            user=user
         ).values("workgroup_id")
         visible |= Q(
             listing_visibility=cls.Visibility.GROUP, workgroup_id__in=member_group_ids

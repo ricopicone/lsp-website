@@ -53,9 +53,8 @@ def _directory_qs():
     committee-kind workgroup memberships whose committee is public.
     """
     membership_qs = (
-        WorkgroupMembership.objects
+        WorkgroupMembership.objects.serving()
         .filter(
-            end_date__isnull=True,
             workgroup__kind=Workgroup.Kind.COMMITTEE,
             workgroup__committee__public=True,
         )

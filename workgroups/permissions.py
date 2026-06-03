@@ -29,8 +29,8 @@ def can_manage_workgroup(user, workgroup) -> bool:
 
     if is_program_committee(user):
         return True
-    if workgroup.memberships.filter(
-        user=user, end_date__isnull=True, role__in=WorkgroupMembership.LEAD_ROLES,
+    if workgroup.memberships.serving().filter(
+        user=user, role__in=WorkgroupMembership.LEAD_ROLES,
     ).exists():
         return True
     # The Board oversees the school's standing bodies (G4 roster authority).
@@ -41,7 +41,6 @@ def is_board(user) -> bool:
     """True if ``user`` is a current member of the Board committee."""
     if not getattr(user, "is_authenticated", False):
         return False
-    return WorkgroupMembership.objects.filter(
-        user=user, end_date__isnull=True,
-        workgroup__committee__slug="board",
+    return WorkgroupMembership.objects.serving().filter(
+        user=user, workgroup__committee__slug="board",
     ).exists()

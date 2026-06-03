@@ -140,8 +140,8 @@ class WorkForm(forms.ModelForm):
             ids = set()
             if current_user is not None and getattr(current_user, "is_authenticated", False):
                 ids.update(
-                    WorkgroupMembership.objects.filter(
-                        user=current_user, end_date__isnull=True
+                    WorkgroupMembership.objects.serving().filter(
+                        user=current_user
                     ).values_list("workgroup_id", flat=True)
                 )
             if self.instance and self.instance.workgroup_id:

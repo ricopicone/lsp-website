@@ -111,7 +111,7 @@ class Command(BaseCommand):
                         continue
                     target_users.add(user.pk)
 
-                    existing = wg.memberships.filter(user=user, end_date__isnull=True).first()
+                    existing = wg.memberships.serving().filter(user=user).first()
                     if existing:
                         if existing.role != role:
                             existing.role = role
@@ -124,7 +124,7 @@ class Command(BaseCommand):
 
                 # Close out memberships not in the current roster.
                 to_close = (wg.memberships
-                            .filter(end_date__isnull=True)
+                            .serving()
                             .exclude(user_id__in=target_users))
                 for m in to_close:
                     m.end_date = today

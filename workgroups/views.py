@@ -215,7 +215,7 @@ def workgroup_detail(request, slug):
     # Open self-join (reading groups): any LSP member joins directly.
     stored_member = (
         request.user.is_authenticated
-        and wg.memberships.filter(user=request.user, end_date__isnull=True).exists()
+        and wg.memberships.serving().filter(user=request.user).exists()
     )
     from accounts.permissions import is_lsp_member
 
@@ -401,7 +401,7 @@ def workgroup_join(request, slug):
     wg = get_object_or_404(Workgroup, slug=slug)
     if not (wg.open_join and is_lsp_member(request.user)):
         raise Http404
-    if not wg.memberships.filter(user=request.user, end_date__isnull=True).exists():
+    if not wg.memberships.serving().filter(user=request.user).exists():
         WorkgroupMembership.objects.create(
             workgroup=wg, user=request.user,
             role=WorkgroupMembership.Role.MEMBER,
@@ -557,7 +557,7 @@ def _can_schedule(wg, user) -> bool:
         return False
     return (
         getattr(user, "is_authenticated", False)
-        and wg.memberships.filter(user=user, end_date__isnull=True).exists()
+        and wg.memberships.serving().filter(user=user).exists()
     )
 
 
