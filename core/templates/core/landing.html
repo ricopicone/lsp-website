@@ -28,6 +28,17 @@
   /* A faint vertical hairline marks the editorial statement band. */
   .lsp-rule-accent { box-shadow: inset 2px 0 0 0 var(--color-primary); }
 
+  /* The display serif (Cutive) has tall ascenders, and the reveal animation
+     promotes the heading to its own compositing layer — which Safari clips to
+     the box, shaving the tops of the caps. Give the box headroom inside that
+     layer and offset it with a matching negative margin so the layout rhythm
+     is unchanged. */
+  .lsp-hero h1 {
+    padding-top: 0.75rem;
+    margin-top: -0.75rem;
+    padding-bottom: 0.25rem;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .lsp-reveal {
       opacity: 0;
@@ -55,7 +66,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
     <p class="lsp-reveal font-mono text-xs uppercase tracking-[0.2em] text-base-content/50" style="--d:0">
       A worldwide school · based in San Francisco
     </p>
-    <h1 class="lsp-reveal font-serif text-4xl sm:text-6xl text-base-content leading-[1.1] tracking-tight py-1" style="--d:1">
+    <h1 class="lsp-reveal font-serif text-4xl sm:text-6xl text-base-content leading-[1.1] tracking-tight" style="--d:1">
       Lacanian School<br class="hidden sm:block"> of Psychoanalysis
     </h1>
     <p class="lsp-reveal text-lg sm:text-xl text-base-content/75 leading-relaxed max-w-2xl" style="--d:2">
