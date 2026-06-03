@@ -84,6 +84,7 @@ urlpatterns = [
     path("cartels/", include("cartels.urls")),
     path("working-groups/", include("workinggroups.urls")),
     path("committees/", include("committees.urls")),
+    path("", include("admissions.urls")),
     path("dues/", _payment_views.dues_pay, name="dues"),
     path("donate/", _payment_views.donate, name="donate"),
     path("tuition/", _payment_views.tuition_decision, name="tuition"),

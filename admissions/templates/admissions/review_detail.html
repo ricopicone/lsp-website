@@ -1,0 +1,122 @@
+{% extends "core/base.html" %}
+{% block title %}Application — {{ application.applicant.get_full_name|default:application.applicant.email }}{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+  <nav class="text-sm"><a href="{% url 'admissions:review_queue' %}" class="link link-hover text-base-content/60">← Applications</a></nav>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <header class="flex flex-wrap items-baseline justify-between gap-2">
+    <div>
+      <h1 class="font-serif text-2xl text-base-content tracking-tight">{{ application.applicant.get_full_name|default:application.applicant.email }}</h1>
+      <p class="text-sm text-base-content/60">{{ application.applicant.email }} · {{ application.get_track_display }}</p>
+    </div>
+    <span class="badge {% if application.status == 'accepted' %}badge-success{% elif application.is_open %}badge-info{% else %}badge-ghost{% endif %}">{{ application.get_status_display }}</span>
+  </header>
+
+  {% comment %}The package{% endcomment %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-3">
+    <h2 class="font-medium text-base-content">Application</h2>
+    <dl class="text-sm space-y-2">
+      {% if application.background %}<div><dt class="text-base-content/60 inline">Background:</dt> <dd class="inline">{{ application.get_background_display }}</dd></div>{% endif %}
+      {% if application.eligibility_note %}<div><dt class="text-base-content/60 inline">Eligibility:</dt> <dd class="inline">{{ application.eligibility_note }}</dd></div>{% endif %}
+      {% if application.cv %}<div><dt class="text-base-content/60 inline">CV:</dt> <dd class="inline"><a href="{% url 'admissions:cv_download' application.pk %}" class="link link-primary">Download</a></dd></div>{% endif %}
+    </dl>
+    <div>
+      <p class="text-base-content/60 text-sm mb-1">Letter of intent</p>
+      <div class="rounded-lg bg-base-200/40 p-3 text-sm whitespace-pre-wrap">{{ application.letter_of_intent }}</div>
+    </div>
+  </section>
+
+  {% comment %}Interviews{% endcomment %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-4">
+    <div class="flex items-baseline justify-between">
+      <h2 class="font-medium text-base-content">Interviews</h2>
+      <span class="text-xs text-base-content/50">Two interviews, one per Analyst.</span>
+    </div>
+
+    {% for iv, rform in report_forms %}
+    <div class="rounded-lg border border-base-300/70 p-3 space-y-2">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-sm font-medium">{{ iv.interviewer.get_full_name|default:iv.interviewer.email }}</span>
+        <div class="flex items-center gap-2">
+          {% if iv.is_complete %}<span class="badge badge-success badge-sm">reported</span>{% else %}<span class="badge badge-ghost badge-sm">pending</span>{% endif %}
+          {% if application.is_open %}
+          <form method="post" action="{% url 'admissions:review_remove_interview' iv.pk %}" onsubmit="return confirm('Remove this interviewer?');">
+            {% csrf_token %}<button class="btn btn-ghost btn-xs text-error">Remove</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% if application.is_open %}
+      <form method="post" action="{% url 'admissions:review_report' iv.pk %}" class="space-y-2">
+        {% csrf_token %}
+        <div class="flex flex-wrap items-end gap-2">
+          <div class="space-y-1">
+            <label class="block text-xs text-base-content/60">Interview date</label>
+            {{ rform.completed_at }}
+          </div>
+          <div class="flex-1 min-w-0 space-y-1">
+            <label class="block text-xs text-base-content/60">Report</label>
+            {{ rform.report }}
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-xs">Save report</button>
+      </form>
+      {% else %}
+        {% if iv.report %}<p class="text-sm text-base-content/70 whitespace-pre-wrap">{{ iv.report }}</p>{% endif %}
+      {% endif %}
+    </div>
+    {% empty %}
+    <p class="text-sm text-base-content/50">No interviewers assigned yet.</p>
+    {% endfor %}
+
+    {% if application.is_open %}
+    <form method="post" action="{% url 'admissions:review_assign' application.pk %}" class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
+      {% csrf_token %}
+      <div class="flex-1 min-w-0 space-y-1">
+        <label class="block text-xs text-base-content/60">{{ assign_form.interviewer.label }}</label>
+        {{ assign_form.interviewer }}
+      </div>
+      <button class="btn btn-sm">Add</button>
+    </form>
+    {% endif %}
+  </section>
+
+  {% comment %}Decision{% endcomment %}
+  {% if application.is_open %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-4">
+    <h2 class="font-medium text-base-content">Decision <span class="text-xs font-normal text-base-content/50">(Meeting of the Analysts)</span></h2>
+    <form method="post" action="{% url 'admissions:review_decide' application.pk %}" class="space-y-3">
+      {% csrf_token %}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">Effective academic year (start year)</label>
+          <input type="number" name="effective_ay" value="{{ default_ay }}" class="input input-bordered w-full">
+          <p class="text-xs text-base-content/50">Used when accepting — admits as a Precandidate from this AY.</p>
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">Note (optional, included in the email)</label>
+          <textarea name="note" rows="2" class="textarea textarea-bordered w-full"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button name="decision" value="accept" class="btn btn-primary btn-sm"
+                onclick="return confirm('Accept and admit this applicant as a Precandidate?');">Accept &amp; admit</button>
+        <button name="decision" value="reject" class="btn btn-ghost btn-sm text-error"
+                onclick="return confirm('Record this application as not accepted?');">Decline</button>
+      </div>
+    </form>
+  </section>
+  {% else %}
+  <section class="rounded-xl border border-base-300 p-5 text-sm space-y-1">
+    <p><span class="text-base-content/60">Decision:</span> <strong>{{ application.get_status_display }}</strong>
+      {% if application.decided_at %}on {{ application.decided_at|date:"M j, Y" }}{% endif %}
+      {% if application.decided_by %}by {{ application.decided_by.get_full_name|default:application.decided_by.email }}{% endif %}</p>
+    {% if application.decision_note %}<p class="text-base-content/70">{{ application.decision_note }}</p>{% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

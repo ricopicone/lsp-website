@@ -55,6 +55,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     "accounts",
+    "admissions",
     "committees",
     "content",
     "documents",
@@ -169,6 +170,11 @@ MEDIA_ROOT = BASE_DIR / "media"
 # survive container restarts.
 PARLETRE_ATTACHMENTS_ROOT = env(
     "PARLETRE_ATTACHMENTS_ROOT", default=str(BASE_DIR / "private-media")
+)
+# Applicant CVs are personal — kept off the public bucket, served only via the
+# access-checked download view (admissions.views.cv_download).
+ADMISSIONS_UPLOADS_ROOT = env(
+    "ADMISSIONS_UPLOADS_ROOT", default=str(BASE_DIR / "private-media" / "admissions")
 )
 
 # --- Email --------------------------------------------------------------

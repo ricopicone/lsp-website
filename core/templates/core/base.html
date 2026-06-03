@@ -225,6 +225,11 @@
             {% if user.profile.owes_tuition %}
             <li><a href="{% url 'tuition' %}">Your tuition decision</a></li>
             {% endif %}
+            {% if user.application %}
+            <li><a href="{% url 'admissions:status' %}">Your application</a></li>
+            {% elif user.profile.role == 'external' or user.profile.role == 'prospective_applicant' %}
+            <li><a href="{% url 'admissions:apply_start' %}">Apply to join</a></li>
+            {% endif %}
             <li><a href="{% url 'profile_edit' %}">Edit profile</a></li>
             <li><a href="{% url 'profile_edit' %}#timezone">Time zone</a></li>
             <li>
