@@ -213,6 +213,9 @@ class ChargePlan:
     user_id: int | None = None
     member_match: str = ""           # confidence label from the matcher
     type_inferred: bool = False
+    #: A provisional guess from the --sweep-unknown pass (recorded as
+    #: source=ASSUMED, to be confirmed via the member survey).
+    provisional: bool = False
     existing_payment_id: int | None = None
     overlap_payment_id: int | None = None
 
@@ -241,6 +244,13 @@ class PlanContext:
     #: plan). A member with no role on record that year is given the benefit of
     #: the doubt (historical years often lack tenure data).
     non_student_user_ays: set | None = None
+    #: Members who have completed tuition (analyst/scholar role, or ≥4 tuition
+    #: years on record). For the --sweep-unknown pass, their otherwise-unknown
+    #: charges are assumed to be seminar *registrations*; everyone else's are
+    #: assumed to be tuition installments.
+    completed_tuition_user_ids: set = field(default_factory=set)
+    sweep_unknown: bool = False                  # provisionally type the leftovers
+    sweep_min: Decimal = Decimal("25")           # ignore tiny card-test charges
     only_types: set | None = None                # restrict which types to create
     default_type: str | None = None
     overlap_days: int = 7
@@ -352,8 +362,35 @@ def _match_member(row: StripeChargeRow, ctx: PlanContext):
 def plan_charges(rows, ctx: PlanContext, *, allow_overlaps=False) -> list[ChargePlan]:
     plans = [plan_charge(r, ctx, allow_overlaps=allow_overlaps) for r in rows]
     _infer_installments(plans, ctx)
+    _sweep_unknown(plans, ctx)
     _apply_type_filter(plans, ctx)
     return plans
+
+
+def _sweep_unknown(plans: list[ChargePlan], ctx: PlanContext) -> None:
+    """Provisionally type the remaining unknowns (opt-in, ``--sweep-unknown``).
+    A payer who has completed tuition (analyst/scholar, or ≥4 tuition years) is
+    assumed to be paying for *seminars* (registration); everyone else — and
+    unmatched payers — is assumed to be paying tuition installments. Tiny
+    card-test charges below ``sweep_min`` are left alone. Recorded as
+    ``source=ASSUMED`` (see apply_plan) so they're easy to re-categorize after
+    the member survey."""
+    if not ctx.sweep_unknown:
+        return
+    for p in plans:
+        if p.action != "needs_type" or p.row.amount < ctx.sweep_min:
+            continue
+        completed = p.user_id is not None and p.user_id in ctx.completed_tuition_user_ids
+        if completed and "registration" in ctx.valid_types:
+            p.payment_type = "registration"
+        elif "tuition" in ctx.valid_types:
+            p.payment_type = "tuition"
+        else:
+            continue
+        p.action = "create" if p.user_id is not None else "create_unmatched"
+        p.provisional = True
+        p.type_inferred = False
+        p.reason = f"provisional ({p.payment_type}) — confirm via survey"
 
 
 def _infer_installments(plans: list[ChargePlan], ctx: PlanContext) -> None:
@@ -416,7 +453,8 @@ def apply_plan(plans: list[ChargePlan]) -> dict:
                 stripe_payment_intent_id=row.payment_intent,
                 stripe_checkout_session_id=row.checkout_session_id,
                 email=row.email,
-                source=Source.IMPORTED,
+                # Provisional sweep guesses are ASSUMED; confident matches IMPORTED.
+                source=Source.ASSUMED if plan.provisional else Source.IMPORTED,
                 paid_at=row.created,
                 notes=_compose_note(row, plan),
             )
@@ -443,7 +481,9 @@ def _compose_note(row: StripeChargeRow, plan: ChargePlan) -> str:
     bits = [tag_for(row.charge_id)]
     if row.description:
         bits.append(row.description)
-    if not plan.type_inferred:
+    if plan.provisional:
+        bits.append("(provisional — confirm via survey)")
+    elif not plan.type_inferred:
         bits.append("(type defaulted — verify)")
     if plan.action == "create_unmatched":
         bits.append(f"(unmatched payer: {row.name or row.email or '?'})")

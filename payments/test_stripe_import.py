@@ -44,9 +44,12 @@ def _user(email, first="Ann", last="Lee"):
                                     first_name=first, last_name=last)
 
 
-def _plan(charges, *, sessions=None, default_type=None, allow_overlaps=False):
+def _plan(charges, *, sessions=None, default_type=None, allow_overlaps=False,
+          sweep_unknown=False, sweep_min=25.0):
     rows = [normalize_charge(c, sessions_by_pi=sessions or {}) for c in charges]
-    ctx = Command().build_context(default_type)
+    ctx = Command().build_context(
+        default_type, sweep_unknown=sweep_unknown, sweep_min=sweep_min,
+    )
     return plan_charges(rows, ctx, allow_overlaps=allow_overlaps)
 
 
@@ -205,6 +208,41 @@ def test_single_nontier_charge_stays_unknown():
     u = _user("ann@x.test")
     _in_training(u)
     plans = _plan([_charge(amount=50000, description="")])  # lone $500
+    assert plans[0].action == "needs_type"
+
+
+# ---- sweep-unknown (provisional) ------------------------------------------
+
+def test_sweep_off_by_default():
+    _user("ann@x.test")
+    plans = _plan([_charge(amount=20000, description="")])  # $200 unknown
+    assert plans[0].action == "needs_type"
+
+
+def test_sweep_unknown_defaults_to_tuition():
+    _user("ann@x.test")  # not analyst/scholar, <4 tuition years → still a student
+    plans = _plan([_charge(amount=20000, description="")], sweep_unknown=True)
+    assert plans[0].action == "create"
+    assert plans[0].payment_type == "tuition"
+    assert plans[0].provisional
+    apply_plan(plans)
+    p = Payment.objects.get(stripe_payment_intent_id="pi_1")
+    assert p.source == Source.ASSUMED
+    assert "provisional" in p.notes
+
+
+def test_sweep_completed_member_is_registration():
+    u = _user("ann@x.test")
+    u.profile.role = Profile.Role.ANALYST  # completed tuition
+    u.profile.save()
+    plans = _plan([_charge(amount=20000, description="")], sweep_unknown=True)
+    assert plans[0].payment_type == "registration"
+    assert plans[0].provisional
+
+
+def test_sweep_skips_tiny_charges():
+    _user("ann@x.test")
+    plans = _plan([_charge(amount=1000, description="")], sweep_unknown=True)  # $10
     assert plans[0].action == "needs_type"
 
 
