@@ -21,6 +21,7 @@ COPY assets/css ./assets/css
 # emitting classes that page templates rely on. (Forgetting works/ +
 # documents/ here broke vibe-card avatars on prod.)
 COPY accounts/templates ./accounts/templates
+COPY admissions/templates ./admissions/templates
 COPY content/templates ./content/templates
 COPY core/templates ./core/templates
 COPY documents/templates ./documents/templates

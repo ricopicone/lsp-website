@@ -1,0 +1,34 @@
+{% extends "core/base.html" %}
+{% block title %}Apply to join — LSP{% endblock %}
+{% block content %}
+<div class="space-y-8 max-w-3xl">
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Apply to join</h1>
+    <p class="text-base-content/70">
+      The Lacanian School of Psychoanalysis offers two formations. Choose the one
+      you're applying to — you'll submit a letter of intent and a CV, then have
+      two interviews with Analysts of the School before the Meeting of the
+      Analysts reviews your application.
+    </p>
+  </header>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {% for t in tracks %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-3 flex flex-col">
+      <h2 class="font-serif text-xl text-base-content">{{ t.label }}</h2>
+      <ul class="text-sm text-base-content/70 space-y-1 list-disc pl-5 flex-1">
+        {% for e in t.eligibility %}<li>{{ e }}</li>{% endfor %}
+      </ul>
+      <a href="{% url 'admissions:apply' t.key %}" class="btn btn-primary btn-sm self-start">
+        Apply — {{ t.label }}
+      </a>
+    </section>
+    {% endfor %}
+  </div>
+
+  <p class="text-xs text-base-content/50">
+    Questions? Email <a href="mailto:{{ 'website@lacanschool.org' }}" class="link">the School</a>.
+    The two interviews carry a $50 fee each, paid to the interviewing analyst directly.
+  </p>
+</div>
+{% endblock %}

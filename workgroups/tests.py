@@ -1178,9 +1178,9 @@ def test_draft_file_download_gated_by_membership(client):
 
 def test_private_storage_used_for_gated_fields():
     """Gated FileFields resolve to the private storage (local fallback in dev)."""
-    from works.models import WorkDraft, WorkFile
-    from documents.models import Document
     from core.storage import private_storage
+    from documents.models import Document
+    from works.models import WorkDraft, WorkFile
     expected = type(private_storage())
     assert isinstance(WorkFile._meta.get_field("file").storage, expected)
     assert isinstance(WorkDraft._meta.get_field("file").storage, expected)
