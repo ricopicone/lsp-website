@@ -47,6 +47,7 @@ urlpatterns = [
     # Collaborative working documents (Work tab)
     path("<slug:slug>/docs/new/", views.draft_create, name="draft_create"),
     path("<slug:slug>/docs/<int:pk>/", views.draft_edit, name="draft_edit"),
+    path("<slug:slug>/docs/<int:pk>/file/", views.draft_file, name="draft_file"),
     path("<slug:slug>/docs/<int:pk>/autosave/", views.draft_autosave, name="draft_autosave"),
     path("<slug:slug>/docs/<int:pk>/version/", views.draft_save_version, name="draft_save_version"),
     path("<slug:slug>/docs/<int:pk>/release/", views.draft_release_lock, name="draft_release_lock"),

@@ -162,14 +162,22 @@ STATICFILES_DIRS = [BASE_DIR / "static"]  # Tailwind build output, future shared
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# Parlêtre attachments live OUTSIDE the public media root (and outside the
-# public S3 bucket) and are served only through the access-checked download
-# view, so files in a private channel stay private. Persist this directory in
-# production the same way media is persisted (a bind-mount), so attachments
-# survive container restarts.
-PARLETRE_ATTACHMENTS_ROOT = env(
-    "PARLETRE_ATTACHMENTS_ROOT", default=str(BASE_DIR / "private-media")
+# Access-controlled uploads (gated Work/Document PDFs, workgroup working-doc
+# files, Parlêtre attachments) live OUTSIDE the public media root — a private
+# S3 bucket in production, or this local dir in dev. Served only through the
+# access-checked download views; never a bare public URL. See core.storage.
+PRIVATE_MEDIA_ROOT = env(
+    "PRIVATE_MEDIA_ROOT", default=str(BASE_DIR / "private-media")
 )
+# Back-compat alias (Parlêtre attachments shared this root).
+PARLETRE_ATTACHMENTS_ROOT = env(
+    "PARLETRE_ATTACHMENTS_ROOT", default=PRIVATE_MEDIA_ROOT
+)
+
+# Private S3 bucket for the above (unset → local filesystem fallback). The
+# public default-storage bucket is configured separately in production.py.
+AWS_PRIVATE_STORAGE_BUCKET_NAME = env("AWS_PRIVATE_STORAGE_BUCKET_NAME", default="")
+AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-west-2")
 
 # --- Email --------------------------------------------------------------
 

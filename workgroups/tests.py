@@ -1153,3 +1153,35 @@ def test_work_tab_renders_file_draft_row(client):
     assert b"Static Paper" in resp.content
     assert b"Upload a PDF" in resp.content       # the new create option
     assert b"PDF \xe2\x86\x97" in resp.content   # "PDF ↗" badge
+
+
+def test_draft_file_download_gated_by_membership(client):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    wg = _wg(name="Filey", slug="filey")
+    member = _member_of(wg, "m@x.test")
+    outsider = _user("out@x.test")
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.create(
+        workgroup=wg, title="Static",
+        file=SimpleUploadedFile("p.pdf", b"%PDF-1.4\nbytes\n", content_type="application/pdf"),
+    )
+    url = reverse("workgroups:draft_file", args=[wg.slug, draft.pk])
+    # member: streams the bytes
+    client.force_login(member)
+    resp = client.get(url)
+    assert resp.status_code == 200
+    assert b"".join(resp.streaming_content) == b"%PDF-1.4\nbytes\n"
+    # outsider: 404 (not a member)
+    client.force_login(outsider)
+    assert client.get(url).status_code == 404
+
+
+def test_private_storage_used_for_gated_fields():
+    """Gated FileFields resolve to the private storage (local fallback in dev)."""
+    from works.models import WorkDraft, WorkFile
+    from documents.models import Document
+    from core.storage import private_storage
+    expected = type(private_storage())
+    assert isinstance(WorkFile._meta.get_field("file").storage, expected)
+    assert isinstance(WorkDraft._meta.get_field("file").storage, expected)
+    assert isinstance(Document._meta.get_field("file").storage, expected)

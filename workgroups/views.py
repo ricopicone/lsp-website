@@ -897,13 +897,27 @@ def draft_create(request, slug):
 
 
 @login_required
+def draft_file(request, slug, pk):
+    """Serve an uploaded working-document file, gated by membership (the file
+    lives in private storage and has no public URL)."""
+    from django.http import FileResponse
+
+    wg, draft = _get_draft(request, slug, pk)
+    if not draft.file:
+        raise Http404
+    resp = FileResponse(draft.file.open("rb"))
+    resp["Content-Disposition"] = f'inline; filename="{draft.filename}"'
+    return resp
+
+
+@login_required
 def draft_edit(request, slug, pk):
     """Full-page TipTap editor for one native document."""
     wg, draft = _get_draft(request, slug, pk)
     if draft.is_linked:
         return redirect(draft.google_doc_url)
     if draft.is_file:
-        return redirect(draft.file.url)
+        return redirect("workgroups:draft_file", slug=wg.slug, pk=draft.pk)
     holder = draft.active_lock_holder()
     can_edit = holder is None or holder.pk == request.user.pk
     if can_edit:

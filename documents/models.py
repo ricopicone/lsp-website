@@ -33,6 +33,7 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from accounts.permissions import is_lsp_member
+from core.storage import private_storage
 
 
 class Document(models.Model):
@@ -79,7 +80,7 @@ class Document(models.Model):
             "change'. Leave blank when the document is settled."
         ),
     )
-    file = models.FileField(upload_to="documents/%Y/")
+    file = models.FileField(upload_to="documents/%Y/", storage=private_storage)
     listing_visibility = models.CharField(
         max_length=16,
         choices=Visibility.choices,

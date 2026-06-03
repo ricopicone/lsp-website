@@ -29,6 +29,7 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from accounts.permissions import is_lsp_member
+from core.storage import private_storage
 
 
 class Work(models.Model):
@@ -293,7 +294,7 @@ class WorkFile(models.Model):
     """
 
     work = models.ForeignKey(Work, on_delete=models.CASCADE, related_name="files")
-    file = models.FileField(upload_to="works/files/%Y/")
+    file = models.FileField(upload_to="works/files/%Y/", storage=private_storage)
     label = models.CharField(
         max_length=200,
         blank=True,
@@ -328,7 +329,7 @@ class WorkDraft(models.Model):
         blank=True, help_text="If set, this is a linked Google Doc (no in-app editing)."
     )
     file = models.FileField(
-        upload_to="workdrafts/%Y/", blank=True,
+        upload_to="workdrafts/%Y/", blank=True, storage=private_storage,
         help_text="If set, this is an uploaded file (e.g. a PDF) — a static "
         "working document, not edited in-app.",
     )

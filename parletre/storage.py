@@ -1,19 +1,16 @@
 """Private storage for Parlêtre attachments.
 
 Attachments may live in private channels, so their bytes must never be
-reachable by a bare media URL — only through the access-checked download
-view (:func:`parletre.views.attachment`). They are therefore stored *outside*
-the public ``MEDIA_ROOT`` (and outside the public S3 bucket), in a location
-that no web server is configured to serve directly. ``base_url=None`` means
-``FieldFile.url`` raises rather than silently producing a public link.
+reachable by a bare, permanent media URL — only through the access-checked
+download view (:func:`parletre.views.attachment`). They are therefore stored in
+the access-controlled location (a private S3 bucket in production, or a local
+``private-media`` dir in dev — see :mod:`core.storage`), and this storage's
+``url()`` refuses to build a link so a stray ``{{ attachment.file.url }}`` fails
+loudly rather than leaking a public URL.
 
-The field references this as a *callable* (``storage=attachment_storage``),
-so migrations record its import path, not a frozen storage instance — keeping
-the migration portable across environments.
-
-When S3 is adopted for private content in a later milestone, swap this for a
-private-ACL S3 backend; the download view and the rest of the app are
-unaffected because they never build a public URL.
+The field references this as a *callable* (``storage=attachment_storage``), so
+migrations record its import path, not a frozen storage instance — keeping the
+migration portable across environments.
 """
 
 from __future__ import annotations
@@ -21,24 +18,40 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 
+_URL_ERROR = (
+    "Parlêtre attachments are private; serve them via the "
+    "parletre:attachment download view, not a media URL."
+)
+
 
 class PrivateAttachmentStorage(FileSystemStorage):
-    """Filesystem storage under a non-public root that refuses to build URLs.
-
-    (``FileSystemStorage(base_url=None)`` quietly falls back to ``MEDIA_URL``,
-    so we override ``url`` to fail loudly — the only way to a Parlêtre
-    attachment is the access-checked download view.)
-    """
+    """Local filesystem store under a non-public root that refuses URLs."""
 
     def __init__(self):
         super().__init__(location=settings.PARLETRE_ATTACHMENTS_ROOT)
 
     def url(self, name):
-        raise ValueError(
-            "Parlêtre attachments are private; serve them via the "
-            "parletre:attachment download view, not a media URL."
+        raise ValueError(_URL_ERROR)
+
+
+def attachment_storage():
+    """Private S3 in production (``AWS_PRIVATE_STORAGE_BUCKET_NAME`` set),
+    else a local private-media filesystem store. Both refuse to build a URL —
+    attachments are reachable only through the access-checked download view."""
+    bucket = getattr(settings, "AWS_PRIVATE_STORAGE_BUCKET_NAME", "")
+    if bucket:
+        from storages.backends.s3 import S3Storage
+
+        class _PrivateS3AttachmentStorage(S3Storage):
+            def url(self, name, parameters=None, expire=None, http_method=None):
+                raise ValueError(_URL_ERROR)
+
+        return _PrivateS3AttachmentStorage(
+            bucket_name=bucket,
+            region_name=getattr(settings, "AWS_S3_REGION_NAME", "us-west-2"),
+            location="parletre",     # namespace within the private bucket
+            querystring_auth=True,
+            default_acl=None,
+            file_overwrite=False,
         )
-
-
-def attachment_storage() -> PrivateAttachmentStorage:
     return PrivateAttachmentStorage()
