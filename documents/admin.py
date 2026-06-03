@@ -14,9 +14,9 @@ class DocumentAuthorInline(admin.TabularInline):
 class DocumentAdmin(admin.ModelAdmin):
     list_display = (
         "title", "category", "owning_workgroup", "listing_visibility",
-        "pdf_visibility", "effective_date", "is_current_display", "display_order",
+        "content_visibility", "effective_date", "is_current_display", "display_order",
     )
-    list_filter = ("category", "owning_workgroup", "listing_visibility", "pdf_visibility")
+    list_filter = ("category", "owning_workgroup", "listing_visibility", "content_visibility")
     search_fields = ("title", "summary", "description", "notice")
     prepopulated_fields = {"slug": ("title",)}
     autocomplete_fields = ("superseded_by", "owning_workgroup")
@@ -29,7 +29,7 @@ class DocumentAdmin(admin.ModelAdmin):
         }),
         ("File", {"fields": ("file",)}),
         ("Visibility & ordering", {
-            "fields": ("listing_visibility", "pdf_visibility", "display_order"),
+            "fields": ("listing_visibility", "content_visibility", "display_order"),
         }),
         ("Status", {"fields": ("notice",)}),
         ("Versioning", {"fields": ("effective_date", "superseded_by")}),

@@ -127,7 +127,7 @@ class Command(BaseCommand):
                 # Members-only PDF — these contain member-specific content
                 # (interviews, new-member profiles). The listing entry stays
                 # public so the historical run is visible.
-                d.pdf_visibility = Document.Visibility.MEMBERS
+                d.content_visibility = Document.Visibility.MEMBERS
                 with pdf_path.open("rb") as fh:
                     d.file.save(pdf_path.name, File(fh), save=False)
                 d.save()

@@ -21,7 +21,7 @@ def _doc(**kwargs) -> Document:
         category=Document.Category.GOVERNANCE,
         summary="A test document",
         listing_visibility=Document.Visibility.PUBLIC,
-        pdf_visibility=Document.Visibility.PUBLIC,
+        content_visibility=Document.Visibility.PUBLIC,
         file=SimpleUploadedFile(
             "test.pdf", b"%PDF-1.4\n%fake\n", content_type="application/pdf",
         ),
@@ -50,17 +50,17 @@ def test_public_listing_with_members_pdf_visible_listing_gated_pdf():
     """The headline scenario: anon sees the listing, can't download the PDF."""
     d = _doc(
         listing_visibility=Document.Visibility.PUBLIC,
-        pdf_visibility=Document.Visibility.MEMBERS,
+        content_visibility=Document.Visibility.MEMBERS,
     )
     assert d.listing_visible_to(None) is True
-    assert d.pdf_visible_to(None) is False
+    assert d.content_visible_to(None) is False
     member = User.objects.create_user(email="m@x.test")
     member.profile.role = Profile.Role.ANALYST
     member.profile.save(update_fields=["role"])
-    assert d.pdf_visible_to(member) is True
+    assert d.content_visible_to(member) is True
     # An auditor (outside registrant, default role=external) is not a member.
     auditor = User.objects.create_user(email="a@x.test")
-    assert d.pdf_visible_to(auditor) is False
+    assert d.content_visible_to(auditor) is False
 
 
 @pytest.mark.django_db
@@ -68,12 +68,12 @@ def test_clean_rejects_public_pdf_with_members_listing():
     d = Document(
         title="X", slug="x", category=Document.Category.GOVERNANCE,
         listing_visibility=Document.Visibility.MEMBERS,
-        pdf_visibility=Document.Visibility.PUBLIC,
+        content_visibility=Document.Visibility.PUBLIC,
         file=SimpleUploadedFile("t.pdf", b"%PDF", content_type="application/pdf"),
     )
     with pytest.raises(ValidationError) as exc:
         d.full_clean()
-    assert "pdf_visibility" in exc.value.error_dict
+    assert "content_visibility" in exc.value.error_dict
 
 
 # ---- for_user filter ---------------------------------------------------
@@ -146,11 +146,11 @@ def test_index_shows_public_listing_with_members_pdf_to_anon(client):
     _doc(
         slug="founding",
         title="Founding Paper",
-        pdf_visibility=Document.Visibility.MEMBERS,
+        content_visibility=Document.Visibility.MEMBERS,
     )
     body = client.get(reverse("documents:index")).content.decode()
     assert "Founding Paper" in body
-    assert "PDF: Members only" in body
+    assert "Contents: Members only" in body
 
 
 @pytest.mark.django_db
@@ -165,7 +165,7 @@ def test_detail_renders_for_anon_when_listing_public_but_pdf_members(client):
     _doc(
         slug="founding",
         title="Founding Paper",
-        pdf_visibility=Document.Visibility.MEMBERS,
+        content_visibility=Document.Visibility.MEMBERS,
     )
     body = client.get(reverse("documents:detail", args=["founding"])).content.decode()
     assert "Founding Paper" in body
@@ -176,7 +176,7 @@ def test_detail_renders_for_anon_when_listing_public_but_pdf_members(client):
 
 @pytest.mark.django_db
 def test_detail_shows_download_for_member_on_members_pdf(client):
-    _doc(slug="founding", pdf_visibility=Document.Visibility.MEMBERS)
+    _doc(slug="founding", content_visibility=Document.Visibility.MEMBERS)
     u = User.objects.create_user(email="m@x.test", password="x")
     u.profile.role = Profile.Role.ANALYST
     u.profile.save(update_fields=["role"])
@@ -189,7 +189,7 @@ def test_detail_shows_download_for_member_on_members_pdf(client):
 @pytest.mark.django_db
 def test_download_404s_for_auditor_on_members_pdf(client):
     """A logged-in auditor (outside registrant) cannot download members-only."""
-    _doc(slug="founding", pdf_visibility=Document.Visibility.MEMBERS)
+    _doc(slug="founding", content_visibility=Document.Visibility.MEMBERS)
     u = User.objects.create_user(email="ext@x.test", password="x")  # role=external
     client.force_login(u)
     resp = client.get(reverse("documents:download", args=["founding"]))
@@ -205,7 +205,7 @@ def test_download_serves_file_for_public_pdf_anon(client):
 
 @pytest.mark.django_db
 def test_download_404s_for_anonymous_on_members_pdf(client):
-    _doc(slug="founding", pdf_visibility=Document.Visibility.MEMBERS)
+    _doc(slug="founding", content_visibility=Document.Visibility.MEMBERS)
     resp = client.get(reverse("documents:download", args=["founding"]))
     assert resp.status_code == 404
 
