@@ -62,6 +62,8 @@ urlpatterns = [
     path("admin-tools/board/", _staff_views.board_admin, name="board_admin"),
     path("admin-tools/board/membership/", _staff_views.board_membership_admin,
          name="board_membership_admin"),
+    path("admin-tools/meeting-of-analysts/", _staff_views.meeting_of_analysts_admin,
+         name="meeting_of_analysts_admin"),
     path("admin-tools/assistant/", _staff_views.admin_assistant_admin,
          name="admin_assistant_admin"),
     path("admin-tools/web-coordinator/", _staff_views.web_coordinator_admin,

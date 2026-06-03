@@ -1,0 +1,36 @@
+{% extends "core/base.html" %}
+{% block title %}Palimpsests & passages — Admin Tools{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+  <nav class="text-sm"><a href="{% url 'meeting_of_analysts_admin' %}" class="link link-hover text-base-content/60">← Meeting of Analysts Admin</a></nav>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Palimpsests &amp; passages</h1>
+    <p class="text-base-content/70">Formation-advancement demandes. Open ones, awaiting the Meeting's decision, are listed first.</p>
+  </header>
+
+  <div class="overflow-x-auto rounded-lg border border-base-300">
+    <table class="table table-sm">
+      <thead><tr><th>Member</th><th>Step</th><th>Advisor</th><th>Presented</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for a in advancements %}
+        <tr class="{% if a.is_open %}font-medium{% else %}text-base-content/60{% endif %}">
+          <td>{{ a.member.get_full_name|default:a.member.email }}</td>
+          <td>{{ a.get_kind_display }}</td>
+          <td class="text-sm">{{ a.advisor.get_full_name|default:a.advisor.email|default:"—" }}</td>
+          <td class="text-sm">{% if a.presented_at %}{{ a.presented_at|date:"M j, Y" }}{% else %}<span class="text-base-content/40">not yet</span>{% endif %}</td>
+          <td><span class="badge badge-sm {% if a.status == 'approved' %}badge-success{% elif a.status == 'presented' %}badge-info{% elif a.is_open %}badge-warning{% else %}badge-ghost{% endif %}">{{ a.get_status_display }}</span></td>
+          <td><a href="{% url 'admissions:advancement_detail' a.pk %}" class="btn btn-ghost btn-xs">Open →</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-base-content/50 py-6">No demandes yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
