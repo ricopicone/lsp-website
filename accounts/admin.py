@@ -3,6 +3,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from .forms import UserChangeForm, UserCreationForm
 from .models import (
+    Advisorship,
     EmailChangeRequest,
     MemberIntakeSurvey,
     MembershipTenure,
@@ -104,3 +105,13 @@ class MemberIntakeSurveyAdmin(admin.ModelAdmin):
     search_fields = ("user__email", "user__first_name", "user__last_name")
     autocomplete_fields = ("user",)
     readonly_fields = ("created_at",)
+
+
+@admin.register(Advisorship)
+class AdvisorshipAdmin(admin.ModelAdmin):
+    list_display = ("advisee", "advisor", "start_date", "end_date")
+    list_filter = ("start_date",)
+    search_fields = (
+        "advisee__email", "advisee__last_name", "advisor__email", "advisor__last_name",
+    )
+    autocomplete_fields = ("advisee", "advisor")
