@@ -993,3 +993,44 @@ def test_roster_set_term_404_without_has_terms(client):
         {"user": chair.pk, "start_date": "2024-09-01"},
     )
     assert resp.status_code == 404
+
+
+def test_publish_attributes_work_to_all_group_members(client):
+    """A document published by a cartel is bylined with every member, not just
+    the publisher (regression: two-person cartel showed one author)."""
+    wg = _wg(name="Two Person", slug="two-person")
+    pub = _member_of(wg, "pub@x.test")
+    pub.is_superuser = True
+    pub.save()
+    pub.first_name, pub.last_name = "Pub", "Lisher"
+    pub.save()
+    other = _member_of(wg, "other@x.test")
+    other.first_name, other.last_name = "Co", "Author"
+    other.save()
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.create(workgroup=wg, title="Attest", content_html="<p>x</p>")
+    client.force_login(pub)
+    client.post(reverse("workgroups:draft_publish", args=[wg.slug, draft.pk]),
+                {"visibility": "members"})
+    draft.refresh_from_db()
+    work = draft.published_work
+    author_ids = set(work.authorships.values_list("user_id", flat=True))
+    assert author_ids == {pub.pk, other.pk}        # both members bylined
+
+
+def test_publish_authors_exclude_personas(client):
+    wg = _wg(name="With Persona", slug="with-persona")
+    pub = _member_of(wg, "real@x.test")
+    pub.is_superuser = True
+    pub.save()
+    persona = _member_of(wg, "persona@x.test")
+    persona.profile.is_persona = True
+    persona.profile.save()
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.create(workgroup=wg, title="Doc", content_html="<p>x</p>")
+    client.force_login(pub)
+    client.post(reverse("workgroups:draft_publish", args=[wg.slug, draft.pk]),
+                {"visibility": "members"})
+    draft.refresh_from_db()
+    ids = set(draft.published_work.authorships.values_list("user_id", flat=True))
+    assert ids == {pub.pk}                          # persona not credited

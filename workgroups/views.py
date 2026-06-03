@@ -1017,10 +1017,20 @@ def draft_publish(request, slug, pk):
     work.save()
 
     revision = draft.versions.filter(label="Published").count() + 1
-    member_names = [
-        p.user.get_full_name() or p.user.email
-        for p in wg.participants() if p.user is not None
-    ]
+
+    # Attribute the published Work to the group's members — a cartel/working-group
+    # document is authored by its people, so the byline lists everyone (not just
+    # the publisher). Re-synced each publish so it tracks the roster; the PDF's
+    # "Members" line uses the same set.
+    from works.models import WorkAuthor
+
+    participants = [p for p in wg.participants() if p.user is not None]
+    member_names = [p.user.get_full_name() or p.user.email for p in participants]
+    work.authorships.all().delete()
+    WorkAuthor.objects.bulk_create([
+        WorkAuthor(work=work, user=p.user, display_order=i)
+        for i, p in enumerate(participants)
+    ])
 
     # (Re)generate the attached PDF with the document's provenance block.
     work.files.filter(label="Published PDF").delete()
