@@ -9,10 +9,26 @@
     <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">Board · Governance</p>
     <h1 class="font-serif text-3xl text-base-content tracking-tight">Membership administration</h1>
     <p class="text-base-content/70">
-      Admit members and record role / standing changes the Board decides. Each
-      change updates the member's current status and writes their history.
+      Record role / standing changes the Board decides. Each change updates the
+      member's current status and writes their history.
     </p>
   </header>
+
+  {% comment %}This is a correction surface, not the formation path.{% endcomment %}
+  <div class="alert alert-warning items-start text-sm">
+    <svg xmlns="http://www.w3.org/2000/svg" class="size-5 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <div class="space-y-1">
+      <p class="font-medium">Use this only to make corrections.</p>
+      <p class="text-base-content/80">
+        Adjust a member's <strong>formation stage</strong>, <strong>start academic year</strong>,
+        <strong>advisor</strong>, or <strong>standing</strong> (e.g. on leave, resigned,
+        emeritus) when the record is wrong or needs a manual fix. The standard
+        path for <strong>formation progression</strong> (admission, palimpsest, passage) is the
+        <a href="{% url 'meeting_of_analysts_admin' %}" class="link">Meeting of the Analysts process</a>,
+        which advances the member and writes this history automatically.
+      </p>
+    </div>
+  </div>
 
   {% if messages %}
     {% for m in messages %}
