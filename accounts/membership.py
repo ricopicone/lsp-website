@@ -1,0 +1,71 @@
+"""Membership administration — the Board's record-keeping for role and standing
+changes across the school.
+
+``record_membership_change`` is the single chokepoint every change type (admit,
+advance, leave, return, resign, emeritus) routes through. It keeps three things
+in sync: the member's open :class:`~accounts.models.MembershipTenure` (closed at
+the change), a new open tenure (the new role + standing), and the live
+``Profile.role`` / ``Profile.standing`` caches.
+"""
+
+from __future__ import annotations
+
+from django.db import transaction
+from django.utils import timezone
+
+from .models import MembershipTenure, Source
+
+
+def current_academic_year_start(on_date=None) -> int:
+    """AY start year for ``on_date`` (default today): the AY runs Sep 1 – Aug 31,
+    so Jan–Aug belongs to the previous calendar year's AY."""
+    today = on_date or timezone.localdate()
+    return today.year if today.month >= 9 else today.year - 1
+
+
+@transaction.atomic
+def record_membership_change(
+    member, *, role, standing, effective_ay, notes="", by=None,
+    source=Source.STAFF,
+):
+    """Record a membership change effective ``effective_ay`` (an AY start year).
+
+    Closes the member's open tenure (ending it the AY before the change) and
+    opens a new one with the new role + standing, then updates the live Profile.
+    If the change is effective in the *same or an earlier* AY than the current
+    open tenure's start, the open tenure is corrected in place instead (so a
+    same-year correction doesn't create a zero-length stub). Returns the
+    resulting open ``MembershipTenure``.
+    """
+    if by is not None:
+        stamp = f"[{timezone.localdate()} by {by.email}]"
+        notes = f"{stamp} {notes}".strip() if notes else stamp
+
+    open_tenure = MembershipTenure.open_for(member)
+
+    if open_tenure is not None and effective_ay <= open_tenure.start_ay:
+        # Correct the current tenure in place (same-year or backdated fix).
+        open_tenure.role = role
+        open_tenure.standing = standing
+        open_tenure.start_ay = effective_ay
+        open_tenure.source = source
+        if notes:
+            open_tenure.notes = (
+                (open_tenure.notes + "\n" + notes).strip() if open_tenure.notes else notes
+            )
+        open_tenure.save(update_fields=["role", "standing", "start_ay", "source", "notes"])
+        tenure = open_tenure
+    else:
+        if open_tenure is not None:
+            open_tenure.end_ay = effective_ay - 1
+            open_tenure.save(update_fields=["end_ay"])
+        tenure = MembershipTenure.objects.create(
+            user=member, role=role, standing=standing, start_ay=effective_ay,
+            source=source, notes=notes,
+        )
+
+    profile = member.profile
+    profile.role = role
+    profile.standing = standing
+    profile.save(update_fields=["role", "standing"])
+    return tenure

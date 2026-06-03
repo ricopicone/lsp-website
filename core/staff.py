@@ -205,6 +205,81 @@ def board_admin(request):
 
 
 @login_required
+def board_membership_admin(request):
+    """Membership administration (Board record-keeping): admit members and record
+    role/standing transitions, writing each member's tenure timeline + the live
+    Profile. Gated to Board members (+ staff/superuser)."""
+    if not _can_board(request.user):
+        raise PermissionDenied
+    from django.contrib import messages
+    from django.db.models import Q
+
+    from accounts.forms import MembershipChangeForm
+    from accounts.membership import (
+        current_academic_year_start,
+        record_membership_change,
+    )
+    from accounts.models import MembershipTenure, User
+
+    member = None
+    form = None
+    if request.method == "POST":
+        member = get_object_or_404(User, pk=request.POST.get("member"))
+        form = MembershipChangeForm(request.POST)
+        if form.is_valid():
+            record_membership_change(
+                member,
+                role=form.cleaned_data["role"],
+                standing=form.cleaned_data["standing"],
+                effective_ay=form.cleaned_data["effective_ay"],
+                notes=form.cleaned_data["notes"],
+                by=request.user,
+            )
+            messages.success(
+                request,
+                f"Recorded a membership change for "
+                f"{member.get_full_name() or member.email}.",
+            )
+            return redirect(f"{reverse('board_membership_admin')}?member={member.pk}")
+    else:
+        member_id = request.GET.get("member")
+        if member_id:
+            member = (
+                User.objects.filter(pk=member_id).select_related("profile").first()
+            )
+
+    q = (request.GET.get("q") or "").strip()
+    results = []
+    if q and member is None:
+        results = list(
+            User.objects.filter(
+                Q(email__icontains=q)
+                | Q(first_name__icontains=q)
+                | Q(last_name__icontains=q),
+            )
+            .select_related("profile")
+            .order_by("last_name", "first_name", "email")[:50]
+        )
+
+    timeline = []
+    if member is not None:
+        timeline = list(
+            MembershipTenure.objects.filter(user=member).order_by("-start_ay")
+        )
+        if form is None:
+            form = MembershipChangeForm(initial={
+                "role": member.profile.role,
+                "standing": member.profile.standing,
+                "effective_ay": current_academic_year_start(),
+            })
+
+    return render(request, "core/staff/admin/board_membership.html", {
+        "q": q, "results": results, "member": member,
+        "timeline": timeline, "form": form,
+    })
+
+
+@login_required
 @staff_role_required(StaffRole.ADMIN_ASSISTANT)
 def admin_assistant_admin(request):
     """Administrative Assistant to the Board admin landing."""

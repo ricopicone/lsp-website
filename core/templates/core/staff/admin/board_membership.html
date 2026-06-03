@@ -1,0 +1,129 @@
+{% extends "core/base.html" %}
+{% block title %}Membership administration — Admin Tools{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+  <nav class="text-sm">
+    <a href="{% url 'board_admin' %}" class="link link-hover text-base-content/60">← Board Admin</a>
+  </nav>
+  <header class="space-y-2">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">Board · Governance</p>
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Membership administration</h1>
+    <p class="text-base-content/70">
+      Admit members and record role / standing changes the Board decides. Each
+      change updates the member's current status and writes their history.
+    </p>
+  </header>
+
+  {% if messages %}
+    {% for m in messages %}
+    <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+    {% endfor %}
+  {% endif %}
+
+  {% comment %}Member search{% endcomment %}
+  <form method="get" class="flex flex-wrap items-end gap-2">
+    <div class="flex-1 min-w-0 space-y-1">
+      <label for="q" class="block text-xs text-base-content/60">Find a member (name or email)</label>
+      <input id="q" name="q" value="{{ q }}" class="input input-bordered input-sm w-full unstyled"
+             placeholder="e.g. Barnwell or garret@…">
+    </div>
+    <button class="btn btn-sm btn-primary">Search</button>
+  </form>
+
+  {% if results %}
+  <div class="overflow-x-auto rounded-lg border border-base-300">
+    <table class="table table-sm">
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Standing</th><th></th></tr></thead>
+      <tbody>
+        {% for u in results %}
+        <tr>
+          <td>{{ u.get_full_name|default:"—" }}</td>
+          <td class="text-base-content/70">{{ u.email }}</td>
+          <td>{{ u.profile.get_role_display }}</td>
+          <td>{{ u.profile.get_standing_display }}</td>
+          <td><a href="?member={{ u.pk }}" class="btn btn-ghost btn-xs">Manage →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif q and not member %}
+  <p class="text-sm text-base-content/60">No members match “{{ q }}”.</p>
+  {% endif %}
+
+  {% if member %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-4">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <div>
+        <h2 class="font-serif text-xl text-base-content">{{ member.get_full_name|default:member.email }}</h2>
+        <p class="text-sm text-base-content/60">{{ member.email }}</p>
+      </div>
+      <div class="flex items-center gap-2 text-sm">
+        <span class="badge badge-outline">{{ member.profile.get_role_display }}</span>
+        <span class="badge {% if member.profile.standing == 'active' %}badge-success{% elif member.profile.standing == 'on_leave' %}badge-warning{% else %}badge-ghost{% endif %}">{{ member.profile.get_standing_display }}</span>
+      </div>
+    </div>
+
+    {% comment %}Record a change{% endcomment %}
+    <form method="post" class="space-y-3 border-t border-base-300/50 pt-4">
+      {% csrf_token %}
+      <input type="hidden" name="member" value="{{ member.pk }}">
+      <h3 class="font-medium text-base-content">Record a change</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">New role</label>
+          {{ form.role }}
+          {% if form.role.errors %}<p class="text-error text-xs">{{ form.role.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">Standing</label>
+          {{ form.standing }}
+          {% if form.standing.errors %}<p class="text-error text-xs">{{ form.standing.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ form.effective_ay.label }}</label>
+          {{ form.effective_ay }}
+          <p class="text-xs text-base-content/50">{{ form.effective_ay.help_text }}</p>
+          {% if form.effective_ay.errors %}<p class="text-error text-xs">{{ form.effective_ay.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ form.notes.label }}</label>
+          {{ form.notes }}
+        </div>
+      </div>
+      <p class="text-xs text-base-content/50">
+        Typical changes: <strong>admit</strong> a guest as a student; <strong>advance</strong>
+        a step (student → pre-candidate → candidate → analyst, or the scholar
+        track); set <strong>on leave</strong>, <strong>resigned</strong>, or <strong>emeritus</strong>.
+      </p>
+      <button class="btn btn-primary btn-sm">Record change</button>
+    </form>
+  </section>
+
+  {% comment %}Role / standing timeline{% endcomment %}
+  <section class="space-y-2">
+    <h3 class="font-serif text-lg text-base-content">Timeline</h3>
+    {% if timeline %}
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead><tr><th>Academic years</th><th>Role</th><th>Standing</th><th>Source</th><th>Note</th></tr></thead>
+        <tbody>
+          {% for t in timeline %}
+          <tr>
+            <td class="whitespace-nowrap">{{ t.ay_label }}</td>
+            <td>{{ t.get_role_display }}</td>
+            <td>{{ t.get_standing_display }}</td>
+            <td class="text-base-content/60 text-xs">{{ t.get_source_display }}</td>
+            <td class="text-base-content/70 text-xs">{{ t.notes|default:"" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-base-content/60">No recorded tenure yet — the first change you record starts their timeline.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
