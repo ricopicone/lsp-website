@@ -92,7 +92,7 @@ class Workgroup(models.Model):
         },
         Kind.COMMITTEE: {
             "has_calendar": True, "has_minutes": True,
-            "has_tasks": True, "has_decisions": True,
+            "has_tasks": True, "has_decisions": True, "has_terms": True,
         },
         Kind.SEMINAR: {"has_works": False, "has_calendar": True},
         Kind.READING_GROUP: {"has_calendar": True, "open_join": True},
@@ -166,6 +166,13 @@ class Workgroup(models.Model):
     has_minutes = models.BooleanField(default=False)
     has_tasks = models.BooleanField(default=False)
     has_decisions = models.BooleanField(default=False)
+    has_terms = models.BooleanField(
+        default=False,
+        help_text=(
+            "Track per-member term dates (start / end) in the roster. Defaulted "
+            "on for committees, where officers serve defined terms."
+        ),
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -661,6 +668,26 @@ class Workgroup(models.Model):
             return False
         m.role = role
         m.save(update_fields=["role"])
+        return True
+
+    def set_member_term(self, user, *, start_date, end_date) -> bool:
+        """Set an active member's term dates (committee terms; see ``has_terms``).
+
+        ``start_date`` is required; ``end_date`` is None while the member is
+        serving, or a date to end the term (consistent with the rest of the
+        model, where a set ``end_date`` means the membership is no longer
+        active). Returns False if there's no active membership or the dates are
+        invalid (end before start)."""
+        if start_date is None:
+            return False
+        if end_date is not None and end_date < start_date:
+            return False
+        m = self.memberships.filter(user=user, end_date__isnull=True).first()
+        if m is None:
+            return False
+        m.start_date = start_date
+        m.end_date = end_date
+        m.save(update_fields=["start_date", "end_date"])
         return True
 
 

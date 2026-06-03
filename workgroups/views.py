@@ -497,6 +497,34 @@ def roster_set_role(request, slug):
 
 @login_required
 @require_POST
+def roster_set_term(request, slug):
+    """Manager sets an active member's term dates (committees; ``has_terms``).
+
+    Start is required; a blank end keeps the member serving, a set end ends the
+    term on that date. Refused if the group doesn't track terms."""
+    from django.contrib import messages
+    from django.utils.dateparse import parse_date
+
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not _can_manage_workgroup(wg, request.user) or not wg.has_terms:
+        raise Http404
+    from accounts.models import User
+
+    member = get_object_or_404(User, pk=request.POST.get("user"))
+    start = parse_date(request.POST.get("start_date") or "")
+    end = parse_date(request.POST.get("end_date") or "")
+    if start is None:
+        messages.error(request, "A term needs a start date.")
+    elif not wg.set_member_term(member, start_date=start, end_date=end):
+        messages.error(
+            request,
+            "Couldn't save the term — check the dates (end can't be before start).",
+        )
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")
+
+
+@login_required
+@require_POST
 def workgroup_update_dates(request, slug):
     """Members set the group's start/end dates (Settings tab)."""
     wg = get_object_or_404(Workgroup, slug=slug)
