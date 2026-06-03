@@ -148,8 +148,17 @@ def treasurer_reconcile(request):
             key, who, matched = f"user:{p.user_id}", (
                 p.user.get_full_name() or p.user.email), True
         else:
-            key = f"email:{(p.email or '').lower()}"
-            who = _payer_name_from_notes(p) or p.email or "unknown payer"
+            # Group unmatched payers by email, else by the payer name carried in
+            # the import note, else each on its own — so distinct people don't
+            # collapse into one "unknown" bucket (most Stripe charges lack email).
+            name = _payer_name_from_notes(p)
+            if p.email:
+                key = f"email:{p.email.lower()}"
+            elif name:
+                key = f"name:{name.lower()}"
+            else:
+                key = f"pmt:{p.pk}"
+            who = name or p.email or "unknown payer"
             matched = False
         g = groups.setdefault(key, {
             "key": key, "who": who, "matched": matched, "email": p.email or "",

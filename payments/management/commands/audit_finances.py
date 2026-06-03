@@ -19,7 +19,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Count, Sum
 
 from accounts.membership import current_academic_year_start as ay_of
-from accounts.models import Profile, Source
+from accounts.models import Profile, Source, User
 from payments.models import DuesPeriod, Payment, TuitionEnrollment, TuitionPeriod
 
 TAG_RE = re.compile(r"\[stripe-import:([^\]]+)\]")
@@ -249,10 +249,13 @@ class Command(BaseCommand):
             TuitionEnrollment.objects.values_list("user_id", "tuition_period_id")
         )
         gaps = [k for k in paid_by_user_period if k not in enrolled]
+        names = {u.id: (u.get_full_name() or u.email)
+                 for u in User.objects.filter(id__in={k[0] for k in gaps})}
+        pnames = {tp.id: tp.name for tp in TuitionPeriod.objects.all()}
         self._finding(
             "member-years with tuition payments but NO enrollment row (gap)",
-            [f"user#{uid} period#{pid}: ${paid_by_user_period[(uid, pid)]}"
-             for (uid, pid) in gaps],
+            [f"{names.get(uid, f'user#{uid}')} {pnames.get(pid, pid)}: "
+             f"${paid_by_user_period[(uid, pid)]}" for (uid, pid) in gaps],
         )
 
     def _provisional_summary(self):
