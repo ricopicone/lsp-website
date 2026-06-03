@@ -10,6 +10,7 @@ from decimal import Decimal
 
 import stripe
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
@@ -60,6 +61,7 @@ TREASURER_TABS = [
     ("dues",     "Dues"),
     ("members",  "Members"),
     ("payments", "Payments"),
+    ("reconcile", "Reconcile"),
     ("settings", "Settings"),
     ("exports",  "Exports"),
     ("help",     "Help"),
@@ -75,6 +77,7 @@ def _treasurer_tab_links() -> list[tuple[str, str, str]]:
         "dues":     reverse("treasurer_dues"),
         "members":  reverse("treasurer_members"),
         "payments": reverse("treasurer_payments"),
+        "reconcile": reverse("treasurer_reconcile"),
         "settings": reverse("treasurer_settings"),
         "exports":  reverse("treasurer_exports"),
         "help":     reverse("treasurer_help"),
@@ -120,6 +123,95 @@ def treasurer_dues(request):
     ctx = _treasurer_dues_context(selected)
     ctx["dues_all_periods"] = list(DuesPeriod.objects.order_by("-start_date"))
     return _treasurer_render(request, "dues", "payments/treasurer/dues.html", ctx)
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_reconcile(request):
+    """Reconcile provisional payments (source=ASSUMED) — the recurring-charge
+    sweep booked as tuition pending the member survey. Grouped by payer so a
+    single answer ("those were seminars") re-types all of one person's charges,
+    and unmatched payers can be linked to a member."""
+    from accounts.models import Source
+
+    if request.method == "POST":
+        return _reconcile_apply(request)
+
+    assumed = list(
+        Payment.objects.filter(source=Source.ASSUMED)
+        .select_related("user")
+        .order_by("-paid_at")
+    )
+    groups: dict = {}
+    for p in assumed:
+        if p.user_id:
+            key, who, matched = f"user:{p.user_id}", (
+                p.user.get_full_name() or p.user.email), True
+        else:
+            key = f"email:{(p.email or '').lower()}"
+            who = _payer_name_from_notes(p) or p.email or "unknown payer"
+            matched = False
+        g = groups.setdefault(key, {
+            "key": key, "who": who, "matched": matched, "email": p.email or "",
+            "payments": [], "total": Decimal("0"), "types": set(),
+        })
+        g["payments"].append(p)
+        g["total"] += p.amount
+        g["types"].add(p.get_payment_type_display())
+    group_list = sorted(groups.values(), key=lambda g: -g["total"])
+
+    return _treasurer_render(request, "reconcile", "payments/treasurer/reconcile.html", {
+        "groups": group_list,
+        "assumed_count": len(assumed),
+        "assumed_total": sum((p.amount for p in assumed), Decimal("0")),
+        "type_choices": Payment.Type.choices,
+    })
+
+
+def _payer_name_from_notes(payment) -> str:
+    import re
+    m = re.search(r"unmatched payer:\s*([^)]+)\)", payment.notes or "")
+    return m.group(1).strip() if m else ""
+
+
+def _reconcile_apply(request):
+    """Re-type (and optionally link) all of one payer's ASSUMED payments."""
+    from accounts.models import Source
+
+    payer = request.POST.get("payer", "")
+    new_type = request.POST.get("payment_type")
+    assign = (request.POST.get("assign_user") or "").strip()
+
+    qs = Payment.objects.filter(source=Source.ASSUMED)
+    if payer.startswith("user:"):
+        qs = qs.filter(user_id=payer.split(":", 1)[1])
+    elif payer.startswith("email:"):
+        qs = qs.filter(email__iexact=payer.split(":", 1)[1], user__isnull=True)
+    else:
+        messages.error(request, "Unknown payer.")
+        return redirect("treasurer_reconcile")
+    if new_type not in Payment.Type.values:
+        messages.error(request, "Choose a valid type.")
+        return redirect("treasurer_reconcile")
+
+    assigned_user = None
+    if assign:
+        assigned_user = (
+            User.objects.filter(email__iexact=assign).first()
+            or (User.objects.filter(pk=assign).first() if assign.isdigit() else None)
+        )
+        if assigned_user is None:
+            messages.error(request, f"No member found for '{assign}'.")
+            return redirect("treasurer_reconcile")
+
+    fields = {"payment_type": new_type, "source": Source.STAFF}
+    if assigned_user is not None:
+        fields["user"] = assigned_user
+    n = qs.count()
+    qs.update(**fields)
+    note = f"reconciled → {new_type}" + (f", linked {assigned_user.email}" if assigned_user else "")
+    messages.success(request, f"Reconciled {n} payment(s): {note}.")
+    return redirect("treasurer_reconcile")
 
 
 def _treasurer_dues_context(selected_period=None) -> dict:
