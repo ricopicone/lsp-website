@@ -55,17 +55,21 @@ sections (alerts, "Coming up") never leave an orphaned gap.
     <p class="lsp-reveal font-mono text-xs uppercase tracking-[0.2em] text-base-content/50" style="--d:0">
       A worldwide school · based in San Francisco
     </p>
-    <h1 class="lsp-reveal font-serif text-4xl sm:text-6xl text-base-content leading-[1.2] tracking-tight" style="--d:1">
+    {# No reveal animation on the <h1>: the opacity/transform animation promotes
+       it to a compositing layer that Safari rasterizes with clipped bounds,
+       shaving the cap tops (the tell: it heals on pinch-zoom — a re-raster — and
+       reverts on refresh). Rendering it in the normal layer avoids that entirely. #}
+    <h1 class="font-serif text-4xl sm:text-6xl text-base-content leading-[1.2] tracking-tight">
       Lacanian School<br class="hidden sm:block"> of Psychoanalysis
     </h1>
-    <p class="lsp-reveal text-lg sm:text-xl text-base-content/75 leading-relaxed max-w-2xl" style="--d:2">
+    <p class="lsp-reveal text-lg sm:text-xl text-base-content/75 leading-relaxed max-w-2xl" style="--d:1">
       A community for the practice, transmission, and study of
       psychoanalysis—Freud's discovery as it was read, and reopened, by Jacques
       Lacan. We form analysts, transmit psychoanalysis through seminars and
       special events open to the public, and sustain the clinical practice of
       psychoanalysis.
     </p>
-    <div class="lsp-reveal flex flex-wrap items-center gap-3 pt-1" style="--d:3">
+    <div class="lsp-reveal flex flex-wrap items-center gap-3 pt-1" style="--d:2">
       <a href="{% url 'find_an_analyst' %}" class="btn btn-primary">Find an analyst</a>
       <a href="{% url 'program' %}" class="btn btn-outline">Explore the program</a>
       <a href="{% url 'about' %}" class="btn btn-ghost">About the School</a>
