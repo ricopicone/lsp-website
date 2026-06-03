@@ -70,15 +70,16 @@
         <details class="dropdown dropdown-end">
           <summary class="btn btn-ghost btn-xs">{% if d.published_work_id %}Re-publish{% else %}Publish{% endif %}</summary>
           <form method="post" action="{% url 'workgroups:draft_publish' workgroup.slug d.pk %}"
-                class="dropdown-content z-10 mt-2 w-64 space-y-2 rounded-xl border border-base-300/60 bg-base-100 p-3 shadow-lg">
+                class="dropdown-content z-50 mt-2 w-72 space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-4 shadow-lg">
             {% csrf_token %}
-            <p class="text-[0.7rem] text-base-content/55">Publish this PDF to Works.</p>
-            <select name="visibility" class="select select-xs select-bordered w-full">
+            <p class="text-xs text-base-content/55">Publish this PDF to Works.</p>
+            <label class="text-xs font-medium uppercase tracking-wider text-base-content/55">Visibility</label>
+            <select name="visibility" class="select select-sm select-bordered w-full">
               <option value="members" selected>LSP members</option>
               <option value="public">Public</option>
               <option value="group">This group only</option>
             </select>
-            <button type="submit" class="btn btn-xs btn-primary w-full">Publish</button>
+            <button type="submit" class="btn btn-sm btn-primary w-full">Publish</button>
           </form>
         </details>
         {% endif %}
