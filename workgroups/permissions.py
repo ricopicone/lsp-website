@@ -66,3 +66,23 @@ def is_board(user) -> bool:
     return WorkgroupMembership.objects.serving().filter(
         user=user, workgroup__committee__slug="board",
     ).exists()
+
+
+def is_meeting_of_analysts(user) -> bool:
+    """True if ``user`` belongs to the Meeting of Analysts — the body that owns
+    the formation pipeline (admissions, palimpsest, passage). Membership is
+    role-derived (every active Analyst, via the workgroup's ``auto_member_role``)
+    plus any explicitly-added roster rows, so this routes through
+    :meth:`Workgroup.is_member` rather than the stored-rows query."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    from committees.models import Committee
+
+    committee = (
+        Committee.objects.filter(slug="meeting-of-analysts")
+        .select_related("workgroup")
+        .first()
+    )
+    return bool(
+        committee and committee.workgroup_id and committee.workgroup.is_member(user)
+    )

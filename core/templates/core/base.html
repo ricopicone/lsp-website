@@ -227,6 +227,12 @@
             {% endif %}
             {% if user.profile.needs_advisor %}
             <li><a href="{% url 'advisor_select' %}">Your advisor</a></li>
+            <li><a href="{% url 'admissions:advancement' %}">Your formation</a></li>
+            {% endif %}
+            {% if user.profile.role == 'analyst' or user.profile.role == 'scholar' %}
+              {% if user.advancements_advised.exists %}
+              <li><a href="{% url 'admissions:advise_queue' %}">Demandes you advise</a></li>
+              {% endif %}
             {% endif %}
             {% if user.application %}
             <li><a href="{% url 'admissions:status' %}">Your application</a></li>

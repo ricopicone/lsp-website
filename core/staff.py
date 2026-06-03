@@ -50,6 +50,11 @@ def _can_program_committee(user) -> bool:
     return user.is_superuser or user.is_staff or is_program_committee(user)
 
 
+def _can_meeting_of_analysts(user) -> bool:
+    from workgroups.permissions import is_meeting_of_analysts
+    return user.is_superuser or user.is_staff or is_meeting_of_analysts(user)
+
+
 def _can_cartel_coordinator(user) -> bool:
     from cartels.permissions import is_cartel_coordinator
     return user.is_superuser or user.is_staff or is_cartel_coordinator(user)
@@ -66,7 +71,11 @@ def can_access_admin_tools(user) -> bool:
         return True
     if has_staff_role(user, *PANEL_ROLES):
         return True
-    return _can_board(user) or _can_program_committee(user)
+    return (
+        _can_board(user)
+        or _can_program_committee(user)
+        or _can_meeting_of_analysts(user)
+    )
 
 
 def _panels_for(user) -> list[dict]:
@@ -86,6 +95,22 @@ def _panels_for(user) -> list[dict]:
             "title": "Program Committee Admin",
             "blurb": "Solicit and review proposals; mint events into a program.",
             "url": reverse("program_admin_programs"),
+        })
+    if _can_meeting_of_analysts(user):
+        from admissions.models import Advancement, Application
+        open_count = (
+            Application.objects.filter(status__in=Application.OPEN_STATUSES).count()
+            + Advancement.objects.filter(
+                status__in=Advancement.OPEN_STATUSES
+            ).count()
+        )
+        panels.append({
+            "title": "Meeting of Analysts Admin",
+            "blurb": "Admissions and formation: review applications, decide "
+                     "palimpsest and passage demandes.",
+            "url": reverse("meeting_of_analysts_admin"),
+            "count": open_count,
+            "count_label": "open",
         })
 
     # --- Staff roles ---
@@ -262,13 +287,10 @@ def board_membership_admin(request):
         )
 
     timeline = []
-    advisor = None
     if member is not None:
-        from accounts.advisor import current_advisor
         timeline = list(
             MembershipTenure.objects.filter(user=member).order_by("-start_ay")
         )
-        advisor = current_advisor(member)
         if form is None:
             form = MembershipChangeForm(initial={
                 "role": member.profile.role,
@@ -278,7 +300,29 @@ def board_membership_admin(request):
 
     return render(request, "core/staff/admin/board_membership.html", {
         "q": q, "results": results, "member": member,
-        "timeline": timeline, "form": form, "advisor": advisor,
+        "timeline": timeline, "form": form,
+    })
+
+
+@login_required
+def meeting_of_analysts_admin(request):
+    """The Meeting of the Analysts' admin landing — the formation pipeline.
+
+    Per ``content/pages/about.md`` the Analysts "review admissions materials …
+    and make admission decisions" and "this meeting considers demands for
+    palimpsests and passages." Gated to the Meeting of Analysts (every active
+    Analyst, via the workgroup's role-derived membership) + staff/superuser.
+    """
+    if not _can_meeting_of_analysts(request.user):
+        raise PermissionDenied
+    from admissions.models import Advancement, Application
+    return render(request, "core/staff/admin/meeting_of_analysts.html", {
+        "open_applications": Application.objects.filter(
+            status__in=Application.OPEN_STATUSES
+        ).count(),
+        "open_advancements": Advancement.objects.filter(
+            status__in=Advancement.OPEN_STATUSES
+        ).count(),
     })
 
 

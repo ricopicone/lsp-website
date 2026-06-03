@@ -107,18 +107,28 @@ def test_second_application_redirects_to_status(client):
 
 
 def test_review_queue_gated(client):
-    client.force_login(_user("plain@x.test", role=Profile.Role.ANALYST))
+    # The Meeting of the Analysts owns admissions: a non-Analyst member (even a
+    # Board member who isn't an Analyst) cannot reach the review queue.
+    client.force_login(_user("plain@x.test", role=Profile.Role.MEMBER))
+    assert client.get(reverse("admissions:review_queue")).status_code == 403
+    client.force_login(_board_member("board-only@x.test"))
     assert client.get(reverse("admissions:review_queue")).status_code == 403
 
 
-def test_board_can_assign_and_report(client):
-    board = _board_member()
+def test_analyst_can_reach_review_queue(client):
+    # Every active Analyst is a Meeting-of-Analysts member (auto-derived role).
+    client.force_login(_analyst("rev-gate@x.test"))
+    assert client.get(reverse("admissions:review_queue")).status_code == 200
+
+
+def test_reviewer_can_assign_and_report(client):
+    reviewer = _analyst("reviewer@x.test")
     analyst = _analyst()
     applicant = _user("a@x.test")
     app = Application.objects.create(
         applicant=applicant, track=Application.Track.ANALYST, letter_of_intent="x",
     )
-    client.force_login(board)
+    client.force_login(reviewer)
     client.post(reverse("admissions:review_assign", args=[app.pk]), {"interviewer": analyst.pk})
     app.refresh_from_db()
     assert app.status == Application.Status.INTERVIEWING
@@ -172,12 +182,12 @@ def test_reject_sets_status():
 
 
 def test_decide_via_view_with_on_commit_email(client, django_capture_on_commit_callbacks):
-    board = _board_member()
+    reviewer = _analyst("rev2@x.test")
     applicant = _user("v@x.test")
     app = Application.objects.create(
         applicant=applicant, track=Application.Track.ANALYST, letter_of_intent="x",
     )
-    client.force_login(board)
+    client.force_login(reviewer)
     with django_capture_on_commit_callbacks(execute=True):
         resp = client.post(reverse("admissions:review_decide", args=[app.pk]), {
             "decision": "accept", "effective_ay": "2026", "note": "Welcome",
@@ -202,7 +212,7 @@ def test_cv_download_gated(client):
     assert client.get(url).status_code == 404
     client.force_login(applicant)
     assert client.get(url).status_code == 200
-    client.force_login(_board_member("board2@x.test"))
+    client.force_login(_analyst("rev3@x.test"))
     assert client.get(url).status_code == 200
 
 
@@ -227,14 +237,14 @@ def test_status_page_renders(client):
 
 
 def test_review_pages_render(client):
-    board = _board_member()
+    reviewer = _analyst("rev4@x.test")
     analyst = _analyst()
     app = Application.objects.create(
         applicant=_user("r3@x.test"), track=Application.Track.ANALYST,
         letter_of_intent="hello", cv=_cv(),
     )
     ApplicationInterview.objects.create(application=app, interviewer=analyst)
-    client.force_login(board)
+    client.force_login(reviewer)
     assert client.get(reverse("admissions:review_queue")).status_code == 200
     r = client.get(reverse("admissions:review_detail", args=[app.pk]))
     assert r.status_code == 200

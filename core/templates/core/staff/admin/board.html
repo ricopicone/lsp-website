@@ -11,9 +11,9 @@
   {% include "core/staff/admin/_section.html" with title="Board workspace" status="Not set up" body="Roster, documents, minutes, decisions, and discussion live in the Board's workspace once its workgroup is created." %}
   {% endif %}
 
-  {% comment %}Genuinely board-specific governance — not in the workspace.{% endcomment %}
-  {% url 'admissions:review_queue' as applications_url %}
-  {% include "core/staff/admin/_section.html" with title="Applications" body="Review membership applications: assign the two interviewers, record their reports, and decide. Accepting admits the applicant as a Precandidate." link=applications_url link_label="Review applications" %}
+  {% comment %}Genuinely board-specific governance — not in the workspace.
+  Admissions + formation advancement live under the Meeting of Analysts Admin
+  (they're the Analysts' decisions), not here.{% endcomment %}
   {% url 'board_membership_admin' as membership_url %}
   {% include "core/staff/admin/_section.html" with title="Membership administration" body="Admit members and record role/standing transitions across the school — student → pre-candidate → candidate → analyst, leaves, and resignations. Each change writes the member's role-timeline entry." link=membership_url link_label="Open membership administration" %}
   {% include "core/staff/admin/_section.html" with title="Appointments" status="Planned" body="Appoint and reassign staff roles (Treasurer, Web Coordinator, Cartel Coordinator, Administrative Assistant, Web Developer) and committee chairs." %}

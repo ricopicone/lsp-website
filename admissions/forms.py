@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 
 from accounts.models import Profile
 
-from .models import Application, ApplicationInterview
+from .models import Advancement, Application, ApplicationInterview
 
 User = get_user_model()
 
@@ -98,3 +98,55 @@ class InterviewReportForm(forms.ModelForm):
             "report": forms.Textarea(attrs={"class": _TEXTAREA, "rows": 4,
                                              "placeholder": "Report / recommendation"}),
         }
+
+
+# --- Advancement (palimpsest / passage) ---
+
+class AdvancementForm(forms.ModelForm):
+    """A member's demande to advance — statement + optional written palimpsest."""
+
+    class Meta:
+        model = Advancement
+        fields = ("statement", "palimpsest")
+        widgets = {
+            "statement": forms.Textarea(attrs={"class": _TEXTAREA, "rows": 10}),
+            "palimpsest": forms.ClearableFileInput(
+                attrs={"class": "file-input file-input-bordered w-full"}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["statement"].label = "Your statement"
+        self.fields["statement"].help_text = (
+            "Why you are ready for this step in your formation."
+        )
+        self.fields["statement"].required = True
+        self.fields["palimpsest"].label = "Written palimpsest (optional)"
+        self.fields["palimpsest"].required = False
+
+
+class RecommendationForm(forms.ModelForm):
+    """The Advisor's recommendation + the date they presented the demande to the
+    Meeting of the Analysts."""
+
+    class Meta:
+        model = Advancement
+        fields = ("recommendation", "presented_at")
+        widgets = {
+            "recommendation": forms.Textarea(attrs={"class": _TEXTAREA, "rows": 6}),
+            "presented_at": forms.DateInput(attrs={"type": "date", "class": _INPUT}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["recommendation"].label = "Your recommendation"
+        self.fields["recommendation"].help_text = (
+            "Your recommendation to the Meeting of the Analysts."
+        )
+        self.fields["recommendation"].required = True
+        self.fields["presented_at"].label = "Date presented to the Meeting"
+        self.fields["presented_at"].help_text = (
+            "Leave blank to use today's date."
+        )
+        self.fields["presented_at"].required = False

@@ -702,14 +702,27 @@ def test_role_pages_forbidden_without_role(client, regular_user):
 
 def test_other_committee_member_no_longer_reaches_hub(db, client):
     """Narrowed access: a member of a committee other than Board / Programming
-    Committee no longer gets the Admin Tools hub."""
+    Committee / Meeting of the Analysts no longer gets the Admin Tools hub."""
     from committees.models import Committee
-    user = User.objects.create_user(email="moa@example.com", password="x")
-    Committee.objects.get(slug="meeting-of-analysts").add_member(
+    user = User.objects.create_user(email="outreach@example.com", password="x")
+    Committee.objects.create(name="Outreach", slug="outreach").add_member(
         user, start_date=date(2026, 1, 1)
     )
     client.force_login(user)
     assert client.get(reverse("admin_tools")).status_code == 403
+
+
+def test_meeting_of_analysts_member_reaches_hub(db, client):
+    """The Meeting of the Analysts now has its own admin surface, so its members
+    reach the hub (and see only their own panel)."""
+    from accounts.models import Profile
+    user = User.objects.create_user(email="analyst-hub@example.com", password="x")
+    user.profile.role = Profile.Role.ANALYST  # auto-member of the Meeting
+    user.profile.save()
+    client.force_login(user)
+    resp = client.get(reverse("admin_tools"))
+    assert resp.status_code == 200
+    assert b"Meeting of Analysts Admin" in resp.content
 
 
 def test_staff_url_redirects_to_admin_tools(client, superuser):
