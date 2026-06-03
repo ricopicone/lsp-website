@@ -81,6 +81,34 @@ def send_email_change_verification(change_request) -> None:
     msg.send(fail_silently=False)
 
 
+def send_magic_link(link) -> None:
+    """Email a passwordless sign-in link to the account's address.
+
+    ``link`` is a :class:`accounts.models.MagicLoginLink`. The link is
+    single-use and short-lived (:attr:`MagicLoginLink.TOKEN_TTL`).
+    """
+    sign_in_url = settings.SITE_BASE_URL.rstrip("/") + reverse(
+        "magic_link_consume", args=[link.token]
+    )
+    body = render_to_string(
+        "accounts/email/magic_link.txt",
+        {
+            "user": link.user,
+            "sign_in_url": sign_in_url,
+            "ttl_minutes": int(link.TOKEN_TTL.total_seconds() // 60),
+            "support_email": settings.SUPPORT_EMAIL,
+        },
+    )
+    msg = EmailMessage(
+        subject="Your Lacanian School sign-in link",
+        body=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[link.user.email],
+        reply_to=[settings.SUPPORT_EMAIL],
+    )
+    msg.send(fail_silently=False)
+
+
 def send_email_change_notice(user, old_email: str, new_email: str) -> None:
     """Notify the *old* address that the account's login email was changed.
 

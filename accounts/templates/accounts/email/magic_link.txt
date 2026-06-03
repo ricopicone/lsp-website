@@ -1,0 +1,10 @@
+{% autoescape off %}Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
+
+Here is your sign-in link for the Lacanian School of Psychoanalysis. Open it
+within {{ ttl_minutes }} minutes to sign in — no password needed:
+
+  {{ sign_in_url }}
+
+The link works once and then stops. If you didn't request it, you can ignore
+this message; your account stays secure. Questions? Reach us at {{ support_email }}.
+{% endautoescape %}

@@ -113,6 +113,16 @@
     </section>
     {% endif %}
 
+    {# ---- Two-factor authentication (separate flow) --------------------- #}
+    <section class="space-y-2">
+      <h2 class="font-serif text-xl text-base-content">Two-factor authentication</h2>
+      <p class="text-sm text-base-content/70">
+        Protect your account with a second step at sign-in using an
+        authenticator app.
+      </p>
+      <a href="{% url 'twofactor_setup' %}" class="btn btn-sm btn-ghost">Set up two-factor authentication…</a>
+    </section>
+
     {# ---- About ---------------------------------------------------------- #}
     <section class="space-y-4">
       <h2 class="font-serif text-xl text-base-content">About</h2>

@@ -25,8 +25,15 @@
       <input type="password" name="password" id="id_password" autocomplete="current-password" required>
     </div>
     <input type="hidden" name="next" value="{{ next }}">
+    <div class="text-right">
+      <a href="{% url 'password_reset' %}" class="link link-primary text-xs">Forgot your password?</a>
+    </div>
     <button type="submit" class="btn btn-primary w-full">Log in</button>
   </form>
+
+  <div class="divider text-xs text-base-content/40">or</div>
+
+  <a href="{% url 'magic_link_request' %}" class="btn btn-outline w-full">Email me a sign-in link</a>
 
   <p class="text-sm text-base-content/60 text-center">
     No account?

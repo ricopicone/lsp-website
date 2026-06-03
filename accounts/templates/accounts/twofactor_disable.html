@@ -1,0 +1,30 @@
+{% extends "core/base.html" %}
+{% block title %}Turn off two-factor authentication — LSP{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto py-8 space-y-6">
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Turn off two-factor authentication</h1>
+    <p class="text-sm text-base-content/70">
+      This removes your authenticator and backup codes. You can set it up again
+      at any time. Confirm your password to continue.
+    </p>
+  </header>
+
+  {% if error %}
+  <div role="alert" class="alert alert-error"><span>{{ error }}</span></div>
+  {% endif %}
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div class="form-control space-y-1">
+      <label for="id_password" class="label-text text-sm">Current password</label>
+      <input type="password" name="password" id="id_password" autocomplete="current-password" required>
+    </div>
+    <div class="flex gap-3">
+      <button type="submit" class="btn btn-error">Turn off</button>
+      <a href="{% url 'twofactor_setup' %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

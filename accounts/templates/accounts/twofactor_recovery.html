@@ -1,0 +1,23 @@
+{% extends "core/base.html" %}
+{% block title %}Save your backup codes — LSP{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto py-8 space-y-6">
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Save your backup codes</h1>
+    <p class="text-sm text-base-content/70">
+      Two-factor authentication is now on. Store these one-time backup codes
+      somewhere safe — each works once if you ever lose access to your
+      authenticator app. <strong>This is the only time we'll show them.</strong>
+    </p>
+  </header>
+
+  <ul class="grid grid-cols-2 gap-2 rounded-lg border border-base-content/15 p-4 bg-base-100 font-mono text-center">
+    {% for code in codes %}
+    <li class="py-1 tracking-widest">{{ code }}</li>
+    {% endfor %}
+  </ul>
+
+  <a href="{% url 'profile_edit' %}" class="btn btn-primary w-full">I've saved my codes</a>
+</div>
+{% endblock %}

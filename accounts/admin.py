@@ -8,6 +8,7 @@ from .models import (
     MemberIntakeSurvey,
     MembershipTenure,
     Profile,
+    TOTPDevice,
     User,
 )
 
@@ -85,6 +86,22 @@ class EmailChangeRequestAdmin(admin.ModelAdmin):
     list_filter = ("confirmed_at",)
     search_fields = ("user__email", "new_email")
     readonly_fields = ("user", "new_email", "token", "created_at", "confirmed_at")
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(TOTPDevice)
+class TOTPDeviceAdmin(admin.ModelAdmin):
+    """Audit + lockout-recovery for 2FA. Delete a row to reset a member's
+    authenticator (they'll re-enroll on next login when enforcement is on).
+    The shared ``secret`` is never shown."""
+
+    list_display = ("user", "confirmed", "created_at", "last_used_at")
+    list_filter = ("confirmed",)
+    search_fields = ("user__email", "user__first_name", "user__last_name")
+    readonly_fields = ("user", "confirmed", "created_at", "last_used_at")
+    exclude = ("secret",)
 
     def has_add_permission(self, request):
         return False
