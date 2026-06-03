@@ -1,0 +1,109 @@
+{% load static %}
+<div class="space-y-6">
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for m in messages %}
+    <div class="alert {% if 'error' in m.tags %}alert-error{% elif 'success' in m.tags %}alert-success{% else %}alert-info{% endif %} text-sm">{{ m }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <section class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="font-serif text-xl text-base-content">Files</h2>
+      {% if can_upload_files %}
+      <details class="dropdown dropdown-end">
+        <summary class="btn btn-sm btn-primary">Upload a file</summary>
+        <form method="post" enctype="multipart/form-data" action="{% url 'workgroups:file_upload' workgroup.slug %}"
+              class="dropdown-content z-50 mt-2 w-80 space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-4 shadow-lg">
+          {% csrf_token %}
+          <input name="file" type="file" required
+                 class="file-input file-input-sm file-input-bordered w-full" />
+          <input name="name" type="text" placeholder="Name (defaults to filename)"
+                 class="input input-sm input-bordered w-full" />
+          <input name="description" type="text" placeholder="Description (optional)"
+                 class="input input-sm input-bordered w-full" />
+          <button type="submit" class="btn btn-sm btn-primary w-full">Upload</button>
+          <p class="text-xs text-base-content/45">
+            Up to {{ max_file_bytes|filesizeformat }} per file ·
+            {{ files_remaining_bytes|filesizeformat }} free
+          </p>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+
+    {# Storage quota #}
+    <div class="space-y-1">
+      <div class="flex flex-wrap justify-between gap-x-4 text-xs text-base-content/55">
+        <span>{{ files_used_bytes|filesizeformat }} of {{ files_quota_bytes|filesizeformat }} used</span>
+        <span>Need more space? Email <a href="mailto:{{ support_email }}?subject=Workgroup%20storage%20request%20—%20{{ workgroup.name|urlencode }}" class="link link-hover text-primary">the web coordinator</a>.</span>
+      </div>
+      <progress class="progress progress-primary w-full" value="{{ files_used_pct }}" max="100"></progress>
+    </div>
+
+    {% if shared_files %}
+    <ul class="divide-y divide-base-300/40 rounded-xl border border-base-300/50 bg-base-100">
+      {% for f in shared_files %}
+      <li class="space-y-2 p-3">
+        <div class="flex flex-wrap items-center gap-3">
+          <a href="{% url 'workgroups:file_download' workgroup.slug f.pk %}" target="_blank" rel="noopener"
+             class="min-w-0 flex-1 font-medium text-base-content hover:text-primary">
+            {{ f.name }}
+            <span class="ml-1 align-middle inline-flex items-center rounded-full bg-base-200 px-2 py-0.5 text-[0.65rem] uppercase tracking-wider text-base-content/55">{{ f.size|filesizeformat }}</span>
+            {% if f.version_count > 1 %}<span class="ml-1 align-middle inline-flex items-center rounded-full bg-base-200 px-2 py-0.5 text-[0.65rem] uppercase tracking-wider text-base-content/55">v{{ f.version_count }}</span>{% endif %}
+          </a>
+          <span class="text-xs text-base-content/45">{{ f.updated_at|date:"M j, Y" }}</span>
+          {% if can_upload_files %}
+          <details class="dropdown dropdown-end">
+            <summary class="btn btn-ghost btn-xs">New version</summary>
+            <form method="post" enctype="multipart/form-data" action="{% url 'workgroups:file_version_add' workgroup.slug f.pk %}"
+                  class="dropdown-content z-50 mt-2 w-72 space-y-2 rounded-xl border border-base-300/60 bg-base-100 p-3 shadow-lg">
+              {% csrf_token %}
+              <input name="file" type="file" required
+                     class="file-input file-input-xs file-input-bordered w-full" />
+              <button type="submit" class="btn btn-xs btn-primary w-full">Upload version</button>
+            </form>
+          </details>
+          {% endif %}
+          {% if f.user_can_manage %}
+          <form method="post" action="{% url 'workgroups:file_delete' workgroup.slug f.pk %}"
+                onsubmit="return confirm('Delete “{{ f.name|escapejs }}” and all its versions?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
+          </form>
+          {% endif %}
+        </div>
+        {% if f.description %}<p class="text-xs text-base-content/55">{{ f.description }}</p>{% endif %}
+        {% if f.version_count > 1 %}
+        <details class="text-xs">
+          <summary class="cursor-pointer text-base-content/55 hover:text-base-content">Version history</summary>
+          <ul class="mt-2 space-y-1.5 border-l border-base-300/50 pl-3">
+            {% for v in f.versions.all %}
+            <li class="flex flex-wrap items-center gap-2">
+              <a href="{% url 'workgroups:file_download' workgroup.slug f.pk %}?v={{ v.number }}"
+                 target="_blank" rel="noopener" class="link link-hover font-medium text-base-content">v{{ v.number }}</a>
+              <span class="text-base-content/45">{{ v.size|filesizeformat }} · {{ v.uploaded_at|date:"M j, Y" }}{% if v.uploaded_by %} · {{ v.uploaded_by.get_full_name|default:v.uploaded_by.email }}{% endif %}</span>
+              {% if f.user_can_manage %}
+              <form method="post" action="{% url 'workgroups:file_version_delete' workgroup.slug f.pk v.pk %}"
+                    onsubmit="return confirm('Delete version {{ v.number }}?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
+              </form>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </details>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="rounded-xl border border-dashed border-base-300/70 bg-base-200/30 p-6 text-center text-sm text-base-content/55">
+      No shared files yet.{% if can_upload_files %} Upload one above — documents, slides, datasets, anything the group needs to share.{% endif %}
+    </div>
+    {% endif %}
+  </section>
+</div>

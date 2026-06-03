@@ -4,6 +4,8 @@ from .models import (
     MeetingSeries,
     Visibility,
     Workgroup,
+    WorkgroupFile,
+    WorkgroupFileVersion,
     WorkgroupInvitation,
     WorkgroupJoinRequest,
     WorkgroupMeeting,
@@ -42,6 +44,11 @@ class WorkgroupAdmin(admin.ModelAdmin):
                 "has_minutes", "has_tasks", "has_decisions",
             ),
             "description": "Defaults are seeded by kind on creation; edit freely.",
+        }),
+        ("Files", {
+            "fields": ("file_quota_bytes",),
+            "description": "Shared-files storage quota (bytes). Raise when a "
+            "group requests more space (default 200 MB = 209715200).",
         }),
     )
 
@@ -125,3 +132,20 @@ class WorkgroupJoinRequestAdmin(admin.ModelAdmin):
     list_filter = ("status", "workgroup__kind")
     search_fields = ("applicant__email", "workgroup__name")
     autocomplete_fields = ("workgroup", "applicant", "decided_by")
+
+
+class WorkgroupFileVersionInline(admin.TabularInline):
+    model = WorkgroupFileVersion
+    extra = 0
+    fields = ("number", "blob", "size", "uploaded_by", "uploaded_at")
+    readonly_fields = ("uploaded_at",)
+    autocomplete_fields = ("uploaded_by",)
+
+
+@admin.register(WorkgroupFile)
+class WorkgroupFileAdmin(admin.ModelAdmin):
+    list_display = ("name", "workgroup", "version_count", "size", "created_by", "updated_at")
+    list_filter = ("workgroup__kind",)
+    search_fields = ("name", "workgroup__name")
+    autocomplete_fields = ("workgroup", "created_by")
+    inlines = (WorkgroupFileVersionInline,)

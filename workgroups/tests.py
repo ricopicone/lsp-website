@@ -1185,3 +1185,120 @@ def test_private_storage_used_for_gated_fields():
     assert isinstance(WorkFile._meta.get_field("file").storage, expected)
     assert isinstance(WorkDraft._meta.get_field("file").storage, expected)
     assert isinstance(Document._meta.get_field("file").storage, expected)
+
+
+# ---- Shared files (Files tab) ------------------------------------------
+
+def _pdf_upload(name="f.pdf", size=1000):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    return SimpleUploadedFile(name, b"x" * size, content_type="application/pdf")
+
+
+def test_file_upload_creates_versioned_file(client):
+    wg = _wg(name="Files WG", slug="files-wg", has_files=True)
+    u = _member_of(wg)
+    client.force_login(u)
+    resp = client.post(reverse("workgroups:file_upload", args=[wg.slug]),
+                       {"name": "Budget", "file": _pdf_upload(size=2048)})
+    assert resp.status_code == 302
+    from workgroups.models import WorkgroupFile
+    wf = WorkgroupFile.objects.get(workgroup=wg)
+    assert wf.name == "Budget"
+    assert wf.version_count == 1
+    assert wf.size == 2048
+    assert wg.files_used_bytes() == 2048
+
+
+def test_file_new_version_increments_and_counts_quota(client):
+    wg = _wg(name="Files WG", slug="files-wg", has_files=True)
+    u = _member_of(wg)
+    from workgroups.models import WorkgroupFile
+    wf = WorkgroupFile.objects.create(workgroup=wg, name="Doc", created_by=u)
+    wf.add_version(blob=_pdf_upload(size=1000), original_name="a.pdf", size=1000, user=u)
+    client.force_login(u)
+    client.post(reverse("workgroups:file_version_add", args=[wg.slug, wf.pk]),
+                {"file": _pdf_upload(size=3000)})
+    wf.refresh_from_db()
+    assert wf.version_count == 2
+    assert wf.current_version().number == 2
+    assert wf.size == 3000                      # current = latest
+    assert wg.files_used_bytes() == 4000        # both versions count
+
+
+def test_file_upload_rejects_oversize(client):
+    from workgroups.models import MAX_WORKGROUP_FILE_BYTES, WorkgroupFile
+    wg = _wg(name="Files WG", slug="files-wg", has_files=True)
+    u = _member_of(wg)
+    client.force_login(u)
+    client.post(reverse("workgroups:file_upload", args=[wg.slug]),
+                {"file": _pdf_upload(size=MAX_WORKGROUP_FILE_BYTES + 1)})
+    assert not WorkgroupFile.objects.filter(workgroup=wg).exists()
+
+
+def test_file_upload_rejects_over_quota(client):
+    from workgroups.models import WorkgroupFile
+    wg = _wg(name="Files WG", slug="files-wg", has_files=True, file_quota_bytes=5000)
+    u = _member_of(wg)
+    wf = WorkgroupFile.objects.create(workgroup=wg, name="Big", created_by=u)
+    wf.add_version(blob=_pdf_upload(size=4000), original_name="a.pdf", size=4000, user=u)
+    client.force_login(u)
+    client.post(reverse("workgroups:file_upload", args=[wg.slug]),
+                {"file": _pdf_upload(size=2000)})       # 4000+2000 > 5000
+    assert WorkgroupFile.objects.filter(workgroup=wg).count() == 1   # not added
+
+
+def test_file_download_gated_and_streams(client):
+    from workgroups.models import WorkgroupFile
+    wg = _wg(name="Files WG", slug="files-wg", has_files=True,
+             content_visibility=Visibility.PRIVATE)
+    member = _member_of(wg, "m@x.test")
+    outsider = _user("out@x.test")
+    wf = WorkgroupFile.objects.create(workgroup=wg, name="Doc", created_by=member)
+    wf.add_version(blob=_pdf_upload(size=12), original_name="a.pdf", size=12, user=member)
+    url = reverse("workgroups:file_download", args=[wg.slug, wf.pk])
+    client.force_login(member)
+    resp = client.get(url)
+    assert resp.status_code == 200
+    assert b"".join(resp.streaming_content) == b"x" * 12
+    client.force_login(outsider)
+    assert client.get(url).status_code == 404
+
+
+def test_file_delete_by_creator_reclaims_quota(client):
+    from workgroups.models import WorkgroupFile
+    wg = _wg(name="Files WG", slug="files-wg", has_files=True)
+    u = _member_of(wg)
+    wf = WorkgroupFile.objects.create(workgroup=wg, name="Doc", created_by=u)
+    wf.add_version(blob=_pdf_upload(size=5000), original_name="a.pdf", size=5000, user=u)
+    assert wg.files_used_bytes() == 5000
+    client.force_login(u)
+    client.post(reverse("workgroups:file_delete", args=[wg.slug, wf.pk]))
+    assert not WorkgroupFile.objects.filter(pk=wf.pk).exists()
+    assert wg.files_used_bytes() == 0
+
+
+def test_files_tab_renders_with_quota(client):
+    wg = _wg(name="Files WG", slug="files-wg", has_files=True,
+             content_visibility=Visibility.MEMBERS)
+    u = _member_of(wg)
+    from workgroups.models import WorkgroupFile
+    wf = WorkgroupFile.objects.create(workgroup=wg, name="Shared Notes", created_by=u)
+    wf.add_version(blob=_pdf_upload(size=1024), original_name="a.pdf", size=1024, user=u)
+    client.force_login(u)
+    resp = client.get(f"{wg.get_absolute_url()}?tab=files")
+    assert resp.status_code == 200
+    assert b"Shared Notes" in resp.content
+    assert b"Upload a file" in resp.content
+    assert b"the web coordinator" in resp.content
+
+
+def test_deleting_version_removes_blob_from_storage(client):
+    from workgroups.models import WorkgroupFile
+    wg = _wg(name="Files WG", slug="files-wg", has_files=True)
+    u = _member_of(wg)
+    wf = WorkgroupFile.objects.create(workgroup=wg, name="Doc", created_by=u)
+    v = wf.add_version(blob=_pdf_upload(size=100), original_name="a.pdf", size=100, user=u)
+    storage, name = v.blob.storage, v.blob.name
+    assert storage.exists(name)
+    wf.delete()                                 # cascade → version → post_delete
+    assert not storage.exists(name)             # blob cleaned up, no orphan

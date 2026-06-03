@@ -3,6 +3,7 @@ group kind renders through."""
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import F
@@ -155,6 +156,8 @@ def workgroup_detail(request, slug):
         tabs.append(("chat", "Chat"))
     if wg.has_works and (can_view or archive_access):
         tabs.append(("work", "Work"))
+    if wg.has_files and (is_member or archive_access):
+        tabs.append(("files", "Files"))
     if wg.has_calendar and is_member:
         tabs.append(("schedule", "Schedule"))
     if wg.has_tasks and is_member:
@@ -296,6 +299,26 @@ def workgroup_detail(request, slug):
             context["drafts"] = list(wg.drafts.select_related("locked_by", "published_work"))
             context["can_edit_docs"] = True
             context["can_publish_docs"] = can_manage
+    elif active == "files" and wg.has_files and (is_member or archive_access):
+        from .models import MAX_WORKGROUP_FILE_BYTES
+
+        files = list(
+            wg.shared_files.prefetch_related("versions__uploaded_by")
+            .select_related("created_by")
+        )
+        for f in files:
+            f.user_can_manage = f.can_manage(request.user)
+        used = wg.files_used_bytes()
+        context["shared_files"] = files
+        context["files_used_bytes"] = used
+        context["files_quota_bytes"] = wg.file_quota_bytes
+        context["files_remaining_bytes"] = wg.files_remaining_bytes()
+        context["files_used_pct"] = (
+            min(100, round(used * 100 / wg.file_quota_bytes)) if wg.file_quota_bytes else 0
+        )
+        context["max_file_bytes"] = MAX_WORKGROUP_FILE_BYTES
+        context["can_upload_files"] = is_member        # archive viewers: read-only
+        context["support_email"] = settings.SUPPORT_EMAIL
     elif active == "schedule" and wg.has_calendar and (is_member or archive_access):
         from django.utils import timezone as _tz
 
@@ -1093,3 +1116,154 @@ def draft_unpublish(request, slug, pk):
     if draft.published_work_id:
         draft.published_work.delete()  # SET_NULL clears draft.published_work
     return redirect("workgroups:draft_edit", slug=wg.slug, pk=draft.pk)
+
+
+# --- Shared files (Files tab) -----------------------------------------------
+
+def _wg_member_or_404(request, slug):
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not (wg.has_files and wg.is_member(request.user)):
+        raise Http404
+    return wg
+
+
+@login_required
+@require_POST
+def file_upload(request, slug):
+    """Upload a new shared file (its first version). Enforces the per-file size
+    cap and the workgroup's storage quota."""
+    from django.contrib import messages
+
+    from .models import MAX_WORKGROUP_FILE_BYTES, WorkgroupFile
+
+    wg = _wg_member_or_404(request, slug)
+    back = f"{wg.get_absolute_url()}?tab=files"
+    upload = request.FILES.get("file")
+    if not upload:
+        messages.error(request, "Choose a file to upload.")
+        return redirect(back)
+    if upload.size > MAX_WORKGROUP_FILE_BYTES:
+        messages.error(request, _file_too_big_msg(upload.size))
+        return redirect(back)
+    if upload.size > wg.files_remaining_bytes():
+        messages.error(request, _quota_msg(wg))
+        return redirect(back)
+    name = (request.POST.get("name") or "").strip()[:255] or upload.name
+    wf = WorkgroupFile.objects.create(
+        workgroup=wg, name=name,
+        description=(request.POST.get("description") or "").strip()[:500],
+        created_by=request.user,
+    )
+    wf.add_version(blob=upload, original_name=upload.name, size=upload.size,
+                   user=request.user)
+    return redirect(back)
+
+
+@login_required
+@require_POST
+def file_version_add(request, slug, pk):
+    """Add a new version to an existing shared file."""
+    from django.contrib import messages
+
+    from .models import MAX_WORKGROUP_FILE_BYTES, WorkgroupFile
+
+    wg = _wg_member_or_404(request, slug)
+    wf = get_object_or_404(WorkgroupFile, pk=pk, workgroup=wg)
+    back = f"{wg.get_absolute_url()}?tab=files"
+    upload = request.FILES.get("file")
+    if not upload:
+        messages.error(request, "Choose a file to upload.")
+        return redirect(back)
+    if upload.size > MAX_WORKGROUP_FILE_BYTES:
+        messages.error(request, _file_too_big_msg(upload.size))
+        return redirect(back)
+    if upload.size > wg.files_remaining_bytes():
+        messages.error(request, _quota_msg(wg))
+        return redirect(back)
+    wf.add_version(blob=upload, original_name=upload.name, size=upload.size,
+                   user=request.user)
+    return redirect(back)
+
+
+@login_required
+def file_download(request, slug, pk):
+    """Stream a shared file (latest version, or ?v=<number>), gated by
+    membership. Files live in private storage with no public URL."""
+    from django.http import FileResponse
+
+    from .models import WorkgroupFile
+
+    wg = get_object_or_404(Workgroup, slug=slug)
+    # Active members and read-only archive viewers may download.
+    if not (wg.has_files and (wg.is_member(request.user)
+                              or wg.has_archive_access(request.user))):
+        raise Http404
+    wf = get_object_or_404(WorkgroupFile, pk=pk, workgroup=wg)
+    vnum = request.GET.get("v")
+    version = (wf.versions.filter(number=vnum).first() if vnum
+               else wf.current_version())
+    if version is None:
+        raise Http404
+    resp = FileResponse(version.blob.open("rb"))
+    resp["Content-Disposition"] = f'inline; filename="{version.filename}"'
+    return resp
+
+
+@login_required
+@require_POST
+def file_delete(request, slug, pk):
+    """Delete a shared file and all its versions (creator or manager only)."""
+    from .models import WorkgroupFile
+
+    wg = _wg_member_or_404(request, slug)
+    wf = get_object_or_404(WorkgroupFile, pk=pk, workgroup=wg)
+    if not wf.can_manage(request.user):
+        raise Http404
+    wf.delete()
+    return redirect(f"{wg.get_absolute_url()}?tab=files")
+
+
+@login_required
+@require_POST
+def file_version_delete(request, slug, pk, vpk):
+    """Delete one version of a shared file. The last remaining version can't be
+    deleted on its own — delete the whole file instead."""
+    from django.contrib import messages
+
+    from .models import WorkgroupFile, WorkgroupFileVersion
+
+    wg = _wg_member_or_404(request, slug)
+    wf = get_object_or_404(WorkgroupFile, pk=pk, workgroup=wg)
+    if not wf.can_manage(request.user):
+        raise Http404
+    version = get_object_or_404(WorkgroupFileVersion, pk=vpk, parent=wf)
+    if wf.versions.count() <= 1:
+        messages.error(request, "That's the only version — delete the file instead.")
+    else:
+        version.delete()
+    return redirect(f"{wg.get_absolute_url()}?tab=files")
+
+
+def _file_too_big_msg(size: int) -> str:
+    from .models import MAX_WORKGROUP_FILE_BYTES
+
+    return (
+        f"That file is {_human_bytes(size)} — over the "
+        f"{_human_bytes(MAX_WORKGROUP_FILE_BYTES)} per-file limit."
+    )
+
+
+def _quota_msg(wg) -> str:
+    return (
+        f"Not enough space: {_human_bytes(wg.files_remaining_bytes())} left of "
+        f"{_human_bytes(wg.file_quota_bytes)}. Delete old files or versions, or "
+        f"ask the web coordinator ({settings.SUPPORT_EMAIL}) for more space."
+    )
+
+
+def _human_bytes(n: int) -> str:
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} GB"

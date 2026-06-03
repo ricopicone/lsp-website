@@ -54,4 +54,11 @@ urlpatterns = [
     path("<slug:slug>/docs/<int:pk>/publish/", views.draft_publish, name="draft_publish"),
     path("<slug:slug>/docs/<int:pk>/unpublish/", views.draft_unpublish, name="draft_unpublish"),
     path("<slug:slug>/docs/<int:pk>/delete/", views.draft_delete, name="draft_delete"),
+    # Shared files (Files tab)
+    path("<slug:slug>/files/upload/", views.file_upload, name="file_upload"),
+    path("<slug:slug>/files/<int:pk>/", views.file_download, name="file_download"),
+    path("<slug:slug>/files/<int:pk>/version/", views.file_version_add, name="file_version_add"),
+    path("<slug:slug>/files/<int:pk>/delete/", views.file_delete, name="file_delete"),
+    path("<slug:slug>/files/<int:pk>/version/<int:vpk>/delete/", views.file_version_delete,
+         name="file_version_delete"),
 ]

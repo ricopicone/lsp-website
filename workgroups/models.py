@@ -18,12 +18,21 @@ from dataclasses import dataclass
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models, transaction
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from accounts.permissions import is_lsp_member
+from core.storage import private_storage
+
+#: Per-uploaded-file size cap and the default per-workgroup storage quota for
+#: the shared Files section. The quota is editable per workgroup (members
+#: request more from the web coordinator, who raises ``file_quota_bytes``).
+MAX_WORKGROUP_FILE_BYTES = 30 * 1024 * 1024        # 30 MB per file
+DEFAULT_WORKGROUP_FILE_QUOTA_BYTES = 200 * 1024 * 1024   # 200 MB per workgroup
 
 
 def serving_membership_q(prefix: str = "", on=None):
@@ -189,6 +198,12 @@ class Workgroup(models.Model):
             "on for committees, where officers serve defined terms."
         ),
     )
+    #: Storage quota (bytes) for the shared Files section — sum of all file
+    #: versions. Raise per workgroup when members request more space.
+    file_quota_bytes = models.PositiveBigIntegerField(
+        default=DEFAULT_WORKGROUP_FILE_QUOTA_BYTES,
+        help_text="Total storage for shared files (all versions count).",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -230,6 +245,21 @@ class Workgroup(models.Model):
     def kind_toggle_defaults(cls, kind) -> dict:
         """The capability-toggle seed for ``kind`` (over the field defaults)."""
         return dict(cls.KIND_TOGGLE_DEFAULTS.get(kind, {}))
+
+    # ---- Shared files quota ----
+
+    def files_used_bytes(self) -> int:
+        """Total bytes stored in the shared Files section (every version)."""
+        from django.db.models import Sum
+
+        return (
+            WorkgroupFileVersion.objects
+            .filter(parent__workgroup=self)
+            .aggregate(total=Sum("size"))["total"] or 0
+        )
+
+    def files_remaining_bytes(self) -> int:
+        return max(0, self.file_quota_bytes - self.files_used_bytes())
 
     # ---- Roster ----
 
@@ -1142,3 +1172,99 @@ def build_workgroup(kind, *, name, **kwargs):
         toggles.setdefault("content_visibility", Visibility.MEMBERS)
     toggles.update(kwargs)
     return Workgroup.objects.create(kind=kind, name=name, **toggles)
+
+
+class WorkgroupFile(models.Model):
+    """A shared file in a workgroup's Files section — general documents and
+    assets, distinct from the editable working documents (``WorkDraft``). A
+    named slot that carries a version history; the latest version is current."""
+
+    workgroup = models.ForeignKey(
+        Workgroup, on_delete=models.CASCADE, related_name="shared_files"
+    )
+    name = models.CharField(max_length=255, help_text="Display name for the file.")
+    description = models.CharField(max_length=500, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="created_workgroup_files",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name
+
+    def current_version(self):
+        return self.versions.order_by("-number").first()
+
+    @property
+    def size(self) -> int:
+        v = self.current_version()
+        return v.size if v else 0
+
+    @property
+    def version_count(self) -> int:
+        return self.versions.count()
+
+    def can_manage(self, user) -> bool:
+        """Delete the file or its versions: the file's creator, or a manager."""
+        if not getattr(user, "is_authenticated", False):
+            return False
+        from .permissions import can_manage_workgroup
+
+        return self.created_by_id == user.pk or can_manage_workgroup(user, self.workgroup)
+
+    def add_version(self, *, blob, original_name, size, user):
+        number = (self.versions.aggregate(
+            m=models.Max("number"))["m"] or 0) + 1
+        return WorkgroupFileVersion.objects.create(
+            parent=self, blob=blob, original_name=original_name[:255],
+            size=size, number=number, uploaded_by=user,
+        )
+
+
+class WorkgroupFileVersion(models.Model):
+    """One uploaded revision of a :class:`WorkgroupFile`. Stored in private
+    storage and served only through the access-checked download view."""
+
+    parent = models.ForeignKey(
+        WorkgroupFile, on_delete=models.CASCADE, related_name="versions"
+    )
+    number = models.PositiveIntegerField()
+    blob = models.FileField(
+        upload_to="workgroup-files/%Y/", storage=private_storage,
+    )
+    original_name = models.CharField(max_length=255, blank=True)
+    size = models.PositiveBigIntegerField(default=0)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="uploaded_workgroup_file_versions",
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-number",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["parent", "number"], name="uniq_workgroupfile_version_number"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.parent.name} v{self.number}"
+
+    @property
+    def filename(self) -> str:
+        return self.original_name or self.blob.name.rsplit("/", 1)[-1]
+
+
+@receiver(post_delete, sender=WorkgroupFileVersion)
+def _delete_workgroup_file_blob(sender, instance, **kwargs):
+    """Remove the stored blob when a version row is deleted (individually or via
+    cascade from its WorkgroupFile / Workgroup) — otherwise the file lingers in
+    storage and keeps consuming real (and quota-counted) space."""
+    if instance.blob:
+        instance.blob.delete(save=False)
