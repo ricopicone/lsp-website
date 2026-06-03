@@ -305,6 +305,145 @@ def board_membership_admin(request):
 
 
 @login_required
+def board_appointments(request):
+    """Appoint and reassign the operational staff roles (Treasurer, Web
+    Coordinator, Cartel Coordinator, Administrative Assistant, Web Developer,
+    LSP Staff). Gated to Board members (+ staff/superuser).
+
+    Committee chairs and officers are roster roles — set those in each
+    committee's workspace (see Committees), not here.
+    """
+    if not _can_board(request.user):
+        raise PermissionDenied
+    from accounts.models import User
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        role = StaffRole.objects.filter(key=request.POST.get("role")).first()
+        member = User.objects.filter(pk=request.POST.get("user")).first()
+        if role is None or member is None:
+            messages.error(request, "Couldn't find that role or member.")
+        elif action == "appoint":
+            role.holders.add(member)
+            messages.success(
+                request,
+                f"Appointed {member.get_full_name() or member.email} as {role.name}.",
+            )
+        elif action == "remove":
+            role.holders.remove(member)
+            messages.success(
+                request,
+                f"Removed {member.get_full_name() or member.email} from {role.name}.",
+            )
+        return redirect("board_appointments")
+
+    roles = list(
+        StaffRole.objects.prefetch_related("holders").order_by("name")
+    )
+    appointable = list(
+        User.objects.filter(is_active=True, profile__is_persona=False)
+        .select_related("profile")
+        .order_by("last_name", "first_name", "email")
+    )
+    return render(request, "core/staff/admin/board_appointments.html", {
+        "roles": roles, "appointable": appointable,
+    })
+
+
+@login_required
+def board_committees(request):
+    """Create and oversee committees. Saving a new committee auto-provisions its
+    backing workgroup (roster, workspace, channel). Gated to Board members."""
+    if not _can_board(request.user):
+        raise PermissionDenied
+    from committees.models import Committee
+
+    from .forms import CommitteeForm
+
+    editing = None
+    edit_id = request.POST.get("committee") or request.GET.get("committee")
+    if edit_id:
+        editing = Committee.objects.filter(pk=edit_id).first()
+
+    if request.method == "POST":
+        form = CommitteeForm(request.POST, instance=editing)
+        if form.is_valid():
+            committee = form.save()
+            messages.success(
+                request,
+                f"{'Updated' if editing else 'Created'} the {committee.name} committee.",
+            )
+            return redirect("board_committees")
+    else:
+        form = CommitteeForm(instance=editing)
+
+    committees = list(
+        Committee.objects.select_related("workgroup").order_by("name")
+    )
+    return render(request, "core/staff/admin/board_committees.html", {
+        "committees": committees, "form": form, "editing": editing,
+    })
+
+
+@login_required
+def board_governance(request):
+    """The Board's at-a-glance dashboard: membership by standing and role,
+    pending decisions across the school, and a link to finances."""
+    if not _can_board(request.user):
+        raise PermissionDenied
+    from django.db.models import Count
+
+    from accounts.models import Profile
+    from admissions.models import Advancement, Application
+    from committees.models import Committee
+
+    member_qs = Profile.objects.filter(
+        role__in=Profile.DIRECTORY_ROLES, is_persona=False, user__is_active=True,
+    )
+    by_standing = {
+        row["standing"]: row["n"]
+        for row in member_qs.values("standing").annotate(n=Count("pk"))
+    }
+    standings = [
+        {"label": label, "value": value, "n": by_standing.get(value, 0)}
+        for value, label in Profile.Standing.choices
+    ]
+    by_role = {
+        row["role"]: row["n"]
+        for row in member_qs.values("role").annotate(n=Count("pk"))
+    }
+    roles = [
+        {"label": label, "n": by_role.get(value, 0)}
+        for value, label in Profile.Role.choices
+        if value in Profile.DIRECTORY_ROLES and by_role.get(value, 0)
+    ]
+
+    pending = {
+        "applications": Application.objects.filter(
+            status__in=Application.OPEN_STATUSES
+        ).count(),
+        "advancements": Advancement.objects.filter(
+            status__in=Advancement.OPEN_STATUSES
+        ).count(),
+    }
+    try:
+        from cartels.models import Cartel
+        pending["cartels"] = Cartel.objects.filter(
+            workgroup__proposal__status=Cartel.Status.PROPOSED
+        ).count()
+    except Exception:
+        pending["cartels"] = 0
+
+    return render(request, "core/staff/admin/board_governance.html", {
+        "standings": standings,
+        "roles": roles,
+        "total_members": member_qs.count(),
+        "pending": pending,
+        "committee_count": Committee.objects.count(),
+    })
+
+
+@login_required
 def meeting_of_analysts_admin(request):
     """The Meeting of the Analysts' admin landing — the formation pipeline.
 
