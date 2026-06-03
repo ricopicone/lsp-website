@@ -24,7 +24,7 @@ Here we're calling the Board of Directors, the Program Committee, and the Meetin
 A **Workspace**—one page per Group, with tabs for an overview, a private
 discussion forum, a private chat, shared works and files, a schedule, tasks, and settings.
 
-## Two ideas that apply to every Group
+## Ideas that apply to every Group
 
 **Leaders.** A Group's *leaders* are the people who run it—they can edit its
 roster, settings, and schedule (and, for committees, its charter). You lead a
