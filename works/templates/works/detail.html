@@ -1,5 +1,18 @@
 {% extends "core/base.html" %}
 {% block title %}{{ work.title }} — Works — LSP{% endblock %}
+{% block extra_head %}
+<style>
+  .pm-content > * + * { margin-top: 0.85em; }
+  .pm-content h1 { font-size: 1.6rem; font-weight: 600; }
+  .pm-content h2 { font-size: 1.3rem; font-weight: 600; }
+  .pm-content h3 { font-size: 1.1rem; font-weight: 600; }
+  .pm-content ul { list-style: disc; padding-left: 1.4em; }
+  .pm-content ol { list-style: decimal; padding-left: 1.4em; }
+  .pm-content blockquote { border-left: 3px solid currentColor; opacity: .8; padding-left: 1em; font-style: italic; }
+  .pm-content a { text-decoration: underline; }
+  .pm-content pre { background: rgba(0,0,0,.06); border-radius: .5rem; padding: .75em 1em; overflow-x: auto; }
+</style>
+{% endblock %}
 {% block content %}
 <article class="max-w-3xl mx-auto space-y-8">
 
@@ -37,25 +50,57 @@
       <p class="text-sm text-base-content/70">
         {% if work.publication_info %}{{ work.publication_info }}{% endif %}
         {% if work.publication_date %}
-          {% if work.publication_info %} · {% endif %}{{ work.publication_date|date:"F Y" }}
+          {% if work.publication_info %} · {% endif %}{{ work.publication_date|date:"F j, Y" }}
         {% endif %}
+      </p>
+      {% endif %}
+      {% if work.workgroup %}
+      <p class="text-sm text-base-content/70">
+        <span class="text-base-content/50">Published by</span>
+        {{ work.workgroup.get_kind_display }} ·
+        <a href="{{ work.workgroup.get_absolute_url }}" class="hover:text-primary border-b border-dotted border-base-content/40">{{ work.workgroup.name }}</a>
       </p>
       {% endif %}
       <div class="flex flex-wrap items-center gap-2 text-xs">
         {% if work.listing_visibility == "members" %}
         <span class="badge badge-ghost badge-sm">Listing: Members only</span>
         {% endif %}
-        {% if work.pdf_visibility == "members" and work.files.all %}
-        <span class="badge badge-ghost badge-sm">PDF: Members only</span>
+        {% if work.content_visibility == "members" %}
+        <span class="badge badge-ghost badge-sm">Contents: Members only</span>
+        {% elif work.content_visibility == "group" %}
+        <span class="badge badge-ghost badge-sm">Contents: Group only</span>
         {% endif %}
       </div>
     </div>
   </header>
 
+  {% if can_edit or can_unpublish %}
+  <div class="flex flex-wrap items-center gap-2 border-y border-base-300/40 py-3 text-sm">
+    <span class="text-base-content/45">Manage:</span>
+    {% if can_edit %}
+    <a href="{% url 'works:edit' work.slug %}" class="btn btn-ghost btn-sm">Edit details</a>
+    {% endif %}
+    {% if can_unpublish %}
+    <form method="post" action="{% url 'workgroups:draft_unpublish' source_draft.workgroup.slug source_draft.pk %}"
+          onsubmit="return confirm('Unpublish “{{ work.title|escapejs }}”? It will be removed from Works and returned to an editable draft in {{ source_draft.workgroup.name|escapejs }}.');">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost btn-sm">Unpublish → draft</button>
+    </form>
+    {% endif %}
+    {% if can_edit %}
+    <form method="post" action="{% url 'works:delete' work.slug %}" class="ml-auto"
+          onsubmit="return confirm('Delete “{{ work.title|escapejs }}” permanently? This removes the work and its files and cannot be undone.{% if source_draft %} The source draft will remain.{% endif %}');">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost btn-sm text-error">Delete</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+
   {# ---- Files section ---- #}
   {% with files=work.files.all %}
   {% if files %}
-    {% if pdf_visible %}
+    {% if content_visible %}
       {% if files|length == 1 %}
         {% with f=files.0 %}
         <div class="flex flex-wrap gap-3">
@@ -137,6 +182,43 @@
   <div class="prose max-w-none">
     {{ work.abstract_html }}
   </div>
+  {% endif %}
+
+  {% if work.body_html %}
+    {% if content_visible %}
+    <div class="pm-content max-w-none border-t border-base-300/50 pt-8 leading-relaxed space-y-4">
+      {{ work.body_html|safe }}
+    </div>
+    {% else %}
+    <div class="border-t border-base-300/50 pt-8">
+      <div class="rounded-xl border border-dashed border-base-300/70 bg-base-200/30 p-6 text-center text-sm text-base-content/60">
+        {% if work.content_visibility == "group" %}
+        The contents of this work are available to its group only.
+        {% elif not user.is_authenticated %}
+        The contents of this work are available to LSP members.
+        <a href="{% url 'login' %}?next={{ request.path }}" class="link link-primary">Log in</a> to read.
+        {% else %}
+        The contents of this work are available to LSP members.
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  {% endif %}
+
+  {% if revisions %}
+  <section class="border-t border-base-300/50 pt-6 space-y-3">
+    <h2 class="text-xs uppercase tracking-wider text-base-content/60">Revision history</h2>
+    <ul class="space-y-1.5 text-sm">
+      {% for r in revisions %}
+      <li class="flex flex-wrap items-baseline gap-x-2 text-base-content/70">
+        <span class="font-medium text-base-content">Revision {{ r.number }}</span>
+        <span>· {{ r.saved_at|date:"F j, Y" }}</span>
+        {% if r.saved_by %}<span>· {{ r.saved_by.get_full_name|default:r.saved_by.email }}</span>{% endif %}
+        {% if forloop.first %}<span class="badge badge-ghost badge-sm">current</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
   {% endif %}
 
 </article>

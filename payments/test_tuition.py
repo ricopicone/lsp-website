@@ -1538,12 +1538,16 @@ def test_assume_skip_when_unpaid(current_period):
 
     call_command("assume_skip_when_unpaid", "--commit", stdout=StringIO())
 
+    from accounts.models import Source
+
     enr_a.refresh_from_db()
     enr_b.refresh_from_db()
     assert enr_a.status == TuitionEnrollment.Status.SKIPPING
+    assert enr_a.source == Source.ASSUMED
     assert enr_b.status == TuitionEnrollment.Status.PAYMENT_PLAN  # partial payer preserved
     c_enr = TuitionEnrollment.objects.get(user=c, tuition_period=current_period)
     assert c_enr.status == TuitionEnrollment.Status.SKIPPING
+    assert c_enr.source == Source.ASSUMED
 
     # Idempotent: a second run changes nothing.
     before = TuitionEnrollment.objects.count()
@@ -1622,3 +1626,52 @@ def test_assume_skip_backfill_roster_for_past_period(current_period):
     )
     call_command("assume_skip_when_unpaid", "--commit", stdout=StringIO())
     assert not TuitionEnrollment.objects.filter(tuition_period=past2).exists()
+
+
+# ---- Standing exempts from tuition obligation --------------------------
+
+
+@pytest.mark.django_db
+def test_owes_tuition_requires_active_standing():
+    u = _mk_candidate()
+    assert u.profile.owes_tuition is True
+    for standing in (Profile.Standing.ON_LEAVE, Profile.Standing.RESIGNED,
+                     Profile.Standing.EMERITUS):
+        u.profile.standing = standing
+        u.profile.save()
+        assert u.profile.owes_tuition is False
+
+
+@pytest.mark.django_db
+def test_tuition_gate_skips_on_leave_student(current_period):
+    """An on-leave in-training student with no decision is NOT blocked by the
+    registration tuition gate (they don't owe tuition)."""
+    from datetime import date as _date
+
+    from events.models import Event
+    from registrations.views import _tuition_block_reason
+
+    student = _mk_candidate()
+    event = Event.objects.create(
+        title="Special", slug="gate-special", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=_date(2026, 9, 1), end_date=_date(2026, 9, 1),
+    )
+    # Active + no decision → blocked (Gate 1).
+    assert _tuition_block_reason(student, event) is not None
+    # On leave → exempt, not blocked.
+    student.profile.standing = Profile.Standing.ON_LEAVE
+    student.profile.save()
+    assert _tuition_block_reason(student, event) is None
+
+
+@pytest.mark.django_db
+def test_treasurer_in_training_count_excludes_on_leave(current_period):
+    from payments.views import _treasurer_tuition_context
+
+    _mk_candidate(email="active-it@x.test")
+    leave = _mk_candidate(email="leave-it@x.test")
+    leave.profile.standing = Profile.Standing.ON_LEAVE
+    leave.profile.save()
+
+    ctx = _treasurer_tuition_context()
+    assert ctx["tuition_in_training_count"] == 1  # only the active candidate

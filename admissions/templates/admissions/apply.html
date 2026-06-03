@@ -1,0 +1,52 @@
+{% extends "core/base.html" %}
+{% block title %}Apply — {{ track_label }} — LSP{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-2xl">
+  <nav class="text-sm"><a href="{% url 'admissions:apply_start' %}" class="link link-hover text-base-content/60">← Choose a different track</a></nav>
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Apply — {{ track_label }}</h1>
+  </header>
+
+  <div class="rounded-lg border border-base-300 bg-base-200/40 p-4 text-sm space-y-1">
+    <p class="font-medium">Eligibility</p>
+    <ul class="list-disc pl-5 text-base-content/70 space-y-1">
+      {% for e in eligibility %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </div>
+
+  {% if form.non_field_errors %}<div class="alert alert-error text-sm">{{ form.non_field_errors }}</div>{% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="space-y-5">
+    {% csrf_token %}
+    {% if form.background %}
+    <div class="space-y-1">
+      <span class="block text-sm font-medium text-base-content">Background</span>
+      <div class="flex flex-col gap-1 text-sm">{{ form.background }}</div>
+      {% if form.background.errors %}<p class="text-error text-xs">{{ form.background.errors|striptags }}</p>{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="space-y-1">
+      <label class="block text-sm font-medium text-base-content">{{ form.eligibility_note.label }}</label>
+      {{ form.eligibility_note }}
+      <p class="text-xs text-base-content/50">{{ form.eligibility_note.help_text }}</p>
+      {% if form.eligibility_note.errors %}<p class="text-error text-xs">{{ form.eligibility_note.errors|striptags }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label class="block text-sm font-medium text-base-content">{{ form.letter_of_intent.label }}</label>
+      {{ form.letter_of_intent }}
+      <p class="text-xs text-base-content/50">{{ form.letter_of_intent.help_text }}</p>
+      {% if form.letter_of_intent.errors %}<p class="text-error text-xs">{{ form.letter_of_intent.errors|striptags }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label class="block text-sm font-medium text-base-content">{{ form.cv.label }}</label>
+      {{ form.cv }}
+      {% if form.cv.errors %}<p class="text-error text-xs">{{ form.cv.errors|striptags }}</p>{% endif %}
+    </div>
+
+    <button class="btn btn-primary">Submit application</button>
+  </form>
+</div>
+{% endblock %}

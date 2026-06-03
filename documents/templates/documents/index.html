@@ -42,8 +42,8 @@
             {% if doc.effective_date %}
             <span>Effective {{ doc.effective_date|date:"M Y" }}</span>
             {% endif %}
-            {% if doc.pdf_visibility == "members" %}
-            <span class="badge badge-ghost badge-sm">PDF: Members only</span>
+            {% if doc.content_visibility == "members" %}
+            <span class="badge badge-ghost badge-sm">Contents: Members only</span>
             {% endif %}
             {% if doc.listing_visibility == "members" %}
             <span class="badge badge-ghost badge-sm">Members only</span>

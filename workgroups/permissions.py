@@ -29,19 +29,60 @@ def can_manage_workgroup(user, workgroup) -> bool:
 
     if is_program_committee(user):
         return True
-    if workgroup.memberships.filter(
-        user=user, end_date__isnull=True, role__in=WorkgroupMembership.LEAD_ROLES,
+    if workgroup.memberships.serving().filter(
+        user=user, role__in=WorkgroupMembership.LEAD_ROLES,
     ).exists():
         return True
     # The Board oversees the school's standing bodies (G4 roster authority).
     return is_board(user)
 
 
+def workgroup_has_leads(workgroup) -> bool:
+    """Whether any currently-serving member holds a leadership role (chair,
+    co-chair, faculty, organizer). False for leaderless groups like cartels
+    (a plus-one is deliberately not a lead)."""
+    return workgroup.memberships.serving().filter(
+        role__in=WorkgroupMembership.LEAD_ROLES
+    ).exists()
+
+
+def can_register_decision(user, workgroup) -> bool:
+    """Who may record a decision in the group's register.
+
+    Leader-led groups (a chair / co-chair / faculty / organizer serves): those
+    leaders plus managers (LSP staff / PC / Board). Leaderless groups — e.g.
+    cartels, where the plus-one isn't a lead — let any active member record."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if can_manage_workgroup(user, workgroup):
+        return True
+    return not workgroup_has_leads(workgroup) and workgroup.is_member(user)
+
+
 def is_board(user) -> bool:
     """True if ``user`` is a current member of the Board committee."""
     if not getattr(user, "is_authenticated", False):
         return False
-    return WorkgroupMembership.objects.filter(
-        user=user, end_date__isnull=True,
-        workgroup__committee__slug="board",
+    return WorkgroupMembership.objects.serving().filter(
+        user=user, workgroup__committee__slug="board",
     ).exists()
+
+
+def is_meeting_of_analysts(user) -> bool:
+    """True if ``user`` belongs to the Meeting of Analysts — the body that owns
+    the formation pipeline (admissions, palimpsest, passage). Membership is
+    role-derived (every active Analyst, via the workgroup's ``auto_member_role``)
+    plus any explicitly-added roster rows, so this routes through
+    :meth:`Workgroup.is_member` rather than the stored-rows query."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    from committees.models import Committee
+
+    committee = (
+        Committee.objects.filter(slug="meeting-of-analysts")
+        .select_related("workgroup")
+        .first()
+    )
+    return bool(
+        committee and committee.workgroup_id and committee.workgroup.is_member(user)
+    )

@@ -1,0 +1,65 @@
+{% extends "core/base.html" %}
+{% block title %}View as… — LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-8">
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">View as…</h1>
+    <p class="text-sm text-base-content/60">
+      Step into another view to test or guide. <strong>Personas</strong> are
+      disposable test accounts — fully writable. Viewing as a <strong>real
+      member</strong> is read-only (you can see what they see, but not act as
+      them). A banner stays up; exit anytime.
+    </p>
+  </header>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Personas</h2>
+    {% if personas %}
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      {% for p in personas %}
+      <li>
+        <form method="post" action="{% url 'core:impersonate_start' p.id %}">
+          {% csrf_token %}
+          <button class="w-full text-left rounded-lg border border-base-300/60 bg-base-100 px-3.5 py-3 hover:border-primary hover:bg-base-200/40 transition-colors">
+            <span class="font-medium text-base-content">{{ p.get_full_name|default:p.email }}</span>
+            <span class="block text-xs text-base-content/55">{{ p.profile.get_role_display }}</span>
+          </button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-base-content/55">No personas seeded yet — run <code>manage.py seed_personas</code>.</p>
+    {% endif %}
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">A real member <span class="text-sm font-normal text-base-content/50">(read-only)</span></h2>
+    <form method="get" class="flex gap-2">
+      <input type="search" name="q" value="{{ q }}" placeholder="Search name or email…"
+             class="input input-bordered input-sm grow">
+      <button class="btn btn-sm">Search</button>
+    </form>
+    {% if q %}
+      {% if matches %}
+      <ul class="divide-y divide-base-300/60 rounded-lg border border-base-300">
+        {% for u in matches %}
+        <li class="flex items-center justify-between gap-3 p-3">
+          <span class="min-w-0">
+            <span class="font-medium text-base-content">{{ u.get_full_name|default:u.email }}</span>
+            <span class="block text-xs text-base-content/55">{{ u.email }} · {{ u.profile.get_role_display }}</span>
+          </span>
+          <form method="post" action="{% url 'core:impersonate_start' u.id %}" style="display:contents">
+            {% csrf_token %}
+            <button class="btn btn-ghost btn-xs shrink-0">View as (read-only)</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-sm text-base-content/55">No members match “{{ q }}”.</p>
+      {% endif %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

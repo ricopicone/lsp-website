@@ -230,11 +230,14 @@ def test_commit_tuition_builds_payments_installments_enrollments(source_dir, ros
     # 200 < 2000 -> PAYMENT_PLAN
     assert enr_l.status == TuitionEnrollment.Status.PAYMENT_PLAN
 
-    # Each payment links its installment and is SUCCEEDED.
+    # Each payment links its installment and is SUCCEEDED, tagged imported.
+    from accounts.models import Source
+    assert enr.source == Source.IMPORTED
     for p in Payment.objects.filter(user=barnwell):
         assert p.status == Payment.Status.SUCCEEDED
         assert p.tuition_installment is not None
         assert p.paid_at is not None
+        assert p.source == Source.IMPORTED
 
 
 def test_commit_is_idempotent(source_dir, roster_db):

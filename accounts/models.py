@@ -84,6 +84,15 @@ class Profile(models.Model):
         MEMBER = "member", _("Member")
         EXTERNAL = "external", _("Auditor")
 
+    class Standing(models.TextChoices):
+        """Membership standing — orthogonal to role. Active is the default; the
+        Board records transitions (on-leave, resigned, emeritus) via Membership
+        administration."""
+        ACTIVE = "active", _("Active")
+        ON_LEAVE = "on_leave", _("On leave")
+        RESIGNED = "resigned", _("Resigned")
+        EMERITUS = "emeritus", _("Emeritus")
+
     class BillingMode(models.TextChoices):
         PER_CLASS = "per_class", _("Per class")
         PER_SEMINAR = "per_seminar", _("Per seminar")
@@ -108,6 +117,13 @@ class Profile(models.Model):
         choices=Role.choices,
         default=Role.EXTERNAL,
         help_text="LSP standing; drives event pricing and members-only access.",
+    )
+    standing = models.CharField(
+        max_length=16,
+        choices=Standing.choices,
+        default=Standing.ACTIVE,
+        help_text="Membership standing (active / on leave / resigned / emeritus). "
+        "Live cache; the Board sets it via Membership administration.",
     )
     timezone = models.CharField(
         max_length=64,
@@ -307,6 +323,16 @@ class Profile(models.Model):
         ),
     )
     notes = models.TextField(blank=True)
+    #: Opaque token for the member's private iCal feed (generated on first use).
+    calendar_token = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    is_persona = models.BooleanField(
+        default=False,
+        help_text=(
+            "A disposable test persona (not a real member). The Web Coordinator "
+            "may impersonate personas with full write access; impersonating a "
+            "real member is read-only. Seeded by `manage.py seed_personas`."
+        ),
+    )
 
     def __str__(self):
         return f"{self.user.email} ({self.get_role_display()})"
@@ -397,6 +423,17 @@ class Profile(models.Model):
         "candidate_scholar",
     })
 
+    #: Formation tracks — used to determine who may advise whom.
+    ANALYST_TRACK_ROLES = frozenset({"pre_candidate", "candidate", "analyst"})
+    SCHOLAR_TRACK_ROLES = frozenset({
+        "pre_candidate_scholar", "candidate_scholar", "scholar",
+    })
+
+    @property
+    def needs_advisor(self) -> bool:
+        """In-training members (Precandidates / Candidates) choose an Advisor."""
+        return self.role in self.IN_TRAINING_ROLES
+
     @property
     def is_in_directory(self) -> bool:
         """Whether this profile's *role* is eligible for /directory/."""
@@ -410,7 +447,13 @@ class Profile(models.Model):
 
     @property
     def owes_tuition(self) -> bool:
-        """Whether this profile's role obligates them to pay tuition each year."""
+        """Whether this profile owes tuition each year — an in-training role held
+        with active standing. On-leave / resigned / emeritus students are exempt
+        (and so aren't blocked by the registration tuition gate)."""
+        if self.is_persona:
+            return False  # personas are test accounts — never financially obligated
+        if self.standing != self.Standing.ACTIVE:
+            return False  # on leave / resigned / emeritus → not obligated
         return self.role in self.IN_TRAINING_ROLES
 
     def current_tuition_enrollment(self, on_date=None):
@@ -488,3 +531,153 @@ class EmailChangeRequest(models.Model):
     @property
     def is_pending(self) -> bool:
         return self.confirmed_at is None and not self.is_expired()
+
+
+class Source(models.TextChoices):
+    """Provenance of a tuition/dues/membership record.
+
+    Lets a later authoritative import *promote* a value (e.g. self-reported →
+    verified) instead of clobbering it, and lets the treasurer see how much of
+    the history is confirmed vs assumed. Shared by ``MembershipTenure`` and the
+    ``payments`` models (``TuitionEnrollment`` / ``Payment``)."""
+
+    VERIFIED = "verified", _("Verified against records")
+    IMPORTED = "imported", _("Imported from treasurer ledger")
+    SELF_REPORTED = "self_reported", _("Member-reported (survey)")
+    ASSUMED = "assumed", _("Assumed")
+    STAFF = "staff", _("Entered by staff")
+
+
+class MembershipTenure(models.Model):
+    """One stint in one role, in academic-year terms.
+
+    A member's tenures (ordered by ``start_ay``) reconstruct which role they
+    held in any past academic year — the missing timeline that lets us derive
+    per-year tuition/dues obligations instead of proxying. ``Profile.role``
+    stays the live cache for present-day access/pricing; the open tenure
+    (``end_ay is None``) mirrors it.
+    """
+
+    user = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="tenures",
+    )
+    role = models.CharField(max_length=32, choices=Profile.Role.choices)
+    standing = models.CharField(
+        max_length=16, choices=Profile.Standing.choices,
+        default=Profile.Standing.ACTIVE,
+    )
+    start_ay = models.PositiveSmallIntegerField(
+        help_text="Academic-year start year, e.g. 2019 for AY 2019–2020.",
+    )
+    end_ay = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text="AY start year this role ended (inclusive); blank = ongoing.",
+    )
+    source = models.CharField(
+        max_length=20, choices=Source.choices, default=Source.STAFF,
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("user", "start_ay")
+        indexes = [models.Index(fields=("user", "start_ay"))]
+
+    def __str__(self):
+        end = self.end_ay if self.end_ay is not None else "present"
+        return f"{self.user} — {self.get_role_display()} ({self.start_ay}–{end})"
+
+    @property
+    def ay_label(self) -> str:
+        """e.g. 'AY 2019–2020' or 'AY 2019–2020 – 2021–2022'."""
+        start = f"AY {self.start_ay}–{self.start_ay + 1}"
+        if self.end_ay is None:
+            return f"{start} – present"
+        if self.end_ay == self.start_ay:
+            return start
+        return f"{start} – {self.end_ay}–{self.end_ay + 1}"
+
+    @classmethod
+    def open_for(cls, user):
+        """The member's current open tenure (``end_ay`` null), or None."""
+        return cls.objects.filter(user=user, end_ay__isnull=True).order_by("-start_ay").first()
+
+    @classmethod
+    def role_at(cls, user, ay: int):
+        """The role ``user`` held in academic year ``ay`` (start year), or None."""
+        tenure = (
+            cls.objects.filter(user=user, start_ay__lte=ay)
+            .filter(models.Q(end_ay__gte=ay) | models.Q(end_ay__isnull=True))
+            .order_by("-start_ay")
+            .first()
+        )
+        return tenure.role if tenure else None
+
+    @classmethod
+    def was_in_training(cls, user, ay: int) -> bool:
+        """True if ``user`` was in an in-training (tuition-owing) role in ``ay``."""
+        return cls.role_at(user, ay) in Profile.IN_TRAINING_ROLES
+
+
+class Advisorship(models.Model):
+    """An in-training member's Advisor — an Analyst (analyst track) or a Scholar
+    or Analyst (scholar track). Precandidates and Candidates choose one as soon
+    as they're admitted; it can change over time (the open row, ``end_date``
+    null, is the current advisor). See the formation guidelines."""
+
+    advisee = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="advisorships",
+    )
+    advisor = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="advisees",
+    )
+    start_date = models.DateField(default=timezone.localdate)
+    end_date = models.DateField(null=True, blank=True, help_text="Null = current advisor.")
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("advisee", "-start_date")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("advisee",),
+                condition=models.Q(end_date__isnull=True),
+                name="accounts_one_current_advisor_per_advisee",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.advisee} ← advised by {self.advisor}"
+
+
+class MemberIntakeSurvey(models.Model):
+    """Raw capture of a member's launch intake survey.
+
+    Stored verbatim so we can re-derive the structured records (tenures,
+    enrollments, dues payments) if our logic changes, and keep an audit trail
+    separate from those records. ``grid`` holds the per-year answers, e.g.
+    ``{"2024": {"tuition": true, "dues": true}}``.
+    """
+
+    user = models.OneToOneField(
+        "accounts.User", on_delete=models.CASCADE, related_name="intake_survey",
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    year_joined = models.PositiveSmallIntegerField(null=True, blank=True)
+    payment_names = models.CharField(
+        max_length=255, blank=True,
+        help_text="Alternate name(s) the member used on payments.",
+    )
+    payment_emails = models.CharField(
+        max_length=255, blank=True,
+        help_text="Other email(s) used for Stripe / PayPal.",
+    )
+    grid = models.JSONField(default=dict, blank=True)
+    applied_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the answers were reconciled into structured records.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        state = "submitted" if self.submitted_at else "draft"
+        return f"Intake survey: {self.user} ({state})"

@@ -367,24 +367,24 @@ def web_coordinator(db):
 
 
 def test_coordinator_requires_login(client):
-    assert client.get(reverse("staff")).status_code == 302
+    assert client.get(reverse("admin_tools")).status_code == 302
 
 
 def test_coordinator_forbidden_for_plain_member(client, regular_user):
     client.force_login(regular_user)
-    assert client.get(reverse("staff")).status_code == 403
+    assert client.get(reverse("admin_tools")).status_code == 403
 
 
 def test_coordinator_ok_for_holder(client, web_coordinator):
     client.force_login(web_coordinator)
-    response = client.get(reverse("staff"))
+    response = client.get(reverse("admin_tools"))
     assert response.status_code == 200
-    assert b"Aphorisms" in response.content
+    assert b"Web Coordinator Admin" in response.content
 
 
 def test_coordinator_ok_for_superuser(client, superuser):
     client.force_login(superuser)
-    assert client.get(reverse("staff")).status_code == 200
+    assert client.get(reverse("admin_tools")).status_code == 200
 
 
 def test_aphorism_create_via_panel(client, web_coordinator):
@@ -426,9 +426,9 @@ def test_aphorism_edit_forbidden_for_member(client, regular_user):
 
 def test_nav_staff_tools_link_visibility(client, web_coordinator, regular_user):
     client.force_login(web_coordinator)
-    assert b"Staff tools" in client.get(reverse("core:landing")).content
+    assert b"Admin Tools" in client.get(reverse("core:landing")).content
     client.force_login(regular_user)
-    assert b"Staff tools" not in client.get(reverse("core:landing")).content
+    assert b"Admin Tools" not in client.get(reverse("core:landing")).content
 
 
 @pytest.fixture
@@ -446,7 +446,7 @@ def test_treasurer_role_reaches_hub_and_dashboard(client, treasurer_member):
     """A Treasurer-role holder (not Django staff) sees the hub + Treasurer tool
     and can open the dashboard."""
     client.force_login(treasurer_member)
-    hub = client.get(reverse("staff"))
+    hub = client.get(reverse("admin_tools"))
     assert hub.status_code == 200
     assert b"Treasurer" in hub.content
     assert b"Aphorisms" not in hub.content  # not a web coordinator
@@ -454,13 +454,13 @@ def test_treasurer_role_reaches_hub_and_dashboard(client, treasurer_member):
 
 
 def test_cartel_coordinator_sees_review_card(client, web_coordinator):
-    """Granting the cartel-coordinator role surfaces the Cartel review card."""
+    """Granting the cartel-coordinator role surfaces the Cartel Coordinator Admin card."""
     from core.models import StaffRole
 
     StaffRole.objects.get(key=StaffRole.CARTEL_COORDINATOR).holders.add(web_coordinator)
     client.force_login(web_coordinator)
-    body = client.get(reverse("staff")).content
-    assert b"Cartel review" in body
+    body = client.get(reverse("admin_tools")).content
+    assert b"Cartel Coordinator Admin" in body
 
 
 @pytest.fixture
@@ -478,7 +478,7 @@ def test_committee_member_sees_committee_panel(client, pc_member):
     """A Programming Committee member (not Django staff, no StaffRole) reaches
     the hub, sees the Program Committee card, and can open the PC admin."""
     client.force_login(pc_member)
-    hub = client.get(reverse("staff"))
+    hub = client.get(reverse("admin_tools"))
     assert hub.status_code == 200
     assert b"Program Committee" in hub.content
     assert b"Aphorisms" not in hub.content  # not a web coordinator
@@ -486,17 +486,18 @@ def test_committee_member_sees_committee_panel(client, pc_member):
 
 
 def test_board_member_sees_board_card(db, client):
-    """A Board member (no role, not Django staff) sees the Board card, which
-    links to the committee's workgroup page."""
+    """A Board member (no role, not Django staff) reaches the hub, sees the
+    Board Admin card, and can open the Board Admin page."""
     from committees.models import Committee
 
     user = User.objects.create_user(email="board@example.com", password="x")
     board = Committee.objects.get(slug="board")
     board.add_member(user, start_date=date(2026, 1, 1))
     client.force_login(user)
-    body = client.get(reverse("staff")).content
-    assert b"Board" in body
-    assert reverse("workgroups:detail", args=[board.workgroup.slug]).encode() in body
+    body = client.get(reverse("admin_tools")).content
+    assert b"Board Admin" in body
+    assert reverse("board_admin").encode() in body
+    assert client.get(reverse("board_admin")).status_code == 200
 
 
 def test_meeting_of_analysts_committee_seeded(db):
@@ -505,6 +506,83 @@ def test_meeting_of_analysts_committee_seeded(db):
 
     c = Committee.objects.get(slug="meeting-of-analysts")
     assert c.workgroup_id is not None
+
+
+# --- Impersonation ("View as") -----------------------------------------------
+
+@pytest.mark.django_db
+def test_superuser_impersonates_persona_and_exits(client):
+    from core.models import ImpersonationLog
+
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    persona = User.objects.create_user(email="persona@x.test",
+                                       first_name="Test", last_name="Persona")
+    persona.profile.is_persona = True
+    persona.profile.role = Profile.Role.ANALYST
+    persona.profile.save()
+
+    client.force_login(su)
+    resp = client.post(reverse("core:impersonate_start", args=[persona.id]))
+    assert resp.status_code == 302
+    home = client.get("/")
+    assert b"Viewing as" in home.content and b"Test Persona" in home.content
+    assert ImpersonationLog.objects.filter(impersonator=su, target=persona).exists()
+
+    client.post(reverse("core:impersonate_stop"))
+    assert b"Viewing as" not in client.get("/").content
+
+
+@pytest.mark.django_db
+def test_non_superuser_cannot_impersonate(client):
+    u = User.objects.create_user(email="u@x.test", password="x")
+    other = User.objects.create_user(email="o@x.test")
+    client.force_login(u)
+    assert client.get(reverse("core:impersonate_picker")).status_code == 404
+    assert client.post(reverse("core:impersonate_start", args=[other.id])).status_code == 404
+
+
+@pytest.mark.django_db
+def test_cannot_impersonate_a_superuser(client):
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    su2 = User.objects.create_superuser(email="su2@x.test", password="x")
+    client.force_login(su)
+    client.post(reverse("core:impersonate_start", args=[su2.id]))
+    assert b"Viewing as" not in client.get("/").content   # refused
+
+
+@pytest.mark.django_db
+def test_real_member_impersonation_is_read_only_persona_is_writable(client):
+    from workgroups.models import Visibility, Workgroup, build_workgroup
+
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    wg = build_workgroup(
+        Workgroup.Kind.READING_GROUP, name="RG", slug="rg-imp",
+        landing_visibility=Visibility.PUBLIC,
+    )
+
+    def _analyst(email, persona):
+        u = User.objects.create_user(email=email)
+        u.profile.role = Profile.Role.ANALYST
+        u.profile.is_persona = persona
+        u.profile.save()
+        return u
+
+    real = _analyst("real@x.test", persona=False)
+    persona = _analyst("persona@x.test", persona=True)
+
+    client.force_login(su)
+
+    # Real member → read-only: the join write is blocked.
+    client.post(reverse("core:impersonate_start", args=[real.id]))
+    r = client.post(reverse("workgroups:join", args=[wg.slug]))
+    assert r.status_code == 302
+    assert not wg.memberships.filter(user=real).exists()
+    client.post(reverse("core:impersonate_stop"))
+
+    # Persona → writable: the join goes through.
+    client.post(reverse("core:impersonate_start", args=[persona.id]))
+    client.post(reverse("workgroups:join", args=[wg.slug]))
+    assert wg.memberships.filter(user=persona, end_date__isnull=True).exists()
 
 
 # ---- Staff hub Documentation section ----------------------------------
@@ -517,16 +595,16 @@ def test_staff_docs_section_and_groups_guide(client):
         email="admin-docs@x.test", password="x", is_staff=True, is_superuser=True
     )
     client.force_login(admin)
-    home = client.get("/staff/")
+    home = client.get("/admin-tools/")
     assert home.status_code == 200
     assert b"Documentation" in home.content
-    assert b"/staff/docs/groups-guide/" in home.content
+    assert b"/admin-tools/docs/groups-guide/" in home.content
 
-    guide = client.get("/staff/docs/groups-guide/")
+    guide = client.get("/admin-tools/docs/groups-guide/")
     assert guide.status_code == 200
     assert b"Groups at the LSP" in guide.content        # the doc's H1, rendered
 
-    assert client.get("/staff/docs/does-not-exist/").status_code == 404
+    assert client.get("/admin-tools/docs/does-not-exist/").status_code == 404
 
 
 @pytest.mark.django_db
@@ -535,4 +613,185 @@ def test_staff_doc_denied_without_hub_access(client):
 
     nobody = User.objects.create_user(email="nobody-docs@x.test", password="x")
     client.force_login(nobody)
-    assert client.get("/staff/docs/groups-guide/").status_code == 403
+    assert client.get("/admin-tools/docs/groups-guide/").status_code == 403
+
+
+# --- Persona exemptions: treasurer/financial + email -------------------------
+
+@pytest.mark.django_db
+def test_personas_are_not_financially_obligated():
+    from payments.dues import is_dues_obligated
+
+    persona = User.objects.create_user(email="persona+analyst@x.test")
+    persona.profile.role = Profile.Role.ANALYST       # dues-obligated role
+    persona.profile.is_persona = True
+    persona.profile.save()
+    assert is_dues_obligated(persona) is False
+
+    cand = User.objects.create_user(email="persona+cand@x.test")
+    cand.profile.role = Profile.Role.CANDIDATE        # tuition (in-training) role
+    cand.profile.is_persona = True
+    cand.profile.save()
+    assert cand.profile.owes_tuition is False
+
+
+@pytest.mark.django_db
+def test_persona_safe_email_backend_drops_persona_recipients(settings):
+    from django.core import mail
+    from django.core.mail import EmailMessage
+
+    from core.email import PersonaSafeEmailBackend
+
+    settings.PERSONA_SAFE_INNER_EMAIL_BACKEND = (
+        "django.core.mail.backends.locmem.EmailBackend"
+    )
+    persona = User.objects.create_user(email="persona+x@lacanschool.org")
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    mail.outbox = []
+    backend = PersonaSafeEmailBackend()
+    backend.send_messages([
+        EmailMessage("s", "b", "from@x.test", ["persona+x@lacanschool.org"]),
+        EmailMessage("s", "b", "from@x.test", ["real@x.test"]),
+    ])
+    delivered = [addr for m in mail.outbox for addr in m.to]
+    assert "real@x.test" in delivered
+    assert "persona+x@lacanschool.org" not in delivered
+
+
+def _grant_role(user, key):
+    from core.models import StaffRole
+    StaffRole.objects.get(key=key).holders.add(user)
+
+
+def test_admin_assistant_role_page_and_card(db, client):
+    from core.models import StaffRole
+    user = User.objects.create_user(email="aa@example.com", password="x")
+    _grant_role(user, StaffRole.ADMIN_ASSISTANT)
+    client.force_login(user)
+    body = client.get(reverse("admin_tools")).content
+    assert b"Administrative Assistant Admin" in body
+    assert b"Web Coordinator Admin" not in body  # only their own card
+    assert client.get(reverse("admin_assistant_admin")).status_code == 200
+
+
+def test_web_developer_role_page_and_card(db, client):
+    from core.models import StaffRole
+    user = User.objects.create_user(email="wd@example.com", password="x")
+    _grant_role(user, StaffRole.WEB_DEVELOPER)
+    client.force_login(user)
+    body = client.get(reverse("admin_tools")).content
+    assert b"Web Developer Admin" in body
+    assert client.get(reverse("web_developer_admin")).status_code == 200
+
+
+def test_web_coordinator_landing_shows_aphorisms(client, web_coordinator):
+    client.force_login(web_coordinator)
+    resp = client.get(reverse("web_coordinator_admin"))
+    assert resp.status_code == 200
+    assert b"Aphorisms" in resp.content
+
+
+def test_role_pages_forbidden_without_role(client, regular_user):
+    client.force_login(regular_user)
+    for name in ("admin_assistant_admin", "web_developer_admin",
+                 "web_coordinator_admin", "board_admin"):
+        assert client.get(reverse(name)).status_code == 403
+
+
+def test_other_committee_member_no_longer_reaches_hub(db, client):
+    """Narrowed access: a member of a committee other than Board / Programming
+    Committee / Meeting of the Analysts no longer gets the Admin Tools hub."""
+    from committees.models import Committee
+    user = User.objects.create_user(email="outreach@example.com", password="x")
+    Committee.objects.create(name="Outreach", slug="outreach").add_member(
+        user, start_date=date(2026, 1, 1)
+    )
+    client.force_login(user)
+    assert client.get(reverse("admin_tools")).status_code == 403
+
+
+def test_meeting_of_analysts_member_reaches_hub(db, client):
+    """The Meeting of the Analysts now has its own admin surface, so its members
+    reach the hub (and see only their own panel)."""
+    from accounts.models import Profile
+    user = User.objects.create_user(email="analyst-hub@example.com", password="x")
+    user.profile.role = Profile.Role.ANALYST  # auto-member of the Meeting
+    user.profile.save()
+    client.force_login(user)
+    resp = client.get(reverse("admin_tools"))
+    assert resp.status_code == 200
+    assert b"Meeting of Analysts Admin" in resp.content
+
+
+def test_staff_url_redirects_to_admin_tools(client, superuser):
+    client.force_login(superuser)
+    resp = client.get("/staff/")
+    assert resp.status_code == 302
+    assert resp.url == reverse("admin_tools")
+
+
+# ---- Board Admin: appointments / committees / governance ----------------
+
+def _board_member(email="boardm@example.com"):
+    from committees.models import Committee
+    u = User.objects.create_user(email=email, password="x")
+    Committee.objects.get(slug="board").add_member(u, start_date=date(2026, 1, 1))
+    return u
+
+
+@pytest.mark.parametrize("name", ["board_appointments", "board_committees", "board_governance"])
+def test_board_pages_gated(db, client, name):
+    client.force_login(User.objects.create_user(email="no@example.com", password="x"))
+    assert client.get(reverse(name)).status_code == 403
+
+
+@pytest.mark.parametrize("name", ["board_appointments", "board_committees", "board_governance"])
+def test_board_pages_render_for_board(db, client, name):
+    client.force_login(_board_member(f"{name}@example.com"))
+    assert client.get(reverse(name)).status_code == 200
+
+
+def test_appoint_and_remove_staff_role(db, client):
+    from core.access import has_staff_role
+    from core.models import StaffRole
+    board = _board_member("appt@example.com")
+    target = User.objects.create_user(email="newtreas@example.com", password="x")
+    client.force_login(board)
+    resp = client.post(reverse("board_appointments"), {
+        "action": "appoint", "role": StaffRole.TREASURER, "user": target.pk,
+    })
+    assert resp.status_code == 302
+    target.refresh_from_db()
+    assert has_staff_role(target, StaffRole.TREASURER)
+    # Remove
+    client.post(reverse("board_appointments"), {
+        "action": "remove", "role": StaffRole.TREASURER, "user": target.pk,
+    })
+    assert not has_staff_role(target, StaffRole.TREASURER)
+
+
+def test_create_committee_provisions_workgroup(db, client):
+    from committees.models import Committee
+    client.force_login(_board_member("cmt@example.com"))
+    resp = client.post(reverse("board_committees"), {
+        "name": "Ethics Committee", "description": "Ethics oversight",
+        "charter": "Reviews ethics matters.", "public": "",
+    })
+    assert resp.status_code == 302
+    c = Committee.objects.get(name="Ethics Committee")
+    assert c.slug == "ethics-committee"
+    assert c.workgroup_id is not None  # auto-provisioned
+
+
+def test_edit_committee(db, client):
+    from committees.models import Committee
+    client.force_login(_board_member("cmt2@example.com"))
+    c = Committee.objects.create(name="Outreach C", slug="outreach-c")
+    client.post(reverse("board_committees"), {
+        "committee": c.pk, "name": "Outreach C", "description": "Updated desc",
+        "charter": "", "public": "on",
+    })
+    c.refresh_from_db()
+    assert c.description == "Updated desc" and c.public is True

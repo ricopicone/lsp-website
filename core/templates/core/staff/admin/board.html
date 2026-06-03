@@ -1,0 +1,25 @@
+{% extends "core/staff/admin/_base.html" %}
+{% block admin_heading_title %}Board Admin{% endblock %}
+{% block admin_kicker %}Governance · Board{% endblock %}
+{% block admin_heading %}Board Admin{% endblock %}
+{% block admin_intro %}School-governance actions the Board performs. The Board's own roster, documents, minutes, decisions, and discussion live in its workspace — linked below — not here.{% endblock %}
+{% block admin_sections %}
+  {% comment %}Pointer out to the collaborative workspace (roster/docs/minutes/etc.).{% endcomment %}
+  {% if workspace_url %}
+  {% include "core/staff/admin/_section.html" with title="Board workspace" body="Roster & officer roles, documents, minutes, decisions, calendar, and discussion — the Board's shared workspace." link=workspace_url link_label="Open the Board workspace" %}
+  {% else %}
+  {% include "core/staff/admin/_section.html" with title="Board workspace" status="Not set up" body="Roster, documents, minutes, decisions, and discussion live in the Board's workspace once its workgroup is created." %}
+  {% endif %}
+
+  {% comment %}Genuinely board-specific governance — not in the workspace.
+  Admissions + formation advancement live under the Meeting of Analysts Admin
+  (they're the Analysts' decisions), not here.{% endcomment %}
+  {% url 'board_membership_admin' as membership_url %}
+  {% include "core/staff/admin/_section.html" with title="Membership administration" body="Record role/standing corrections across the school — leaves, resignations, emeritus, and manual fixes. Each change writes the member's role-timeline entry." link=membership_url link_label="Open membership administration" %}
+  {% url 'board_appointments' as appointments_url %}
+  {% include "core/staff/admin/_section.html" with title="Appointments" body="Appoint and reassign the staff roles: Treasurer, Web Coordinator, Cartel Coordinator, Administrative Assistant, Web Developer, and LSP Staff." link=appointments_url link_label="Manage appointments" %}
+  {% url 'board_committees' as committees_url %}
+  {% include "core/staff/admin/_section.html" with title="Committees" body="Create and oversee committees and their charge — each gets a workspace for its own roster, minutes, and discussion." link=committees_url link_label="Manage committees" %}
+  {% url 'board_governance' as governance_url %}
+  {% include "core/staff/admin/_section.html" with title="Governance overview" body="Membership by standing, pending decisions across the school, and a link through to the Treasurer's finances — the Board's at-a-glance dashboard." link=governance_url link_label="Open governance overview" %}
+{% endblock %}

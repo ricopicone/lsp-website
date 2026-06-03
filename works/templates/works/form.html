@@ -171,10 +171,10 @@
           {% if form.listing_visibility.errors %}<p class="text-error text-xs mt-1">{{ form.listing_visibility.errors|join:", " }}</p>{% endif %}
         </div>
         <div class="space-y-1">
-          <label for="{{ form.pdf_visibility.id_for_label }}" class="block text-sm font-medium">PDFs</label>
-          {{ form.pdf_visibility }}
-          <p class="text-xs text-base-content/60">Who can download attached PDFs.</p>
-          {% if form.pdf_visibility.errors %}<p class="text-error text-xs mt-1">{{ form.pdf_visibility.errors|join:", " }}</p>{% endif %}
+          <label for="{{ form.content_visibility.id_for_label }}" class="block text-sm font-medium">Contents (PDFs &amp; HTML)</label>
+          {{ form.content_visibility }}
+          <p class="text-xs text-base-content/60">Who can open the contents — attached PDFs and the published HTML body. Can't be more public than the listing.</p>
+          {% if form.content_visibility.errors %}<p class="text-error text-xs mt-1">{{ form.content_visibility.errors|join:", " }}</p>{% endif %}
         </div>
       </div>
     </fieldset>

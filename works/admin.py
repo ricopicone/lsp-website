@@ -19,17 +19,17 @@ class WorkFileInline(admin.TabularInline):
 @admin.register(Work)
 class WorkAdmin(admin.ModelAdmin):
     list_display = (
-        "title", "kind", "listing_visibility", "pdf_visibility",
+        "title", "kind", "listing_visibility", "content_visibility",
         "file_count", "publication_date", "submitted_by",
     )
-    list_filter = ("kind", "listing_visibility", "pdf_visibility")
+    list_filter = ("kind", "listing_visibility", "content_visibility")
     search_fields = ("title", "abstract", "publication_info", "external_authors")
     prepopulated_fields = {"slug": ("title",)}
     autocomplete_fields = ("submitted_by",)
     inlines = [WorkAuthorInline, WorkFileInline]
     fieldsets = (
         (None, {"fields": ("title", "slug", "kind")}),
-        ("Visibility", {"fields": ("listing_visibility", "pdf_visibility")}),
+        ("Visibility", {"fields": ("listing_visibility", "content_visibility")}),
         ("Content", {"fields": ("abstract", "publication_info", "url", "publication_date")}),
         ("Cover", {"fields": ("cover_image",)}),
         ("Authors", {"fields": ("external_authors", "submitted_by")}),

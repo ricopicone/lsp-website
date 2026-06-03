@@ -1,0 +1,38 @@
+{% extends "core/base.html" %}
+{% block title %}Applications — Admin Tools{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-4xl">
+  <nav class="text-sm"><a href="{% url 'meeting_of_analysts_admin' %}" class="link link-hover text-base-content/60">← Meeting of Analysts Admin</a></nav>
+  <header class="space-y-2">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">Meeting of the Analysts · Admissions</p>
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Applications</h1>
+    <p class="text-base-content/70">Membership applications to review. Open ones first.</p>
+  </header>
+
+  {% if applications %}
+  <div class="overflow-x-auto rounded-lg border border-base-300">
+    <table class="table table-sm">
+      <thead>
+        <tr><th>Applicant</th><th>Track</th><th>Status</th><th>Interviews</th><th>Submitted</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for a in applications %}
+        <tr class="{% if a.status in open_statuses %}{% else %}opacity-60{% endif %}">
+          <td>{{ a.applicant.get_full_name|default:a.applicant.email }}</td>
+          <td class="whitespace-nowrap">{{ a.get_track_display }}</td>
+          <td>
+            <span class="badge badge-sm {% if a.status == 'accepted' %}badge-success{% elif a.status == 'submitted' or a.status == 'interviewing' %}badge-info{% else %}badge-ghost{% endif %}">{{ a.get_status_display }}</span>
+          </td>
+          <td>{{ a.interviews.all|length }}</td>
+          <td class="whitespace-nowrap text-base-content/70">{{ a.submitted_at|date:"M j, Y" }}</td>
+          <td><a href="{% url 'admissions:review_detail' a.pk %}" class="btn btn-ghost btn-xs">Review →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-base-content/60">No applications yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

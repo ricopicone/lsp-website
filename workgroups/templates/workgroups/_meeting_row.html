@@ -1,21 +1,83 @@
-{% comment %}One meeting in the Schedule list. Expects: workgroup, m.{% endcomment %}
-<li class="group flex items-start gap-3 px-3.5 py-3 transition-colors hover:bg-base-200/40">
-  <div class="grow min-w-0">
-    <p class="text-sm">
-      <span class="font-medium text-base-content">{{ m.starts_at|date:"D, M j · g:i a" }}</span>
-      {% if m.ends_at %}<span class="text-base-content/50">– {{ m.ends_at|date:"g:i a" }}</span>{% endif %}
-      {% if m.title %}<span class="text-base-content/80">— {{ m.title }}</span>{% endif %}
-    </p>
-    {% if m.location %}<p class="text-xs text-base-content/60 truncate">{{ m.location|urlize }}</p>{% endif %}
-    {% if m.note %}<p class="text-xs text-base-content/60 mt-1 whitespace-pre-line">{{ m.note }}</p>{% endif %}
+{% comment %}One meeting in the Schedule list. Expects: workgroup, m, can_schedule.{% endcomment %}
+<li class="group px-3.5 py-3 transition-colors hover:bg-base-200/40 {% if m.cancelled %}opacity-60{% endif %}">
+  <div class="flex items-start gap-3">
+    <div class="grow min-w-0 space-y-1">
+      <p class="text-sm">
+        <span class="font-medium text-base-content {% if m.cancelled %}line-through{% endif %}">{{ m.starts_at|date:"D, M j · g:i a" }}</span>
+        {% if m.ends_at %}<span class="text-base-content/50">– {{ m.ends_at|date:"g:i a" }}</span>{% endif %}
+        {% if m.title %}<span class="text-base-content/80">— {{ m.title }}</span>{% endif %}
+        {% if m.series_id %}<span class="badge badge-ghost badge-xs align-middle ml-1">series</span>{% endif %}
+        {% if m.cancelled %}<span class="badge badge-error badge-xs align-middle ml-1">Cancelled</span>{% endif %}
+      </p>
+      {% if m.cancelled and m.cancellation_reason %}<p class="text-xs text-error/80">{{ m.cancellation_reason }}</p>{% endif %}
+      {% if not m.cancelled %}
+        {% if m.online_url %}<p class="text-xs"><a href="{{ m.online_url }}" class="link text-primary" target="_blank" rel="noopener">Join online ↗</a></p>{% endif %}
+        {% if m.location %}<p class="text-xs text-base-content/60 truncate">{{ m.location|urlize }}</p>{% endif %}
+        {% if m.access_info %}<p class="text-xs text-base-content/50">{{ m.access_info }}</p>{% endif %}
+      {% endif %}
+      {% if m.note %}<p class="text-xs text-base-content/60 whitespace-pre-line">{{ m.note }}</p>{% endif %}
+
+      {% if m.minutes or can_schedule %}
+      <details class="mt-1">
+        <summary class="cursor-pointer text-xs text-base-content/55 hover:text-primary">
+          {% if m.minutes %}Minutes{% else %}Add minutes{% endif %}
+        </summary>
+        <div class="mt-1">
+          {% if m.minutes %}<div class="text-xs text-base-content/70 whitespace-pre-line border-l-2 border-base-300 pl-2">{{ m.minutes }}</div>{% endif %}
+          {% if m.minutes and workgroup.has_decisions and can_register_decisions %}
+          <p class="mt-1.5 text-xs"><a href="{{ workgroup.get_absolute_url }}?tab=decisions&meeting={{ m.pk }}" class="link link-hover text-primary">Record a decision from this meeting →</a></p>
+          {% endif %}
+          {% if can_schedule %}
+          <form method="post" action="{% url 'workgroups:meeting_minutes' workgroup.slug m.pk %}" class="mt-1.5 space-y-1">
+            {% csrf_token %}
+            <textarea name="minutes" rows="4" class="textarea textarea-bordered textarea-sm w-full" placeholder="Minutes / notes…">{{ m.minutes }}</textarea>
+            <button class="btn btn-xs btn-primary">Save minutes</button>
+          </form>
+          {% endif %}
+        </div>
+      </details>
+      {% endif %}
+    </div>
+
+    {% if can_schedule %}
+    <details class="dropdown dropdown-end shrink-0">
+      <summary class="btn btn-ghost btn-xs opacity-0 transition group-hover:opacity-100" title="Manage">⋯</summary>
+      <div class="dropdown-content z-10 mt-1 w-64 bg-base-100 border border-base-300 rounded-box p-3 shadow space-y-3">
+        {# Reschedule #}
+        <form method="post" action="{% url 'workgroups:meeting_reschedule' workgroup.slug m.pk %}" class="space-y-1">
+          {% csrf_token %}
+          <p class="label-text text-xs text-base-content/60">Reschedule</p>
+          <input type="datetime-local" name="starts_at" value="{{ m.starts_at|date:'Y-m-d\TH:i' }}" class="input input-bordered input-xs w-full">
+          <input type="datetime-local" name="ends_at" value="{{ m.ends_at|date:'Y-m-d\TH:i' }}" class="input input-bordered input-xs w-full">
+          <button class="btn btn-xs btn-primary w-full">Move</button>
+        </form>
+        {# Edit details #}
+        <form method="post" action="{% url 'workgroups:meeting_edit' workgroup.slug m.pk %}" class="space-y-1">
+          {% csrf_token %}
+          <input type="hidden" name="starts_at" value="{{ m.starts_at|date:'Y-m-d\TH:i' }}">
+          <input type="hidden" name="ends_at" value="{{ m.ends_at|date:'Y-m-d\TH:i' }}">
+          <p class="label-text text-xs text-base-content/60">Details</p>
+          <input type="text" name="title" value="{{ m.title }}" placeholder="Label" class="input input-bordered input-xs w-full">
+          <input type="text" name="location" value="{{ m.location }}" placeholder="Location" class="input input-bordered input-xs w-full">
+          <input type="url" name="online_url" value="{{ m.online_url }}" placeholder="Video link" class="input input-bordered input-xs w-full">
+          <input type="text" name="access_info" value="{{ m.access_info }}" placeholder="Passcode / dial-in" class="input input-bordered input-xs w-full">
+          <textarea name="note" rows="2" placeholder="Agenda" class="textarea textarea-bordered textarea-xs w-full">{{ m.note }}</textarea>
+          <button class="btn btn-xs w-full">Save details</button>
+        </form>
+        {# Cancel / restore #}
+        <form method="post" action="{% url 'workgroups:meeting_cancel' workgroup.slug m.pk %}" class="space-y-1">
+          {% csrf_token %}
+          {% if not m.cancelled %}<input type="text" name="reason" placeholder="Reason (optional)" class="input input-bordered input-xs w-full">{% endif %}
+          <button class="btn btn-xs w-full {% if m.cancelled %}btn-success{% else %}btn-warning{% endif %}">{% if m.cancelled %}Restore{% else %}Cancel this meeting{% endif %}</button>
+        </form>
+        {# Delete #}
+        <form method="post" action="{% url 'workgroups:meeting_delete' workgroup.slug m.pk %}"
+              onsubmit="return confirm('Delete this meeting permanently?');">
+          {% csrf_token %}
+          <button class="btn btn-xs btn-ghost text-error w-full">Delete</button>
+        </form>
+      </div>
+    </details>
+    {% endif %}
   </div>
-  {% if can_schedule %}
-  <form method="post" action="{% url 'workgroups:meeting_delete' workgroup.slug m.pk %}" style="display:contents"
-        onsubmit="return confirm('Remove this meeting?');">
-    {% csrf_token %}
-    <button type="submit" class="mt-0.5 shrink-0 text-base-content/30 opacity-0 transition group-hover:opacity-100 hover:text-error" aria-label="Remove">
-      <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-    </button>
-  </form>
-  {% endif %}
 </li>

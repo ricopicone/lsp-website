@@ -2,7 +2,14 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
 from .forms import UserChangeForm, UserCreationForm
-from .models import EmailChangeRequest, Profile, User
+from .models import (
+    Advisorship,
+    EmailChangeRequest,
+    MemberIntakeSurvey,
+    MembershipTenure,
+    Profile,
+    User,
+)
 
 
 class ProfileInline(admin.StackedInline):
@@ -81,3 +88,30 @@ class EmailChangeRequestAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(MembershipTenure)
+class MembershipTenureAdmin(admin.ModelAdmin):
+    list_display = ("user", "role", "start_ay", "end_ay", "source")
+    list_filter = ("role", "source")
+    search_fields = ("user__email", "user__first_name", "user__last_name")
+    autocomplete_fields = ("user",)
+
+
+@admin.register(MemberIntakeSurvey)
+class MemberIntakeSurveyAdmin(admin.ModelAdmin):
+    list_display = ("user", "submitted_at", "year_joined", "applied_at")
+    list_filter = ("submitted_at", "applied_at")
+    search_fields = ("user__email", "user__first_name", "user__last_name")
+    autocomplete_fields = ("user",)
+    readonly_fields = ("created_at",)
+
+
+@admin.register(Advisorship)
+class AdvisorshipAdmin(admin.ModelAdmin):
+    list_display = ("advisee", "advisor", "start_date", "end_date")
+    list_filter = ("start_date",)
+    search_fields = (
+        "advisee__email", "advisee__last_name", "advisor__email", "advisor__last_name",
+    )
+    autocomplete_fields = ("advisee", "advisor")

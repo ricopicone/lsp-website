@@ -18,12 +18,37 @@ from dataclasses import dataclass
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models, transaction
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from accounts.permissions import is_lsp_member
+from core.storage import private_storage
+
+#: Per-uploaded-file size cap and the default per-workgroup storage quota for
+#: the shared Files section. The quota is editable per workgroup (members
+#: request more from the web coordinator, who raises ``file_quota_bytes``).
+MAX_WORKGROUP_FILE_BYTES = 30 * 1024 * 1024        # 30 MB per file
+DEFAULT_WORKGROUP_FILE_QUOTA_BYTES = 200 * 1024 * 1024   # 200 MB per workgroup
+
+
+def serving_membership_q(prefix: str = "", on=None):
+    """Q for a *currently-serving* membership: open-ended (``end_date`` null) or
+    a term that ends in the future (``end_date > on``, default today).
+
+    This is the single definition of "active membership" — a member with a
+    future-dated term end is still serving until that date. ``end_date`` is the
+    day the membership ends (exclusive): a member is *not* serving on or after
+    it, so ``remove``/``leave`` (which set ``end_date`` to today) take effect
+    immediately, exactly as before. ``prefix`` filters through a relation, e.g.
+    ``serving_membership_q("workgroup_memberships__")``.
+    """
+    on = on or timezone.localdate()
+    field = f"{prefix}end_date"
+    return models.Q(**{f"{field}__isnull": True}) | models.Q(**{f"{field}__gt": on})
 
 
 class Visibility(models.TextChoices):
@@ -92,7 +117,7 @@ class Workgroup(models.Model):
         },
         Kind.COMMITTEE: {
             "has_calendar": True, "has_minutes": True,
-            "has_tasks": True, "has_decisions": True,
+            "has_tasks": True, "has_decisions": True, "has_terms": True,
         },
         Kind.SEMINAR: {"has_works": False, "has_calendar": True},
         Kind.READING_GROUP: {"has_calendar": True, "open_join": True},
@@ -166,6 +191,19 @@ class Workgroup(models.Model):
     has_minutes = models.BooleanField(default=False)
     has_tasks = models.BooleanField(default=False)
     has_decisions = models.BooleanField(default=False)
+    has_terms = models.BooleanField(
+        default=False,
+        help_text=(
+            "Track per-member term dates (start / end) in the roster. Defaulted "
+            "on for committees, where officers serve defined terms."
+        ),
+    )
+    #: Storage quota (bytes) for the shared Files section — sum of all file
+    #: versions. Raise per workgroup when members request more space.
+    file_quota_bytes = models.PositiveBigIntegerField(
+        default=DEFAULT_WORKGROUP_FILE_QUOTA_BYTES,
+        help_text="Total storage for shared files (all versions count).",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -208,13 +246,30 @@ class Workgroup(models.Model):
         """The capability-toggle seed for ``kind`` (over the field defaults)."""
         return dict(cls.KIND_TOGGLE_DEFAULTS.get(kind, {}))
 
+    # ---- Shared files quota ----
+
+    def files_used_bytes(self) -> int:
+        """Total bytes stored in the shared Files section (every version)."""
+        from django.db.models import Sum
+
+        return (
+            WorkgroupFileVersion.objects
+            .filter(parent__workgroup=self)
+            .aggregate(total=Sum("size"))["total"] or 0
+        )
+
+    def files_remaining_bytes(self) -> int:
+        return max(0, self.file_quota_bytes - self.files_used_bytes())
+
     # ---- Roster ----
 
     def active_members(self):
         """Stored ``WorkgroupMembership`` rows (hand-managed roster). For the
         full roster including derived seminar registrants, use
         :meth:`participants`."""
-        return self.memberships.filter(end_date__isnull=True).select_related("user")
+        return self.memberships.serving().select_related(
+            "user", "user__profile"
+        )
 
     @staticmethod
     def _user_role(user):
@@ -242,7 +297,7 @@ class Workgroup(models.Model):
         # Analysts) — automatic, no stored row.
         if self.auto_member_role and self._user_role(user) == self.auto_member_role:
             return True
-        if self.memberships.filter(user=user, end_date__isnull=True).exists():
+        if self.memberships.serving().filter(user=user).exists():
             return True
         # Term-based offerings: active = current term's paid/comped registrants.
         if self.kind in self.OFFERING_KINDS:
@@ -262,8 +317,8 @@ class Workgroup(models.Model):
         # A dissolved (archived) group stays readable to its still-active
         # roster — membership rows aren't ended by archiving, so past members
         # keep read-only access to the channel history + released works.
-        if self.is_archived and self.memberships.filter(
-            user=user, end_date__isnull=True
+        if self.is_archived and self.memberships.serving().filter(
+            user=user
         ).exists():
             return True
         if self.kind in self.OFFERING_KINDS:
@@ -287,7 +342,8 @@ class Workgroup(models.Model):
             from django.contrib.auth import get_user_model
 
             users = (get_user_model().objects
-                     .filter(profile__role=self.auto_member_role, is_active=True)
+                     .filter(profile__role=self.auto_member_role, is_active=True,
+                             profile__is_persona=False)
                      .select_related("profile"))
             for u in users:
                 if u.pk not in seen:
@@ -308,7 +364,12 @@ class Workgroup(models.Model):
                     seen[u.pk] = Participant(
                         user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
                     )
-        return list(seen.values())
+        # Personas are test accounts — keep them off every roster (they retain
+        # their memberships for impersonation fidelity, just not shown here).
+        return [
+            p for p in seen.values()
+            if not getattr(getattr(p.user, "profile", None), "is_persona", False)
+        ]
 
     def current_term(self):
         """For a term-based offering (seminar / reading group), the active-or-
@@ -498,7 +559,7 @@ class Workgroup(models.Model):
         membership row (existing or newly created)."""
         if role is None:
             role = WorkgroupMembership.Role.MEMBER
-        existing = self.memberships.filter(user=user, end_date__isnull=True).first()
+        existing = self.memberships.serving().filter(user=user).first()
         if existing:
             return existing
         return WorkgroupMembership.objects.create(
@@ -597,14 +658,14 @@ class Workgroup(models.Model):
     def lead_members(self):
         """Active members holding a lead role (chair / co-chair / plus-one /
         faculty / organizer) — those who manage the group."""
-        return self.memberships.filter(
-            end_date__isnull=True, role__in=WorkgroupMembership.LEAD_ROLES
+        return self.memberships.serving().filter(
+            role__in=WorkgroupMembership.LEAD_ROLES
         )
 
     def _would_orphan(self, user) -> bool:
         """True if removing/demoting ``user`` would leave the group with no
         lead — we forbid that (staff can still recover via the admin)."""
-        m = self.memberships.filter(user=user, end_date__isnull=True).first()
+        m = self.memberships.serving().filter(user=user).first()
         return (
             m is not None
             and m.role in WorkgroupMembership.LEAD_ROLES
@@ -617,14 +678,14 @@ class Workgroup(models.Model):
         lapse by their own mechanism). The sole remaining lead may not leave."""
         if not getattr(user, "is_authenticated", False):
             return False
-        if not self.memberships.filter(user=user, end_date__isnull=True).exists():
+        if not self.memberships.serving().filter(user=user).exists():
             return False
         return not self._would_orphan(user)
 
     def leave(self, user) -> bool:
         if not self.can_leave(user):
             return False
-        self.memberships.filter(user=user, end_date__isnull=True).update(
+        self.memberships.serving().filter(user=user).update(
             end_date=timezone.localdate()
         )
         return True
@@ -638,7 +699,7 @@ class Workgroup(models.Model):
         orphan the group's last lead."""
         if self._would_orphan(user):
             return False
-        ended = self.memberships.filter(user=user, end_date__isnull=True).update(
+        ended = self.memberships.serving().filter(user=user).update(
             end_date=timezone.localdate()
         )
         return bool(ended)
@@ -646,7 +707,7 @@ class Workgroup(models.Model):
     def set_role(self, user, role) -> bool:
         """Manager changes a stored member's role. Refuses to demote the sole
         lead out of a lead role."""
-        m = self.memberships.filter(user=user, end_date__isnull=True).first()
+        m = self.memberships.serving().filter(user=user).first()
         if m is None:
             return False
         if (role not in WorkgroupMembership.LEAD_ROLES) and self._would_orphan(user):
@@ -655,6 +716,32 @@ class Workgroup(models.Model):
         m.save(update_fields=["role"])
         return True
 
+    def set_member_term(self, user, *, start_date, end_date) -> bool:
+        """Set an active member's term dates (committee terms; see ``has_terms``).
+
+        ``start_date`` is required; ``end_date`` is None while the member is
+        serving, or a date to end the term (consistent with the rest of the
+        model, where a set ``end_date`` means the membership is no longer
+        active). Returns False if there's no active membership or the dates are
+        invalid (end before start)."""
+        if start_date is None:
+            return False
+        if end_date is not None and end_date < start_date:
+            return False
+        m = self.memberships.serving().filter(user=user).first()
+        if m is None:
+            return False
+        m.start_date = start_date
+        m.end_date = end_date
+        m.save(update_fields=["start_date", "end_date"])
+        return True
+
+
+class WorkgroupMembershipQuerySet(models.QuerySet):
+    def serving(self, on=None):
+        """Currently-serving memberships (open-ended or term not yet ended)."""
+        return self.filter(serving_membership_q(on=on))
+
 
 class WorkgroupMembership(models.Model):
     """A user's tenure in a workgroup — the unified roster.
@@ -662,7 +749,14 @@ class WorkgroupMembership(models.Model):
     Generalizes ``committees.CommitteeMembership`` (same shape, same
     one-active-per-pair constraint). The cartel "plus-one" is just
     ``role=PLUS_ONE`` — no field on the Cartel model.
+
+    "Active"/"serving" means ``end_date`` is null *or* in the future — a
+    committee officer with a future-dated term end is still serving until then.
+    Use ``.serving()`` (or :func:`serving_membership_q`) rather than testing
+    ``end_date__isnull`` directly.
     """
+
+    objects = WorkgroupMembershipQuerySet.as_manager()
 
     class Role(models.TextChoices):
         MEMBER = "member", _("Member")
@@ -927,20 +1021,124 @@ class WorkgroupTask(models.Model):
                     and self.due_date < timezone.localdate())
 
 
+class MeetingSeries(models.Model):
+    """A recurring schedule that materializes :class:`WorkgroupMeeting`
+    occurrences (weekly / biweekly / monthly-ordinal). Editable defaults
+    (time, location, links) flow to the occurrences it generates."""
+
+    class Frequency(models.TextChoices):
+        WEEKLY = "weekly", _("Weekly")
+        BIWEEKLY = "biweekly", _("Every 2 weeks")
+        MONTHLY = "monthly", _("Monthly (nth weekday)")
+
+    workgroup = models.ForeignKey(
+        Workgroup, on_delete=models.CASCADE, related_name="meeting_series"
+    )
+    title = models.CharField(max_length=255, blank=True)
+    frequency = models.CharField(max_length=12, choices=Frequency.choices,
+                                 default=Frequency.WEEKLY)
+    #: Weekday codes, comma-separated: MO,TU,WE,TH,FR,SA,SU.
+    weekdays = models.CharField(max_length=32, default="MO")
+    #: Ordinal week-in-month for MONTHLY (1=first … 5, -1=last).
+    week_position = models.SmallIntegerField(default=1)
+    start_date = models.DateField()
+    end_date = models.DateField(help_text="The series runs through this date.")
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    location = models.CharField(max_length=255, blank=True)
+    online_url = models.URLField(blank=True)
+    access_info = models.CharField(
+        max_length=255, blank=True, help_text="Passcode / dial-in / room notes."
+    )
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="created_meeting_series",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-start_date",)
+        verbose_name_plural = "meeting series"
+
+    def __str__(self) -> str:
+        return f"{self.title or 'Series'} ({self.get_frequency_display()})"
+
+    def _windows(self):
+        from events.scheduling import (
+            generate_monthly_ordinal,
+            generate_weekly,
+        )
+
+        weekdays = [w.strip() for w in self.weekdays.split(",") if w.strip()]
+        if self.frequency == self.Frequency.MONTHLY:
+            return generate_monthly_ordinal(
+                start_date=self.start_date, end_date=self.end_date,
+                weekdays=weekdays, week_positions=[self.week_position],
+                start_time=self.start_time, end_time=self.end_time,
+            )
+        interval = 2 if self.frequency == self.Frequency.BIWEEKLY else 1
+        return generate_weekly(
+            start_date=self.start_date, end_date=self.end_date, weekdays=weekdays,
+            start_time=self.start_time, end_time=self.end_time, interval=interval,
+        )
+
+    @transaction.atomic
+    def generate(self):
+        """(Re)materialize FUTURE occurrences from the rule. Past occurrences
+        and per-occurrence overrides (rescheduled / cancelled / with minutes)
+        are preserved; only future, untouched rows are replaced."""
+        now = timezone.now()
+        self.meetings.filter(
+            starts_at__gte=now, is_override=False, cancelled=False, minutes="",
+        ).delete()
+        existing = set(
+            self.meetings.values_list("starts_at", flat=True)
+        )
+        created = []
+        for w in self._windows():
+            if w.start_at < now or w.start_at in existing:
+                continue
+            created.append(WorkgroupMeeting(
+                workgroup=self.workgroup, series=self,
+                title=self.title, starts_at=w.start_at, ends_at=w.end_at,
+                location=self.location, online_url=self.online_url,
+                access_info=self.access_info, note=self.description,
+                created_by=self.created_by,
+            ))
+        WorkgroupMeeting.objects.bulk_create(created)
+        return len(created)
+
+
 class WorkgroupMeeting(models.Model):
-    """A scheduled meeting / session for a workgroup's Schedule tab
-    (has_calendar). Lightweight and internal — distinct from public Events."""
+    """A single meeting occurrence on a workgroup's Schedule tab (has_calendar).
+    Standalone, or one occurrence of a :class:`MeetingSeries`. Lightweight and
+    internal — distinct from public Events."""
 
     workgroup = models.ForeignKey(
         Workgroup, on_delete=models.CASCADE, related_name="meetings"
+    )
+    series = models.ForeignKey(
+        MeetingSeries, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="meetings",
     )
     title = models.CharField(max_length=255, blank=True, help_text="Optional label.")
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField(null=True, blank=True)
     location = models.CharField(
-        max_length=255, blank=True, help_text="Room or video link."
+        max_length=255, blank=True, help_text="Room or short location."
     )
-    note = models.TextField(blank=True)
+    online_url = models.URLField(blank=True, help_text="Video-call link (Zoom, etc.).")
+    access_info = models.CharField(
+        max_length=255, blank=True, help_text="Passcode / dial-in / access notes."
+    )
+    note = models.TextField(blank=True, help_text="Agenda / description.")
+    minutes = models.TextField(blank=True, help_text="Minutes / notes recorded after.")
+    cancelled = models.BooleanField(default=False)
+    cancellation_reason = models.CharField(max_length=255, blank=True)
+    #: True once this occurrence is individually edited, so series regeneration
+    #: won't overwrite it.
+    is_override = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True, blank=True, on_delete=models.SET_NULL,
@@ -974,3 +1172,157 @@ def build_workgroup(kind, *, name, **kwargs):
         toggles.setdefault("content_visibility", Visibility.MEMBERS)
     toggles.update(kwargs)
     return Workgroup.objects.create(kind=kind, name=name, **toggles)
+
+
+class WorkgroupFile(models.Model):
+    """A shared file in a workgroup's Files section — general documents and
+    assets, distinct from the editable working documents (``WorkDraft``). A
+    named slot that carries a version history; the latest version is current."""
+
+    workgroup = models.ForeignKey(
+        Workgroup, on_delete=models.CASCADE, related_name="shared_files"
+    )
+    name = models.CharField(max_length=255, help_text="Display name for the file.")
+    description = models.CharField(max_length=500, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="created_workgroup_files",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name
+
+    def current_version(self):
+        return self.versions.order_by("-number").first()
+
+    @property
+    def size(self) -> int:
+        v = self.current_version()
+        return v.size if v else 0
+
+    @property
+    def version_count(self) -> int:
+        return self.versions.count()
+
+    def can_manage(self, user) -> bool:
+        """Delete the file or its versions: the file's creator, or a manager."""
+        if not getattr(user, "is_authenticated", False):
+            return False
+        from .permissions import can_manage_workgroup
+
+        return self.created_by_id == user.pk or can_manage_workgroup(user, self.workgroup)
+
+    def add_version(self, *, blob, original_name, size, user):
+        number = (self.versions.aggregate(
+            m=models.Max("number"))["m"] or 0) + 1
+        return WorkgroupFileVersion.objects.create(
+            parent=self, blob=blob, original_name=original_name[:255],
+            size=size, number=number, uploaded_by=user,
+        )
+
+
+class WorkgroupFileVersion(models.Model):
+    """One uploaded revision of a :class:`WorkgroupFile`. Stored in private
+    storage and served only through the access-checked download view."""
+
+    parent = models.ForeignKey(
+        WorkgroupFile, on_delete=models.CASCADE, related_name="versions"
+    )
+    number = models.PositiveIntegerField()
+    blob = models.FileField(
+        upload_to="workgroup-files/%Y/", storage=private_storage,
+    )
+    original_name = models.CharField(max_length=255, blank=True)
+    size = models.PositiveBigIntegerField(default=0)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="uploaded_workgroup_file_versions",
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-number",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["parent", "number"], name="uniq_workgroupfile_version_number"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.parent.name} v{self.number}"
+
+    @property
+    def filename(self) -> str:
+        return self.original_name or self.blob.name.rsplit("/", 1)[-1]
+
+
+@receiver(post_delete, sender=WorkgroupFileVersion)
+def _delete_workgroup_file_blob(sender, instance, **kwargs):
+    """Remove the stored blob when a version row is deleted (individually or via
+    cascade from its WorkgroupFile / Workgroup) — otherwise the file lingers in
+    storage and keeps consuming real (and quota-counted) space."""
+    if instance.blob:
+        instance.blob.delete(save=False)
+
+
+class WorkgroupDecision(models.Model):
+    """A formal decision recorded in a workgroup's lightweight decision register
+    (governance bodies — committees, working groups — and, leaderless, cartels).
+    Optionally linked to the meeting whose minutes recorded it."""
+
+    class Status(models.TextChoices):
+        ADOPTED = "adopted", _("Adopted")
+        REJECTED = "rejected", _("Rejected")
+        TABLED = "tabled", _("Tabled")
+        SUPERSEDED = "superseded", _("Superseded")
+
+    workgroup = models.ForeignKey(
+        Workgroup, on_delete=models.CASCADE, related_name="decisions"
+    )
+    title = models.CharField(max_length=255, help_text="What was decided.")
+    detail = models.TextField(blank=True, help_text="Context / wording (markdown).")
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.ADOPTED
+    )
+    decided_on = models.DateField(default=timezone.localdate)
+    meeting = models.ForeignKey(
+        WorkgroupMeeting, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="decisions",
+        help_text="The meeting whose minutes recorded this decision, if any.",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="registered_decisions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-decided_on", "-created_at")
+
+    def __str__(self) -> str:
+        return self.title
+
+    @property
+    def detail_html(self) -> str:
+        if not self.detail:
+            return ""
+        import markdown
+        from django.utils.safestring import mark_safe
+
+        return mark_safe(markdown.markdown(
+            self.detail, extensions=["smarty", "sane_lists"], output_format="html5"
+        ))
+
+    def editable_by(self, user) -> bool:
+        """Edit / delete: the registrant, or a manager."""
+        if not getattr(user, "is_authenticated", False):
+            return False
+        from .permissions import can_manage_workgroup
+
+        return self.created_by_id == user.pk or can_manage_workgroup(user, self.workgroup)

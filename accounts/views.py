@@ -53,9 +53,8 @@ def _directory_qs():
     committee-kind workgroup memberships whose committee is public.
     """
     membership_qs = (
-        WorkgroupMembership.objects
+        WorkgroupMembership.objects.serving()
         .filter(
-            end_date__isnull=True,
             workgroup__kind=Workgroup.Kind.COMMITTEE,
             workgroup__committee__public=True,
         )
@@ -454,3 +453,27 @@ def set_timezone_from_browser(request):
     request.user.profile.timezone = tz_name
     request.user.profile.save(update_fields=("timezone",))
     return JsonResponse({"ok": True, "saved": True, "tz": tz_name})
+
+
+@login_required
+def advisor_select(request):
+    """Self-service: an in-training member chooses (or changes) their Advisor."""
+    from django.contrib import messages
+
+    from .advisor import current_advisor, set_advisor
+    from .forms import AdvisorSelectForm
+
+    profile = request.user.profile
+    current = current_advisor(request.user)
+    form = None
+    if profile.needs_advisor:
+        form = AdvisorSelectForm(request.POST or None, advisee=request.user)
+        if request.method == "POST" and form.is_valid():
+            set_advisor(request.user, form.cleaned_data["advisor"], by=request.user)
+            messages.success(request, "Your advisor has been recorded.")
+            return redirect("advisor_select")
+    return render(request, "accounts/advisor.html", {
+        "needs_advisor": profile.needs_advisor,
+        "current": current,
+        "form": form,
+    })

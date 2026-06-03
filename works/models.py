@@ -29,6 +29,7 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from accounts.permissions import is_lsp_member
+from core.storage import private_storage
 
 
 class Work(models.Model):
@@ -37,6 +38,7 @@ class Work(models.Model):
         CARTEL     = "cartel",     _("Cartel work")
         PALIMPSEST = "palimpsest", _("Palimpsest")
         PASSAGE    = "passage",    _("Passage")
+        DOCUMENT   = "document",   _("Document")
 
     class Visibility(models.TextChoices):
         PUBLIC  = "public",  _("Public")
@@ -68,14 +70,14 @@ class Work(models.Model):
         default=Visibility.PUBLIC,
         help_text="Who can see this work exists in the catalog.",
     )
-    pdf_visibility = models.CharField(
+    content_visibility = models.CharField(
         max_length=16,
         choices=Visibility.choices,
         default=Visibility.MEMBERS,
         help_text=(
-            "Who can download the PDFs attached to this work. Cannot be "
-            "more public than the listing — listing=Members blocks a "
-            "Public PDF setting."
+            "Who can access the contents — the attached PDFs and the published "
+            "HTML body. Cannot be more public than the listing — listing=Members "
+            "blocks a Public contents setting."
         ),
     )
 
@@ -99,6 +101,10 @@ class Work(models.Model):
         blank=True,
         null=True,
     )
+    #: Published web version (rendered HTML) when this Work was produced by
+    #: publishing a WorkDraft. Shown on the Work page; the generated PDF is
+    #: attached as a WorkFile (so existing download + visibility apply).
+    body_html = models.TextField(blank=True)
 
     external_authors = models.CharField(
         max_length=255,
@@ -141,14 +147,14 @@ class Work(models.Model):
 
     def clean(self):
         rank = self._VISIBILITY_RANK
-        if rank[self.pdf_visibility] > rank[self.listing_visibility]:
+        if rank[self.content_visibility] > rank[self.listing_visibility]:
             raise ValidationError({
-                "pdf_visibility": _(
-                    "The PDF can't be more public than the listing."
+                "content_visibility": _(
+                    "The contents can't be more public than the listing."
                 ),
             })
         if (
-            self.Visibility.GROUP in (self.listing_visibility, self.pdf_visibility)
+            self.Visibility.GROUP in (self.listing_visibility, self.content_visibility)
             and self.workgroup_id is None
         ):
             raise ValidationError({
@@ -174,11 +180,11 @@ class Work(models.Model):
     def listing_visible_to(self, user) -> bool:
         return self._visible_at(self.listing_visibility, user)
 
-    def pdf_visible_to(self, user) -> bool:
-        """True only when (a) visibility permits and (b) at least one file exists."""
-        if not self.files.exists():
-            return False
-        return self._visible_at(self.pdf_visibility, user)
+    def content_visible_to(self, user) -> bool:
+        """Whether ``user`` may access the contents — the published HTML body and
+        any attached PDFs. A pure visibility-level check; callers that render a
+        download button also check that a file exists (the template does)."""
+        return self._visible_at(self.content_visibility, user)
 
     @classmethod
     def listing_for(cls, user):
@@ -199,8 +205,8 @@ class Work(models.Model):
 
         from workgroups.models import WorkgroupMembership
 
-        member_group_ids = WorkgroupMembership.objects.filter(
-            user=user, end_date__isnull=True
+        member_group_ids = WorkgroupMembership.objects.serving().filter(
+            user=user
         ).values("workgroup_id")
         visible |= Q(
             listing_visibility=cls.Visibility.GROUP, workgroup_id__in=member_group_ids
@@ -288,7 +294,7 @@ class WorkFile(models.Model):
     """
 
     work = models.ForeignKey(Work, on_delete=models.CASCADE, related_name="files")
-    file = models.FileField(upload_to="works/files/%Y/")
+    file = models.FileField(upload_to="works/files/%Y/", storage=private_storage)
     label = models.CharField(
         max_length=200,
         blank=True,
@@ -305,3 +311,117 @@ class WorkFile(models.Model):
 
     def __str__(self) -> str:
         return self.label or self.file.name.rsplit("/", 1)[-1]
+
+
+class WorkDraft(models.Model):
+    """A collaborative working document in a workgroup's Work tab — eventually
+    *published* into a :class:`Work`. One of three kinds: a *native* doc drafted
+    in-browser (``content_html``, TipTap, autosaved + versioned); a *linked*
+    external Google Doc (``google_doc_url``); or an uploaded *file* (``file``,
+    e.g. a PDF that sits as a static working document until published)."""
+
+    workgroup = models.ForeignKey(
+        "workgroups.Workgroup", on_delete=models.CASCADE, related_name="drafts"
+    )
+    title = models.CharField(max_length=200, default="Untitled document")
+    content_html = models.TextField(blank=True)
+    google_doc_url = models.URLField(
+        blank=True, help_text="If set, this is a linked Google Doc (no in-app editing)."
+    )
+    file = models.FileField(
+        upload_to="workdrafts/%Y/", blank=True, storage=private_storage,
+        help_text="If set, this is an uploaded file (e.g. a PDF) — a static "
+        "working document, not edited in-app.",
+    )
+    #: Soft, advisory edit lock — who's currently editing + when last seen.
+    locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="locked_drafts",
+    )
+    locked_at = models.DateTimeField(null=True, blank=True)
+    published_work = models.OneToOneField(
+        "works.Work", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="source_draft",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="created_drafts",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="edited_drafts",
+    )
+
+    #: A held lock is considered active for this long since the last heartbeat.
+    LOCK_TTL_SECONDS = 180
+
+    class Meta:
+        ordering = ("-updated_at",)
+
+    def __str__(self) -> str:
+        return self.title
+
+    def get_absolute_url(self) -> str:
+        return reverse("workgroups:draft_edit", args=[self.workgroup.slug, self.pk])
+
+    @property
+    def is_linked(self) -> bool:
+        return bool(self.google_doc_url)
+
+    @property
+    def is_file(self) -> bool:
+        return bool(self.file)
+
+    @property
+    def is_native(self) -> bool:
+        """Drafted in-browser (the only kind with an in-app editor)."""
+        return not self.is_linked and not self.is_file
+
+    @property
+    def filename(self) -> str:
+        return self.file.name.rsplit("/", 1)[-1] if self.file else ""
+
+    def active_lock_holder(self):
+        """The user currently holding a live edit lock, or None (stale/unlocked)."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+        if self.locked_by_id is None or self.locked_at is None:
+            return None
+        if timezone.now() - self.locked_at > timedelta(seconds=self.LOCK_TTL_SECONDS):
+            return None
+        return self.locked_by
+
+    def can_edit_now(self, user) -> bool:
+        """True if ``user`` may write (lock free / stale / theirs)."""
+        holder = self.active_lock_holder()
+        return holder is None or holder.pk == user.pk
+
+    def acquire_lock(self, user):
+        from django.utils import timezone
+        self.locked_by = user
+        self.locked_at = timezone.now()
+        self.save(update_fields=["locked_by", "locked_at"])
+
+
+class WorkDraftVersion(models.Model):
+    """A named snapshot of a draft's content (manual save-version + on publish)."""
+
+    draft = models.ForeignKey(
+        WorkDraft, on_delete=models.CASCADE, related_name="versions"
+    )
+    content_html = models.TextField(blank=True)
+    label = models.CharField(max_length=120, blank=True)
+    saved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="saved_draft_versions",
+    )
+    saved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-saved_at",)
+
+    def __str__(self) -> str:
+        return f"{self.draft.title} @ {self.saved_at:%Y-%m-%d %H:%M}"

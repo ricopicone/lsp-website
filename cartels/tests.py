@@ -348,10 +348,10 @@ def test_work_tab_splits_in_progress_and_released(client):
     wg = cartel.workgroup
     Work.objects.create(title="Done Paper", slug="done", kind=Work.Kind.CARTEL,
                         listing_visibility=Work.Visibility.GROUP,
-                        pdf_visibility=Work.Visibility.GROUP, workgroup=wg, in_progress=False)
+                        content_visibility=Work.Visibility.GROUP, workgroup=wg, in_progress=False)
     Work.objects.create(title="Draft Paper", slug="draft", kind=Work.Kind.CARTEL,
                         listing_visibility=Work.Visibility.GROUP,
-                        pdf_visibility=Work.Visibility.GROUP, workgroup=wg, in_progress=True)
+                        content_visibility=Work.Visibility.GROUP, workgroup=wg, in_progress=True)
     client.force_login(gen)
     resp = client.get(f"{wg.get_absolute_url()}?tab=work")
     assert resp.status_code == 200

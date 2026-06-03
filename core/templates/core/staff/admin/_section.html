@@ -1,0 +1,17 @@
+{% comment %}
+One admin-page section card. Params:
+  title       — heading
+  body        — description text
+  status      — optional badge (e.g. "Planned")
+  link        — optional href
+  link_label  — optional link text (default "Open")
+{% endcomment %}
+<section class="rounded-xl border border-base-300 p-5 space-y-2">
+  <div class="flex items-baseline justify-between gap-3">
+    <h2 class="font-serif text-lg text-base-content tracking-tight">{{ title }}</h2>
+    {% if status %}<span class="badge badge-ghost badge-sm whitespace-nowrap">{{ status }}</span>{% endif %}
+    {% if count is not None %}<span class="font-mono text-xs text-base-content/50">{{ count }} {{ count_label }}</span>{% endif %}
+  </div>
+  <p class="text-sm text-base-content/65">{{ body }}</p>
+  {% if link %}<a href="{{ link }}" class="link link-primary text-sm">{{ link_label|default:"Open" }} →</a>{% endif %}
+</section>

@@ -1,0 +1,53 @@
+"""A persona-safe email backend.
+
+Wraps the real email backend and never delivers to persona test accounts —
+their addresses aren't real mailboxes, so sending would only bounce (and hurt
+SES reputation). All outbound mail flows through here, so any flow that would
+email a persona (e.g. the Web Coordinator testing a registration while
+impersonating one) is silently dropped for those recipients.
+"""
+
+from __future__ import annotations
+
+from django.conf import settings
+from django.core.mail import get_connection
+from django.core.mail.backends.base import BaseEmailBackend
+
+INNER_SETTING = "PERSONA_SAFE_INNER_EMAIL_BACKEND"
+DEFAULT_INNER = "django.core.mail.backends.console.EmailBackend"
+
+
+def _persona_addresses() -> set[str]:
+    from accounts.models import Profile
+
+    return {
+        e.lower()
+        for e in Profile.objects.filter(is_persona=True).values_list(
+            "user__email", flat=True
+        )
+        if e
+    }
+
+
+class PersonaSafeEmailBackend(BaseEmailBackend):
+    def __init__(self, fail_silently: bool = False, **kwargs):
+        super().__init__(fail_silently=fail_silently)
+        self._inner = get_connection(
+            backend=getattr(settings, INNER_SETTING, DEFAULT_INNER),
+            fail_silently=fail_silently,
+        )
+
+    def send_messages(self, email_messages):
+        if not email_messages:
+            return 0
+        personas = _persona_addresses()
+        if not personas:
+            return self._inner.send_messages(email_messages)
+        kept = []
+        for m in email_messages:
+            m.to = [a for a in m.to if a.lower() not in personas]
+            m.cc = [a for a in m.cc if a.lower() not in personas]
+            m.bcc = [a for a in m.bcc if a.lower() not in personas]
+            if m.to or m.cc or m.bcc:
+                kept.append(m)
+        return self._inner.send_messages(kept) if kept else 0

@@ -371,10 +371,9 @@ class Event(models.Model):
 
         if not self.workgroup_id:
             return WorkgroupMembership.objects.none()
-        return WorkgroupMembership.objects.filter(
+        return WorkgroupMembership.objects.serving().filter(
             workgroup_id=self.workgroup_id,
             role=WorkgroupMembership.Role.FACULTY,
-            end_date__isnull=True,
         ).select_related("user")
 
     def faculty_members(self):
@@ -400,7 +399,7 @@ class Event(models.Model):
         wg = self.ensure_workgroup()
         if wg is None:
             return None
-        existing = wg.memberships.filter(user=user, end_date__isnull=True).first()
+        existing = wg.memberships.serving().filter(user=user).first()
         if existing:
             if existing.role != WorkgroupMembership.Role.FACULTY:
                 existing.role = WorkgroupMembership.Role.FACULTY
@@ -431,7 +430,7 @@ class Event(models.Model):
         current = {m.user_id: m for m in self._faculty_memberships()}
         for uid, m in current.items():
             if uid not in target:
-                m.end_date = timezone.now().date()
+                m.end_date = timezone.localdate()
                 m.save(update_fields=["end_date"])
         for uid, user in target.items():
             if uid not in current:

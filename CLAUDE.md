@@ -41,14 +41,19 @@ uv run python manage.py createsuperuser  # create an admin (prompts for email)
 uv run python manage.py runserver        # dev server at http://localhost:8000/
 uv run pytest                            # run the test suite
 uv run ruff check .                      # lint
-npm install                              # one-time: install Tailwind + DaisyUI
+npm install                              # one-time: install Tailwind + DaisyUI + esbuild
 npm run watch:css                        # dev: rebuild static/css/site.css on save
 npm run build:css                        # one-shot minified build
+npm run build:js                         # bundle the vendored TipTap doc editor
 ```
 
 The CSS pipeline (Tailwind v4 + DaisyUI v5) compiles `static/css/input.css`
 to `static/css/site.css`. The output is `.gitignore`'d — rebuild before
 running the dev server, or run `npm run watch:css` in a second terminal.
+The Work-tab document editor's TipTap bundle is **vendored** (no runtime
+CDN): `assets/js/doc-editor.src.js` is bundled by esbuild to
+`static/js/vendor/doc-editor.js`, which **is** committed. After editing the
+source, run `npm run build:js` and commit the rebuilt bundle.
 `base.html` links `{% static 'css/site.css' %}` and sets `data-theme="silk"`
 (light) with `abyss` (dark) auto-applied via `prefers-color-scheme` and a
 manual toggle. **Authoring rule: use DaisyUI semantic tokens

@@ -221,7 +221,7 @@ class Command(BaseCommand):
                 doc.display_order = entry.display_order
                 doc.owning_workgroup = owning_workgroup
                 doc.listing_visibility = Document.Visibility.PUBLIC
-                doc.pdf_visibility = Document.Visibility.PUBLIC
+                doc.content_visibility = Document.Visibility.PUBLIC
                 # Always re-attach the file so a fresh source PDF replaces an
                 # older one. The FileField.save call uploads through the
                 # configured storage backend.

@@ -369,7 +369,7 @@ def test_treasurer_dashboard_renders_for_staff(
     client.force_login(staff_user)
     response = client.get(reverse("treasurer"))
     assert response.status_code == 200
-    assert b"Treasurer dashboard" in response.content
+    assert b"Treasurer Admin" in response.content
     assert bytes(current_period.name, "utf-8") in response.content
     # Total collected reflects the one paid Payment.
     assert b"$100.00" in response.content
@@ -524,3 +524,48 @@ def test_treasurer_dues_year_selector_loads_past(client, staff_user, current_per
     resp = client.get(reverse("treasurer_dues") + "?year=ay-1998-1999")
     assert resp.status_code == 200
     assert b"AY 1998-1999" in resp.content
+
+
+# ---- Standing exempts from dues obligation -----------------------------
+
+
+def test_on_leave_member_not_dues_obligated(member):
+    """A dues-obligated role on non-active standing is exempt."""
+    assert is_dues_obligated(member) is True  # active candidate
+    member.profile.standing = Profile.Standing.ON_LEAVE
+    member.profile.save()
+    assert is_dues_obligated(member) is False
+    member.profile.standing = Profile.Standing.RESIGNED
+    member.profile.save()
+    assert is_dues_obligated(member) is False
+    member.profile.standing = Profile.Standing.EMERITUS
+    member.profile.save()
+    assert is_dues_obligated(member) is False
+
+
+def test_obligated_count_excludes_on_leave(current_period):
+    """The treasurer dues counts/lists exclude on-leave members."""
+    from payments.views import _treasurer_dues_context
+
+    active = User.objects.create_user(email="active@x.test")
+    active.profile.role = Profile.Role.CANDIDATE
+    active.profile.save()
+    leave = User.objects.create_user(email="leave@x.test")
+    leave.profile.role = Profile.Role.CANDIDATE
+    leave.profile.standing = Profile.Standing.ON_LEAVE
+    leave.profile.save()
+
+    ctx = _treasurer_dues_context()
+    unpaid_emails = {u.email for u in ctx["unpaid_users"]}
+    assert "active@x.test" in unpaid_emails
+    assert "leave@x.test" not in unpaid_emails
+    # on-leave doesn't inflate the obligated headcount or outstanding $.
+    assert leave not in ctx["unpaid_users"]
+
+
+def test_landing_banner_hidden_for_on_leave(client, member, current_period):
+    member.profile.standing = Profile.Standing.ON_LEAVE
+    member.profile.save()
+    client.force_login(member)
+    response = client.get(reverse("core:landing"))
+    assert b"pay now" not in response.content.lower()

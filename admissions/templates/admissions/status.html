@@ -1,0 +1,56 @@
+{% extends "core/base.html" %}
+{% block title %}Your application — LSP{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-2xl">
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Your application</h1>
+    <p class="text-base-content/70">
+      {{ application.get_track_display }} · submitted {{ application.submitted_at|date:"M j, Y" }}
+    </p>
+  </header>
+
+  {% with s=application.status %}
+  <div class="rounded-xl border border-base-300 p-5 space-y-4">
+    <div class="flex items-center gap-2">
+      <span class="text-sm text-base-content/60">Status:</span>
+      <span class="badge {% if s == 'accepted' %}badge-success{% elif s == 'rejected' %}badge-ghost{% elif s == 'withdrawn' %}badge-ghost{% else %}badge-info{% endif %}">
+        {{ application.get_status_display }}
+      </span>
+    </div>
+
+    <ol class="space-y-2 text-sm">
+      <li class="flex items-center gap-2">
+        <span class="text-success">✓</span> Application submitted
+      </li>
+      <li class="flex items-center gap-2">
+        {% if application.interviews.all %}<span class="text-success">✓</span>{% else %}<span class="text-base-content/30">○</span>{% endif %}
+        Two interviews with Analysts of the School
+        {% if application.interviews.all %}
+        <span class="text-base-content/50">({{ application.interviews.all|length }} arranged)</span>
+        {% endif %}
+      </li>
+      <li class="flex items-center gap-2">
+        {% if s == 'accepted' or s == 'rejected' %}<span class="text-success">✓</span>{% else %}<span class="text-base-content/30">○</span>{% endif %}
+        Review at the Meeting of the Analysts
+      </li>
+    </ol>
+
+    {% if s == 'accepted' %}
+    <div class="rounded-lg bg-success/10 border border-success/30 p-3 text-sm space-y-2">
+      <p class="font-medium text-base-content">Welcome — you've been admitted as a Precandidate.</p>
+      <p class="text-base-content/70">Your next step is to choose an Advisor.</p>
+      <a href="{% url 'advisor_select' %}" class="btn btn-primary btn-sm">Choose your advisor</a>
+    </div>
+    {% elif s == 'rejected' %}
+    <p class="text-sm text-base-content/70">After review, we're not able to offer admission at this time. Thank you for applying.</p>
+    {% else %}
+    <p class="text-sm text-base-content/60">We'll email you as your application moves forward.</p>
+    {% endif %}
+  </div>
+  {% endwith %}
+</div>
+{% endblock %}

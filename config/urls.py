@@ -16,6 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from accounts import views as _account_views
 from content import views as _content_views
@@ -54,15 +55,34 @@ urlpatterns = [
     path("program-admin/<str:academic_year>/events/<slug:slug>/edit/",
          _event_views.program_admin_event_edit,
          name="program_admin_event_edit"),
-    path("staff/", _staff_views.home, name="staff"),
-    path("staff/docs/<slug:slug>/", _staff_views.doc, name="staff_doc"),
-    path("staff/aphorisms/", _staff_views.aphorism_list, name="staff_aphorisms"),
-    path("staff/aphorisms/new/", _staff_views.aphorism_create, name="staff_aphorism_new"),
-    path("staff/aphorisms/<int:pk>/edit/", _staff_views.aphorism_edit,
+    path("admin-tools/", _staff_views.home, name="admin_tools"),
+    # Back-compat: the hub used to live at /staff/.
+    path("staff/", RedirectView.as_view(pattern_name="admin_tools", permanent=False)),
+    path("admin-tools/docs/<slug:slug>/", _staff_views.doc, name="staff_doc"),
+    path("admin-tools/board/", _staff_views.board_admin, name="board_admin"),
+    path("admin-tools/board/membership/", _staff_views.board_membership_admin,
+         name="board_membership_admin"),
+    path("admin-tools/board/appointments/", _staff_views.board_appointments,
+         name="board_appointments"),
+    path("admin-tools/board/committees/", _staff_views.board_committees,
+         name="board_committees"),
+    path("admin-tools/board/governance/", _staff_views.board_governance,
+         name="board_governance"),
+    path("admin-tools/meeting-of-analysts/", _staff_views.meeting_of_analysts_admin,
+         name="meeting_of_analysts_admin"),
+    path("admin-tools/assistant/", _staff_views.admin_assistant_admin,
+         name="admin_assistant_admin"),
+    path("admin-tools/web-coordinator/", _staff_views.web_coordinator_admin,
+         name="web_coordinator_admin"),
+    path("admin-tools/web-developer/", _staff_views.web_developer_admin,
+         name="web_developer_admin"),
+    path("admin-tools/aphorisms/", _staff_views.aphorism_list, name="staff_aphorisms"),
+    path("admin-tools/aphorisms/new/", _staff_views.aphorism_create, name="staff_aphorism_new"),
+    path("admin-tools/aphorisms/<int:pk>/edit/", _staff_views.aphorism_edit,
          name="staff_aphorism_edit"),
-    path("staff/aphorisms/<int:pk>/delete/", _staff_views.aphorism_delete,
+    path("admin-tools/aphorisms/<int:pk>/delete/", _staff_views.aphorism_delete,
          name="staff_aphorism_delete"),
-    path("staff/aphorisms/<int:pk>/toggle/", _staff_views.aphorism_toggle,
+    path("admin-tools/aphorisms/<int:pk>/toggle/", _staff_views.aphorism_toggle,
          name="staff_aphorism_toggle"),
     path("events/", include("events.urls")),
     path("documents/", include("documents.urls")),
@@ -72,6 +92,7 @@ urlpatterns = [
     path("cartels/", include("cartels.urls")),
     path("working-groups/", include("workinggroups.urls")),
     path("committees/", include("committees.urls")),
+    path("", include("admissions.urls")),
     path("dues/", _payment_views.dues_pay, name="dues"),
     path("donate/", _payment_views.donate, name="donate"),
     path("tuition/", _payment_views.tuition_decision, name="tuition"),

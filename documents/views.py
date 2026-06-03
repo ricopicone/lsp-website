@@ -2,7 +2,7 @@
 
 The index renders the (current) Document list grouped by category as
 cards. Detail pages show the longer markdown description, author
-byline, and a download link gated by ``pdf_visible_to``. Two-axis
+byline, and a download link gated by ``content_visible_to``. Two-axis
 visibility means a document can be browsable to the public while its
 PDF stays members-only.
 """
@@ -66,14 +66,14 @@ def detail(request, slug):
         {
             "doc": doc,
             "older_versions": older,
-            "pdf_visible": doc.pdf_visible_to(request.user),
+            "content_visible": doc.content_visible_to(request.user),
         },
     )
 
 
 def download(request, slug):
     doc = get_object_or_404(Document, slug=slug)
-    if not doc.pdf_visible_to(request.user):
+    if not doc.content_visible_to(request.user):
         raise Http404()
     if not doc.file:
         raise Http404()

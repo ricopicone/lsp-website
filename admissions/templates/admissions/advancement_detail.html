@@ -1,0 +1,79 @@
+{% extends "core/base.html" %}
+{% block title %}Demande — {{ adv.member.get_full_name|default:adv.member.email }}{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+  <nav class="text-sm"><a href="{% url 'admissions:advancement_queue' %}" class="link link-hover text-base-content/60">← Palimpsests &amp; passages</a></nav>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <header class="flex flex-wrap items-baseline justify-between gap-2">
+    <div>
+      <h1 class="font-serif text-2xl text-base-content tracking-tight">{{ adv.member.get_full_name|default:adv.member.email }}</h1>
+      <p class="text-sm text-base-content/60">{{ adv.get_kind_display }} · {{ adv.member.profile.get_role_display }} · opened {{ adv.requested_at|date:"M j, Y" }}</p>
+    </div>
+    <span class="badge {% if adv.status == 'approved' %}badge-success{% elif adv.is_open %}badge-info{% else %}badge-ghost{% endif %}">{{ adv.get_status_display }}</span>
+  </header>
+
+  {% comment %}The demande{% endcomment %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-3">
+    <h2 class="font-medium text-base-content">The demande</h2>
+    <div>
+      <p class="text-base-content/60 text-sm mb-1">Member's statement</p>
+      <div class="rounded-lg bg-base-200/40 p-3 text-sm whitespace-pre-wrap">{{ adv.statement }}</div>
+    </div>
+    {% if adv.palimpsest %}
+    <p class="text-sm"><span class="text-base-content/60">Written palimpsest:</span> <a href="{% url 'admissions:palimpsest_download' adv.pk %}" class="link link-primary">Download</a></p>
+    {% endif %}
+  </section>
+
+  {% comment %}Advisor recommendation{% endcomment %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-2">
+    <div class="flex items-baseline justify-between">
+      <h2 class="font-medium text-base-content">Advisor's recommendation</h2>
+      <span class="text-xs text-base-content/50">{{ adv.advisor.get_full_name|default:adv.advisor.email|default:"no advisor on file" }}</span>
+    </div>
+    {% if adv.presented_at %}
+    <p class="text-xs text-base-content/50">Presented to the Meeting {{ adv.presented_at|date:"M j, Y" }}.</p>
+    <div class="rounded-lg bg-base-200/40 p-3 text-sm whitespace-pre-wrap">{{ adv.recommendation|default:"—" }}</div>
+    {% else %}
+    <p class="text-sm text-warning">Not yet presented — the Advisor is being reminded to present this to the Meeting.</p>
+    {% endif %}
+  </section>
+
+  {% comment %}Decision{% endcomment %}
+  {% if adv.is_open %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-4">
+    <h2 class="font-medium text-base-content">Decision <span class="text-xs font-normal text-base-content/50">(Meeting of the Analysts)</span></h2>
+    <form method="post" action="{% url 'admissions:advancement_decide' adv.pk %}" class="space-y-3">
+      {% csrf_token %}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">Effective academic year (start year)</label>
+          <input type="number" name="effective_ay" value="{{ default_ay }}" class="input input-bordered w-full">
+          <p class="text-xs text-base-content/50">Used when approving — advances the role from this AY.</p>
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">Note (optional, included in the email)</label>
+          <textarea name="note" rows="2" class="textarea textarea-bordered w-full"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button name="decision" value="approve" class="btn btn-primary btn-sm"
+                onclick="return confirm('Approve this demande and advance the member?');">Approve &amp; advance</button>
+        <button name="decision" value="decline" class="btn btn-ghost btn-sm text-error"
+                onclick="return confirm('Record this demande as not approved?');">Decline</button>
+      </div>
+    </form>
+  </section>
+  {% else %}
+  <section class="rounded-xl border border-base-300 p-5 text-sm space-y-1">
+    <p><span class="text-base-content/60">Decision:</span> <strong>{{ adv.get_status_display }}</strong>
+      {% if adv.decided_at %}on {{ adv.decided_at|date:"M j, Y" }}{% endif %}
+      {% if adv.decided_by %}by {{ adv.decided_by.get_full_name|default:adv.decided_by.email }}{% endif %}</p>
+    {% if adv.decision_note %}<p class="text-base-content/70">{{ adv.decision_note }}</p>{% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

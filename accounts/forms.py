@@ -10,7 +10,7 @@ from django import forms
 from django.contrib.auth.forms import BaseUserCreationForm
 from django.contrib.auth.forms import UserChangeForm as BaseUserChangeForm
 
-from .models import User
+from .models import Profile, User
 
 
 class UserCreationForm(BaseUserCreationForm):
@@ -355,3 +355,50 @@ class ProfileEditForm(forms.ModelForm):
         if commit:
             profile.save()
         return profile
+
+
+class MembershipChangeForm(forms.Form):
+    """Board record-keeping: a member's new role + standing, effective AY, and
+    the decision note. Drives :func:`accounts.membership.record_membership_change`."""
+
+    role = forms.ChoiceField(
+        choices=Profile.Role.choices,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+    standing = forms.ChoiceField(
+        choices=Profile.Standing.choices,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+    effective_ay = forms.IntegerField(
+        min_value=1980, max_value=2100,
+        label="Effective academic year (start year)",
+        help_text="e.g. 2026 for AY 2026–2027.",
+        widget=forms.NumberInput(attrs={"class": "input input-bordered w-full"}),
+    )
+    notes = forms.CharField(
+        required=False, label="Decision / note",
+        widget=forms.Textarea(attrs={
+            "rows": 2, "class": "textarea textarea-bordered w-full",
+            "placeholder": "e.g. Board minutes 2026-05-12",
+        }),
+    )
+
+
+class AdvisorSelectForm(forms.Form):
+    """An in-training member picks their Advisor from the eligible pool."""
+
+    advisor = forms.ModelChoiceField(
+        queryset=User.objects.none(),
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        label="Your advisor",
+    )
+
+    def __init__(self, *args, advisee=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.advisee = advisee
+        if advisee is not None:
+            from .advisor import eligible_advisors
+            self.fields["advisor"].queryset = eligible_advisors(advisee)
+        self.fields["advisor"].label_from_instance = lambda u: (
+            f"{u.get_full_name() or u.email} — {u.profile.get_role_display()}"
+        )

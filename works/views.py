@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Prefetch, Q
 from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from .forms import WorkForm
 from .models import Work, WorkAuthor, WorkFile
@@ -75,16 +76,38 @@ def detail(request, slug):
     work = get_object_or_404(_annotated_qs(request.user), slug=slug)
     if not work.listing_visible_to(request.user):
         raise Http404()
+    # Publication revisions — the "Published" snapshots of the source draft,
+    # oldest → newest, so each carries a stable revision number.
+    revisions = []
+    draft = getattr(work, "source_draft", None)
+    if draft is not None:
+        pubs = list(draft.versions.filter(label="Published")
+                    .select_related("saved_by").order_by("saved_at"))
+        revisions = [
+            {"number": i + 1, "saved_at": v.saved_at, "saved_by": v.saved_by}
+            for i, v in enumerate(pubs)
+        ]
+        revisions.reverse()  # newest first for display
+    # Unpublish (back to an editable draft) is offered for document works whose
+    # source draft still exists and whose group the user manages.
+    can_unpublish = False
+    if draft is not None:
+        from workgroups.permissions import can_manage_workgroup
+
+        can_unpublish = can_manage_workgroup(request.user, draft.workgroup)
     return render(request, "works/detail.html", {
         "work": work,
         "can_edit": work.editable_by(request.user),
-        "pdf_visible": work.pdf_visible_to(request.user),
+        "content_visible": work.content_visible_to(request.user),
+        "revisions": revisions,
+        "source_draft": draft,
+        "can_unpublish": can_unpublish,
     })
 
 
 def download(request, slug, file_id):
     work = get_object_or_404(Work, slug=slug)
-    if not work.pdf_visible_to(request.user):
+    if not work.content_visible_to(request.user):
         raise Http404()
     wf = get_object_or_404(WorkFile, pk=file_id, work=work)
     filename = wf.file.name.rsplit("/", 1)[-1]
@@ -125,6 +148,22 @@ def edit(request, slug):
         "work": work,
         "is_new": False,
     })
+
+
+@login_required
+@require_POST
+def delete(request, slug):
+    """Remove a work entirely (and its attached files). If it was published
+    from a draft, the draft survives — its ``published_work`` link just nulls,
+    so the document can be re-published or further edited."""
+    work = get_object_or_404(Work, slug=slug)
+    if not work.editable_by(request.user):
+        return HttpResponseForbidden("You don't have permission to delete this work.")
+    wg = work.workgroup
+    work.delete()
+    if wg is not None:
+        return redirect(f"{wg.get_absolute_url()}?tab=work")
+    return redirect("works:index")
 
 
 @login_required

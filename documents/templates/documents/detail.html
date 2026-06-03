@@ -35,8 +35,8 @@
       {% if doc.listing_visibility == "members" %}
       <span class="badge badge-ghost badge-sm">Listing: Members only</span>
       {% endif %}
-      {% if doc.pdf_visibility == "members" %}
-      <span class="badge badge-ghost badge-sm">PDF: Members only</span>
+      {% if doc.content_visibility == "members" %}
+      <span class="badge badge-ghost badge-sm">Contents: Members only</span>
       {% endif %}
     </div>
   </header>
@@ -48,7 +48,7 @@
   {% endif %}
 
   <div class="flex flex-wrap gap-3">
-    {% if pdf_visible %}
+    {% if content_visible %}
     <a href="{% url 'documents:download' doc.slug %}" class="btn btn-primary">
       Download PDF
     </a>

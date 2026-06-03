@@ -1,0 +1,62 @@
+{% extends "core/base.html" %}
+{% block title %}Demandes you advise — LSP{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Demandes you advise</h1>
+    <p class="text-base-content/70">
+      Your advisees' formation demandes. For each open one, write your
+      recommendation and present it to the Meeting of the Analysts — then record
+      that you've presented it here.
+    </p>
+  </header>
+
+  {% for a in advancements %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-3">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <div>
+        <h2 class="font-medium text-base-content">{{ a.member.get_full_name|default:a.member.email }}</h2>
+        <p class="text-sm text-base-content/60">{{ a.get_kind_display }} · opened {{ a.requested_at|date:"M j, Y" }}</p>
+      </div>
+      <span class="badge {% if a.status == 'approved' %}badge-success{% elif a.status == 'presented' %}badge-info{% elif a.is_open %}badge-warning{% else %}badge-ghost{% endif %}">{{ a.get_status_display }}</span>
+    </div>
+
+    <div>
+      <p class="text-base-content/60 text-sm mb-1">Their statement</p>
+      <div class="rounded-lg bg-base-200/40 p-3 text-sm whitespace-pre-wrap">{{ a.statement }}</div>
+    </div>
+    {% if a.palimpsest %}
+    <p class="text-sm"><span class="text-base-content/60">Palimpsest:</span> <a href="{% url 'admissions:palimpsest_download' a.pk %}" class="link link-primary">Download</a></p>
+    {% endif %}
+
+    {% if a.is_open %}
+    <form method="post" action="{% url 'admissions:advise_present' a.pk %}" class="space-y-3 border-t border-base-300/50 pt-3">
+      {% csrf_token %}
+      <div class="space-y-1">
+        <label class="block text-sm text-base-content/70">Your recommendation to the Meeting</label>
+        <textarea name="a{{ a.pk }}-recommendation" rows="5" class="textarea textarea-bordered w-full" required>{{ a.recommendation }}</textarea>
+      </div>
+      <div class="flex flex-wrap items-end gap-2">
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">Date presented (blank = today)</label>
+          <input type="date" name="a{{ a.pk }}-presented_at" value="{{ a.presented_at|date:'Y-m-d' }}" class="input input-bordered">
+        </div>
+        <button class="btn btn-primary btn-sm">
+          {% if a.status == 'presented' %}Update recommendation{% else %}Mark presented to the Meeting{% endif %}
+        </button>
+      </div>
+    </form>
+    {% elif a.recommendation %}
+    <div><p class="text-base-content/60 text-sm mb-1">Your recommendation</p>
+      <p class="text-sm text-base-content/70 whitespace-pre-wrap">{{ a.recommendation }}</p></div>
+    {% endif %}
+  </section>
+  {% empty %}
+  <p class="text-sm text-base-content/60">No advisees have open demandes right now.</p>
+  {% endfor %}
+</div>
+{% endblock %}

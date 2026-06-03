@@ -69,6 +69,8 @@ class StaffRole(models.Model):
     TREASURER = "treasurer"
     CARTEL_COORDINATOR = "cartel_coordinator"
     LSP_STAFF = "lsp_staff"
+    ADMIN_ASSISTANT = "admin_assistant"
+    WEB_DEVELOPER = "web_developer"
 
     key = models.SlugField(
         max_length=50,
@@ -90,3 +92,30 @@ class StaffRole(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class ImpersonationLog(models.Model):
+    """Audit trail: a superuser viewed the site as another user (impersonation).
+
+    Recorded when impersonation *starts*; ``ended_at`` is stamped on exit.
+    """
+
+    impersonator = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE,
+        related_name="impersonations_made",
+    )
+    target = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE,
+        related_name="impersonations_of",
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    read_only = models.BooleanField(
+        default=True, help_text="Whether writes were blocked (real member, not a persona)."
+    )
+
+    class Meta:
+        ordering = ("-started_at",)
+
+    def __str__(self) -> str:
+        return f"{self.impersonator} → {self.target} @ {self.started_at:%Y-%m-%d %H:%M}"

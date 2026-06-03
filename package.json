@@ -5,11 +5,17 @@
   "description": "CSS build tooling for the LSP website (Tailwind v4 + DaisyUI v5).",
   "scripts": {
     "build:css": "tailwindcss -i ./assets/css/input.css -o ./static/css/site.css --minify",
-    "watch:css": "tailwindcss -i ./assets/css/input.css -o ./static/css/site.css --watch"
+    "watch:css": "tailwindcss -i ./assets/css/input.css -o ./static/css/site.css --watch",
+    "build:js": "esbuild assets/js/doc-editor.src.js --bundle --minify --format=iife --outfile=static/js/vendor/doc-editor.js"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.0.0",
+    "@tiptap/core": "^2.27.2",
+    "@tiptap/extension-link": "^2.27.2",
+    "@tiptap/extension-placeholder": "^2.27.2",
+    "@tiptap/starter-kit": "^2.27.2",
     "daisyui": "^5.0.0",
+    "esbuild": "0.24.2",
     "tailwindcss": "^4.0.0"
   }
 }

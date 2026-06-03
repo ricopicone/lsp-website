@@ -36,7 +36,7 @@ class SeedWork:
     publication_date: date | None = None
     abstract: str = ""
     listing_visibility: str = Work.Visibility.PUBLIC
-    pdf_visibility: str = Work.PDFVisibility.MEMBERS
+    content_visibility: str = Work.Visibility.MEMBERS
 
 
 SEED: list[SeedWork] = [
@@ -135,7 +135,7 @@ class Command(BaseCommand):
                 w.abstract = entry.abstract
                 w.publication_date = entry.publication_date
                 w.listing_visibility = entry.listing_visibility
-                w.pdf_visibility = entry.pdf_visibility
+                w.content_visibility = entry.content_visibility
                 w.external_authors = "; ".join(externals)
                 with pdf_path.open("rb") as fh:
                     w.pdf.save(pdf_path.name, File(fh), save=False)

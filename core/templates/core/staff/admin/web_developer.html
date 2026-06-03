@@ -1,0 +1,11 @@
+{% extends "core/staff/admin/_base.html" %}
+{% block admin_heading_title %}Web Developer Admin{% endblock %}
+{% block admin_kicker %}Staff · Web Developer{% endblock %}
+{% block admin_heading %}Web Developer Admin{% endblock %}
+{% block admin_intro %}Technical operations for the site. Most items live in external systems; this page gathers the entry points.{% endblock %}
+{% block admin_sections %}
+  {% include "core/staff/admin/_section.html" with title="Django admin" body="The full back office for every model (requires staff access)." link="/admin/" link_label="Open Django admin" %}
+  {% include "core/staff/admin/_section.html" with title="Deploys & operations" status="Planned" body="Deploy status and history, and a link to the operational runbook." %}
+  {% include "core/staff/admin/_section.html" with title="Scheduled jobs" status="Planned" body="The cron timers (dues/tuition reminders, digests, purges) and their state." %}
+  {% include "core/staff/admin/_section.html" with title="Technical docs" status="Planned" body="Architecture and developer guides for the site." %}
+{% endblock %}

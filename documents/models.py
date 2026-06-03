@@ -5,7 +5,7 @@ Distinct from ``works.Work`` (member-contributed intellectual output): a
 formation guidelines, founding texts, cartel-process resources). Most
 are public; a few may be members-only.
 
-Two-axis visibility (``listing_visibility`` + ``pdf_visibility``) lets a
+Two-axis visibility (``listing_visibility`` + ``content_visibility``) lets a
 document's existence be public while the PDF stays members-only — useful
 for founding texts and cartel papers we want to *acknowledge* publicly
 while restricting the actual text to members. Same shape as Work.
@@ -33,6 +33,7 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from accounts.permissions import is_lsp_member
+from core.storage import private_storage
 
 
 class Document(models.Model):
@@ -79,20 +80,20 @@ class Document(models.Model):
             "change'. Leave blank when the document is settled."
         ),
     )
-    file = models.FileField(upload_to="documents/%Y/")
+    file = models.FileField(upload_to="documents/%Y/", storage=private_storage)
     listing_visibility = models.CharField(
         max_length=16,
         choices=Visibility.choices,
         default=Visibility.PUBLIC,
         help_text="Who can see this document exists in the index.",
     )
-    pdf_visibility = models.CharField(
+    content_visibility = models.CharField(
         max_length=16,
         choices=Visibility.choices,
         default=Visibility.PUBLIC,
         help_text=(
-            "Who can download the PDF. Cannot be more public than the "
-            "listing — e.g. listing=Members blocks a Public PDF."
+            "Who can open the contents — the PDF. Cannot be more public than "
+            "the listing — e.g. listing=Members blocks Public contents."
         ),
     )
     effective_date = models.DateField(
@@ -143,12 +144,12 @@ class Document(models.Model):
 
     def clean(self):
         if (
-            self.pdf_visibility == self.Visibility.PUBLIC
+            self.content_visibility == self.Visibility.PUBLIC
             and self.listing_visibility == self.Visibility.MEMBERS
         ):
             raise ValidationError({
-                "pdf_visibility": _(
-                    "PDF can't be public when the listing is members-only."
+                "content_visibility": _(
+                    "Contents can't be public when the listing is members-only."
                 ),
             })
 
@@ -187,9 +188,10 @@ class Document(models.Model):
             return True
         return is_lsp_member(user)
 
-    def pdf_visible_to(self, user) -> bool:
-        """Whether ``user`` may download the PDF (members-only ⇒ LSP member)."""
-        if self.pdf_visibility == self.Visibility.PUBLIC:
+    def content_visible_to(self, user) -> bool:
+        """Whether ``user`` may open the contents — the PDF (members-only ⇒ LSP
+        member)."""
+        if self.content_visibility == self.Visibility.PUBLIC:
             return True
         return is_lsp_member(user)
 
