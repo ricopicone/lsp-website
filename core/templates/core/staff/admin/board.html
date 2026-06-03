@@ -2,10 +2,18 @@
 {% block admin_heading_title %}Board Admin{% endblock %}
 {% block admin_kicker %}Governance · Board{% endblock %}
 {% block admin_heading %}Board Admin{% endblock %}
-{% block admin_intro %}Tools for the Board of Directors. The Board's roster, minutes, and discussion live in its workspace; the items below will gather Board-level administration as they're built.{% endblock %}
+{% block admin_intro %}School-governance actions the Board performs. The Board's own roster, documents, minutes, decisions, and discussion live in its workspace — linked below — not here.{% endblock %}
 {% block admin_sections %}
-  {% include "core/staff/admin/_section.html" with title="Board roster & terms" status="Planned" body="See and manage who sits on the Board and their term dates." %}
-  {% include "core/staff/admin/_section.html" with title="Board documents" status="Planned" body="Charter, bylaws, policies, and shared Board files in one place." %}
-  {% include "core/staff/admin/_section.html" with title="Meeting minutes" status="Planned" body="Agendas and minutes for Board meetings." %}
-  {% include "core/staff/admin/_section.html" with title="Membership decisions" status="Planned" body="Admissions, role transitions, and standing changes the Board ratifies." %}
+  {% comment %}Pointer out to the collaborative workspace (roster/docs/minutes/etc.).{% endcomment %}
+  {% if workspace_url %}
+  {% include "core/staff/admin/_section.html" with title="Board workspace" body="Roster & officer roles, documents, minutes, decisions, calendar, and discussion — the Board's shared workspace." link=workspace_url link_label="Open the Board workspace" %}
+  {% else %}
+  {% include "core/staff/admin/_section.html" with title="Board workspace" status="Not set up" body="Roster, documents, minutes, decisions, and discussion live in the Board's workspace once its workgroup is created." %}
+  {% endif %}
+
+  {% comment %}Genuinely board-specific governance — not in the workspace.{% endcomment %}
+  {% include "core/staff/admin/_section.html" with title="Membership administration" status="Planned" body="Admit members and record role/standing transitions across the school — student → pre-candidate → candidate → analyst, leaves, and resignations. Each change writes the member's role-timeline entry." %}
+  {% include "core/staff/admin/_section.html" with title="Appointments" status="Planned" body="Appoint and reassign staff roles (Treasurer, Web Coordinator, Cartel Coordinator, Administrative Assistant, Web Developer) and committee chairs." %}
+  {% include "core/staff/admin/_section.html" with title="Committees" status="Planned" body="Create and oversee committees and their charge — each gets a workspace for its own roster, minutes, and discussion." %}
+  {% include "core/staff/admin/_section.html" with title="Governance overview" status="Planned" body="Membership by standing, pending decisions, and a link through to the Treasurer's finances — the Board's at-a-glance dashboard." %}
 {% endblock %}

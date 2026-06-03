@@ -183,10 +183,25 @@ def doc(request, slug):
 
 @login_required
 def board_admin(request):
-    """Board's admin landing. Gated to Board members (+ staff/superuser)."""
+    """Board's admin landing. Gated to Board members (+ staff/superuser).
+
+    School-governance actions only — the Board's own roster, documents, minutes,
+    decisions, and discussion live in its workspace, linked from the page.
+    """
     if not _can_board(request.user):
         raise PermissionDenied
-    return render(request, "core/staff/admin/board.html", {})
+    from committees.models import Committee
+    board = (
+        Committee.objects.filter(slug="board").select_related("workgroup").first()
+    )
+    workspace_url = (
+        reverse("workgroups:detail", args=[board.workgroup.slug])
+        if board and board.workgroup_id
+        else None
+    )
+    return render(request, "core/staff/admin/board.html", {
+        "workspace_url": workspace_url,
+    })
 
 
 @login_required
