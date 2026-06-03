@@ -66,6 +66,9 @@ class Command(BaseCommand):
                             help="Create rows even when they look like a ledger duplicate.")
         parser.add_argument("--verbose-rows", action="store_true",
                             help="List every charge and its planned action.")
+        parser.add_argument("--dump-unknown", action="store_true",
+                            help="List every still-unknown charge (payer, date, "
+                            "description) to help classify the tail.")
 
     # -- fetch (live Stripe; not unit-tested) --------------------------------
 
@@ -119,17 +122,24 @@ class Command(BaseCommand):
         payments = list(Payment.objects.all().only(
             "id", "stripe_payment_intent_id", "stripe_checkout_session_id",
             "status", "source", "method", "amount", "paid_at", "user_id", "notes",
+            "payment_type",
         ))
         tags_seen = set()
         overlaps_by_user: dict = {}
+        existing_dues_ay: dict = {}
         for p in payments:
             for m in TAG_RE.finditer(p.notes or ""):
                 tags_seen.add(m.group(1))
-            # Overlap candidates: succeeded offline rows from the treasurer ledger.
+            if not (p.user_id and p.status == Payment.Status.SUCCEEDED):
+                continue
+            # Dues are once-per-member-per-year: index every succeeded dues row
+            # (any source/method) so a Stripe dues charge for that (member, AY)
+            # is recognised as a duplicate.
+            if p.payment_type == Payment.Type.DUES and p.paid_at:
+                existing_dues_ay.setdefault((p.user_id, ay_of(p.paid_at.date())), p.pk)
+            # Amount+date overlap candidates: succeeded offline ledger rows.
             if (
-                p.user_id and p.paid_at
-                and p.status == Payment.Status.SUCCEEDED
-                and p.method == Payment.Method.OFFLINE
+                p.paid_at and p.method == Payment.Method.OFFLINE
                 and p.source in (Source.IMPORTED, Source.VERIFIED)
             ):
                 overlaps_by_user.setdefault(p.user_id, []).append(
@@ -159,14 +169,15 @@ class Command(BaseCommand):
             for tp in TuitionPeriod.objects.all()
         }
 
-        # {(user_id, ay)} the member held a tuition-paying role — gates the
-        # "multiple charges in an AY = installments" rule to actual students.
+        # {(user_id, ay)} the member held a *non*-student role — blocks the
+        # "multiple charges in an AY = installments" rule for them (e.g. an
+        # analyst's repeat donations). Unknown role that year → allowed.
         cur_ay = current_academic_year_start()
-        tuition_user_ays: set = set()
-        for t in MembershipTenure.objects.filter(role__in=Profile.IN_TRAINING_ROLES):
+        non_student_user_ays: set = set()
+        for t in MembershipTenure.objects.exclude(role__in=Profile.IN_TRAINING_ROLES):
             last = t.end_ay if t.end_ay is not None else cur_ay
             for ay in range(t.start_ay, last + 1):
-                tuition_user_ays.add((t.user_id, ay))
+                non_student_user_ays.add((t.user_id, ay))
 
         return PlanContext(
             valid_types=set(Payment.Type.values),
@@ -185,7 +196,8 @@ class Command(BaseCommand):
             overlaps_by_user=overlaps_by_user,
             dues_amounts_by_ay={k: frozenset(v) for k, v in dues_amounts_by_ay.items()},
             tuition_by_ay=tuition_by_ay,
-            tuition_user_ays=tuition_user_ays,
+            existing_dues_ay=existing_dues_ay,
+            non_student_user_ays=non_student_user_ays,
             only_types=only_types,
             default_type=default_type,
         )
@@ -212,6 +224,17 @@ class Command(BaseCommand):
         plans = plan_charges(rows, ctx, allow_overlaps=opts["allow_overlaps"])
 
         self._report(plans, committing=opts["commit"])
+
+        if opts["dump_unknown"]:
+            unknown = [p for p in plans if p.action == "needs_type"]
+            self.stdout.write(f"\nAll {len(unknown)} unknown charges:")
+            for p in sorted(unknown, key=lambda p: (p.row.amount, p.row.created)):
+                r = p.row
+                who = r.name or r.email or "?"
+                self.stdout.write(
+                    f"  ${r.amount:>8}  {r.created:%Y-%m-%d}  {who:<28.28}  "
+                    f"{(r.description or '')[:50]}"
+                )
 
         if opts["commit"]:
             with transaction.atomic():

@@ -151,13 +151,16 @@ def test_amount_infers_tuition_from_period():
     assert plans[0].payment_type == "tuition"
 
 
-def _in_training(user, start_ay=2023, end_ay=None):
+def _tenure(user, role, start_ay=2023, end_ay=None):
     from accounts.models import MembershipTenure
     MembershipTenure.objects.create(
-        user=user, role=Profile.Role.PRE_CANDIDATE,
-        standing=Profile.Standing.ACTIVE, start_ay=start_ay, end_ay=end_ay,
-        source=Source.IMPORTED,
+        user=user, role=role, standing=Profile.Standing.ACTIVE,
+        start_ay=start_ay, end_ay=end_ay, source=Source.IMPORTED,
     )
+
+
+def _in_training(user, **kw):
+    _tenure(user, Profile.Role.PRE_CANDIDATE, **kw)
 
 
 def test_multiple_charges_in_ay_are_tuition_installments():
@@ -173,13 +176,29 @@ def test_multiple_charges_in_ay_are_tuition_installments():
     assert all("installment" in p.reason for p in plans)
 
 
-def test_multiple_charges_from_non_student_not_tuition():
-    _user("ann@x.test")  # no in-training tenure → not a tuition payer
+def test_multiple_charges_from_known_non_student_not_tuition():
+    u = _user("ann@x.test")
+    _tenure(u, Profile.Role.ANALYST)  # known non-student that year → blocked
     plans = _plan([
         _charge(cid="ch_a", pi="pi_a", amount=50000, description=""),
         _charge(cid="ch_b", pi="pi_b", amount=50000, description=""),
     ])
     assert {p.action for p in plans} == {"needs_type"}
+
+
+def test_multiple_charges_unknown_role_grouped_as_tuition():
+    _user("ann@x.test")  # no tenure on record → benefit of the doubt
+    plans = _plan([
+        _charge(cid="ch_a", pi="pi_a", amount=50000, description=""),
+        _charge(cid="ch_b", pi="pi_b", amount=50000, description=""),
+    ])
+    assert all(p.payment_type == "tuition" for p in plans)
+
+
+def test_amount_infers_tuition_static_fallback():
+    _user("ann@x.test")  # no TuitionPeriod, but $2000 is a standard amount
+    plans = _plan([_charge(amount=200000, description="")])
+    assert plans[0].payment_type == "tuition"
 
 
 def test_single_nontier_charge_stays_unknown():
@@ -273,6 +292,20 @@ def test_overlap_with_ledger_skipped_then_allowed():
     # Forcing it creates the row anyway.
     plans = _plan([_charge(description="dues")], allow_overlaps=True)
     assert plans[0].action == "create"
+
+
+def test_dues_overlap_by_member_and_ay():
+    u = _user("ann@x.test")
+    # Member already has a succeeded dues row for AY 2023 (ledger, $150).
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES, user=u, amount=Decimal("150.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        source=Source.IMPORTED, paid_at=DAY,
+    )
+    # A Stripe dues charge for the same AY — even a different tier — is a dup.
+    plans = _plan([_charge(amount=10000, description="dues")])  # $100, AY 2023
+    assert plans[0].action == "overlap"
+    assert "academic year" in plans[0].reason
 
 
 def test_idempotent_rerun_skips():

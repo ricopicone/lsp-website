@@ -41,6 +41,10 @@ from accounts.models import Source
 #: these amounts are dues (historical years may have no DuesPeriod row).
 DEFAULT_DUES_AMOUNTS = frozenset({Decimal("50"), Decimal("100"), Decimal("150")})
 
+#: Standard full-year tuition amounts across the years we have ($2500 current,
+#: $2000 earlier) — used when no TuitionPeriod row covers the charge's year.
+DEFAULT_TUITION_AMOUNTS = frozenset({Decimal("2000"), Decimal("2500")})
+
 #: Marker written into Payment.notes; also the idempotency key on re-runs.
 TAG_RE = re.compile(r"\[stripe-import:([^\]]+)\]")
 
@@ -174,8 +178,11 @@ def infer_type(row: StripeChargeRow, ctx) -> tuple[str | None, str]:
     dues_amts = ctx.dues_amounts_by_ay.get(ay, frozenset()) | ctx.static_dues
     if row.amount in dues_amts and "dues" in ctx.valid_types:
         return "dues", "amount"
-    tuition_amt = ctx.tuition_by_ay.get(ay)
-    if tuition_amt is not None and row.amount == tuition_amt and "tuition" in ctx.valid_types:
+    period_tuition = ctx.tuition_by_ay.get(ay)
+    tuition_amts = ctx.static_tuition | (
+        {period_tuition} if period_tuition is not None else set()
+    )
+    if row.amount in tuition_amts and "tuition" in ctx.valid_types:
         return "tuition", "amount"
     return None, ""
 
@@ -224,10 +231,16 @@ class PlanContext:
     dues_amounts_by_ay: dict = field(default_factory=dict)   # ay -> {tier amounts}
     tuition_by_ay: dict = field(default_factory=dict)        # ay -> tuition amount
     static_dues: frozenset = DEFAULT_DUES_AMOUNTS
-    #: {(user_id, ay)} the member was in a tuition-paying (in-training) role.
-    #: When provided, installment inference is limited to these — so a frequent
-    #: donor's several gifts aren't mistaken for a payment plan. None = no gate.
-    tuition_user_ays: set | None = None
+    static_tuition: frozenset = DEFAULT_TUITION_AMOUNTS
+    #: {(user_id, ay): payment_pk} where a succeeded dues payment already exists.
+    #: Dues are once-per-member-per-year, so a charge for an (member, AY) already
+    #: on record is a duplicate (catches ledger dues the ±7-day check would miss).
+    existing_dues_ay: dict = field(default_factory=dict)
+    #: {(user_id, ay)} the member held a *non*-student role — installment
+    #: inference is blocked for these (their several charges aren't a payment
+    #: plan). A member with no role on record that year is given the benefit of
+    #: the doubt (historical years often lack tenure data).
+    non_student_user_ays: set | None = None
     only_types: set | None = None                # restrict which types to create
     default_type: str | None = None
     overlap_days: int = 7
@@ -274,16 +287,27 @@ def plan_charge(row: StripeChargeRow, ctx: PlanContext, *, allow_overlaps=False)
 
     # --- Create a new historical row. ---
     user_id, confidence = _match_member(row, ctx)
-    overlap_pk = _find_overlap(ctx, user_id, row)
+    ptype, how = infer_type(row, ctx)
+    type_inferred = ptype is not None
+    ay = ay_of(row.created.date())
+
+    # Duplicate guard (type-aware). Dues are once-per-member-per-year, so an
+    # (member, AY) already on record is a duplicate — stronger than a date
+    # window. Other types fall back to the amount + ±N-day match.
+    overlap_pk = None
+    reason = "likely duplicate of an existing imported payment"
+    if ptype == "dues" and user_id is not None:
+        overlap_pk = ctx.existing_dues_ay.get((user_id, ay))
+        if overlap_pk is not None:
+            reason = "member already has dues recorded for this academic year"
+    if overlap_pk is None:
+        overlap_pk = _find_overlap(ctx, user_id, row)
     if overlap_pk is not None and not allow_overlaps:
         return ChargePlan(
-            row, "overlap",
-            "likely duplicate of an existing imported payment",
+            row, "overlap", reason,
             user_id=user_id, member_match=confidence, overlap_payment_id=overlap_pk,
         )
 
-    ptype, how = infer_type(row, ctx)
-    type_inferred = ptype is not None
     if ptype is None:
         ptype = ctx.default_type
     if ptype is None:
@@ -346,8 +370,9 @@ def _infer_installments(plans: list[ChargePlan], ctx: PlanContext) -> None:
     for (uid, ay), members in groups.items():
         if len(members) < 2:
             continue
-        # Only members who were in a tuition-paying role that year (when known).
-        if ctx.tuition_user_ays is not None and (uid, ay) not in ctx.tuition_user_ays:
+        # Skip only when we positively know this member wasn't a student that
+        # year (e.g. an analyst's repeat donations). Unknown role → allow.
+        if ctx.non_student_user_ays is not None and (uid, ay) in ctx.non_student_user_ays:
             continue
         for p in members:
             p.action = "create"
