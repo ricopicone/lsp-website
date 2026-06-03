@@ -169,11 +169,13 @@ class Command(BaseCommand):
 
         # Per-year dues tiers + tuition amounts, for data-driven type inference.
         dues_amounts_by_ay: dict = {}
+        dues_period_by_ay: dict = {}
         for dp in DuesPeriod.objects.all():
             ay = ay_of(dp.start_date)
             amts = {dp.dues_amount_pre_candidate, dp.dues_amount_candidate,
                     dp.dues_amount_analyst}
             dues_amounts_by_ay.setdefault(ay, set()).update(a for a in amts if a)
+            dues_period_by_ay.setdefault(ay, dp.pk)
         tuition_by_ay = {
             ay_of(tp.start_date): tp.tuition_amount
             for tp in TuitionPeriod.objects.all()
@@ -229,6 +231,7 @@ class Command(BaseCommand):
             matcher=NameMatcher.from_queryset(users),
             overlaps_by_user=overlaps_by_user,
             dues_amounts_by_ay={k: frozenset(v) for k, v in dues_amounts_by_ay.items()},
+            dues_period_by_ay=dues_period_by_ay,
             tuition_by_ay=tuition_by_ay,
             existing_dues_ay=existing_dues_ay,
             non_student_user_ays=non_student_user_ays,

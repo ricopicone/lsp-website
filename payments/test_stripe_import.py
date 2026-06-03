@@ -198,6 +198,26 @@ def test_multiple_charges_unknown_role_grouped_as_tuition():
     assert all(p.payment_type == "tuition" for p in plans)
 
 
+def test_dues_links_to_period():
+    from datetime import date
+
+    from payments.models import DuesPeriod
+    dp = DuesPeriod.objects.create(
+        name="AY 2023–2024", slug="ay-2023-2024",
+        start_date=date(2023, 9, 1), end_date=date(2024, 8, 31),
+        due_date=date(2023, 12, 1),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"), dues_amount_analyst=Decimal("150"),
+    )
+    _user("ann@x.test")
+    plans = _plan([_charge(amount=15000, description="")])  # $150, AY 2023
+    assert plans[0].payment_type == "dues"
+    assert plans[0].dues_period_id == dp.pk
+    apply_plan(plans)
+    p = Payment.objects.get(stripe_payment_intent_id="pi_1")
+    assert p.dues_period_id == dp.pk
+
+
 def test_amount_infers_tuition_static_fallback():
     _user("ann@x.test")  # no TuitionPeriod, but $2000 is a standard amount
     plans = _plan([_charge(amount=200000, description="")])

@@ -216,6 +216,9 @@ class ChargePlan:
     #: A provisional guess from the --sweep-unknown pass (recorded as
     #: source=ASSUMED, to be confirmed via the member survey).
     provisional: bool = False
+    #: For dues, the DuesPeriod covering the charge's academic year (so the
+    #: treasurer's per-year dashboard counts this payment).
+    dues_period_id: int | None = None
     existing_payment_id: int | None = None
     overlap_payment_id: int | None = None
 
@@ -232,6 +235,7 @@ class PlanContext:
     matcher: object                              # NameMatcher
     overlaps_by_user: dict                       # user_id -> [(amount, date, pk)]
     dues_amounts_by_ay: dict = field(default_factory=dict)   # ay -> {tier amounts}
+    dues_period_by_ay: dict = field(default_factory=dict)    # ay -> DuesPeriod pk
     tuition_by_ay: dict = field(default_factory=dict)        # ay -> tuition amount
     static_dues: frozenset = DEFAULT_DUES_AMOUNTS
     static_tuition: frozenset = DEFAULT_TUITION_AMOUNTS
@@ -331,10 +335,12 @@ def plan_charge(row: StripeChargeRow, ctx: PlanContext, *, allow_overlaps=False)
         f"new historical payment ({how} type)" if user_id is not None
         else f"new payment, member unmatched ({how} type)"
     )
+    dues_period_id = ctx.dues_period_by_ay.get(ay) if ptype == "dues" else None
     return ChargePlan(
         row, action, reason,
         payment_type=ptype, user_id=user_id, member_match=confidence,
         type_inferred=type_inferred, overlap_payment_id=overlap_pk,
+        dues_period_id=dues_period_id,
     )
 
 
@@ -455,6 +461,7 @@ def apply_plan(plans: list[ChargePlan]) -> dict:
                 email=row.email,
                 # Provisional sweep guesses are ASSUMED; confident matches IMPORTED.
                 source=Source.ASSUMED if plan.provisional else Source.IMPORTED,
+                dues_period_id=plan.dues_period_id,
                 paid_at=row.created,
                 notes=_compose_note(row, plan),
             )
