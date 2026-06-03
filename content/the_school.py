@@ -52,6 +52,14 @@ DESTINATIONS: dict[str, str] = {
     "passages": "works:index",
 }
 
+# Optional query string appended to a destination — a filter the linked page
+# applies automatically. Lets one shared archive (the Works index, which reads
+# ``?kind=``) serve as the destination for several blocks, each pre-filtered.
+DESTINATION_QUERY: dict[str, str] = {
+    "palimpsests": "kind=palimpsest",
+    "passages": "kind=passage",
+}
+
 
 @dataclass(frozen=True)
 class Entry:
@@ -99,6 +107,10 @@ def build_rows() -> list[dict]:
                     destination = reverse(url_name)
                 except NoReverseMatch:
                     destination = ""
+                else:
+                    query = DESTINATION_QUERY.get(slug)
+                    if query:
+                        destination = f"{destination}?{query}"
             entry = _load_entry(slug, destination)
             if entry is not None:
                 entries.append(entry)
