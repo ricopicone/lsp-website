@@ -27,6 +27,7 @@ urlpatterns = [
     path("<slug:slug>/roster/add/", views.roster_add, name="roster_add"),
     path("<slug:slug>/roster/remove/", views.roster_remove, name="roster_remove"),
     path("<slug:slug>/roster/role/", views.roster_set_role, name="roster_set_role"),
+    path("<slug:slug>/roster/term/", views.roster_set_term, name="roster_set_term"),
     path("<slug:slug>/open-term/", views.open_reading_group_term, name="open_term"),
     path("<slug:slug>/dates/", views.workgroup_update_dates, name="update_dates"),
     path("<slug:slug>/tasks/add/", views.task_add, name="task_add"),

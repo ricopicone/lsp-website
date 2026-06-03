@@ -933,3 +933,63 @@ def test_delete_document_work_keeps_source_draft(client):
     draft.refresh_from_db()
     assert WorkDraft.objects.filter(pk=draft.pk).exists()
     assert draft.published_work_id is None
+
+
+# ---- Committee terms (has_terms) ---------------------------------------
+
+
+def test_committee_kind_default_enables_terms():
+    from workgroups.models import build_workgroup
+    committee = build_workgroup(Workgroup.Kind.COMMITTEE, name="Board X", slug="board-x")
+    cartel = build_workgroup(Workgroup.Kind.CARTEL, name="Cartel X", slug="cartel-x")
+    assert committee.has_terms is True
+    assert cartel.has_terms is False
+
+
+@pytest.mark.django_db
+def test_set_member_term_model():
+    wg = _wg(kind=Workgroup.Kind.COMMITTEE, name="Term WG", has_terms=True)
+    u = _user("m@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=u, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    # Valid: set a new start and an end.
+    assert wg.set_member_term(
+        u, start_date=datetime.date(2024, 9, 1), end_date=datetime.date(2026, 8, 31)
+    ) is True
+    m = wg.memberships.get(user=u)
+    assert m.start_date == datetime.date(2024, 9, 1)
+    assert m.end_date == datetime.date(2026, 8, 31)
+    # Reject end before start.
+    assert wg.set_member_term(
+        u, start_date=datetime.date(2024, 9, 1), end_date=datetime.date(2024, 1, 1)
+    ) is False
+
+
+def test_roster_set_term_view(client):
+    wg = _wg(kind=Workgroup.Kind.COMMITTEE, name="Term View WG",
+             landing_visibility=Visibility.PUBLIC, has_terms=True)
+    chair = _chair(wg)
+    member = _user("member@x.test", role=Profile.Role.ANALYST)
+    wg.add_member(member)
+    client.force_login(chair)
+    resp = client.post(
+        reverse("workgroups:roster_set_term", args=[wg.slug]),
+        {"user": member.pk, "start_date": "2024-09-01", "end_date": ""},
+    )
+    assert resp.status_code == 302
+    m = wg.memberships.get(user=member, end_date__isnull=True)
+    assert m.start_date == datetime.date(2024, 9, 1)
+
+
+def test_roster_set_term_404_without_has_terms(client):
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="No Terms WG",
+             landing_visibility=Visibility.PUBLIC, has_terms=False)
+    chair = _chair(wg)
+    client.force_login(chair)
+    resp = client.post(
+        reverse("workgroups:roster_set_term", args=[wg.slug]),
+        {"user": chair.pk, "start_date": "2024-09-01"},
+    )
+    assert resp.status_code == 404
