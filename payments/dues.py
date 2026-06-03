@@ -15,13 +15,30 @@ from django.conf import settings
 
 
 def is_dues_obligated(user) -> bool:
-    """True when the user's role makes them owe annual dues."""
+    """True when the user owes annual dues — a dues-obligated *role* held with
+    *active* standing. On-leave / resigned / emeritus members are exempt."""
     if not user.is_authenticated:
         return False
     profile = getattr(user, "profile", None)
     if profile is None or profile.is_persona:
         return False  # personas are test accounts — never financially obligated
+    from accounts.models import Profile
+    if profile.standing != Profile.Standing.ACTIVE:
+        return False  # on leave / resigned / emeritus → not obligated
     return profile.role in set(settings.DUES_OBLIGATED_ROLES)
+
+
+def obligated_users_qs():
+    """Queryset of users currently obligated to pay dues: active account,
+    non-persona, ACTIVE standing, in a dues-obligated role. The single
+    definition the treasurer dashboard's counts/lists build on."""
+    from accounts.models import Profile, User
+    return User.objects.filter(
+        is_active=True,
+        profile__is_persona=False,
+        profile__standing=Profile.Standing.ACTIVE,
+        profile__role__in=list(settings.DUES_OBLIGATED_ROLES),
+    )
 
 
 def user_paid_for_period(user, period) -> bool:
