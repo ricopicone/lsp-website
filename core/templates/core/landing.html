@@ -28,6 +28,17 @@
   /* A faint vertical hairline marks the editorial statement band. */
   .lsp-rule-accent { box-shadow: inset 2px 0 0 0 var(--color-primary); }
 
+  /* The display serif (Cutive) has tall ascenders, and the reveal animation
+     promotes the heading to its own compositing layer — which Safari clips to
+     the box, shaving the tops of the caps. Give the box headroom inside that
+     layer and offset it with a matching negative margin so the layout rhythm
+     is unchanged. */
+  .lsp-hero h1 {
+    padding-top: 0.75rem;
+    margin-top: -0.75rem;
+    padding-bottom: 0.25rem;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .lsp-reveal {
       opacity: 0;
@@ -43,14 +54,19 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-16 sm:space-y-24">
+{% comment %}
+Vertical rhythm is set per-section (not a blanket space-y) so the two ruled
+interludes don't double up margin + border-padding, and so the conditional
+sections (alerts, "Coming up") never leave an orphaned gap.
+{% endcomment %}
+<div>
 
   {# ===================== Hero ===================== #}
   <header class="lsp-hero space-y-7 max-w-3xl pt-2 sm:pt-8">
     <p class="lsp-reveal font-mono text-xs uppercase tracking-[0.2em] text-base-content/50" style="--d:0">
       A worldwide school · based in San Francisco
     </p>
-    <h1 class="lsp-reveal font-serif text-4xl sm:text-6xl text-base-content leading-[1.05] tracking-tight" style="--d:1">
+    <h1 class="lsp-reveal font-serif text-4xl sm:text-6xl text-base-content leading-[1.1] tracking-tight" style="--d:1">
       Lacanian School<br class="hidden sm:block"> of Psychoanalysis
     </h1>
     <p class="lsp-reveal text-lg sm:text-xl text-base-content/75 leading-relaxed max-w-2xl" style="--d:2">
@@ -69,7 +85,7 @@
 
   {# ===================== Member alerts (functional) ===================== #}
   {% if dues_period_unpaid or user_registrations_url %}
-  <div class="space-y-3 -my-4 sm:-my-8">
+  <div class="space-y-3 mt-8">
     {% if dues_period_unpaid %}
     <div role="alert" class="alert alert-warning">
       <span>
@@ -88,7 +104,7 @@
   {% endif %}
 
   {# ===================== Three doors ===================== #}
-  <section class="space-y-6">
+  <section class="space-y-6 mt-16 sm:mt-20">
     <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">However you arrive</h2>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
 
@@ -136,7 +152,7 @@
 
   {# ===================== Coming up ===================== #}
   {% if upcoming_events %}
-  <section class="space-y-6">
+  <section class="space-y-6 mt-16 sm:mt-20">
     <div class="flex flex-wrap items-baseline justify-between gap-4">
       <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">Coming up</h2>
       <a href="{% url 'core:calendar' %}" class="link link-hover text-sm text-base-content/60">Full calendar →</a>
@@ -168,7 +184,7 @@
   {% endif %}
 
   {# ============ Editorial statement: a school run by its students ============ #}
-  <section class="border-t border-base-300/60 pt-12 sm:pt-16">
+  <section class="mt-12 sm:mt-16 border-t border-base-300/60 pt-10 sm:pt-12">
     <div class="lsp-rule-accent pl-6 sm:pl-9 max-w-3xl">
       <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45 mb-5">How we are organized</p>
       <p class="font-serif text-3xl sm:text-5xl text-base-content leading-[1.08] tracking-tight">
@@ -184,7 +200,7 @@
   </section>
 
   {# ===================== Orientation ===================== #}
-  <section class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 lg:gap-14 items-start">
+  <section class="mt-16 sm:mt-20 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 lg:gap-14 items-start">
     <div class="space-y-5 max-w-2xl">
       <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">What we do</h2>
       <p class="text-base-content/75 leading-relaxed">
@@ -215,7 +231,7 @@
   </section>
 
   {# ===================== Site index ===================== #}
-  <section class="space-y-8 border-t border-base-300/60 pt-12">
+  <section class="space-y-8 mt-12 sm:mt-16 border-t border-base-300/60 pt-10 sm:pt-12">
     <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">Everything here</h2>
     {% with lbl="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45" lnk="link link-hover text-base-content/80" %}
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-8 gap-y-10">
@@ -277,7 +293,7 @@
   </section>
 
   {# ===================== Closing invitation ===================== #}
-  <section class="rounded-xl border border-base-300 bg-base-200/40 px-8 py-10 sm:px-12 sm:py-14 text-center space-y-4">
+  <section class="mt-16 sm:mt-20 rounded-xl border border-base-300 bg-base-200/40 px-8 py-10 sm:px-12 sm:py-14 text-center space-y-4">
     <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">Questions?</h2>
     <p class="text-base-content/70 leading-relaxed max-w-xl mx-auto">
       Whether you're seeking analysis, considering candidacy, or wondering how to

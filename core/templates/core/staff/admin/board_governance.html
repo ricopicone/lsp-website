@@ -1,0 +1,79 @@
+{% extends "core/base.html" %}
+{% block title %}Governance overview — Admin Tools{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+  <nav class="text-sm">
+    <a href="{% url 'board_admin' %}" class="link link-hover text-base-content/60">← Board Admin</a>
+  </nav>
+  <header class="space-y-2">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">Board · Governance</p>
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Governance overview</h1>
+    <p class="text-base-content/70">The school at a glance — membership, pending decisions, and finances.</p>
+  </header>
+
+  {% comment %}Membership by standing{% endcomment %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-3">
+    <div class="flex items-baseline justify-between">
+      <h2 class="font-medium text-base-content">Membership</h2>
+      <span class="font-mono text-xs text-base-content/45">{{ total_members }} member{{ total_members|pluralize }}</span>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {% for s in standings %}
+      <div class="rounded-lg bg-base-200/40 p-3">
+        <div class="text-2xl font-serif text-base-content">{{ s.n }}</div>
+        <div class="text-xs text-base-content/60">{{ s.label }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if roles %}
+    <div class="pt-2">
+      <p class="text-xs text-base-content/50 mb-1">By role</p>
+      <div class="flex flex-wrap gap-2">
+        {% for r in roles %}
+        <span class="badge badge-outline gap-1">{{ r.label }} <span class="font-mono text-base-content/55">{{ r.n }}</span></span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    <a href="{% url 'board_membership_admin' %}" class="link link-primary text-sm">Membership administration →</a>
+  </section>
+
+  {% comment %}Pending decisions{% endcomment %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-3">
+    <h2 class="font-medium text-base-content">Pending decisions</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <a href="{% url 'admissions:review_queue' %}" class="rounded-lg border border-base-300/70 p-3 hover:bg-base-200/40">
+        <div class="text-2xl font-serif text-base-content">{{ pending.applications }}</div>
+        <div class="text-xs text-base-content/60">Open applications</div>
+      </a>
+      <a href="{% url 'admissions:advancement_queue' %}" class="rounded-lg border border-base-300/70 p-3 hover:bg-base-200/40">
+        <div class="text-2xl font-serif text-base-content">{{ pending.advancements }}</div>
+        <div class="text-xs text-base-content/60">Palimpsests &amp; passages</div>
+      </a>
+      <a href="{% url 'cartels:review_queue' %}" class="rounded-lg border border-base-300/70 p-3 hover:bg-base-200/40">
+        <div class="text-2xl font-serif text-base-content">{{ pending.cartels }}</div>
+        <div class="text-xs text-base-content/60">Proposed cartels</div>
+      </a>
+    </div>
+    <p class="text-xs text-base-content/50">
+      Admissions and formation decisions belong to the
+      <a href="{% url 'meeting_of_analysts_admin' %}" class="link">Meeting of the Analysts</a>;
+      cartels are reviewed by the Program Committee / Cartel Coordinator.
+    </p>
+  </section>
+
+  {% comment %}Finances + committees{% endcomment %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <section class="rounded-xl border border-base-300 p-5 space-y-2">
+      <h2 class="font-serif text-lg text-base-content tracking-tight">Finances</h2>
+      <p class="text-sm text-base-content/65">Dues and tuition dashboards, member ledgers, and exports — the Treasurer's surface.</p>
+      <a href="{% url 'treasurer' %}" class="link link-primary text-sm">Open the Treasurer dashboard →</a>
+    </section>
+    <section class="rounded-xl border border-base-300 p-5 space-y-2">
+      <h2 class="font-serif text-lg text-base-content tracking-tight">Committees</h2>
+      <p class="text-sm text-base-content/65">{{ committee_count }} committee{{ committee_count|pluralize }} across the school.</p>
+      <a href="{% url 'board_committees' %}" class="link link-primary text-sm">Manage committees →</a>
+    </section>
+  </div>
+</div>
+{% endblock %}

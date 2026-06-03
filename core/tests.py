@@ -730,3 +730,68 @@ def test_staff_url_redirects_to_admin_tools(client, superuser):
     resp = client.get("/staff/")
     assert resp.status_code == 302
     assert resp.url == reverse("admin_tools")
+
+
+# ---- Board Admin: appointments / committees / governance ----------------
+
+def _board_member(email="boardm@example.com"):
+    from committees.models import Committee
+    u = User.objects.create_user(email=email, password="x")
+    Committee.objects.get(slug="board").add_member(u, start_date=date(2026, 1, 1))
+    return u
+
+
+@pytest.mark.parametrize("name", ["board_appointments", "board_committees", "board_governance"])
+def test_board_pages_gated(db, client, name):
+    client.force_login(User.objects.create_user(email="no@example.com", password="x"))
+    assert client.get(reverse(name)).status_code == 403
+
+
+@pytest.mark.parametrize("name", ["board_appointments", "board_committees", "board_governance"])
+def test_board_pages_render_for_board(db, client, name):
+    client.force_login(_board_member(f"{name}@example.com"))
+    assert client.get(reverse(name)).status_code == 200
+
+
+def test_appoint_and_remove_staff_role(db, client):
+    from core.access import has_staff_role
+    from core.models import StaffRole
+    board = _board_member("appt@example.com")
+    target = User.objects.create_user(email="newtreas@example.com", password="x")
+    client.force_login(board)
+    resp = client.post(reverse("board_appointments"), {
+        "action": "appoint", "role": StaffRole.TREASURER, "user": target.pk,
+    })
+    assert resp.status_code == 302
+    target.refresh_from_db()
+    assert has_staff_role(target, StaffRole.TREASURER)
+    # Remove
+    client.post(reverse("board_appointments"), {
+        "action": "remove", "role": StaffRole.TREASURER, "user": target.pk,
+    })
+    assert not has_staff_role(target, StaffRole.TREASURER)
+
+
+def test_create_committee_provisions_workgroup(db, client):
+    from committees.models import Committee
+    client.force_login(_board_member("cmt@example.com"))
+    resp = client.post(reverse("board_committees"), {
+        "name": "Ethics Committee", "description": "Ethics oversight",
+        "charter": "Reviews ethics matters.", "public": "",
+    })
+    assert resp.status_code == 302
+    c = Committee.objects.get(name="Ethics Committee")
+    assert c.slug == "ethics-committee"
+    assert c.workgroup_id is not None  # auto-provisioned
+
+
+def test_edit_committee(db, client):
+    from committees.models import Committee
+    client.force_login(_board_member("cmt2@example.com"))
+    c = Committee.objects.create(name="Outreach C", slug="outreach-c")
+    client.post(reverse("board_committees"), {
+        "committee": c.pk, "name": "Outreach C", "description": "Updated desc",
+        "charter": "", "public": "on",
+    })
+    c.refresh_from_db()
+    assert c.description == "Updated desc" and c.public is True
