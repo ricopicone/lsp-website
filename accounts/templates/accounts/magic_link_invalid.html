@@ -1,0 +1,19 @@
+{% extends "core/base.html" %}
+{% block title %}Link expired — LSP{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto py-8 space-y-6">
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">Link expired</h1>
+  </header>
+  <div role="alert" class="alert alert-error">
+    <span>
+      This sign-in link is invalid, already used, or expired. Request a fresh
+      one — they're good for a few minutes after sending.
+    </span>
+  </div>
+  <a href="{% url 'magic_link_request' %}" class="btn btn-primary w-full">Email me a new link</a>
+  <p class="text-sm text-base-content/60 text-center">
+    or <a href="{% url 'login' %}" class="link link-primary">log in with a password</a>.
+  </p>
+</div>
+{% endblock %}

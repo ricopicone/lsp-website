@@ -16,6 +16,11 @@ def _email_change_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def _magic_login_token() -> str:
+    """An opaque, single-use token for a passwordless sign-in link."""
+    return secrets.token_urlsafe(32)
+
+
 #: Directory-profile fields whose visibility a member sets individually
 #: (Public / Members only / Private) via the editor. Identity fields (name,
 #: role, committees) are always public and aren't listed here. ``email`` and
@@ -531,6 +536,98 @@ class EmailChangeRequest(models.Model):
     @property
     def is_pending(self) -> bool:
         return self.confirmed_at is None and not self.is_expired()
+
+
+class MagicLoginLink(models.Model):
+    """A single-use, short-lived passwordless sign-in link.
+
+    Mirrors :class:`EmailChangeRequest`: an opaque token emailed to the
+    account's address; clicking it logs the user in. Links expire after
+    :attr:`TOKEN_TTL` and are consumed on first use. Admins still hit the
+    2FA challenge afterwards (see ``accounts.middleware``) when enforcement
+    is on — the link only proves control of the mailbox, not the second
+    factor.
+    """
+
+    TOKEN_TTL = timedelta(minutes=15)
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="magic_login_links",
+    )
+    token = models.CharField(
+        max_length=64, unique=True, default=_magic_login_token, editable=False
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        state = "used" if self.used_at else ("expired" if self.is_expired() else "pending")
+        return f"magic link for {self.user.email} ({state})"
+
+    def is_expired(self, now=None) -> bool:
+        return (now or timezone.now()) - self.created_at > self.TOKEN_TTL
+
+    @property
+    def is_valid(self) -> bool:
+        return self.used_at is None and not self.is_expired()
+
+    def consume(self) -> None:
+        """Mark the link used so it cannot be replayed."""
+        self.used_at = timezone.now()
+        self.save(update_fields=["used_at"])
+
+
+class TOTPDevice(models.Model):
+    """A member's TOTP (authenticator-app) second factor.
+
+    One device per user. ``confirmed`` flips True only once the member has
+    proved the secret by entering a current code, so a half-finished
+    enrollment never gates login. The shared secret is base32 (pyotp). Lost
+    devices are recovered with one-time :class:`RecoveryCode` rows, or reset
+    by deleting this row in the Django admin.
+    """
+
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="totp_device",
+    )
+    secret = models.CharField(max_length=64, editable=False)
+    confirmed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        state = "confirmed" if self.confirmed else "pending"
+        return f"TOTP device for {self.user.email} ({state})"
+
+
+class RecoveryCode(models.Model):
+    """A one-time backup code for an account whose authenticator is lost.
+
+    Codes are stored hashed (never plaintext); the plaintext set is shown to
+    the member exactly once at enrollment. Verifying a code marks it used.
+    """
+
+    device = models.ForeignKey(
+        "accounts.TOTPDevice",
+        on_delete=models.CASCADE,
+        related_name="recovery_codes",
+    )
+    code_hash = models.CharField(max_length=128, editable=False)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("id",)
+
+    def __str__(self):
+        state = "used" if self.used_at else "unused"
+        return f"recovery code for {self.device.user.email} ({state})"
 
 
 class Source(models.TextChoices):

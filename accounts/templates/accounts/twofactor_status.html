@@ -1,0 +1,20 @@
+{% extends "core/base.html" %}
+{% block title %}Two-factor authentication — LSP{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto py-8 space-y-6">
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">Two-factor authentication</h1>
+  </header>
+  <div role="alert" class="alert alert-success">
+    <span>Two-factor authentication is <strong>on</strong> for your account.</span>
+  </div>
+  <p class="text-sm text-base-content/70">
+    Turned on {{ device.created_at|date:"F j, Y" }}. To switch authenticator
+    apps or replace your device, turn it off and set it up again.
+  </p>
+  <div class="flex gap-3">
+    <a href="{% url 'twofactor_disable' %}" class="btn btn-outline btn-error btn-sm">Turn off / re-enroll</a>
+    <a href="{% url 'profile_edit' %}" class="btn btn-ghost btn-sm">Back to profile</a>
+  </div>
+</div>
+{% endblock %}

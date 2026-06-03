@@ -85,6 +85,7 @@ MIDDLEWARE = [
     "accounts.middleware.TimezoneMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "core.middleware.ImpersonationMiddleware",
+    "accounts.middleware.TwoFactorEnforcementMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -205,6 +206,14 @@ EMAIL_CHANGE_PUBLIC = env.bool("DJANGO_EMAIL_CHANGE_PUBLIC", default=False)
 EMAIL_CHANGE_ALLOWLIST = env.list(
     "DJANGO_EMAIL_CHANGE_ALLOWLIST", default=["dr@ricopic.one"]
 )
+
+# --- Two-factor auth (TOTP) ---------------------------------------------
+# 2FA *enrollment* (authenticator setup at /accounts/2fa/setup/) is always
+# available. The *requirement* — forcing enrollment + a per-session challenge
+# for anyone with an admin role (accounts.twofactor.requires_2fa) — is gated
+# here and ships OFF so current testers aren't blocked. Flip
+# DJANGO_TWO_FACTOR_ENFORCED=true at launch to switch enforcement on.
+TWO_FACTOR_ENFORCED = env.bool("DJANGO_TWO_FACTOR_ENFORCED", default=False)
 
 # Max sustained send rate (messages/second) for the batch reminder jobs
 # (payments.sending.ThrottledSender). SES caps sends — 1/s in the sandbox,

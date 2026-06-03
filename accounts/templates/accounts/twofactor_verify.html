@@ -1,0 +1,31 @@
+{% extends "core/base.html" %}
+{% block title %}Two-step verification — LSP{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto py-8 space-y-6">
+
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">Two-step verification</h1>
+    <p class="text-sm text-base-content/60">
+      Enter the 6-digit code from your authenticator app to finish signing in.
+    </p>
+  </header>
+
+  {% if error %}
+  <div role="alert" class="alert alert-error"><span>{{ error }}</span></div>
+  {% endif %}
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div class="form-control space-y-1">
+      <label for="{{ form.code.id_for_label }}" class="label-text text-sm">Authentication code</label>
+      {{ form.code }}
+    </div>
+    <input type="hidden" name="next" value="{{ next }}">
+    <button type="submit" class="btn btn-primary w-full">Verify</button>
+  </form>
+
+  <p class="text-xs text-base-content/55 text-center">
+    Lost your device? Enter one of your backup codes above instead.
+  </p>
+</div>
+{% endblock %}

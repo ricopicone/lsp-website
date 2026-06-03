@@ -1,0 +1,38 @@
+{% extends "core/base.html" %}
+{% block title %}Email me a sign-in link — LSP{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto py-8 space-y-6">
+
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">Sign in by email</h1>
+    <p class="text-sm text-base-content/60">
+      We'll email you a link that signs you in — no password needed.
+    </p>
+  </header>
+
+  {% if sent %}
+  <div role="alert" class="alert alert-success">
+    <span>
+      If an account exists for that address, we've emailed a sign-in link.
+      It's good for the next few minutes. Check your spam folder if you don't
+      see it.
+    </span>
+  </div>
+  <a href="{% url 'login' %}" class="btn btn-ghost btn-sm">Back to log in</a>
+  {% else %}
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div class="form-control space-y-1">
+      <label for="{{ form.email.id_for_label }}" class="label-text text-sm">Email</label>
+      {{ form.email }}
+      {% if form.email.errors %}<p class="text-error text-xs mt-1">{{ form.email.errors|join:", " }}</p>{% endif %}
+    </div>
+    <button type="submit" class="btn btn-primary w-full">Email me a link</button>
+  </form>
+  <p class="text-sm text-base-content/60 text-center">
+    Prefer a password? <a href="{% url 'login' %}" class="link link-primary">Log in normally</a>.
+  </p>
+  {% endif %}
+
+</div>
+{% endblock %}

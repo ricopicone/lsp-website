@@ -7,8 +7,11 @@ of the flow").
 """
 
 from django import forms
-from django.contrib.auth.forms import BaseUserCreationForm
+from django.conf import settings
+from django.contrib.auth.forms import BaseUserCreationForm, PasswordResetForm
 from django.contrib.auth.forms import UserChangeForm as BaseUserChangeForm
+from django.core.mail import EmailMultiAlternatives
+from django.template import loader
 
 from .models import Profile, User
 
@@ -402,3 +405,64 @@ class AdvisorSelectForm(forms.Form):
         self.fields["advisor"].label_from_instance = lambda u: (
             f"{u.get_full_name() or u.email} — {u.profile.get_role_display()}"
         )
+
+
+class ReplyToPasswordResetForm(PasswordResetForm):
+    """Django's password-reset form, but with ``Reply-To: SUPPORT_EMAIL``.
+
+    Matches the rest of the app's transactional mail (see
+    ``accounts.emails``) so a member who replies to the reset email reaches
+    support, not the no-reply sending address.
+    """
+
+    def send_mail(self, subject_template_name, email_template_name, context,
+                  from_email, to_email, html_email_template_name=None):
+        subject = loader.render_to_string(subject_template_name, context)
+        subject = "".join(subject.splitlines())  # email subjects are single-line
+        body = loader.render_to_string(email_template_name, context)
+        msg = EmailMultiAlternatives(
+            subject, body, from_email, [to_email],
+            reply_to=[settings.SUPPORT_EMAIL],
+        )
+        if html_email_template_name is not None:
+            html = loader.render_to_string(html_email_template_name, context)
+            msg.attach_alternative(html, "text/html")
+        msg.send()
+
+
+class MagicLinkRequestForm(forms.Form):
+    """Ask for a passwordless sign-in link by email address."""
+
+    email = forms.EmailField(
+        label="Email",
+        widget=forms.EmailInput(attrs={
+            "class": _INPUT, "autocomplete": "email", "autofocus": True,
+        }),
+    )
+
+    def clean_email(self) -> str:
+        from django.contrib.auth.models import BaseUserManager
+        return BaseUserManager.normalize_email(self.cleaned_data["email"]).strip()
+
+
+class TOTPCodeForm(forms.Form):
+    """A code entry — a 6-digit TOTP, or a backup recovery code at challenge.
+
+    Validation of the code against the device happens in the view (it needs
+    the device); this just collects and lightly normalises the input.
+    """
+
+    code = forms.CharField(
+        label="Code",
+        max_length=20,
+        widget=forms.TextInput(attrs={
+            "class": _INPUT,
+            "autocomplete": "one-time-code",
+            "inputmode": "numeric",
+            "autofocus": True,
+            "placeholder": "123456",
+        }),
+    )
+
+    def clean_code(self) -> str:
+        return (self.cleaned_data.get("code") or "").strip()

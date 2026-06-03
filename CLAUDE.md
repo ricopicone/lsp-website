@@ -27,7 +27,7 @@ Planning documents live in the parent `LSP-Web-Coordinator` folder, alongside th
 - uv for dependencies and the virtual environment.
 - SQLite for local development; PostgreSQL in production (via `DATABASE_URL`).
 - Stripe (hosted Checkout) for payments and Amazon SES for email — both built and
-  live (SES still in sandbox pending production-access approval).
+  live (SES production access granted 2026-06-03; out of the sandbox).
 - Realtime chat (Parlêtre) over Django Channels + daphne (ASGI); in-memory channel
   layer in prod, Redis gated behind `PARLETRE_USE_REDIS`.
 - Hosting: AWS, live on the `app.lacanschool.org` subdomain.
@@ -269,6 +269,18 @@ Done (see `git log` for specifics):
   (`send_tuition_reminders`). Treasurer guide at `/treasurer/help/`
   (`core/docs/treasurer-guide.md`) is the canonical policy doc.
   See `tuition-lifecycle` memory.
+- **Email-based auth — password reset + magic-link + admin 2FA** (shipped
+  once SES left the sandbox). Django's built-in password-reset flow wired
+  under `/accounts/password/reset/` (templates under `accounts/`, not
+  `registration/`, since `django.contrib.admin` shadows the latter);
+  passwordless **magic-link** sign-in (`MagicLoginLink`, 15-min single-use,
+  offered alongside the password form, no user enumeration); and **admin
+  TOTP 2FA** (`pyotp` + `qrcode`, `TOTPDevice` + hashed `RecoveryCode`s,
+  helpers in `accounts/twofactor.py`). 2FA *eligibility* is
+  `core.staff.can_access_admin_tools`; **enforcement is gated OFF** behind
+  `DJANGO_TWO_FACTOR_ENFORCED` (default false) so current testers aren't
+  blocked — enrollment at `/accounts/2fa/setup/` works regardless. See
+  `email-auth-2fa` memory.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
@@ -354,19 +366,11 @@ Phase 2 plan for milestone IDs):**
   cases require manual edits.
 - **Set the actual Zoom link** in `Event.access_info` for the Working with
   Masochism event (currently a placeholder).
-- **SES production access — awaiting AWS re-review (still sandboxed).** The
-  account is **still in the sandbox** (`ProductionAccessEnabled: false`).
-  `aws sesv2 get-account` shows `ReviewDetails.Status: DENIED`, but that
-  reflects AWS's *automated first-pass* (auto-deny + request more info), not
-  a final verdict: the support case 178015607900328 status is "Customer
-  action completed" — AWS asked for detail on 2026-05-30, Rico replied the
-  same day with a full transactional use-case, and it's now in AWS's queue.
-  Monitor `ProductionAccessEnabled` (flips to `true` when granted); nudge the
-  case if AWS is silent for a few days. **Do not resubmit.** Until granted,
-  SES only delivers to *verified identities*. `dr@ricopic.one` and the
-  `lacanschool.org` domain are already verified, so to test
-  login-email-change end-to-end now, verify a *second* address you control
-  and change `dr@ricopic.one` to it. See `ses-status` memory.
+- **SES production access — GRANTED 2026-06-03.** The account is **out of the
+  sandbox** (`ProductionAccessEnabled: true`, `MaxSendRate: 14`,
+  `Max24HourSend: 50000`). SES now delivers to any recipient — the
+  "verified-identities only" containment is gone, so the member-facing timers
+  must stay disabled until launch is intended (below). See `ses-status` memory.
 - **Re-enable member-facing notification timers at launch.** On 2026-06-01
   the three member-facing host timers were disabled
   (`sudo systemctl disable --now lsp-dues-cron.timer
@@ -387,6 +391,12 @@ Phase 2 plan for milestone IDs):**
 - **Open login-email change to all members at launch** — set
   `DJANGO_EMAIL_CHANGE_PUBLIC=true` in the host `.env` (currently gated to
   `DJANGO_EMAIL_CHANGE_ALLOWLIST`, default rico's address).
+- **Turn on admin 2FA enforcement at launch** — set
+  `DJANGO_TWO_FACTOR_ENFORCED=true` in the host `.env`. The TOTP flows are
+  built and enrollment is live, but enforcement ships OFF so current testers
+  aren't forced through it. Flipping it requires every admin to enroll an
+  authenticator on next request (recovery codes / deleting the `TOTPDevice`
+  row are the lockout escape hatches). See `email-auth-2fa` memory.
 - **Stripe credentials cutover** from rico's business account to the LSP's
   (Garrett's) once that account is ready.
 

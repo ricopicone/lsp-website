@@ -19,16 +19,18 @@ from django.views.decorators.http import require_POST
 
 from workgroups.models import Workgroup, WorkgroupMembership
 
-from . import emails
+from . import emails, twofactor
 from .forms import (
     EmailChangeForm,
     LightSignupForm,
+    MagicLinkRequestForm,
     ProfileEditForm,
     ReferralRequestForm,
+    TOTPCodeForm,
     UserNameForm,
 )
 from .images import MAX_UPLOAD_BYTES, InvalidImage, render_headshot_square
-from .models import EmailChangeRequest, Profile, User
+from .models import EmailChangeRequest, MagicLoginLink, Profile, TOTPDevice, User
 
 logger = logging.getLogger(__name__)
 
@@ -477,3 +479,155 @@ def advisor_select(request):
         "current": current,
         "form": form,
     })
+
+
+# --- Passwordless sign-in (magic link) ----------------------------------
+
+def magic_link_request(request):
+    """Request a single-use sign-in link by email (no password).
+
+    Never reveals whether an account exists — the same confirmation renders
+    either way. Repeat submits reuse the most recent unexpired link rather
+    than minting a pile of them.
+    """
+    if request.user.is_authenticated:
+        return redirect(_safe_next(request) or "/")
+    sent = False
+    if request.method == "POST":
+        form = MagicLinkRequestForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data["email"]
+            user = User.objects.filter(email__iexact=email, is_active=True).first()
+            if user is not None:
+                link = (
+                    MagicLoginLink.objects
+                    .filter(user=user, used_at__isnull=True)
+                    .order_by("-created_at")
+                    .first()
+                )
+                if link is None or link.is_expired():
+                    link = MagicLoginLink.objects.create(user=user)
+                try:
+                    emails.send_magic_link(link)
+                except Exception:  # delivery failure must not leak existence
+                    logger.exception("magic-link email to %s failed", user.email)
+            sent = True
+            form = None
+    else:
+        form = MagicLinkRequestForm()
+    return render(request, "accounts/magic_link_request.html", {
+        "form": form, "sent": sent,
+    })
+
+
+def magic_link_consume(request, token):
+    """Log in from a magic link. Single-use; admins still hit 2FA after."""
+    if request.user.is_authenticated:
+        return redirect(_safe_next(request) or "/")
+    link = MagicLoginLink.objects.filter(token=token).select_related("user").first()
+    if link is None or not link.is_valid or not link.user.is_active:
+        return render(request, "accounts/magic_link_invalid.html", status=410)
+    link.consume()
+    login(request, link.user)
+    return redirect(settings.LOGIN_REDIRECT_URL)
+
+
+# --- Two-factor authentication (TOTP) -----------------------------------
+
+@login_required
+def twofactor_setup(request):
+    """Enroll (or show the status of) an authenticator-app second factor.
+
+    Available to anyone — enrollment is decoupled from whether the
+    requirement is switched on (see ``TWO_FACTOR_ENFORCED``). On first
+    confirmation we mint one-time recovery codes and show them once.
+    """
+    device, _ = TOTPDevice.objects.get_or_create(
+        user=request.user, defaults={"secret": twofactor.new_secret()},
+    )
+    if device.confirmed:
+        return render(request, "accounts/twofactor_status.html", {"device": device})
+
+    error = None
+    if request.method == "POST":
+        form = TOTPCodeForm(request.POST)
+        if form.is_valid() and twofactor.verify_code(device, form.cleaned_data["code"]):
+            device.confirmed = True
+            device.last_used_at = timezone.now()
+            device.save(update_fields=["confirmed", "last_used_at"])
+            request.session[twofactor.SESSION_VERIFIED_KEY] = True
+            request.session["2fa_recovery_codes"] = twofactor.generate_recovery_codes(device)
+            return redirect("twofactor_recovery")
+        error = "That code didn't match. Check your authenticator app and try again."
+    else:
+        form = TOTPCodeForm()
+
+    return render(request, "accounts/twofactor_setup.html", {
+        "form": form,
+        "secret": device.secret,
+        "qr_svg": twofactor.qr_svg(twofactor.provisioning_uri(device)),
+        "error": error,
+    })
+
+
+@login_required
+def twofactor_recovery(request):
+    """Show freshly-minted backup codes exactly once (right after setup)."""
+    codes = request.session.pop("2fa_recovery_codes", None)
+    if not codes:
+        return redirect("twofactor_setup")
+    return render(request, "accounts/twofactor_recovery.html", {"codes": codes})
+
+
+@login_required
+def twofactor_verify(request):
+    """Per-session challenge: enter a TOTP (or a backup recovery code)."""
+    device = twofactor.confirmed_device(request.user)
+    if device is None:
+        return redirect("twofactor_setup")
+    if request.session.get(twofactor.SESSION_VERIFIED_KEY):
+        return redirect(_safe_next(request) or "/")
+
+    error = None
+    if request.method == "POST":
+        form = TOTPCodeForm(request.POST)
+        if form.is_valid():
+            code = form.cleaned_data["code"]
+            if twofactor.verify_code(device, code) or twofactor.verify_recovery_code(device, code):
+                device.last_used_at = timezone.now()
+                device.save(update_fields=["last_used_at"])
+                request.session[twofactor.SESSION_VERIFIED_KEY] = True
+                return redirect(_safe_next(request) or "/")
+            error = "That code didn't match. Try again, or use a backup code."
+    else:
+        form = TOTPCodeForm()
+
+    return render(request, "accounts/twofactor_verify.html", {
+        "form": form, "error": error, "next": request.GET.get("next", ""),
+    })
+
+
+@login_required
+def twofactor_disable(request):
+    """Turn off 2FA for the current account (password re-auth required).
+
+    If the requirement is on for this user, the next request simply sends
+    them back through enrollment — but disabling is still how you re-enroll
+    a new authenticator.
+    """
+    from django.contrib import messages
+
+    device = getattr(request.user, "totp_device", None)
+    if device is None:
+        return redirect("profile_edit")
+
+    error = None
+    if request.method == "POST":
+        if request.user.check_password(request.POST.get("password", "")):
+            device.delete()
+            request.session.pop(twofactor.SESSION_VERIFIED_KEY, None)
+            messages.success(request, "Two-factor authentication has been turned off.")
+            return redirect("profile_edit")
+        error = "That password is incorrect."
+
+    return render(request, "accounts/twofactor_disable.html", {"error": error})
