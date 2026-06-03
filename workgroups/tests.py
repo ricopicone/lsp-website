@@ -872,3 +872,64 @@ def test_work_tab_lists_drafts_for_member(client):
     assert resp.status_code == 200
     assert b"Shared notes" in resp.content
     assert b"Working documents" in resp.content
+
+
+def test_unpublish_removes_work_keeps_draft(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    manager = _member_of(wg, "mgr@x.test")
+    manager.is_superuser = True
+    manager.save()
+    from works.models import Work, WorkDraft
+    draft = WorkDraft.objects.create(workgroup=wg, title="D", content_html="<p>x</p>")
+    client.force_login(manager)
+    client.post(reverse("workgroups:draft_publish", args=[wg.slug, draft.pk]),
+                {"visibility": "members"})
+    draft.refresh_from_db()
+    work_pk = draft.published_work_id
+    assert work_pk is not None
+    resp = client.post(reverse("workgroups:draft_unpublish", args=[wg.slug, draft.pk]))
+    assert resp.status_code == 302
+    assert resp.url == reverse("workgroups:draft_edit", args=[wg.slug, draft.pk])
+    draft.refresh_from_db()
+    assert draft.published_work_id is None              # back to editable draft
+    assert not Work.objects.filter(pk=work_pk).exists()  # work removed
+    assert WorkDraft.objects.filter(pk=draft.pk).exists()  # draft kept
+
+
+def test_unpublish_blocked_for_non_manager(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    manager = _member_of(wg, "mgr@x.test")
+    manager.is_superuser = True
+    manager.save()
+    plain = _member_of(wg, "plain@x.test")
+    from works.models import WorkDraft
+    draft = WorkDraft.objects.create(workgroup=wg, title="D")
+    client.force_login(manager)
+    client.post(reverse("workgroups:draft_publish", args=[wg.slug, draft.pk]),
+                {"visibility": "members"})
+    client.force_login(plain)
+    resp = client.post(reverse("workgroups:draft_unpublish", args=[wg.slug, draft.pk]))
+    assert resp.status_code == 404
+    draft.refresh_from_db()
+    assert draft.published_work_id is not None          # untouched
+
+
+def test_delete_document_work_keeps_source_draft(client):
+    wg = _wg(name="Doc Group", slug="doc-group")
+    manager = _member_of(wg, "mgr@x.test")
+    manager.is_superuser = True
+    manager.save()
+    from works.models import Work, WorkDraft
+    draft = WorkDraft.objects.create(workgroup=wg, title="D", content_html="<p>x</p>")
+    client.force_login(manager)
+    client.post(reverse("workgroups:draft_publish", args=[wg.slug, draft.pk]),
+                {"visibility": "members"})
+    draft.refresh_from_db()
+    work = draft.published_work
+    resp = client.post(reverse("works:delete", args=[work.slug]))
+    assert resp.status_code == 302
+    assert f"{wg.get_absolute_url()}?tab=work" in resp.url
+    assert not Work.objects.filter(pk=work.pk).exists()
+    draft.refresh_from_db()
+    assert WorkDraft.objects.filter(pk=draft.pk).exists()
+    assert draft.published_work_id is None

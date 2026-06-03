@@ -686,3 +686,40 @@ def test_unwrap_list_paragraphs():
 
     assert (_unwrap_list_paragraphs("<ul><li><p>a</p></li><li><p>b</p></li></ul>")
             == "<ul><li>a</li><li>b</li></ul>")
+
+
+# ---- Delete a work -----------------------------------------------------
+
+@pytest.mark.django_db
+def test_delete_work_by_submitter(client):
+    u = User.objects.create_user(email="a@x.test", password="x")
+    w = Work.objects.create(title="Paper", slug="paper", kind=Work.Kind.EXTERNAL,
+                            submitted_by=u)
+    client.force_login(u)
+    resp = client.post(reverse("works:delete", args=[w.slug]))
+    assert resp.status_code == 302
+    assert resp.url == reverse("works:index")
+    assert not Work.objects.filter(pk=w.pk).exists()
+
+
+@pytest.mark.django_db
+def test_delete_work_forbidden_for_non_editor(client):
+    owner = User.objects.create_user(email="o@x.test", password="x")
+    other = User.objects.create_user(email="x@x.test", password="x")
+    w = Work.objects.create(title="Paper", slug="paper", kind=Work.Kind.EXTERNAL,
+                            submitted_by=owner)
+    client.force_login(other)
+    resp = client.post(reverse("works:delete", args=[w.slug]))
+    assert resp.status_code == 403
+    assert Work.objects.filter(pk=w.pk).exists()
+
+
+@pytest.mark.django_db
+def test_delete_work_requires_post(client):
+    u = User.objects.create_user(email="a@x.test", password="x")
+    w = Work.objects.create(title="Paper", slug="paper", kind=Work.Kind.EXTERNAL,
+                            submitted_by=u)
+    client.force_login(u)
+    resp = client.get(reverse("works:delete", args=[w.slug]))
+    assert resp.status_code == 405                      # require_POST
+    assert Work.objects.filter(pk=w.pk).exists()

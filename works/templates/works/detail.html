@@ -72,6 +72,29 @@
     </div>
   </header>
 
+  {% if can_edit or can_unpublish %}
+  <div class="flex flex-wrap items-center gap-2 border-y border-base-300/40 py-3 text-sm">
+    <span class="text-base-content/45">Manage:</span>
+    {% if can_edit %}
+    <a href="{% url 'works:edit' work.slug %}" class="btn btn-ghost btn-sm">Edit details</a>
+    {% endif %}
+    {% if can_unpublish %}
+    <form method="post" action="{% url 'workgroups:draft_unpublish' source_draft.workgroup.slug source_draft.pk %}"
+          onsubmit="return confirm('Unpublish “{{ work.title|escapejs }}”? It will be removed from Works and returned to an editable draft in {{ source_draft.workgroup.name|escapejs }}.');">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost btn-sm">Unpublish → draft</button>
+    </form>
+    {% endif %}
+    {% if can_edit %}
+    <form method="post" action="{% url 'works:delete' work.slug %}" class="ml-auto"
+          onsubmit="return confirm('Delete “{{ work.title|escapejs }}” permanently? This removes the work and its files and cannot be undone.{% if source_draft %} The source draft will remain.{% endif %}');">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost btn-sm text-error">Delete</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+
   {# ---- Files section ---- #}
   {% with files=work.files.all %}
   {% if files %}

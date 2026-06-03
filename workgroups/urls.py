@@ -50,5 +50,6 @@ urlpatterns = [
     path("<slug:slug>/docs/<int:pk>/version/", views.draft_save_version, name="draft_save_version"),
     path("<slug:slug>/docs/<int:pk>/release/", views.draft_release_lock, name="draft_release_lock"),
     path("<slug:slug>/docs/<int:pk>/publish/", views.draft_publish, name="draft_publish"),
+    path("<slug:slug>/docs/<int:pk>/unpublish/", views.draft_unpublish, name="draft_unpublish"),
     path("<slug:slug>/docs/<int:pk>/delete/", views.draft_delete, name="draft_delete"),
 ]

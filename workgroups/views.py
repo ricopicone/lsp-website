@@ -1014,3 +1014,20 @@ def draft_publish(request, slug, pk):
         saved_by=request.user,
     )
     return redirect(work.get_absolute_url())
+
+
+@login_required
+@require_POST
+def draft_unpublish(request, slug, pk):
+    """Take a published document's Work down while keeping the draft. Deleting
+    the Work nulls the draft's ``published_work`` link (SET_NULL), so the
+    document returns to a private, editable draft."""
+    from works.models import WorkDraft
+
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not _can_manage_workgroup(wg, request.user):
+        raise Http404
+    draft = get_object_or_404(WorkDraft, pk=pk, workgroup=wg)
+    if draft.published_work_id:
+        draft.published_work.delete()  # SET_NULL clears draft.published_work
+    return redirect("workgroups:draft_edit", slug=wg.slug, pk=draft.pk)

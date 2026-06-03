@@ -71,6 +71,14 @@
           {% if draft.published_work_id %}<p class="text-[0.65rem] text-base-content/45">Re-publishing updates the existing Work.</p>{% endif %}
         </form>
       </details>
+      {% if draft.published_work_id %}
+      <a href="{{ draft.published_work.get_absolute_url }}" class="btn btn-xs btn-ghost">View published →</a>
+      <form method="post" action="{% url 'workgroups:draft_unpublish' workgroup.slug draft.pk %}"
+            onsubmit="return confirm('Unpublish this document? It will be removed from Works and stay here as an editable draft.');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-xs btn-ghost text-error">Unpublish</button>
+      </form>
+      {% endif %}
       {% endif %}
     </div>
   </header>

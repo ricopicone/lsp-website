@@ -10,5 +10,6 @@ urlpatterns = [
     path("mine/", views.my_works, name="mine"),
     path("<slug:slug>/", views.detail, name="detail"),
     path("<slug:slug>/edit/", views.edit, name="edit"),
+    path("<slug:slug>/delete/", views.delete, name="delete"),
     path("<slug:slug>/pdf/<int:file_id>/", views.download, name="download"),
 ]
