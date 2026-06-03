@@ -4,6 +4,7 @@ from .models import (
     MeetingSeries,
     Visibility,
     Workgroup,
+    WorkgroupDecision,
     WorkgroupFile,
     WorkgroupFileVersion,
     WorkgroupInvitation,
@@ -149,3 +150,11 @@ class WorkgroupFileAdmin(admin.ModelAdmin):
     search_fields = ("name", "workgroup__name")
     autocomplete_fields = ("workgroup", "created_by")
     inlines = (WorkgroupFileVersionInline,)
+
+
+@admin.register(WorkgroupDecision)
+class WorkgroupDecisionAdmin(admin.ModelAdmin):
+    list_display = ("title", "workgroup", "status", "decided_on", "meeting", "created_by")
+    list_filter = ("status", "workgroup__kind")
+    search_fields = ("title", "detail", "workgroup__name")
+    autocomplete_fields = ("workgroup", "meeting", "created_by")

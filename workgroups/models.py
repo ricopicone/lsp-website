@@ -1268,3 +1268,61 @@ def _delete_workgroup_file_blob(sender, instance, **kwargs):
     storage and keeps consuming real (and quota-counted) space."""
     if instance.blob:
         instance.blob.delete(save=False)
+
+
+class WorkgroupDecision(models.Model):
+    """A formal decision recorded in a workgroup's lightweight decision register
+    (governance bodies — committees, working groups — and, leaderless, cartels).
+    Optionally linked to the meeting whose minutes recorded it."""
+
+    class Status(models.TextChoices):
+        ADOPTED = "adopted", _("Adopted")
+        REJECTED = "rejected", _("Rejected")
+        TABLED = "tabled", _("Tabled")
+        SUPERSEDED = "superseded", _("Superseded")
+
+    workgroup = models.ForeignKey(
+        Workgroup, on_delete=models.CASCADE, related_name="decisions"
+    )
+    title = models.CharField(max_length=255, help_text="What was decided.")
+    detail = models.TextField(blank=True, help_text="Context / wording (markdown).")
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.ADOPTED
+    )
+    decided_on = models.DateField(default=timezone.localdate)
+    meeting = models.ForeignKey(
+        WorkgroupMeeting, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="decisions",
+        help_text="The meeting whose minutes recorded this decision, if any.",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="registered_decisions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-decided_on", "-created_at")
+
+    def __str__(self) -> str:
+        return self.title
+
+    @property
+    def detail_html(self) -> str:
+        if not self.detail:
+            return ""
+        import markdown
+        from django.utils.safestring import mark_safe
+
+        return mark_safe(markdown.markdown(
+            self.detail, extensions=["smarty", "sane_lists"], output_format="html5"
+        ))
+
+    def editable_by(self, user) -> bool:
+        """Edit / delete: the registrant, or a manager."""
+        if not getattr(user, "is_authenticated", False):
+            return False
+        from .permissions import can_manage_workgroup
+
+        return self.created_by_id == user.pk or can_manage_workgroup(user, self.workgroup)

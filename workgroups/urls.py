@@ -61,4 +61,8 @@ urlpatterns = [
     path("<slug:slug>/files/<int:pk>/delete/", views.file_delete, name="file_delete"),
     path("<slug:slug>/files/<int:pk>/version/<int:vpk>/delete/", views.file_version_delete,
          name="file_version_delete"),
+    # Decisions register (Decisions tab)
+    path("<slug:slug>/decisions/add/", views.decision_add, name="decision_add"),
+    path("<slug:slug>/decisions/<int:pk>/edit/", views.decision_edit, name="decision_edit"),
+    path("<slug:slug>/decisions/<int:pk>/delete/", views.decision_delete, name="decision_delete"),
 ]

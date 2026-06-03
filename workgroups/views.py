@@ -14,7 +14,13 @@ from django.views.decorators.http import require_POST
 
 from works.models import Work
 
-from .models import Visibility, Workgroup, WorkgroupMeeting, WorkgroupMembership
+from .models import (
+    Visibility,
+    Workgroup,
+    WorkgroupDecision,
+    WorkgroupMeeting,
+    WorkgroupMembership,
+)
 
 
 def _attached(workgroup, accessor):
@@ -162,6 +168,8 @@ def workgroup_detail(request, slug):
         tabs.append(("schedule", "Schedule"))
     if wg.has_tasks and is_member:
         tabs.append(("tasks", "Tasks"))
+    if wg.has_decisions and (is_member or archive_access):
+        tabs.append(("decisions", "Decisions"))
     if can_edit_offering:
         tabs.append(("roster", "Roster"))
     if is_member or can_manage:
@@ -338,6 +346,11 @@ def workgroup_detail(request, slug):
         # those who can schedule (stored members + managers) edit it.
         context["can_schedule"] = _can_schedule(wg, request.user)
         context["calendar_feed_url"] = _calendar_feed_url(request, wg)
+        # Minutes → decisions: offer "record a decision from this meeting".
+        if wg.has_decisions:
+            from .permissions import can_register_decision
+
+            context["can_register_decisions"] = can_register_decision(request.user, wg)
     elif active == "tasks" and wg.has_tasks and is_member:
         qs = wg.tasks.prefetch_related("assignees")
         q = (request.GET.get("q") or "").strip()
@@ -356,6 +369,30 @@ def workgroup_detail(request, slug):
         context["done_tasks"] = list(qs.filter(done=True).order_by("-completed_at"))
         context["task_q"] = q
         context["task_sort"] = sort
+    elif active == "decisions" and wg.has_decisions and (is_member or archive_access):
+        from .permissions import can_register_decision
+
+        decisions = list(
+            wg.decisions.select_related("meeting", "created_by")
+        )
+        can_register = can_register_decision(request.user, wg)
+        for d in decisions:
+            d.user_can_edit = d.editable_by(request.user)
+        context["decisions"] = decisions
+        context["can_register_decision"] = can_register
+        context["decision_statuses"] = WorkgroupDecision.Status.choices
+        if can_register:
+            # Meetings to attribute a decision to (minutes connection).
+            context["decision_meetings"] = list(
+                wg.meetings.filter(cancelled=False).order_by("-starts_at")[:50]
+            )
+            try:
+                context["preselected_meeting_id"] = int(request.GET.get("meeting", ""))
+            except (TypeError, ValueError):
+                context["preselected_meeting_id"] = None
+            from django.utils import timezone as _tz
+
+            context["today"] = _tz.localdate()
     elif active == "settings" and (is_member or can_manage):
         from .forms import WorkgroupDatesForm
 
@@ -1267,3 +1304,84 @@ def _human_bytes(n: int) -> str:
             return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
         n /= 1024
     return f"{n:.1f} GB"
+
+
+# --- Decisions register (Decisions tab) -------------------------------------
+
+def _parse_decision_form(request, wg):
+    """Pull + validate the shared decision fields from POST. Returns a dict of
+    cleaned values (title, detail, status, decided_on, meeting)."""
+    from django.utils import timezone
+
+    from .models import WorkgroupDecision, WorkgroupMeeting
+
+    title = (request.POST.get("title") or "").strip()[:255]
+    status = request.POST.get("status")
+    if status not in dict(WorkgroupDecision.Status.choices):
+        status = WorkgroupDecision.Status.ADOPTED
+    decided_on = request.POST.get("decided_on") or None
+    if not decided_on:
+        decided_on = timezone.localdate()
+    meeting = None
+    mid = request.POST.get("meeting")
+    if mid:
+        meeting = WorkgroupMeeting.objects.filter(pk=mid, workgroup=wg).first()
+    return {
+        "title": title,
+        "detail": (request.POST.get("detail") or "").strip(),
+        "status": status,
+        "decided_on": decided_on,
+        "meeting": meeting,
+    }
+
+
+@login_required
+@require_POST
+def decision_add(request, slug):
+    from django.contrib import messages
+
+    from .models import WorkgroupDecision
+    from .permissions import can_register_decision
+
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not (wg.has_decisions and can_register_decision(request.user, wg)):
+        raise Http404
+    data = _parse_decision_form(request, wg)
+    back = f"{wg.get_absolute_url()}?tab=decisions"
+    if not data["title"]:
+        messages.error(request, "Give the decision a title.")
+        return redirect(back)
+    WorkgroupDecision.objects.create(
+        workgroup=wg, created_by=request.user, **data
+    )
+    return redirect(back)
+
+
+@login_required
+@require_POST
+def decision_edit(request, slug, pk):
+    from .models import WorkgroupDecision
+
+    wg = get_object_or_404(Workgroup, slug=slug)
+    d = get_object_or_404(WorkgroupDecision, pk=pk, workgroup=wg)
+    if not d.editable_by(request.user):
+        raise Http404
+    data = _parse_decision_form(request, wg)
+    if data["title"]:
+        for field, value in data.items():
+            setattr(d, field, value)
+        d.save()
+    return redirect(f"{wg.get_absolute_url()}?tab=decisions")
+
+
+@login_required
+@require_POST
+def decision_delete(request, slug, pk):
+    from .models import WorkgroupDecision
+
+    wg = get_object_or_404(Workgroup, slug=slug)
+    d = get_object_or_404(WorkgroupDecision, pk=pk, workgroup=wg)
+    if not d.editable_by(request.user):
+        raise Http404
+    d.delete()
+    return redirect(f"{wg.get_absolute_url()}?tab=decisions")

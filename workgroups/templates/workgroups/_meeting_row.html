@@ -24,6 +24,9 @@
         </summary>
         <div class="mt-1">
           {% if m.minutes %}<div class="text-xs text-base-content/70 whitespace-pre-line border-l-2 border-base-300 pl-2">{{ m.minutes }}</div>{% endif %}
+          {% if m.minutes and workgroup.has_decisions and can_register_decisions %}
+          <p class="mt-1.5 text-xs"><a href="{{ workgroup.get_absolute_url }}?tab=decisions&meeting={{ m.pk }}" class="link link-hover text-primary">Record a decision from this meeting →</a></p>
+          {% endif %}
           {% if can_schedule %}
           <form method="post" action="{% url 'workgroups:meeting_minutes' workgroup.slug m.pk %}" class="mt-1.5 space-y-1">
             {% csrf_token %}

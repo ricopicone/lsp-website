@@ -1302,3 +1302,97 @@ def test_deleting_version_removes_blob_from_storage(client):
     assert storage.exists(name)
     wf.delete()                                 # cascade → version → post_delete
     assert not storage.exists(name)             # blob cleaned up, no orphan
+
+
+# ---- Decisions register (Decisions tab) --------------------------------
+
+def _chair_of(wg, email="chair@x.test"):
+    u = _user(email)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=u, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2000, 1, 1),
+    )
+    return u
+
+
+def test_decision_leaderless_any_member_can_register():
+    from workgroups.permissions import can_register_decision, workgroup_has_leads
+    wg = _wg(name="Cartel D", slug="cartel-d", has_decisions=True)        # cartel, members only
+    m = _member_of(wg, "m@x.test")
+    assert workgroup_has_leads(wg) is False
+    assert can_register_decision(m, wg) is True
+
+
+def test_decision_leaderled_only_leads_register():
+    from workgroups.permissions import can_register_decision, workgroup_has_leads
+    wg = _wg(name="Cmte D", slug="cmte-d", kind=Workgroup.Kind.COMMITTEE, has_decisions=True)
+    chair = _chair_of(wg)
+    plain = _member_of(wg, "plain@x.test")
+    assert workgroup_has_leads(wg) is True
+    assert can_register_decision(chair, wg) is True
+    assert can_register_decision(plain, wg) is False    # member, not a lead
+
+
+def test_decision_add_links_meeting_and_records_author(client):
+    from workgroups.models import WorkgroupDecision, WorkgroupMeeting
+    wg = _wg(name="Cartel D", slug="cartel-d", has_decisions=True)
+    m = _member_of(wg, "m@x.test")
+    mt = WorkgroupMeeting.objects.create(
+        workgroup=wg,
+        starts_at=datetime.datetime(2026, 3, 1, 18, 0, tzinfo=datetime.timezone.utc),
+    )
+    client.force_login(m)
+    resp = client.post(reverse("workgroups:decision_add", args=[wg.slug]), {
+        "title": "Adopt the budget", "status": "adopted",
+        "decided_on": "2026-03-01", "meeting": mt.pk, "detail": "**ratified**",
+    })
+    assert resp.status_code == 302
+    d = WorkgroupDecision.objects.get(workgroup=wg)
+    assert d.title == "Adopt the budget"
+    assert d.meeting_id == mt.pk and d.status == "adopted" and d.created_by == m
+
+
+def test_decision_add_blocked_for_non_lead_in_led_group(client):
+    from workgroups.models import WorkgroupDecision
+    wg = _wg(name="Cmte D", slug="cmte-d", kind=Workgroup.Kind.COMMITTEE, has_decisions=True)
+    _chair_of(wg)
+    plain = _member_of(wg, "plain@x.test")
+    client.force_login(plain)
+    resp = client.post(reverse("workgroups:decision_add", args=[wg.slug]),
+                       {"title": "Nope"})
+    assert resp.status_code == 404
+    assert not WorkgroupDecision.objects.filter(workgroup=wg).exists()
+
+
+def test_decision_edit_delete_restricted_to_creator_or_manager(client):
+    from workgroups.models import WorkgroupDecision
+    wg = _wg(name="Cartel D", slug="cartel-d", has_decisions=True)
+    creator = _member_of(wg, "c@x.test")
+    other = _member_of(wg, "o@x.test")
+    d = WorkgroupDecision.objects.create(workgroup=wg, title="X", created_by=creator)
+    # another member (can register, but not this decision's author/manager): 404
+    client.force_login(other)
+    assert client.post(
+        reverse("workgroups:decision_delete", args=[wg.slug, d.pk])).status_code == 404
+    # creator edits + deletes
+    client.force_login(creator)
+    client.post(reverse("workgroups:decision_edit", args=[wg.slug, d.pk]),
+                {"title": "Y", "status": "tabled"})
+    d.refresh_from_db()
+    assert d.title == "Y" and d.status == "tabled"
+    client.post(reverse("workgroups:decision_delete", args=[wg.slug, d.pk]))
+    assert not WorkgroupDecision.objects.filter(pk=d.pk).exists()
+
+
+def test_decisions_tab_renders(client):
+    from workgroups.models import WorkgroupDecision
+    wg = _wg(name="Cartel D", slug="cartel-d", has_decisions=True,
+             content_visibility=Visibility.MEMBERS)
+    m = _member_of(wg, "m@x.test")
+    WorkgroupDecision.objects.create(workgroup=wg, title="Adopt the charter",
+                                     created_by=m, status="adopted")
+    client.force_login(m)
+    resp = client.get(f"{wg.get_absolute_url()}?tab=decisions")
+    assert resp.status_code == 200
+    assert b"Adopt the charter" in resp.content
+    assert b"Record a decision" in resp.content

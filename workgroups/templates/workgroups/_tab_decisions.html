@@ -1,0 +1,118 @@
+{% comment %}
+Decision register. Expects: workgroup, decisions (each with .user_can_edit),
+can_register_decision, decision_statuses, decision_meetings,
+preselected_meeting_id, today.
+{% endcomment %}
+<div class="space-y-6">
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for m in messages %}
+    <div class="alert {% if 'error' in m.tags %}alert-error{% elif 'success' in m.tags %}alert-success{% else %}alert-info{% endif %} text-sm">{{ m }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <section class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="font-serif text-xl text-base-content">Decisions</h2>
+        <p class="text-xs text-base-content/55">A register of the group's formal decisions.</p>
+      </div>
+      {% if can_register_decision %}
+      <details class="dropdown dropdown-end">
+        <summary class="btn btn-sm btn-primary">Record a decision</summary>
+        <form method="post" action="{% url 'workgroups:decision_add' workgroup.slug %}"
+              class="dropdown-content z-50 mt-2 w-80 space-y-2 rounded-xl border border-base-300/60 bg-base-100 p-4 shadow-lg">
+          {% csrf_token %}
+          <input name="title" type="text" required placeholder="What was decided"
+                 class="input input-sm input-bordered w-full" />
+          <textarea name="detail" rows="3" placeholder="Context / wording (optional, markdown)"
+                    class="textarea textarea-sm textarea-bordered w-full"></textarea>
+          <div class="flex gap-2">
+            <select name="status" class="select select-sm select-bordered flex-1">
+              {% for value, label in decision_statuses %}
+              <option value="{{ value }}" {% if value == 'adopted' %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <input name="decided_on" type="date" value="{{ today|date:'Y-m-d' }}"
+                   class="input input-sm input-bordered flex-1" />
+          </div>
+          {% if decision_meetings %}
+          <select name="meeting" class="select select-sm select-bordered w-full">
+            <option value="">— From a meeting (optional) —</option>
+            {% for mt in decision_meetings %}
+            <option value="{{ mt.pk }}" {% if mt.pk == preselected_meeting_id %}selected{% endif %}>{{ mt.starts_at|date:"M j, Y" }}{% if mt.title %} · {{ mt.title }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+          <button type="submit" class="btn btn-sm btn-primary w-full">Record</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+
+    {% if decisions %}
+    <ul class="divide-y divide-base-300/40 rounded-xl border border-base-300/50 bg-base-100">
+      {% for d in decisions %}
+      <li class="space-y-1.5 p-3.5">
+        <div class="flex flex-wrap items-start gap-3">
+          <div class="min-w-0 flex-1 space-y-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="badge badge-sm {% if d.status == 'adopted' %}badge-success{% elif d.status == 'rejected' %}badge-error{% elif d.status == 'tabled' %}badge-warning{% else %}badge-ghost{% endif %}">{{ d.get_status_display }}</span>
+              <span class="font-medium text-base-content">{{ d.title }}</span>
+            </div>
+            <p class="text-xs text-base-content/50">
+              {{ d.decided_on|date:"F j, Y" }}
+              {% if d.meeting %} · <a href="{{ workgroup.get_absolute_url }}?tab=schedule" class="link link-hover text-primary">from the {{ d.meeting.starts_at|date:"M j" }} meeting</a>{% endif %}
+              {% if d.created_by %} · recorded by {{ d.created_by.get_full_name|default:d.created_by.email }}{% endif %}
+            </p>
+          </div>
+          {% if d.user_can_edit %}
+          <details class="dropdown dropdown-end shrink-0">
+            <summary class="btn btn-ghost btn-xs">Edit</summary>
+            <div class="dropdown-content z-50 mt-2 w-80 space-y-2 rounded-xl border border-base-300/60 bg-base-100 p-4 shadow-lg">
+              <form method="post" action="{% url 'workgroups:decision_edit' workgroup.slug d.pk %}" class="space-y-2">
+                {% csrf_token %}
+                <input name="title" type="text" required value="{{ d.title }}"
+                       class="input input-sm input-bordered w-full" />
+                <textarea name="detail" rows="3" class="textarea textarea-sm textarea-bordered w-full">{{ d.detail }}</textarea>
+                <div class="flex gap-2">
+                  <select name="status" class="select select-sm select-bordered flex-1">
+                    {% for value, label in decision_statuses %}
+                    <option value="{{ value }}" {% if value == d.status %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <input name="decided_on" type="date" value="{{ d.decided_on|date:'Y-m-d' }}"
+                         class="input input-sm input-bordered flex-1" />
+                </div>
+                {% if decision_meetings %}
+                <select name="meeting" class="select select-sm select-bordered w-full">
+                  <option value="">— No meeting —</option>
+                  {% for mt in decision_meetings %}
+                  <option value="{{ mt.pk }}" {% if mt.pk == d.meeting_id %}selected{% endif %}>{{ mt.starts_at|date:"M j, Y" }}{% if mt.title %} · {{ mt.title }}{% endif %}</option>
+                  {% endfor %}
+                </select>
+                {% endif %}
+                <button type="submit" class="btn btn-sm btn-primary w-full">Save</button>
+              </form>
+              <form method="post" action="{% url 'workgroups:decision_delete' workgroup.slug d.pk %}"
+                    onsubmit="return confirm('Delete this decision from the register?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-xs w-full text-error">Delete</button>
+              </form>
+            </div>
+          </details>
+          {% endif %}
+        </div>
+        {% if d.detail %}<div class="prose prose-sm max-w-none text-sm text-base-content/75">{{ d.detail_html }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="rounded-xl border border-dashed border-base-300/70 bg-base-200/30 p-6 text-center text-sm text-base-content/55">
+      No decisions recorded yet.{% if can_register_decision %} Record one above — they’ll form the group’s decision history.{% endif %}
+    </div>
+    {% endif %}
+  </section>
+</div>
