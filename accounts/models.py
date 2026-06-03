@@ -436,9 +436,13 @@ class Profile(models.Model):
 
     @property
     def owes_tuition(self) -> bool:
-        """Whether this profile's role obligates them to pay tuition each year."""
+        """Whether this profile owes tuition each year — an in-training role held
+        with active standing. On-leave / resigned / emeritus students are exempt
+        (and so aren't blocked by the registration tuition gate)."""
         if self.is_persona:
             return False  # personas are test accounts — never financially obligated
+        if self.standing != self.Standing.ACTIVE:
+            return False  # on leave / resigned / emeritus → not obligated
         return self.role in self.IN_TRAINING_ROLES
 
     def current_tuition_enrollment(self, on_date=None):

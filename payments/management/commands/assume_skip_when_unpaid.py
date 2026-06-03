@@ -101,7 +101,9 @@ class Command(BaseCommand):
                         .values_list("user_id", flat=True)
                     )
                     undecided = User.objects.filter(
-                        is_active=True, profile__role__in=Profile.IN_TRAINING_ROLES,
+                        is_active=True,
+                        profile__standing=Profile.Standing.ACTIVE,
+                        profile__role__in=Profile.IN_TRAINING_ROLES,
                     ).exclude(id__in=decided_ids)
                     row_note = note if is_current else proxy_note
                     for u in undecided:

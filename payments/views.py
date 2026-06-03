@@ -706,7 +706,9 @@ def _treasurer_tuition_context(selected_period=None) -> dict:
     undecided_owed = Decimal("0")
     if is_current:
         in_training_qs = User.objects.filter(
-            is_active=True, profile__is_persona=False, profile__role__in=Profile.IN_TRAINING_ROLES,
+            is_active=True, profile__is_persona=False,
+            profile__standing=Profile.Standing.ACTIVE,
+            profile__role__in=Profile.IN_TRAINING_ROLES,
         )
         in_training_count = in_training_qs.count()
         undecided_users = list(in_training_qs.exclude(id__in=decided_user_ids))
