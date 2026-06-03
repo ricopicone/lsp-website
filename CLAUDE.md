@@ -27,7 +27,7 @@ Planning documents live in the parent `LSP-Web-Coordinator` folder, alongside th
 - uv for dependencies and the virtual environment.
 - SQLite for local development; PostgreSQL in production (via `DATABASE_URL`).
 - Stripe (hosted Checkout) for payments and Amazon SES for email — both built and
-  live (SES still in sandbox pending production-access approval).
+  live (SES production access granted 2026-06-03; out of the sandbox).
 - Realtime chat (Parlêtre) over Django Channels + daphne (ASGI); in-memory channel
   layer in prod, Redis gated behind `PARLETRE_USE_REDIS`.
 - Hosting: AWS, live on the `app.lacanschool.org` subdomain.
