@@ -74,7 +74,7 @@ class TuitionDecisionForm(forms.Form):
         choices=STATUS_CHOICES,
         widget=forms.RadioSelect,
         required=True,
-        label="Your decision for this academic year",
+        label="My decision for this academic year",
     )
 
 

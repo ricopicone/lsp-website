@@ -50,6 +50,7 @@ DESTINATIONS: dict[str, str] = {
     "program-committee": "workgroups:kind_committees",
     "palimpsests": "works:index",
     "passages": "works:index",
+    "traversees": "works:index",
 }
 
 # Optional query string appended to a destination—a filter the linked page
@@ -58,6 +59,7 @@ DESTINATIONS: dict[str, str] = {
 DESTINATION_QUERY: dict[str, str] = {
     "palimpsests": "kind=palimpsest",
     "passages": "kind=passage",
+    "traversees": "kind=traversee",
 }
 
 

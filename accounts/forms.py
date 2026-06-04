@@ -466,3 +466,33 @@ class TOTPCodeForm(forms.Form):
 
     def clean_code(self) -> str:
         return (self.cleaned_data.get("code") or "").strip()
+
+
+class IntakeSurveyForm(forms.Form):
+    """Scalar fields of the launch intake survey. The year-grid checkboxes are
+    parsed from POST separately (see ``accounts.survey.parse_grid``)."""
+
+    year_joined = forms.IntegerField(
+        required=False, min_value=1970, max_value=2100,
+        label="Roughly what year did you join LSP?",
+        widget=forms.NumberInput(attrs={"class": _INPUT, "placeholder": "e.g. 2019"}),
+    )
+    pronouns = forms.CharField(
+        required=False, max_length=80, label="Pronouns (optional)",
+        widget=forms.TextInput(attrs={"class": _INPUT}),
+    )
+    payment_names = forms.CharField(
+        required=False, max_length=255,
+        label="Other name on your payments",
+        widget=forms.TextInput(attrs={"class": _INPUT, "placeholder": "optional"}),
+    )
+    payment_emails = forms.CharField(
+        required=False, max_length=255,
+        label="Other email (Stripe / PayPal)",
+        widget=forms.TextInput(attrs={"class": _INPUT, "placeholder": "optional"}),
+    )
+    list_in_directory = forms.BooleanField(
+        required=False,
+        label="List me in the public member directory (name, role, bio, photo).",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
+    )

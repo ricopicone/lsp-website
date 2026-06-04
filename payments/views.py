@@ -335,6 +335,7 @@ def _treasurer_dues_context(selected_period=None) -> dict:
         "role_breakdown": role_breakdown,
         "unpaid_users":   unpaid_users,
         "paid_members":   paid_members,
+        "dues_confirmed_pct": _confirmed_pct(p.source for p in paid_members),
         "obligated_count": obligated_count,
         "dues_collected": dues_collected,
         "dues_outstanding": dues_outstanding,
@@ -718,6 +719,20 @@ _TUITION_STATUS_ORDER = [
 ]
 
 
+def _confirmed_pct(sources) -> int | None:
+    """Percent of rows whose provenance is confirmed (verified/imported/staff)
+    vs. estimated (self-reported/assumed). None when there are no rows."""
+    from accounts.models import Source
+    sources = list(sources)
+    if not sources:
+        return None
+    confirmed = sum(
+        1 for s in sources
+        if s in (Source.VERIFIED, Source.IMPORTED, Source.STAFF)
+    )
+    return round(100 * confirmed / len(sources))
+
+
 def _backfilled_tuition_collected(period) -> Decimal:
     """Succeeded tuition payments with no installment link (historical Stripe /
     treasurer-ledger imports), summed for ``period`` by payment date. The
@@ -820,6 +835,7 @@ def _treasurer_tuition_context(selected_period=None) -> dict:
         enrollment_rows.append({
             "user": e.user, "status": e.status,
             "status_label": status_labels.get(e.status, e.status),
+            "source": e.source, "source_label": e.get_source_display(),
             "paid": paid, "remaining": remaining,
         })
 
@@ -893,6 +909,7 @@ def _treasurer_tuition_context(selected_period=None) -> dict:
         "tuition_role_breakdown":      role_breakdown_tuition,
         "tuition_reconciliation_users": reconciliation_users,
         "tuition_enrollment_rows":     enrollment_rows,
+        "tuition_confirmed_pct":       _confirmed_pct(e.source for e in enrollments),
         "tuition_in_training_count":   in_training_count,
         "tuition_total_collected":     total_collected,
         "tuition_committed_remaining": committed_remaining,
@@ -990,6 +1007,19 @@ def stripe_webhook(request):
 
     event_type = event["type"]
     event_id = event["id"] if "id" in event else "?"
+
+    # Keep Stripe test-mode events out of real accounting (production). Genuine
+    # protection is the live webhook secret rejecting test signatures above;
+    # this is belt-and-suspenders for a window where test keys are configured.
+    if getattr(settings, "STRIPE_LIVE_ONLY", False):
+        livemode = event["livemode"] if "livemode" in event else True
+        if not livemode:
+            logger.warning(
+                "Ignoring Stripe TEST-mode event (type=%s id=%s) — STRIPE_LIVE_ONLY",
+                event_type, event_id,
+            )
+            return HttpResponse(status=200)
+
     try:
         if event_type == "checkout.session.completed":
             _handle_checkout_completed(event["data"]["object"])
@@ -1034,12 +1064,19 @@ def _handle_checkout_completed(session) -> None:
         if payment.status == Payment.Status.SUCCEEDED:
             return  # already processed — idempotent no-op
 
-        # Stripe-specific bookkeeping — payment_intent goes onto the row
-        # before we hand off to the generic success machinery.
+        # Stripe-specific bookkeeping — payment_intent + the authoritative
+        # live/test flag go onto the row before the generic success machinery.
+        fields = []
         intent_id = session["payment_intent"] if "payment_intent" in session else None
         if intent_id:
             payment.stripe_payment_intent_id = intent_id
-            payment.save(update_fields=("stripe_payment_intent_id",))
+            fields.append("stripe_payment_intent_id")
+        livemode = session["livemode"] if "livemode" in session else True
+        if payment.livemode != livemode:
+            payment.livemode = livemode
+            fields.append("livemode")
+        if fields:
+            payment.save(update_fields=fields)
 
     # Run the shared success side-effects (idempotent across paths).
     complete_payment(payment)
@@ -1260,57 +1297,40 @@ def _handle_charge_refunded(charge: dict) -> None:
             ).update(status=Registration.Status.REFUNDED)
 
 
+def _tuition_tab_url(**params) -> str:
+    """The tuition tab of the member's Formation hub — where tuition lives now.
+    Extra params (e.g. ``stripe='success'``) ride along."""
+    from urllib.parse import urlencode
+
+    from django.urls import reverse
+
+    query = {"tab": "tuition", **{k: v for k, v in params.items() if v}}
+    return reverse("admissions:formation") + "?" + urlencode(query)
+
+
 @login_required
 def tuition_decision(request):
-    """Annual tuition decision page (M7.5).
+    """Record the annual tuition decision (M7.5).
 
-    Open to authenticated users whose Profile.role is in the four
-    in-training tracks (Profile.IN_TRAINING_ROLES). Posts create or
-    update a TuitionEnrollment for the current TuitionPeriod.
-
-    Shows the user their current decision status; lets them switch
-    (committed / payment plan / skipping) before the period closes.
+    The tuition surface (decision form, installments, payment history) lives on
+    the member's Formation hub. This endpoint only handles the decision form's
+    POST; every other request just redirects there.
     """
     profile = request.user.profile
-    if not profile.owes_tuition:
-        return render(
-            request, "payments/tuition_not_applicable.html",
-            {"role_display": profile.get_role_display()},
-        )
-
     period = TuitionPeriod.current()
-    if period is None:
-        return render(request, "payments/tuition_no_period.html")
 
-    enrollment = TuitionEnrollment.objects.filter(
-        user=request.user, tuition_period=period,
-    ).first()
-
-    if request.method == "POST":
+    if request.method == "POST" and profile.owes_tuition and period is not None:
         form = TuitionDecisionForm(request.POST)
         if form.is_valid():
-            status = form.cleaned_data["status"]
             with transaction.atomic():
-                enrollment, _ = TuitionEnrollment.objects.update_or_create(
+                TuitionEnrollment.objects.update_or_create(
                     user=request.user, tuition_period=period,
-                    defaults={"status": status},
+                    defaults={"status": form.cleaned_data["status"]},
                 )
-            return redirect("tuition")
-    else:
-        initial = {"status": enrollment.status} if enrollment else {}
-        form = TuitionDecisionForm(initial=initial)
-
-    installments = []
-    if enrollment is not None:
-        installments = list(enrollment.installments.order_by("sequence"))
-
-    return render(request, "payments/tuition.html", {
-        "period":       period,
-        "enrollment":   enrollment,
-        "installments": installments,
-        "form":         form,
-        "stripe_status": request.GET.get("stripe"),
-    })
+            messages.success(request, "Your tuition decision has been recorded.")
+        else:
+            messages.error(request, "Please choose one of the listed options.")
+    return redirect(_tuition_tab_url())
 
 
 @login_required
@@ -1325,19 +1345,19 @@ def tuition_pay_in_full(request):
     """
     profile = request.user.profile
     if not profile.owes_tuition:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     period = TuitionPeriod.current()
     if period is None:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     enrollment = TuitionEnrollment.objects.filter(
         user=request.user, tuition_period=period,
     ).first()
     if enrollment is None:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     if enrollment.installments.exists():
         # Already on a payment plan / has installments — direct to pay one
         # rather than minting a parallel "full" installment.
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     with transaction.atomic():
         installment = TuitionInstallment.objects.create(
             enrollment=enrollment, sequence=1,
@@ -1367,23 +1387,23 @@ def tuition_setup_plan(request):
     """
     profile = request.user.profile
     if not profile.owes_tuition:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     period = TuitionPeriod.current()
     if period is None:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     enrollment = TuitionEnrollment.objects.filter(
         user=request.user, tuition_period=period,
     ).first()
     if enrollment is None or enrollment.status != TuitionEnrollment.Status.PAYMENT_PLAN:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     if enrollment.installments.exists():
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     try:
         count = int(request.POST.get("installment_count", "0"))
     except (TypeError, ValueError):
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     if count not in (2, 9):
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
 
     schedule = _build_installment_schedule(period, count)
     with transaction.atomic():
@@ -1392,7 +1412,7 @@ def tuition_setup_plan(request):
                 enrollment=enrollment, sequence=seq,
                 due_date=due_date, amount=amount,
             )
-    return redirect("tuition")
+    return redirect(_tuition_tab_url())
 
 
 def _build_installment_schedule(
@@ -1445,7 +1465,7 @@ def tuition_pay_installment(request, installment_id: int):
         pk=installment_id, enrollment__user=request.user,
     )
     if installment.paid:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     with transaction.atomic():
         payment = Payment.objects.create(
             payment_type=Payment.Type.TUITION,
@@ -1457,3 +1477,35 @@ def tuition_pay_installment(request, installment_id: int):
         )
     session = create_tuition_session(payment)
     return redirect(session.url)
+
+
+@login_required
+@require_POST
+def my_payment_reconcile(request):
+    """A member re-categorizes their *own* provisional charges.
+
+    The recurring-charge import books charges it can't classify as ``ASSUMED``.
+    The treasurer reconciles these globally; this lets the member do the same
+    for their own — re-typing a selected subset and promoting them to
+    ``SELF_REPORTED`` (member-reported). Constrained to the member's own
+    ASSUMED rows, so a stale/forged id can't touch a confirmed payment."""
+    from accounts.models import Source
+
+    ids = request.POST.getlist("payment_ids")
+    new_type = request.POST.get("payment_type")
+    if not ids:
+        messages.error(request, "Select at least one payment to categorize.")
+        return redirect(_tuition_tab_url())
+    if new_type not in Payment.Type.values:
+        messages.error(request, "Choose a valid type.")
+        return redirect(_tuition_tab_url())
+
+    qs = Payment.objects.filter(
+        user=request.user, source=Source.ASSUMED, pk__in=ids,
+    )
+    n = qs.update(payment_type=new_type, source=Source.SELF_REPORTED)
+    if n:
+        messages.success(request, f"Thank you — categorized {n} payment(s).")
+    else:
+        messages.error(request, "Those payments were already categorized.")
+    return redirect(_tuition_tab_url())

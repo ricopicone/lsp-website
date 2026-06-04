@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}Your application — LSP{% endblock %}
+{% block title %}My application — LSP{% endblock %}
 {% block content %}
 <div class="space-y-6 max-w-2xl">
   {% if messages %}{% for m in messages %}
@@ -7,7 +7,7 @@
   {% endfor %}{% endif %}
 
   <header class="space-y-2">
-    <h1 class="font-serif text-3xl text-base-content tracking-tight">Your application</h1>
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">My application</h1>
     <p class="text-base-content/70">
       {{ application.get_track_display }} · submitted {{ application.submitted_at|date:"M j, Y" }}
     </p>
@@ -43,7 +43,7 @@
     <div class="rounded-lg bg-success/10 border border-success/30 p-3 text-sm space-y-2">
       <p class="font-medium text-base-content">Welcome — you've been admitted as a Precandidate.</p>
       <p class="text-base-content/70">Your next step is to choose an Advisor.</p>
-      <a href="{% url 'advisor_select' %}" class="btn btn-primary btn-sm">Choose your advisor</a>
+      <a href="{% url 'admissions:formation' %}?tab=formation" class="btn btn-primary btn-sm">Choose your Advisor</a>
     </div>
     {% elif s == 'rejected' %}
     <p class="text-sm text-base-content/70">After review, we're not able to offer admission at this time. Thank you for applying.</p>

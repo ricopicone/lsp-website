@@ -119,7 +119,9 @@ def test_member_must_choose_advisor_first(client):
     client.force_login(member)
     resp = client.post(reverse("admissions:advancement"), {"statement": "ready"})
     assert resp.status_code == 302
-    assert resp.url == reverse("advisor_select")
+    # Bounced back to the Formation hub (where the Advisor picker lives) — no
+    # demande opened until an Advisor is chosen.
+    assert reverse("admissions:formation") in resp.url
     assert not Advancement.objects.filter(member=member).exists()
 
 

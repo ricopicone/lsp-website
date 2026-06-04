@@ -141,3 +141,44 @@ def test_other_event_type_is_ignored(client, payment):
 def test_get_method_rejected(client):
     response = client.get(reverse("payments:stripe_webhook"))
     assert response.status_code == 405
+
+
+# ---- livemode guard (keep test data out of accounting) --------------------
+
+def _event(session_id, *, livemode, intent="pi_x"):
+    return {
+        "id": "evt_lm", "type": "checkout.session.completed", "livemode": livemode,
+        "data": {"object": {
+            "id": session_id, "payment_intent": intent,
+            "amount_total": 10000, "currency": "usd", "livemode": livemode,
+        }},
+    }
+
+
+@pytest.mark.django_db
+@override_settings(STRIPE_LIVE_ONLY=True)
+def test_test_mode_event_ignored_when_live_only(client, payment):
+    resp = _post_event(client, _event(payment.stripe_checkout_session_id, livemode=False))
+    assert resp.status_code == 200
+    payment.refresh_from_db()
+    assert payment.status == Payment.Status.PENDING  # never completed
+
+
+@pytest.mark.django_db
+@override_settings(STRIPE_LIVE_ONLY=False)
+def test_test_mode_event_processed_in_dev_records_livemode(client, payment):
+    resp = _post_event(client, _event(payment.stripe_checkout_session_id, livemode=False))
+    assert resp.status_code == 200
+    payment.refresh_from_db()
+    assert payment.status == Payment.Status.SUCCEEDED
+    assert payment.livemode is False
+
+
+@pytest.mark.django_db
+@override_settings(STRIPE_LIVE_ONLY=True)
+def test_live_event_completes_and_records_livemode_true(client, payment):
+    resp = _post_event(client, _event(payment.stripe_checkout_session_id, livemode=True))
+    assert resp.status_code == 200
+    payment.refresh_from_db()
+    assert payment.status == Payment.Status.SUCCEEDED
+    assert payment.livemode is True

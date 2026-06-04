@@ -218,29 +218,24 @@
             <li><hr class="border-base-300/60 my-1"></li>
 
             {% if user.profile.is_listed %}
-            <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">Your directory page</a></li>
+            <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">My directory page</a></li>
             {% endif %}
             <li><a href="{% url 'works:mine' %}">My works</a></li>
-            <li><a href="{% url 'workgroups:list' %}">Groups</a></li>
-            {% if user.profile.owes_tuition %}
-            <li><a href="{% url 'tuition' %}">Your tuition decision</a></li>
-            {% endif %}
-            {% if user.profile.needs_advisor %}
-            <li><a href="{% url 'advisor_select' %}">Your advisor</a></li>
-            <li><a href="{% url 'admissions:advancement' %}">Your formation</a></li>
-            {% endif %}
+            <li><a href="{% url 'admissions:formation' %}">My Formation</a></li>
             {% if user.profile.role == 'analyst' or user.profile.role == 'scholar' %}
               {% if user.advancements_advised.exists %}
               <li><a href="{% url 'admissions:advise_queue' %}">Demandes you advise</a></li>
               {% endif %}
             {% endif %}
             {% if user.application %}
-            <li><a href="{% url 'admissions:status' %}">Your application</a></li>
+            <li><a href="{% url 'admissions:status' %}">My application</a></li>
             {% elif user.profile.role == 'external' or user.profile.role == 'prospective_applicant' %}
             <li><a href="{% url 'admissions:apply_start' %}">Apply to join</a></li>
             {% endif %}
+            {% if show_survey_nudge %}
+            <li><a href="{% url 'intake_survey' %}">Finish intake survey</a></li>
+            {% endif %}
             <li><a href="{% url 'profile_edit' %}">Edit profile</a></li>
-            <li><a href="{% url 'profile_edit' %}#timezone">Time zone</a></li>
             <li>
               {# Theme toggle: shows the mode you'll switch to. #}
               <button type="button" data-theme-toggle class="justify-start gap-2">
@@ -292,6 +287,14 @@
   {% endblock %}
 
   <main class="flex-1 mx-auto w-full max-w-5xl px-4 sm:px-6 py-8 sm:py-10">
+    {% if show_survey_nudge %}
+    <div class="alert mb-6 flex-wrap gap-2 border border-primary/30 bg-primary/5">
+      <span class="text-sm text-base-content/80">
+        👋 Help us get your records right — a quick <strong>3-minute</strong> intake survey.
+      </span>
+      <a href="{% url 'intake_survey' %}" class="btn btn-primary btn-sm">Start the survey</a>
+    </div>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
 

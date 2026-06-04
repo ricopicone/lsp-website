@@ -38,6 +38,7 @@ class Work(models.Model):
         CARTEL     = "cartel",     _("Cartel work")
         PALIMPSEST = "palimpsest", _("Palimpsest")
         PASSAGE    = "passage",    _("Passage")
+        TRAVERSEE  = "traversee",  _("Traversée")
         DOCUMENT   = "document",   _("Document")
 
     class Visibility(models.TextChoices):

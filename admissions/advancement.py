@@ -34,6 +34,15 @@ def kind_for(member) -> str | None:
     return Advancement.KIND_FOR_ROLE.get(member.profile.role)
 
 
+def step_label_for_member(member) -> str | None:
+    """The track-aware name of the step ``member`` may currently request
+    (Palimpsest / Passage / Traversée), or None if they're not eligible."""
+    from .models import step_label_for
+
+    kind = kind_for(member)
+    return step_label_for(kind, member.profile.role) if kind else None
+
+
 def open_advancement_for(member):
     """The member's current open demande, if any."""
     return (

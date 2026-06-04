@@ -4,6 +4,10 @@ from .base import *
 
 DEBUG = False
 
+# Production must never let Stripe test-mode events into real accounting.
+# (Override to False via env only for a deliberate staging/test deployment.)
+STRIPE_LIVE_ONLY = env.bool("STRIPE_LIVE_ONLY", default=True)
+
 # PostgreSQL connection, read from DATABASE_URL.
 DATABASES = {
     "default": env.db("DATABASE_URL"),

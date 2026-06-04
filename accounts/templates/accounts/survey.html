@@ -1,0 +1,198 @@
+{% extends "core/base.html" %}
+{% block title %}Quick intake survey — LSP{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-2xl">
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  {% if done %}
+  {% comment %}Screen 5 — done; route them to finish their profile.{% endcomment %}
+  <div class="rounded-xl border border-base-300 p-6 space-y-3 text-center">
+    <h1 class="font-serif text-3xl text-base-content">Thanks — you're all set ✅</h1>
+    <p class="text-base-content/70">
+      We've saved your answers and will match them against our records, reaching
+      out only if something doesn't line up.
+    </p>
+    <p class="text-base-content/80">
+      <strong>One more step:</strong> finish your profile — add a photo, a short
+      bio, and your contact details so colleagues can find you.
+    </p>
+    <div class="flex justify-center gap-2 pt-1">
+      <a href="{% url 'profile_edit' %}" class="btn btn-primary">Complete my profile →</a>
+      <a href="{% url 'core:landing' %}" class="btn btn-ghost btn-sm">Maybe later</a>
+    </div>
+    <p class="text-xs text-base-content/45">You can update any of this later from your profile menu.</p>
+  </div>
+
+  {% else %}
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Welcome to the new LSP site 👋</h1>
+    <p class="text-base-content/70">
+      We're moving our records over and want yours to be right. This takes about
+      <strong>three minutes</strong> — answer from memory, <strong>best guesses are
+      totally fine</strong>, and you can finish later from your profile.
+    </p>
+  </header>
+
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+
+    {% comment %}Section — You.{% endcomment %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-4">
+      <h2 class="font-medium text-base-content">A few quick confirmations</h2>
+      <p class="text-sm text-base-content/60">
+        You're <strong>{{ request.user.get_full_name|default:request.user.email }}</strong>,
+        currently <strong>{{ request.user.profile.get_role_display }}</strong>.
+        <a href="{% url 'profile_edit' %}" class="link">Not right? Edit your profile.</a>
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ form.year_joined.label }}</label>
+          {{ form.year_joined }}
+          <p class="text-xs text-base-content/45">A year is all we need — a guess is fine. It tells us which years you may have owed tuition or dues.</p>
+          {% if form.year_joined.errors %}<p class="text-error text-xs">{{ form.year_joined.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ form.pronouns.label }}</label>
+          {{ form.pronouns }}
+        </div>
+      </div>
+    </section>
+
+    {% comment %}Section — the year grid (the one real question).{% endcomment %}
+    {% if rows %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-3">
+      <div>
+        <h2 class="font-medium text-base-content">Your years at LSP</h2>
+        <p class="text-sm text-base-content/60">
+          For each year, mark whether you paid tuition in <strong>full</strong>, paid
+          <strong>some</strong>, or not that year — and check dues. Pre-filled from
+          our records; don't sweat exactness, a best guess is fine.
+        </p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm" id="year-grid">
+          <thead>
+            <tr>
+              <th>Academic year</th>
+              <th class="text-center">Tuition</th>
+              <th class="text-center">Paid dues</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="whitespace-nowrap align-top pt-3">{{ r.label }}</td>
+              <td class="text-center">
+                {% if r.has_tuition %}
+                <div class="flex items-center justify-center gap-3 text-xs">
+                  <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="tuition_{{ r.ay }}" value="full" class="radio radio-xs" data-tuition-radio data-tuition-full {% if r.tuition_state == 'full' %}checked{% endif %}> Full</label>
+                  <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="tuition_{{ r.ay }}" value="partial" class="radio radio-xs" data-tuition-radio {% if r.tuition_state == 'partial' %}checked{% endif %}> Some</label>
+                  <label class="flex items-center gap-1 cursor-pointer text-base-content/50"><input type="radio" name="tuition_{{ r.ay }}" value="" class="radio radio-xs" data-tuition-radio {% if not r.tuition_state %}checked{% endif %}> —</label>
+                </div>
+                {% if r.tuition_paid %}<div class="text-[10px] text-base-content/45 mt-0.5">${{ r.tuition_paid|floatformat:0 }} of ${{ r.tuition_full|floatformat:0 }} on record</div>{% endif %}
+                {% else %}<span class="text-base-content/25">—</span>{% endif %}
+              </td>
+              <td class="text-center align-top pt-3">
+                {% if r.has_dues %}
+                <input type="checkbox" name="dues_{{ r.ay }}" class="checkbox checkbox-sm" {% if r.dues_checked %}checked{% endif %}>
+                {% else %}<span class="text-base-content/25">—</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-base-content/60">
+        Tuition: students owe four years total — you've marked
+        <strong><span id="tuition-count">{{ tuition_prechecked }}</span> of 4</strong> paid in full so far.
+      </p>
+    </section>
+    {% endif %}
+
+    {% comment %}Section — formation steps (role-dependent).{% endcomment %}
+    {% if milestones %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-3">
+      <h2 class="font-medium text-base-content">Your formation steps</h2>
+      <p class="text-sm text-base-content/60">Roughly what year did each happen? A guess is fine.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {% for m in milestones %}
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ m.label }} — year</label>
+          <input type="number" name="milestone_{{ m.key }}" value="{{ m.value }}"
+                 min="1970" max="2100" placeholder="e.g. 2019"
+                 class="input input-bordered w-full">
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% comment %}Section — advisor (in-training members).{% endcomment %}
+    {% if needs_advisor %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-3">
+      <h2 class="font-medium text-base-content">Your advisor</h2>
+      <p class="text-sm text-base-content/60">Who is your current advisor (an Analyst of the School)?</p>
+      <select name="advisor" class="select select-bordered w-full sm:max-w-sm">
+        <option value="">— select —</option>
+        {% for a in advisors %}
+        <option value="{{ a.pk }}" {% if current_advisor and a.pk == current_advisor.pk %}selected{% endif %}>{{ a.get_full_name|default:a.email }}</option>
+        {% endfor %}
+      </select>
+    </section>
+    {% endif %}
+
+    {% comment %}Section — public directory opt-in (directory-eligible roles).{% endcomment %}
+    {% if can_list %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-1">
+      <label class="flex items-start gap-2 cursor-pointer">
+        {{ form.list_in_directory }}
+        <span class="text-sm text-base-content/80">{{ form.list_in_directory.label }}</span>
+      </label>
+      <p class="text-xs text-base-content/45 ml-6">You control exactly what appears on your profile page in the profile editor.</p>
+    </section>
+    {% endif %}
+
+    {% comment %}Section — paying under a different name (optional).{% endcomment %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-3">
+      <h2 class="font-medium text-base-content">Paying under a different name? <span class="text-xs font-normal text-base-content/45">(optional)</span></h2>
+      <p class="text-sm text-base-content/60">
+        Did you ever pay by a name or email different from your account? Tell us so
+        we can find those payments. Skip if not.
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ form.payment_names.label }}</label>
+          {{ form.payment_names }}
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ form.payment_emails.label }}</label>
+          {{ form.payment_emails }}
+        </div>
+      </div>
+    </section>
+
+    <div class="flex items-center gap-3">
+      <button class="btn btn-primary">Finish</button>
+      <a href="{% url 'core:landing' %}" class="link link-hover text-sm text-base-content/60">Finish later</a>
+    </div>
+  </form>
+  {% endif %}
+</div>
+
+<script>
+  // Live "N of 4" counter — counts years marked "Full".
+  (function () {
+    var radios = document.querySelectorAll('[data-tuition-radio]');
+    var fulls = document.querySelectorAll('[data-tuition-full]');
+    var out = document.getElementById('tuition-count');
+    if (!radios.length || !out) return;
+    function tally() {
+      out.textContent = Array.prototype.filter.call(fulls, function (b) { return b.checked; }).length;
+    }
+    radios.forEach(function (r) { r.addEventListener('change', tally); });
+  })();
+</script>
+{% endblock %}
