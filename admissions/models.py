@@ -26,6 +26,16 @@ from django.utils.translation import gettext_lazy as _
 from .storage import cv_storage
 
 
+def step_label_for(kind, role) -> str:
+    """The track-aware display name for a formation step. ``Palimpsest`` is the
+    same on both tracks; the passage step is a **Passage** for the Analyst track
+    and a **Traversée** for the Scholar track."""
+    if kind == "palimpsest":
+        return "Palimpsest"
+    from accounts.models import Profile
+    return "Traversée" if role in Profile.SCHOLAR_TRACK_ROLES else "Passage"
+
+
 class Application(models.Model):
     """One person's application to join a formation track."""
 
@@ -256,3 +266,11 @@ class Advancement(models.Model):
         """The role this demande advances the member into (None if their
         ``from_role`` has no mapping for this kind)."""
         return self.ADVANCE_ROLE.get(self.kind, {}).get(self.from_role)
+
+    @property
+    def step_label(self) -> str:
+        """The track-aware name of this formation step. The passage step is a
+        **Passage** on the Analyst track and a **Traversée** on the Scholar
+        track; the palimpsest is the same word on both. Keyed off ``from_role``
+        (snapshotted when the demande opened) so it's stable after advancement."""
+        return step_label_for(self.kind, self.from_role)
