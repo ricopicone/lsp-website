@@ -430,7 +430,9 @@ def treasurer_payments(request):
     payment_type = request.GET.get("type") or ""
     status = request.GET.get("status") or ""
 
-    qs = Payment.objects.select_related("user", "registration__event").order_by("-created_at")
+    qs = Payment.objects.select_related(
+        "user", "registration__event", "tuition_period",
+    ).order_by("-created_at")
     if payment_type:
         qs = qs.filter(payment_type=payment_type)
     if status:
@@ -738,16 +740,20 @@ def _backfilled_tuition_collected(period) -> Decimal:
     treasurer-ledger imports), summed for ``period`` by payment date. The
     payment-plan flow links tuition via ``tuition_installment``; backfilled lump
     payments don't, so they'd otherwise be invisible on the tuition dashboard."""
-    return (
-        Payment.objects.filter(
-            payment_type=Payment.Type.TUITION,
-            status=Payment.Status.SUCCEEDED,
-            tuition_installment__isnull=True,
-            paid_at__date__gte=period.start_date,
-            paid_at__date__lte=period.end_date,
-        ).aggregate(s=Sum("amount"))["s"]
-        or Decimal("0")
+    base = Payment.objects.filter(
+        payment_type=Payment.Type.TUITION,
+        status=Payment.Status.SUCCEEDED,
+        tuition_installment__isnull=True,
     )
+    # Payments the member assigned to this AY win outright; the rest fall back
+    # to the AY their payment date lands in.
+    assigned = base.filter(tuition_period=period).aggregate(s=Sum("amount"))["s"]
+    dated = base.filter(
+        tuition_period__isnull=True,
+        paid_at__date__gte=period.start_date,
+        paid_at__date__lte=period.end_date,
+    ).aggregate(s=Sum("amount"))["s"]
+    return (assigned or Decimal("0")) + (dated or Decimal("0"))
 
 
 def _treasurer_tuition_context(selected_period=None) -> dict:
@@ -947,17 +953,21 @@ def _treasurer_tuition_longitudinal() -> dict:
         if pid is not None:
             collected_by_period[pid] = row["s"] or Decimal("0")
 
-    # Fold in installment-less backfill (Stripe/treasurer imports), bucketed by
-    # the academic year of each payment — one query, no per-period fan-out.
+    # Fold in installment-less backfill (Stripe/treasurer imports). Member-
+    # assigned payments go to their chosen AY; the rest bucket by payment date.
     period_id_by_ay = {ay_of(p.start_date): p.id for p in periods}
-    for paid_at, amount in (
-        Payment.objects.filter(
-            payment_type=Payment.Type.TUITION,
-            status=Payment.Status.SUCCEEDED,
-            tuition_installment__isnull=True,
-            paid_at__isnull=False,
-        ).values_list("paid_at", "amount")
-    ):
+    base = Payment.objects.filter(
+        payment_type=Payment.Type.TUITION,
+        status=Payment.Status.SUCCEEDED,
+        tuition_installment__isnull=True,
+    )
+    for pid, amount in base.filter(
+        tuition_period__isnull=False
+    ).values_list("tuition_period_id", "amount"):
+        collected_by_period[pid] = collected_by_period.get(pid, Decimal("0")) + amount
+    for paid_at, amount in base.filter(
+        tuition_period__isnull=True, paid_at__isnull=False
+    ).values_list("paid_at", "amount"):
         pid = period_id_by_ay.get(ay_of(paid_at.date()))
         if pid is not None:
             collected_by_period[pid] = collected_by_period.get(pid, Decimal("0")) + amount
@@ -1508,4 +1518,39 @@ def my_payment_reconcile(request):
         messages.success(request, f"Thank you — categorized {n} payment(s).")
     else:
         messages.error(request, "Those payments were already categorized.")
+    return redirect(_tuition_tab_url())
+
+
+@login_required
+@require_POST
+def my_payment_assign_tuition(request):
+    """A member assigns each of their *own* tuition payments to an academic year
+    (resolving e.g. an August payment's ambiguous AY) and adds a note the
+    treasurer can see. Sets ``tuition_period`` + ``member_note``; constrained to
+    the member's own tuition payments."""
+    periods = {str(tp.id): tp for tp in TuitionPeriod.objects.all()}
+    tuition = Payment.objects.filter(
+        user=request.user, payment_type=Payment.Type.TUITION
+    )
+    changed = 0
+    for p in tuition:
+        if f"period_{p.id}" not in request.POST:
+            continue
+        fields = []
+        new_period = periods.get(request.POST.get(f"period_{p.id}") or "")
+        new_period_id = new_period.id if new_period else None
+        if p.tuition_period_id != new_period_id:
+            p.tuition_period_id = new_period_id
+            fields.append("tuition_period")
+        note = (request.POST.get(f"note_{p.id}") or "").strip()[:1000]
+        if p.member_note != note:
+            p.member_note = note
+            fields.append("member_note")
+        if fields:
+            p.save(update_fields=fields)
+            changed += 1
+    messages.success(
+        request,
+        f"Saved {changed} payment update(s)." if changed else "No changes to save.",
+    )
     return redirect(_tuition_tab_url())

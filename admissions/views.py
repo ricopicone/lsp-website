@@ -384,6 +384,21 @@ def _formation_money_context(request) -> dict:
     payments = list(Payment.objects.filter(user=user).order_by("-created_at", "-id"))
     assumed = [p for p in payments if p.source == Source.ASSUMED]
 
+    # Tuition payments the member can assign to an academic year. Pre-select the
+    # assigned period, else the AY the payment date falls in.
+    from accounts.membership import current_academic_year_start as ay_of
+    tuition_periods = list(TuitionPeriod.objects.order_by("-start_date"))
+    period_id_by_ay = {ay_of(tp.start_date): tp.id for tp in tuition_periods}
+    my_tuition_payments = []
+    for p in payments:
+        if p.payment_type != Payment.Type.TUITION:
+            continue
+        when = p.paid_at or p.created_at
+        p.selected_period_id = p.tuition_period_id or (
+            period_id_by_ay.get(ay_of(when.date())) if when else None
+        )
+        my_tuition_payments.append(p)
+
     show_money_tab = (
         profile.owes_tuition or dues_obligated or bool(payments)
         or progress["tuition_years_started"] > 0
@@ -409,6 +424,8 @@ def _formation_money_context(request) -> dict:
         # payments
         "my_payments": payments,
         "my_assumed_payments": assumed,
+        "my_tuition_payments": my_tuition_payments,
+        "tuition_periods": tuition_periods,
         "payment_type_choices": Payment.Type.choices,
     }
 

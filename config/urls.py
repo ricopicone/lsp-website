@@ -103,6 +103,8 @@ urlpatterns = [
          _payment_views.tuition_pay_installment, name="tuition_pay_installment"),
     path("payments/my/reconcile/", _payment_views.my_payment_reconcile,
          name="my_payment_reconcile"),
+    path("payments/my/assign-tuition/", _payment_views.my_payment_assign_tuition,
+         name="my_payment_assign_tuition"),
     path("treasurer/", _payment_views.treasurer_dashboard, name="treasurer"),
     path("treasurer/tuition/", _payment_views.treasurer_tuition, name="treasurer_tuition"),
     path("treasurer/dues/", _payment_views.treasurer_dues, name="treasurer_dues"),

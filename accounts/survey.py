@@ -28,6 +28,10 @@ from .models import MemberIntakeSurvey, MembershipTenure, Profile, Source, User
 
 R = Profile.Role
 
+#: The tuition/dues grid only goes back this far (older years are reported via
+#: the join-year + formation selectors, not the financial grid).
+FINANCIAL_GRID_FROM_AY = 2015
+
 #: Formation-step questions shown per current role (key, label).
 MILESTONES_BY_ROLE: dict[str, list[tuple[str, str]]] = {
     R.CANDIDATE: [("palimpsest", "Palimpsest")],
@@ -61,14 +65,18 @@ def survey_year_rows(user) -> list[dict]:
 
     tuition_by_ay = {ay_of(tp.start_date): tp for tp in TuitionPeriod.objects.all()}
     dues_by_ay = {ay_of(dp.start_date): dp for dp in DuesPeriod.objects.all()}
-    years = sorted(set(tuition_by_ay) | set(dues_by_ay), reverse=True)
+    cur_ay = ay_of(timezone.localdate())
+    years = sorted(
+        ay for ay in (set(tuition_by_ay) | set(dues_by_ay))
+        if FINANCIAL_GRID_FROM_AY <= ay <= cur_ay
+    )
+    years.reverse()
 
     tuition_paid_by_ay = _tuition_paid_by_ay(user)
     dues_ays = _paid_dues_ays(user)
     enroll_by_period = {
         e.tuition_period_id: e for e in TuitionEnrollment.objects.filter(user=user)
     }
-    cur = ay_of(timezone.localdate())
     rows = []
     for ay in years:
         tp = tuition_by_ay.get(ay)
@@ -81,7 +89,7 @@ def survey_year_rows(user) -> list[dict]:
             )
         rows.append({
             "ay": ay,
-            "label": f"AY {ay}–{ay + 1}" + (" (current)" if ay == cur else ""),
+            "label": f"AY {ay}–{ay + 1}" + (" (current)" if ay == cur_ay else ""),
             "has_tuition": tp is not None,
             "has_dues": dp is not None,
             "tuition_state": state,
@@ -175,8 +183,8 @@ def parse_milestones(post) -> dict:
 
 @transaction.atomic
 def apply_survey(
-    user, *, year_joined, pronouns, payment_names, payment_emails, grid,
-    milestones=None, list_in_directory=None,
+    user, *, year_joined, payment_names, payment_emails, grid,
+    milestones=None, list_in_directory=None, paid_all_tuition=None,
 ) -> MemberIntakeSurvey:
     """Store the raw survey and reconcile it into structured records."""
     milestones = milestones or {}
@@ -186,6 +194,7 @@ def apply_survey(
     survey.payment_emails = (payment_emails or "").strip()[:255]
     survey.grid = grid
     survey.milestones = milestones
+    survey.paid_all_tuition = paid_all_tuition
     survey.submitted_at = timezone.now()
     survey.save()
 
@@ -194,9 +203,6 @@ def apply_survey(
     if year_joined and profile.year_joined != year_joined:
         profile.year_joined = year_joined
         updates.append("year_joined")
-    if pronouns is not None and profile.pronouns != pronouns:
-        profile.pronouns = pronouns
-        updates.append("pronouns")
     if list_in_directory is not None and profile.public != list_in_directory:
         profile.public = list_in_directory
         updates.append("public")
