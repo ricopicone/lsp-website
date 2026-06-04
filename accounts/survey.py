@@ -176,7 +176,7 @@ def parse_milestones(post) -> dict:
 @transaction.atomic
 def apply_survey(
     user, *, year_joined, pronouns, payment_names, payment_emails, grid,
-    milestones=None,
+    milestones=None, list_in_directory=None,
 ) -> MemberIntakeSurvey:
     """Store the raw survey and reconcile it into structured records."""
     milestones = milestones or {}
@@ -197,6 +197,9 @@ def apply_survey(
     if pronouns is not None and profile.pronouns != pronouns:
         profile.pronouns = pronouns
         updates.append("pronouns")
+    if list_in_directory is not None and profile.public != list_in_directory:
+        profile.public = list_in_directory
+        updates.append("public")
     if updates:
         profile.save(update_fields=updates)
 

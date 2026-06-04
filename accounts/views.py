@@ -656,6 +656,7 @@ def intake_survey(request):
     survey = MemberIntakeSurvey.objects.filter(user=request.user).first()
     profile = request.user.profile
     needs_advisor = profile.needs_advisor
+    can_list = profile.is_in_directory
 
     if request.method == "POST":
         form = IntakeSurveyForm(request.POST)
@@ -668,6 +669,9 @@ def intake_survey(request):
                 payment_emails=form.cleaned_data["payment_emails"],
                 grid=parse_grid(request.POST),
                 milestones=parse_milestones(request.POST),
+                list_in_directory=(
+                    form.cleaned_data["list_in_directory"] if can_list else None
+                ),
             )
             if needs_advisor and request.POST.get("advisor"):
                 advisor = eligible_advisors(request.user).filter(
@@ -683,6 +687,7 @@ def intake_survey(request):
             "pronouns": profile.pronouns,
             "payment_names": survey.payment_names if survey else "",
             "payment_emails": survey.payment_emails if survey else "",
+            "list_in_directory": profile.public,
         })
 
     rows = survey_year_rows(request.user)
@@ -696,4 +701,5 @@ def intake_survey(request):
         "needs_advisor": needs_advisor,
         "advisors": eligible_advisors(request.user) if needs_advisor else [],
         "current_advisor": current_advisor(request.user) if needs_advisor else None,
+        "can_list": can_list,
     })

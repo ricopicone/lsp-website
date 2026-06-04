@@ -8,18 +8,22 @@
   {% endfor %}{% endif %}
 
   {% if done %}
-  {% comment %}Screen 5 — done.{% endcomment %}
+  {% comment %}Screen 5 — done; route them to finish their profile.{% endcomment %}
   <div class="rounded-xl border border-base-300 p-6 space-y-3 text-center">
     <h1 class="font-serif text-3xl text-base-content">Thanks — you're all set ✅</h1>
     <p class="text-base-content/70">
-      We'll match this against our records and only reach out if something doesn't
-      line up. Want to polish your public profile while you're here?
+      We've saved your answers and will match them against our records, reaching
+      out only if something doesn't line up.
+    </p>
+    <p class="text-base-content/80">
+      <strong>One more step:</strong> finish your profile — add a photo, a short
+      bio, and your contact details so colleagues can find you.
     </p>
     <div class="flex justify-center gap-2 pt-1">
-      <a href="{% url 'profile_edit' %}" class="btn btn-primary btn-sm">Edit my profile</a>
-      <a href="{% url 'core:landing' %}" class="btn btn-ghost btn-sm">Go to the site</a>
+      <a href="{% url 'profile_edit' %}" class="btn btn-primary">Complete my profile →</a>
+      <a href="{% url 'core:landing' %}" class="btn btn-ghost btn-sm">Maybe later</a>
     </div>
-    <p class="text-xs text-base-content/45">You can update these answers any time from your profile menu.</p>
+    <p class="text-xs text-base-content/45">You can update any of this later from your profile menu.</p>
   </div>
 
   {% else %}
@@ -137,6 +141,17 @@
         <option value="{{ a.pk }}" {% if current_advisor and a.pk == current_advisor.pk %}selected{% endif %}>{{ a.get_full_name|default:a.email }}</option>
         {% endfor %}
       </select>
+    </section>
+    {% endif %}
+
+    {% comment %}Section — public directory opt-in (directory-eligible roles).{% endcomment %}
+    {% if can_list %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-1">
+      <label class="flex items-start gap-2 cursor-pointer">
+        {{ form.list_in_directory }}
+        <span class="text-sm text-base-content/80">{{ form.list_in_directory.label }}</span>
+      </label>
+      <p class="text-xs text-base-content/45 ml-6">You control exactly what appears on your profile page in the profile editor.</p>
     </section>
     {% endif %}
 

@@ -491,3 +491,8 @@ class IntakeSurveyForm(forms.Form):
         label="Other email (Stripe / PayPal)",
         widget=forms.TextInput(attrs={"class": _INPUT, "placeholder": "optional"}),
     )
+    list_in_directory = forms.BooleanField(
+        required=False,
+        label="List me in the public member directory (name, role, bio, photo).",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
+    )

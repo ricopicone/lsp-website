@@ -245,6 +245,19 @@ def test_survey_sets_advisor(client):
     assert current_advisor(u) == analyst
 
 
+def test_directory_optin_sets_public(client):
+    _periods(2023)
+    u = _member(role=Profile.Role.CANDIDATE)  # directory-eligible
+    u.profile.public = False
+    u.profile.save()
+    client.force_login(u)
+    client.post(reverse("intake_survey"), {
+        "year_joined": "2020", "list_in_directory": "on",
+    })
+    u.profile.refresh_from_db()
+    assert u.profile.public is True
+
+
 @override_settings(SURVEY_ENABLED=True)
 def test_nudge_shows_until_submitted(client):
     u = _member()
