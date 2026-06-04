@@ -990,6 +990,19 @@ def stripe_webhook(request):
 
     event_type = event["type"]
     event_id = event["id"] if "id" in event else "?"
+
+    # Keep Stripe test-mode events out of real accounting (production). Genuine
+    # protection is the live webhook secret rejecting test signatures above;
+    # this is belt-and-suspenders for a window where test keys are configured.
+    if getattr(settings, "STRIPE_LIVE_ONLY", False):
+        livemode = event["livemode"] if "livemode" in event else True
+        if not livemode:
+            logger.warning(
+                "Ignoring Stripe TEST-mode event (type=%s id=%s) — STRIPE_LIVE_ONLY",
+                event_type, event_id,
+            )
+            return HttpResponse(status=200)
+
     try:
         if event_type == "checkout.session.completed":
             _handle_checkout_completed(event["data"]["object"])
@@ -1034,12 +1047,19 @@ def _handle_checkout_completed(session) -> None:
         if payment.status == Payment.Status.SUCCEEDED:
             return  # already processed — idempotent no-op
 
-        # Stripe-specific bookkeeping — payment_intent goes onto the row
-        # before we hand off to the generic success machinery.
+        # Stripe-specific bookkeeping — payment_intent + the authoritative
+        # live/test flag go onto the row before the generic success machinery.
+        fields = []
         intent_id = session["payment_intent"] if "payment_intent" in session else None
         if intent_id:
             payment.stripe_payment_intent_id = intent_id
-            payment.save(update_fields=("stripe_payment_intent_id",))
+            fields.append("stripe_payment_intent_id")
+        livemode = session["livemode"] if "livemode" in session else True
+        if payment.livemode != livemode:
+            payment.livemode = livemode
+            fields.append("livemode")
+        if fields:
+            payment.save(update_fields=fields)
 
     # Run the shared success side-effects (idempotent across paths).
     complete_payment(payment)

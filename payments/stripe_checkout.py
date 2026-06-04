@@ -82,7 +82,10 @@ def _make_session(
     )
 
     payment.stripe_checkout_session_id = session.id
-    payment.save(update_fields=("stripe_checkout_session_id",))
+    # Record the mode now (the webhook confirms from the session at completion);
+    # keeps test-mode payments out of real accounting.
+    payment.livemode = bool(getattr(session, "livemode", True))
+    payment.save(update_fields=("stripe_checkout_session_id", "livemode"))
     return session
 
 
