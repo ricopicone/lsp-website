@@ -15,10 +15,13 @@ urlpatterns = [
     path("apply/<int:pk>/cv/", views.cv_download, name="cv_download"),
     path("apply/<str:track>/", views.apply, name="apply"),
 
-    # --- Advancement: member side ---
-    path("formation/", views.advancement, name="advancement"),
+    # --- Member formation hub (advisor + advancement + tuition + groups) ---
+    path("formation/", views.formation, name="formation"),
+    path("formation/demande/", views.advancement, name="advancement"),
     path("formation/<int:pk>/withdraw/", views.advancement_withdraw,
          name="advancement_withdraw"),
+    path("formation/<int:pk>/upload/", views.advancement_upload,
+         name="advancement_upload"),
     path("formation/<int:pk>/palimpsest/", views.palimpsest_download,
          name="palimpsest_download"),
 

@@ -8,7 +8,7 @@ from decimal import Decimal
 
 import pytest
 
-from accounts.models import Source, User
+from accounts.models import Profile, Source, User
 from payments.management.commands.import_stripe_payments import Command
 from payments.models import Payment
 from payments.stripe_import import (
@@ -44,9 +44,12 @@ def _user(email, first="Ann", last="Lee"):
                                     first_name=first, last_name=last)
 
 
-def _plan(charges, *, sessions=None, default_type=None, allow_overlaps=False):
+def _plan(charges, *, sessions=None, default_type=None, allow_overlaps=False,
+          sweep_unknown=False, sweep_min=25.0):
     rows = [normalize_charge(c, sessions_by_pi=sessions or {}) for c in charges]
-    ctx = Command().build_context(default_type)
+    ctx = Command().build_context(
+        default_type, sweep_unknown=sweep_unknown, sweep_min=sweep_min,
+    )
     return plan_charges(rows, ctx, allow_overlaps=allow_overlaps)
 
 
@@ -109,7 +112,8 @@ def test_create_unmatched_member():
 
 def test_needs_type_when_uninferable():
     _user("ann@x.test")
-    plans = _plan([_charge(description="mystery")])
+    # $77 is not a dues tier, tuition amount, or keyword — genuinely unknown.
+    plans = _plan([_charge(amount=7700, description="mystery")])
     assert plans[0].action == "needs_type"
     apply_plan(plans)
     assert not Payment.objects.filter(stripe_payment_intent_id="pi_1").exists()
@@ -117,12 +121,161 @@ def test_needs_type_when_uninferable():
 
 def test_default_type_sweeps_unknown():
     _user("ann@x.test")
-    plans = _plan([_charge(description="mystery")], default_type="donation")
+    plans = _plan([_charge(amount=7700, description="mystery")], default_type="donation")
     assert plans[0].action == "create"
     apply_plan(plans)
     p = Payment.objects.get(stripe_payment_intent_id="pi_1")
     assert p.payment_type == Payment.Type.DONATION
     assert "type defaulted" in p.notes
+
+
+# ---- amount-based type inference ------------------------------------------
+
+def test_amount_infers_dues_tier():
+    _user("ann@x.test")
+    # $150 with no description → standard analyst/scholar dues tier.
+    plans = _plan([_charge(amount=15000, description="")])
+    assert plans[0].action == "create"
+    assert plans[0].payment_type == "dues"
+    assert plans[0].type_inferred
+
+
+def test_amount_infers_tuition_from_period():
+    from datetime import date
+
+    from payments.models import TuitionPeriod
+    TuitionPeriod.objects.create(
+        start_date=date(2023, 9, 1), decision_due_date=date(2023, 10, 1),
+        end_date=date(2024, 8, 31), tuition_amount=Decimal("2500.00"),
+    )
+    _user("ann@x.test")
+    plans = _plan([_charge(amount=250000, description="")])  # $2500, AY 2023
+    assert plans[0].action == "create"
+    assert plans[0].payment_type == "tuition"
+
+
+def _tenure(user, role, start_ay=2023, end_ay=None):
+    from accounts.models import MembershipTenure
+    MembershipTenure.objects.create(
+        user=user, role=role, standing=Profile.Standing.ACTIVE,
+        start_ay=start_ay, end_ay=end_ay, source=Source.IMPORTED,
+    )
+
+
+def _in_training(user, **kw):
+    _tenure(user, Profile.Role.PRE_CANDIDATE, **kw)
+
+
+def test_multiple_charges_in_ay_are_tuition_installments():
+    u = _user("ann@x.test")
+    _in_training(u)  # a tuition-paying member in AY 2023
+    # Two non-tier charges from the same payer in one AY → payment plan.
+    plans = _plan([
+        _charge(cid="ch_a", pi="pi_a", amount=50000, description=""),   # $500
+        _charge(cid="ch_b", pi="pi_b", amount=50000, description=""),   # $500
+    ])
+    assert {p.action for p in plans} == {"create"}
+    assert all(p.payment_type == "tuition" for p in plans)
+    assert all("installment" in p.reason for p in plans)
+
+
+def test_multiple_charges_from_known_non_student_not_tuition():
+    u = _user("ann@x.test")
+    _tenure(u, Profile.Role.ANALYST)  # known non-student that year → blocked
+    plans = _plan([
+        _charge(cid="ch_a", pi="pi_a", amount=50000, description=""),
+        _charge(cid="ch_b", pi="pi_b", amount=50000, description=""),
+    ])
+    assert {p.action for p in plans} == {"needs_type"}
+
+
+def test_multiple_charges_unknown_role_grouped_as_tuition():
+    _user("ann@x.test")  # no tenure on record → benefit of the doubt
+    plans = _plan([
+        _charge(cid="ch_a", pi="pi_a", amount=50000, description=""),
+        _charge(cid="ch_b", pi="pi_b", amount=50000, description=""),
+    ])
+    assert all(p.payment_type == "tuition" for p in plans)
+
+
+def test_dues_links_to_period():
+    from datetime import date
+
+    from payments.models import DuesPeriod
+    dp = DuesPeriod.objects.create(
+        name="AY 2023–2024", slug="ay-2023-2024",
+        start_date=date(2023, 9, 1), end_date=date(2024, 8, 31),
+        due_date=date(2023, 12, 1),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"), dues_amount_analyst=Decimal("150"),
+    )
+    _user("ann@x.test")
+    plans = _plan([_charge(amount=15000, description="")])  # $150, AY 2023
+    assert plans[0].payment_type == "dues"
+    assert plans[0].dues_period_id == dp.pk
+    apply_plan(plans)
+    p = Payment.objects.get(stripe_payment_intent_id="pi_1")
+    assert p.dues_period_id == dp.pk
+
+
+def test_amount_infers_tuition_static_fallback():
+    _user("ann@x.test")  # no TuitionPeriod, but $2000 is a standard amount
+    plans = _plan([_charge(amount=200000, description="")])
+    assert plans[0].payment_type == "tuition"
+
+
+def test_single_nontier_charge_stays_unknown():
+    u = _user("ann@x.test")
+    _in_training(u)
+    plans = _plan([_charge(amount=50000, description="")])  # lone $500
+    assert plans[0].action == "needs_type"
+
+
+# ---- sweep-unknown (provisional) ------------------------------------------
+
+def test_sweep_off_by_default():
+    _user("ann@x.test")
+    plans = _plan([_charge(amount=20000, description="")])  # $200 unknown
+    assert plans[0].action == "needs_type"
+
+
+def test_sweep_unknown_defaults_to_tuition():
+    _user("ann@x.test")  # not analyst/scholar, <4 tuition years → still a student
+    plans = _plan([_charge(amount=20000, description="")], sweep_unknown=True)
+    assert plans[0].action == "create"
+    assert plans[0].payment_type == "tuition"
+    assert plans[0].provisional
+    apply_plan(plans)
+    p = Payment.objects.get(stripe_payment_intent_id="pi_1")
+    assert p.source == Source.ASSUMED
+    assert "provisional" in p.notes
+
+
+def test_sweep_completed_member_is_registration():
+    u = _user("ann@x.test")
+    u.profile.role = Profile.Role.ANALYST  # completed tuition
+    u.profile.save()
+    plans = _plan([_charge(amount=20000, description="")], sweep_unknown=True)
+    assert plans[0].payment_type == "registration"
+    assert plans[0].provisional
+
+
+def test_sweep_skips_tiny_charges():
+    _user("ann@x.test")
+    plans = _plan([_charge(amount=1000, description="")], sweep_unknown=True)  # $10
+    assert plans[0].action == "needs_type"
+
+
+# ---- only-types filter ----------------------------------------------------
+
+def test_only_types_holds_back_other_types():
+    _user("ann@x.test")
+    rows = [normalize_charge(_charge(amount=15000, description=""))]  # $150 dues
+    ctx = Command().build_context(None, only_types={"tuition"})
+    plans = plan_charges(rows, ctx)
+    assert plans[0].action == "skip_filtered"
+    apply_plan(plans)
+    assert not Payment.objects.filter(stripe_payment_intent_id="pi_1").exists()
 
 
 def test_skip_failed_charge():
@@ -197,6 +350,20 @@ def test_overlap_with_ledger_skipped_then_allowed():
     # Forcing it creates the row anyway.
     plans = _plan([_charge(description="dues")], allow_overlaps=True)
     assert plans[0].action == "create"
+
+
+def test_dues_overlap_by_member_and_ay():
+    u = _user("ann@x.test")
+    # Member already has a succeeded dues row for AY 2023 (ledger, $150).
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES, user=u, amount=Decimal("150.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        source=Source.IMPORTED, paid_at=DAY,
+    )
+    # A Stripe dues charge for the same AY — even a different tier — is a dup.
+    plans = _plan([_charge(amount=10000, description="dues")])  # $100, AY 2023
+    assert plans[0].action == "overlap"
+    assert "academic year" in plans[0].reason
 
 
 def test_idempotent_rerun_skips():

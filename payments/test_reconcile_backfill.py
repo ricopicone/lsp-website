@@ -1,0 +1,253 @@
+"""Tests for the provisional-payment reconciliation view + tuition backfill."""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+from decimal import Decimal
+
+import pytest
+from django.core.management import call_command
+from django.urls import reverse
+from django.utils import timezone
+
+from accounts.models import Profile, Source, User
+from payments.models import Payment, TuitionEnrollment, TuitionPeriod
+
+pytestmark = pytest.mark.django_db
+
+
+def _period():
+    return TuitionPeriod.objects.create(
+        name="AY 2022–2023", slug="ay-2022-2023",
+        start_date=date(2022, 9, 1), decision_due_date=date(2022, 10, 1),
+        end_date=date(2023, 8, 31), tuition_amount=Decimal("2000.00"),
+    )
+
+
+def _student(email="s@x.test"):
+    u = User.objects.create_user(email=email, password="x")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    return u
+
+
+def _tuition_payment(user, amount, when, *, source=Source.IMPORTED):
+    return Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=user, amount=Decimal(amount),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        source=source, paid_at=timezone.make_aware(when),
+    )
+
+
+# ---- backfill_tuition_status ----------------------------------------------
+
+def test_backfill_marks_paid_in_full():
+    p = _period()
+    u = _student()
+    _tuition_payment(u, "2000.00", datetime(2022, 10, 1, 12))
+    call_command("backfill_tuition_status", "--commit")
+    e = TuitionEnrollment.objects.get(user=u, tuition_period=p)
+    assert e.status == TuitionEnrollment.Status.PAID_IN_FULL
+    assert e.source == Source.IMPORTED
+
+
+def test_backfill_partial_is_payment_plan():
+    p = _period()
+    u = _student()
+    _tuition_payment(u, "500.00", datetime(2022, 10, 1, 12))
+    _tuition_payment(u, "500.00", datetime(2023, 1, 1, 12))  # $1000 < $2000
+    call_command("backfill_tuition_status", "--commit")
+    e = TuitionEnrollment.objects.get(user=u, tuition_period=p)
+    assert e.status == TuitionEnrollment.Status.PAYMENT_PLAN
+
+
+def test_backfill_dry_run_writes_nothing():
+    _period()
+    u = _student()
+    _tuition_payment(u, "2000.00", datetime(2022, 10, 1, 12))
+    call_command("backfill_tuition_status")
+    assert not TuitionEnrollment.objects.exists()
+
+
+def test_backfill_excludes_assumed_by_default():
+    _period()
+    u = _student()
+    _tuition_payment(u, "2000.00", datetime(2022, 10, 1, 12), source=Source.ASSUMED)
+    call_command("backfill_tuition_status", "--commit")
+    assert not TuitionEnrollment.objects.exists()
+    call_command("backfill_tuition_status", "--commit", "--include-assumed")
+    assert TuitionEnrollment.objects.filter(user=u).exists()
+
+
+def test_backfill_upgrades_but_does_not_downgrade():
+    p = _period()
+    u = _student()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=p, status=TuitionEnrollment.Status.SKIPPING,
+    )
+    _tuition_payment(u, "2000.00", datetime(2022, 10, 1, 12))
+    call_command("backfill_tuition_status", "--commit")
+    e = TuitionEnrollment.objects.get(user=u, tuition_period=p)
+    assert e.status == TuitionEnrollment.Status.PAID_IN_FULL  # skipping → paid
+
+    # A later partial payment must NOT downgrade an existing paid-in-full row.
+    _tuition_payment(u, "10.00", datetime(2022, 11, 1, 12))
+    call_command("backfill_tuition_status", "--commit")
+    e.refresh_from_db()
+    assert e.status == TuitionEnrollment.Status.PAID_IN_FULL
+
+
+# ---- reconcile view -------------------------------------------------------
+
+def _treasurer(client):
+    u = User.objects.create_user(email="treas@x.test", password="x", is_staff=True)
+    client.force_login(u)
+    return u
+
+
+def test_reconcile_gated(client):
+    client.force_login(User.objects.create_user(email="plain@x.test", password="x"))
+    # The treasurer area uses user_passes_test, which redirects rather than 403s.
+    assert client.get(reverse("treasurer_reconcile")).status_code == 302
+
+
+def test_reconcile_lists_assumed_grouped(client):
+    _treasurer(client)
+    u = _student("karen@x.test")
+    _tuition_payment(u, "60.00", datetime(2025, 10, 1, 12), source=Source.ASSUMED)
+    _tuition_payment(u, "60.00", datetime(2025, 11, 1, 12), source=Source.ASSUMED)
+    resp = client.get(reverse("treasurer_reconcile"))
+    assert resp.status_code == 200
+    assert b"karen@x.test" in resp.content
+
+
+def test_reconcile_retypes_selected_payments(client):
+    _treasurer(client)
+    u = _student("karen@x.test")
+    p1 = _tuition_payment(u, "60.00", datetime(2025, 10, 1, 12), source=Source.ASSUMED)
+    p2 = _tuition_payment(u, "60.00", datetime(2025, 11, 1, 12), source=Source.ASSUMED)
+    resp = client.post(reverse("treasurer_reconcile"), {
+        "payment_ids": [p1.pk, p2.pk], "payment_type": "registration",
+    })
+    assert resp.status_code == 302
+    rows = Payment.objects.filter(user=u)
+    assert all(p.payment_type == "registration" for p in rows)
+    assert all(p.source == Source.STAFF for p in rows)  # now staff-confirmed
+
+
+def test_reconcile_leaves_unselected_payments(client):
+    _treasurer(client)
+    u = _student("karen@x.test")
+    keep = _tuition_payment(u, "60.00", datetime(2025, 10, 1, 12), source=Source.ASSUMED)
+    fix = _tuition_payment(u, "500.00", datetime(2025, 11, 1, 12), source=Source.ASSUMED)
+    client.post(reverse("treasurer_reconcile"), {
+        "payment_ids": [fix.pk], "payment_type": "registration",
+    })
+    keep.refresh_from_db()
+    fix.refresh_from_db()
+    assert fix.payment_type == "registration" and fix.source == Source.STAFF
+    # The unselected one is untouched — still assumed tuition for next time.
+    assert keep.payment_type == "tuition" and keep.source == Source.ASSUMED
+
+
+def test_reconcile_requires_a_selection(client):
+    _treasurer(client)
+    u = _student("karen@x.test")
+    _tuition_payment(u, "60.00", datetime(2025, 10, 1, 12), source=Source.ASSUMED)
+    resp = client.post(reverse("treasurer_reconcile"), {"payment_type": "registration"})
+    assert resp.status_code == 302  # redirects with an error, nothing changed
+    assert Payment.objects.filter(source=Source.ASSUMED).count() == 1
+
+
+def test_reconcile_links_unmatched_payer(client):
+    _treasurer(client)
+    member = _student("realmember@x.test")
+    p = Payment.objects.create(
+        payment_type=Payment.Type.TUITION, amount=Decimal("60.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        source=Source.ASSUMED, email="karen@x.test",
+        paid_at=timezone.make_aware(datetime(2025, 10, 1, 12)),
+        notes="[stripe-import:ch_x] (unmatched payer: Karen Benezra)",
+    )
+    resp = client.post(reverse("treasurer_reconcile"), {
+        "payment_ids": [p.pk], "payment_type": "registration",
+        "assign_user": "realmember@x.test",
+    })
+    assert resp.status_code == 302
+    p.refresh_from_db()
+    assert p.user == member and p.payment_type == "registration"
+
+
+# ---- audit_finances (read-only diagnostic) --------------------------------
+
+def test_audit_runs_and_flags_duplicate_dues():
+    from io import StringIO
+
+    from payments.models import DuesPeriod
+
+    DuesPeriod.objects.create(
+        name="AY 2023–2024", slug="ay-2023-2024",
+        start_date=date(2023, 9, 1), end_date=date(2024, 8, 31),
+        due_date=date(2023, 12, 1),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"), dues_amount_analyst=Decimal("150"),
+    )
+    u = _student("dup@x.test")
+    for when in (datetime(2023, 10, 1, 12), datetime(2023, 11, 1, 12)):
+        Payment.objects.create(
+            payment_type=Payment.Type.DUES, user=u, amount=Decimal("100.00"),
+            status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+            source=Source.IMPORTED, paid_at=timezone.make_aware(when),
+        )
+    out = StringIO()
+    call_command("audit_finances", stdout=out)
+    text = out.getvalue()
+    assert "audit complete" in text
+    # The two same-year dues payments should be flagged.
+    assert "1  ⚠  members with >1 dues payment" in text
+
+
+# ---- purge_test_payments --------------------------------------------------
+
+def _stripe_payment(session_id="", *, livemode=True, source=Source.IMPORTED):
+    return Payment.objects.create(
+        payment_type=Payment.Type.DUES, amount=Decimal("100.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        stripe_checkout_session_id=session_id, livemode=livemode, source=source,
+        paid_at=timezone.make_aware(datetime(2026, 5, 28, 12)),
+    )
+
+
+def test_purge_finds_test_by_cs_test_and_livemode():
+    t1 = _stripe_payment("cs_test_abc")            # test-mode session
+    t2 = _stripe_payment("cs_live_xyz", livemode=False)  # explicit test flag
+    real = _stripe_payment("cs_live_real", livemode=True)
+    call_command("purge_test_payments")  # dry run — nothing deleted
+    assert Payment.objects.filter(pk__in=[t1.pk, t2.pk, real.pk]).count() == 3
+    call_command("purge_test_payments", "--commit")
+    assert not Payment.objects.filter(pk__in=[t1.pk, t2.pk]).exists()
+    assert Payment.objects.filter(pk=real.pk).exists()
+
+
+def test_purge_skips_registration_linked_unless_forced():
+    from datetime import date
+
+    from events.models import Audience, Event, PriceTier
+    from registrations.models import Registration
+
+    u = _student("reg@x.test")
+    ev = Event.objects.create(title="E", slug="e-purge",
+                              start_date=date(2026, 9, 1), end_date=date(2026, 9, 1))
+    tier = PriceTier.objects.create(event=ev, audience=Audience.ALL,
+                                    base_amount=Decimal("100.00"))
+    reg = Registration.objects.create(user=u, event=ev, price_tier=tier,
+                                      quoted_amount=Decimal("100.00"))
+    p = Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg, user=u,
+        amount=Decimal("100.00"), status=Payment.Status.SUCCEEDED,
+        method=Payment.Method.STRIPE, stripe_checkout_session_id="cs_test_reg",
+    )
+    call_command("purge_test_payments", "--commit")
+    assert Payment.objects.filter(pk=p.pk).exists()  # skipped (linked to a reg)
+    call_command("purge_test_payments", "--commit", "--force")
+    assert not Payment.objects.filter(pk=p.pk).exists()

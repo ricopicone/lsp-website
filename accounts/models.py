@@ -769,6 +769,10 @@ class MemberIntakeSurvey(models.Model):
         help_text="Other email(s) used for Stripe / PayPal.",
     )
     grid = models.JSONField(default=dict, blank=True)
+    milestones = models.JSONField(
+        default=dict, blank=True,
+        help_text='Formation-step years, e.g. {"palimpsest": 2019, "passage": 2023}.',
+    )
     applied_at = models.DateTimeField(
         null=True, blank=True,
         help_text="When the answers were reconciled into structured records.",

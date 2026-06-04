@@ -1,10 +1,10 @@
-"""The School — a graphical index of the School's concepts and bodies.
+"""The School—a graphical index of the School's concepts and bodies.
 
 A single source of truth, the ``TAXONOMY`` below, drives *both* the visual
 table of contents (the "graphic") and the encyclopedia-style entries on the
 ``/the-school/`` page. Each concept is backed by its own Markdown file at
-``content/pages/the-school/<slug>.md`` so entries can be authored — and
-attributed — independently. Add a slug to a row here and drop a matching
+``content/pages/the-school/<slug>.md`` so entries can be authored—and
+attributed—independently. Add a slug to a row here and drop a matching
 ``.md`` file in that directory, and the concept appears in both the graphic
 and the entry list; the two can never drift.
 
@@ -26,11 +26,11 @@ from . import loader
 ENTRIES_DIR = Path(settings.BASE_DIR) / "content" / "pages" / "the-school"
 
 # (Row label, [concept slugs in display order]). The row grouping is one
-# member's mental model of the School (Gardner Gray's) — the labels and the
+# member's mental model of the School (Gardner Gray's)—the labels and the
 # membership of each row are an editorial decision for the School, not a
 # technical one. Edit freely.
 TAXONOMY: list[tuple[str, list[str]]] = [
-    ("One by One", ["palimpsests", "passages"]),
+    ("One by One", ["palimpsests", "passages", "traversees"]),
     ("One on Ones", ["training-analysis", "control-analyses", "advisor-meetings"]),
     ("Study Groups", ["seminars", "cartels", "reading-groups"]),
     ("All School Functions", ["days-of-assembly", "working-days"]),
@@ -50,6 +50,16 @@ DESTINATIONS: dict[str, str] = {
     "program-committee": "workgroups:kind_committees",
     "palimpsests": "works:index",
     "passages": "works:index",
+    "traversees": "works:index",
+}
+
+# Optional query string appended to a destination—a filter the linked page
+# applies automatically. Lets one shared archive (the Works index, which reads
+# ``?kind=``) serve as the destination for several blocks, each pre-filtered.
+DESTINATION_QUERY: dict[str, str] = {
+    "palimpsests": "kind=palimpsest",
+    "passages": "kind=passage",
+    "traversees": "kind=traversee",
 }
 
 
@@ -99,6 +109,10 @@ def build_rows() -> list[dict]:
                     destination = reverse(url_name)
                 except NoReverseMatch:
                     destination = ""
+                else:
+                    query = DESTINATION_QUERY.get(slug)
+                    if query:
+                        destination = f"{destination}?{query}"
             entry = _load_entry(slug, destination)
             if entry is not None:
                 entries.append(entry)

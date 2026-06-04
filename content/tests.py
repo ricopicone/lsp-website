@@ -59,3 +59,34 @@ def test_the_school_destinations_resolve(client):
 
     for url_name in set(the_school.DESTINATIONS.values()):
         reverse(url_name)  # raises NoReverseMatch if the route is gone
+
+
+@pytest.mark.django_db
+def test_the_school_applies_archive_filter_to_destination(client):
+    """The Palimpsests/Passages blocks point at the Works archive pre-filtered
+    by kind — the filter is part of the link, applied automatically."""
+    from content import the_school
+
+    rows = {e.slug: e for row in the_school.build_rows() for e in row["entries"]}
+    assert rows["palimpsests"].destination.endswith("?kind=palimpsest")
+    assert rows["passages"].destination.endswith("?kind=passage")
+    # Traversée (Scholar track) has its own Works kind, separate from Passage.
+    assert rows["traversees"].destination.endswith("?kind=traversee")
+    assert "Scholar of the School" in rows["traversees"].body_html
+    assert client.get("/works/?kind=traversee").status_code == 200
+
+    resp = client.get("/the-school/")
+    assert b"?kind=palimpsest" in resp.content
+    # The Works index must actually honor the ?kind= filter the link relies on.
+    assert client.get("/works/?kind=palimpsest").status_code == 200
+
+
+@pytest.mark.django_db
+def test_the_school_palimpsest_grounded_in_founding_papers(client):
+    """The palimpsest entry is grounded in the two founding papers (Patsalides
+    + Adler, 1992). They're named in prose; the live links are commented out in
+    the source until the gated documents are made public."""
+    resp = client.get("/the-school/")
+    body = resp.content
+    assert b"Patsalides" in body
+    assert b"rubbed again" in body  # the etymological grounding from the text

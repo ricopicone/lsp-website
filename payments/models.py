@@ -157,6 +157,12 @@ class Payment(models.Model):
     currency = models.CharField(max_length=3, default="usd")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     method = models.CharField(max_length=20, choices=Method.choices, default=Method.STRIPE)
+    livemode = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="False for Stripe *test*-mode payments — kept out of real "
+        "accounting. Offline/manual and live payments are True.",
+    )
     stripe_payment_intent_id = models.CharField(max_length=120, blank=True, db_index=True)
     stripe_checkout_session_id = models.CharField(
         max_length=120,

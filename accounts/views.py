@@ -459,26 +459,24 @@ def set_timezone_from_browser(request):
 
 @login_required
 def advisor_select(request):
-    """Self-service: an in-training member chooses (or changes) their Advisor."""
+    """Self-service Advisor choice. The Advisor form lives on the Formation hub
+    (``admissions:formation``); this endpoint handles its POST and otherwise
+    redirects there — there's no standalone Advisor page anymore."""
     from django.contrib import messages
 
-    from .advisor import current_advisor, set_advisor
+    from .advisor import set_advisor
     from .forms import AdvisorSelectForm
 
+    formation_url = reverse("admissions:formation") + "?tab=formation"
     profile = request.user.profile
-    current = current_advisor(request.user)
-    form = None
-    if profile.needs_advisor:
-        form = AdvisorSelectForm(request.POST or None, advisee=request.user)
-        if request.method == "POST" and form.is_valid():
+    if request.method == "POST" and profile.needs_advisor:
+        form = AdvisorSelectForm(request.POST, advisee=request.user)
+        if form.is_valid():
             set_advisor(request.user, form.cleaned_data["advisor"], by=request.user)
-            messages.success(request, "Your advisor has been recorded.")
-            return redirect("advisor_select")
-    return render(request, "accounts/advisor.html", {
-        "needs_advisor": profile.needs_advisor,
-        "current": current,
-        "form": form,
-    })
+            messages.success(request, "Your Advisor has been recorded.")
+        else:
+            messages.error(request, "Please choose an eligible Advisor.")
+    return redirect(formation_url)
 
 
 # --- Passwordless sign-in (magic link) ----------------------------------
@@ -631,3 +629,71 @@ def twofactor_disable(request):
         error = "That password is incorrect."
 
     return render(request, "accounts/twofactor_disable.html", {"error": error})
+
+
+# ---------------------------------------------------------------------------
+# Member intake survey (launch onboarding)
+# ---------------------------------------------------------------------------
+
+@login_required
+def intake_survey(request):
+    """The launch intake survey — a friendly single page. Confirms a few fields,
+    a tuition/dues year-grid, formation-step years, and the member's advisor; on
+    submit it reconciles into structured records (see ``accounts.survey``)."""
+    from django.contrib import messages
+
+    from .advisor import current_advisor, eligible_advisors, set_advisor
+    from .forms import IntakeSurveyForm
+    from .models import MemberIntakeSurvey
+    from .survey import (
+        apply_survey,
+        milestone_questions,
+        parse_grid,
+        parse_milestones,
+        survey_year_rows,
+    )
+
+    survey = MemberIntakeSurvey.objects.filter(user=request.user).first()
+    profile = request.user.profile
+    needs_advisor = profile.needs_advisor
+
+    if request.method == "POST":
+        form = IntakeSurveyForm(request.POST)
+        if form.is_valid():
+            apply_survey(
+                request.user,
+                year_joined=form.cleaned_data["year_joined"],
+                pronouns=(form.cleaned_data["pronouns"] or None),
+                payment_names=form.cleaned_data["payment_names"],
+                payment_emails=form.cleaned_data["payment_emails"],
+                grid=parse_grid(request.POST),
+                milestones=parse_milestones(request.POST),
+            )
+            if needs_advisor and request.POST.get("advisor"):
+                advisor = eligible_advisors(request.user).filter(
+                    pk=request.POST["advisor"]
+                ).first()
+                if advisor is not None:
+                    set_advisor(request.user, advisor, by=request.user)
+            messages.success(request, "Thanks — your answers are saved.")
+            return redirect(reverse("intake_survey") + "?done=1")
+    else:
+        form = IntakeSurveyForm(initial={
+            "year_joined": (survey.year_joined if survey else None) or profile.year_joined,
+            "pronouns": profile.pronouns,
+            "payment_names": survey.payment_names if survey else "",
+            "payment_emails": survey.payment_emails if survey else "",
+        })
+
+    rows = survey_year_rows(request.user)
+    return render(request, "accounts/survey.html", {
+        "form": form,
+        "rows": rows,
+        "survey": survey,
+        "done": request.GET.get("done") == "1",
+        "tuition_prechecked": sum(1 for r in rows if r["tuition_state"] == "full"),
+        "milestones": milestone_questions(request.user),
+        "needs_advisor": needs_advisor,
+        "advisors": eligible_advisors(request.user) if needs_advisor else [],
+        "current_advisor": current_advisor(request.user) if needs_advisor else None,
+    })

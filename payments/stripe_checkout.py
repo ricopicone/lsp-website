@@ -82,7 +82,10 @@ def _make_session(
     )
 
     payment.stripe_checkout_session_id = session.id
-    payment.save(update_fields=("stripe_checkout_session_id",))
+    # Record the mode now (the webhook confirms from the session at completion);
+    # keeps test-mode payments out of real accounting.
+    payment.livemode = bool(getattr(session, "livemode", True))
+    payment.save(update_fields=("stripe_checkout_session_id", "livemode"))
     return session
 
 
@@ -177,6 +180,6 @@ def create_tuition_session(payment: Payment) -> stripe.checkout.Session:
         payment=payment,
         product_name=f"LSP tuition — {period_name}",
         product_description=description,
-        success_path=reverse("tuition") + "?stripe=success",
-        cancel_path=reverse("tuition") + "?stripe=cancelled",
+        success_path=reverse("admissions:formation") + "?tab=tuition&stripe=success",
+        cancel_path=reverse("admissions:formation") + "?tab=tuition&stripe=cancelled",
     )

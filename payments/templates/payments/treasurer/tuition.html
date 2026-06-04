@@ -138,17 +138,21 @@
     <h2 class="font-serif text-xl text-base-content">
       Students this year
       <span class="text-base-content/60 text-base font-normal">({{ tuition_enrollment_rows|length }})</span>
+      {% if tuition_confirmed_pct is not None %}
+      <span class="badge badge-ghost badge-sm align-middle ml-1">{{ tuition_confirmed_pct }}% confirmed</span>
+      {% endif %}
     </h2>
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Name</th><th>Status</th><th class="text-right">Paid</th><th class="text-right">Remaining</th></tr>
+          <tr><th>Name</th><th>Status</th><th>Source</th><th class="text-right">Paid</th><th class="text-right">Remaining</th></tr>
         </thead>
         <tbody>
           {% for row in tuition_enrollment_rows %}
           <tr>
             <td>{{ row.user.first_name }} {{ row.user.last_name }}</td>
             <td>{% status_badge row.status %}</td>
+            <td>{% include "payments/treasurer/_source_badge.html" with source=row.source label=row.source_label %}</td>
             <td class="text-right whitespace-nowrap">{{ row.paid|usd }}</td>
             <td class="text-right whitespace-nowrap {% if row.remaining %}text-warning{% endif %}">{{ row.remaining|usd }}</td>
           </tr>

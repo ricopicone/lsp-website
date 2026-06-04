@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -139,21 +139,41 @@ def test_tuition_view_requires_login(client):
 
 @pytest.mark.django_db
 def test_tuition_view_renders_for_in_training_student(client, current_period):
+    """The tuition surface lives on the Formation hub's Tuition tab now."""
     u = _mk_candidate()
     client.force_login(u)
-    resp = client.get(reverse("tuition"))
+    resp = client.get(reverse("admissions:formation") + "?tab=tuition")
     assert resp.status_code == 200
     assert current_period.name.encode() in resp.content
-    assert b"Your decision" in resp.content
+    assert b"My decision" in resp.content
 
 
 @pytest.mark.django_db
-def test_tuition_view_explains_when_role_not_in_training(client):
-    u = _mk_candidate(email="analyst@x.test", role=Profile.Role.ANALYST)
+def test_tuition_endpoint_redirects_to_formation_hub(client, current_period):
+    """The legacy /tuition/ endpoint now only handles the decision POST; a GET
+    just bounces to the Formation hub's Tuition tab."""
+    u = _mk_candidate()
     client.force_login(u)
     resp = client.get(reverse("tuition"))
+    assert resp.status_code == 302
+    assert reverse("admissions:formation") in resp.url
+
+
+@pytest.mark.django_db
+def test_tuition_tab_explains_when_role_not_in_training(client, current_period):
+    """An analyst with a payment on file sees the not-applicable note, not a
+    decision form."""
+    from payments.models import Payment
+
+    u = _mk_candidate(email="analyst@x.test", role=Profile.Role.ANALYST)
+    Payment.objects.create(
+        payment_type=Payment.Type.DONATION, user=u, amount=Decimal("25"),
+        status=Payment.Status.SUCCEEDED,
+    )
+    client.force_login(u)
+    resp = client.get(reverse("admissions:formation") + "?tab=tuition")
     assert resp.status_code == 200
-    assert b"Analyst" in resp.content
+    assert b"not in a tuition-paying role" in resp.content
 
 
 @pytest.mark.django_db
@@ -185,11 +205,13 @@ def test_post_updates_existing_enrollment(client, current_period):
 
 @pytest.mark.django_db
 def test_form_rejects_staff_only_statuses(client, current_period):
-    """PAID_IN_FULL isn't student-selectable; it's reached via actual payment."""
+    """PAID_IN_FULL isn't student-selectable; it's reached via actual payment.
+    An invalid choice records no enrollment and bounces back to the hub."""
     u = _mk_candidate()
     client.force_login(u)
     resp = client.post(reverse("tuition"), {"status": "paid_in_full"})
-    assert resp.status_code == 200  # form re-renders with errors
+    assert resp.status_code == 302
+    assert not TuitionEnrollment.objects.filter(user=u).exists()
 
 
 # --- Backfill migration -------------------------------------------------
@@ -1675,3 +1697,34 @@ def test_treasurer_in_training_count_excludes_on_leave(current_period):
 
     ctx = _treasurer_tuition_context()
     assert ctx["tuition_in_training_count"] == 1  # only the active candidate
+
+
+# --- Backfilled (installment-less) tuition shows on the dashboard -------
+
+@pytest.mark.django_db
+def test_backfilled_tuition_counts_toward_collected():
+    """Imported tuition with no installment link (Stripe/treasurer backfill)
+    still counts as collected for its academic year."""
+    from payments.models import Payment
+    from payments.views import (
+        _treasurer_tuition_context,
+        _treasurer_tuition_longitudinal,
+    )
+
+    period = TuitionPeriod.objects.create(
+        name="AY 2022–2023", slug="ay-2022-2023",
+        start_date=date(2022, 9, 1), decision_due_date=date(2022, 10, 1),
+        end_date=date(2023, 8, 31), tuition_amount=Decimal("2000.00"),
+    )
+    u = _mk_candidate("backfill@example.com")
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("2000.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        paid_at=timezone.make_aware(datetime(2022, 10, 15, 12, 0)),
+    )
+    ctx = _treasurer_tuition_context(period)
+    assert ctx["tuition_total_collected"] == Decimal("2000.00")
+
+    longi = _treasurer_tuition_longitudinal()
+    row = next(r for r in longi["tuition_year_rows"] if r["period"].id == period.id)
+    assert row["collected"] == Decimal("2000.00")

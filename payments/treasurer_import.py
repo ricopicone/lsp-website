@@ -40,6 +40,16 @@ from pathlib import Path
 #: comparison (honorifics, generational suffixes).
 _NOISE_TOKENS = {"dr", "mr", "mrs", "ms", "mx", "prof", "jr", "sr", "ii", "iii", "iv"}
 
+#: Professional credentials that ride along on card-billing names ("Annie Rogers
+#: PhD", "Nathan Lupo LMFT", "… Psych …"). Dropped before matching so the real
+#: surname isn't mistaken for a credential. Deliberately excludes ambiguous
+#: short tokens that are also surnames (e.g. "Ma", "Do", "MD") to avoid
+#: erasing a real name.
+_CREDENTIAL_TOKENS = {
+    "phd", "psyd", "psya", "psyad", "lmft", "lcsw", "lcpc", "lpc", "lpcc",
+    "lmhc", "lcat", "msw", "edd", "dsw", "mph", "mfa", "psych", "rn", "np",
+}
+
 #: Surname particles — kept for display but ignored for token-set matching so
 #: ``Shanna Carlson de la Torre`` matches ``Shanna Carlson``.
 _PARTICLES = {"de", "la", "le", "del", "della", "di", "da", "van", "von",
@@ -82,7 +92,10 @@ def name_tokens(raw: str) -> list[str]:
     """
     s = strip_accents(clean_raw_name(raw)).lower()
     s = re.sub(r"[^a-z\s]", " ", s)
-    toks = [t for t in s.split() if t and t not in _NOISE_TOKENS]
+    toks = [
+        t for t in s.split()
+        if t and t not in _NOISE_TOKENS and t not in _CREDENTIAL_TOKENS
+    ]
     return toks
 
 

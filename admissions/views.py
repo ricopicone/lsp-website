@@ -7,6 +7,8 @@ two interviewers, their reports, and the accept/reject decision.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -20,10 +22,10 @@ from accounts.models import Profile
 from .advancement import (
     can_open_advancement,
     decide_advancement,
-    kind_for,
     open_advancement,
     open_advancement_for,
     present_advancement,
+    step_label_for_member,
     withdraw_advancement,
 )
 from .emails import send_application_submitted
@@ -262,56 +264,307 @@ def review_decide(request, pk):
 # Advancement — palimpsest (Precandidate → Candidate) / passage demandes
 # ==========================================================================
 
-# ---- Member side ----------------------------------------------------------
+# ---- Member side: the unified "Your Formation" hub ------------------------
+
+def _formation_url(tab="formation", **params):
+    """URL for the formation hub, landing on ``tab`` (and carrying any extra
+    query params, e.g. ``stripe=success``) after a POST round-trip."""
+    from urllib.parse import urlencode
+
+    from django.urls import reverse
+
+    query = {"tab": tab, **{k: v for k, v in params.items() if v}}
+    return reverse("admissions:formation") + "?" + urlencode(query)
+
 
 @login_required
-def advancement(request):
-    """The member's own formation-advancement page: open a demande, or watch
-    the one in flight / the last decided one."""
-    from accounts.advisor import current_advisor
+def formation(request):
+    """The member's personal formation hub — a tabbed surface that gathers
+    everything about their place in the School: their Advisor and advancement
+    demandes (Formation), their tuition decision + payments (Tuition), and the
+    groups they belong to now and in the past (Groups)."""
+    return render(request, "admissions/formation.html", _formation_context(request))
 
+
+def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict:
+    """Assemble the full context for the formation hub. Bound forms may be
+    passed in so a failed POST can re-render with errors on the right tab."""
+    from accounts.advisor import current_advisor
+    from accounts.forms import AdvisorSelectForm
+
+    user = request.user
+    profile = user.profile
+    tab = request.GET.get("tab") or "formation"
+
+    advisor = current_advisor(user)
     existing = (
-        Advancement.objects.filter(member=request.user)
+        Advancement.objects.filter(member=user)
         .select_related("advisor")
         .order_by("-requested_at")
         .first()
     )
-    open_one = open_advancement_for(request.user)
-    kind = kind_for(request.user)
-    advisor = current_advisor(request.user)
+    if advisor_form is None and profile.needs_advisor:
+        advisor_form = AdvisorSelectForm(advisee=user)
 
-    if request.method == "POST":
-        if not can_open_advancement(request.user):
-            raise PermissionDenied
-        if advisor is None:
-            messages.error(
-                request, "Choose your Advisor before opening a demande."
-            )
-            return redirect("advisor_select")
-        form = AdvancementForm(request.POST, request.FILES)
-        if form.is_valid():
-            open_advancement(
-                request.user,
-                statement=form.cleaned_data["statement"],
-                palimpsest=form.cleaned_data.get("palimpsest"),
-            )
-            messages.success(
-                request,
-                "Your demande has been opened and your Advisor notified.",
-            )
-            return redirect("admissions:advancement")
-    else:
-        form = AdvancementForm()
+    # The full trace of formation steps (oldest first), so a member sees their
+    # Palimpsest and Passage/Traversée history with dates + the Work they left.
+    advancements = list(
+        Advancement.objects.filter(member=user)
+        .select_related("advisor")
+        .order_by("requested_at")
+    )
 
-    return render(request, "admissions/advancement.html", {
-        "existing": existing,
-        "open_one": open_one,
-        "can_open": can_open_advancement(request.user),
-        "kind": kind,
-        "kind_label": Advancement.Kind(kind).label if kind else None,
+    ctx = {
+        "active_tab": tab,
         "advisor": advisor,
-        "form": form,
-    })
+        "needs_advisor": profile.needs_advisor,
+        "advisor_form": advisor_form,
+        "existing": existing,
+        "open_one": open_advancement_for(user),
+        "can_open": can_open_advancement(user),
+        "step_label": step_label_for_member(user),
+        "advancements": advancements,
+        "demande_form": demande_form if demande_form is not None else AdvancementForm(),
+        "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
+    }
+    ctx.update(_formation_money_context(request))
+    ctx.update(_formation_groups_context(user))
+    return ctx
+
+
+def _formation_money_context(request) -> dict:
+    """Tuition + dues + the member's own payment history (all on one tab).
+
+    Tuition: the four-year progress, this year's decision/installments. Dues:
+    this year's obligation + status. Payments: full history + the provisional
+    (ASSUMED) subset the member can self-categorize."""
+    from accounts.models import Source
+    from payments.dues import is_dues_obligated, user_paid_for_period
+    from payments.forms import TuitionDecisionForm
+    from payments.models import (
+        DuesPeriod,
+        Payment,
+        TuitionEnrollment,
+        TuitionPeriod,
+    )
+
+    user = request.user
+    profile = user.profile
+
+    # --- Tuition (current year) ---
+    period = TuitionPeriod.current()
+    enrollment = None
+    installments = []
+    if period is not None:
+        enrollment = TuitionEnrollment.objects.filter(
+            user=user, tuition_period=period,
+        ).first()
+        if enrollment is not None:
+            installments = list(enrollment.installments.order_by("sequence"))
+    progress = _tuition_progress(user)
+
+    # --- Dues (current year) ---
+    dues_period = DuesPeriod.current()
+    dues_obligated = is_dues_obligated(user)
+    dues_amount = (
+        dues_period.amount_for_role(profile.role) if dues_period is not None else None
+    )
+    dues_paid = user_paid_for_period(user, dues_period)
+
+    # --- Payments (all) ---
+    payments = list(Payment.objects.filter(user=user).order_by("-created_at", "-id"))
+    assumed = [p for p in payments if p.source == Source.ASSUMED]
+
+    show_money_tab = (
+        profile.owes_tuition or dues_obligated or bool(payments)
+        or progress["tuition_years_started"] > 0
+    )
+
+    return {
+        "show_money_tab": show_money_tab,
+        # tuition
+        "owes_tuition": profile.owes_tuition,
+        "tuition_period": period,
+        "tuition_enrollment": enrollment,
+        "tuition_installments": installments,
+        "tuition_form": TuitionDecisionForm(
+            initial={"status": enrollment.status} if enrollment else {}
+        ),
+        "tuition_stripe_status": request.GET.get("stripe"),
+        **progress,
+        # dues
+        "dues_period": dues_period,
+        "dues_obligated": dues_obligated,
+        "dues_amount": dues_amount,
+        "dues_paid": dues_paid,
+        # payments
+        "my_payments": payments,
+        "my_assumed_payments": assumed,
+        "payment_type_choices": Payment.Type.choices,
+    }
+
+
+def _tuition_progress(user) -> dict:
+    """The member's progress toward the four years of tuition required for full
+    standing.
+
+    A year is "started" if the member has a non-skipping enrollment *or* any
+    successful tuition payment dated to it. Progress is driven by **actual
+    SUCCEEDED tuition payments** — not installment flags — so ledger-imported,
+    Stripe-imported, reconciled, and offline payments all count, even when no
+    ``TuitionInstallment`` was ever created. Each started year is one of the
+    four slots (goal = that year's amount; a partially-paid year counts its
+    remainder as still owed); years not yet started are projected at the
+    current rate so there's always a four-slot goal to fill."""
+    from payments.models import Payment, TuitionEnrollment, TuitionPeriod
+
+    required = 4
+
+    def ay_of(d):
+        """Academic-year start year for a date (the AY begins in September)."""
+        return d.year if d.month >= 9 else d.year - 1
+
+    # Goal + name per academic year, and which years count as started.
+    period_by_ay: dict[int, object] = {}
+    paid_by_ay: dict[int, Decimal] = {}
+
+    # 1) Successful tuition payments → paid, bucketed by academic year (via the
+    #    linked period when present, else the payment date).
+    payments = (
+        Payment.objects
+        .filter(user=user, payment_type=Payment.Type.TUITION,
+                status=Payment.Status.SUCCEEDED)
+        .select_related("tuition_installment__enrollment__tuition_period")
+    )
+    for p in payments:
+        period = None
+        inst = p.tuition_installment
+        if inst is not None and inst.enrollment_id:
+            period = inst.enrollment.tuition_period
+        ay = ay_of(period.start_date) if period else ay_of(p.paid_at or p.created_at)
+        if period is not None:
+            period_by_ay.setdefault(ay, period)
+        paid_by_ay[ay] = paid_by_ay.get(ay, Decimal("0")) + p.amount
+
+    # 2) Non-skipping enrollments mark a year started (even if nothing paid yet).
+    for enr in (
+        TuitionEnrollment.objects.filter(user=user)
+        .exclude(status=TuitionEnrollment.Status.SKIPPING)
+        .select_related("tuition_period")
+    ):
+        ay = ay_of(enr.tuition_period.start_date)
+        period_by_ay.setdefault(ay, enr.tuition_period)
+        paid_by_ay.setdefault(ay, Decimal("0"))
+
+    current = (
+        TuitionPeriod.current()
+        or TuitionPeriod.objects.order_by("-start_date").first()
+    )
+    rate = (current.tuition_amount if current else None) or Decimal("0")
+
+    slots = []
+    total_paid = Decimal("0")
+    total_goal = Decimal("0")
+    for ay in sorted(paid_by_ay)[:required]:
+        period = period_by_ay.get(ay)
+        goal = (period.tuition_amount if period else rate) or Decimal("0")
+        paid = min(paid_by_ay[ay], goal) if goal else paid_by_ay[ay]
+        pct = int(paid / goal * 100) if goal else 0
+        slots.append({
+            "label": period.name if period else f"{ay}–{ay + 1}",
+            "goal": goal, "paid": paid, "remaining": max(goal - paid, Decimal("0")),
+            "pct": pct, "projected": False,
+        })
+        total_paid += paid
+        total_goal += goal
+
+    started = len(slots)
+    for _ in range(started, required):
+        slots.append({
+            "label": "Future year", "goal": rate, "paid": Decimal("0"),
+            "remaining": rate, "pct": 0, "projected": True,
+        })
+        total_goal += rate
+
+    total_pct = int(total_paid / total_goal * 100) if total_goal else 0
+    return {
+        "tuition_slots": slots,
+        "tuition_total_paid": total_paid,
+        "tuition_total_goal": total_goal,
+        "tuition_total_pct": total_pct,
+        "tuition_years_started": started,
+        "tuition_required_years": required,
+    }
+
+
+def _formation_groups_context(user) -> dict:
+    """The user's current and past groups: stored ``WorkgroupMembership`` rows
+    plus seminars / reading groups they attended as a paid/comped registrant."""
+    from registrations.models import Registration
+
+    current, past = [], []
+    seen: set[int] = set()
+
+    memberships = (
+        user.workgroup_memberships
+        .select_related("workgroup")
+        .order_by("workgroup__name", "-start_date")
+    )
+    for m in memberships:
+        if m.workgroup_id in seen:
+            continue
+        seen.add(m.workgroup_id)
+        entry = {
+            "workgroup": m.workgroup,
+            "kind": m.workgroup.get_kind_display(),
+            "role": m.get_role_display(),
+        }
+        (current if m.is_active else past).append(entry)
+
+    # Derived: seminars / reading groups joined via a paid or comped
+    # registration (no stored membership row).
+    regs = (
+        Registration.objects
+        .filter(user=user, status__in=(
+            Registration.Status.PAID, Registration.Status.COMPED,
+        ))
+        .select_related("event", "event__workgroup")
+    )
+    for reg in regs:
+        wg = reg.event.workgroup if reg.event_id else None
+        if wg is None or wg.id in seen:
+            continue
+        seen.add(wg.id)
+        entry = {"workgroup": wg, "kind": wg.get_kind_display(), "role": "Participant"}
+        (current if wg.is_member(user) else past).append(entry)
+
+    current.sort(key=lambda e: e["workgroup"].name.lower())
+    past.sort(key=lambda e: e["workgroup"].name.lower())
+    return {"current_groups": current, "past_groups": past}
+
+
+@login_required
+@require_POST
+def advancement(request):
+    """Open a Palimpsest / Passage / Traversée demande — the request to present
+    at the next Days of Assembly. POSTed from the Formation tab."""
+    from accounts.advisor import current_advisor
+
+    if not can_open_advancement(request.user):
+        raise PermissionDenied
+    if current_advisor(request.user) is None:
+        messages.error(request, "Choose your Advisor before opening a demande.")
+        return redirect(_formation_url("formation"))
+    form = AdvancementForm(request.POST)
+    if form.is_valid():
+        open_advancement(
+            request.user,
+            statement=form.cleaned_data.get("statement") or "",
+        )
+        messages.success(request, "Your request has been sent to your Advisor.")
+        return redirect(_formation_url("formation"))
+    return render(request, "admissions/formation.html",
+                  _formation_context(request, demande_form=form))
 
 
 @login_required
@@ -323,7 +576,24 @@ def advancement_withdraw(request, pk):
     else:
         withdraw_advancement(adv)
         messages.success(request, "Your demande has been withdrawn.")
-    return redirect("admissions:advancement")
+    return redirect(_formation_url("formation"))
+
+
+@login_required
+@require_POST
+def advancement_upload(request, pk):
+    """Attach (or replace) the Work the member presented for this step — the
+    written Palimpsest / Passage / Traversée text — leaving a trace on their
+    formation. Stored privately on the demande (see ``palimpsest_download``)."""
+    adv = get_object_or_404(Advancement, pk=pk, member=request.user)
+    upload = request.FILES.get("work")
+    if upload is None:
+        messages.error(request, "Choose a file to upload.")
+    else:
+        adv.palimpsest = upload
+        adv.save(update_fields=["palimpsest", "updated_at"])
+        messages.success(request, f"Your {adv.step_label} Work has been saved.")
+    return redirect(_formation_url("formation"))
 
 
 @login_required

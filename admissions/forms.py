@@ -103,27 +103,29 @@ class InterviewReportForm(forms.ModelForm):
 # --- Advancement (palimpsest / passage) ---
 
 class AdvancementForm(forms.ModelForm):
-    """A member's demande to advance — statement + optional written palimpsest."""
+    """A member's demande to advance.
+
+    The demande is an *expression of desire* to present the Palimpsest or
+    Passage / Traversée to the whole School at the next Days of Assembly — sent
+    to the Advisor in lieu of an email. You don't attach the text you'll
+    present; opening the demande is the request itself. The only field is an
+    optional note to your Advisor."""
 
     class Meta:
         model = Advancement
-        fields = ("statement", "palimpsest")
+        fields = ("statement",)
         widgets = {
-            "statement": forms.Textarea(attrs={"class": _TEXTAREA, "rows": 10}),
-            "palimpsest": forms.ClearableFileInput(
-                attrs={"class": "file-input file-input-bordered w-full"}
-            ),
+            "statement": forms.Textarea(attrs={"class": _TEXTAREA, "rows": 5}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["statement"].label = "Your statement"
+        self.fields["statement"].label = "A note to your Advisor (optional)"
         self.fields["statement"].help_text = (
-            "Why you are ready for this step in your formation."
+            "Anything you'd like your Advisor to know — they present your "
+            "request to the Meeting of the Analysts. You may leave this blank."
         )
-        self.fields["statement"].required = True
-        self.fields["palimpsest"].label = "Written palimpsest (optional)"
-        self.fields["palimpsest"].required = False
+        self.fields["statement"].required = False
 
 
 class RecommendationForm(forms.ModelForm):
