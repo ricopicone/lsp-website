@@ -3,13 +3,15 @@ ongoing_meeting, upcoming_meetings. One persistent room per group; Meet Now and
 every Join open the same room.{% endcomment %}
 <div class="max-w-2xl space-y-6">
 
-  {% if ongoing_meeting %}
+  {% if room_live %}
   <div class="rounded-lg border border-success/40 bg-success/10 p-4 flex items-center justify-between gap-3">
     <div class="flex items-center gap-2.5">
       {% include "workgroups/_live_dot.html" %}
       <div>
         <h3 class="font-medium text-base-content">Meeting in progress</h3>
-        <p class="text-sm text-base-content/60">{{ ongoing_meeting.title|default:"Now meeting" }}</p>
+        <p class="text-sm text-base-content/60">
+          {% if ongoing_meeting %}{{ ongoing_meeting.title|default:"Now meeting" }} · {% endif %}{{ room_participants }} in the room
+        </p>
       </div>
     </div>
     <a href="{% url 'video:workgroup_room' workgroup.slug %}" class="btn btn-success btn-sm">Join Meeting in Progress</a>
@@ -32,14 +34,14 @@ every Join open the same room.{% endcomment %}
       <li class="flex items-center justify-between gap-3 py-2.5">
         <div class="min-w-0">
           <div class="flex items-center gap-2">
-            {% if m == ongoing_meeting %}{% include "workgroups/_live_dot.html" %}{% endif %}
+            {% if m == ongoing_meeting and room_live %}{% include "workgroups/_live_dot.html" %}{% endif %}
             <span class="font-medium text-base-content truncate">{{ m.title|default:"Meeting" }}</span>
           </div>
           <p class="text-xs text-base-content/55">{{ m.starts_at|date:"D, M j · g:i A" }}{% if m.ends_at %} – {{ m.ends_at|date:"g:i A" }}{% endif %}</p>
         </div>
         <a href="{% url 'video:workgroup_room' workgroup.slug %}"
-           class="btn btn-xs {% if m == ongoing_meeting %}btn-success{% else %}btn-ghost{% endif %}">
-          {% if m == ongoing_meeting %}Join now{% else %}Join{% endif %}
+           class="btn btn-xs {% if m == ongoing_meeting and room_live %}btn-success{% else %}btn-ghost{% endif %}">
+          {% if m == ongoing_meeting and room_live %}Join now{% else %}Join{% endif %}
         </a>
       </li>
       {% endfor %}

@@ -1,11 +1,13 @@
 <div class="space-y-10">
-  {% if ongoing_meeting %}
+  {% if room_live %}
   <div class="rounded-lg border border-success/40 bg-success/10 p-4 flex items-center justify-between gap-3">
     <div class="flex items-center gap-2.5">
       {% include "workgroups/_live_dot.html" %}
       <div>
         <h3 class="font-medium text-base-content">Meeting in progress</h3>
-        <p class="text-sm text-base-content/60">{{ ongoing_meeting.title|default:"Now meeting" }}</p>
+        <p class="text-sm text-base-content/60">
+          {% if ongoing_meeting %}{{ ongoing_meeting.title|default:"Now meeting" }} · {% endif %}{{ room_participants }} in the room
+        </p>
       </div>
     </div>
     <a href="{% url 'video:workgroup_room' workgroup.slug %}" class="btn btn-success btn-sm">Join Meeting in Progress</a>

@@ -15,6 +15,7 @@ import logging
 import time
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 
 from . import daily
@@ -23,6 +24,12 @@ from .models import DailyRoom
 logger = logging.getLogger("video")
 
 ROOM_PREFIX = "lsp-"
+
+#: Live presence is fetched account-wide once and cached briefly — a single
+#: ``GET /presence`` covers every room, and a ~20s staleness is fine for a
+#: "someone's in the room" indicator. Daily's own data lags up to ~15s anyway.
+PRESENCE_CACHE_KEY = "video:daily:presence"
+PRESENCE_TTL_SECONDS = 20
 
 
 def daily_enabled() -> bool:
@@ -115,6 +122,38 @@ def is_owner(workgroup, user) -> bool:
     return workgroup.memberships.serving().filter(
         user=user, role__in=WorkgroupMembership.LEAD_ROLES
     ).exists()
+
+
+# ---- Live presence ------------------------------------------------------
+
+def presence_map() -> dict:
+    """``{room_name: [participant, ...]}`` for currently-occupied rooms, cached
+    ~20s. Empty when the feature is off or the API call fails (never raises)."""
+    if not daily_enabled():
+        return {}
+    cached = cache.get(PRESENCE_CACHE_KEY)
+    if cached is not None:
+        return cached
+    try:
+        data = daily.get_presence()
+    except daily.DailyError:
+        logger.warning("Daily presence fetch failed", exc_info=True)
+        data = {}
+    cache.set(PRESENCE_CACHE_KEY, data, PRESENCE_TTL_SECONDS)
+    return data
+
+
+def room_participant_count(room) -> int:
+    """Live participant count for a ``DailyRoom`` (or None). 0 when the room is
+    unprovisioned or empty — and skips the presence fetch entirely for None."""
+    if room is None:
+        return 0
+    return len(presence_map().get(room.name, []))
+
+
+def live_room_names() -> set[str]:
+    """Names of rooms with at least one participant right now."""
+    return {name for name, people in presence_map().items() if people}
 
 
 # ---- Parlêtre channel rooms (board-level video channels) ----------------

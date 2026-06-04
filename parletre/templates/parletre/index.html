@@ -69,7 +69,8 @@
             {% if channel.kind == 'chat' %}
               <span class="badge badge-sm badge-ghost">Chat</span>
             {% elif channel.kind == 'video' %}
-              <span class="badge badge-sm badge-ghost gap-1">{% icon "video" %} Video</span>
+              {% if channel.is_live %}<span class="badge badge-sm badge-success gap-1" title="Someone is in the room">{% icon "video" %} Live</span>
+              {% else %}<span class="badge badge-sm badge-ghost gap-1">{% icon "video" %} Video</span>{% endif %}
             {% else %}
               <span class="badge badge-sm badge-ghost">Forum</span>
             {% endif %}

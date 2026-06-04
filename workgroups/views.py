@@ -155,13 +155,19 @@ def workgroup_detail(request, slug):
 
         can_edit_offering = can_edit_event(request.user, primary_event)
 
-    from video.services import daily_enabled as _daily_enabled
+    from video import services as _video
 
-    daily_on = _daily_enabled()
+    daily_on = _video.daily_enabled()
     # The Meet tab is the group's meeting hub (Meet Now + joinable meetings); it
-    # shows to members whenever video is enabled. The ongoing meeting drives the
-    # "in progress" indicator on both Overview and Meet.
-    ongoing_meeting = wg.ongoing_meeting() if (daily_on and is_member) else None
+    # shows to members whenever video is enabled. The "in progress" indicator on
+    # Overview + Meet is driven by *real* Daily presence (people actually in the
+    # room now), with the ongoing scheduled meeting only labelling it.
+    ongoing_meeting = room_participants = None
+    if daily_on and is_member:
+        ongoing_meeting = wg.ongoing_meeting()
+        room_participants = _video.room_participant_count(
+            getattr(wg, "video_room", None)
+        )
 
     tabs = [("overview", "Overview")]
     if discuss_channel:
@@ -267,6 +273,8 @@ def workgroup_detail(request, slug):
         "can_leave": can_leave,
         "daily_enabled": daily_on,
         "ongoing_meeting": ongoing_meeting,
+        "room_participants": room_participants,
+        "room_live": bool(room_participants),
     }
     # Compose kind-specific UI without importing the concrete app: reach the
     # attached object via its reverse accessor and ask it for its viewer state.

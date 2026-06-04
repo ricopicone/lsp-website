@@ -55,6 +55,23 @@ def delete_room(name: str) -> bool:
     raise DailyError(f"delete_room({name}) -> {resp.status_code}: {resp.text}")
 
 
+def get_presence() -> dict:
+    """GET /presence — active participants grouped by room (near-real-time, up to
+    ~15s lag). Returns a ``{room_name: [participant, ...]}`` map, tolerating either
+    the ``{"data": {...}}`` wrapper or a flat top-level map.
+    """
+    resp = requests.get(_url("presence"), headers=_headers(), timeout=10)
+    if resp.status_code != 200:
+        raise DailyError(f"get_presence -> {resp.status_code}: {resp.text}")
+    payload = resp.json()
+    if not isinstance(payload, dict):
+        return {}
+    data = payload.get("data")
+    if isinstance(data, dict):
+        return data
+    return {k: v for k, v in payload.items() if k != "total_count" and isinstance(v, list)}
+
+
 def create_meeting_token(
     *, room_name: str, user_name: str = "", is_owner: bool = False, exp: int | None = None
 ) -> str:

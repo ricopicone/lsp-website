@@ -4,12 +4,14 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pytest
+from django.core.cache import cache
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import Profile, User
 from events.models import Event
+from video.models import DailyRoom
 from workgroups.models import WorkgroupMembership
 
 pytestmark = pytest.mark.django_db
@@ -17,6 +19,20 @@ pytestmark = pytest.mark.django_db
 daily_on = override_settings(
     DAILY_ENABLED=True, DAILY_API_KEY="k", DAILY_DOMAIN="lsp.daily.co"
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_presence_cache():
+    cache.clear()
+    yield
+    cache.clear()
+
+
+def _provision_room(wg):
+    return DailyRoom.objects.create(
+        workgroup=wg, name=f"lsp-{wg.slug}",
+        url=f"https://lsp.daily.co/lsp-{wg.slug}", provider_created=True,
+    )
 
 
 def _member(email="m@x.test"):
@@ -73,15 +89,30 @@ def test_meet_tab_visible_to_member(client):
 
 
 @daily_on
-def test_overview_shows_in_progress_banner(client):
+def test_overview_shows_in_progress_banner_when_room_is_live(client, monkeypatch):
     user = _member()
     wg = _wg_with_member(user)
-    now = timezone.now()
-    _meeting(wg, start=now - timedelta(minutes=5), end=now + timedelta(minutes=55))
+    room = _provision_room(wg)
+    monkeypatch.setattr(
+        "video.daily.get_presence", lambda: {room.name: [{"userName": "A"}, {"userName": "B"}]}
+    )
     client.force_login(user)
     resp = client.get(reverse("workgroups:detail", args=[wg.slug]))
     assert resp.status_code == 200
     assert b"Join Meeting in Progress" in resp.content
+    assert b"2 in the room" in resp.content
+
+
+@daily_on
+def test_overview_has_no_banner_when_room_empty(client, monkeypatch):
+    user = _member()
+    wg = _wg_with_member(user)
+    _provision_room(wg)
+    monkeypatch.setattr("video.daily.get_presence", lambda: {})
+    client.force_login(user)
+    resp = client.get(reverse("workgroups:detail", args=[wg.slug]))
+    assert resp.status_code == 200
+    assert b"Join Meeting in Progress" not in resp.content
 
 
 def test_meet_tab_hidden_when_video_disabled(client):
