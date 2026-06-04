@@ -18,7 +18,7 @@
   {% endfor %}{% endif %}
 
   {% for g in groups %}
-  <section class="rounded-xl border border-base-300 p-4 space-y-3">
+  <section class="rounded-xl border border-base-300 p-4 space-y-3" data-recon-group>
     <div class="flex flex-wrap items-baseline justify-between gap-2">
       <div>
         <h3 class="font-medium text-base-content">
@@ -31,34 +31,41 @@
           {% if g.email %}· {{ g.email }}{% endif %}
         </p>
       </div>
+      <label class="flex items-center gap-1.5 text-xs text-base-content/60 cursor-pointer">
+        <input type="checkbox" class="checkbox checkbox-xs" data-recon-all checked>
+        Select all
+      </label>
     </div>
 
-    {% comment %}Sample of the charges (amount + date) for context.{% endcomment %}
-    <div class="flex flex-wrap gap-1.5 text-xs">
-      {% for p in g.payments|slice:":12" %}
-      <span class="badge badge-ghost badge-sm">{{ p.amount|usd0 }} · {{ p.paid_at|date:"M y" }}</span>
-      {% endfor %}
-      {% if g.payments|length > 12 %}<span class="text-base-content/40">+{{ g.payments|length|add:"-12" }} more</span>{% endif %}
-    </div>
-
-    <form method="post" class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
+    <form method="post" class="space-y-3">
       {% csrf_token %}
-      <input type="hidden" name="payer" value="{{ g.key }}">
-      <div class="space-y-1">
-        <label class="block text-xs text-base-content/60">Reclassify all as</label>
-        <select name="payment_type" class="select select-bordered select-sm">
-          {% for value, label in type_choices %}
-          <option value="{{ value }}">{{ label }}</option>
-          {% endfor %}
-        </select>
+      {% comment %}One checkbox per charge — uncheck any you want to leave for later.{% endcomment %}
+      <div class="flex flex-wrap gap-1.5">
+        {% for p in g.payments %}
+        <label class="inline-flex items-center gap-1.5 rounded-md border border-base-300/70 px-2 py-1 text-xs cursor-pointer has-[:checked]:bg-primary/10 has-[:checked]:border-primary/40">
+          <input type="checkbox" name="payment_ids" value="{{ p.pk }}" class="checkbox checkbox-xs" data-recon-item checked>
+          {{ p.amount|usd0 }} · {{ p.paid_at|date:"M j, Y" }}
+        </label>
+        {% endfor %}
       </div>
-      {% if not g.matched %}
-      <div class="space-y-1">
-        <label class="block text-xs text-base-content/60">Link to member (email or id)</label>
-        <input name="assign_user" class="input input-bordered input-sm" placeholder="optional">
+
+      <div class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">Reclassify selected as</label>
+          <select name="payment_type" class="select select-bordered select-sm">
+            {% for value, label in type_choices %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if not g.matched %}
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">Link to member (email or id)</label>
+          <input name="assign_user" class="input input-bordered input-sm" placeholder="optional">
+        </div>
+        {% endif %}
+        <button class="btn btn-primary btn-sm">Reconcile selected</button>
       </div>
-      {% endif %}
-      <button class="btn btn-primary btn-sm">Reconcile</button>
     </form>
   </section>
   {% empty %}
@@ -67,4 +74,22 @@
   </div>
   {% endfor %}
 </div>
+
+<script>
+  // Per-group "select all" toggles that group's charge checkboxes; the group
+  // header box reflects whether all are currently checked.
+  document.querySelectorAll('[data-recon-group]').forEach(function (group) {
+    var all = group.querySelector('[data-recon-all]');
+    var items = group.querySelectorAll('[data-recon-item]');
+    if (!all) return;
+    all.addEventListener('change', function () {
+      items.forEach(function (i) { i.checked = all.checked; });
+    });
+    items.forEach(function (i) {
+      i.addEventListener('change', function () {
+        all.checked = Array.prototype.every.call(items, function (x) { return x.checked; });
+      });
+    });
+  });
+</script>
 {% endblock %}

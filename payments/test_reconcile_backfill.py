@@ -121,13 +121,13 @@ def test_reconcile_lists_assumed_grouped(client):
     assert b"karen@x.test" in resp.content
 
 
-def test_reconcile_retypes_payers_assumed_payments(client):
+def test_reconcile_retypes_selected_payments(client):
     _treasurer(client)
     u = _student("karen@x.test")
-    _tuition_payment(u, "60.00", datetime(2025, 10, 1, 12), source=Source.ASSUMED)
-    _tuition_payment(u, "60.00", datetime(2025, 11, 1, 12), source=Source.ASSUMED)
+    p1 = _tuition_payment(u, "60.00", datetime(2025, 10, 1, 12), source=Source.ASSUMED)
+    p2 = _tuition_payment(u, "60.00", datetime(2025, 11, 1, 12), source=Source.ASSUMED)
     resp = client.post(reverse("treasurer_reconcile"), {
-        "payer": f"user:{u.pk}", "payment_type": "registration",
+        "payment_ids": [p1.pk, p2.pk], "payment_type": "registration",
     })
     assert resp.status_code == 302
     rows = Payment.objects.filter(user=u)
@@ -135,10 +135,34 @@ def test_reconcile_retypes_payers_assumed_payments(client):
     assert all(p.source == Source.STAFF for p in rows)  # now staff-confirmed
 
 
+def test_reconcile_leaves_unselected_payments(client):
+    _treasurer(client)
+    u = _student("karen@x.test")
+    keep = _tuition_payment(u, "60.00", datetime(2025, 10, 1, 12), source=Source.ASSUMED)
+    fix = _tuition_payment(u, "500.00", datetime(2025, 11, 1, 12), source=Source.ASSUMED)
+    client.post(reverse("treasurer_reconcile"), {
+        "payment_ids": [fix.pk], "payment_type": "registration",
+    })
+    keep.refresh_from_db()
+    fix.refresh_from_db()
+    assert fix.payment_type == "registration" and fix.source == Source.STAFF
+    # The unselected one is untouched — still assumed tuition for next time.
+    assert keep.payment_type == "tuition" and keep.source == Source.ASSUMED
+
+
+def test_reconcile_requires_a_selection(client):
+    _treasurer(client)
+    u = _student("karen@x.test")
+    _tuition_payment(u, "60.00", datetime(2025, 10, 1, 12), source=Source.ASSUMED)
+    resp = client.post(reverse("treasurer_reconcile"), {"payment_type": "registration"})
+    assert resp.status_code == 302  # redirects with an error, nothing changed
+    assert Payment.objects.filter(source=Source.ASSUMED).count() == 1
+
+
 def test_reconcile_links_unmatched_payer(client):
     _treasurer(client)
     member = _student("realmember@x.test")
-    Payment.objects.create(
+    p = Payment.objects.create(
         payment_type=Payment.Type.TUITION, amount=Decimal("60.00"),
         status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
         source=Source.ASSUMED, email="karen@x.test",
@@ -146,9 +170,38 @@ def test_reconcile_links_unmatched_payer(client):
         notes="[stripe-import:ch_x] (unmatched payer: Karen Benezra)",
     )
     resp = client.post(reverse("treasurer_reconcile"), {
-        "payer": "email:karen@x.test", "payment_type": "registration",
+        "payment_ids": [p.pk], "payment_type": "registration",
         "assign_user": "realmember@x.test",
     })
     assert resp.status_code == 302
-    p = Payment.objects.get(email="karen@x.test")
+    p.refresh_from_db()
     assert p.user == member and p.payment_type == "registration"
+
+
+# ---- audit_finances (read-only diagnostic) --------------------------------
+
+def test_audit_runs_and_flags_duplicate_dues():
+    from io import StringIO
+
+    from payments.models import DuesPeriod
+
+    DuesPeriod.objects.create(
+        name="AY 2023–2024", slug="ay-2023-2024",
+        start_date=date(2023, 9, 1), end_date=date(2024, 8, 31),
+        due_date=date(2023, 12, 1),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"), dues_amount_analyst=Decimal("150"),
+    )
+    u = _student("dup@x.test")
+    for when in (datetime(2023, 10, 1, 12), datetime(2023, 11, 1, 12)):
+        Payment.objects.create(
+            payment_type=Payment.Type.DUES, user=u, amount=Decimal("100.00"),
+            status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+            source=Source.IMPORTED, paid_at=timezone.make_aware(when),
+        )
+    out = StringIO()
+    call_command("audit_finances", stdout=out)
+    text = out.getvalue()
+    assert "audit complete" in text
+    # The two same-year dues payments should be flagged.
+    assert "1  ⚠  members with >1 dues payment" in text

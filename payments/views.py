@@ -148,8 +148,17 @@ def treasurer_reconcile(request):
             key, who, matched = f"user:{p.user_id}", (
                 p.user.get_full_name() or p.user.email), True
         else:
-            key = f"email:{(p.email or '').lower()}"
-            who = _payer_name_from_notes(p) or p.email or "unknown payer"
+            # Group unmatched payers by email, else by the payer name carried in
+            # the import note, else each on its own — so distinct people don't
+            # collapse into one "unknown" bucket (most Stripe charges lack email).
+            name = _payer_name_from_notes(p)
+            if p.email:
+                key = f"email:{p.email.lower()}"
+            elif name:
+                key = f"name:{name.lower()}"
+            else:
+                key = f"pmt:{p.pk}"
+            who = name or p.email or "unknown payer"
             matched = False
         g = groups.setdefault(key, {
             "key": key, "who": who, "matched": matched, "email": p.email or "",
@@ -175,24 +184,23 @@ def _payer_name_from_notes(payment) -> str:
 
 
 def _reconcile_apply(request):
-    """Re-type (and optionally link) all of one payer's ASSUMED payments."""
+    """Re-type (and optionally link) a *selected subset* of ASSUMED payments.
+    Unselected payments stay assumed and reappear on the next load."""
     from accounts.models import Source
 
-    payer = request.POST.get("payer", "")
+    ids = request.POST.getlist("payment_ids")
     new_type = request.POST.get("payment_type")
     assign = (request.POST.get("assign_user") or "").strip()
 
-    qs = Payment.objects.filter(source=Source.ASSUMED)
-    if payer.startswith("user:"):
-        qs = qs.filter(user_id=payer.split(":", 1)[1])
-    elif payer.startswith("email:"):
-        qs = qs.filter(email__iexact=payer.split(":", 1)[1], user__isnull=True)
-    else:
-        messages.error(request, "Unknown payer.")
+    if not ids:
+        messages.error(request, "Select at least one payment to reconcile.")
         return redirect("treasurer_reconcile")
     if new_type not in Payment.Type.values:
         messages.error(request, "Choose a valid type.")
         return redirect("treasurer_reconcile")
+
+    # Constrained to ASSUMED so a stale/forged id can't touch a confirmed row.
+    qs = Payment.objects.filter(source=Source.ASSUMED, pk__in=ids)
 
     assigned_user = None
     if assign:
@@ -209,8 +217,11 @@ def _reconcile_apply(request):
         fields["user"] = assigned_user
     n = qs.count()
     qs.update(**fields)
-    note = f"reconciled → {new_type}" + (f", linked {assigned_user.email}" if assigned_user else "")
-    messages.success(request, f"Reconciled {n} payment(s): {note}.")
+    if not n:
+        messages.error(request, "Those payments were already reconciled.")
+        return redirect("treasurer_reconcile")
+    note = f"→ {new_type}" + (f", linked {assigned_user.email}" if assigned_user else "")
+    messages.success(request, f"Reconciled {n} payment(s) {note}.")
     return redirect("treasurer_reconcile")
 
 
