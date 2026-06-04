@@ -103,37 +103,56 @@
       {% endif %}
       {% endif %}
 
-      {# Trace of every step #}
-      {% if advancements %}
+      {# Trace of every step (derived from role history, demande overlaid) #}
+      {% if formation_steps %}
       <ol class="space-y-3">
-        {% for a in advancements %}
+        {% for s in formation_steps %}
+        {% with a=s.advancement %}
         <li class="rounded-lg border border-base-300 p-4 space-y-3">
           <div class="flex items-center gap-2 flex-wrap">
-            <span class="font-medium text-base-content">{{ a.step_label }}</span>
+            <span class="font-medium text-base-content">{{ s.label }}</span>
+            {% if a %}
             <span class="badge badge-sm
               {% if a.status == 'approved' %}badge-success
               {% elif a.status == 'declined' or a.status == 'withdrawn' %}badge-ghost
               {% elif a.status == 'presented' %}badge-info
               {% else %}badge-warning{% endif %}">{{ a.get_status_display }}</span>
+            {% elif s.completed %}
+            <span class="badge badge-sm badge-success">Completed</span>
+            {% endif %}
           </div>
           <ul class="text-sm text-base-content/70 space-y-0.5">
-            <li>Requested {{ a.requested_at|date:"M j, Y" }}</li>
-            {% if a.presented_at %}<li>Presented to the Meeting {{ a.presented_at|date:"M j, Y" }}{% if a.advisor %} by {{ a.advisor.get_full_name|default:a.advisor.email }}{% endif %}</li>{% endif %}
-            {% if a.decided_at %}<li>Decision {{ a.decided_at|date:"M j, Y" }}{% if a.decision_note %} — {{ a.decision_note }}{% endif %}</li>{% endif %}
+            {% if a %}
+              <li>Requested {{ a.requested_at|date:"M j, Y" }}</li>
+              {% if a.presented_at %}<li>Presented to the Meeting {{ a.presented_at|date:"M j, Y" }}{% if a.advisor %} by {{ a.advisor.get_full_name|default:a.advisor.email }}{% endif %}</li>{% endif %}
+              {% if a.decided_at %}<li>Decision {{ a.decided_at|date:"M j, Y" }}{% if a.decision_note %} — {{ a.decision_note }}{% endif %}</li>{% endif %}
+            {% elif s.when_ay %}
+              <li>Completed in AY {{ s.when_ay }}–{{ s.when_ay|add:1 }}</li>
+            {% else %}
+              <li>Completed.</li>
+            {% endif %}
           </ul>
 
           {# The Work I presented (leave a trace) #}
           <div class="flex items-center gap-3 flex-wrap pt-1 border-t border-base-300/60">
-            {% if a.palimpsest %}
-            <a href="{% url 'admissions:palimpsest_download' a.pk %}" class="link link-primary text-sm">View my {{ a.step_label }} Work →</a>
+            {% if a and a.palimpsest %}
+            <a href="{% url 'admissions:palimpsest_download' a.pk %}" class="link link-primary text-sm">View my {{ s.label }} Work →</a>
             <form method="post" enctype="multipart/form-data" action="{% url 'admissions:advancement_upload' a.pk %}" class="flex items-center gap-2">
               {% csrf_token %}
               <input type="file" name="work" class="file-input file-input-bordered file-input-xs max-w-xs">
               <button class="btn btn-ghost btn-xs">Replace</button>
             </form>
-            {% else %}
+            {% elif a %}
             <form method="post" enctype="multipart/form-data" action="{% url 'admissions:advancement_upload' a.pk %}" class="flex items-center gap-2">
               {% csrf_token %}
+              <label class="text-sm text-base-content/70">Upload the Work I presented:</label>
+              <input type="file" name="work" class="file-input file-input-bordered file-input-xs max-w-xs">
+              <button class="btn btn-primary btn-xs">Upload</button>
+            </form>
+            {% else %}
+            <form method="post" enctype="multipart/form-data" action="{% url 'admissions:formation_work_upload' %}" class="flex items-center gap-2">
+              {% csrf_token %}
+              <input type="hidden" name="kind" value="{{ s.kind }}">
               <label class="text-sm text-base-content/70">Upload the Work I presented:</label>
               <input type="file" name="work" class="file-input file-input-bordered file-input-xs max-w-xs">
               <button class="btn btn-primary btn-xs">Upload</button>
@@ -141,7 +160,7 @@
             {% endif %}
           </div>
 
-          {% if a.is_open %}
+          {% if a and a.is_open %}
           <form method="post" action="{% url 'admissions:advancement_withdraw' a.pk %}"
                 onsubmit="return confirm('Withdraw this demande?');">
             {% csrf_token %}
@@ -149,6 +168,7 @@
           </form>
           {% endif %}
         </li>
+        {% endwith %}
         {% endfor %}
       </ol>
       {% elif not can_open %}

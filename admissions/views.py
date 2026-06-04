@@ -23,7 +23,6 @@ from .advancement import (
     can_open_advancement,
     decide_advancement,
     open_advancement,
-    open_advancement_for,
     present_advancement,
     step_label_for_member,
     withdraw_advancement,
@@ -296,32 +295,19 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     profile = user.profile
 
     advisor = current_advisor(user)
-    existing = (
-        Advancement.objects.filter(member=user)
-        .select_related("advisor")
-        .order_by("-requested_at")
-        .first()
-    )
     if advisor_form is None and profile.needs_advisor:
         advisor_form = AdvisorSelectForm(advisee=user)
-
-    # The full trace of formation steps (oldest first), so a member sees their
-    # Palimpsest and Passage/Traversée history with dates + the Work they left.
-    advancements = list(
-        Advancement.objects.filter(member=user)
-        .select_related("advisor")
-        .order_by("requested_at")
-    )
 
     ctx = {
         "advisor": advisor,
         "needs_advisor": profile.needs_advisor,
         "advisor_form": advisor_form,
-        "existing": existing,
-        "open_one": open_advancement_for(user),
         "can_open": can_open_advancement(user),
         "step_label": step_label_for_member(user),
-        "advancements": advancements,
+        # The trace of formation steps (Palimpsest, then Passage/Traversée) —
+        # derived from the member's role history so steps completed before this
+        # system (or via import) still show, with any Advancement overlaid.
+        "formation_steps": _formation_steps(user),
         "demande_form": demande_form if demande_form is not None else AdvancementForm(),
         "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
     }
@@ -339,6 +325,76 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     ctx["formation_tabs"] = tabs
     ctx["active_tab"] = tab if tab in keys else "formation"
     return ctx
+
+
+#: Each formation track's role ladder. The step *into* index 1 is the
+#: Palimpsest; the step into index 2 is the Passage (Analyst) / Traversée
+#: (Scholar).
+_FORMATION_TRACKS = {
+    "analyst": ["pre_candidate", "candidate", "analyst"],
+    "scholar": ["pre_candidate_scholar", "candidate_scholar", "scholar"],
+}
+
+
+def _formation_track_for(roles_held):
+    """Which ladder the member is on, from any analyst/scholar-track role they
+    hold now or have held. Returns ``(name, ladder)`` or ``(None, None)``."""
+    for name, ladder in _FORMATION_TRACKS.items():
+        if roles_held & set(ladder):
+            return name, ladder
+    return None, None
+
+
+def _formation_steps(user):
+    """The member's formation steps as a display trace.
+
+    Derived from the **role history** (``MembershipTenure``) so a Palimpsest or
+    Passage/Traversée completed before this system — or set by import — still
+    shows, dated to the academic year the member entered the target role. Any
+    actual ``Advancement`` demande is overlaid for its status/dates and the Work
+    file. Only completed steps (or steps with a demande on file) are listed; the
+    *next* available step is offered by the demande form, not here."""
+    from accounts.models import MembershipTenure
+
+    from .models import Advancement, step_label_for
+
+    tenures = list(MembershipTenure.objects.filter(user=user))
+    roles_held = {t.role for t in tenures} | {user.profile.role}
+    _, ladder = _formation_track_for(roles_held)
+    if ladder is None:
+        return []
+
+    # Earliest AY the member entered each role (the step's "when").
+    entered_ay: dict[str, int] = {}
+    for t in tenures:
+        if t.role not in entered_ay or t.start_ay < entered_ay[t.role]:
+            entered_ay[t.role] = t.start_ay
+
+    max_rank = max(
+        (ladder.index(r) for r in roles_held if r in ladder), default=-1
+    )
+
+    advs = {
+        a.kind: a
+        for a in Advancement.objects.filter(member=user)
+        .select_related("advisor").order_by("requested_at")
+    }
+
+    steps = []
+    for i, kind in ((1, Advancement.Kind.PALIMPSEST), (2, Advancement.Kind.PASSAGE)):
+        from_role, target_role = ladder[i - 1], ladder[i]
+        adv = advs.get(kind)
+        completed = max_rank >= i
+        if not completed and adv is None:
+            continue  # not reached and no demande on file — the form covers it
+        steps.append({
+            "kind": kind,
+            "label": step_label_for(kind, from_role),
+            "completed": completed,
+            "when_ay": entered_ay.get(target_role) if completed else None,
+            "advancement": adv,
+        })
+    return steps
 
 
 def _formation_money_context(request) -> dict:
@@ -619,6 +675,57 @@ def advancement_upload(request, pk):
         adv.palimpsest = upload
         adv.save(update_fields=["palimpsest", "updated_at"])
         messages.success(request, f"Your {adv.step_label} Work has been saved.")
+    return redirect(_formation_url("formation"))
+
+
+@login_required
+@require_POST
+def formation_work_upload(request):
+    """Attach the Work for a completed step identified by ``kind`` — used for
+    steps the member completed *before* this system (no ``Advancement`` row
+    exists yet). Materializes a minimal APPROVED ``Advancement`` to hold the
+    file, then stores it. Steps that already have a demande use
+    :func:`advancement_upload` instead."""
+    kind = request.POST.get("kind")
+    upload = request.FILES.get("work")
+    if kind not in (Advancement.Kind.PALIMPSEST, Advancement.Kind.PASSAGE):
+        messages.error(request, "Unknown formation step.")
+        return redirect(_formation_url("formation"))
+    if upload is None:
+        messages.error(request, "Choose a file to upload.")
+        return redirect(_formation_url("formation"))
+
+    adv = (
+        Advancement.objects.filter(member=request.user, kind=kind)
+        .order_by("-requested_at").first()
+    )
+    if adv is None:
+        # Only allow materializing a record for a step the member has actually
+        # completed (their role ladder is past it); otherwise there's nothing
+        # to attach a Work to.
+        from accounts.models import MembershipTenure
+
+        steps = {s["kind"]: s for s in _formation_steps(request.user)}
+        step = steps.get(kind)
+        if step is None or not step["completed"]:
+            messages.error(request, "There's no completed step to attach that to.")
+            return redirect(_formation_url("formation"))
+        roles_held = set(
+            MembershipTenure.objects.filter(user=request.user)
+            .values_list("role", flat=True)
+        ) | {request.user.profile.role}
+        _, ladder = _formation_track_for(roles_held)
+        idx = 1 if kind == Advancement.Kind.PALIMPSEST else 2
+        from_role = ladder[idx - 1] if ladder else ""
+        adv = Advancement.objects.create(
+            member=request.user, kind=kind, from_role=from_role,
+            status=Advancement.Status.APPROVED,
+            decided_at=timezone.now(),
+            decision_note="Recorded retroactively when the Work was uploaded.",
+        )
+    adv.palimpsest = upload
+    adv.save(update_fields=["palimpsest", "updated_at"])
+    messages.success(request, f"Your {adv.step_label} Work has been saved.")
     return redirect(_formation_url("formation"))
 
 
