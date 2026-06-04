@@ -15,6 +15,7 @@ import logging
 import time
 
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 
 from . import daily
 from .models import DailyRoom
@@ -31,24 +32,32 @@ def daily_enabled() -> bool:
     )
 
 
-def _room_name(workgroup) -> str:
-    return f"{ROOM_PREFIX}{workgroup.slug}"[:128]
+def _is_workgroup(owner) -> bool:
+    from workgroups.models import Workgroup
+
+    return isinstance(owner, Workgroup)
 
 
-def ensure_room(workgroup) -> DailyRoom | None:
-    """Return the workgroup's Daily room, creating it on the provider if needed.
+def _room_name(owner) -> str:
+    prefix = ROOM_PREFIX if _is_workgroup(owner) else f"{ROOM_PREFIX}ch-"
+    return f"{prefix}{owner.slug}"[:128]
 
-    Idempotent. Returns ``None`` (and logs nothing surprising) when the feature
-    is disabled or provisioning fails — callers then fall back to ``access_info``.
+
+def ensure_room(owner) -> DailyRoom | None:
+    """Return the owner's Daily room, creating it on the provider if needed.
+
+    ``owner`` is a Workgroup or a Parlêtre Channel; both expose a ``video_room``
+    reverse accessor. Idempotent. Returns ``None`` when the feature is disabled or
+    provisioning fails — callers then fall back to ``access_info``.
     """
     if not daily_enabled():
         return None
 
-    room = getattr(workgroup, "video_room", None)
+    room = getattr(owner, "video_room", None)
     if room is not None and room.provider_created:
         return room
 
-    name = room.name if room is not None else _room_name(workgroup)
+    name = room.name if room is not None else _room_name(owner)
     properties = {
         "enable_recording": False,  # case-history privacy — never enable
         "enable_prejoin_ui": True,
@@ -60,13 +69,14 @@ def ensure_room(workgroup) -> DailyRoom | None:
     try:
         data = daily.create_room(name, properties=properties)
     except daily.DailyError:
-        logger.exception("Daily ensure_room failed for workgroup %s", workgroup.slug)
+        logger.exception("Daily ensure_room failed for %s", _room_name(owner))
         return None
 
     url = data.get("url") or f"https://{settings.DAILY_DOMAIN}/{name}"
     if room is None:
+        owner_kwarg = {"workgroup": owner} if _is_workgroup(owner) else {"channel": owner}
         room = DailyRoom.objects.create(
-            workgroup=workgroup, name=name, url=url, provider_created=True
+            name=name, url=url, provider_created=True, **owner_kwarg
         )
     else:
         room.url = url
@@ -105,3 +115,43 @@ def is_owner(workgroup, user) -> bool:
     return workgroup.memberships.serving().filter(
         user=user, role__in=WorkgroupMembership.LEAD_ROLES
     ).exists()
+
+
+# ---- Parlêtre channel rooms (board-level video channels) ----------------
+
+def can_enter_channel(channel, user) -> bool:
+    """Whether ``user`` may join a video channel's room — the channel's own
+    visibility rule (Open / Role / Committee / Workgroup / Private / LSP Staff)."""
+    from parletre.permissions import channel_visible
+
+    return channel_visible(channel, user)
+
+
+def is_channel_owner(channel, user) -> bool:
+    """Moderator (Daily owner) for a channel room = the channel's moderators."""
+    from parletre.permissions import channel_can_moderate
+
+    return channel_can_moderate(channel, user)
+
+
+def channel_room_context(request, channel) -> dict:
+    """Room context for rendering a video channel (standalone page or inline).
+
+    A workgroup-access channel reuses its workgroup's room; other channels anchor
+    on the channel itself. Returns ``{room_url, room_token, is_owner}`` or
+    ``{"room_unavailable": True}`` when Daily is off / provisioning fails.
+    """
+    user = request.user
+    if not can_enter_channel(channel, user):
+        raise PermissionDenied("You don't have access to this room.")
+    owner = channel.workgroup or channel
+    room = ensure_room(owner)
+    if room is None:
+        return {"room_unavailable": True}
+    owner_flag = is_channel_owner(channel, user)
+    try:
+        token = mint_token(room, user, is_owner=owner_flag)
+    except Exception:  # noqa: BLE001 — degrade to the unavailable state
+        logger.exception("Daily token mint failed for channel %s", channel.slug)
+        return {"room_unavailable": True}
+    return {"room_url": room.url, "room_token": token, "is_owner": owner_flag}

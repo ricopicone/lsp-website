@@ -44,3 +44,12 @@ def register(u, event, status=Registration.Status.PAID):
         user=u, event=event, price_tier=tier,
         quoted_amount=Decimal("0.00"), status=status,
     )
+
+
+def video_channel(slug="vid", *, access=None, workgroup=None):
+    from parletre.models import Channel
+
+    return Channel.objects.create(
+        name="Video room", slug=slug, kind=Channel.Kind.VIDEO,
+        access=access or Channel.Access.OPEN, workgroup=workgroup,
+    )

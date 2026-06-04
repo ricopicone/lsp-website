@@ -1,16 +1,6 @@
 {% comment %}Schedule tab. Expects: workgroup, upcoming_meetings, past_meetings,
 meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
 <div class="max-w-2xl space-y-6">
-  {% if daily_enabled %}
-  <div class="rounded-lg border border-base-300 bg-base-100 p-4 flex items-center justify-between gap-3">
-    <div>
-      <h3 class="font-medium">Meeting room</h3>
-      <p class="text-sm text-base-content/60">Join this group's room in your browser — no app to install.</p>
-    </div>
-    <a href="{% url 'video:workgroup_room' workgroup.slug %}" class="btn btn-primary btn-sm">Join the meeting room</a>
-  </div>
-  {% endif %}
-
   {% if calendar_feed_url %}
   <div class="flex items-center justify-between gap-2 text-sm">
     <span class="text-base-content/55">Subscribe to keep this calendar in your own app.</span>

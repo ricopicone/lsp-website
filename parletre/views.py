@@ -271,8 +271,8 @@ def channel(request, slug):
     can_post = channel.can_post(request.user)
 
     if request.method == "POST":
-        # Chat-channel composer (forum channels post via new_thread / replies).
-        if channel.is_forum:
+        # Chat-channel composer (forum/video channels have no inline composer).
+        if channel.is_forum or channel.is_video:
             raise Http404()
         if not can_post:
             messages.error(request, "You can't post in this channel.")
@@ -321,6 +321,12 @@ def channel(request, slug):
             thread.is_unread = thread.id in unread_ids
         context["threads"] = threads
         return render(request, "parletre/channel_forum.html", context)
+
+    if channel.is_video:
+        from video.services import channel_room_context
+
+        context.update(channel_room_context(request, channel))
+        return render(request, "parletre/channel_video.html", context)
 
     # Chat: viewing the stream marks the channel read.
     mark_channel_read(request.user, channel)

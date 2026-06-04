@@ -10,13 +10,29 @@ membership rules — see the ``video-daily-integration`` design.
 from __future__ import annotations
 
 from django.db import models
+from django.db.models import Q
 
 
 class DailyRoom(models.Model):
-    """A provisioned Daily.co room bound to a single Workgroup."""
+    """A provisioned Daily.co room bound to a single owner.
+
+    The owner is either a Workgroup (the group's persistent room, surfaced on the
+    Meet tab) or a standalone Parlêtre Channel (a board-level video channel). A
+    workgroup-access video channel reuses its workgroup's room, so the ``channel``
+    owner is used only for non-workgroup channels.
+    """
 
     workgroup = models.OneToOneField(
         "workgroups.Workgroup",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="video_room",
+    )
+    channel = models.OneToOneField(
+        "parletre.Channel",
+        null=True,
+        blank=True,
         on_delete=models.CASCADE,
         related_name="video_room",
     )
@@ -32,6 +48,19 @@ class DailyRoom(models.Model):
 
     class Meta:
         verbose_name = "Daily room"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(workgroup__isnull=False, channel__isnull=True)
+                    | Q(workgroup__isnull=True, channel__isnull=False)
+                ),
+                name="video_room_exactly_one_owner",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def owner(self):
+        return self.workgroup or self.channel

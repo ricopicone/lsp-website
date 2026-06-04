@@ -11,34 +11,10 @@
     <a href="{{ back_url }}" class="btn btn-ghost btn-sm">← Back</a>
   </div>
 
-  <div id="daily-root"
-       class="w-full overflow-hidden rounded-xl border border-base-300 bg-base-200"
-       style="height: 72vh;"></div>
+  {% include "video/_embed.html" with room_url=room_url room_token=token back_url=back_url %}
 
   <p class="text-xs text-base-content/50">
     This meeting is not recorded.{% if is_owner %} You are joining as a moderator.{% endif %}
   </p>
-
-  {{ room_url|json_script:"room-url" }}
-  {{ token|json_script:"room-token" }}
-  {{ back_url|json_script:"back-url" }}
-
-  <script src="{% static 'js/vendor/daily.js' %}"></script>
-  <script>
-    (function () {
-      var root = document.getElementById("daily-root");
-      var url = JSON.parse(document.getElementById("room-url").textContent);
-      var token = JSON.parse(document.getElementById("room-token").textContent);
-      var back = JSON.parse(document.getElementById("back-url").textContent);
-      if (!window.DailyIframe) { return; }
-      var frame = window.DailyIframe.createFrame(root, {
-        iframeStyle: { width: "100%", height: "100%", border: "0" },
-        showLeaveButton: true,
-        showFullscreenButton: true,
-      });
-      frame.on("left-meeting", function () { window.location.href = back; });
-      frame.join({ url: url, token: token });
-    })();
-  </script>
 </div>
 {% endblock %}

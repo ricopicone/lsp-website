@@ -66,6 +66,11 @@ _ICON_PATHS = {
         '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>'
         '<path d="M13.7 21a2 2 0 0 1-3.4 0"/>'
     ),
+    # video meeting room
+    "video": (
+        '<path d="m23 7-7 5 7 5V7z"/>'
+        '<rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>'
+    ),
     # add-a-reaction smiley
     "smile": (
         '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/>'

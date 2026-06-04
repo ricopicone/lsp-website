@@ -95,6 +95,7 @@ class Channel(models.Model):
     class Kind(models.TextChoices):
         FORUM = "forum", _("Forum (threaded)")
         CHAT = "chat", _("Chat (live stream)")
+        VIDEO = "video", _("Video (meeting room)")
 
     class Access(models.TextChoices):
         OPEN = "open", _("Open — every member")
@@ -229,6 +230,10 @@ class Channel(models.Model):
     @property
     def is_forum(self) -> bool:
         return self.kind == self.Kind.FORUM
+
+    @property
+    def is_video(self) -> bool:
+        return self.kind == self.Kind.VIDEO
 
     @property
     def is_ephemeral(self) -> bool:
