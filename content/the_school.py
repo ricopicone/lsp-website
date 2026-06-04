@@ -30,7 +30,7 @@ ENTRIES_DIR = Path(settings.BASE_DIR) / "content" / "pages" / "the-school"
 # membership of each row are an editorial decision for the School, not a
 # technical one. Edit freely.
 TAXONOMY: list[tuple[str, list[str]]] = [
-    ("One by One", ["palimpsests", "passages"]),
+    ("One by One", ["palimpsests", "passages", "traversees"]),
     ("One on Ones", ["training-analysis", "control-analyses", "advisor-meetings"]),
     ("Study Groups", ["seminars", "cartels", "reading-groups"]),
     ("All School Functions", ["days-of-assembly", "working-days"]),

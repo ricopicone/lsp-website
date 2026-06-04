@@ -70,6 +70,10 @@ def test_the_school_applies_archive_filter_to_destination(client):
     rows = {e.slug: e for row in the_school.build_rows() for e in row["entries"]}
     assert rows["palimpsests"].destination.endswith("?kind=palimpsest")
     assert rows["passages"].destination.endswith("?kind=passage")
+    # Traversée (Scholar track) is split out from Passage (Analyst track); the
+    # Works model has no separate kind, so it's description-only for now.
+    assert rows["traversees"].destination == ""
+    assert "Scholar of the School" in rows["traversees"].body_html
 
     resp = client.get("/the-school/")
     assert b"?kind=palimpsest" in resp.content
