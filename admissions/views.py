@@ -20,10 +20,10 @@ from accounts.models import Profile
 from .advancement import (
     can_open_advancement,
     decide_advancement,
-    kind_for,
     open_advancement,
     open_advancement_for,
     present_advancement,
+    step_label_for_member,
     withdraw_advancement,
 )
 from .emails import send_application_submitted
@@ -262,56 +262,171 @@ def review_decide(request, pk):
 # Advancement — palimpsest (Precandidate → Candidate) / passage demandes
 # ==========================================================================
 
-# ---- Member side ----------------------------------------------------------
+# ---- Member side: the unified "Your Formation" hub ------------------------
+
+def _formation_url(tab="formation", **params):
+    """URL for the formation hub, landing on ``tab`` (and carrying any extra
+    query params, e.g. ``stripe=success``) after a POST round-trip."""
+    from urllib.parse import urlencode
+
+    from django.urls import reverse
+
+    query = {"tab": tab, **{k: v for k, v in params.items() if v}}
+    return reverse("admissions:formation") + "?" + urlencode(query)
+
 
 @login_required
-def advancement(request):
-    """The member's own formation-advancement page: open a demande, or watch
-    the one in flight / the last decided one."""
-    from accounts.advisor import current_advisor
+def formation(request):
+    """The member's personal formation hub — a tabbed surface that gathers
+    everything about their place in the School: their Advisor and advancement
+    demandes (Formation), their tuition decision + payments (Tuition), and the
+    groups they belong to now and in the past (Groups)."""
+    return render(request, "admissions/formation.html", _formation_context(request))
 
+
+def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict:
+    """Assemble the full context for the formation hub. Bound forms may be
+    passed in so a failed POST can re-render with errors on the right tab."""
+    from accounts.advisor import current_advisor
+    from accounts.forms import AdvisorSelectForm
+
+    user = request.user
+    profile = user.profile
+    tab = request.GET.get("tab") or "formation"
+
+    advisor = current_advisor(user)
     existing = (
-        Advancement.objects.filter(member=request.user)
+        Advancement.objects.filter(member=user)
         .select_related("advisor")
         .order_by("-requested_at")
         .first()
     )
-    open_one = open_advancement_for(request.user)
-    kind = kind_for(request.user)
-    advisor = current_advisor(request.user)
+    if advisor_form is None and profile.needs_advisor:
+        advisor_form = AdvisorSelectForm(advisee=user)
 
-    if request.method == "POST":
-        if not can_open_advancement(request.user):
-            raise PermissionDenied
-        if advisor is None:
-            messages.error(
-                request, "Choose your Advisor before opening a demande."
-            )
-            return redirect("advisor_select")
-        form = AdvancementForm(request.POST, request.FILES)
-        if form.is_valid():
-            open_advancement(
-                request.user,
-                statement=form.cleaned_data["statement"],
-                palimpsest=form.cleaned_data.get("palimpsest"),
-            )
-            messages.success(
-                request,
-                "Your demande has been opened and your Advisor notified.",
-            )
-            return redirect("admissions:advancement")
-    else:
-        form = AdvancementForm()
-
-    return render(request, "admissions/advancement.html", {
-        "existing": existing,
-        "open_one": open_one,
-        "can_open": can_open_advancement(request.user),
-        "kind": kind,
-        "kind_label": Advancement.Kind(kind).label if kind else None,
+    ctx = {
+        "active_tab": tab,
         "advisor": advisor,
-        "form": form,
-    })
+        "needs_advisor": profile.needs_advisor,
+        "advisor_form": advisor_form,
+        "existing": existing,
+        "open_one": open_advancement_for(user),
+        "can_open": can_open_advancement(user),
+        "step_label": step_label_for_member(user),
+        "demande_form": demande_form if demande_form is not None else AdvancementForm(),
+        "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
+    }
+    ctx.update(_formation_tuition_context(request))
+    ctx.update(_formation_groups_context(user))
+    return ctx
+
+
+def _formation_tuition_context(request) -> dict:
+    """Tuition decision + installments + the member's own payment history and
+    the subset they can self-reconcile (provisional / ASSUMED charges)."""
+    from accounts.models import Source
+    from payments.forms import TuitionDecisionForm
+    from payments.models import Payment, TuitionEnrollment, TuitionPeriod
+
+    user = request.user
+    profile = user.profile
+    period = TuitionPeriod.current()
+    enrollment = None
+    installments = []
+    if period is not None:
+        enrollment = TuitionEnrollment.objects.filter(
+            user=user, tuition_period=period,
+        ).first()
+        if enrollment is not None:
+            installments = list(enrollment.installments.order_by("sequence"))
+
+    payments = list(Payment.objects.filter(user=user).order_by("-created_at", "-id"))
+    assumed = [p for p in payments if p.source == Source.ASSUMED]
+
+    return {
+        "owes_tuition": profile.owes_tuition,
+        "show_tuition_tab": profile.owes_tuition or bool(payments),
+        "tuition_period": period,
+        "tuition_enrollment": enrollment,
+        "tuition_installments": installments,
+        "tuition_form": TuitionDecisionForm(
+            initial={"status": enrollment.status} if enrollment else {}
+        ),
+        "tuition_stripe_status": request.GET.get("stripe"),
+        "my_payments": payments,
+        "my_assumed_payments": assumed,
+        "payment_type_choices": Payment.Type.choices,
+    }
+
+
+def _formation_groups_context(user) -> dict:
+    """The user's current and past groups: stored ``WorkgroupMembership`` rows
+    plus seminars / reading groups they attended as a paid/comped registrant."""
+    from registrations.models import Registration
+
+    current, past = [], []
+    seen: set[int] = set()
+
+    memberships = (
+        user.workgroup_memberships
+        .select_related("workgroup")
+        .order_by("workgroup__name", "-start_date")
+    )
+    for m in memberships:
+        if m.workgroup_id in seen:
+            continue
+        seen.add(m.workgroup_id)
+        entry = {
+            "workgroup": m.workgroup,
+            "kind": m.workgroup.get_kind_display(),
+            "role": m.get_role_display(),
+        }
+        (current if m.is_active else past).append(entry)
+
+    # Derived: seminars / reading groups joined via a paid or comped
+    # registration (no stored membership row).
+    regs = (
+        Registration.objects
+        .filter(user=user, status__in=(
+            Registration.Status.PAID, Registration.Status.COMPED,
+        ))
+        .select_related("event", "event__workgroup")
+    )
+    for reg in regs:
+        wg = reg.event.workgroup if reg.event_id else None
+        if wg is None or wg.id in seen:
+            continue
+        seen.add(wg.id)
+        entry = {"workgroup": wg, "kind": wg.get_kind_display(), "role": "Participant"}
+        (current if wg.is_member(user) else past).append(entry)
+
+    current.sort(key=lambda e: e["workgroup"].name.lower())
+    past.sort(key=lambda e: e["workgroup"].name.lower())
+    return {"current_groups": current, "past_groups": past}
+
+
+@login_required
+@require_POST
+def advancement(request):
+    """Open a Palimpsest / Passage / Traversée demande — the request to present
+    at the next Days of Assembly. POSTed from the Formation tab."""
+    from accounts.advisor import current_advisor
+
+    if not can_open_advancement(request.user):
+        raise PermissionDenied
+    if current_advisor(request.user) is None:
+        messages.error(request, "Choose your Advisor before opening a demande.")
+        return redirect(_formation_url("formation"))
+    form = AdvancementForm(request.POST)
+    if form.is_valid():
+        open_advancement(
+            request.user,
+            statement=form.cleaned_data.get("statement") or "",
+        )
+        messages.success(request, "Your request has been sent to your Advisor.")
+        return redirect(_formation_url("formation"))
+    return render(request, "admissions/formation.html",
+                  _formation_context(request, demande_form=form))
 
 
 @login_required
@@ -323,7 +438,7 @@ def advancement_withdraw(request, pk):
     else:
         withdraw_advancement(adv)
         messages.success(request, "Your demande has been withdrawn.")
-    return redirect("admissions:advancement")
+    return redirect(_formation_url("formation"))
 
 
 @login_required

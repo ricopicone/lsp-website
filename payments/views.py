@@ -1280,57 +1280,40 @@ def _handle_charge_refunded(charge: dict) -> None:
             ).update(status=Registration.Status.REFUNDED)
 
 
+def _tuition_tab_url(**params) -> str:
+    """The tuition tab of the member's Formation hub — where tuition lives now.
+    Extra params (e.g. ``stripe='success'``) ride along."""
+    from urllib.parse import urlencode
+
+    from django.urls import reverse
+
+    query = {"tab": "tuition", **{k: v for k, v in params.items() if v}}
+    return reverse("admissions:formation") + "?" + urlencode(query)
+
+
 @login_required
 def tuition_decision(request):
-    """Annual tuition decision page (M7.5).
+    """Record the annual tuition decision (M7.5).
 
-    Open to authenticated users whose Profile.role is in the four
-    in-training tracks (Profile.IN_TRAINING_ROLES). Posts create or
-    update a TuitionEnrollment for the current TuitionPeriod.
-
-    Shows the user their current decision status; lets them switch
-    (committed / payment plan / skipping) before the period closes.
+    The tuition surface (decision form, installments, payment history) lives on
+    the member's Formation hub. This endpoint only handles the decision form's
+    POST; every other request just redirects there.
     """
     profile = request.user.profile
-    if not profile.owes_tuition:
-        return render(
-            request, "payments/tuition_not_applicable.html",
-            {"role_display": profile.get_role_display()},
-        )
-
     period = TuitionPeriod.current()
-    if period is None:
-        return render(request, "payments/tuition_no_period.html")
 
-    enrollment = TuitionEnrollment.objects.filter(
-        user=request.user, tuition_period=period,
-    ).first()
-
-    if request.method == "POST":
+    if request.method == "POST" and profile.owes_tuition and period is not None:
         form = TuitionDecisionForm(request.POST)
         if form.is_valid():
-            status = form.cleaned_data["status"]
             with transaction.atomic():
-                enrollment, _ = TuitionEnrollment.objects.update_or_create(
+                TuitionEnrollment.objects.update_or_create(
                     user=request.user, tuition_period=period,
-                    defaults={"status": status},
+                    defaults={"status": form.cleaned_data["status"]},
                 )
-            return redirect("tuition")
-    else:
-        initial = {"status": enrollment.status} if enrollment else {}
-        form = TuitionDecisionForm(initial=initial)
-
-    installments = []
-    if enrollment is not None:
-        installments = list(enrollment.installments.order_by("sequence"))
-
-    return render(request, "payments/tuition.html", {
-        "period":       period,
-        "enrollment":   enrollment,
-        "installments": installments,
-        "form":         form,
-        "stripe_status": request.GET.get("stripe"),
-    })
+            messages.success(request, "Your tuition decision has been recorded.")
+        else:
+            messages.error(request, "Please choose one of the listed options.")
+    return redirect(_tuition_tab_url())
 
 
 @login_required
@@ -1345,19 +1328,19 @@ def tuition_pay_in_full(request):
     """
     profile = request.user.profile
     if not profile.owes_tuition:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     period = TuitionPeriod.current()
     if period is None:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     enrollment = TuitionEnrollment.objects.filter(
         user=request.user, tuition_period=period,
     ).first()
     if enrollment is None:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     if enrollment.installments.exists():
         # Already on a payment plan / has installments — direct to pay one
         # rather than minting a parallel "full" installment.
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     with transaction.atomic():
         installment = TuitionInstallment.objects.create(
             enrollment=enrollment, sequence=1,
@@ -1387,23 +1370,23 @@ def tuition_setup_plan(request):
     """
     profile = request.user.profile
     if not profile.owes_tuition:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     period = TuitionPeriod.current()
     if period is None:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     enrollment = TuitionEnrollment.objects.filter(
         user=request.user, tuition_period=period,
     ).first()
     if enrollment is None or enrollment.status != TuitionEnrollment.Status.PAYMENT_PLAN:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     if enrollment.installments.exists():
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     try:
         count = int(request.POST.get("installment_count", "0"))
     except (TypeError, ValueError):
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     if count not in (2, 9):
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
 
     schedule = _build_installment_schedule(period, count)
     with transaction.atomic():
@@ -1412,7 +1395,7 @@ def tuition_setup_plan(request):
                 enrollment=enrollment, sequence=seq,
                 due_date=due_date, amount=amount,
             )
-    return redirect("tuition")
+    return redirect(_tuition_tab_url())
 
 
 def _build_installment_schedule(
@@ -1465,7 +1448,7 @@ def tuition_pay_installment(request, installment_id: int):
         pk=installment_id, enrollment__user=request.user,
     )
     if installment.paid:
-        return redirect("tuition")
+        return redirect(_tuition_tab_url())
     with transaction.atomic():
         payment = Payment.objects.create(
             payment_type=Payment.Type.TUITION,
@@ -1477,3 +1460,35 @@ def tuition_pay_installment(request, installment_id: int):
         )
     session = create_tuition_session(payment)
     return redirect(session.url)
+
+
+@login_required
+@require_POST
+def my_payment_reconcile(request):
+    """A member re-categorizes their *own* provisional charges.
+
+    The recurring-charge import books charges it can't classify as ``ASSUMED``.
+    The treasurer reconciles these globally; this lets the member do the same
+    for their own — re-typing a selected subset and promoting them to
+    ``SELF_REPORTED`` (member-reported). Constrained to the member's own
+    ASSUMED rows, so a stale/forged id can't touch a confirmed payment."""
+    from accounts.models import Source
+
+    ids = request.POST.getlist("payment_ids")
+    new_type = request.POST.get("payment_type")
+    if not ids:
+        messages.error(request, "Select at least one payment to categorize.")
+        return redirect(_tuition_tab_url())
+    if new_type not in Payment.Type.values:
+        messages.error(request, "Choose a valid type.")
+        return redirect(_tuition_tab_url())
+
+    qs = Payment.objects.filter(
+        user=request.user, source=Source.ASSUMED, pk__in=ids,
+    )
+    n = qs.update(payment_type=new_type, source=Source.SELF_REPORTED)
+    if n:
+        messages.success(request, f"Thank you — categorized {n} payment(s).")
+    else:
+        messages.error(request, "Those payments were already categorized.")
+    return redirect(_tuition_tab_url())

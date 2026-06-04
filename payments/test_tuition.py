@@ -139,21 +139,41 @@ def test_tuition_view_requires_login(client):
 
 @pytest.mark.django_db
 def test_tuition_view_renders_for_in_training_student(client, current_period):
+    """The tuition surface lives on the Formation hub's Tuition tab now."""
     u = _mk_candidate()
     client.force_login(u)
-    resp = client.get(reverse("tuition"))
+    resp = client.get(reverse("admissions:formation") + "?tab=tuition")
     assert resp.status_code == 200
     assert current_period.name.encode() in resp.content
     assert b"Your decision" in resp.content
 
 
 @pytest.mark.django_db
-def test_tuition_view_explains_when_role_not_in_training(client):
-    u = _mk_candidate(email="analyst@x.test", role=Profile.Role.ANALYST)
+def test_tuition_endpoint_redirects_to_formation_hub(client, current_period):
+    """The legacy /tuition/ endpoint now only handles the decision POST; a GET
+    just bounces to the Formation hub's Tuition tab."""
+    u = _mk_candidate()
     client.force_login(u)
     resp = client.get(reverse("tuition"))
+    assert resp.status_code == 302
+    assert reverse("admissions:formation") in resp.url
+
+
+@pytest.mark.django_db
+def test_tuition_tab_explains_when_role_not_in_training(client, current_period):
+    """An analyst with a payment on file sees the not-applicable note, not a
+    decision form."""
+    from payments.models import Payment
+
+    u = _mk_candidate(email="analyst@x.test", role=Profile.Role.ANALYST)
+    Payment.objects.create(
+        payment_type=Payment.Type.DONATION, user=u, amount=Decimal("25"),
+        status=Payment.Status.SUCCEEDED,
+    )
+    client.force_login(u)
+    resp = client.get(reverse("admissions:formation") + "?tab=tuition")
     assert resp.status_code == 200
-    assert b"Analyst" in resp.content
+    assert b"not in a tuition-paying role" in resp.content
 
 
 @pytest.mark.django_db
@@ -185,11 +205,13 @@ def test_post_updates_existing_enrollment(client, current_period):
 
 @pytest.mark.django_db
 def test_form_rejects_staff_only_statuses(client, current_period):
-    """PAID_IN_FULL isn't student-selectable; it's reached via actual payment."""
+    """PAID_IN_FULL isn't student-selectable; it's reached via actual payment.
+    An invalid choice records no enrollment and bounces back to the hub."""
     u = _mk_candidate()
     client.force_login(u)
     resp = client.post(reverse("tuition"), {"status": "paid_in_full"})
-    assert resp.status_code == 200  # form re-renders with errors
+    assert resp.status_code == 302
+    assert not TuitionEnrollment.objects.filter(user=u).exists()
 
 
 # --- Backfill migration -------------------------------------------------

@@ -99,9 +99,20 @@ def test_in_training_member_selects_advisor(client):
     assert current_advisor(advisee) == analyst
 
 
-def test_non_in_training_sees_notice(client):
-    member = _u("v2@x.test", role=Profile.Role.ANALYST)
+def test_advisor_select_redirects_to_formation_hub(client):
+    """The Advisor picker lives on the Formation hub now — bare GETs land there."""
+    member = _u("v1b@x.test", role=Profile.Role.CANDIDATE)
     client.force_login(member)
     resp = client.get(reverse("advisor_select"))
+    assert resp.status_code == 302
+    assert reverse("admissions:formation") in resp.url
+
+
+def test_non_in_training_sees_notice(client):
+    """An analyst on the Formation hub sees that Advisors are for members in
+    formation — not an Advisor picker."""
+    member = _u("v2@x.test", role=Profile.Role.ANALYST)
+    client.force_login(member)
+    resp = client.get(reverse("admissions:formation"))
     assert resp.status_code == 200
     assert b"chosen by members in formation" in resp.content
