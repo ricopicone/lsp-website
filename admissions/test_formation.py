@@ -89,6 +89,8 @@ def test_formation_page_shows_tabs_for_candidate(client):
     body = client.get(reverse("admissions:formation")).content
     assert b"My Formation" in body
     assert b"Formation" in body and b"Tuition" in body and b"Groups" in body
+    # Tabs are real, shareable ?tab= links (not client-only state).
+    assert b'href="?tab=tuition"' in body and b'href="?tab=groups"' in body
 
 
 # ---- groups tab ------------------------------------------------------------

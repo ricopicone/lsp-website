@@ -294,7 +294,6 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
 
     user = request.user
     profile = user.profile
-    tab = request.GET.get("tab") or "formation"
 
     advisor = current_advisor(user)
     existing = (
@@ -315,7 +314,6 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     )
 
     ctx = {
-        "active_tab": tab,
         "advisor": advisor,
         "needs_advisor": profile.needs_advisor,
         "advisor_form": advisor_form,
@@ -329,6 +327,17 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     }
     ctx.update(_formation_money_context(request))
     ctx.update(_formation_groups_context(user))
+
+    # URL-addressable tabs: each is its own `?tab=<key>` link (shareable). The
+    # Tuition & Dues tab only appears when there's something to show.
+    tabs = [("formation", "Formation")]
+    if ctx["show_money_tab"]:
+        tabs.append(("tuition", "Tuition & Dues"))
+    tabs.append(("groups", "Groups"))
+    keys = {k for k, _ in tabs}
+    tab = request.GET.get("tab") or "formation"
+    ctx["formation_tabs"] = tabs
+    ctx["active_tab"] = tab if tab in keys else "formation"
     return ctx
 
 
