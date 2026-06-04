@@ -1491,64 +1491,46 @@ def tuition_pay_installment(request, installment_id: int):
 
 @login_required
 @require_POST
-def my_payment_reconcile(request):
-    """A member re-categorizes their *own* provisional charges.
-
-    The recurring-charge import books charges it can't classify as ``ASSUMED``.
-    The treasurer reconciles these globally; this lets the member do the same
-    for their own — re-typing a selected subset and promoting them to
-    ``SELF_REPORTED`` (member-reported). Constrained to the member's own
-    ASSUMED rows, so a stale/forged id can't touch a confirmed payment."""
+def my_payments_update(request):
+    """A member edits their *own* payments from the My Payments table: the
+    **type** (re-categorizing e.g. a provisional/ASSUMED charge — promoted to
+    ``SELF_REPORTED``), a **note** the treasurer can see (``member_note``), and —
+    for tuition payments — the **academic year** it counts toward
+    (``tuition_period``, resolving an ambiguous August date). Per-row fields
+    ``type_<id>`` / ``note_<id>`` / ``period_<id>``; constrained to the member's
+    own payments so a stale/forged id can't touch anyone else's."""
     from accounts.models import Source
 
-    ids = request.POST.getlist("payment_ids")
-    new_type = request.POST.get("payment_type")
-    if not ids:
-        messages.error(request, "Select at least one payment to categorize.")
-        return redirect(_tuition_tab_url())
-    if new_type not in Payment.Type.values:
-        messages.error(request, "Choose a valid type.")
-        return redirect(_tuition_tab_url())
-
-    qs = Payment.objects.filter(
-        user=request.user, source=Source.ASSUMED, pk__in=ids,
-    )
-    n = qs.update(payment_type=new_type, source=Source.SELF_REPORTED)
-    if n:
-        messages.success(request, f"Thank you — categorized {n} payment(s).")
-    else:
-        messages.error(request, "Those payments were already categorized.")
-    return redirect(_tuition_tab_url())
-
-
-@login_required
-@require_POST
-def my_payment_assign_tuition(request):
-    """A member assigns each of their *own* tuition payments to an academic year
-    (resolving e.g. an August payment's ambiguous AY) and adds a note the
-    treasurer can see. Sets ``tuition_period`` + ``member_note``; constrained to
-    the member's own tuition payments."""
     periods = {str(tp.id): tp for tp in TuitionPeriod.objects.all()}
-    tuition = Payment.objects.filter(
-        user=request.user, payment_type=Payment.Type.TUITION
-    )
     changed = 0
-    for p in tuition:
-        if f"period_{p.id}" not in request.POST:
-            continue
+    for p in Payment.objects.filter(user=request.user):
         fields = []
-        new_period = periods.get(request.POST.get(f"period_{p.id}") or "")
-        new_period_id = new_period.id if new_period else None
-        if p.tuition_period_id != new_period_id:
-            p.tuition_period_id = new_period_id
-            fields.append("tuition_period")
-        note = (request.POST.get(f"note_{p.id}") or "").strip()[:1000]
-        if p.member_note != note:
-            p.member_note = note
-            fields.append("member_note")
+
+        new_type = request.POST.get(f"type_{p.id}")
+        if new_type in Payment.Type.values and new_type != p.payment_type:
+            p.payment_type = new_type
+            p.source = Source.SELF_REPORTED
+            fields += ["payment_type", "source"]
+
+        note_key = f"note_{p.id}"
+        if note_key in request.POST:
+            note = (request.POST.get(note_key) or "").strip()[:1000]
+            if p.member_note != note:
+                p.member_note = note
+                fields.append("member_note")
+
+        period_key = f"period_{p.id}"
+        if period_key in request.POST:
+            new_period = periods.get(request.POST.get(period_key) or "")
+            new_period_id = new_period.id if new_period else None
+            if p.tuition_period_id != new_period_id:
+                p.tuition_period_id = new_period_id
+                fields.append("tuition_period")
+
         if fields:
             p.save(update_fields=fields)
             changed += 1
+
     messages.success(
         request,
         f"Saved {changed} payment update(s)." if changed else "No changes to save.",

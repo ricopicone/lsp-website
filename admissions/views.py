@@ -423,9 +423,8 @@ def _formation_money_context(request) -> dict:
     """Tuition + dues + the member's own payment history (all on one tab).
 
     Tuition: the four-year progress, this year's decision/installments. Dues:
-    this year's obligation + status. Payments: full history + the provisional
-    (ASSUMED) subset the member can self-categorize."""
-    from accounts.models import Source
+    this year's obligation + status. Payments: full history (editable type/note,
+    and academic year for tuition) from the My Payments table."""
     from payments.dues import is_dues_obligated, user_paid_for_period
     from payments.forms import TuitionDecisionForm
     from payments.models import (
@@ -458,16 +457,18 @@ def _formation_money_context(request) -> dict:
     )
     dues_paid = user_paid_for_period(user, dues_period)
 
-    # --- Payments (all) ---
-    payments = list(Payment.objects.filter(user=user).order_by("-created_at", "-id"))
-    assumed = [p for p in payments if p.source == Source.ASSUMED]
+    # --- Payments (all) — one editable table (type + note + tuition AY) ---
+    payments = list(
+        Payment.objects.filter(user=user)
+        .select_related("registration__event", "dues_period", "tuition_period")
+        .order_by("-created_at", "-id")
+    )
 
-    # Tuition payments the member can assign to an academic year. Pre-select the
-    # assigned period, else the AY the payment date falls in.
+    # For tuition rows, pre-select the assigned AY, else the AY the payment date
+    # falls in (so the "For" column's year picker starts on the right guess).
     from accounts.membership import current_academic_year_start as ay_of
     tuition_periods = list(TuitionPeriod.objects.order_by("-start_date"))
     period_id_by_ay = {ay_of(tp.start_date): tp.id for tp in tuition_periods}
-    my_tuition_payments = []
     for p in payments:
         if p.payment_type != Payment.Type.TUITION:
             continue
@@ -475,7 +476,6 @@ def _formation_money_context(request) -> dict:
         p.selected_period_id = p.tuition_period_id or (
             period_id_by_ay.get(ay_of(when.date())) if when else None
         )
-        my_tuition_payments.append(p)
 
     show_money_tab = (
         profile.owes_tuition or dues_obligated or bool(payments)
@@ -501,8 +501,6 @@ def _formation_money_context(request) -> dict:
         "dues_paid": dues_paid,
         # payments
         "my_payments": payments,
-        "my_assumed_payments": assumed,
-        "my_tuition_payments": my_tuition_payments,
         "tuition_periods": tuition_periods,
         "payment_type_choices": Payment.Type.choices,
     }
@@ -538,13 +536,18 @@ def _tuition_progress(user) -> dict:
         Payment.objects
         .filter(user=user, payment_type=Payment.Type.TUITION,
                 status=Payment.Status.SUCCEEDED)
-        .select_related("tuition_installment__enrollment__tuition_period")
+        .select_related(
+            "tuition_period", "tuition_installment__enrollment__tuition_period",
+        )
     )
     for p in payments:
-        period = None
-        inst = p.tuition_installment
-        if inst is not None and inst.enrollment_id:
-            period = inst.enrollment.tuition_period
+        # Prefer the member's explicit AY assignment, then the installment's
+        # period, then the payment date.
+        period = p.tuition_period
+        if period is None:
+            inst = p.tuition_installment
+            if inst is not None and inst.enrollment_id:
+                period = inst.enrollment.tuition_period
         ay = ay_of(period.start_date) if period else ay_of(p.paid_at or p.created_at)
         if period is not None:
             period_by_ay.setdefault(ay, period)

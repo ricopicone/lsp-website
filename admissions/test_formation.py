@@ -116,9 +116,9 @@ def test_groups_tab_lists_current_and_past(client):
     assert b"My current groups" in body and b"My past groups" in body
 
 
-# ---- self-reconcile of own provisional payments ---------------------------
+# ---- editable My Payments table (type / note / AY) -------------------------
 
-def test_member_reconciles_own_assumed_payment(client):
+def test_member_edits_type_and_note_on_own_payment(client):
     from payments.models import Payment
 
     member = _user("r@x.test", role=Profile.Role.CANDIDATE)
@@ -132,18 +132,51 @@ def test_member_reconciles_own_assumed_payment(client):
         status=Payment.Status.SUCCEEDED, source=Source.ASSUMED,
     )
     client.force_login(member)
-    resp = client.post(reverse("my_payment_reconcile"), {
-        "payment_ids": [str(mine.id), str(theirs.id)],  # theirs must be ignored
-        "payment_type": "donation",
+    resp = client.post(reverse("my_payments_update"), {
+        f"type_{mine.id}": "donation",
+        f"note_{mine.id}": "Actually a donation.",
+        # An attempt to edit someone else's payment is ignored (not in the qs).
+        f"type_{theirs.id}": "donation",
     })
     assert resp.status_code == 302
     mine.refresh_from_db()
     theirs.refresh_from_db()
     assert mine.payment_type == "donation"
     assert mine.source == Source.SELF_REPORTED
-    # A member can't touch someone else's payment even by passing its id.
-    assert theirs.payment_type == "tuition"
+    assert mine.member_note == "Actually a donation."
+    assert theirs.payment_type == "tuition"  # untouched
     assert theirs.source == Source.ASSUMED
+
+
+def test_my_payments_shows_event_for_registration(client):
+    """The 'For' column links to the event a registration payment is for."""
+    from datetime import date as _date
+
+    from events.models import Audience, Event, PriceTier
+    from payments.models import Payment
+    from registrations.models import Registration
+
+    member = _user("regpay@x.test", role=Profile.Role.MEMBER)
+    event = Event.objects.create(
+        title="Working with Masochism", slug="masochism",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=_date(2030, 9, 1), end_date=_date(2030, 9, 1), published=True,
+    )
+    tier = PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal("50.00"),
+    )
+    reg = Registration.objects.create(
+        user=member, event=event, price_tier=tier,
+        quoted_amount=Decimal("50.00"), status=Registration.Status.PAID,
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg, user=member,
+        amount=Decimal("50.00"), status=Payment.Status.SUCCEEDED,
+    )
+    client.force_login(member)
+    body = client.get(reverse("admissions:formation") + "?tab=tuition").content.decode()
+    assert "Working with Masochism" in body
+    assert reverse("events:detail", args=[event.slug]) in body
 
 
 # ---- step trace + linking the Work via the Works flow ----------------------

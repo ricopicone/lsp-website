@@ -1752,7 +1752,7 @@ def test_member_assigns_tuition_period_and_note(client):
         status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
     )
     client.force_login(u)
-    client.post(reverse("my_payment_assign_tuition"), {
+    client.post(reverse("my_payments_update"), {
         f"period_{pay.id}": str(p2022.id), f"note_{pay.id}": "This was for 22-23.",
         f"period_{other_pay.id}": str(p2022.id),  # not the member's — ignored
     })

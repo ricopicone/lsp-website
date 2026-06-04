@@ -344,101 +344,68 @@
       {% endif %}
     </section>
 
-    {# ---- My Payments + self-reconcile ---- #}
+    {# ---- My Payments (editable: type, AY for tuition, note) ---- #}
     <section class="space-y-3">
       <h2 class="font-serif text-2xl text-base-content">My Payments</h2>
       {% if my_payments %}
-      <table class="table table-sm">
-        <thead>
-          <tr><th>Date</th><th>Type</th><th class="text-right">Amount</th><th>Status</th><th>Method</th></tr>
-        </thead>
-        <tbody>
-          {% for p in my_payments %}
-          <tr>
-            <td class="whitespace-nowrap">{{ p.paid_at|default:p.created_at|date:"M j, Y" }}</td>
-            <td>{{ p.get_payment_type_display }}{% if p.source == 'assumed' %} <span class="badge badge-ghost badge-xs">provisional</span>{% endif %}</td>
-            <td class="text-right whitespace-nowrap">${{ p.amount }}</td>
-            <td>{{ p.get_status_display }}</td>
-            <td>{{ p.get_method_display }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <p class="text-sm text-base-content/60">No payments on record yet.</p>
-      {% endif %}
-
-      {% if my_tuition_payments %}
-      <div class="rounded-lg border border-base-300 p-5 space-y-3">
-        <h3 class="font-medium text-base-content">Assign your tuition payments to academic years</h3>
-        <p class="text-sm text-base-content/70">
-          We've guessed each tuition payment's academic year from its date — but
-          August payments are ambiguous (the year runs Sep–Aug). Set the right
-          year and add a note if it helps. The treasurer sees both.
-        </p>
-        <form method="post" action="{% url 'my_payment_assign_tuition' %}" class="space-y-2">
-          {% csrf_token %}
-          <table class="table table-sm">
-            <thead><tr><th>Date</th><th class="text-right">Amount</th><th>Academic year</th><th>Note (optional)</th></tr></thead>
-            <tbody>
-              {% for p in my_tuition_payments %}
-              <tr>
-                <td class="whitespace-nowrap">{{ p.paid_at|default:p.created_at|date:"M j, Y" }}</td>
-                <td class="text-right whitespace-nowrap">${{ p.amount }}</td>
-                <td>
-                  <select name="period_{{ p.id }}" class="select select-bordered select-sm">
-                    <option value="">— unassigned —</option>
+      <p class="text-sm text-base-content/70">
+        Not sure a charge is categorized right? Set its type, and for tuition
+        choose the academic year it counts toward. Add a note for the treasurer
+        if it helps. Provisional charges came from our records and are a guess.
+      </p>
+      <form method="post" action="{% url 'my_payments_update' %}" class="space-y-3">
+        {% csrf_token %}
+        <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Date</th><th>For</th><th>Type</th>
+              <th class="text-right">Amount</th><th>Status</th><th>Method</th><th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in my_payments %}
+            <tr>
+              <td class="whitespace-nowrap">{{ p.paid_at|default:p.created_at|date:"M j, Y" }}</td>
+              <td>
+                {% if p.payment_type == 'tuition' %}
+                  <select name="period_{{ p.id }}" class="select select-bordered select-xs">
+                    <option value="">— year? —</option>
                     {% for tp in tuition_periods %}
                     <option value="{{ tp.id }}" {% if tp.id == p.selected_period_id %}selected{% endif %}>{{ tp.name }}</option>
                     {% endfor %}
                   </select>
-                </td>
-                <td><input type="text" name="note_{{ p.id }}" value="{{ p.member_note }}" maxlength="1000" class="input input-bordered input-sm w-full" placeholder="optional"></td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-          <button type="submit" class="btn btn-primary btn-sm">Save tuition years</button>
-        </form>
-      </div>
-      {% endif %}
-
-      {% if my_assumed_payments %}
-      <div class="rounded-lg border border-warning/30 bg-warning/5 p-5 space-y-3">
-        <h3 class="font-medium text-base-content">Help us categorize these charges</h3>
-        <p class="text-sm text-base-content/70">
-          We recorded the payments below from our records but aren't sure what each
-          was for. Tick the ones that belong together, choose what they were, and
-          save — this helps the treasurer keep your account straight.
-        </p>
-        <form method="post" action="{% url 'my_payment_reconcile' %}" class="space-y-3">
-          {% csrf_token %}
-          <table class="table table-sm">
-            <thead><tr><th></th><th>Date</th><th class="text-right">Amount</th><th>Currently</th></tr></thead>
-            <tbody>
-              {% for p in my_assumed_payments %}
-              <tr>
-                <td><input type="checkbox" name="payment_ids" value="{{ p.id }}" class="checkbox checkbox-sm"></td>
-                <td class="whitespace-nowrap">{{ p.paid_at|default:p.created_at|date:"M j, Y" }}</td>
-                <td class="text-right whitespace-nowrap">${{ p.amount }}</td>
-                <td>{{ p.get_payment_type_display }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-          <div class="flex flex-wrap items-end gap-3">
-            <label class="text-sm">
-              <span class="block text-base-content/70 mb-1">These payments were for</span>
-              <select name="payment_type" class="select select-bordered select-sm">
-                {% for value, label in payment_type_choices %}
-                <option value="{{ value }}">{{ label }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <button type="submit" class="btn btn-primary btn-sm">Save categorization</button>
-          </div>
-        </form>
-      </div>
+                {% elif p.registration and p.registration.event %}
+                  <a href="{% url 'events:detail' p.registration.event.slug %}" class="link link-hover text-primary">{{ p.registration.event.title }}</a>
+                {% elif p.payment_type == 'dues' %}
+                  Dues{% if p.dues_period %} — {{ p.dues_period.name }}{% endif %}
+                {% elif p.payment_type == 'donation' %}
+                  Donation
+                {% else %}
+                  <span class="text-base-content/40">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <select name="type_{{ p.id }}" class="select select-bordered select-xs">
+                  {% for value, label in payment_type_choices %}
+                  <option value="{{ value }}" {% if value == p.payment_type %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                {% if p.source == 'assumed' %}<span class="badge badge-ghost badge-xs ml-1">provisional</span>{% endif %}
+              </td>
+              <td class="text-right whitespace-nowrap">${{ p.amount }}</td>
+              <td>{{ p.get_status_display }}</td>
+              <td>{{ p.get_method_display }}</td>
+              <td><input type="text" name="note_{{ p.id }}" value="{{ p.member_note }}" maxlength="1000" class="input input-bordered input-xs w-40" placeholder="optional"></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+      </form>
+      {% else %}
+      <p class="text-sm text-base-content/60">No payments on record yet.</p>
       {% endif %}
     </section>
 
