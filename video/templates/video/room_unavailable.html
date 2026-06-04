@@ -1,0 +1,13 @@
+{% extends "core/base.html" %}
+{% block title %}Meeting room — {{ event.title|default:workgroup.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto px-4 py-10 space-y-4 text-center">
+  <h1 class="font-serif text-2xl text-base-content">Meeting room unavailable</h1>
+  <p class="text-base-content/70">
+    The in-site video room isn't available right now. If your group's organizer
+    posted joining details, you'll find them on the event or group page.
+  </p>
+  <a href="{{ back_url }}" class="btn btn-primary btn-sm">← Back</a>
+</div>
+{% endblock %}

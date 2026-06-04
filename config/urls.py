@@ -85,6 +85,9 @@ urlpatterns = [
          name="staff_aphorism_delete"),
     path("admin-tools/aphorisms/<int:pk>/toggle/", _staff_views.aphorism_toggle,
          name="staff_aphorism_toggle"),
+    # Video rooms: /events/<slug>/room/ and /groups/<slug>/room/. Mounted
+    # before the events/groups includes so the room routes win.
+    path("", include("video.urls")),
     path("events/", include("events.urls")),
     path("documents/", include("documents.urls")),
     path("works/", include("works.urls")),

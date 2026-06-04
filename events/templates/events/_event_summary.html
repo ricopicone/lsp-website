@@ -79,6 +79,17 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
 </section>
 {% endif %}
 
+{# ---------- In-site meeting room (paid users only) ---------- #}
+{% if has_paid_registration and daily_enabled %}
+<div class="rounded-lg border border-base-300 bg-base-100 p-4 flex items-center justify-between gap-3">
+  <div>
+    <h3 class="font-medium">Meeting room</h3>
+    <p class="text-sm text-base-content/60">Join the seminar in your browser — no app to install.</p>
+  </div>
+  <a href="{% url 'video:event_room' event.slug %}" class="btn btn-primary btn-sm">Join the meeting room</a>
+</div>
+{% endif %}
+
 {# ---------- Access details (paid users only) ---------- #}
 {% if has_paid_registration and event.access_info %}
 <div role="alert" class="alert alert-success">

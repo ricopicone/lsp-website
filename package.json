@@ -6,9 +6,12 @@
   "scripts": {
     "build:css": "tailwindcss -i ./assets/css/input.css -o ./static/css/site.css --minify",
     "watch:css": "tailwindcss -i ./assets/css/input.css -o ./static/css/site.css --watch",
-    "build:js": "esbuild assets/js/doc-editor.src.js --bundle --minify --format=iife --outfile=static/js/vendor/doc-editor.js"
+    "build:js": "npm run build:js:doc && npm run build:js:daily",
+    "build:js:doc": "esbuild assets/js/doc-editor.src.js --bundle --minify --format=iife --outfile=static/js/vendor/doc-editor.js",
+    "build:js:daily": "esbuild assets/js/daily.src.js --bundle --minify --format=iife --outfile=static/js/vendor/daily.js"
   },
   "devDependencies": {
+    "@daily-co/daily-js": "^0.90.0",
     "@tailwindcss/cli": "^4.0.0",
     "@tiptap/core": "^2.27.2",
     "@tiptap/extension-link": "^2.27.2",

@@ -53,7 +53,9 @@ running the dev server, or run `npm run watch:css` in a second terminal.
 The Work-tab document editor's TipTap bundle is **vendored** (no runtime
 CDN): `assets/js/doc-editor.src.js` is bundled by esbuild to
 `static/js/vendor/doc-editor.js`, which **is** committed. After editing the
-source, run `npm run build:js` and commit the rebuilt bundle.
+source, run `npm run build:js` and commit the rebuilt bundle. The Daily.co
+video client is vendored the same way (`assets/js/daily.src.js` →
+`static/js/vendor/daily.js`); `npm run build:js` rebuilds both.
 `base.html` links `{% static 'css/site.css' %}` and sets `data-theme="silk"`
 (light) with `abyss` (dark) auto-applied via `prefers-color-scheme` and a
 manual toggle. **Authoring rule: use DaisyUI semantic tokens
@@ -79,6 +81,7 @@ parletre/       Parlêtre members-only discussion board (MEM-3, M13.5)      <- P
 workgroups/     shared Workgroup layer (roster+channel+works+files)        <- Phase 2
 cartels/        Cartels (CART-1/2/3), built on the Workgroup layer         <- Phase 2
 workinggroups/  Working groups, built on the Workgroup layer               <- Phase 2
+video/          Daily.co in-site meeting rooms (one per Workgroup)          <- Phase 2
 ```
 
 - Settings are split by environment. `DJANGO_SETTINGS_MODULE` defaults to

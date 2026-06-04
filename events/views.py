@@ -65,6 +65,8 @@ def event_summary_context(event, user) -> dict:
             Registration.Status.COMPED,
         )
     )
+    from video.services import daily_enabled
+
     return {
         "event": event,
         "sessions": event.sessions.order_by("start_at"),
@@ -73,6 +75,7 @@ def event_summary_context(event, user) -> dict:
         ),
         "user_registration": user_registration,
         "has_paid_registration": has_paid_registration,
+        "daily_enabled": daily_enabled(),
     }
 
 

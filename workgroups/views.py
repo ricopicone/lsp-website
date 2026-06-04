@@ -237,6 +237,8 @@ def workgroup_detail(request, slug):
     # the sole remaining lead.
     can_leave = wg.can_leave(request.user)
 
+    from video.services import daily_enabled as _daily_enabled
+
     context = {
         "workgroup": wg,
         "can_view_content": can_view,
@@ -255,6 +257,7 @@ def workgroup_detail(request, slug):
         "can_edit_offering": can_edit_offering,
         "can_join": can_join,
         "can_leave": can_leave,
+        "daily_enabled": _daily_enabled(),
     }
     # Compose kind-specific UI without importing the concrete app: reach the
     # attached object via its reverse accessor and ask it for its viewer state.
