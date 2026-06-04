@@ -406,35 +406,72 @@ def _formation_money_context(request) -> dict:
 
 def _tuition_progress(user) -> dict:
     """The member's progress toward the four years of tuition required for full
-    standing. Each *started* (non-skipping) enrollment is one of the four
-    "slots", with that year's amount as the goal and paid installments as
-    progress; a partially-paid year counts its remainder as still owed. Years
-    not yet started are projected at the current tuition rate so there's always
-    a four-slot goal to fill."""
-    from payments.models import TuitionEnrollment, TuitionPeriod
+    standing.
+
+    A year is "started" if the member has a non-skipping enrollment *or* any
+    successful tuition payment dated to it. Progress is driven by **actual
+    SUCCEEDED tuition payments** — not installment flags — so ledger-imported,
+    Stripe-imported, reconciled, and offline payments all count, even when no
+    ``TuitionInstallment`` was ever created. Each started year is one of the
+    four slots (goal = that year's amount; a partially-paid year counts its
+    remainder as still owed); years not yet started are projected at the
+    current rate so there's always a four-slot goal to fill."""
+    from payments.models import Payment, TuitionEnrollment, TuitionPeriod
 
     required = 4
-    enrollments = list(
-        TuitionEnrollment.objects
-        .filter(user=user)
+
+    def ay_of(d):
+        """Academic-year start year for a date (the AY begins in September)."""
+        return d.year if d.month >= 9 else d.year - 1
+
+    # Goal + name per academic year, and which years count as started.
+    period_by_ay: dict[int, object] = {}
+    paid_by_ay: dict[int, Decimal] = {}
+
+    # 1) Successful tuition payments → paid, bucketed by academic year (via the
+    #    linked period when present, else the payment date).
+    payments = (
+        Payment.objects
+        .filter(user=user, payment_type=Payment.Type.TUITION,
+                status=Payment.Status.SUCCEEDED)
+        .select_related("tuition_installment__enrollment__tuition_period")
+    )
+    for p in payments:
+        period = None
+        inst = p.tuition_installment
+        if inst is not None and inst.enrollment_id:
+            period = inst.enrollment.tuition_period
+        ay = ay_of(period.start_date) if period else ay_of(p.paid_at or p.created_at)
+        if period is not None:
+            period_by_ay.setdefault(ay, period)
+        paid_by_ay[ay] = paid_by_ay.get(ay, Decimal("0")) + p.amount
+
+    # 2) Non-skipping enrollments mark a year started (even if nothing paid yet).
+    for enr in (
+        TuitionEnrollment.objects.filter(user=user)
         .exclude(status=TuitionEnrollment.Status.SKIPPING)
         .select_related("tuition_period")
-        .prefetch_related("installments")
-        .order_by("tuition_period__start_date")
+    ):
+        ay = ay_of(enr.tuition_period.start_date)
+        period_by_ay.setdefault(ay, enr.tuition_period)
+        paid_by_ay.setdefault(ay, Decimal("0"))
+
+    current = (
+        TuitionPeriod.current()
+        or TuitionPeriod.objects.order_by("-start_date").first()
     )
+    rate = (current.tuition_amount if current else None) or Decimal("0")
 
     slots = []
     total_paid = Decimal("0")
     total_goal = Decimal("0")
-    for enr in enrollments[:required]:
-        goal = enr.tuition_period.tuition_amount or Decimal("0")
-        paid = sum(
-            (i.amount for i in enr.installments.all() if i.paid), Decimal("0")
-        )
-        paid = min(paid, goal) if goal else paid
+    for ay in sorted(paid_by_ay)[:required]:
+        period = period_by_ay.get(ay)
+        goal = (period.tuition_amount if period else rate) or Decimal("0")
+        paid = min(paid_by_ay[ay], goal) if goal else paid_by_ay[ay]
         pct = int(paid / goal * 100) if goal else 0
         slots.append({
-            "label": enr.tuition_period.name,
+            "label": period.name if period else f"{ay}–{ay + 1}",
             "goal": goal, "paid": paid, "remaining": max(goal - paid, Decimal("0")),
             "pct": pct, "projected": False,
         })
@@ -442,11 +479,6 @@ def _tuition_progress(user) -> dict:
         total_goal += goal
 
     started = len(slots)
-    current = (
-        TuitionPeriod.current()
-        or TuitionPeriod.objects.order_by("-start_date").first()
-    )
-    rate = (current.tuition_amount if current else None) or Decimal("0")
     for _ in range(started, required):
         slots.append({
             "label": "Future year", "goal": rate, "paid": Decimal("0"),

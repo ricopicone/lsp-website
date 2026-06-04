@@ -3,7 +3,7 @@ tuition + groups on one tabbed page)."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 import pytest
@@ -203,7 +203,7 @@ def test_cannot_upload_to_another_members_advancement(client):
 
 def test_tuition_progress_counts_paid_and_projects_to_four_years(current_period):
     from admissions.views import _tuition_progress
-    from payments.models import TuitionInstallment
+    from payments.models import Payment, TuitionInstallment
 
     member = _user("prog@x.test", role=Profile.Role.CANDIDATE)
     enr = TuitionEnrollment.objects.create(
@@ -212,12 +212,16 @@ def test_tuition_progress_counts_paid_and_projects_to_four_years(current_period)
     )
     full = current_period.tuition_amount
     half = (full / 2).quantize(Decimal("0.01"))
-    TuitionInstallment.objects.create(
+    inst = TuitionInstallment.objects.create(
         enrollment=enr, sequence=1, due_date=current_period.start_date,
         amount=half, paid=True,
     )
     TuitionInstallment.objects.create(
         enrollment=enr, sequence=2, due_date=current_period.start_date, amount=full - half,
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=member, amount=half,
+        status=Payment.Status.SUCCEEDED, tuition_installment=inst,
     )
     ctx = _tuition_progress(member)
     assert ctx["tuition_years_started"] == 1
@@ -225,6 +229,27 @@ def test_tuition_progress_counts_paid_and_projects_to_four_years(current_period)
     assert ctx["tuition_total_paid"] == half
     # Goal = this year's amount + 3 projected years at the current rate.
     assert ctx["tuition_total_goal"] == full * 4
+
+
+def test_tuition_progress_counts_payments_without_installments(current_period):
+    """The bug fix: a SUCCEEDED tuition payment with no TuitionInstallment
+    (ledger/Stripe import, reconcile, offline) still counts toward progress."""
+    from admissions.views import _tuition_progress
+    from payments.models import Payment
+
+    member = _user("noinst@x.test", role=Profile.Role.CANDIDATE)
+    # No enrollment, no installment — just a tuition payment dated to this year.
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=member,
+        amount=current_period.tuition_amount,
+        status=Payment.Status.SUCCEEDED,
+        paid_at=timezone.make_aware(
+            datetime.combine(current_period.start_date, time(12, 0))
+        ),
+    )
+    ctx = _tuition_progress(member)
+    assert ctx["tuition_years_started"] == 1
+    assert ctx["tuition_total_paid"] == current_period.tuition_amount
     assert sum(1 for s in ctx["tuition_slots"] if s["projected"]) == 3
 
 
