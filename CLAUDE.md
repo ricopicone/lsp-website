@@ -399,6 +399,14 @@ Phase 2 plan for milestone IDs):**
   row are the lockout escape hatches). See `email-auth-2fa` memory.
 - **Stripe credentials cutover** from rico's business account to the LSP's
   (Garrett's) once that account is ready.
+- **SES bounce/complaint handling (someday-soon, post-launch hardening).** Now
+  that SES is out of the sandbox and sends to real members, add a configuration
+  set with an SNS event destination for `Bounce` + `Complaint` (also gives the
+  per-message logging we currently lack). Subscribe an endpoint so hard bounces /
+  complaints are visible and can suppress/flag the member address. Not urgent —
+  SES's account-level suppression list is on by default and the audience is ~80
+  curated addresses — but expected of a production sender. See
+  `ses-bounce-complaint-handling` memory.
 
 ## Visual identity (deferred to Phase 2)
 
