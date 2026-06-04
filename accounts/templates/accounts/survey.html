@@ -63,8 +63,9 @@
       <div>
         <h2 class="font-medium text-base-content">Your years at LSP</h2>
         <p class="text-sm text-base-content/60">
-          Check the years you paid. Leave blank for years you skipped or weren't
-          enrolled — don't sweat exactness, we verify against records where we can.
+          For each year, mark whether you paid tuition in <strong>full</strong>, paid
+          <strong>some</strong>, or not that year — and check dues. Pre-filled from
+          our records; don't sweat exactness, a best guess is fine.
         </p>
       </div>
       <div class="overflow-x-auto">
@@ -72,20 +73,25 @@
           <thead>
             <tr>
               <th>Academic year</th>
-              <th class="text-center">Paid tuition</th>
+              <th class="text-center">Tuition</th>
               <th class="text-center">Paid dues</th>
             </tr>
           </thead>
           <tbody>
             {% for r in rows %}
             <tr>
-              <td class="whitespace-nowrap">{{ r.label }}</td>
+              <td class="whitespace-nowrap align-top pt-3">{{ r.label }}</td>
               <td class="text-center">
                 {% if r.has_tuition %}
-                <input type="checkbox" name="tuition_{{ r.ay }}" class="checkbox checkbox-sm" data-tuition {% if r.tuition_checked %}checked{% endif %}>
+                <div class="flex items-center justify-center gap-3 text-xs">
+                  <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="tuition_{{ r.ay }}" value="full" class="radio radio-xs" data-tuition-radio data-tuition-full {% if r.tuition_state == 'full' %}checked{% endif %}> Full</label>
+                  <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="tuition_{{ r.ay }}" value="partial" class="radio radio-xs" data-tuition-radio {% if r.tuition_state == 'partial' %}checked{% endif %}> Some</label>
+                  <label class="flex items-center gap-1 cursor-pointer text-base-content/50"><input type="radio" name="tuition_{{ r.ay }}" value="" class="radio radio-xs" data-tuition-radio {% if not r.tuition_state %}checked{% endif %}> —</label>
+                </div>
+                {% if r.tuition_paid %}<div class="text-[10px] text-base-content/45 mt-0.5">${{ r.tuition_paid|floatformat:0 }} of ${{ r.tuition_full|floatformat:0 }} on record</div>{% endif %}
                 {% else %}<span class="text-base-content/25">—</span>{% endif %}
               </td>
-              <td class="text-center">
+              <td class="text-center align-top pt-3">
                 {% if r.has_dues %}
                 <input type="checkbox" name="dues_{{ r.ay }}" class="checkbox checkbox-sm" {% if r.dues_checked %}checked{% endif %}>
                 {% else %}<span class="text-base-content/25">—</span>{% endif %}
@@ -97,8 +103,40 @@
       </div>
       <p class="text-xs text-base-content/60">
         Tuition: students owe four years total — you've marked
-        <strong><span id="tuition-count">{{ tuition_prechecked }}</span> of 4</strong> so far.
+        <strong><span id="tuition-count">{{ tuition_prechecked }}</span> of 4</strong> paid in full so far.
       </p>
+    </section>
+    {% endif %}
+
+    {% comment %}Section — formation steps (role-dependent).{% endcomment %}
+    {% if milestones %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-3">
+      <h2 class="font-medium text-base-content">Your formation steps</h2>
+      <p class="text-sm text-base-content/60">Roughly what year did each happen? A guess is fine.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {% for m in milestones %}
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ m.label }} — year</label>
+          <input type="number" name="milestone_{{ m.key }}" value="{{ m.value }}"
+                 min="1970" max="2100" placeholder="e.g. 2019"
+                 class="input input-bordered w-full">
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% comment %}Section — advisor (in-training members).{% endcomment %}
+    {% if needs_advisor %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-3">
+      <h2 class="font-medium text-base-content">Your advisor</h2>
+      <p class="text-sm text-base-content/60">Who is your current advisor (an Analyst of the School)?</p>
+      <select name="advisor" class="select select-bordered w-full sm:max-w-sm">
+        <option value="">— select —</option>
+        {% for a in advisors %}
+        <option value="{{ a.pk }}" {% if current_advisor and a.pk == current_advisor.pk %}selected{% endif %}>{{ a.get_full_name|default:a.email }}</option>
+        {% endfor %}
+      </select>
     </section>
     {% endif %}
 
@@ -130,15 +168,16 @@
 </div>
 
 <script>
-  // Live "N of 4" tuition counter.
+  // Live "N of 4" counter — counts years marked "Full".
   (function () {
-    var boxes = document.querySelectorAll('[data-tuition]');
+    var radios = document.querySelectorAll('[data-tuition-radio]');
+    var fulls = document.querySelectorAll('[data-tuition-full]');
     var out = document.getElementById('tuition-count');
-    if (!boxes.length || !out) return;
+    if (!radios.length || !out) return;
     function tally() {
-      out.textContent = Array.prototype.filter.call(boxes, function (b) { return b.checked; }).length;
+      out.textContent = Array.prototype.filter.call(fulls, function (b) { return b.checked; }).length;
     }
-    boxes.forEach(function (b) { b.addEventListener('change', tally); });
+    radios.forEach(function (r) { r.addEventListener('change', tally); });
   })();
 </script>
 {% endblock %}

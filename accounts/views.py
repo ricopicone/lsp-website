@@ -637,17 +637,25 @@ def twofactor_disable(request):
 
 @login_required
 def intake_survey(request):
-    """The launch intake survey — a friendly single page. Confirms a few fields
-    and one year-grid (which years you paid tuition/dues); on submit it
-    reconciles into structured records (see ``accounts.survey``)."""
+    """The launch intake survey — a friendly single page. Confirms a few fields,
+    a tuition/dues year-grid, formation-step years, and the member's advisor; on
+    submit it reconciles into structured records (see ``accounts.survey``)."""
     from django.contrib import messages
 
+    from .advisor import current_advisor, eligible_advisors, set_advisor
     from .forms import IntakeSurveyForm
     from .models import MemberIntakeSurvey
-    from .survey import apply_survey, parse_grid, survey_year_rows
+    from .survey import (
+        apply_survey,
+        milestone_questions,
+        parse_grid,
+        parse_milestones,
+        survey_year_rows,
+    )
 
     survey = MemberIntakeSurvey.objects.filter(user=request.user).first()
     profile = request.user.profile
+    needs_advisor = profile.needs_advisor
 
     if request.method == "POST":
         form = IntakeSurveyForm(request.POST)
@@ -659,7 +667,14 @@ def intake_survey(request):
                 payment_names=form.cleaned_data["payment_names"],
                 payment_emails=form.cleaned_data["payment_emails"],
                 grid=parse_grid(request.POST),
+                milestones=parse_milestones(request.POST),
             )
+            if needs_advisor and request.POST.get("advisor"):
+                advisor = eligible_advisors(request.user).filter(
+                    pk=request.POST["advisor"]
+                ).first()
+                if advisor is not None:
+                    set_advisor(request.user, advisor, by=request.user)
             messages.success(request, "Thanks — your answers are saved.")
             return redirect(reverse("intake_survey") + "?done=1")
     else:
@@ -676,5 +691,9 @@ def intake_survey(request):
         "rows": rows,
         "survey": survey,
         "done": request.GET.get("done") == "1",
-        "tuition_prechecked": sum(1 for r in rows if r["tuition_checked"]),
+        "tuition_prechecked": sum(1 for r in rows if r["tuition_state"] == "full"),
+        "milestones": milestone_questions(request.user),
+        "needs_advisor": needs_advisor,
+        "advisors": eligible_advisors(request.user) if needs_advisor else [],
+        "current_advisor": current_advisor(request.user) if needs_advisor else None,
     })
