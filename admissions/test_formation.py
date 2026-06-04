@@ -146,66 +146,27 @@ def test_member_reconciles_own_assumed_payment(client):
     assert theirs.source == Source.ASSUMED
 
 
-# ---- advancement trace + Work upload --------------------------------------
+# ---- step trace + linking the Work via the Works flow ----------------------
 
-def test_trace_shows_each_step_with_dates(client):
+def test_trace_offers_add_work_button_via_works_flow(client):
     member = _user("trace@x.test", role=Profile.Role.CANDIDATE)
-    adv = Advancement.objects.create(
+    Advancement.objects.create(
         member=member, kind=Advancement.Kind.PALIMPSEST,
         from_role=Profile.Role.PRE_CANDIDATE, statement="",
         status=Advancement.Status.APPROVED,
     )
     client.force_login(member)
-    body = client.get(reverse("admissions:formation")).content
-    assert b"Palimpsest" in body
-    # No Work uploaded yet → an upload control is offered.
-    assert b"Upload the Work" in body
-    assert reverse("admissions:advancement_upload", args=[adv.pk]).encode() in body
+    body = client.get(reverse("admissions:formation")).content.decode()
+    assert "Palimpsest" in body
+    # No Work yet → a button into the Works flow, pre-picking the kind.
+    assert "Add my Palimpsest" in body
+    assert f"{reverse('works:add')}?kind=palimpsest" in body
 
-
-def test_member_uploads_work_to_their_advancement(client):
-    from django.core.files.uploadedfile import SimpleUploadedFile
-
-    member = _user("up@x.test", role=Profile.Role.CANDIDATE)
-    adv = Advancement.objects.create(
-        member=member, kind=Advancement.Kind.PALIMPSEST,
-        from_role=Profile.Role.PRE_CANDIDATE, statement="",
-        status=Advancement.Status.APPROVED,
-    )
-    client.force_login(member)
-    resp = client.post(
-        reverse("admissions:advancement_upload", args=[adv.pk]),
-        {"work": SimpleUploadedFile("palimpsest.txt", b"my text", content_type="text/plain")},
-    )
-    assert resp.status_code == 302
-    adv.refresh_from_db()
-    assert adv.palimpsest  # a file is now attached
-
-
-def test_cannot_upload_to_another_members_advancement(client):
-    from django.core.files.uploadedfile import SimpleUploadedFile
-
-    owner = _user("owner@x.test", role=Profile.Role.CANDIDATE)
-    intruder = _user("intruder@x.test", role=Profile.Role.CANDIDATE)
-    adv = Advancement.objects.create(
-        member=owner, kind=Advancement.Kind.PALIMPSEST,
-        from_role=Profile.Role.PRE_CANDIDATE, statement="",
-    )
-    client.force_login(intruder)
-    resp = client.post(
-        reverse("admissions:advancement_upload", args=[adv.pk]),
-        {"work": SimpleUploadedFile("x.txt", b"x", content_type="text/plain")},
-    )
-    assert resp.status_code == 404
-    adv.refresh_from_db()
-    assert not adv.palimpsest
-
-
-# ---- derived trace (steps completed without an Advancement record) ---------
 
 def test_candidate_without_advancement_record_sees_palimpsest(client):
     """The reported bug: a member who reached Candidate via import (no
-    Advancement row) still sees their completed Palimpsest, dated from tenure."""
+    Advancement row) still sees their completed Palimpsest, dated from tenure,
+    with an Add-Work button."""
     from accounts.models import MembershipTenure
 
     member = _user("imported@x.test", role=Profile.Role.CANDIDATE)
@@ -214,11 +175,26 @@ def test_candidate_without_advancement_record_sees_palimpsest(client):
     )
     assert not Advancement.objects.filter(member=member).exists()
     client.force_login(member)
-    body = client.get(reverse("admissions:formation")).content
-    assert b"Palimpsest" in body
-    assert b"Completed in AY 2022" in body
-    # And an upload control to attach the Work (no demande row to point at).
-    assert reverse("admissions:formation_work_upload").encode() in body
+    body = client.get(reverse("admissions:formation")).content.decode()
+    assert "Palimpsest" in body
+    assert "Completed in AY 2022" in body
+    assert f"{reverse('works:add')}?kind=palimpsest" in body
+
+
+def test_palimpsest_work_appears_in_step(client):
+    """A Work of kind=palimpsest authored by the member shows in their step."""
+    from works.models import Work
+
+    member = _user("hasworks@x.test", role=Profile.Role.CANDIDATE)
+    work = Work.objects.create(
+        title="My Palimpsest Text", slug="my-palimpsest-text",
+        kind=Work.Kind.PALIMPSEST, submitted_by=member,
+    )
+    work.authors.add(member)
+    client.force_login(member)
+    body = client.get(reverse("admissions:formation")).content.decode()
+    assert "My Palimpsest Text" in body
+    assert work.get_absolute_url() in body
 
 
 def test_analyst_sees_both_completed_steps(client):
@@ -228,44 +204,22 @@ def test_analyst_sees_both_completed_steps(client):
     assert b"Palimpsest" in body and b"Passage" in body
 
 
-def test_scholar_sees_traversee_not_passage(client):
+def test_scholar_step_uses_traversee_work_kind(client):
     member = _user("sch-done@x.test", role=Profile.Role.SCHOLAR)
     client.force_login(member)
-    body = client.get(reverse("admissions:formation")).content
-    assert "Traversée".encode() in body
-    assert b"Palimpsest" in body
+    body = client.get(reverse("admissions:formation")).content.decode()
+    assert "Traversée" in body
+    assert "Palimpsest" in body
+    # The scholar's passage step links to a Traversée Work, not a Passage one.
+    assert f"{reverse('works:add')}?kind=traversee" in body
 
 
-def test_work_upload_for_completed_step_materializes_record(client):
-    """Uploading the Work for a step with no demande creates an APPROVED
-    Advancement to hold it."""
-    from django.core.files.uploadedfile import SimpleUploadedFile
-
-    member = _user("mat@x.test", role=Profile.Role.ANALYST)
+def test_add_work_view_preselects_kind_from_query(client):
+    member = _user("addkind@x.test", role=Profile.Role.CANDIDATE)
     client.force_login(member)
-    resp = client.post(reverse("admissions:formation_work_upload"), {
-        "kind": "palimpsest",
-        "work": SimpleUploadedFile("p.txt", b"text", content_type="text/plain"),
-    })
-    assert resp.status_code == 302
-    adv = Advancement.objects.get(member=member, kind="palimpsest")
-    assert adv.status == Advancement.Status.APPROVED
-    assert adv.from_role == Profile.Role.PRE_CANDIDATE
-    assert adv.palimpsest
-
-
-def test_work_upload_rejected_for_uncompleted_step(client):
-    """A precandidate hasn't completed the palimpsest — nothing to attach to."""
-    from django.core.files.uploadedfile import SimpleUploadedFile
-
-    member = _user("pc-noupload@x.test", role=Profile.Role.PRE_CANDIDATE)
-    client.force_login(member)
-    resp = client.post(reverse("admissions:formation_work_upload"), {
-        "kind": "passage",
-        "work": SimpleUploadedFile("p.txt", b"text", content_type="text/plain"),
-    })
-    assert resp.status_code == 302
-    assert not Advancement.objects.filter(member=member).exists()
+    resp = client.get(reverse("works:add") + "?kind=palimpsest")
+    assert resp.status_code == 200
+    assert resp.context["form"].initial.get("kind") == "palimpsest"
 
 
 # ---- tuition four-year progress -------------------------------------------

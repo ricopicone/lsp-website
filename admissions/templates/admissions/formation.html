@@ -133,30 +133,20 @@
             {% endif %}
           </ul>
 
-          {# The Work I presented (leave a trace) #}
+          {# The Work I presented — a real entry in Works (not a file here). #}
           <div class="flex items-center gap-3 flex-wrap pt-1 border-t border-base-300/60">
-            {% if a and a.palimpsest %}
-            <a href="{% url 'admissions:palimpsest_download' a.pk %}" class="link link-primary text-sm">View my {{ s.label }} Work →</a>
-            <form method="post" enctype="multipart/form-data" action="{% url 'admissions:advancement_upload' a.pk %}" class="flex items-center gap-2">
-              {% csrf_token %}
-              <input type="file" name="work" class="file-input file-input-bordered file-input-xs max-w-xs">
-              <button class="btn btn-ghost btn-xs">Replace</button>
-            </form>
-            {% elif a %}
-            <form method="post" enctype="multipart/form-data" action="{% url 'admissions:advancement_upload' a.pk %}" class="flex items-center gap-2">
-              {% csrf_token %}
-              <label class="text-sm text-base-content/70">Upload the Work I presented:</label>
-              <input type="file" name="work" class="file-input file-input-bordered file-input-xs max-w-xs">
-              <button class="btn btn-primary btn-xs">Upload</button>
-            </form>
+            {% if s.works %}
+            <ul class="flex-1 min-w-0 space-y-0.5">
+              {% for w in s.works %}
+              <li><a href="{{ w.get_absolute_url }}" class="link link-primary text-sm">{{ w.title }} →</a></li>
+              {% endfor %}
+            </ul>
+            <a href="{% url 'works:add' %}?kind={{ s.work_kind }}&next={{ request.path|urlencode }}"
+               class="btn btn-ghost btn-xs">Add another</a>
             {% else %}
-            <form method="post" enctype="multipart/form-data" action="{% url 'admissions:formation_work_upload' %}" class="flex items-center gap-2">
-              {% csrf_token %}
-              <input type="hidden" name="kind" value="{{ s.kind }}">
-              <label class="text-sm text-base-content/70">Upload the Work I presented:</label>
-              <input type="file" name="work" class="file-input file-input-bordered file-input-xs max-w-xs">
-              <button class="btn btn-primary btn-xs">Upload</button>
-            </form>
+            <span class="text-sm text-base-content/60">No {{ s.label }} added yet.</span>
+            <a href="{% url 'works:add' %}?kind={{ s.work_kind }}&next={{ request.path|urlencode }}"
+               class="btn btn-primary btn-xs">Add my {{ s.label }}</a>
             {% endif %}
           </div>
 

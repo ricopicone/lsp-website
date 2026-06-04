@@ -360,7 +360,7 @@ def _formation_steps(user):
 
     tenures = list(MembershipTenure.objects.filter(user=user))
     roles_held = {t.role for t in tenures} | {user.profile.role}
-    _, ladder = _formation_track_for(roles_held)
+    track, ladder = _formation_track_for(roles_held)
     if ladder is None:
         return []
 
@@ -380,6 +380,25 @@ def _formation_steps(user):
         .select_related("advisor").order_by("requested_at")
     }
 
+    # The artifact for each step is a real Work (works app), of the matching
+    # Kind, authored by the member — not a file on the demande. Map the step to
+    # the Work.Kind, distinguishing the Analyst Passage from the Scholar
+    # Traversée.
+    from works.models import Work
+
+    scholar = track == "scholar"
+    work_kind_for = {
+        1: Work.Kind.PALIMPSEST,
+        2: Work.Kind.TRAVERSEE if scholar else Work.Kind.PASSAGE,
+    }
+    my_works = (
+        Work.objects.filter(authors=user, kind__in=work_kind_for.values())
+        .order_by("-created_at")
+    )
+    works_by_kind: dict[str, list] = {}
+    for w in my_works:
+        works_by_kind.setdefault(w.kind, []).append(w)
+
     steps = []
     for i, kind in ((1, Advancement.Kind.PALIMPSEST), (2, Advancement.Kind.PASSAGE)):
         from_role, target_role = ladder[i - 1], ladder[i]
@@ -387,12 +406,15 @@ def _formation_steps(user):
         completed = max_rank >= i
         if not completed and adv is None:
             continue  # not reached and no demande on file — the form covers it
+        work_kind = work_kind_for[i]
         steps.append({
             "kind": kind,
             "label": step_label_for(kind, from_role),
             "completed": completed,
             "when_ay": entered_ay.get(target_role) if completed else None,
             "advancement": adv,
+            "work_kind": work_kind,
+            "works": works_by_kind.get(work_kind, []),
         })
     return steps
 
@@ -658,74 +680,6 @@ def advancement_withdraw(request, pk):
     else:
         withdraw_advancement(adv)
         messages.success(request, "Your demande has been withdrawn.")
-    return redirect(_formation_url("formation"))
-
-
-@login_required
-@require_POST
-def advancement_upload(request, pk):
-    """Attach (or replace) the Work the member presented for this step — the
-    written Palimpsest / Passage / Traversée text — leaving a trace on their
-    formation. Stored privately on the demande (see ``palimpsest_download``)."""
-    adv = get_object_or_404(Advancement, pk=pk, member=request.user)
-    upload = request.FILES.get("work")
-    if upload is None:
-        messages.error(request, "Choose a file to upload.")
-    else:
-        adv.palimpsest = upload
-        adv.save(update_fields=["palimpsest", "updated_at"])
-        messages.success(request, f"Your {adv.step_label} Work has been saved.")
-    return redirect(_formation_url("formation"))
-
-
-@login_required
-@require_POST
-def formation_work_upload(request):
-    """Attach the Work for a completed step identified by ``kind`` — used for
-    steps the member completed *before* this system (no ``Advancement`` row
-    exists yet). Materializes a minimal APPROVED ``Advancement`` to hold the
-    file, then stores it. Steps that already have a demande use
-    :func:`advancement_upload` instead."""
-    kind = request.POST.get("kind")
-    upload = request.FILES.get("work")
-    if kind not in (Advancement.Kind.PALIMPSEST, Advancement.Kind.PASSAGE):
-        messages.error(request, "Unknown formation step.")
-        return redirect(_formation_url("formation"))
-    if upload is None:
-        messages.error(request, "Choose a file to upload.")
-        return redirect(_formation_url("formation"))
-
-    adv = (
-        Advancement.objects.filter(member=request.user, kind=kind)
-        .order_by("-requested_at").first()
-    )
-    if adv is None:
-        # Only allow materializing a record for a step the member has actually
-        # completed (their role ladder is past it); otherwise there's nothing
-        # to attach a Work to.
-        from accounts.models import MembershipTenure
-
-        steps = {s["kind"]: s for s in _formation_steps(request.user)}
-        step = steps.get(kind)
-        if step is None or not step["completed"]:
-            messages.error(request, "There's no completed step to attach that to.")
-            return redirect(_formation_url("formation"))
-        roles_held = set(
-            MembershipTenure.objects.filter(user=request.user)
-            .values_list("role", flat=True)
-        ) | {request.user.profile.role}
-        _, ladder = _formation_track_for(roles_held)
-        idx = 1 if kind == Advancement.Kind.PALIMPSEST else 2
-        from_role = ladder[idx - 1] if ladder else ""
-        adv = Advancement.objects.create(
-            member=request.user, kind=kind, from_role=from_role,
-            status=Advancement.Status.APPROVED,
-            decided_at=timezone.now(),
-            decision_note="Recorded retroactively when the Work was uploaded.",
-        )
-    adv.palimpsest = upload
-    adv.save(update_fields=["palimpsest", "updated_at"])
-    messages.success(request, f"Your {adv.step_label} Work has been saved.")
     return redirect(_formation_url("formation"))
 
 
