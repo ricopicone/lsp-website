@@ -629,3 +629,52 @@ def twofactor_disable(request):
         error = "That password is incorrect."
 
     return render(request, "accounts/twofactor_disable.html", {"error": error})
+
+
+# ---------------------------------------------------------------------------
+# Member intake survey (launch onboarding)
+# ---------------------------------------------------------------------------
+
+@login_required
+def intake_survey(request):
+    """The launch intake survey — a friendly single page. Confirms a few fields
+    and one year-grid (which years you paid tuition/dues); on submit it
+    reconciles into structured records (see ``accounts.survey``)."""
+    from django.contrib import messages
+
+    from .forms import IntakeSurveyForm
+    from .models import MemberIntakeSurvey
+    from .survey import apply_survey, parse_grid, survey_year_rows
+
+    survey = MemberIntakeSurvey.objects.filter(user=request.user).first()
+    profile = request.user.profile
+
+    if request.method == "POST":
+        form = IntakeSurveyForm(request.POST)
+        if form.is_valid():
+            apply_survey(
+                request.user,
+                year_joined=form.cleaned_data["year_joined"],
+                pronouns=(form.cleaned_data["pronouns"] or None),
+                payment_names=form.cleaned_data["payment_names"],
+                payment_emails=form.cleaned_data["payment_emails"],
+                grid=parse_grid(request.POST),
+            )
+            messages.success(request, "Thanks — your answers are saved.")
+            return redirect(reverse("intake_survey") + "?done=1")
+    else:
+        form = IntakeSurveyForm(initial={
+            "year_joined": (survey.year_joined if survey else None) or profile.year_joined,
+            "pronouns": profile.pronouns,
+            "payment_names": survey.payment_names if survey else "",
+            "payment_emails": survey.payment_emails if survey else "",
+        })
+
+    rows = survey_year_rows(request.user)
+    return render(request, "accounts/survey.html", {
+        "form": form,
+        "rows": rows,
+        "survey": survey,
+        "done": request.GET.get("done") == "1",
+        "tuition_prechecked": sum(1 for r in rows if r["tuition_checked"]),
+    })

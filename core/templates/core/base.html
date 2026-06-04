@@ -232,6 +232,9 @@
             {% elif user.profile.role == 'external' or user.profile.role == 'prospective_applicant' %}
             <li><a href="{% url 'admissions:apply_start' %}">Apply to join</a></li>
             {% endif %}
+            {% if show_survey_nudge %}
+            <li><a href="{% url 'intake_survey' %}">Finish intake survey</a></li>
+            {% endif %}
             <li><a href="{% url 'profile_edit' %}">Edit profile</a></li>
             <li>
               {# Theme toggle: shows the mode you'll switch to. #}
@@ -284,6 +287,14 @@
   {% endblock %}
 
   <main class="flex-1 mx-auto w-full max-w-5xl px-4 sm:px-6 py-8 sm:py-10">
+    {% if show_survey_nudge %}
+    <div class="alert mb-6 flex-wrap gap-2 border border-primary/30 bg-primary/5">
+      <span class="text-sm text-base-content/80">
+        👋 Help us get your records right — a quick <strong>3-minute</strong> intake survey.
+      </span>
+      <a href="{% url 'intake_survey' %}" class="btn btn-primary btn-sm">Start the survey</a>
+    </div>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
 

@@ -102,6 +102,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.aphorism",
+                "core.context_processors.survey_nudge",
                 "parletre.context_processors.notifications",
             ],
         },
@@ -252,6 +253,11 @@ STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")
 # test data can never enter real accounting. Off in development (so the flow
 # can be exercised with test keys); ON in production — see production.py.
 STRIPE_LIVE_ONLY = env.bool("STRIPE_LIVE_ONLY", default=False)
+
+# Launch intake survey: when True, members are nudged (banner + dropdown link)
+# to complete the onboarding survey. Off until launch; the page itself stays
+# reachable at /accounts/survey/ for testing. Flip via DJANGO_SURVEY_ENABLED.
+SURVEY_ENABLED = env.bool("SURVEY_ENABLED", default=False)
 
 # Public base URL used to build Stripe Checkout success/cancel return URLs.
 SITE_BASE_URL = env("SITE_BASE_URL", default="http://localhost:8000")

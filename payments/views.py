@@ -335,6 +335,7 @@ def _treasurer_dues_context(selected_period=None) -> dict:
         "role_breakdown": role_breakdown,
         "unpaid_users":   unpaid_users,
         "paid_members":   paid_members,
+        "dues_confirmed_pct": _confirmed_pct(p.source for p in paid_members),
         "obligated_count": obligated_count,
         "dues_collected": dues_collected,
         "dues_outstanding": dues_outstanding,
@@ -718,6 +719,20 @@ _TUITION_STATUS_ORDER = [
 ]
 
 
+def _confirmed_pct(sources) -> int | None:
+    """Percent of rows whose provenance is confirmed (verified/imported/staff)
+    vs. estimated (self-reported/assumed). None when there are no rows."""
+    from accounts.models import Source
+    sources = list(sources)
+    if not sources:
+        return None
+    confirmed = sum(
+        1 for s in sources
+        if s in (Source.VERIFIED, Source.IMPORTED, Source.STAFF)
+    )
+    return round(100 * confirmed / len(sources))
+
+
 def _backfilled_tuition_collected(period) -> Decimal:
     """Succeeded tuition payments with no installment link (historical Stripe /
     treasurer-ledger imports), summed for ``period`` by payment date. The
@@ -820,6 +835,7 @@ def _treasurer_tuition_context(selected_period=None) -> dict:
         enrollment_rows.append({
             "user": e.user, "status": e.status,
             "status_label": status_labels.get(e.status, e.status),
+            "source": e.source, "source_label": e.get_source_display(),
             "paid": paid, "remaining": remaining,
         })
 
@@ -893,6 +909,7 @@ def _treasurer_tuition_context(selected_period=None) -> dict:
         "tuition_role_breakdown":      role_breakdown_tuition,
         "tuition_reconciliation_users": reconciliation_users,
         "tuition_enrollment_rows":     enrollment_rows,
+        "tuition_confirmed_pct":       _confirmed_pct(e.source for e in enrollments),
         "tuition_in_training_count":   in_training_count,
         "tuition_total_collected":     total_collected,
         "tuition_committed_remaining": committed_remaining,

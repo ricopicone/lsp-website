@@ -1,0 +1,144 @@
+{% extends "core/base.html" %}
+{% block title %}Quick intake survey — LSP{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-2xl">
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  {% if done %}
+  {% comment %}Screen 5 — done.{% endcomment %}
+  <div class="rounded-xl border border-base-300 p-6 space-y-3 text-center">
+    <h1 class="font-serif text-3xl text-base-content">Thanks — you're all set ✅</h1>
+    <p class="text-base-content/70">
+      We'll match this against our records and only reach out if something doesn't
+      line up. Want to polish your public profile while you're here?
+    </p>
+    <div class="flex justify-center gap-2 pt-1">
+      <a href="{% url 'profile_edit' %}" class="btn btn-primary btn-sm">Edit my profile</a>
+      <a href="{% url 'core:landing' %}" class="btn btn-ghost btn-sm">Go to the site</a>
+    </div>
+    <p class="text-xs text-base-content/45">You can update these answers any time from your profile menu.</p>
+  </div>
+
+  {% else %}
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Welcome to the new LSP site 👋</h1>
+    <p class="text-base-content/70">
+      We're moving our records over and want yours to be right. This takes about
+      <strong>three minutes</strong> — answer from memory, <strong>best guesses are
+      totally fine</strong>, and you can finish later from your profile.
+    </p>
+  </header>
+
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+
+    {% comment %}Section — You.{% endcomment %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-4">
+      <h2 class="font-medium text-base-content">A few quick confirmations</h2>
+      <p class="text-sm text-base-content/60">
+        You're <strong>{{ request.user.get_full_name|default:request.user.email }}</strong>,
+        currently <strong>{{ request.user.profile.get_role_display }}</strong>.
+        <a href="{% url 'profile_edit' %}" class="link">Not right? Edit your profile.</a>
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ form.year_joined.label }}</label>
+          {{ form.year_joined }}
+          <p class="text-xs text-base-content/45">A year is all we need — a guess is fine. It tells us which years you may have owed tuition or dues.</p>
+          {% if form.year_joined.errors %}<p class="text-error text-xs">{{ form.year_joined.errors|striptags }}</p>{% endif %}
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ form.pronouns.label }}</label>
+          {{ form.pronouns }}
+        </div>
+      </div>
+    </section>
+
+    {% comment %}Section — the year grid (the one real question).{% endcomment %}
+    {% if rows %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-3">
+      <div>
+        <h2 class="font-medium text-base-content">Your years at LSP</h2>
+        <p class="text-sm text-base-content/60">
+          Check the years you paid. Leave blank for years you skipped or weren't
+          enrolled — don't sweat exactness, we verify against records where we can.
+        </p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm" id="year-grid">
+          <thead>
+            <tr>
+              <th>Academic year</th>
+              <th class="text-center">Paid tuition</th>
+              <th class="text-center">Paid dues</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="whitespace-nowrap">{{ r.label }}</td>
+              <td class="text-center">
+                {% if r.has_tuition %}
+                <input type="checkbox" name="tuition_{{ r.ay }}" class="checkbox checkbox-sm" data-tuition {% if r.tuition_checked %}checked{% endif %}>
+                {% else %}<span class="text-base-content/25">—</span>{% endif %}
+              </td>
+              <td class="text-center">
+                {% if r.has_dues %}
+                <input type="checkbox" name="dues_{{ r.ay }}" class="checkbox checkbox-sm" {% if r.dues_checked %}checked{% endif %}>
+                {% else %}<span class="text-base-content/25">—</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-base-content/60">
+        Tuition: students owe four years total — you've marked
+        <strong><span id="tuition-count">{{ tuition_prechecked }}</span> of 4</strong> so far.
+      </p>
+    </section>
+    {% endif %}
+
+    {% comment %}Section — paying under a different name (optional).{% endcomment %}
+    <section class="rounded-xl border border-base-300 p-5 space-y-3">
+      <h2 class="font-medium text-base-content">Paying under a different name? <span class="text-xs font-normal text-base-content/45">(optional)</span></h2>
+      <p class="text-sm text-base-content/60">
+        Did you ever pay by a name or email different from your account? Tell us so
+        we can find those payments. Skip if not.
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ form.payment_names.label }}</label>
+          {{ form.payment_names }}
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">{{ form.payment_emails.label }}</label>
+          {{ form.payment_emails }}
+        </div>
+      </div>
+    </section>
+
+    <div class="flex items-center gap-3">
+      <button class="btn btn-primary">Finish</button>
+      <a href="{% url 'core:landing' %}" class="link link-hover text-sm text-base-content/60">Finish later</a>
+    </div>
+  </form>
+  {% endif %}
+</div>
+
+<script>
+  // Live "N of 4" tuition counter.
+  (function () {
+    var boxes = document.querySelectorAll('[data-tuition]');
+    var out = document.getElementById('tuition-count');
+    if (!boxes.length || !out) return;
+    function tally() {
+      out.textContent = Array.prototype.filter.call(boxes, function (b) { return b.checked; }).length;
+    }
+    boxes.forEach(function (b) { b.addEventListener('change', tally); });
+  })();
+</script>
+{% endblock %}

@@ -34,3 +34,19 @@ def aphorism(request):
     """One Lacanian aphorism per page render. Surfaces in the footer."""
     items = _active_aphorisms()
     return {"aphorism": random.choice(items) if items else None}
+
+
+def survey_nudge(request):
+    """Whether to show the launch intake-survey banner: enabled, the user is an
+    authenticated member, and they haven't submitted yet. Cheap — one indexed
+    OneToOne lookup, only for logged-in users when the survey is live."""
+    from django.conf import settings
+
+    user = getattr(request, "user", None)
+    if not (getattr(settings, "SURVEY_ENABLED", False)
+            and user is not None and user.is_authenticated):
+        return {"show_survey_nudge": False}
+    submitted = (
+        getattr(getattr(user, "intake_survey", None), "submitted_at", None) is not None
+    )
+    return {"show_survey_nudge": not submitted}
