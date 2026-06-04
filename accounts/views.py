@@ -644,7 +644,8 @@ def intake_survey(request):
 
     from .advisor import current_advisor, eligible_advisors, set_advisor
     from .forms import IntakeSurveyForm
-    from .models import MemberIntakeSurvey
+    from .membership import academic_year_choices
+    from .models import MemberIntakeSurvey, Profile
     from .survey import (
         apply_survey,
         milestone_questions,
@@ -657,20 +658,26 @@ def intake_survey(request):
     profile = request.user.profile
     needs_advisor = profile.needs_advisor
     can_list = profile.is_in_directory
+    on_tuition_track = profile.role in (
+        Profile.IN_TRAINING_ROLES | {Profile.Role.ANALYST, Profile.Role.SCHOLAR}
+    )
+    ay_choices = academic_year_choices()
 
     if request.method == "POST":
-        form = IntakeSurveyForm(request.POST)
+        form = IntakeSurveyForm(request.POST, ay_choices=ay_choices)
         if form.is_valid():
             apply_survey(
                 request.user,
                 year_joined=form.cleaned_data["year_joined"],
-                pronouns=(form.cleaned_data["pronouns"] or None),
                 payment_names=form.cleaned_data["payment_names"],
                 payment_emails=form.cleaned_data["payment_emails"],
                 grid=parse_grid(request.POST),
                 milestones=parse_milestones(request.POST),
                 list_in_directory=(
                     form.cleaned_data["list_in_directory"] if can_list else None
+                ),
+                paid_all_tuition=(
+                    form.cleaned_data["paid_all_tuition"] if on_tuition_track else None
                 ),
             )
             if needs_advisor and request.POST.get("advisor"):
@@ -682,9 +689,8 @@ def intake_survey(request):
             messages.success(request, "Thanks — your answers are saved.")
             return redirect(reverse("intake_survey") + "?done=1")
     else:
-        form = IntakeSurveyForm(initial={
+        form = IntakeSurveyForm(ay_choices=ay_choices, initial={
             "year_joined": (survey.year_joined if survey else None) or profile.year_joined,
-            "pronouns": profile.pronouns,
             "payment_names": survey.payment_names if survey else "",
             "payment_emails": survey.payment_emails if survey else "",
             "list_in_directory": profile.public,
@@ -696,6 +702,8 @@ def intake_survey(request):
         "rows": rows,
         "survey": survey,
         "done": request.GET.get("done") == "1",
+        "ay_choices": ay_choices,
+        "show_paid_all": on_tuition_track,
         "tuition_prechecked": sum(1 for r in rows if r["tuition_state"] == "full"),
         "milestones": milestone_questions(request.user),
         "needs_advisor": needs_advisor,

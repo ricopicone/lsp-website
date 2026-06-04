@@ -30,8 +30,9 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--commit", action="store_true",
                             help="Write changes (default: dry-run preview).")
-        parser.add_argument("--from-ay", type=int, default=2020,
-                            help="First academic-year start year (default 2020).")
+        parser.add_argument("--from-ay", type=int, default=2015,
+                            help="First academic-year start year (default 2015 — "
+                            "tuition/dues tracking begins here).")
         parser.add_argument("--through-ay", type=int, default=2024,
                             help="Last academic-year start year (default 2024).")
         parser.add_argument("--tuition", type=float, default=2000.0,

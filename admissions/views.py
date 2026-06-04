@@ -23,7 +23,6 @@ from .advancement import (
     can_open_advancement,
     decide_advancement,
     open_advancement,
-    open_advancement_for,
     present_advancement,
     step_label_for_member,
     withdraw_advancement,
@@ -296,32 +295,19 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     profile = user.profile
 
     advisor = current_advisor(user)
-    existing = (
-        Advancement.objects.filter(member=user)
-        .select_related("advisor")
-        .order_by("-requested_at")
-        .first()
-    )
     if advisor_form is None and profile.needs_advisor:
         advisor_form = AdvisorSelectForm(advisee=user)
-
-    # The full trace of formation steps (oldest first), so a member sees their
-    # Palimpsest and Passage/Traversée history with dates + the Work they left.
-    advancements = list(
-        Advancement.objects.filter(member=user)
-        .select_related("advisor")
-        .order_by("requested_at")
-    )
 
     ctx = {
         "advisor": advisor,
         "needs_advisor": profile.needs_advisor,
         "advisor_form": advisor_form,
-        "existing": existing,
-        "open_one": open_advancement_for(user),
         "can_open": can_open_advancement(user),
         "step_label": step_label_for_member(user),
-        "advancements": advancements,
+        # The trace of formation steps (Palimpsest, then Passage/Traversée) —
+        # derived from the member's role history so steps completed before this
+        # system (or via import) still show, with any Advancement overlaid.
+        "formation_steps": _formation_steps(user),
         "demande_form": demande_form if demande_form is not None else AdvancementForm(),
         "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
     }
@@ -341,13 +327,104 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     return ctx
 
 
+#: Each formation track's role ladder. The step *into* index 1 is the
+#: Palimpsest; the step into index 2 is the Passage (Analyst) / Traversée
+#: (Scholar).
+_FORMATION_TRACKS = {
+    "analyst": ["pre_candidate", "candidate", "analyst"],
+    "scholar": ["pre_candidate_scholar", "candidate_scholar", "scholar"],
+}
+
+
+def _formation_track_for(roles_held):
+    """Which ladder the member is on, from any analyst/scholar-track role they
+    hold now or have held. Returns ``(name, ladder)`` or ``(None, None)``."""
+    for name, ladder in _FORMATION_TRACKS.items():
+        if roles_held & set(ladder):
+            return name, ladder
+    return None, None
+
+
+def _formation_steps(user):
+    """The member's formation steps as a display trace.
+
+    Derived from the **role history** (``MembershipTenure``) so a Palimpsest or
+    Passage/Traversée completed before this system — or set by import — still
+    shows, dated to the academic year the member entered the target role. Any
+    actual ``Advancement`` demande is overlaid for its status/dates and the Work
+    file. Only completed steps (or steps with a demande on file) are listed; the
+    *next* available step is offered by the demande form, not here."""
+    from accounts.models import MembershipTenure
+
+    from .models import Advancement, step_label_for
+
+    tenures = list(MembershipTenure.objects.filter(user=user))
+    roles_held = {t.role for t in tenures} | {user.profile.role}
+    track, ladder = _formation_track_for(roles_held)
+    if ladder is None:
+        return []
+
+    # Earliest AY the member entered each role (the step's "when").
+    entered_ay: dict[str, int] = {}
+    for t in tenures:
+        if t.role not in entered_ay or t.start_ay < entered_ay[t.role]:
+            entered_ay[t.role] = t.start_ay
+
+    max_rank = max(
+        (ladder.index(r) for r in roles_held if r in ladder), default=-1
+    )
+
+    advs = {
+        a.kind: a
+        for a in Advancement.objects.filter(member=user)
+        .select_related("advisor").order_by("requested_at")
+    }
+
+    # The artifact for each step is a real Work (works app), of the matching
+    # Kind, authored by the member — not a file on the demande. Map the step to
+    # the Work.Kind, distinguishing the Analyst Passage from the Scholar
+    # Traversée.
+    from works.models import Work
+
+    scholar = track == "scholar"
+    work_kind_for = {
+        1: Work.Kind.PALIMPSEST,
+        2: Work.Kind.TRAVERSEE if scholar else Work.Kind.PASSAGE,
+    }
+    my_works = (
+        Work.objects.filter(authors=user, kind__in=work_kind_for.values())
+        .order_by("-created_at")
+    )
+    works_by_kind: dict[str, list] = {}
+    for w in my_works:
+        works_by_kind.setdefault(w.kind, []).append(w)
+
+    steps = []
+    for i, kind in ((1, Advancement.Kind.PALIMPSEST), (2, Advancement.Kind.PASSAGE)):
+        from_role, target_role = ladder[i - 1], ladder[i]
+        adv = advs.get(kind)
+        completed = max_rank >= i
+        if not completed and adv is None:
+            continue  # not reached and no demande on file — the form covers it
+        work_kind = work_kind_for[i]
+        steps.append({
+            "kind": kind,
+            "label": step_label_for(kind, from_role),
+            "completed": completed,
+            "when_ay": entered_ay.get(target_role) if completed else None,
+            "advancement": adv,
+            "work_kind": work_kind,
+            "works": works_by_kind.get(work_kind, []),
+        })
+    return steps
+
+
 def _formation_money_context(request) -> dict:
     """Tuition + dues + the member's own payment history (all on one tab).
 
     Tuition: the four-year progress, this year's decision/installments. Dues:
-    this year's obligation + status. Payments: full history + the provisional
-    (ASSUMED) subset the member can self-categorize."""
-    from accounts.models import Source
+    this year's obligation + status. Payments: full history (editable type/note,
+    and academic year for tuition) from the My Payments table."""
     from payments.dues import is_dues_obligated, user_paid_for_period
     from payments.forms import TuitionDecisionForm
     from payments.models import (
@@ -380,9 +457,25 @@ def _formation_money_context(request) -> dict:
     )
     dues_paid = user_paid_for_period(user, dues_period)
 
-    # --- Payments (all) ---
-    payments = list(Payment.objects.filter(user=user).order_by("-created_at", "-id"))
-    assumed = [p for p in payments if p.source == Source.ASSUMED]
+    # --- Payments (all) — one editable table (type + note + tuition AY) ---
+    payments = list(
+        Payment.objects.filter(user=user)
+        .select_related("registration__event", "dues_period", "tuition_period")
+        .order_by("-created_at", "-id")
+    )
+
+    # For tuition rows, pre-select the assigned AY, else the AY the payment date
+    # falls in (so the "For" column's year picker starts on the right guess).
+    from accounts.membership import current_academic_year_start as ay_of
+    tuition_periods = list(TuitionPeriod.objects.order_by("-start_date"))
+    period_id_by_ay = {ay_of(tp.start_date): tp.id for tp in tuition_periods}
+    for p in payments:
+        if p.payment_type != Payment.Type.TUITION:
+            continue
+        when = p.paid_at or p.created_at
+        p.selected_period_id = p.tuition_period_id or (
+            period_id_by_ay.get(ay_of(when.date())) if when else None
+        )
 
     show_money_tab = (
         profile.owes_tuition or dues_obligated or bool(payments)
@@ -408,7 +501,7 @@ def _formation_money_context(request) -> dict:
         "dues_paid": dues_paid,
         # payments
         "my_payments": payments,
-        "my_assumed_payments": assumed,
+        "tuition_periods": tuition_periods,
         "payment_type_choices": Payment.Type.choices,
     }
 
@@ -443,13 +536,18 @@ def _tuition_progress(user) -> dict:
         Payment.objects
         .filter(user=user, payment_type=Payment.Type.TUITION,
                 status=Payment.Status.SUCCEEDED)
-        .select_related("tuition_installment__enrollment__tuition_period")
+        .select_related(
+            "tuition_period", "tuition_installment__enrollment__tuition_period",
+        )
     )
     for p in payments:
-        period = None
-        inst = p.tuition_installment
-        if inst is not None and inst.enrollment_id:
-            period = inst.enrollment.tuition_period
+        # Prefer the member's explicit AY assignment, then the installment's
+        # period, then the payment date.
+        period = p.tuition_period
+        if period is None:
+            inst = p.tuition_installment
+            if inst is not None and inst.enrollment_id:
+                period = inst.enrollment.tuition_period
         ay = ay_of(period.start_date) if period else ay_of(p.paid_at or p.created_at)
         if period is not None:
             period_by_ay.setdefault(ay, period)
@@ -585,23 +683,6 @@ def advancement_withdraw(request, pk):
     else:
         withdraw_advancement(adv)
         messages.success(request, "Your demande has been withdrawn.")
-    return redirect(_formation_url("formation"))
-
-
-@login_required
-@require_POST
-def advancement_upload(request, pk):
-    """Attach (or replace) the Work the member presented for this step — the
-    written Palimpsest / Passage / Traversée text — leaving a trace on their
-    formation. Stored privately on the demande (see ``palimpsest_download``)."""
-    adv = get_object_or_404(Advancement, pk=pk, member=request.user)
-    upload = request.FILES.get("work")
-    if upload is None:
-        messages.error(request, "Choose a file to upload.")
-    else:
-        adv.palimpsest = upload
-        adv.save(update_fields=["palimpsest", "updated_at"])
-        messages.success(request, f"Your {adv.step_label} Work has been saved.")
     return redirect(_formation_url("formation"))
 
 

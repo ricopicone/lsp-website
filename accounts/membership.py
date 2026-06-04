@@ -23,6 +23,20 @@ def current_academic_year_start(on_date=None) -> int:
     return today.year if today.month >= 9 else today.year - 1
 
 
+def academic_year_label(year: int) -> str:
+    """'AY 2019–2020' for a start year."""
+    return f"AY {year}–{year + 1}"
+
+
+def academic_year_choices(start: int = 1992) -> list[tuple[int, str]]:
+    """Academic years (start year, label) from ``start`` to the current AY, newest
+    first — for the survey's join-year and formation-milestone selectors. The
+    range covers the School's full history; financial periods are seeded only
+    from 2015 (see ``seed_historical_periods``)."""
+    current = current_academic_year_start()
+    return [(y, academic_year_label(y)) for y in range(current, start - 1, -1)]
+
+
 @transaction.atomic
 def record_membership_change(
     member, *, role, standing, effective_ay, notes="", by=None,
