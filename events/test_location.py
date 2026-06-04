@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from django.core.cache import cache
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -12,10 +13,18 @@ from django.utils import timezone
 from accounts.models import Profile, User
 from events.models import Audience, Event, PriceTier, Session
 from registrations.models import Registration
+from video.models import DailyRoom
 
 pytestmark = pytest.mark.django_db
 
 daily_on = override_settings(DAILY_ENABLED=True, DAILY_API_KEY="k", DAILY_DOMAIN="lsp.daily.co")
+
+
+@pytest.fixture(autouse=True)
+def _clear_presence_cache():
+    cache.clear()
+    yield
+    cache.clear()
 
 
 def _event(slug="talk", fmt=Event.Format.ONLINE):
@@ -104,6 +113,34 @@ def test_registered_when_live_sees_join(client):
     _register(u, e)
     client.force_login(u)
     resp = client.get(reverse("events:detail", args=[e.slug]))
+    assert b"Join the meeting room" in resp.content
+
+
+@daily_on
+def test_registered_sees_live_now_when_room_occupied(client, monkeypatch):
+    # A special event stays on the detail page; attach a workgroup with an
+    # occupied room so only real presence (not the schedule) makes it "live".
+    from workgroups.models import Workgroup, build_workgroup
+
+    e = _event(slug="live-talk")
+    now = timezone.now()
+    _session(e, start=now + timedelta(days=3), end=now + timedelta(days=3, hours=1))
+    wg = build_workgroup(
+        Workgroup.Kind.COMMITTEE, name="Talk WG", slug="talk-wg",
+        description="", landing_visibility="members", content_visibility="private",
+    )
+    e.workgroup = wg
+    e.save(update_fields=["workgroup"])
+    room = DailyRoom.objects.create(
+        workgroup=wg, name=f"lsp-{wg.slug}", url=f"https://lsp.daily.co/lsp-{wg.slug}",
+        provider_created=True,
+    )
+    monkeypatch.setattr("video.daily.get_presence", lambda: {room.name: [{"u": 1}, {"u": 2}]})
+    u = _member()
+    _register(u, e)
+    client.force_login(u)
+    resp = client.get(reverse("events:detail", args=[e.slug]))
+    assert b"Live now \xc2\xb7 2 in the room" in resp.content  # "Live now · 2 in the room"
     assert b"Join the meeting room" in resp.content
 
 

@@ -20,10 +20,16 @@ branded label with registration/live-aware messaging + a tech-check link.
 
     {% if has_paid_registration %}
       {% if daily_enabled %}
-        {% if event_is_live or can_host %}
-        <div class="mt-2 flex flex-wrap items-center gap-3">
+        {% if event_is_live or event_room_live or can_host %}
+        {% if event_room_live %}
+        <p class="mt-2 inline-flex items-center gap-2 text-sm text-success font-medium">
+          {% include "workgroups/_live_dot.html" %}
+          Live now · {{ event_room_participants }} in the room
+        </p>
+        {% endif %}
+        <div class="mt-1 flex flex-wrap items-center gap-3">
           <a href="{% url 'video:event_room' event.slug %}" class="btn btn-primary btn-sm">
-            {% if event_is_live %}Join the meeting room{% else %}Open room (host){% endif %}
+            {% if event_is_live or event_room_live %}Join the meeting room{% else %}Open room (host){% endif %}
           </a>
           <a href="{% url 'video:system_check' %}" class="link text-sm text-base-content/60">Test your video &amp; audio</a>
         </div>
