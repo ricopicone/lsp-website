@@ -3,16 +3,18 @@ tuition + groups on one tabbed page)."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.advisor import set_advisor
 from accounts.models import Profile, Source, User
 from admissions.advancement import step_label_for_member
 from admissions.models import Advancement, step_label_for
+from payments.models import TuitionEnrollment, TuitionPeriod
 
 pytestmark = pytest.mark.django_db
 
@@ -22,6 +24,23 @@ def _user(email, role=Profile.Role.PRE_CANDIDATE):
     u.profile.role = role
     u.profile.save()
     return u
+
+
+@pytest.fixture
+def current_period(db):
+    """The current TuitionPeriod (seeded by migration), or a synthesized one
+    covering today if the seed picked a future-only AY."""
+    period = TuitionPeriod.current()
+    if period is not None:
+        return period
+    today = timezone.now().date()
+    return TuitionPeriod.objects.create(
+        name="Test AY", slug="test-ay-tuition",
+        start_date=today - timedelta(days=60),
+        decision_due_date=today + timedelta(days=30),
+        end_date=today + timedelta(days=300),
+        tuition_amount=Decimal("800.00"),
+    )
 
 
 # ---- track-aware step labels ----------------------------------------------
@@ -92,7 +111,7 @@ def test_groups_tab_lists_current_and_past(client):
     body = client.get(reverse("admissions:formation") + "?tab=groups").content
     assert b"Desire Cartel" in body
     assert b"Old WG" in body
-    assert b"Current groups" in body and b"Past groups" in body
+    assert b"My current groups" in body and b"My past groups" in body
 
 
 # ---- self-reconcile of own provisional payments ---------------------------
@@ -123,3 +142,110 @@ def test_member_reconciles_own_assumed_payment(client):
     # A member can't touch someone else's payment even by passing its id.
     assert theirs.payment_type == "tuition"
     assert theirs.source == Source.ASSUMED
+
+
+# ---- advancement trace + Work upload --------------------------------------
+
+def test_trace_shows_each_step_with_dates(client):
+    member = _user("trace@x.test", role=Profile.Role.CANDIDATE)
+    adv = Advancement.objects.create(
+        member=member, kind=Advancement.Kind.PALIMPSEST,
+        from_role=Profile.Role.PRE_CANDIDATE, statement="",
+        status=Advancement.Status.APPROVED,
+    )
+    client.force_login(member)
+    body = client.get(reverse("admissions:formation")).content
+    assert b"Palimpsest" in body
+    # No Work uploaded yet → an upload control is offered.
+    assert b"Upload the Work" in body
+    assert reverse("admissions:advancement_upload", args=[adv.pk]).encode() in body
+
+
+def test_member_uploads_work_to_their_advancement(client):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    member = _user("up@x.test", role=Profile.Role.CANDIDATE)
+    adv = Advancement.objects.create(
+        member=member, kind=Advancement.Kind.PALIMPSEST,
+        from_role=Profile.Role.PRE_CANDIDATE, statement="",
+        status=Advancement.Status.APPROVED,
+    )
+    client.force_login(member)
+    resp = client.post(
+        reverse("admissions:advancement_upload", args=[adv.pk]),
+        {"work": SimpleUploadedFile("palimpsest.txt", b"my text", content_type="text/plain")},
+    )
+    assert resp.status_code == 302
+    adv.refresh_from_db()
+    assert adv.palimpsest  # a file is now attached
+
+
+def test_cannot_upload_to_another_members_advancement(client):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    owner = _user("owner@x.test", role=Profile.Role.CANDIDATE)
+    intruder = _user("intruder@x.test", role=Profile.Role.CANDIDATE)
+    adv = Advancement.objects.create(
+        member=owner, kind=Advancement.Kind.PALIMPSEST,
+        from_role=Profile.Role.PRE_CANDIDATE, statement="",
+    )
+    client.force_login(intruder)
+    resp = client.post(
+        reverse("admissions:advancement_upload", args=[adv.pk]),
+        {"work": SimpleUploadedFile("x.txt", b"x", content_type="text/plain")},
+    )
+    assert resp.status_code == 404
+    adv.refresh_from_db()
+    assert not adv.palimpsest
+
+
+# ---- tuition four-year progress -------------------------------------------
+
+def test_tuition_progress_counts_paid_and_projects_to_four_years(current_period):
+    from admissions.views import _tuition_progress
+    from payments.models import TuitionInstallment
+
+    member = _user("prog@x.test", role=Profile.Role.CANDIDATE)
+    enr = TuitionEnrollment.objects.create(
+        user=member, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    full = current_period.tuition_amount
+    half = (full / 2).quantize(Decimal("0.01"))
+    TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1, due_date=current_period.start_date,
+        amount=half, paid=True,
+    )
+    TuitionInstallment.objects.create(
+        enrollment=enr, sequence=2, due_date=current_period.start_date, amount=full - half,
+    )
+    ctx = _tuition_progress(member)
+    assert ctx["tuition_years_started"] == 1
+    assert len(ctx["tuition_slots"]) == 4          # one started + three projected
+    assert ctx["tuition_total_paid"] == half
+    # Goal = this year's amount + 3 projected years at the current rate.
+    assert ctx["tuition_total_goal"] == full * 4
+    assert sum(1 for s in ctx["tuition_slots"] if s["projected"]) == 3
+
+
+def test_skipping_year_is_not_one_of_the_four(current_period):
+    from admissions.views import _tuition_progress
+
+    member = _user("skip@x.test", role=Profile.Role.CANDIDATE)
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=current_period,
+        status=TuitionEnrollment.Status.SKIPPING,
+    )
+    ctx = _tuition_progress(member)
+    assert ctx["tuition_years_started"] == 0
+
+
+# ---- dues section ----------------------------------------------------------
+
+def test_dues_section_offers_payment_when_unpaid(client, current_period):
+    member = _user("dues@x.test", role=Profile.Role.CANDIDATE)
+    client.force_login(member)
+    body = client.get(reverse("admissions:formation") + "?tab=tuition").content
+    assert b"Membership dues" in body
+    # An obligated, unpaid member is offered a pay action.
+    assert b"dues" in body.lower()

@@ -218,7 +218,7 @@
             <li><hr class="border-base-300/60 my-1"></li>
 
             {% if user.profile.is_listed %}
-            <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">Your directory page</a></li>
+            <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">My directory page</a></li>
             {% endif %}
             <li><a href="{% url 'works:mine' %}">My works</a></li>
             <li><a href="{% url 'admissions:formation' %}">My Formation</a></li>
@@ -228,7 +228,7 @@
               {% endif %}
             {% endif %}
             {% if user.application %}
-            <li><a href="{% url 'admissions:status' %}">Your application</a></li>
+            <li><a href="{% url 'admissions:status' %}">My application</a></li>
             {% elif user.profile.role == 'external' or user.profile.role == 'prospective_applicant' %}
             <li><a href="{% url 'admissions:apply_start' %}">Apply to join</a></li>
             {% endif %}

@@ -7,6 +7,8 @@ two interviewers, their reports, and the accept/reject decision.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -304,6 +306,14 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     if advisor_form is None and profile.needs_advisor:
         advisor_form = AdvisorSelectForm(advisee=user)
 
+    # The full trace of formation steps (oldest first), so a member sees their
+    # Palimpsest and Passage/Traversée history with dates + the Work they left.
+    advancements = list(
+        Advancement.objects.filter(member=user)
+        .select_related("advisor")
+        .order_by("requested_at")
+    )
+
     ctx = {
         "active_tab": tab,
         "advisor": advisor,
@@ -313,23 +323,35 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
         "open_one": open_advancement_for(user),
         "can_open": can_open_advancement(user),
         "step_label": step_label_for_member(user),
+        "advancements": advancements,
         "demande_form": demande_form if demande_form is not None else AdvancementForm(),
         "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
     }
-    ctx.update(_formation_tuition_context(request))
+    ctx.update(_formation_money_context(request))
     ctx.update(_formation_groups_context(user))
     return ctx
 
 
-def _formation_tuition_context(request) -> dict:
-    """Tuition decision + installments + the member's own payment history and
-    the subset they can self-reconcile (provisional / ASSUMED charges)."""
+def _formation_money_context(request) -> dict:
+    """Tuition + dues + the member's own payment history (all on one tab).
+
+    Tuition: the four-year progress, this year's decision/installments. Dues:
+    this year's obligation + status. Payments: full history + the provisional
+    (ASSUMED) subset the member can self-categorize."""
     from accounts.models import Source
+    from payments.dues import is_dues_obligated, user_paid_for_period
     from payments.forms import TuitionDecisionForm
-    from payments.models import Payment, TuitionEnrollment, TuitionPeriod
+    from payments.models import (
+        DuesPeriod,
+        Payment,
+        TuitionEnrollment,
+        TuitionPeriod,
+    )
 
     user = request.user
     profile = user.profile
+
+    # --- Tuition (current year) ---
     period = TuitionPeriod.current()
     enrollment = None
     installments = []
@@ -339,13 +361,29 @@ def _formation_tuition_context(request) -> dict:
         ).first()
         if enrollment is not None:
             installments = list(enrollment.installments.order_by("sequence"))
+    progress = _tuition_progress(user)
 
+    # --- Dues (current year) ---
+    dues_period = DuesPeriod.current()
+    dues_obligated = is_dues_obligated(user)
+    dues_amount = (
+        dues_period.amount_for_role(profile.role) if dues_period is not None else None
+    )
+    dues_paid = user_paid_for_period(user, dues_period)
+
+    # --- Payments (all) ---
     payments = list(Payment.objects.filter(user=user).order_by("-created_at", "-id"))
     assumed = [p for p in payments if p.source == Source.ASSUMED]
 
+    show_money_tab = (
+        profile.owes_tuition or dues_obligated or bool(payments)
+        or progress["tuition_years_started"] > 0
+    )
+
     return {
+        "show_money_tab": show_money_tab,
+        # tuition
         "owes_tuition": profile.owes_tuition,
-        "show_tuition_tab": profile.owes_tuition or bool(payments),
         "tuition_period": period,
         "tuition_enrollment": enrollment,
         "tuition_installments": installments,
@@ -353,9 +391,77 @@ def _formation_tuition_context(request) -> dict:
             initial={"status": enrollment.status} if enrollment else {}
         ),
         "tuition_stripe_status": request.GET.get("stripe"),
+        **progress,
+        # dues
+        "dues_period": dues_period,
+        "dues_obligated": dues_obligated,
+        "dues_amount": dues_amount,
+        "dues_paid": dues_paid,
+        # payments
         "my_payments": payments,
         "my_assumed_payments": assumed,
         "payment_type_choices": Payment.Type.choices,
+    }
+
+
+def _tuition_progress(user) -> dict:
+    """The member's progress toward the four years of tuition required for full
+    standing. Each *started* (non-skipping) enrollment is one of the four
+    "slots", with that year's amount as the goal and paid installments as
+    progress; a partially-paid year counts its remainder as still owed. Years
+    not yet started are projected at the current tuition rate so there's always
+    a four-slot goal to fill."""
+    from payments.models import TuitionEnrollment, TuitionPeriod
+
+    required = 4
+    enrollments = list(
+        TuitionEnrollment.objects
+        .filter(user=user)
+        .exclude(status=TuitionEnrollment.Status.SKIPPING)
+        .select_related("tuition_period")
+        .prefetch_related("installments")
+        .order_by("tuition_period__start_date")
+    )
+
+    slots = []
+    total_paid = Decimal("0")
+    total_goal = Decimal("0")
+    for enr in enrollments[:required]:
+        goal = enr.tuition_period.tuition_amount or Decimal("0")
+        paid = sum(
+            (i.amount for i in enr.installments.all() if i.paid), Decimal("0")
+        )
+        paid = min(paid, goal) if goal else paid
+        pct = int(paid / goal * 100) if goal else 0
+        slots.append({
+            "label": enr.tuition_period.name,
+            "goal": goal, "paid": paid, "remaining": max(goal - paid, Decimal("0")),
+            "pct": pct, "projected": False,
+        })
+        total_paid += paid
+        total_goal += goal
+
+    started = len(slots)
+    current = (
+        TuitionPeriod.current()
+        or TuitionPeriod.objects.order_by("-start_date").first()
+    )
+    rate = (current.tuition_amount if current else None) or Decimal("0")
+    for _ in range(started, required):
+        slots.append({
+            "label": "Future year", "goal": rate, "paid": Decimal("0"),
+            "remaining": rate, "pct": 0, "projected": True,
+        })
+        total_goal += rate
+
+    total_pct = int(total_paid / total_goal * 100) if total_goal else 0
+    return {
+        "tuition_slots": slots,
+        "tuition_total_paid": total_paid,
+        "tuition_total_goal": total_goal,
+        "tuition_total_pct": total_pct,
+        "tuition_years_started": started,
+        "tuition_required_years": required,
     }
 
 
@@ -438,6 +544,23 @@ def advancement_withdraw(request, pk):
     else:
         withdraw_advancement(adv)
         messages.success(request, "Your demande has been withdrawn.")
+    return redirect(_formation_url("formation"))
+
+
+@login_required
+@require_POST
+def advancement_upload(request, pk):
+    """Attach (or replace) the Work the member presented for this step — the
+    written Palimpsest / Passage / Traversée text — leaving a trace on their
+    formation. Stored privately on the demande (see ``palimpsest_download``)."""
+    adv = get_object_or_404(Advancement, pk=pk, member=request.user)
+    upload = request.FILES.get("work")
+    if upload is None:
+        messages.error(request, "Choose a file to upload.")
+    else:
+        adv.palimpsest = upload
+        adv.save(update_fields=["palimpsest", "updated_at"])
+        messages.success(request, f"Your {adv.step_label} Work has been saved.")
     return redirect(_formation_url("formation"))
 
 

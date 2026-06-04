@@ -145,7 +145,7 @@ def test_tuition_view_renders_for_in_training_student(client, current_period):
     resp = client.get(reverse("admissions:formation") + "?tab=tuition")
     assert resp.status_code == 200
     assert current_period.name.encode() in resp.content
-    assert b"Your decision" in resp.content
+    assert b"My decision" in resp.content
 
 
 @pytest.mark.django_db

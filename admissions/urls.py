@@ -20,6 +20,8 @@ urlpatterns = [
     path("formation/demande/", views.advancement, name="advancement"),
     path("formation/<int:pk>/withdraw/", views.advancement_withdraw,
          name="advancement_withdraw"),
+    path("formation/<int:pk>/upload/", views.advancement_upload,
+         name="advancement_upload"),
     path("formation/<int:pk>/palimpsest/", views.palimpsest_download,
          name="palimpsest_download"),
 
