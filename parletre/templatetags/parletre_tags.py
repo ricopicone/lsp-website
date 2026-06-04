@@ -71,6 +71,17 @@ _ICON_PATHS = {
         '<path d="m23 7-7 5 7 5V7z"/>'
         '<rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>'
     ),
+    # forum (threaded) — overlapping square bubbles
+    "forum": (
+        '<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/>'
+        '<path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>'
+    ),
+    # chat (live) — single round speech bubble
+    "chat": (
+        '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 '
+        '8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 '
+        '4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'
+    ),
     # add-a-reaction smiley
     "smile": (
         '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/>'

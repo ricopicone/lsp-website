@@ -67,12 +67,12 @@
             {% if channel.is_unread %}<span class="size-2 rounded-full bg-primary inline-block shrink-0" title="Unread activity"></span>{% endif %}
             <span class="font-medium text-base-content">{{ channel.name }}</span>
             {% if channel.kind == 'chat' %}
-              <span class="badge badge-sm badge-ghost">Chat</span>
+              <span class="badge badge-sm badge-secondary gap-1" title="Live chat">{% icon "chat" %} Chat</span>
             {% elif channel.kind == 'video' %}
               {% if channel.is_live %}<span class="badge badge-sm badge-success gap-1" title="Someone is in the room">{% icon "video" %} Live</span>
-              {% else %}<span class="badge badge-sm badge-ghost gap-1">{% icon "video" %} Video</span>{% endif %}
+              {% else %}<span class="badge badge-sm badge-primary gap-1" title="Video meeting room">{% icon "video" %} Video</span>{% endif %}
             {% else %}
-              <span class="badge badge-sm badge-ghost">Forum</span>
+              <span class="badge badge-sm badge-info gap-1" title="Threaded discussion">{% icon "forum" %} Forum</span>
             {% endif %}
             {% if channel.is_ephemeral %}
               <span class="badge badge-sm badge-warning badge-outline gap-1" title="Messages disappear">{% icon "hourglass" %} Disappearing</span>
