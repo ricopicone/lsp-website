@@ -205,3 +205,49 @@ def test_audit_runs_and_flags_duplicate_dues():
     assert "audit complete" in text
     # The two same-year dues payments should be flagged.
     assert "1  ⚠  members with >1 dues payment" in text
+
+
+# ---- purge_test_payments --------------------------------------------------
+
+def _stripe_payment(session_id="", *, livemode=True, source=Source.IMPORTED):
+    return Payment.objects.create(
+        payment_type=Payment.Type.DUES, amount=Decimal("100.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        stripe_checkout_session_id=session_id, livemode=livemode, source=source,
+        paid_at=timezone.make_aware(datetime(2026, 5, 28, 12)),
+    )
+
+
+def test_purge_finds_test_by_cs_test_and_livemode():
+    t1 = _stripe_payment("cs_test_abc")            # test-mode session
+    t2 = _stripe_payment("cs_live_xyz", livemode=False)  # explicit test flag
+    real = _stripe_payment("cs_live_real", livemode=True)
+    call_command("purge_test_payments")  # dry run — nothing deleted
+    assert Payment.objects.filter(pk__in=[t1.pk, t2.pk, real.pk]).count() == 3
+    call_command("purge_test_payments", "--commit")
+    assert not Payment.objects.filter(pk__in=[t1.pk, t2.pk]).exists()
+    assert Payment.objects.filter(pk=real.pk).exists()
+
+
+def test_purge_skips_registration_linked_unless_forced():
+    from datetime import date
+
+    from events.models import Audience, Event, PriceTier
+    from registrations.models import Registration
+
+    u = _student("reg@x.test")
+    ev = Event.objects.create(title="E", slug="e-purge",
+                              start_date=date(2026, 9, 1), end_date=date(2026, 9, 1))
+    tier = PriceTier.objects.create(event=ev, audience=Audience.ALL,
+                                    base_amount=Decimal("100.00"))
+    reg = Registration.objects.create(user=u, event=ev, price_tier=tier,
+                                      quoted_amount=Decimal("100.00"))
+    p = Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg, user=u,
+        amount=Decimal("100.00"), status=Payment.Status.SUCCEEDED,
+        method=Payment.Method.STRIPE, stripe_checkout_session_id="cs_test_reg",
+    )
+    call_command("purge_test_payments", "--commit")
+    assert Payment.objects.filter(pk=p.pk).exists()  # skipped (linked to a reg)
+    call_command("purge_test_payments", "--commit", "--force")
+    assert not Payment.objects.filter(pk=p.pk).exists()
