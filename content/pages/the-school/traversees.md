@@ -3,12 +3,10 @@ title: Traversées
 author:
 ---
 
-<!-- The Scholar Formation founding text (Rogers & Estrada, 2022) is seeded at
-     /documents/scholar-formation-founding-text/ but is members-only for now;
-     link it here once it's made public. -->
 A traversée is the advancement of a Candidate Scholar to Scholar of the School—the
 scholar-track counterpart to the analyst's [Passage](#passages). Its name marks the
-*traversal* the School's Scholar-formation founding text calls "foundational to the
+*traversal* the School's [Scholar-formation founding
+text](/documents/scholar-formation-founding-text/) calls "foundational to the
 Scholar of the School": from the split subject of the unconscious to the *objet
 petit a*, the remainder at the end of analysis.
 
