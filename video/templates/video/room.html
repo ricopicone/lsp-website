@@ -13,8 +13,12 @@
 
   {% include "video/_embed.html" with room_url=room_url room_token=token back_url=back_url %}
 
-  <p class="text-xs text-base-content/50">
-    This meeting is not recorded.{% if is_owner %} You are joining as a moderator.{% endif %}
-  </p>
+  <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-base-content/50">
+    <p>
+      This meeting is not recorded.{% if is_owner %} As a host you can mute or remove
+      participants from the People panel.{% endif %}
+    </p>
+    <a href="{% url 'video:system_check' %}" class="link">Test your video &amp; audio</a>
+  </div>
 </div>
 {% endblock %}

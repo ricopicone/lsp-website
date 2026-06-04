@@ -65,8 +65,10 @@ def event_summary_context(event, user) -> dict:
             Registration.Status.COMPED,
         )
     )
+    from events.permissions import can_edit_event
     from video.services import daily_enabled
 
+    next_session = event.next_session()
     return {
         "event": event,
         "sessions": event.sessions.order_by("start_at"),
@@ -76,6 +78,9 @@ def event_summary_context(event, user) -> dict:
         "user_registration": user_registration,
         "has_paid_registration": has_paid_registration,
         "daily_enabled": daily_enabled(),
+        "event_is_live": event.is_live(),
+        "event_next_session_at": next_session.start_at if next_session else None,
+        "can_host": can_edit_event(user, event),
     }
 
 

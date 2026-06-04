@@ -23,7 +23,10 @@ every Join open the same room.{% endcomment %}
       <h3 class="font-medium text-base-content">Meeting room</h3>
       <p class="text-sm text-base-content/60">Start a video meeting in your browser — no app to install.</p>
     </div>
-    <a href="{% url 'video:workgroup_room' workgroup.slug %}" class="btn btn-primary btn-sm">Meet Now</a>
+    <div class="flex flex-col items-end gap-1">
+      <a href="{% url 'video:workgroup_room' workgroup.slug %}" class="btn btn-primary btn-sm">Meet Now</a>
+      <a href="{% url 'video:system_check' %}" class="link text-xs text-base-content/55">Test your setup</a>
+    </div>
   </div>
 
   {% if upcoming_meetings %}

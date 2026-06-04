@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 
 from django.conf import settings
 from django.core.cache import cache
@@ -67,8 +68,10 @@ def ensure_room(owner) -> DailyRoom | None:
     name = room.name if room is not None else _room_name(owner)
     properties = {
         "enable_recording": False,  # case-history privacy — never enable
-        "enable_prejoin_ui": True,
+        "enable_prejoin_ui": True,  # device/mic/camera check before joining
         "enable_knocking": False,  # token-gated, not knock-to-enter
+        "enable_chat": True,  # everyone can use text chat
+        "enable_people_ui": True,  # participants panel + host mute/remove controls
     }
     if settings.DAILY_MAX_PARTICIPANTS:
         properties["max_participants"] = settings.DAILY_MAX_PARTICIPANTS
@@ -102,6 +105,38 @@ def mint_token(room: DailyRoom, user, *, is_owner: bool = False) -> str:
     return daily.create_meeting_token(
         room_name=room.name, user_name=name[:255], is_owner=is_owner, exp=exp
     )
+
+
+def system_check_context(request) -> dict:
+    """A throwaway pre-event device/network check room. Each call mints a fresh
+    private room that auto-closes ~10 min after creation (``exp`` +
+    ``eject_at_room_exp``) so testing never touches a real event room. Returns
+    ``{room_url, room_token}`` or ``{room_unavailable: True}``."""
+    if not daily_enabled():
+        return {"room_unavailable": True}
+    name = f"{ROOM_PREFIX}check-{uuid.uuid4().hex[:16]}"
+    exp = int(time.time()) + 600  # ~10 minutes
+    user = getattr(request, "user", None)
+    uname = ""
+    if user is not None:
+        uname = (getattr(user, "get_full_name", lambda: "")() or "").strip()
+        uname = uname or getattr(user, "email", "") or ""
+    try:
+        data = daily.create_room(name, properties={
+            "enable_prejoin_ui": True,
+            "enable_chat": False,
+            "enable_recording": False,
+            "exp": exp,
+            "eject_at_room_exp": True,
+        })
+        token = daily.create_meeting_token(
+            room_name=name, user_name=uname[:255], is_owner=False, exp=exp
+        )
+    except daily.DailyError:
+        logger.exception("Daily system-check provisioning failed")
+        return {"room_unavailable": True}
+    url = data.get("url") or f"https://{settings.DAILY_DOMAIN}/{name}"
+    return {"room_url": url, "room_token": token}
 
 
 def can_enter(workgroup, user) -> bool:

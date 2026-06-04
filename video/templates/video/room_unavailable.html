@@ -8,6 +8,9 @@
     The in-site video room isn't available right now. If your group's organizer
     posted joining details, you'll find them on the event or group page.
   </p>
-  <a href="{{ back_url }}" class="btn btn-primary btn-sm">← Back</a>
+  <div class="flex items-center justify-center gap-3">
+    <a href="{{ back_url }}" class="btn btn-primary btn-sm">← Back</a>
+    <a href="{% url 'video:system_check' %}" class="link text-sm">Test your video &amp; audio</a>
+  </div>
 </div>
 {% endblock %}

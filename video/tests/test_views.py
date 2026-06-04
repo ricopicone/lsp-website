@@ -65,7 +65,7 @@ def test_faculty_joins_as_moderator(client):
     client.force_login(teacher)
     resp = client.get(_room_url(event))
     assert resp.status_code == 200
-    assert b"moderator" in resp.content
+    assert b"mute or remove" in resp.content  # host moderation hint
 
 
 def test_disabled_renders_fallback(client):

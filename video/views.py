@@ -24,6 +24,13 @@ logger = logging.getLogger("video")
 
 
 @login_required
+def system_check(request):
+    """Pre-event tech check — a throwaway Daily room that lands on the device /
+    mic / camera / network prejoin screen and auto-closes ~10 min."""
+    return render(request, "video/system_check.html", services.system_check_context(request))
+
+
+@login_required
 def workgroup_room(request, slug):
     wg = get_object_or_404(Workgroup, slug=slug)
     return _render_room(request, wg, back_url=wg.get_absolute_url())

@@ -1,0 +1,49 @@
+{% extends "core/base.html" %}
+{% block title %}Test your video &amp; audio{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-6 space-y-5">
+  <div class="space-y-1">
+    <h1 class="font-serif text-2xl text-base-content">Test your video &amp; audio</h1>
+    <p class="text-base-content/70 text-sm">
+      This is a private practice room — no one else can join it, and it closes itself
+      after about 10 minutes. Use it to make sure your camera, microphone, and
+      connection are ready before an event.
+    </p>
+  </div>
+
+  {% if room_unavailable %}
+  <div class="rounded-lg border border-base-300 bg-base-100 p-6 text-center text-base-content/70">
+    The practice room isn't available right now. Please try again later.
+  </div>
+  {% else %}
+  <div class="grid gap-5 lg:grid-cols-[1fr_18rem]">
+    <div>
+      {% include "video/_embed.html" with room_url=room_url room_token=room_token %}
+      <p class="mt-2 text-xs text-base-content/50">
+        On the setup screen, pick your camera and microphone and confirm you can see
+        yourself and the mic meter moves when you speak. You don't need to "join."
+      </p>
+    </div>
+    <aside class="rounded-lg border border-base-300 bg-base-100 p-4 text-sm space-y-3">
+      <h2 class="font-medium text-base-content">Having trouble?</h2>
+      <ul class="space-y-2 text-base-content/70 list-disc pl-4">
+        <li><strong>Allow camera &amp; microphone</strong> when your browser asks. If you
+          dismissed it, click the camera/lock icon in the address bar and set both to
+          Allow, then reload.</li>
+        <li>Use a recent <strong>Chrome, Edge, Firefox, or Safari</strong>. Avoid
+          in-app browsers (opening from a link inside another app).</li>
+        <li>If the wrong device shows, pick the right <strong>camera/microphone</strong>
+          from the dropdowns on the setup screen.</li>
+        <li><strong>Use headphones</strong> to avoid echo, and close other apps that
+          use the camera (Zoom, Teams, FaceTime).</li>
+        <li>For the smoothest call, use a <strong>strong Wi-Fi or wired</strong>
+          connection.</li>
+      </ul>
+      <p class="text-base-content/50 text-xs">Still stuck? Email
+        <a href="mailto:{{ SUPPORT_EMAIL|default:'website@lacanschool.org' }}" class="link">support</a>.</p>
+    </aside>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
