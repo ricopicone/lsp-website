@@ -195,7 +195,9 @@ def index(request):
 
     from . import presence
 
-    video_presence = presence_map() if any(c.is_video for c in general) else {}
+    has_video = any(c.is_video for c in general) or any(c.is_video for c in wg_channels)
+    video_presence = presence_map() if has_video else {}
+    live_video = {name for name, ppl in video_presence.items() if ppl}
 
     # Group into categories, preserving order; uncategorised last.
     groups: list[tuple[str, list[Channel]]] = []
@@ -217,7 +219,7 @@ def index(request):
             groups.append((label, bucket))
         seen[key].append(channel)
 
-    my_spaces = _my_spaces(wg_channels, private_chats, unread)
+    my_spaces = _my_spaces(wg_channels, private_chats, unread, live_video)
 
     return render(
         request,
@@ -265,12 +267,21 @@ _CHANNEL_KIND_NAV = {
 }
 
 
-def _channel_menu_item(channel, *, unread=None, active_id=None):
+def _channel_menu_item(channel, *, unread=None, active_id=None, live_video=None):
     from django.urls import reverse
 
     label, icon, order = _CHANNEL_KIND_NAV.get(
         channel.kind, (channel.get_kind_display(), "forum", 9)
     )
+    is_live = False
+    if channel.kind == "video" and live_video:
+        # A workgroup video channel's room is the workgroup room (lsp-<slug>);
+        # a board video channel anchors on the channel (lsp-ch-<slug>).
+        room = (
+            f"lsp-{channel.workgroup.slug}" if channel.workgroup_id
+            else f"lsp-ch-{channel.slug}"
+        )
+        is_live = room in live_video
     return {
         "label": label,
         "icon": icon,
@@ -278,10 +289,11 @@ def _channel_menu_item(channel, *, unread=None, active_id=None):
         "url": reverse("parletre:channel", args=[channel.slug]),
         "is_unread": unread is not None and channel.id in unread,
         "is_active": active_id is not None and channel.id == active_id,
+        "is_live": is_live,
     }
 
 
-def _my_spaces(wg_channels, private_chats, unread):
+def _my_spaces(wg_channels, private_chats, unread, live_video=None):
     """The member's own spaces for the "Your groups & private chats" section:
     one tile per workgroup (whose channels open *in Parlêtre*, not the workspace)
     plus one per private chat. Group tiles are ``{is_group: True, name, label,
@@ -293,7 +305,9 @@ def _my_spaces(wg_channels, private_chats, unread):
         if wg is None or channel.archived:
             continue
         entry = by_group.setdefault(wg.id, {"wg": wg, "channels": []})
-        entry["channels"].append(_channel_menu_item(channel, unread=unread))
+        entry["channels"].append(
+            _channel_menu_item(channel, unread=unread, live_video=live_video)
+        )
 
     group_tiles = [
         {
@@ -328,9 +342,15 @@ def _group_channel_nav(channel):
     wg = channel.workgroup
     if wg is None:
         return []
+    siblings = list(wg.channels.filter(archived=False).select_related("workgroup"))
+    live_video = set()
+    if any(c.kind == Channel.Kind.VIDEO for c in siblings):
+        from video.services import live_room_names
+
+        live_video = live_room_names()
     items = [
-        _channel_menu_item(ch, active_id=channel.id)
-        for ch in wg.channels.filter(archived=False)
+        _channel_menu_item(ch, active_id=channel.id, live_video=live_video)
+        for ch in siblings
     ]
     return sorted(items, key=lambda c: c["order"])
 

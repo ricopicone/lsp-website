@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from django.core.cache import cache
+from django.test import override_settings
 from django.urls import reverse
 
 from accounts.models import Profile, User
@@ -12,6 +14,8 @@ from parletre.models import Channel
 from workgroups.models import Workgroup, WorkgroupMembership, build_workgroup
 
 pytestmark = pytest.mark.django_db
+
+daily_on = override_settings(DAILY_ENABLED=True, DAILY_API_KEY="k", DAILY_DOMAIN="lsp.daily.co")
 
 
 def _member(email="m@x.test"):
@@ -74,6 +78,33 @@ def test_board_channel_has_no_switcher(client):
     resp = client.get(reverse("parletre:channel", args=[ch.slug]))
     assert resp.status_code == 200
     assert b"Open workspace" not in resp.content
+
+
+@daily_on
+def test_video_menu_item_shows_live_when_room_occupied(client, monkeypatch):
+    cache.clear()
+    u = _member()
+    wg = _group_with_member(u, slug="cartel-live")
+    # The workgroup video channel's room is the workgroup room (lsp-<slug>).
+    monkeypatch.setattr(
+        "video.daily.get_presence", lambda: {f"lsp-{wg.slug}": [{"userName": "Someone"}]}
+    )
+    client.force_login(u)
+    body = client.get(reverse("parletre:index")).content.decode()
+    assert "A meeting is happening now" in body  # live cue on the Video button
+    cache.clear()
+
+
+@daily_on
+def test_video_menu_item_not_live_when_room_empty(client, monkeypatch):
+    cache.clear()
+    u = _member()
+    _group_with_member(u, slug="cartel-quiet")
+    monkeypatch.setattr("video.daily.get_presence", lambda: {})
+    client.force_login(u)
+    body = client.get(reverse("parletre:index")).content.decode()
+    assert "A meeting is happening now" not in body
+    cache.clear()
 
 
 def test_open_access_relabeled_all_lsp(client):

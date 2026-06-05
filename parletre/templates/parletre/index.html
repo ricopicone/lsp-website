@@ -64,7 +64,9 @@
         </div>
         <div class="flex flex-wrap gap-2">
           {% for c in s.channels %}
-          <a href="{{ c.url }}" class="btn btn-sm btn-ghost gap-1">
+          <a href="{{ c.url }}" class="btn btn-sm btn-ghost gap-1 {% if c.is_live %}text-success{% endif %}"
+             {% if c.is_live %}title="A meeting is happening now"{% endif %}>
+            {% if c.is_live %}{% include "workgroups/_live_dot.html" %}{% endif %}
             {% icon c.icon %} {{ c.label }}
             {% if c.is_unread %}<span class="size-1.5 rounded-full bg-primary inline-block shrink-0" title="Unread"></span>{% endif %}
           </a>
