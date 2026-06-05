@@ -20,6 +20,7 @@ def _mock_daily(monkeypatch):
     from django.core.cache import cache
 
     cache.clear()
+    monkeypatch.setattr("video.daily.get_room", lambda name: None)  # forces create
     monkeypatch.setattr(
         "video.daily.create_room",
         lambda name, properties=None: {"name": name, "url": f"https://lsp.daily.co/{name}"},

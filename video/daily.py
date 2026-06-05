@@ -41,10 +41,14 @@ def create_room(name: str, *, properties: dict | None = None) -> dict:
     raise DailyError(f"create_room({name}) -> {resp.status_code}: {resp.text}")
 
 
-def get_room(name: str) -> dict:
+def get_room(name: str) -> dict | None:
+    """Fetch a room, or ``None`` if it doesn't exist (404) — lets callers detect a
+    room that was deleted on Daily's side and recreate it."""
     resp = requests.get(_url(f"rooms/{name}"), headers=_headers(), timeout=15)
     if resp.status_code == 200:
         return resp.json()
+    if resp.status_code == 404:
+        return None
     raise DailyError(f"get_room({name}) -> {resp.status_code}: {resp.text}")
 
 

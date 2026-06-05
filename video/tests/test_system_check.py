@@ -63,6 +63,7 @@ def test_system_check_view_renders(client, _capture_daily):
 @daily_on
 def test_rooms_enable_chat_and_people_ui(monkeypatch):
     captured = {}
+    monkeypatch.setattr("video.daily.get_room", lambda name: None)  # forces create
     monkeypatch.setattr(
         "video.daily.create_room",
         lambda name, properties=None: captured.update(properties or {}) or {"url": f"x/{name}"},

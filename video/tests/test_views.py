@@ -13,6 +13,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture(autouse=True)
 def _mock_daily(monkeypatch):
     """Every view test gets a stubbed Daily API (no network)."""
+    monkeypatch.setattr("video.daily.get_room", lambda name: None)  # forces create
     monkeypatch.setattr(
         "video.daily.create_room",
         lambda name, properties=None: {"name": name, "url": f"https://lsp.daily.co/{name}"},

@@ -17,27 +17,59 @@ def _fake_create_room(calls):
     return _inner
 
 
-@daily_on
-def test_ensure_room_is_idempotent(monkeypatch):
-    calls: list = []
-    monkeypatch.setattr("video.daily.create_room", _fake_create_room(calls))
-    event = seminar()
-    wg = event.ensure_workgroup()
+def _missing(name):
+    """get_room stub: the room does not exist on Daily."""
+    return None
 
+
+@daily_on
+def test_ensure_room_creates_when_missing(monkeypatch):
+    calls: list = []
+    monkeypatch.setattr("video.daily.get_room", _missing)
+    monkeypatch.setattr("video.daily.create_room", _fake_create_room(calls))
+    wg = seminar().ensure_workgroup()
     room = services.ensure_room(wg)
     assert isinstance(room, DailyRoom)
     assert room.provider_created is True
     assert room.name == f"lsp-{wg.slug}"
+    assert len(calls) == 1
 
-    # Second call reuses the row — no second provider hit.
+
+@daily_on
+def test_ensure_room_reuses_existing_daily_room(monkeypatch):
+    create_calls: list = []
+    monkeypatch.setattr(
+        "video.daily.get_room",
+        lambda name: {"name": name, "url": f"https://lsp.daily.co/{name}"},
+    )
+    monkeypatch.setattr("video.daily.create_room", _fake_create_room(create_calls))
+    wg = seminar().ensure_workgroup()
+    room = services.ensure_room(wg)
     again = services.ensure_room(wg)
     assert again.pk == room.pk
-    assert len(calls) == 1
+    assert create_calls == []  # Daily already has the room → never recreated
+
+
+@daily_on
+def test_ensure_room_recreates_room_deleted_on_daily(monkeypatch):
+    # The DB row exists + provider_created, but the Daily room was deleted
+    # (e.g. cleaned up in the dashboard). ensure_room must self-heal.
+    wg = seminar().ensure_workgroup()
+    DailyRoom.objects.create(
+        workgroup=wg, name=f"lsp-{wg.slug}", url="https://x/y", provider_created=True
+    )
+    create_calls: list = []
+    monkeypatch.setattr("video.daily.get_room", _missing)
+    monkeypatch.setattr("video.daily.create_room", _fake_create_room(create_calls))
+    room = services.ensure_room(wg)
+    assert len(create_calls) == 1  # recreated on Daily's side
+    assert room.provider_created is True
 
 
 @daily_on
 def test_ensure_room_disables_recording(monkeypatch):
     calls: list = []
+    monkeypatch.setattr("video.daily.get_room", _missing)
     monkeypatch.setattr("video.daily.create_room", _fake_create_room(calls))
     wg = seminar().ensure_workgroup()
     services.ensure_room(wg)
@@ -58,6 +90,7 @@ def test_mint_token_passes_owner_flag(monkeypatch):
         captured.update(room_name=room_name, user_name=user_name, is_owner=is_owner)
         return "tok-123"
 
+    monkeypatch.setattr("video.daily.get_room", _missing)
     monkeypatch.setattr("video.daily.create_room", _fake_create_room([]))
     monkeypatch.setattr("video.daily.create_meeting_token", _fake_token)
     wg = seminar().ensure_workgroup()

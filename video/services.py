@@ -52,19 +52,18 @@ def _room_name(owner) -> str:
 
 
 def ensure_room(owner) -> DailyRoom | None:
-    """Return the owner's Daily room, creating it on the provider if needed.
+    """Return the owner's Daily room, reconciling our DB row against Daily.
 
-    ``owner`` is a Workgroup or a Parlêtre Channel; both expose a ``video_room``
-    reverse accessor. Idempotent. Returns ``None`` when the feature is disabled or
-    provisioning fails — callers then fall back to ``access_info``.
+    Daily is the source of truth: we verify the room still exists on every call
+    and recreate it if it was deleted (e.g. cleaned up in the Daily dashboard), so
+    a stale DB row can't hand out a dead "meeting does not exist" URL. ``owner`` is
+    a Workgroup or a Parlêtre Channel (both expose ``video_room``). Returns ``None``
+    when the feature is disabled or the Daily call fails.
     """
     if not daily_enabled():
         return None
 
     room = getattr(owner, "video_room", None)
-    if room is not None and room.provider_created:
-        return room
-
     name = room.name if room is not None else _room_name(owner)
     properties = {
         "enable_recording": False,  # case-history privacy — never enable
@@ -77,9 +76,11 @@ def ensure_room(owner) -> DailyRoom | None:
         properties["max_participants"] = settings.DAILY_MAX_PARTICIPANTS
 
     try:
-        data = daily.create_room(name, properties=properties)
+        data = daily.get_room(name)  # None if it was deleted on Daily's side
+        if data is None:
+            data = daily.create_room(name, properties=properties)
     except daily.DailyError:
-        logger.exception("Daily ensure_room failed for %s", _room_name(owner))
+        logger.exception("Daily ensure_room failed for %s", name)
         return None
 
     url = data.get("url") or f"https://{settings.DAILY_DOMAIN}/{name}"
