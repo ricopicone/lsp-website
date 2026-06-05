@@ -190,8 +190,9 @@ class Recording(models.Model):
 
     # ---- playback ----
 
-    def playable_url(self):
-        """A temporary URL to stream/download the recording, or None if not ready."""
+    def playable_url(self, *, download: bool = False):
+        """A temporary URL to stream/download the recording, or None if not ready.
+        Presigned from our S3 (owned mode) else Daily's access-link."""
         from django.conf import settings
 
         from . import daily
@@ -199,8 +200,8 @@ class Recording(models.Model):
         if self.status != self.Status.READY:
             return None
         if getattr(settings, "RECORDING_OWN_S3", False) and self.s3_key:
-            from core.storage import recordings_storage
-            return recordings_storage().url(self.s3_key)
+            from core.storage import presigned_recordings_url
+            return presigned_recordings_url(self.s3_key, download=download)
         try:
             return daily.recording_access_link(self.daily_recording_id)
         except daily.DailyError:

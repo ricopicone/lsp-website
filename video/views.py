@@ -57,10 +57,11 @@ def recording_play(request, pk):
     rec = get_object_or_404(Recording, pk=pk)
     if not rec.content_visible_to(request.user):
         raise PermissionDenied("You don't have access to this recording.")
-    url = rec.playable_url()
+    download = bool(request.GET.get("download"))
+    url = rec.playable_url(download=download)
     if url is None:
         return render(request, "video/recording_unavailable.html", {"recording": rec})
-    if request.GET.get("download"):
+    if download:
         return HttpResponseRedirect(url)
     back = ""
     if rec.event_id:

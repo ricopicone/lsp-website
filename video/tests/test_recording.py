@@ -148,7 +148,7 @@ def test_content_cannot_exceed_listing():
 def test_recording_play_gated(client, monkeypatch):
     wg = seminar().ensure_workgroup()
     rec = _recording(wg, content=Recording.Visibility.MEMBERS)
-    monkeypatch.setattr(Recording, "playable_url", lambda self: "https://x/play.mp4")
+    monkeypatch.setattr(Recording, "playable_url", lambda self, **kw: "https://x/play.mp4")
     member = user("m4@x.test")
     outsider = user("o2@x.test")
     outsider.profile.role = Profile.Role.EXTERNAL

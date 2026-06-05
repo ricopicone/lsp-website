@@ -42,6 +42,36 @@ def private_storage():
     return FileSystemStorage(location=settings.PRIVATE_MEDIA_ROOT)
 
 
+def presigned_recordings_url(key, *, download=False, expires=21600):
+    """A signed, time-limited GET URL for a recording object in our bucket.
+
+    Generated directly via boto3 with **SigV4** (Storage.url() defaults to the
+    deprecated SigV2 here, and video playback needs reliable range requests). The
+    URL is valid until ``expires`` or the signing instance-role credentials lapse,
+    whichever is sooner (~6h). ``download`` forces a Content-Disposition attachment.
+    """
+    from django.conf import settings
+
+    bucket = getattr(settings, "AWS_RECORDINGS_BUCKET_NAME", "") or getattr(
+        settings, "AWS_PRIVATE_STORAGE_BUCKET_NAME", ""
+    )
+    if not bucket:
+        return None
+    import boto3
+    from botocore.config import Config
+
+    params = {"Bucket": bucket, "Key": key}
+    if download:
+        fname = key.rsplit("/", 1)[-1] or "recording.mp4"
+        params["ResponseContentDisposition"] = f'attachment; filename="{fname}"'
+    client = boto3.client(
+        "s3",
+        region_name=getattr(settings, "AWS_S3_REGION_NAME", "us-west-2"),
+        config=Config(signature_version="s3v4"),
+    )
+    return client.generate_presigned_url("get_object", Params=params, ExpiresIn=expires)
+
+
 def recordings_storage():
     """Storage for owned video recordings (Daily writes the mp4 here when
     ``recordings_bucket`` is configured). Signed, expiring URLs — never public.
