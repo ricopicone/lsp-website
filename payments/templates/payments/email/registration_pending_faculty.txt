@@ -1,4 +1,4 @@
-Hello,
+{% autoescape off %}Hello,
 
 {{ registration.user.get_full_name|default:registration.user.email }} has requested
 to register for "{{ event.title }}" and is awaiting your approval.
@@ -15,3 +15,4 @@ Once you approve, the registrant is asked to complete payment (if any is due).
 Questions? Reply to this email — it goes to {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
+{% endautoescape %}

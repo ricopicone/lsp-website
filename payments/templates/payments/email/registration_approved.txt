@@ -1,4 +1,4 @@
-{{ registration.user.first_name|default:"Hello" }},
+{% autoescape off %}{{ registration.user.first_name|default:"Hello" }},
 
 Good news — your registration for "{{ registration.event.title }}" has been
 approved by the faculty.
@@ -16,3 +16,4 @@ convenience.
 Questions? Reply to this email — it goes to {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
+{% endautoescape %}

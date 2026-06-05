@@ -1,4 +1,4 @@
-{{ registration.user.first_name|default:"Hello" }},
+{% autoescape off %}{{ registration.user.first_name|default:"Hello" }},
 
 Your registration for "{{ registration.event.title }}" has been cancelled.
 
@@ -11,3 +11,4 @@ card on file. It typically appears on your statement in 5–10 business days.
 Questions? Reply to this email — it goes to {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
+{% endautoescape %}

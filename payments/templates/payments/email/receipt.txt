@@ -1,4 +1,4 @@
-{% if payment.payment_type == "dues" %}Thank you for paying your annual membership dues — your support keeps the School running.
+{% autoescape off %}{% if payment.payment_type == "dues" %}Thank you for paying your annual membership dues — your support keeps the School running.
 
 {% elif payment.payment_type == "donation" %}Thank you for your donation to the Lacanian School of Psychoanalysis.
 
@@ -19,3 +19,4 @@ Method: {{ payment.get_method_display }}
 Keep for your records. Questions? Reply to this email — it goes to {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
+{% endautoescape %}
