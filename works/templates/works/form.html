@@ -23,6 +23,7 @@
 
   <form method="post" enctype="multipart/form-data" class="space-y-6">
     {% csrf_token %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
     {% if form.non_field_errors %}
     <div class="rounded-md border border-error/40 bg-error/5 p-3 text-sm text-error">
       {{ form.non_field_errors }}

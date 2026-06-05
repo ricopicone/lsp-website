@@ -53,7 +53,9 @@ running the dev server, or run `npm run watch:css` in a second terminal.
 The Work-tab document editor's TipTap bundle is **vendored** (no runtime
 CDN): `assets/js/doc-editor.src.js` is bundled by esbuild to
 `static/js/vendor/doc-editor.js`, which **is** committed. After editing the
-source, run `npm run build:js` and commit the rebuilt bundle.
+source, run `npm run build:js` and commit the rebuilt bundle. The Daily.co
+video client is vendored the same way (`assets/js/daily.src.js` →
+`static/js/vendor/daily.js`); `npm run build:js` rebuilds both.
 `base.html` links `{% static 'css/site.css' %}` and sets `data-theme="silk"`
 (light) with `abyss` (dark) auto-applied via `prefers-color-scheme` and a
 manual toggle. **Authoring rule: use DaisyUI semantic tokens
@@ -79,6 +81,7 @@ parletre/       Parlêtre members-only discussion board (MEM-3, M13.5)      <- P
 workgroups/     shared Workgroup layer (roster+channel+works+files)        <- Phase 2
 cartels/        Cartels (CART-1/2/3), built on the Workgroup layer         <- Phase 2
 workinggroups/  Working groups, built on the Workgroup layer               <- Phase 2
+video/          Daily.co in-site meeting rooms (one per Workgroup)          <- Phase 2
 ```
 
 - Settings are split by environment. `DJANGO_SETTINGS_MODULE` defaults to
@@ -327,6 +330,20 @@ Phase 2 plan for milestone IDs):**
   provenance title block) + a sanitized HTML body, bylined to the group's
   members; unpublish/delete supported. Comments/track-changes deferred
   (TipTap Pro). See `document-editor` memory.
+- **Video / Daily.co** (`video`) — in-site, browser-based meeting rooms (Daily
+  Prebuilt, no client install). One persistent `DailyRoom` per **Workgroup** *or*
+  per Parlêtre **Channel** (board video channels), provisioned lazily on first
+  join; private + per-user meeting-token gated; **recording never enabled**
+  (case-history privacy). Surfaces: a Workgroup **"Meet" tab** (Meet Now + joinable
+  meetings), a third Parlêtre channel kind **VIDEO**, and **context-aware event
+  location** ("Online · video meeting"; live-gated Join). **Real Daily presence**
+  ("Live now · N in the room", cached `GET /presence`) lights the Meet/Overview
+  tabs, board channel tiles, and event pages. **Tech check** at
+  `/video/system-check/` (throwaway room, auto-closes ~10 min). Hosts (faculty/
+  leads) moderate via Daily's People panel (mute / camera-off / remove); everyone
+  gets chat. **Feature-flagged OFF** until `DJANGO_DAILY_ENABLED=true` +
+  `DAILY_API_KEY`/`DAILY_DOMAIN` on the host. `daily.js` is vendored (see the CSS/JS
+  pipeline note above). See the `video-daily-integration` memory.
 - **Cartels** (`cartels`, CART-1/2/3) — built on the Workgroup layer.
 - **Directory** (`/directory/`), **Find an Analyst** map, member
   self-service **profile editor** (`/accounts/profile/`), **works**

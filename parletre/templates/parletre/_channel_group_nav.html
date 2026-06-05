@@ -1,0 +1,18 @@
+{% comment %}Sibling-channel switcher for a workgroup-backed channel — keeps a
+group's navigation inside Parlêtre (Discuss / Chat / Video) with a link out to the
+full workspace. Expects: group_channels, channel.{% endcomment %}
+{% load parletre_tags %}
+{% if group_channels %}
+<div class="flex flex-wrap items-center gap-1.5">
+  {% for c in group_channels %}
+  <a href="{{ c.url }}" class="btn btn-xs gap-1 {% if c.is_active %}btn-primary{% else %}btn-ghost{% endif %} {% if c.is_live %}text-success{% endif %}"
+     {% if c.is_live %}title="A meeting is happening now"{% endif %}>
+    {% if c.is_live %}{% include "workgroups/_live_dot.html" %}{% endif %}
+    {% icon c.icon %} {{ c.label }}
+  </a>
+  {% endfor %}
+  {% if channel.workgroup %}
+  <a href="{{ channel.workgroup.get_absolute_url }}" class="ml-auto text-xs text-base-content/50 hover:text-primary">Open workspace ↗</a>
+  {% endif %}
+</div>
+{% endif %}

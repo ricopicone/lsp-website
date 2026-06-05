@@ -187,12 +187,30 @@ def index(request):
     wg_channels = [c for c in visible if c.access == Channel.Access.WORKGROUP]
     private_chats = [c for c in visible if c.access == Channel.Access.PRIVATE]
 
+    # Light up any board video channel whose room currently has participants,
+    # and surface who's in it. Channel rooms are deterministically named
+    # ``lsp-ch-<slug>`` (see video.services._room_name), so we needn't touch the
+    # DailyRoom rows.
+    from video.services import participant_names, presence_map
+
+    from . import presence
+
+    has_video = any(c.is_video for c in general) or any(c.is_video for c in wg_channels)
+    video_presence = presence_map() if has_video else {}
+    live_video = {name for name, ppl in video_presence.items() if ppl}
+
     # Group into categories, preserving order; uncategorised last.
     groups: list[tuple[str, list[Channel]]] = []
     seen: dict[object, list[Channel]] = {}
     for channel in general:
         channel.user_sub_level = subs.get(channel.id)
         channel.is_unread = channel.id in unread
+        # Video → who's in the Daily room; chat → who currently has it open.
+        people = video_presence.get(f"lsp-ch-{channel.slug}", []) if channel.is_video else []
+        channel.is_live = bool(people)
+        channel.live_people = participant_names(people)
+        is_chat = channel.kind == Channel.Kind.CHAT
+        channel.online_here = presence.online_channel(channel.id) if is_chat else []
         key = channel.category_id
         if key not in seen:
             label = channel.category.name if channel.category else "Other"
@@ -201,7 +219,7 @@ def index(request):
             groups.append((label, bucket))
         seen[key].append(channel)
 
-    my_spaces = _my_spaces(wg_channels, private_chats, unread)
+    my_spaces = _my_spaces(wg_channels, private_chats, unread, live_video)
 
     return render(
         request,
@@ -209,9 +227,26 @@ def index(request):
         {
             "groups": groups,
             "my_spaces": my_spaces,
+            "online_now": presence.online_global(),
             "any_channels": bool(general) or bool(my_spaces),
         },
     )
+
+
+@login_required
+def heartbeat(request):
+    """Global presence ping fired by every Parlêtre page. Marks the member online
+    (anywhere in Parlêtre) and returns the current 'online now' roster."""
+    from django.http import HttpResponseForbidden, JsonResponse
+
+    from . import presence
+
+    if not can_enter_parletre(request.user):
+        return HttpResponseForbidden()
+    if request.method == "POST":
+        presence.touch_global(request.user)
+    roster = presence.online_global()
+    return JsonResponse({"online": roster, "count": len(roster)})
 
 
 #: Display order for "Your groups", mirroring the Groups overview (KIND_META).
@@ -224,29 +259,64 @@ _KIND_ORDER = {
 }
 
 
-def _my_spaces(wg_channels, private_chats, unread):
+#: Kind → (label, icon, sort order) for the in-Parlêtre channel menus/switcher.
+_CHANNEL_KIND_NAV = {
+    "forum": ("Discuss", "forum", 0),
+    "chat": ("Chat", "chat", 1),
+    "video": ("Video", "video", 2),
+}
+
+
+def _channel_menu_item(channel, *, unread=None, active_id=None, live_video=None):
+    from django.urls import reverse
+
+    label, icon, order = _CHANNEL_KIND_NAV.get(
+        channel.kind, (channel.get_kind_display(), "forum", 9)
+    )
+    is_live = False
+    if channel.kind == "video" and live_video:
+        # A workgroup video channel's room is the workgroup room (lsp-<slug>);
+        # a board video channel anchors on the channel (lsp-ch-<slug>).
+        room = (
+            f"lsp-{channel.workgroup.slug}" if channel.workgroup_id
+            else f"lsp-ch-{channel.slug}"
+        )
+        is_live = room in live_video
+    return {
+        "label": label,
+        "icon": icon,
+        "order": order,
+        "url": reverse("parletre:channel", args=[channel.slug]),
+        "is_unread": unread is not None and channel.id in unread,
+        "is_active": active_id is not None and channel.id == active_id,
+        "is_live": is_live,
+    }
+
+
+def _my_spaces(wg_channels, private_chats, unread, live_video=None):
     """The member's own spaces for the "Your groups & private chats" section:
-    one tile per workgroup (its forum + chat collapsed) plus one per private
-    chat. Each tile is ``{url, name, label, is_unread}``; groups first (by
-    kind, then name), then private chats (by name)."""
+    one tile per workgroup (whose channels open *in Parlêtre*, not the workspace)
+    plus one per private chat. Group tiles are ``{is_group: True, name, label,
+    channels, workspace_url, is_unread}``; chat tiles ``{is_group: False, url,
+    name, label, is_unread}``. Groups first (by kind, then name)."""
     by_group: dict[int, dict] = {}
     for channel in wg_channels:
         wg = channel.workgroup
-        if wg is None:
+        if wg is None or channel.archived:
             continue
-        entry = by_group.get(wg.id)
-        if entry is None:
-            entry = {"wg": wg, "is_unread": False}
-            by_group[wg.id] = entry
-        if channel.id in unread:
-            entry["is_unread"] = True
+        entry = by_group.setdefault(wg.id, {"wg": wg, "channels": []})
+        entry["channels"].append(
+            _channel_menu_item(channel, unread=unread, live_video=live_video)
+        )
 
     group_tiles = [
         {
-            "url": e["wg"].get_absolute_url(),
+            "is_group": True,
             "name": e["wg"].name,
             "label": e["wg"].get_kind_display(),
-            "is_unread": e["is_unread"],
+            "channels": sorted(e["channels"], key=lambda c: c["order"]),
+            "workspace_url": e["wg"].get_absolute_url(),
+            "is_unread": any(c["is_unread"] for c in e["channels"]),
         }
         for e in sorted(
             by_group.values(),
@@ -255,6 +325,7 @@ def _my_spaces(wg_channels, private_chats, unread):
     ]
     chat_tiles = [
         {
+            "is_group": False,
             "url": c.get_absolute_url(),
             "name": c.name,
             "label": "Disappearing chat" if c.is_ephemeral else "Private chat",
@@ -265,14 +336,33 @@ def _my_spaces(wg_channels, private_chats, unread):
     return group_tiles + chat_tiles
 
 
+def _group_channel_nav(channel):
+    """Sibling channels of a workgroup-backed channel (for the in-Parlêtre
+    switcher), with the current one marked active. Empty for board channels."""
+    wg = channel.workgroup
+    if wg is None:
+        return []
+    siblings = list(wg.channels.filter(archived=False).select_related("workgroup"))
+    live_video = set()
+    if any(c.kind == Channel.Kind.VIDEO for c in siblings):
+        from video.services import live_room_names
+
+        live_video = live_room_names()
+    items = [
+        _channel_menu_item(ch, active_id=channel.id, live_video=live_video)
+        for ch in siblings
+    ]
+    return sorted(items, key=lambda c: c["order"])
+
+
 @login_required
 def channel(request, slug):
     channel = _visible_channel_or_404(request.user, slug)
     can_post = channel.can_post(request.user)
 
     if request.method == "POST":
-        # Chat-channel composer (forum channels post via new_thread / replies).
-        if channel.is_forum:
+        # Chat-channel composer (forum/video channels have no inline composer).
+        if channel.is_forum or channel.is_video:
             raise Http404()
         if not can_post:
             messages.error(request, "You can't post in this channel.")
@@ -308,6 +398,8 @@ def channel(request, slug):
         "sub_level": sub.level if sub else None,
         "levels": SubscriptionLevel.choices,
         "reply_parent": _reply_parent(request.GET.get("reply_to"), channel),
+        # Sibling channels of a group, so navigation stays inside Parlêtre.
+        "group_channels": _group_channel_nav(channel),
     }
 
     if channel.is_forum:
@@ -321,6 +413,12 @@ def channel(request, slug):
             thread.is_unread = thread.id in unread_ids
         context["threads"] = threads
         return render(request, "parletre/channel_forum.html", context)
+
+    if channel.is_video:
+        from video.services import channel_room_context
+
+        context.update(channel_room_context(request, channel))
+        return render(request, "parletre/channel_video.html", context)
 
     # Chat: viewing the stream marks the channel read.
     mark_channel_read(request.user, channel)
@@ -341,6 +439,9 @@ def channel(request, slug):
     # Member-created private chats: the creator manages / deletes; others leave.
     context["can_delete_chat"] = channel.can_delete(request.user)
     context["can_leave_chat"] = channel.can_leave(request.user)
+    from . import presence
+
+    context["chat_online"] = presence.online_channel(channel.id)
     return render(request, "parletre/channel_chat.html", context)
 
 

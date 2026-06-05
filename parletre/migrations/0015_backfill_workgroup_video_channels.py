@@ -1,0 +1,67 @@
+"""Backfill a Video channel for each workgroup that has a Discuss (forum)
+channel but no video channel yet — so every group shows three channels in
+Parlêtre (Discuss / Chat / Video). The video channel's room resolves to the
+workgroup's own room. Additive; reverse = noop. Mirrors 0012 (chat backfill).
+"""
+
+from django.db import migrations
+from django.utils.text import slugify
+
+_CATEGORY_FOR_KIND = {
+    "committee": ("Committees", 20),
+    "cartel": ("Cartels", 30),
+    "reading_group": ("Reading Groups", 35),
+    "working_group": ("Working Groups", 40),
+    "seminar": ("Seminars", 50),
+}
+
+
+def backfill(apps, schema_editor):
+    Workgroup = apps.get_model("workgroups", "Workgroup")
+    Channel = apps.get_model("parletre", "Channel")
+    ChannelCategory = apps.get_model("parletre", "ChannelCategory")
+
+    def unique_slug(base):
+        base = (slugify(base) or "group")[:100] + "-video"
+        slug, n = base, 2
+        while Channel.objects.filter(slug=slug).exists():
+            slug = f"{base}-{n}"
+            n += 1
+        return slug
+
+    cats = {}
+    created = 0
+    for wg in Workgroup.objects.filter(has_channel=True):
+        kinds = set(wg.channels.values_list("kind", flat=True))
+        if "forum" not in kinds or "video" in kinds:
+            continue  # only workgroups that have a forum but no video
+        cat = None
+        catinfo = _CATEGORY_FOR_KIND.get(wg.kind)
+        if catinfo:
+            if wg.kind not in cats:
+                name, pos = catinfo
+                cats[wg.kind], _ = ChannelCategory.objects.get_or_create(
+                    name=name, defaults={"slug": slugify(name), "position": pos}
+                )
+            cat = cats[wg.kind]
+        Channel.objects.create(
+            name=f"{wg.name} video"[:120],
+            slug=unique_slug(wg.slug or wg.name),
+            kind="video",
+            access="workgroup",
+            workgroup=wg,
+            category=cat,
+            description=f"Video room for {wg.name}.",
+        )
+        created += 1
+    print(f"  backfilled {created} workgroup video channel(s).")
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("parletre", "0014_alter_channel_kind"),
+        ("workgroups", "0002_alter_workgroup_kind"),
+    ]
+
+    operations = [migrations.RunPython(backfill, migrations.RunPython.noop)]

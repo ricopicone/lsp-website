@@ -70,6 +70,12 @@
             {% if p.registration %}
             <div class="text-xs text-base-content/60">{{ p.registration.event.title|truncatechars:32 }}</div>
             {% endif %}
+            {% if p.tuition_period_id %}
+            <div class="text-xs text-base-content/60">→ {{ p.tuition_period.name }}</div>
+            {% endif %}
+            {% if p.member_note %}
+            <div class="text-xs text-info/80 italic" title="Member note">“{{ p.member_note|truncatechars:60 }}”</div>
+            {% endif %}
           </td>
           <td class="whitespace-nowrap">${{ p.amount }}</td>
           <td class="text-xs">{{ p.get_method_display }}</td>

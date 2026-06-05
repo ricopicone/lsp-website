@@ -67,6 +67,7 @@ LOCAL_APPS = [
     "workgroups",
     "cartels",
     "workinggroups",
+    "video",
     "core",
 ]
 
@@ -258,6 +259,18 @@ STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")
 # test data can never enter real accounting. Off in development (so the flow
 # can be exercised with test keys); ON in production — see production.py.
 STRIPE_LIVE_ONLY = env.bool("STRIPE_LIVE_ONLY", default=False)
+
+# --- Daily.co video rooms -----------------------------------------------
+# In-site, browser-based meeting rooms (one persistent room per Workgroup,
+# provisioned lazily on first join). Off by default until the school's Daily
+# key is on the host; mirrors the SURVEY_ENABLED / STRIPE_LIVE_ONLY pattern.
+# Recording is never enabled (case-history privacy). See the video app.
+DAILY_ENABLED = env.bool("DJANGO_DAILY_ENABLED", default=False)
+DAILY_API_KEY = env("DAILY_API_KEY", default="")
+DAILY_DOMAIN = env("DAILY_DOMAIN", default="")            # e.g. lsp.daily.co
+DAILY_API_URL = env("DAILY_API_URL", default="https://api.daily.co/v1")
+DAILY_TOKEN_TTL_MINUTES = env.int("DJANGO_DAILY_TOKEN_TTL_MINUTES", default=180)
+DAILY_MAX_PARTICIPANTS = env.int("DJANGO_DAILY_MAX_PARTICIPANTS", default=0)  # 0 = unset
 
 # Launch intake survey: when True, members are nudged (banner + dropdown link)
 # to complete the onboarding survey. Off until launch; the page itself stays

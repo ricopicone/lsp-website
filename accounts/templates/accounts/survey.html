@@ -47,17 +47,11 @@
         currently <strong>{{ request.user.profile.get_role_display }}</strong>.
         <a href="{% url 'profile_edit' %}" class="link">Not right? Edit your profile.</a>
       </p>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div class="space-y-1">
-          <label class="block text-xs text-base-content/60">{{ form.year_joined.label }}</label>
-          {{ form.year_joined }}
-          <p class="text-xs text-base-content/45">A year is all we need — a guess is fine. It tells us which years you may have owed tuition or dues.</p>
-          {% if form.year_joined.errors %}<p class="text-error text-xs">{{ form.year_joined.errors|striptags }}</p>{% endif %}
-        </div>
-        <div class="space-y-1">
-          <label class="block text-xs text-base-content/60">{{ form.pronouns.label }}</label>
-          {{ form.pronouns }}
-        </div>
+      <div class="space-y-1 sm:max-w-sm">
+        <label class="block text-xs text-base-content/60">{{ form.year_joined.label }}</label>
+        {{ form.year_joined }}
+        <p class="text-xs text-base-content/45">A best guess is fine — it tells us which years you may have owed tuition or dues.</p>
+        {% if form.year_joined.errors %}<p class="text-error text-xs">{{ form.year_joined.errors|striptags }}</p>{% endif %}
       </div>
     </section>
 
@@ -109,6 +103,12 @@
         Tuition: students owe four years total — you've marked
         <strong><span id="tuition-count">{{ tuition_prechecked }}</span> of 4</strong> paid in full so far.
       </p>
+      {% if show_paid_all %}
+      <div class="space-y-1 border-t border-base-300/50 pt-3 sm:max-w-sm">
+        <label class="block text-xs text-base-content/60">{{ form.paid_all_tuition.label }}</label>
+        {{ form.paid_all_tuition }}
+      </div>
+      {% endif %}
     </section>
     {% endif %}
 
@@ -116,14 +116,17 @@
     {% if milestones %}
     <section class="rounded-xl border border-base-300 p-5 space-y-3">
       <h2 class="font-medium text-base-content">Your formation steps</h2>
-      <p class="text-sm text-base-content/60">Roughly what year did each happen? A guess is fine.</p>
+      <p class="text-sm text-base-content/60">Which academic year did each happen? A best guess is fine.</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {% for m in milestones %}
         <div class="space-y-1">
-          <label class="block text-xs text-base-content/60">{{ m.label }} — year</label>
-          <input type="number" name="milestone_{{ m.key }}" value="{{ m.value }}"
-                 min="1970" max="2100" placeholder="e.g. 2019"
-                 class="input input-bordered w-full">
+          <label class="block text-xs text-base-content/60">{{ m.label }}</label>
+          <select name="milestone_{{ m.key }}" class="select select-bordered w-full">
+            <option value="">— select —</option>
+            {% for y, label in ay_choices %}
+            <option value="{{ y }}" {% if m.value == y %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
         </div>
         {% endfor %}
       </div>

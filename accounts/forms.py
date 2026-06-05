@@ -327,7 +327,10 @@ class ProfileEditForm(forms.ModelForm):
                     choices=Profile.Visibility.choices,
                     initial=current.get(key, Profile.Visibility.PUBLIC),
                     widget=forms.Select(
-                        attrs={"class": "select select-xs select-bordered",
+                        # `unstyled` opts out of the global `form select` base
+                        # rule (big font/padding) which otherwise fights the
+                        # DaisyUI sizing and clips the text on a small select.
+                        attrs={"class": "select select-sm select-bordered unstyled",
                                "aria-label": "Visibility"}
                     ),
                 )
@@ -469,17 +472,22 @@ class TOTPCodeForm(forms.Form):
 
 
 class IntakeSurveyForm(forms.Form):
-    """Scalar fields of the launch intake survey. The year-grid checkboxes are
-    parsed from POST separately (see ``accounts.survey.parse_grid``)."""
+    """Scalar fields of the launch intake survey. The year-grid + formation
+    milestones are parsed from POST separately (see ``accounts.survey``).
+    Pass ``ay_choices`` (from ``academic_year_choices``) so the join-year select
+    lists the School's academic years."""
 
-    year_joined = forms.IntegerField(
-        required=False, min_value=1970, max_value=2100,
-        label="Roughly what year did you join LSP?",
-        widget=forms.NumberInput(attrs={"class": _INPUT, "placeholder": "e.g. 2019"}),
+    year_joined = forms.TypedChoiceField(
+        required=False, coerce=int, empty_value=None,
+        label="Which academic year did you join LSP?",
+        widget=forms.Select(attrs={"class": _INPUT}),
     )
-    pronouns = forms.CharField(
-        required=False, max_length=80, label="Pronouns (optional)",
-        widget=forms.TextInput(attrs={"class": _INPUT}),
+    paid_all_tuition = forms.ChoiceField(
+        required=False,
+        choices=[("", "— select —"), ("yes", "Yes — all four years"),
+                 ("no", "No / not yet")],
+        label="Do you believe you've paid all four years of full tuition, to date?",
+        widget=forms.Select(attrs={"class": _INPUT}),
     )
     payment_names = forms.CharField(
         required=False, max_length=255,
@@ -496,3 +504,13 @@ class IntakeSurveyForm(forms.Form):
         label="List me in the public member directory (name, role, bio, photo).",
         widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
     )
+
+    def __init__(self, *args, ay_choices=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["year_joined"].choices = (
+            [("", "— select —")] + [(str(y), label) for y, label in (ay_choices or [])]
+        )
+
+    def clean_paid_all_tuition(self):
+        v = self.cleaned_data.get("paid_all_tuition")
+        return {"yes": True, "no": False}.get(v)  # → True / False / None

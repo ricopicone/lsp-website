@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Prefetch, Q
 from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from .forms import WorkForm
@@ -116,16 +117,28 @@ def download(request, slug, file_id):
 
 @login_required
 def add(request):
+    # A caller (e.g. the My Formation hub) can pre-pick the kind and ask to be
+    # returned to its page via ?kind=&next=.
+    next_url = request.POST.get("next") or request.GET.get("next") or ""
+    if not url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        next_url = ""
     if request.method == "POST":
         form = WorkForm(request.POST, request.FILES, current_user=request.user)
         if form.is_valid():
             work = form.save()
-            return redirect(work.get_absolute_url())
+            return redirect(next_url or work.get_absolute_url())
     else:
-        form = WorkForm(current_user=request.user)
+        initial = {}
+        kind = request.GET.get("kind")
+        if kind in Work.Kind.values:
+            initial["kind"] = kind
+        form = WorkForm(current_user=request.user, initial=initial)
     return render(request, "works/form.html", {
         "form": form,
         "is_new": True,
+        "next": next_url,
     })
 
 

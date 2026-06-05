@@ -54,10 +54,10 @@ def _tuition(user, amount, when, *, source=Source.IMPORTED):
     )
 
 
-def _apply(user, grid, *, year_joined=2020, milestones=None):
-    return apply_survey(user, year_joined=year_joined, pronouns=None,
+def _apply(user, grid, *, year_joined=2020, milestones=None, paid_all_tuition=None):
+    return apply_survey(user, year_joined=year_joined,
                         payment_names="", payment_emails="", grid=grid,
-                        milestones=milestones)
+                        milestones=milestones, paid_all_tuition=paid_all_tuition)
 
 
 # ---- parsing & prefill -----------------------------------------------------
@@ -223,12 +223,29 @@ def test_survey_get_and_post(client):
     assert client.get(reverse("intake_survey")).status_code == 200
     resp = client.post(reverse("intake_survey"), {
         "year_joined": "2020", "tuition_2023": "full", "dues_2023": "on",
-        "milestone_palimpsest": "2021",
+        "milestone_palimpsest": "2021", "paid_all_tuition": "yes",
     })
     assert resp.status_code == 302
     s = MemberIntakeSurvey.objects.get(user=u)
     assert s.grid == {"2023": {"tuition": "full", "dues": True}}
     assert s.milestones == {"palimpsest": 2021}
+    assert s.year_joined == 2020
+    assert s.paid_all_tuition is True
+
+
+def test_paid_all_tuition_no_maps_false():
+    u = _member()
+    _apply(u, {}, paid_all_tuition=False)
+    assert MemberIntakeSurvey.objects.get(user=u).paid_all_tuition is False
+
+
+def test_grid_floored_at_2015():
+    _periods(2014)  # before the financial-grid floor
+    _periods(2016)
+    u = _member()
+    ays = {r["ay"] for r in survey_year_rows(u)}
+    assert 2016 in ays
+    assert 2014 not in ays  # older than the 2015 floor — excluded
 
 
 def test_survey_sets_advisor(client):

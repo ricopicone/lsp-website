@@ -289,9 +289,10 @@ def test_index_summarises_workgroup_channels_under_your_groups(client):
     body = client.get(reverse("parletre:index")).content.decode()
     assert "Your groups" in body
     assert wg.name in body
+    # the workspace is one click away, and the group's channels open in Parlêtre
+    # via the tile's channel menu (Discuss / Chat / Video).
     assert wg.get_absolute_url() in body
-    # the group's channel itself is not listed as a board channel
-    assert forum.get_absolute_url() not in body
+    assert forum.get_absolute_url() in body
 
     other = make_user("out@x.co", role=Role.ANALYST)
     client.force_login(other)
@@ -1339,8 +1340,8 @@ def test_chat_consumer_posts_and_broadcasts():
         comm = _ws(member, ch.slug)
         connected, _ = await comm.connect()
         assert connected
-        first = await comm.receive_json_from()        # our own join presence
-        assert first["kind"] == "presence" and first["event"] == "join"
+        first = await comm.receive_json_from()        # the presence roster broadcast
+        assert first["kind"] == "presence" and "m@x.co" in first["roster"]
         await comm.send_json_to({"body": "hello **live**"})
         msg = await comm.receive_json_from()
         assert msg["kind"] == "message"

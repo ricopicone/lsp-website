@@ -7,7 +7,7 @@
   <header class="flex flex-wrap items-start justify-between gap-3">
     <div class="space-y-1">
       <h1 class="font-serif text-3xl tracking-tight text-base-content">Parlêtre</h1>
-      <p class="text-base-content/70">The school's discussion board — where the parlêtres speak.</p>
+      <p class="text-base-content/70">Forums, text chats, and video chats—offerings to the Other.</p>
     </div>
     <div class="flex items-center gap-2">
       <a href="{% url 'parletre:create_private_chat' %}" class="btn btn-sm btn-primary gap-1">{% icon "lock" %} New private chat</a>
@@ -24,8 +24,8 @@
     <span>
       <strong>Private to the school.</strong>
       Everything in Parlêtre is visible only to members of the Lacanian School —
-      <em>including channels marked “Open.”</em> “Open” means open to every member,
-      never to the public. Nothing here is on the public web.
+      <em>including channels marked “All LSP.”</em> “All LSP” means every member,
+      never the public. Nothing here is on the public web.
     </span>
   </div>
 
@@ -33,15 +33,47 @@
     <p class="text-base-content/60 italic">No channels yet. Check back soon.</p>
   {% endif %}
 
+  {# Who's online right now (anywhere in Parlêtre) — live-updated by the heartbeat. #}
+  <section id="parletre-online" class="rounded-box border border-base-300 bg-base-100 p-3 flex flex-wrap items-center gap-2"
+           {% if not online_now %}hidden{% endif %}>
+    <span class="inline-flex items-center gap-1.5 text-sm font-medium text-base-content/80">
+      {% include "workgroups/_live_dot.html" %}
+      Online now <span class="text-base-content/50">(<span data-online-count>{{ online_now|length }}</span>)</span>
+    </span>
+    <span data-online-list class="flex flex-wrap gap-1.5">
+      {% for p in online_now %}<span class="badge badge-sm badge-ghost">{{ p.name }}</span>{% endfor %}
+    </span>
+  </section>
+
   {% if my_spaces %}
   <section class="space-y-3">
     <h2 class="font-serif text-lg text-base-content/80 border-b border-base-300/60 pb-1">Your groups &amp; private chats</h2>
     <p class="text-sm text-base-content/60">
-      Private to their members — your groups' discussions live on each group's
-      page, and your private chats are visible only to the people in them.
+      Private to their members — open a group's channels right here, and your
+      private chats are visible only to the people in them.
     </p>
     <ul class="grid gap-3 sm:grid-cols-2">
       {% for s in my_spaces %}
+      {% if s.is_group %}
+      <li class="rounded-box border border-base-300 bg-base-100 p-4 space-y-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          {% if s.is_unread %}<span class="size-2 rounded-full bg-primary inline-block shrink-0" title="Unread activity"></span>{% endif %}
+          <span class="font-medium text-base-content">{{ s.name }}</span>
+          <span class="badge badge-sm badge-outline">{{ s.label }}</span>
+          <a href="{{ s.workspace_url }}" class="ml-auto text-xs text-base-content/50 hover:text-primary">Workspace ↗</a>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          {% for c in s.channels %}
+          <a href="{{ c.url }}" class="btn btn-sm btn-ghost gap-1 {% if c.is_live %}text-success{% endif %}"
+             {% if c.is_live %}title="A meeting is happening now"{% endif %}>
+            {% if c.is_live %}{% include "workgroups/_live_dot.html" %}{% endif %}
+            {% icon c.icon %} {{ c.label }}
+            {% if c.is_unread %}<span class="size-1.5 rounded-full bg-primary inline-block shrink-0" title="Unread"></span>{% endif %}
+          </a>
+          {% endfor %}
+        </div>
+      </li>
+      {% else %}
       <li class="rounded-box border border-base-300 bg-base-100 p-4 hover:border-base-content/30 transition-colors">
         <a href="{{ s.url }}" class="block space-y-1">
           <div class="flex items-center gap-2 flex-wrap">
@@ -51,6 +83,7 @@
           </div>
         </a>
       </li>
+      {% endif %}
       {% endfor %}
     </ul>
   </section>
@@ -67,9 +100,12 @@
             {% if channel.is_unread %}<span class="size-2 rounded-full bg-primary inline-block shrink-0" title="Unread activity"></span>{% endif %}
             <span class="font-medium text-base-content">{{ channel.name }}</span>
             {% if channel.kind == 'chat' %}
-              <span class="badge badge-sm badge-ghost">Chat</span>
+              <span class="badge badge-sm badge-secondary gap-1" title="Live chat">{% icon "chat" %} Chat</span>
+            {% elif channel.kind == 'video' %}
+              {% if channel.is_live %}<span class="badge badge-sm badge-success gap-1 animate-breathe" title="Someone is in the room">{% icon "video" %} Live</span>
+              {% else %}<span class="badge badge-sm badge-primary gap-1" title="Video meeting room">{% icon "video" %} Video</span>{% endif %}
             {% else %}
-              <span class="badge badge-sm badge-ghost">Forum</span>
+              <span class="badge badge-sm badge-info gap-1" title="Threaded discussion">{% icon "forum" %} Forum</span>
             {% endif %}
             {% if channel.is_ephemeral %}
               <span class="badge badge-sm badge-warning badge-outline gap-1" title="Messages disappear">{% icon "hourglass" %} Disappearing</span>
@@ -81,9 +117,15 @@
             {% elif channel.access == 'role' %}
               <span class="badge badge-sm badge-outline">Roles</span>
             {% else %}
-              <span class="badge badge-sm badge-outline" title="Open to every member (not the public)">Open</span>
+              <span class="badge badge-sm badge-outline" title="Every LSP member (not the public)">All LSP</span>
             {% endif %}
           </div>
+          {% if channel.live_people %}
+          <p class="text-xs text-success/90 mt-0.5">In the room: {{ channel.live_people|slice:":6"|join:", " }}{% if channel.live_people|length > 6 %} +{{ channel.live_people|length|add:"-6" }} more{% endif %}</p>
+          {% endif %}
+          {% if channel.online_here %}
+          <p class="text-xs text-success/90 mt-0.5">{{ channel.online_here|length }} here: {{ channel.online_here|slice:":6"|join:", " }}{% if channel.online_here|length > 6 %} +{{ channel.online_here|length|add:"-6" }} more{% endif %}</p>
+          {% endif %}
           {% if channel.description %}
           <p class="text-sm text-base-content/60">{{ channel.description }}</p>
           {% endif %}

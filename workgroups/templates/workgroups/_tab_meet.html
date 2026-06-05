@@ -1,0 +1,60 @@
+{% comment %}Meet tab — the group's meeting hub. Expects: workgroup,
+ongoing_meeting, upcoming_meetings. One persistent room per group; Meet Now and
+every Join open the same room.{% endcomment %}
+<div class="max-w-2xl space-y-6">
+
+  {% if room_live %}
+  <div class="rounded-lg border border-success/40 bg-success/10 p-4 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-2.5">
+      {% include "workgroups/_live_dot.html" %}
+      <div>
+        <h3 class="font-medium text-base-content">Meeting in progress</h3>
+        <p class="text-sm text-base-content/60">
+          {% if ongoing_meeting %}{{ ongoing_meeting.title|default:"Now meeting" }} · {% endif %}{{ room_participants }} in the room
+        </p>
+        {% if room_participant_names %}
+        <p class="text-xs text-success/90">{{ room_participant_names|slice:":6"|join:", " }}{% if room_participant_names|length > 6 %} +{{ room_participant_names|length|add:"-6" }} more{% endif %}</p>
+        {% endif %}
+      </div>
+    </div>
+    <a href="{% url 'video:workgroup_room' workgroup.slug %}" class="btn btn-success btn-sm">Join Meeting in Progress</a>
+  </div>
+  {% endif %}
+
+  <div class="rounded-lg border border-base-300 bg-base-100 p-5 flex items-center justify-between gap-3">
+    <div>
+      <h3 class="font-medium text-base-content">Meeting room</h3>
+      <p class="text-sm text-base-content/60">Start a video meeting in your browser — no app to install.</p>
+    </div>
+    <div class="flex flex-col items-end gap-1">
+      <a href="{% url 'video:workgroup_room' workgroup.slug %}" class="btn btn-primary btn-sm">Meet Now</a>
+      <a href="{% url 'video:system_check' %}" class="link text-xs text-base-content/55">Test your setup</a>
+    </div>
+  </div>
+
+  {% if upcoming_meetings %}
+  <section class="space-y-2">
+    <h3 class="font-serif text-lg text-base-content/80 border-b border-base-300/60 pb-1">Upcoming &amp; ongoing</h3>
+    <ul class="divide-y divide-base-300/60">
+      {% for m in upcoming_meetings %}
+      <li class="flex items-center justify-between gap-3 py-2.5">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            {% if m == ongoing_meeting and room_live %}{% include "workgroups/_live_dot.html" %}{% endif %}
+            <span class="font-medium text-base-content truncate">{{ m.title|default:"Meeting" }}</span>
+          </div>
+          <p class="text-xs text-base-content/55">{{ m.starts_at|date:"D, M j · g:i A" }}{% if m.ends_at %} – {{ m.ends_at|date:"g:i A" }}{% endif %}</p>
+        </div>
+        <a href="{% url 'video:workgroup_room' workgroup.slug %}"
+           class="btn btn-xs {% if m == ongoing_meeting and room_live %}btn-success{% else %}btn-ghost{% endif %}">
+          {% if m == ongoing_meeting and room_live %}Join now{% else %}Join{% endif %}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="text-xs text-base-content/45">Manage the cadence on the Schedule tab.</p>
+  </section>
+  {% else %}
+  <p class="text-sm text-base-content/55">No meetings scheduled. Use <strong>Meet Now</strong> to start one, or add a cadence on the Schedule tab.</p>
+  {% endif %}
+</div>

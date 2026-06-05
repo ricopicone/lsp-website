@@ -54,6 +54,12 @@
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
+/* Breathing "live" indicator — a gentle opacity pulse (calmer than a ping).
+   Authored here so the prod CSS build emits it; reduced-motion users opt out. */
+@keyframes lsp-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.animate-breathe { animation: lsp-breathe 2.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .animate-breathe { animation: none; } }
+
 /* --- lsp-prose: Markdown body content styling -----------------------------
    Used by the content app's rendered HTML so we don't need
    @tailwindcss/typography for a small set of pages. */

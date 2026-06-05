@@ -6,6 +6,7 @@ app_name = "parletre"
 
 urlpatterns = [
     path("", views.index, name="index"),
+    path("heartbeat/", views.heartbeat, name="heartbeat"),
     path("notifications/", views.notifications, name="notifications"),
     path("settings/", views.preferences, name="settings"),
     path("search/", views.search, name="search"),

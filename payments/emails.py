@@ -54,17 +54,28 @@ def _recipient_timezone(user) -> contextlib.AbstractContextManager:
 
 def send_registration_confirmation(registration: Registration) -> None:
     """Send the confirmation email (REG-9), releasing access_info if PAID/COMPED."""
+    from django.urls import reverse
+
+    from video.services import daily_enabled
+
     subject = f"Registration confirmed: {registration.event.title}"
+    has_access = registration.status in (
+        Registration.Status.PAID,
+        Registration.Status.COMPED,
+    )
+    room_url = ""
+    if has_access and daily_enabled():
+        room_url = settings.SITE_BASE_URL.rstrip("/") + reverse(
+            "video:event_room", args=[registration.event.slug]
+        )
     with _recipient_timezone(registration.user):
         body = render_to_string(
             "payments/email/confirmation.txt",
             {
                 "registration": registration,
                 "is_comp": registration.status == Registration.Status.COMPED,
-                "has_access": registration.status in (
-                    Registration.Status.PAID,
-                    Registration.Status.COMPED,
-                ),
+                "has_access": has_access,
+                "room_url": room_url,
                 "support_email": settings.SUPPORT_EMAIL,
                 "site_base_url": settings.SITE_BASE_URL,
             },

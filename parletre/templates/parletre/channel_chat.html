@@ -12,6 +12,8 @@
     <span class="text-base-content/70">{{ channel.name }}</span>
   </nav>
 
+  {% include "parletre/_channel_group_nav.html" %}
+
   <header class="flex flex-wrap items-start justify-between gap-3">
     <div class="space-y-1">
       <h1 class="font-serif text-2xl tracking-tight text-base-content">{{ channel.name }}</h1>
@@ -37,7 +39,7 @@
         <button type="submit" class="text-xs text-error/70 hover:text-error">Leave chat</button>
       </form>
       {% endif %}
-      <span class="text-xs text-success" data-chat-presence aria-live="polite"></span>
+      <span class="text-xs text-success" data-chat-presence aria-live="polite">{% if chat_online %}● {{ chat_online|join:", " }}{% endif %}</span>
     </div>
   </header>
 
