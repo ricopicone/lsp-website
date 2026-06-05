@@ -341,6 +341,33 @@ def test_open_term_blocked_for_non_managers(client):
     assert wg.current_term() is None
 
 
+def test_recording_settings_manager_only(client):
+    """A manager can flip the Record-button off switch; a non-manager can't."""
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Rec", slug="wg-rec")
+    lead = _user("lead@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=lead, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    plain = _user("plainrec@x.test", role=Profile.Role.ANALYST)
+    url = reverse("workgroups:recording_settings", args=[wg.slug])
+
+    client.force_login(plain)
+    assert client.post(url, {"recording_mode": "off"}).status_code == 404
+    wg.refresh_from_db()
+    assert wg.recording_mode == "on_demand"  # unchanged
+
+    client.force_login(lead)
+    assert client.post(url, {"recording_mode": "off"}).status_code == 302
+    wg.refresh_from_db()
+    assert wg.recording_mode == "off"
+
+    # An invalid value is ignored, not saved.
+    client.post(url, {"recording_mode": "bogus"})
+    wg.refresh_from_db()
+    assert wg.recording_mode == "off"
+
+
 def test_reading_group_kind_default_open_join():
     from workgroups.models import build_workgroup
 
