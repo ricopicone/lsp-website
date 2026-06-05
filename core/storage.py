@@ -40,3 +40,23 @@ def private_storage():
             file_overwrite=False,
         )
     return FileSystemStorage(location=settings.PRIVATE_MEDIA_ROOT)
+
+
+def recordings_storage():
+    """Storage for owned video recordings (Daily writes the mp4 here when
+    ``recordings_bucket`` is configured). Signed, expiring URLs — never public.
+    Falls back to the private bucket / local store when no dedicated bucket is set."""
+    bucket = getattr(settings, "AWS_RECORDINGS_BUCKET_NAME", "") or getattr(
+        settings, "AWS_PRIVATE_STORAGE_BUCKET_NAME", ""
+    )
+    if bucket:
+        from storages.backends.s3 import S3Storage
+
+        return S3Storage(
+            bucket_name=bucket,
+            region_name=getattr(settings, "AWS_S3_REGION_NAME", "us-west-2"),
+            querystring_auth=True,
+            default_acl=None,
+            file_overwrite=False,
+        )
+    return FileSystemStorage(location=settings.PRIVATE_MEDIA_ROOT)

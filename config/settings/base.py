@@ -104,6 +104,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.aphorism",
                 "core.context_processors.survey_nudge",
+                "core.context_processors.preview_tour",
                 "parletre.context_processors.notifications",
             ],
         },
@@ -163,7 +164,11 @@ STATICFILES_DIRS = [BASE_DIR / "static"]  # Tailwind build output, future shared
 # milestone, once a faculty-facing upload UI exists and we need durability
 # across container restarts.
 
-MEDIA_URL = "media/"
+# Leading slash so headshot.url is a root-absolute path ("/media/…") rather
+# than one relative to the current page — otherwise an <img> on /accounts/profile/
+# resolves it to /accounts/media/… and 404s. Production overrides this with the
+# absolute S3 URL, so this only governs local-disk dev.
+MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # Access-controlled uploads (gated Work/Document PDFs, workgroup working-doc
@@ -267,10 +272,39 @@ DAILY_API_URL = env("DAILY_API_URL", default="https://api.daily.co/v1")
 DAILY_TOKEN_TTL_MINUTES = env.int("DJANGO_DAILY_TOKEN_TTL_MINUTES", default=180)
 DAILY_MAX_PARTICIPANTS = env.int("DJANGO_DAILY_MAX_PARTICIPANTS", default=0)  # 0 = unset
 
+# Recording (opt-in; hosts start it, special events auto-start). Recordings are
+# stored on Daily by default; set RECORDING_OWN_S3=true + AWS_RECORDINGS_BUCKET_NAME
+# (and Daily's domain recordings_bucket) to own them in our S3. The webhook secret
+# is the base64 HMAC secret configured on the Daily webhook.
+DAILY_WEBHOOK_SECRET = env("DAILY_WEBHOOK_SECRET", default="")
+RECORDING_OWN_S3 = env.bool("DJANGO_RECORDING_OWN_S3", default=False)
+AWS_RECORDINGS_BUCKET_NAME = env("AWS_RECORDINGS_BUCKET_NAME", default="")
+RECORDING_RETENTION_DAYS = env.int("DJANGO_RECORDING_RETENTION_DAYS", default=365)
+
 # Launch intake survey: when True, members are nudged (banner + dropdown link)
 # to complete the onboarding survey. Off until launch; the page itself stays
 # reachable at /accounts/survey/ for testing. Flip via DJANGO_SURVEY_ENABLED.
 SURVEY_ENABLED = env.bool("SURVEY_ENABLED", default=False)
+
+# Limited-preview onboarding tour: a dismissible task checklist (every page) plus
+# contextual hints (e.g. on the profile photo chooser) that guide a small
+# preview cohort through their first tasks. Off by default; flip
+# DJANGO_PREVIEW_TOUR_ENABLED=true to switch it on. PREVIEW_TOUR_ALLOWLIST
+# restricts it to specific addresses while enabled — an empty list means every
+# authenticated user sees it. Mirrors the EMAIL_CHANGE_* gating.
+PREVIEW_TOUR_ENABLED = env.bool("DJANGO_PREVIEW_TOUR_ENABLED", default=False)
+PREVIEW_TOUR_ALLOWLIST = env.list(
+    "DJANGO_PREVIEW_TOUR_ALLOWLIST", default=["dr@ricopic.one"]
+)
+# Slug of the sandbox seminar the tour's "Register" task points at. Created by
+# `manage.py seed_preview_seminar` ($0 tier → registration skips Stripe). The
+# checklist links here and auto-ticks once the member has an active
+# registration for it.
+PREVIEW_TOUR_SEMINAR_SLUG = env("DJANGO_PREVIEW_TOUR_SEMINAR_SLUG", default="preview-seminar")
+# Slug of the open Parlêtre chat channel the tour's "Say hello" task points at.
+# Created by `manage.py seed_preview`. The checklist auto-ticks once the member
+# has posted there.
+PREVIEW_TOUR_CHANNEL_SLUG = env("DJANGO_PREVIEW_TOUR_CHANNEL_SLUG", default="welcome")
 
 # Public base URL used to build Stripe Checkout success/cancel return URLs.
 SITE_BASE_URL = env("SITE_BASE_URL", default="http://localhost:8000")

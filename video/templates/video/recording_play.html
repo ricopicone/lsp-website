@@ -1,0 +1,24 @@
+{% extends "core/base.html" %}
+{% block title %}{{ recording.title|default:"Recording" }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-6 space-y-4">
+  <div class="flex items-center justify-between gap-3">
+    <h1 class="font-serif text-2xl text-base-content truncate">{{ recording.title|default:"Recording" }}</h1>
+    {% if back_url %}<a href="{{ back_url }}" class="btn btn-ghost btn-sm">← Back</a>{% endif %}
+  </div>
+
+  <video controls playsinline class="w-full rounded-xl border border-base-300 bg-black"
+         src="{{ play_url }}" style="max-height: 75vh;"></video>
+
+  <div class="flex flex-wrap items-center justify-between gap-2 text-sm text-base-content/60">
+    <span>
+      {% if recording.started_at %}{{ recording.started_at|date:"M j, Y" }} · {% endif %}
+      {% if recording.duration_seconds %}{{ recording.duration_seconds|floatformat:0 }}s · {% endif %}
+      {{ recording.get_content_visibility_display }}
+    </span>
+    <a href="?download=1" class="link">Download</a>
+  </div>
+  <p class="text-xs text-base-content/40">This recording is private to the School; please don't redistribute it.</p>
+</div>
+{% endblock %}

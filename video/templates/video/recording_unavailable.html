@@ -1,0 +1,14 @@
+{% extends "core/base.html" %}
+{% block title %}Recording{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto px-4 py-10 space-y-4 text-center">
+  <h1 class="font-serif text-2xl text-base-content">Recording not available yet</h1>
+  <p class="text-base-content/70">
+    {% if recording.status == 'recording' %}This meeting is still being recorded.
+    {% elif recording.status == 'error' %}This recording failed to process.
+    {% else %}This recording isn't available right now — it may still be processing.{% endif %}
+    Please check back shortly.
+  </p>
+</div>
+{% endblock %}

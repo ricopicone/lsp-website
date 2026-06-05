@@ -66,7 +66,10 @@ def ensure_room(owner) -> DailyRoom | None:
     room = getattr(owner, "video_room", None)
     name = room.name if room is not None else _room_name(owner)
     properties = {
-        "enable_recording": False,  # case-history privacy — never enable
+        # Recording is *available* to hosts (owners) but never auto-on — it stays
+        # off until a host starts it (and special-event rooms auto-start it client
+        # side). Non-owners can't record; attendees see Daily's recording indicator.
+        "enable_recording": "cloud",
         "enable_prejoin_ui": True,  # device/mic/camera check before joining
         "enable_knocking": False,  # token-gated, not knock-to-enter
         "enable_chat": True,  # everyone can use text chat
@@ -138,6 +141,61 @@ def system_check_context(request) -> dict:
         return {"room_unavailable": True}
     url = data.get("url") or f"https://{settings.DAILY_DOMAIN}/{name}"
     return {"room_url": url, "room_token": token}
+
+
+# ---- recordings (webhook ingestion) ------------------------------------
+
+def _recording_event_and_title(room):
+    """Resolve the event + a default title for a recording in ``room``."""
+    event = None
+    if room is not None and room.workgroup_id:
+        event = room.workgroup.primary_event() or room.workgroup.current_term()
+    name = (event.title if event else (room.workgroup.name if room and room.workgroup_id
+            else (room.name if room else "Recording")))
+    return event, name
+
+
+def ingest_recording_event(event_type: str, payload: dict):
+    """Upsert a Recording from a Daily recording webhook. Idempotent on the Daily
+    recording id. Returns the Recording or None."""
+    from datetime import datetime
+    from datetime import timezone as _tz
+
+    from .models import DailyRoom, Recording
+
+    rec_id = payload.get("recording_id") or payload.get("id")
+    if not rec_id:
+        return None
+    room_name = payload.get("room_name") or payload.get("room") or ""
+    room = DailyRoom.objects.filter(name=room_name).first()
+    event, default_name = _recording_event_and_title(room)
+
+    rec, created = Recording.objects.get_or_create(
+        daily_recording_id=rec_id,
+        defaults={"room": room, "room_name": room_name, "event": event},
+    )
+    if created and event is not None and getattr(event, "record_video", False):
+        # An event flagged to record → list it for members by default.
+        rec.listing_visibility = Recording.Visibility.MEMBERS
+        rec.content_visibility = Recording.Visibility.MEMBERS
+
+    start_ts = payload.get("start_ts")
+    if start_ts and not rec.started_at:
+        rec.started_at = datetime.fromtimestamp(int(start_ts), tz=_tz.utc)
+
+    if event_type == "recording.started":
+        rec.status = Recording.Status.RECORDING
+    elif event_type == "recording.ready-to-download":
+        rec.status = Recording.Status.READY
+        rec.s3_key = payload.get("s3_key") or payload.get("s3key") or rec.s3_key
+        rec.duration_seconds = payload.get("duration") or rec.duration_seconds
+        if not rec.title:
+            stamp = rec.started_at.date().isoformat() if rec.started_at else ""
+            rec.title = f"{default_name} — {stamp}".strip(" —")
+    elif event_type == "recording.error":
+        rec.status = Recording.Status.ERROR
+    rec.save()
+    return rec
 
 
 def can_enter(workgroup, user) -> bool:
