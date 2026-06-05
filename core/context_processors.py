@@ -56,10 +56,12 @@ def preview_tour(request):
     """Limited-preview onboarding tour gating + task state.
 
     Shows the floating task checklist (and the per-page hints) only when the
-    tour is enabled and the signed-in user is in the preview cohort — an empty
-    allowlist means every authenticated user. ``preview_profile_done`` reflects
-    real data (a headshot *and* a bio), so the checklist auto-ticks when the
-    member actually finishes rather than tracking clicks.
+    tour is enabled and the signed-in user is in the preview cohort. The cohort
+    is every authenticated user when ``PREVIEW_TOUR_PUBLIC`` is on (or the
+    allowlist is empty), otherwise just the allowlisted addresses.
+    ``preview_profile_done`` reflects real data (a headshot *and* a bio), so the
+    checklist auto-ticks when the member actually finishes rather than tracking
+    clicks.
     """
     from django.conf import settings
 
@@ -68,8 +70,12 @@ def preview_tour(request):
             and user is not None and user.is_authenticated):
         return {"show_preview_tour": False}
 
-    allowlist = [a.lower() for a in getattr(settings, "PREVIEW_TOUR_ALLOWLIST", [])]
-    if allowlist and (user.email or "").lower() not in allowlist:
+    # Public → everyone signed in. Otherwise gate on the allowlist (empty list
+    # also means everyone). Empty strings are filtered so `ALLOWLIST=` reads as
+    # "no restriction" rather than a one-element [""] that excludes all.
+    public = getattr(settings, "PREVIEW_TOUR_PUBLIC", False)
+    allowlist = [a.lower() for a in getattr(settings, "PREVIEW_TOUR_ALLOWLIST", []) if a.strip()]
+    if not public and allowlist and (user.email or "").lower() not in allowlist:
         return {"show_preview_tour": False}
 
     profile = getattr(user, "profile", None)

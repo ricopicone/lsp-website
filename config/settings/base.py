@@ -293,6 +293,10 @@ SURVEY_ENABLED = env.bool("SURVEY_ENABLED", default=False)
 # restricts it to specific addresses while enabled — an empty list means every
 # authenticated user sees it. Mirrors the EMAIL_CHANGE_* gating.
 PREVIEW_TOUR_ENABLED = env.bool("DJANGO_PREVIEW_TOUR_ENABLED", default=False)
+# When True, the tour shows for every authenticated user, ignoring the
+# allowlist (mirrors EMAIL_CHANGE_PUBLIC). Flip on to broaden the preview
+# beyond the named cohort.
+PREVIEW_TOUR_PUBLIC = env.bool("DJANGO_PREVIEW_TOUR_PUBLIC", default=False)
 PREVIEW_TOUR_ALLOWLIST = env.list(
     "DJANGO_PREVIEW_TOUR_ALLOWLIST", default=["dr@ricopic.one"]
 )
