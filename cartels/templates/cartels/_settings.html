@@ -1,50 +1,145 @@
 {% comment %}Cartel-specific Settings, composed into the Settings tab.
 Expects: cartel, workgroup, members (active roster).{% endcomment %}
 
+{# ── Cartel details (name / guiding question / overview) ──────── #}
 {% if cartel.status == "open" %}
-<section class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-5">
-  <h3 class="font-medium text-base-content">Membership</h3>
-  <form method="post" action="{% url 'cartels:manage' workgroup.slug %}" class="flex flex-wrap gap-2">
+<section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
+  <div class="space-y-0.5">
+    <h3 class="font-medium text-base-content">Cartel details</h3>
+    <p class="text-xs text-base-content/50">The name, guiding question, and overview shown on the cartel's page. Any member may edit these.</p>
+  </div>
+  <form method="post" action="{% url 'cartels:edit' workgroup.slug %}" class="space-y-3">
     {% csrf_token %}
-    {% if cartel.closed %}
-    <button name="action" value="reopen" class="btn btn-ghost btn-sm">Reopen to new members</button>
-    {% else %}
-    <button name="action" value="close" class="btn btn-ghost btn-sm">Close to new members</button>
-    {% endif %}
-    <button name="action" value="archive" class="btn btn-ghost btn-sm"
-            onclick="return confirm('Archive this cartel?')">Archive cartel</button>
+    <div class="space-y-1">
+      <label for="cartel-name" class="block text-xs text-base-content/60">Name</label>
+      <input id="cartel-name" name="name" type="text" maxlength="120" required
+             value="{{ workgroup.name }}" class="input input-bordered input-sm w-full">
+    </div>
+    <div class="space-y-1">
+      <label for="cartel-gq" class="block text-xs text-base-content/60">Guiding question</label>
+      <textarea id="cartel-gq" name="guiding_question" rows="2" required
+                class="textarea textarea-bordered w-full">{{ cartel.guiding_question }}</textarea>
+    </div>
+    <div class="space-y-1">
+      <label for="cartel-desc" class="block text-xs text-base-content/60">Overview</label>
+      <textarea id="cartel-desc" name="description" rows="4"
+                class="textarea textarea-bordered w-full">{{ workgroup.description }}</textarea>
+      <p class="text-xs text-base-content/50">Markdown supported.</p>
+    </div>
+    <button class="btn btn-primary btn-sm">Save details</button>
   </form>
 </section>
 {% endif %}
 
-<section class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-5">
-  <h3 class="font-medium text-base-content">Plus-one</h3>
-  {# Internal: designate an existing member #}
-  <form method="post" action="{% url 'cartels:set_plus_one' workgroup.slug %}" class="flex flex-wrap items-end gap-2">
-    {% csrf_token %}
-    <select name="user" class="select select-bordered select-sm">
-      {% for m in members %}<option value="{{ m.user.pk }}">{{ m.user.get_full_name|default:m.user.email }}{% if m.role == "plus_one" %} (current){% endif %}</option>{% endfor %}
-    </select>
-    <button class="btn btn-ghost btn-sm">Set internal plus-one</button>
-  </form>
-
-  {# External plus-ones #}
-  {% for ext in cartel.external_plus_ones.all %}
-  <div class="flex items-center justify-between rounded-md border border-base-300/50 px-3 py-2 text-sm">
-    <span>{{ ext.name }}{% if ext.affiliation %} · {{ ext.affiliation }}{% endif %} <span class="text-base-content/50">(external)</span></span>
-    {% if ext.email and not ext.invited_at %}
-    <form method="post" action="{% url 'cartels:invite_external_plus_one' workgroup.slug ext.pk %}">
-      {% csrf_token %}<button class="btn btn-ghost btn-xs">Invite to create account</button>
-    </form>
-    {% elif ext.invited_at %}<span class="text-xs text-base-content/50">Invited</span>{% endif %}
+{# ── Plus-one ────────────────────────────────────────────────── #}
+{% if cartel.status == "open" %}
+<section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
+  <div class="space-y-0.5">
+    <h3 class="font-medium text-base-content">Plus-one</h3>
+    <p class="text-xs text-base-content/50">A cartel may include a plus-one — an extra member, or an outside guest — alongside its core members.</p>
   </div>
-  {% endfor %}
 
-  <form method="post" action="{% url 'cartels:add_external_plus_one' workgroup.slug %}" class="flex flex-wrap items-end gap-2">
+  {# Current plus-ones — internal first, then external; each removable. #}
+  <ul class="space-y-2">
+    {% for m in members %}{% if m.role == "plus_one" %}
+    <li class="flex items-center justify-between gap-2 rounded-md border border-base-300/50 bg-base-200/30 px-3 py-2 text-sm">
+      <span>{{ m.user.get_full_name|default:m.user.email }} <span class="text-base-content/50">· plus-one</span></span>
+      <form method="post" action="{% url 'cartels:set_plus_one' workgroup.slug %}">
+        {% csrf_token %}
+        <button class="btn btn-ghost btn-xs text-error">Remove</button>
+      </form>
+    </li>
+    {% endif %}{% endfor %}
+    {% for ext in cartel.external_plus_ones.all %}
+    <li class="flex items-center justify-between gap-2 rounded-md border border-base-300/50 bg-base-200/30 px-3 py-2 text-sm">
+      <span>{{ ext.name }}{% if ext.affiliation %} · {{ ext.affiliation }}{% endif %}
+        <span class="text-base-content/50">· external{% if ext.invited_at %} · invited{% endif %}</span></span>
+      <div class="flex items-center gap-1">
+        {% if ext.email and not ext.invited_at %}
+        <form method="post" action="{% url 'cartels:invite_external_plus_one' workgroup.slug ext.pk %}">
+          {% csrf_token %}<button class="btn btn-ghost btn-xs">Invite to create account</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{% url 'cartels:remove_external_plus_one' workgroup.slug ext.pk %}">
+          {% csrf_token %}<button class="btn btn-ghost btn-xs text-error">Remove</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+
+  {# Assign an existing member as plus-one (reassigning demotes the previous one). #}
+  <form method="post" action="{% url 'cartels:set_plus_one' workgroup.slug %}" class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
     {% csrf_token %}
-    <input type="text" name="name" placeholder="External plus-one name" class="input input-bordered input-sm" required>
-    <input type="text" name="affiliation" placeholder="Affiliation (optional)" class="input input-bordered input-sm">
-    <input type="email" name="email" placeholder="Email (to invite)" class="input input-bordered input-sm">
-    <button class="btn btn-ghost btn-sm">Add external plus-one</button>
+    <div class="flex-1 space-y-1">
+      <label for="assign-plus-one" class="block text-xs text-base-content/60">Assign a member as plus-one</label>
+      <select id="assign-plus-one" name="user" class="select select-bordered select-sm w-full">
+        {% for m in members %}{% if m.role != "plus_one" %}
+        <option value="{{ m.user.pk }}">{{ m.user.get_full_name|default:m.user.email }}</option>
+        {% endif %}{% endfor %}
+      </select>
+    </div>
+    <button class="btn btn-ghost btn-sm">Assign</button>
   </form>
+
+  {# Invite an outside (non-LSP) guest as the plus-one. #}
+  <form method="post" action="{% url 'cartels:add_external_plus_one' workgroup.slug %}" class="space-y-2 border-t border-base-300/50 pt-3">
+    {% csrf_token %}
+    <label class="block text-xs text-base-content/60">Add an external plus-one</label>
+    <div class="flex flex-wrap items-end gap-2">
+      <input type="text" name="name" placeholder="Name" class="input input-bordered input-sm" required>
+      <input type="text" name="affiliation" placeholder="Affiliation (optional)" class="input input-bordered input-sm">
+      <input type="email" name="email" placeholder="Email (to invite, optional)" class="input input-bordered input-sm">
+      <button class="btn btn-ghost btn-sm">Add</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+{# ── Membership & lifecycle (kept at the bottom; actions carry warnings) ── #}
+<section class="space-y-4 rounded-xl border border-error/30 bg-base-100 p-5">
+  <div class="space-y-0.5">
+    <h3 class="font-medium text-base-content">Membership &amp; lifecycle</h3>
+    <p class="text-xs text-base-content/50">Control whether new members may apply, and archive the cartel when its work is complete.</p>
+  </div>
+
+  {% if cartel.status == "archived" %}
+  <div class="rounded-md border border-base-300/50 bg-base-200/30 px-3 py-2 text-sm text-base-content/70">
+    This cartel is <strong>archived</strong> — read-only. Reactivating it reopens
+    the workspace and lets members post and apply again.
+  </div>
+  <form method="post" action="{% url 'cartels:manage' workgroup.slug %}">
+    {% csrf_token %}
+    <button name="action" value="reactivate" class="btn btn-outline btn-sm">Reactivate cartel</button>
+  </form>
+  {% else %}
+  <div class="flex flex-wrap items-center gap-2">
+    {% if cartel.closed %}
+    <form method="post" action="{% url 'cartels:manage' workgroup.slug %}">
+      {% csrf_token %}
+      <button name="action" value="reopen" class="btn btn-ghost btn-sm">Reopen to new members</button>
+    </form>
+    <span class="text-xs text-base-content/50">Currently closed — members can't apply to join.</span>
+    {% else %}
+    <form method="post" action="{% url 'cartels:manage' workgroup.slug %}">
+      {% csrf_token %}
+      <button name="action" value="close" class="btn btn-ghost btn-sm">Close to new members</button>
+    </form>
+    <span class="text-xs text-base-content/50">Open — members may apply to join.</span>
+    {% endif %}
+  </div>
+
+  <div class="space-y-2 border-t border-base-300/50 pt-3">
+    <p class="text-xs text-base-content/50">
+      <strong class="text-base-content/70">Archiving dissolves the cartel.</strong>
+      It becomes read-only — no new posts, applications, or members — but stays
+      readable to its members. You can reactivate it later from here.
+    </p>
+    <form method="post" action="{% url 'cartels:manage' workgroup.slug %}"
+          onsubmit="return confirm('Archive (dissolve) this cartel? It becomes read-only. You can reactivate it later.');">
+      {% csrf_token %}
+      <button name="action" value="archive" class="btn btn-outline btn-sm text-error">Archive cartel</button>
+    </form>
+  </div>
+  {% endif %}
 </section>
