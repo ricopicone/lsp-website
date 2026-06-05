@@ -113,11 +113,14 @@
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">
       Payments received <span class="text-base-content/60 text-base font-normal">({{ paid_members|length }})</span>
+      {% if dues_confirmed_pct is not None %}
+      <span class="badge badge-ghost badge-sm align-middle ml-1">{{ dues_confirmed_pct }}% confirmed</span>
+      {% endif %}
     </h2>
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Name</th><th>Role</th><th class="text-right">Amount</th><th>Date</th><th>Method</th></tr>
+          <tr><th>Name</th><th>Role</th><th class="text-right">Amount</th><th>Date</th><th>Method</th><th>Source</th></tr>
         </thead>
         <tbody>
           {% for p in paid_members %}
@@ -127,6 +130,7 @@
             <td class="text-right whitespace-nowrap">{{ p.amount|usd }}</td>
             <td class="whitespace-nowrap">{{ p.paid_at|date:"M j, Y"|default:"—" }}</td>
             <td>{{ p.get_method_display }}</td>
+            <td>{% include "payments/treasurer/_source_badge.html" with source=p.source label=p.get_source_display %}</td>
           </tr>
           {% endfor %}
         </tbody>

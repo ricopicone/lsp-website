@@ -327,7 +327,10 @@ class ProfileEditForm(forms.ModelForm):
                     choices=Profile.Visibility.choices,
                     initial=current.get(key, Profile.Visibility.PUBLIC),
                     widget=forms.Select(
-                        attrs={"class": "select select-xs select-bordered",
+                        # `unstyled` opts out of the global `form select` base
+                        # rule (big font/padding) which otherwise fights the
+                        # DaisyUI sizing and clips the text on a small select.
+                        attrs={"class": "select select-sm select-bordered unstyled",
                                "aria-label": "Visibility"}
                     ),
                 )
@@ -466,3 +469,48 @@ class TOTPCodeForm(forms.Form):
 
     def clean_code(self) -> str:
         return (self.cleaned_data.get("code") or "").strip()
+
+
+class IntakeSurveyForm(forms.Form):
+    """Scalar fields of the launch intake survey. The year-grid + formation
+    milestones are parsed from POST separately (see ``accounts.survey``).
+    Pass ``ay_choices`` (from ``academic_year_choices``) so the join-year select
+    lists the School's academic years."""
+
+    year_joined = forms.TypedChoiceField(
+        required=False, coerce=int, empty_value=None,
+        label="Which academic year did you join LSP?",
+        widget=forms.Select(attrs={"class": _INPUT}),
+    )
+    paid_all_tuition = forms.ChoiceField(
+        required=False,
+        choices=[("", "— select —"), ("yes", "Yes — all four years"),
+                 ("no", "No / not yet")],
+        label="Do you believe you've paid all four years of full tuition, to date?",
+        widget=forms.Select(attrs={"class": _INPUT}),
+    )
+    payment_names = forms.CharField(
+        required=False, max_length=255,
+        label="Other name on your payments",
+        widget=forms.TextInput(attrs={"class": _INPUT, "placeholder": "optional"}),
+    )
+    payment_emails = forms.CharField(
+        required=False, max_length=255,
+        label="Other email (Stripe / PayPal)",
+        widget=forms.TextInput(attrs={"class": _INPUT, "placeholder": "optional"}),
+    )
+    list_in_directory = forms.BooleanField(
+        required=False,
+        label="List me in the public member directory (name, role, bio, photo).",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
+    )
+
+    def __init__(self, *args, ay_choices=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["year_joined"].choices = (
+            [("", "— select —")] + [(str(y), label) for y, label in (ay_choices or [])]
+        )
+
+    def clean_paid_all_tuition(self):
+        v = self.cleaned_data.get("paid_all_tuition")
+        return {"yes": True, "no": False}.get(v)  # → True / False / None

@@ -769,6 +769,15 @@ class MemberIntakeSurvey(models.Model):
         help_text="Other email(s) used for Stripe / PayPal.",
     )
     grid = models.JSONField(default=dict, blank=True)
+    milestones = models.JSONField(
+        default=dict, blank=True,
+        help_text='Formation-step years, e.g. {"palimpsest": 2019, "passage": 2023}.',
+    )
+    paid_all_tuition = models.BooleanField(
+        null=True, blank=True,
+        help_text="Member's belief that they've paid all four years of full "
+        "tuition to date (a fallback when records are incomplete).",
+    )
     applied_at = models.DateTimeField(
         null=True, blank=True,
         help_text="When the answers were reconciled into structured records.",

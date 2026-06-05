@@ -193,7 +193,21 @@ class Payment(models.Model):
         related_name="payments",
         help_text="The tuition installment this payment satisfies — set for type=TUITION.",
     )
+    tuition_period = models.ForeignKey(
+        "payments.TuitionPeriod",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payments",
+        help_text="The academic year a tuition payment is for, when assigned "
+        "directly (overrides the date-based attribution; e.g. an August payment "
+        "the member assigns to a specific AY).",
+    )
     notes = models.TextField(blank=True, help_text="Staff notes — e.g. for offline payments.")
+    member_note = models.TextField(
+        blank=True,
+        help_text="A note the member wrote about this payment (visible to the treasurer).",
+    )
     source = models.CharField(
         max_length=20,
         choices=Source.choices,

@@ -79,6 +79,9 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
 </section>
 {% endif %}
 
+{# ---------- Where: context-aware location + meeting room ---------- #}
+{% include "events/_location.html" %}
+
 {# ---------- Access details (paid users only) ---------- #}
 {% if has_paid_registration and event.access_info %}
 <div role="alert" class="alert alert-success">
@@ -105,7 +108,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
             <td class="text-base-content/60">{{ s.sequence }}</td>
             <td>{{ s.start_at|user_datetime }}</td>
             <td class="whitespace-nowrap">{{ s.start_at|user_time }}–{{ s.end_at|user_time }}</td>
-            <td>{{ s.location }}</td>
+            <td>{% if event.format == 'online' %}Online{% else %}{{ s.location }}{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -121,7 +124,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
         <dd class="m-0">{{ first.start_at|user_datetime }}</dd>
         <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Time</dt>
         <dd class="m-0">{{ first.start_at|user_time }}–{{ first.end_at|user_time }}</dd>
-        {% if first.location %}
+        {% if event.format != 'online' and first.location %}
         <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Location</dt>
         <dd class="m-0">{{ first.location }}</dd>
         {% endif %}

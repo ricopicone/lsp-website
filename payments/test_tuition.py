@@ -145,7 +145,7 @@ def test_tuition_view_renders_for_in_training_student(client, current_period):
     resp = client.get(reverse("admissions:formation") + "?tab=tuition")
     assert resp.status_code == 200
     assert current_period.name.encode() in resp.content
-    assert b"Your decision" in resp.content
+    assert b"My decision" in resp.content
 
 
 @pytest.mark.django_db
@@ -1728,3 +1728,57 @@ def test_backfilled_tuition_counts_toward_collected():
     longi = _treasurer_tuition_longitudinal()
     row = next(r for r in longi["tuition_year_rows"] if r["period"].id == period.id)
     assert row["collected"] == Decimal("2000.00")
+
+
+# --- Member tuition AY assignment + treasurer override ------------------
+
+@pytest.mark.django_db
+def test_member_assigns_tuition_period_and_note(client):
+    from payments.models import Payment
+    p2022 = TuitionPeriod.objects.create(
+        name="AY 2022–2023", slug="ay-2022-2023-x",
+        start_date=date(2022, 9, 1), decision_due_date=date(2022, 10, 1),
+        end_date=date(2023, 8, 31), tuition_amount=Decimal("2000.00"),
+    )
+    u = _mk_candidate("assign@example.com")
+    pay = Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("500.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        paid_at=timezone.make_aware(datetime(2022, 8, 20, 12)),  # ambiguous August
+    )
+    other = _mk_candidate("other@example.com")
+    other_pay = Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=other, amount=Decimal("500.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+    )
+    client.force_login(u)
+    client.post(reverse("my_payments_update"), {
+        f"period_{pay.id}": str(p2022.id), f"note_{pay.id}": "This was for 22-23.",
+        f"period_{other_pay.id}": str(p2022.id),  # not the member's — ignored
+    })
+    pay.refresh_from_db()
+    other_pay.refresh_from_db()
+    assert pay.tuition_period_id == p2022.id
+    assert pay.member_note == "This was for 22-23."
+    assert other_pay.tuition_period_id is None  # constrained to own payments
+
+
+@pytest.mark.django_db
+def test_assigned_period_overrides_date_in_dashboard():
+    from payments.models import Payment
+    from payments.views import _treasurer_tuition_context
+    p2022 = TuitionPeriod.objects.create(
+        name="AY 2022–2023", slug="ay-2022-2023-y",
+        start_date=date(2022, 9, 1), decision_due_date=date(2022, 10, 1),
+        end_date=date(2023, 8, 31), tuition_amount=Decimal("2000.00"),
+    )
+    u = _mk_candidate("ovr@example.com")
+    # Paid in August 2022 (date → AY 2021) but assigned to AY 2022.
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("2000.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        tuition_period=p2022,
+        paid_at=timezone.make_aware(datetime(2022, 8, 15, 12)),
+    )
+    ctx = _treasurer_tuition_context(p2022)
+    assert ctx["tuition_total_collected"] == Decimal("2000.00")

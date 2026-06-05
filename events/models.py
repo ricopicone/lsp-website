@@ -468,6 +468,43 @@ class Event(models.Model):
         who have access (paid or comped)."""
         return self.is_faculty(user) or self.has_access_registrant(user)
 
+    # ---- Live timing (drives the video-room "Join" gating) ----
+
+    #: How early the room opens before a session, and how long after it ends the
+    #: join stays available — a buffer around the "live" window.
+    JOIN_PREOPEN = _dt.timedelta(minutes=15)
+    JOIN_GRACE = _dt.timedelta(minutes=30)
+
+    def live_session(self, now=None):
+        """The session whose window (± the pre-open/grace buffers) contains ``now``,
+        else None. Used to surface the online-event Join button only when live."""
+        from django.utils import timezone
+
+        now = now or timezone.now()
+        for s in self.sessions.order_by("start_at"):
+            if s.start_at - self.JOIN_PREOPEN <= now <= s.end_at + self.JOIN_GRACE:
+                return s
+        return None
+
+    def is_live(self, now=None) -> bool:
+        """True while the event is joinable. Session-based when sessions exist;
+        otherwise the event's whole date span counts as live."""
+        from django.utils import timezone
+
+        if self.live_session(now) is not None:
+            return True
+        if not self.sessions.exists() and self.start_date and self.end_date:
+            today = (now or timezone.now()).date()
+            return self.start_date <= today <= self.end_date
+        return False
+
+    def next_session(self, now=None):
+        """The soonest session that hasn't started yet (for 'opens at …' copy)."""
+        from django.utils import timezone
+
+        now = now or timezone.now()
+        return self.sessions.filter(start_at__gte=now).order_by("start_at").first()
+
     #: Event types organized by the Programming Committee (not their own group).
     PC_OWNED_TYPES = frozenset({
         "special_event", "day_of_assembly", "working_day", "scholarly_seminar",

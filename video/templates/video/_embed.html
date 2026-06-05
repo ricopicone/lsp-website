@@ -1,0 +1,32 @@
+{% comment %}Shared Daily Prebuilt mount. Expects: room_url, room_token, and
+optionally back_url (redirect target on leave; defaults to history back).
+Loads the vendored daily.js (window.DailyIframe) — no runtime CDN.{% endcomment %}
+{% load static %}
+<div id="daily-root"
+     class="w-full overflow-hidden rounded-xl border border-base-300 bg-base-200"
+     style="height: 72vh;"></div>
+
+{{ room_url|json_script:"room-url" }}
+{{ room_token|json_script:"room-token" }}
+{{ back_url|default:""|json_script:"back-url" }}
+
+<script src="{% static 'js/vendor/daily.js' %}"></script>
+<script>
+  (function () {
+    var root = document.getElementById("daily-root");
+    var url = JSON.parse(document.getElementById("room-url").textContent);
+    var token = JSON.parse(document.getElementById("room-token").textContent);
+    var back = JSON.parse(document.getElementById("back-url").textContent);
+    if (!window.DailyIframe || !root) { return; }
+    var frame = window.DailyIframe.createFrame(root, {
+      iframeStyle: { width: "100%", height: "100%", border: "0" },
+      showLeaveButton: true,
+      showFullscreenButton: true,
+    });
+    frame.on("left-meeting", function () {
+      if (back) { window.location.href = back; }
+      else { history.length > 1 ? history.back() : (window.location.href = "/"); }
+    });
+    frame.join({ url: url, token: token });
+  })();
+</script>

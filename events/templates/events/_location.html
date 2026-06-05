@@ -1,0 +1,52 @@
+{% comment %}Context-aware "Where" block for an event. Expects: event,
+has_paid_registration, user_registration, daily_enabled, event_is_live,
+event_next_session_at, can_host. In-person shows the venue; online shows a
+branded label with registration/live-aware messaging + a tech-check link.
+{% endcomment %}
+{% load tz_filters %}
+<section class="rounded-lg border border-base-300 bg-base-100 p-4 space-y-1">
+  <h3 class="font-medium text-base-content">
+    {% if event.format == 'in_person' %}In person
+    {% elif event.format == 'hybrid' %}Hybrid — in person &amp; online
+    {% else %}Online · video meeting{% endif %}
+  </h3>
+
+  {% if event.format != 'online' and sessions.0.location %}
+  <p class="text-sm text-base-content/70">{{ sessions.0.location }}</p>
+  {% endif %}
+
+  {% if event.format != 'in_person' %}
+    {% if daily_enabled %}<p class="text-sm text-base-content/60">In your browser — no app to install.</p>{% endif %}
+
+    {% if has_paid_registration %}
+      {% if daily_enabled %}
+        {% if event_is_live or event_room_live or can_host %}
+        {% if event_room_live %}
+        <p class="mt-2 inline-flex items-center gap-2 text-sm text-success font-medium">
+          {% include "workgroups/_live_dot.html" %}
+          Live now · {{ event_room_participants }} in the room
+        </p>
+        {% if event_room_participant_names %}
+        <p class="text-xs text-success/90">{{ event_room_participant_names|slice:":6"|join:", " }}{% if event_room_participant_names|length > 6 %} +{{ event_room_participant_names|length|add:"-6" }} more{% endif %}</p>
+        {% endif %}
+        {% endif %}
+        <div class="mt-1 flex flex-wrap items-center gap-3">
+          <a href="{% url 'video:event_room' event.slug %}" class="btn btn-primary btn-sm">
+            {% if event_is_live or event_room_live %}Join the meeting room{% else %}Open room (host){% endif %}
+          </a>
+          <a href="{% url 'video:system_check' %}" class="link text-sm text-base-content/60">Test your video &amp; audio</a>
+        </div>
+        {% else %}
+        <p class="mt-1 text-sm text-base-content/70">
+          The join button appears here when the event begins{% if event_next_session_at %} · {{ event_next_session_at|user_datetime }}{% endif %}.
+        </p>
+        <a href="{% url 'video:system_check' %}" class="link text-sm text-base-content/60">Test your video &amp; audio →</a>
+        {% endif %}
+      {% endif %}
+    {% else %}
+      <p class="mt-1 text-sm text-base-content/70">
+        <a href="{% url 'registrations:register' event.slug %}" class="link">Register for details</a> to receive joining access.
+      </p>
+    {% endif %}
+  {% endif %}
+</section>

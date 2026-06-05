@@ -155,11 +155,28 @@ def workgroup_detail(request, slug):
 
         can_edit_offering = can_edit_event(request.user, primary_event)
 
+    from video import services as _video
+
+    daily_on = _video.daily_enabled()
+    # The Meet tab is the group's meeting hub (Meet Now + joinable meetings); it
+    # shows to members whenever video is enabled. The "in progress" indicator on
+    # Overview + Meet is driven by *real* Daily presence (people actually in the
+    # room now), with the ongoing scheduled meeting only labelling it.
+    ongoing_meeting = room_participants = None
+    room_participant_names = []
+    if daily_on and is_member:
+        ongoing_meeting = wg.ongoing_meeting()
+        _room = getattr(wg, "video_room", None)
+        room_participants = _video.room_participant_count(_room)
+        room_participant_names = _video.presence_names(_room)
+
     tabs = [("overview", "Overview")]
     if discuss_channel:
         tabs.append(("discuss", "Discuss"))
     if chat_channel:
         tabs.append(("chat", "Chat"))
+    if daily_on and is_member:
+        tabs.append(("meet", "Meet"))
     if wg.has_works and (can_view or archive_access):
         tabs.append(("work", "Work"))
     if wg.has_files and (is_member or archive_access):
@@ -255,6 +272,11 @@ def workgroup_detail(request, slug):
         "can_edit_offering": can_edit_offering,
         "can_join": can_join,
         "can_leave": can_leave,
+        "daily_enabled": daily_on,
+        "ongoing_meeting": ongoing_meeting,
+        "room_participants": room_participants,
+        "room_participant_names": room_participant_names,
+        "room_live": bool(room_participants),
     }
     # Compose kind-specific UI without importing the concrete app: reach the
     # attached object via its reverse accessor and ask it for its viewer state.
@@ -329,6 +351,16 @@ def workgroup_detail(request, slug):
         context["max_file_bytes"] = MAX_WORKGROUP_FILE_BYTES
         context["can_upload_files"] = is_member        # archive viewers: read-only
         context["support_email"] = settings.SUPPORT_EMAIL
+    elif active == "meet" and daily_on and is_member:
+        from django.utils import timezone as _tz
+
+        now = _tz.now()
+        # Upcoming + still-ongoing meetings, soonest first (ongoing has a
+        # future ends_at, so the gte-on-ends_at filter keeps it in the list).
+        context["upcoming_meetings"] = list(
+            wg.meetings.filter(ends_at__gte=now, cancelled=False)
+            .select_related("series").order_by("starts_at")
+        )
     elif active == "schedule" and wg.has_calendar and (is_member or archive_access):
         from django.utils import timezone as _tz
 

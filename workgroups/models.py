@@ -385,6 +385,17 @@ class Workgroup(models.Model):
             return None
         return min(active, key=lambda e: e.start_date or today)
 
+    def ongoing_meeting(self):
+        """The scheduled meeting (if any) whose time window contains now — drives
+        the 'meeting in progress' indicator on the Overview + Meet tabs. Cancelled
+        meetings don't count. Schedule-based, no live-presence check."""
+        now = timezone.now()
+        return (
+            self.meetings.filter(starts_at__lte=now, ends_at__gte=now, cancelled=False)
+            .order_by("starts_at")
+            .first()
+        )
+
     def open_reading_group_term(self, *, start_date, end_date, fee):
         """Open a new annual term for this reading group — a published, open
         ``Event`` attached to this standing workgroup, with a single all-audience

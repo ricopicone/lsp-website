@@ -629,3 +629,85 @@ def twofactor_disable(request):
         error = "That password is incorrect."
 
     return render(request, "accounts/twofactor_disable.html", {"error": error})
+
+
+# ---------------------------------------------------------------------------
+# Member intake survey (launch onboarding)
+# ---------------------------------------------------------------------------
+
+@login_required
+def intake_survey(request):
+    """The launch intake survey — a friendly single page. Confirms a few fields,
+    a tuition/dues year-grid, formation-step years, and the member's advisor; on
+    submit it reconciles into structured records (see ``accounts.survey``)."""
+    from django.contrib import messages
+
+    from .advisor import current_advisor, eligible_advisors, set_advisor
+    from .forms import IntakeSurveyForm
+    from .membership import academic_year_choices
+    from .models import MemberIntakeSurvey, Profile
+    from .survey import (
+        apply_survey,
+        milestone_questions,
+        parse_grid,
+        parse_milestones,
+        survey_year_rows,
+    )
+
+    survey = MemberIntakeSurvey.objects.filter(user=request.user).first()
+    profile = request.user.profile
+    needs_advisor = profile.needs_advisor
+    can_list = profile.is_in_directory
+    on_tuition_track = profile.role in (
+        Profile.IN_TRAINING_ROLES | {Profile.Role.ANALYST, Profile.Role.SCHOLAR}
+    )
+    ay_choices = academic_year_choices()
+
+    if request.method == "POST":
+        form = IntakeSurveyForm(request.POST, ay_choices=ay_choices)
+        if form.is_valid():
+            apply_survey(
+                request.user,
+                year_joined=form.cleaned_data["year_joined"],
+                payment_names=form.cleaned_data["payment_names"],
+                payment_emails=form.cleaned_data["payment_emails"],
+                grid=parse_grid(request.POST),
+                milestones=parse_milestones(request.POST),
+                list_in_directory=(
+                    form.cleaned_data["list_in_directory"] if can_list else None
+                ),
+                paid_all_tuition=(
+                    form.cleaned_data["paid_all_tuition"] if on_tuition_track else None
+                ),
+            )
+            if needs_advisor and request.POST.get("advisor"):
+                advisor = eligible_advisors(request.user).filter(
+                    pk=request.POST["advisor"]
+                ).first()
+                if advisor is not None:
+                    set_advisor(request.user, advisor, by=request.user)
+            messages.success(request, "Thanks — your answers are saved.")
+            return redirect(reverse("intake_survey") + "?done=1")
+    else:
+        form = IntakeSurveyForm(ay_choices=ay_choices, initial={
+            "year_joined": (survey.year_joined if survey else None) or profile.year_joined,
+            "payment_names": survey.payment_names if survey else "",
+            "payment_emails": survey.payment_emails if survey else "",
+            "list_in_directory": profile.public,
+        })
+
+    rows = survey_year_rows(request.user)
+    return render(request, "accounts/survey.html", {
+        "form": form,
+        "rows": rows,
+        "survey": survey,
+        "done": request.GET.get("done") == "1",
+        "ay_choices": ay_choices,
+        "show_paid_all": on_tuition_track,
+        "tuition_prechecked": sum(1 for r in rows if r["tuition_state"] == "full"),
+        "milestones": milestone_questions(request.user),
+        "needs_advisor": needs_advisor,
+        "advisors": eligible_advisors(request.user) if needs_advisor else [],
+        "current_advisor": current_advisor(request.user) if needs_advisor else None,
+        "can_list": can_list,
+    })

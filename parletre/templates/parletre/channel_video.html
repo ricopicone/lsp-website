@@ -1,0 +1,35 @@
+{% extends "core/base.html" %}
+{% load parletre_tags %}
+{% block title %}{{ channel.name }} — Parlêtre{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'parletre:index' %}" class="hover:text-primary">Parlêtre</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-base-content/70">{{ channel.name }}</span>
+  </nav>
+
+  {% include "parletre/_channel_group_nav.html" %}
+
+  <header class="space-y-1">
+    <h1 class="font-serif text-2xl tracking-tight text-base-content inline-flex items-center gap-2">
+      {% icon "video" css="text-primary" %} {{ channel.name }}
+    </h1>
+    {% if channel.description %}
+    <div class="prose prose-sm max-w-none text-base-content/70">{{ channel.description_html }}</div>
+    {% endif %}
+  </header>
+
+  {% if room_unavailable %}
+  <div class="rounded-lg border border-base-300 bg-base-100 p-6 text-center text-base-content/70">
+    The video room isn't available right now.
+  </div>
+  {% else %}
+  {% include "video/_embed.html" with room_url=room_url room_token=room_token back_url=channel.get_absolute_url %}
+  <p class="text-xs text-base-content/50">
+    This meeting is not recorded.{% if is_owner %} You are joining as a moderator.{% endif %}
+  </p>
+  {% endif %}
+</div>
+{% endblock %}

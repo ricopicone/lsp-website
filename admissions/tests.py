@@ -233,7 +233,7 @@ def test_status_page_renders(client):
     )
     client.force_login(applicant)
     r = client.get(reverse("admissions:status"))
-    assert r.status_code == 200 and b"Your application" in r.content
+    assert r.status_code == 200 and b"My application" in r.content
 
 
 def test_review_pages_render(client):

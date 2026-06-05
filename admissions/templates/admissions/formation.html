@@ -10,386 +10,445 @@
   <header class="space-y-2">
     <h1 class="font-serif text-3xl text-base-content tracking-tight">My Formation</h1>
     <p class="text-base-content/70">
-      Your place in the School — your Advisor and the steps of your formation,
-      your tuition, and the groups you take part in.
+      My place in the School — my Advisor and the steps of my formation, my
+      tuition and dues, and the groups I take part in.
     </p>
   </header>
 
-  <div role="tablist" class="tabs tabs-bordered">
+  {# ── Tabs (each is its own ?tab= URL) ─────────────────────────── #}
+  <div role="tablist"
+       class="no-scrollbar -mx-1 flex gap-1 overflow-x-auto border-b border-base-300/60 px-1">
+    {% for key, label in formation_tabs %}
+    <a href="?tab={{ key }}" role="tab"
+       class="relative shrink-0 px-3.5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors
+              {% if key == active_tab %}text-primary{% else %}text-base-content/55 hover:text-base-content{% endif %}">
+      {{ label }}
+      {% if key == active_tab %}<span class="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary"></span>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
 
-    {# ===================== Formation tab ===================== #}
-    <input type="radio" name="formation_tabs" role="tab" class="tab font-medium"
-           aria-label="Formation" {% if active_tab == 'formation' %}checked{% endif %}>
-    <div role="tabpanel" class="tab-content pt-6">
-      <div class="space-y-6">
+  {# ===================== Formation ===================== #}
+  {% if active_tab == "formation" %}
+  <div class="space-y-6">
 
-        {# ---- Advisor ---- #}
-        <section class="rounded-xl border border-base-300 p-5 space-y-4">
-          <h2 class="font-serif text-xl text-base-content">Your Advisor</h2>
-          {% if advisor %}
-          <div>
-            <p class="font-medium text-base-content">{{ advisor.get_full_name|default:advisor.email }}</p>
-            <p class="text-sm text-base-content/60">{{ advisor.profile.get_role_display }}</p>
-          </div>
+    {# ---- Advisor ---- #}
+    <section class="rounded-xl border border-base-300 p-5 space-y-4">
+      <h2 class="font-serif text-xl text-base-content">My Advisor</h2>
+      {% if advisor %}
+      <div>
+        <p class="font-medium text-base-content">{{ advisor.get_full_name|default:advisor.email }}</p>
+        <p class="text-sm text-base-content/60">{{ advisor.profile.get_role_display }}</p>
+      </div>
+      {% endif %}
+      {% if needs_advisor %}
+      <form method="post" action="{% url 'advisor_select' %}" class="space-y-3">
+        {% csrf_token %}
+        <label class="block text-sm font-medium text-base-content">
+          {% if advisor %}Change my Advisor{% else %}Choose my Advisor{% endif %}
+        </label>
+        {{ advisor_form.advisor }}
+        {% if advisor_form.advisor.errors %}<p class="text-error text-xs">{{ advisor_form.advisor.errors|striptags }}</p>{% endif %}
+        <p class="text-xs text-base-content/50">
+          {% if advisor_form.advisor.field.queryset.exists %}
+            My Advisor supports me through my training and presents my demandes
+            to the Meeting of the Analysts. They'll be notified of my choice.
+          {% else %}
+            No eligible advisors are listed yet. Please contact the School.
           {% endif %}
-          {% if needs_advisor %}
-          <form method="post" action="{% url 'advisor_select' %}" class="space-y-3">
-            {% csrf_token %}
-            <label class="block text-sm font-medium text-base-content">
-              {% if advisor %}Change your Advisor{% else %}Choose your Advisor{% endif %}
-            </label>
-            {{ advisor_form.advisor }}
-            {% if advisor_form.advisor.errors %}<p class="text-error text-xs">{{ advisor_form.advisor.errors|striptags }}</p>{% endif %}
-            <p class="text-xs text-base-content/50">
-              {% if advisor_form.advisor.field.queryset.exists %}
-                Your Advisor supports you through your training and presents your
-                demandes to the Meeting of the Analysts. They'll be notified of your choice.
-              {% else %}
-                No eligible advisors are listed yet. Please contact the School.
-              {% endif %}
-            </p>
-            {% if advisor_form.advisor.field.queryset.exists %}
-            <button class="btn btn-primary btn-sm">Save Advisor</button>
+        </p>
+        {% if advisor_form.advisor.field.queryset.exists %}
+        <button class="btn btn-primary btn-sm">Save Advisor</button>
+        {% endif %}
+      </form>
+      {% elif not advisor %}
+      <p class="text-sm text-base-content/60">
+        Advisors are chosen by members in formation (Precandidates and Candidates).
+      </p>
+      {% endif %}
+    </section>
+
+    {# ---- Formation steps (demande + trace) ---- #}
+    <section class="rounded-xl border border-base-300 p-5 space-y-4">
+      <h2 class="font-serif text-xl text-base-content">My formation steps</h2>
+      <p class="text-sm text-base-content/70">
+        A demande is my request to present my Palimpsest or Passage / Traversée
+        to the entire School at the next Days of Assembly — sent to my Advisor in
+        lieu of an email. My Advisor presents it, with a recommendation, to the
+        Meeting of the Analysts, who decide.
+      </p>
+
+      {# Open a new demande #}
+      {% if can_open %}
+      {% if advisor %}
+      <form method="post" action="{% url 'admissions:advancement' %}" class="space-y-3 rounded-lg border border-base-300 bg-base-200/40 p-4">
+        {% csrf_token %}
+        <p class="text-sm text-base-content/70">
+          Request to present my <strong>{{ step_label }}</strong> at the next Days of
+          Assembly. {{ advisor.get_full_name|default:advisor.email }} will be asked
+          to present it on my behalf.
+        </p>
+        <div class="space-y-1">
+          <label class="block text-sm text-base-content/70">{{ demande_form.statement.label }}</label>
+          {{ demande_form.statement }}
+          <p class="text-xs text-base-content/50">{{ demande_form.statement.help_text }}</p>
+          {% if demande_form.statement.errors %}<p class="text-error text-xs">{{ demande_form.statement.errors|striptags }}</p>{% endif %}
+        </div>
+        <button class="btn btn-primary btn-sm">Demande my {{ step_label }}</button>
+      </form>
+      {% else %}
+      <div class="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm">
+        <p class="text-base-content/80">Choose my Advisor (above) before sending a demande — they present it to the Meeting on my behalf.</p>
+      </div>
+      {% endif %}
+      {% endif %}
+
+      {# Trace of every step (derived from role history, demande overlaid) #}
+      {% if formation_steps %}
+      <ol class="space-y-3">
+        {% for s in formation_steps %}
+        {% with a=s.advancement %}
+        <li class="rounded-lg border border-base-300 p-4 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-medium text-base-content">{{ s.label }}</span>
+            {% if a %}
+            <span class="badge badge-sm
+              {% if a.status == 'approved' %}badge-success
+              {% elif a.status == 'declined' or a.status == 'withdrawn' %}badge-ghost
+              {% elif a.status == 'presented' %}badge-info
+              {% else %}badge-warning{% endif %}">{{ a.get_status_display }}</span>
+            {% elif s.completed %}
+            <span class="badge badge-sm badge-success">Completed</span>
             {% endif %}
-          </form>
-          {% elif not advisor %}
-          <p class="text-sm text-base-content/60">
-            Advisors are chosen by members in formation (Precandidates and Candidates).
-          </p>
-          {% endif %}
-        </section>
-
-        {# ---- Advancement demande ---- #}
-        <section class="rounded-xl border border-base-300 p-5 space-y-4">
-          <h2 class="font-serif text-xl text-base-content">
-            {% if step_label %}Your {{ step_label }}{% else %}Advancement{% endif %}
-          </h2>
-          <p class="text-sm text-base-content/70">
-            A demande is your request to present your Palimpsest or Passage / Traversée
-            to the entire School at the next Days of Assembly. It goes to your Advisor
-            in lieu of an email — you don't attach the text you'll present. Your
-            Advisor presents the demande, with a recommendation, to the Meeting of the
-            Analysts, who decide.
-          </p>
-
-          {% if open_one %}
-          {% with a=open_one %}
-          <div class="rounded-lg border border-base-300 bg-base-200/40 p-4 space-y-3">
-            <div class="flex items-center gap-2">
-              <span class="text-sm text-base-content/60">{{ a.step_label }}:</span>
-              <span class="badge {% if a.status == 'presented' %}badge-info{% else %}badge-warning{% endif %}">{{ a.get_status_display }}</span>
-            </div>
-            <ol class="space-y-2 text-sm">
-              <li class="flex items-center gap-2"><span class="text-success">✓</span> Request sent {{ a.requested_at|date:"M j, Y" }}</li>
-              <li class="flex items-center gap-2">
-                {% if a.presented_at %}<span class="text-success">✓</span>{% else %}<span class="text-base-content/30">○</span>{% endif %}
-                Your Advisor presents it to the Meeting of the Analysts
-                {% if a.advisor %}<span class="text-base-content/50">({{ a.advisor.get_full_name|default:a.advisor.email }})</span>{% endif %}
-              </li>
-              <li class="flex items-center gap-2"><span class="text-base-content/30">○</span> Decision at the Days of Assembly</li>
-            </ol>
-            <form method="post" action="{% url 'admissions:advancement_withdraw' a.pk %}"
-                  onsubmit="return confirm('Withdraw this request?');">
-              {% csrf_token %}
-              <button class="btn btn-ghost btn-xs text-error">Withdraw request</button>
-            </form>
           </div>
-          {% endwith %}
+          <ul class="text-sm text-base-content/70 space-y-0.5">
+            {% if a %}
+              <li>Requested {{ a.requested_at|date:"M j, Y" }}</li>
+              {% if a.presented_at %}<li>Presented to the Meeting {{ a.presented_at|date:"M j, Y" }}{% if a.advisor %} by {{ a.advisor.get_full_name|default:a.advisor.email }}{% endif %}</li>{% endif %}
+              {% if a.decided_at %}<li>Decision {{ a.decided_at|date:"M j, Y" }}{% if a.decision_note %} — {{ a.decision_note }}{% endif %}</li>{% endif %}
+            {% elif s.when_ay %}
+              <li>Completed in AY {{ s.when_ay }}–{{ s.when_ay|add:1 }}</li>
+            {% else %}
+              <li>Completed.</li>
+            {% endif %}
+          </ul>
 
-          {% elif can_open %}
-          {% if advisor %}
-          <form method="post" action="{% url 'admissions:advancement' %}" class="space-y-3">
+          {# The Work I presented — a real entry in Works (not a file here). #}
+          <div class="flex items-center gap-3 flex-wrap pt-1 border-t border-base-300/60">
+            {% if s.works %}
+            <ul class="flex-1 min-w-0 space-y-0.5">
+              {% for w in s.works %}
+              <li><a href="{{ w.get_absolute_url }}" class="link link-primary text-sm">{{ w.title }} →</a></li>
+              {% endfor %}
+            </ul>
+            <a href="{% url 'works:add' %}?kind={{ s.work_kind }}&next={{ request.path|urlencode }}"
+               class="btn btn-ghost btn-xs">Add another</a>
+            {% else %}
+            <span class="text-sm text-base-content/60">No {{ s.label }} added yet.</span>
+            <a href="{% url 'works:add' %}?kind={{ s.work_kind }}&next={{ request.path|urlencode }}"
+               class="btn btn-primary btn-xs">Add my {{ s.label }}</a>
+            {% endif %}
+          </div>
+
+          {% if a and a.is_open %}
+          <form method="post" action="{% url 'admissions:advancement_withdraw' a.pk %}"
+                onsubmit="return confirm('Withdraw this demande?');">
             {% csrf_token %}
-            <p class="text-sm text-base-content/70">
-              Request to present your <strong>{{ step_label }}</strong> at the next Days
-              of Assembly. {{ advisor.get_full_name|default:advisor.email }} will be asked
-              to present it on your behalf.
-            </p>
-            <div class="space-y-1">
-              <label class="block text-sm text-base-content/70">{{ demande_form.statement.label }}</label>
-              {{ demande_form.statement }}
-              <p class="text-xs text-base-content/50">{{ demande_form.statement.help_text }}</p>
-              {% if demande_form.statement.errors %}<p class="text-error text-xs">{{ demande_form.statement.errors|striptags }}</p>{% endif %}
-            </div>
-            <button class="btn btn-primary btn-sm">Send request to my Advisor</button>
+            <button class="btn btn-ghost btn-xs text-error">Withdraw demande</button>
           </form>
-          {% else %}
-          <div class="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm space-y-2">
-            <p class="text-base-content/80">Choose your Advisor (above) before sending a request — they present it to the Meeting on your behalf.</p>
-          </div>
           {% endif %}
+        </li>
+        {% endwith %}
+        {% endfor %}
+      </ol>
+      {% elif not can_open %}
+      <p class="text-sm text-base-content/60">
+        Formation demandes (Palimpsest, Passage / Traversée) are sent by members in
+        training when they're ready for the next step. There's nothing here yet.
+      </p>
+      {% endif %}
+    </section>
 
-          {% elif existing %}
-          {% with a=existing %}
-          <div class="rounded-lg border border-base-300 p-4 text-sm space-y-1">
-            <p><span class="text-base-content/60">{{ a.step_label }}:</span> <strong>{{ a.get_status_display }}</strong>
-              {% if a.decided_at %}on {{ a.decided_at|date:"M j, Y" }}{% endif %}</p>
-            {% if a.decision_note %}<p class="text-base-content/70">{{ a.decision_note }}</p>{% endif %}
-          </div>
-          {% endwith %}
+  </div>
 
-          {% else %}
-          <p class="text-sm text-base-content/60">
-            Formation demandes (Palimpsest, Passage / Traversée) are sent by members in
-            training when they're ready for the next step. There's nothing for you to do
-            here right now.
-          </p>
-          {% endif %}
-        </section>
+  {# ===================== Tuition & Dues ===================== #}
+  {% elif active_tab == "tuition" %}
+  <div class="space-y-8">
 
-      </div>
+    {% if tuition_stripe_status == "cancelled" %}
+    <div class="rounded-lg border border-warning/40 bg-warning/10 px-5 py-3 text-sm">
+      Payment cancelled. No charge was made — you can try again whenever you're ready.
     </div>
-
-    {# ===================== Tuition tab ===================== #}
-    {% if show_tuition_tab %}
-    <input type="radio" name="formation_tabs" role="tab" class="tab font-medium"
-           aria-label="Tuition" {% if active_tab == 'tuition' %}checked{% endif %}>
-    <div role="tabpanel" class="tab-content pt-6">
-      <div class="space-y-6">
-
-        {% if tuition_stripe_status == "cancelled" %}
-        <div class="rounded-lg border border-warning/40 bg-warning/10 px-5 py-3 text-sm">
-          Payment cancelled. No charge was made — you can try again whenever you're ready.
-        </div>
-        {% elif tuition_stripe_status == "success" %}
-        <div class="rounded-lg border border-success/40 bg-success/10 px-5 py-3 text-sm">
-          Thank you — your payment was received. It may take a moment to appear below.
-        </div>
-        {% endif %}
-
-        {% if not owes_tuition %}
-        <section class="rounded-lg border border-base-300 bg-base-200/40 p-5 text-sm text-base-content/70">
-          You're not in a tuition-paying role right now, so there's no tuition decision
-          to record. Your payment history is below.
-        </section>
-        {% elif not tuition_period %}
-        <section class="rounded-lg border border-base-300 bg-base-200/40 p-5 text-sm text-base-content/70">
-          No academic year is currently open for tuition. Check back later.
-        </section>
-        {% else %}
-        <section class="space-y-5">
-          <header class="space-y-1">
-            <h2 class="font-serif text-2xl text-base-content">Tuition — {{ tuition_period.name }}</h2>
-            <p class="text-sm text-base-content/70">
-              Annual amount: <strong>${{ tuition_period.tuition_amount }}</strong>.
-              Decisions due by {{ tuition_period.decision_due_date|date:"M j, Y" }}.
-            </p>
-          </header>
-
-          <div class="rounded-lg border border-base-300 bg-base-200/40 p-5 text-sm leading-relaxed space-y-2">
-            <p>
-              Students pay <strong>four total years of tuition</strong> before transitioning
-              to full Analyst or Scholar standing. The four years need not be consecutive —
-              you may skip a year and pay it later.
-            </p>
-            <p>
-              Tuition-paying students receive "covered by tuition" pricing on seminars.
-              Students skipping a year still pay the regular per-event fee.
-            </p>
-          </div>
-
-          {% if tuition_enrollment %}
-          <div class="rounded-lg border border-primary/30 bg-primary/5 px-5 py-4 text-sm">
-            <p>Current decision for {{ tuition_period.name }}:
-              <strong>{{ tuition_enrollment.get_status_display }}</strong>
-              <span class="text-base-content/60">(recorded {{ tuition_enrollment.decided_at|user_datetime }})</span>
-            </p>
-            <p class="text-base-content/70 mt-1">You can change it below any time before the year ends.</p>
-          </div>
-
-          {% if tuition_enrollment.status == "committed" and not tuition_installments %}
-          <div class="rounded-lg border border-base-300 p-5 space-y-3">
-            <h3 class="font-serif text-lg text-base-content">Pay tuition</h3>
-            <p class="text-sm text-base-content/70">Pay this year's tuition in one transaction via Stripe.</p>
-            <form method="post" action="{% url 'tuition_pay_in_full' %}">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-primary">Pay ${{ tuition_period.tuition_amount }} now →</button>
-            </form>
-            <p class="text-xs text-base-content/60">
-              Prefer to spread payments out? Switch your decision to "payment plan" below.
-            </p>
-          </div>
-          {% endif %}
-
-          {% if tuition_enrollment.status == "payment_plan" and not tuition_installments %}
-          <div class="rounded-lg border border-base-300 p-5 space-y-4">
-            <h3 class="font-serif text-lg text-base-content">Choose a payment plan</h3>
-            <p class="text-sm text-base-content/70">Pick how you'd like to split the ${{ tuition_period.tuition_amount }} annual tuition.</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <form method="post" action="{% url 'tuition_setup_plan' %}" class="contents">
-                {% csrf_token %}
-                <input type="hidden" name="installment_count" value="2">
-                <button type="submit" class="btn btn-outline justify-start text-left h-auto py-4">
-                  <span class="block"><span class="font-medium block">Two installments</span>
-                  <span class="text-xs text-base-content/60 block mt-0.5">September + February</span></span>
-                </button>
-              </form>
-              <form method="post" action="{% url 'tuition_setup_plan' %}" class="contents">
-                {% csrf_token %}
-                <input type="hidden" name="installment_count" value="9">
-                <button type="submit" class="btn btn-outline justify-start text-left h-auto py-4">
-                  <span class="block"><span class="font-medium block">Monthly (9 installments)</span>
-                  <span class="text-xs text-base-content/60 block mt-0.5">September through May</span></span>
-                </button>
-              </form>
-            </div>
-          </div>
-          {% endif %}
-
-          {% if tuition_installments %}
-          <div class="rounded-lg border border-base-300 p-5 space-y-3">
-            <h3 class="font-serif text-lg text-base-content">Your installments</h3>
-            <table class="table table-sm">
-              <thead><tr><th>#</th><th>Due</th><th class="text-right">Amount</th><th></th></tr></thead>
-              <tbody>
-                {% for inst in tuition_installments %}
-                <tr>
-                  <td>{{ inst.sequence }}</td>
-                  <td class="whitespace-nowrap">{{ inst.due_date|date:"M j, Y" }}</td>
-                  <td class="text-right whitespace-nowrap">${{ inst.amount }}</td>
-                  <td class="text-right">
-                    {% if inst.paid %}
-                      <span class="badge badge-success badge-sm">Paid {{ inst.paid_at|date:"M j" }}</span>
-                    {% else %}
-                      <form method="post" action="{% url 'tuition_pay_installment' inst.id %}" class="contents">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-primary btn-xs">Pay →</button>
-                      </form>
-                    {% endif %}
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          {% endif %}
-          {% endif %}
-
-          <form method="post" action="{% url 'tuition' %}" class="space-y-4 rounded-lg border border-base-300 p-5">
-            {% csrf_token %}
-            <fieldset class="space-y-2">
-              <legend class="font-serif text-lg text-base-content mb-2">{{ tuition_form.status.label }}</legend>
-              {% for radio in tuition_form.status %}
-              <label class="flex items-start gap-3 cursor-pointer">
-                {{ radio.tag }}
-                <span class="text-sm">{{ radio.choice_label }}</span>
-              </label>
-              {% endfor %}
-              {% if tuition_form.status.errors %}<p class="text-error text-sm">{{ tuition_form.status.errors|join:", " }}</p>{% endif %}
-            </fieldset>
-            <button type="submit" class="btn btn-primary">Record decision</button>
-          </form>
-        </section>
-        {% endif %}
-
-        {# ---- Payment history + self-reconcile ---- #}
-        <section class="space-y-3">
-          <h2 class="font-serif text-xl text-base-content">Your payments</h2>
-          {% if my_payments %}
-          <table class="table table-sm">
-            <thead>
-              <tr><th>Date</th><th>Type</th><th class="text-right">Amount</th><th>Status</th><th>Method</th></tr>
-            </thead>
-            <tbody>
-              {% for p in my_payments %}
-              <tr>
-                <td class="whitespace-nowrap">{{ p.paid_at|default:p.created_at|date:"M j, Y" }}</td>
-                <td>{{ p.get_payment_type_display }}{% if p.source == 'assumed' %} <span class="badge badge-ghost badge-xs">provisional</span>{% endif %}</td>
-                <td class="text-right whitespace-nowrap">${{ p.amount }}</td>
-                <td>{{ p.get_status_display }}</td>
-                <td>{{ p.get_method_display }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-          {% else %}
-          <p class="text-sm text-base-content/60">No payments on record yet.</p>
-          {% endif %}
-
-          {% if my_assumed_payments %}
-          <div class="rounded-lg border border-warning/30 bg-warning/5 p-5 space-y-3">
-            <h3 class="font-medium text-base-content">Help us categorize these charges</h3>
-            <p class="text-sm text-base-content/70">
-              We recorded the payments below from our records but aren't sure what each was
-              for. Tick the ones that belong together, choose what they were, and save —
-              this helps the treasurer keep your account straight.
-            </p>
-            <form method="post" action="{% url 'my_payment_reconcile' %}" class="space-y-3">
-              {% csrf_token %}
-              <table class="table table-sm">
-                <thead><tr><th></th><th>Date</th><th class="text-right">Amount</th><th>Currently</th></tr></thead>
-                <tbody>
-                  {% for p in my_assumed_payments %}
-                  <tr>
-                    <td><input type="checkbox" name="payment_ids" value="{{ p.id }}" class="checkbox checkbox-sm"></td>
-                    <td class="whitespace-nowrap">{{ p.paid_at|default:p.created_at|date:"M j, Y" }}</td>
-                    <td class="text-right whitespace-nowrap">${{ p.amount }}</td>
-                    <td>{{ p.get_payment_type_display }}</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-              <div class="flex flex-wrap items-end gap-3">
-                <label class="text-sm">
-                  <span class="block text-base-content/70 mb-1">These payments were for</span>
-                  <select name="payment_type" class="select select-bordered select-sm">
-                    {% for value, label in payment_type_choices %}
-                    <option value="{{ value }}">{{ label }}</option>
-                    {% endfor %}
-                  </select>
-                </label>
-                <button type="submit" class="btn btn-primary btn-sm">Save categorization</button>
-              </div>
-            </form>
-          </div>
-          {% endif %}
-        </section>
-
-      </div>
+    {% elif tuition_stripe_status == "success" %}
+    <div class="rounded-lg border border-success/40 bg-success/10 px-5 py-3 text-sm">
+      Thank you — your payment was received. It may take a moment to appear below.
     </div>
     {% endif %}
 
-    {# ===================== Groups tab ===================== #}
-    <input type="radio" name="formation_tabs" role="tab" class="tab font-medium"
-           aria-label="Groups" {% if active_tab == 'groups' %}checked{% endif %}>
-    <div role="tabpanel" class="tab-content pt-6">
-      <div class="space-y-6">
-        <section class="space-y-3">
-          <h2 class="font-serif text-xl text-base-content">Current groups</h2>
-          {% if current_groups %}
-          <ul class="divide-y divide-base-300 rounded-xl border border-base-300">
-            {% for g in current_groups %}
-            <li class="flex items-center justify-between gap-3 p-4">
-              <div>
-                <a href="{{ g.workgroup.get_absolute_url }}" class="link link-hover font-medium text-base-content">{{ g.workgroup.name }}</a>
-                <p class="text-xs text-base-content/60">{{ g.kind }} · {{ g.role }}</p>
-              </div>
-            </li>
-            {% endfor %}
-          </ul>
-          {% else %}
-          <p class="text-sm text-base-content/60">You're not currently in any groups.</p>
-          {% endif %}
-        </section>
+    {# ---- Tuition ---- #}
+    <section class="space-y-5">
+      <h2 class="font-serif text-2xl text-base-content">Tuition</h2>
 
-        {% if past_groups %}
-        <section class="space-y-3">
-          <h2 class="font-serif text-xl text-base-content">Past groups</h2>
-          <ul class="divide-y divide-base-300 rounded-xl border border-base-300">
-            {% for g in past_groups %}
-            <li class="flex items-center justify-between gap-3 p-4">
-              <div>
-                <a href="{{ g.workgroup.get_absolute_url }}" class="link link-hover text-base-content/80">{{ g.workgroup.name }}</a>
-                <p class="text-xs text-base-content/60">{{ g.kind }} · {{ g.role }}</p>
-              </div>
-            </li>
-            {% endfor %}
-          </ul>
-        </section>
-        {% endif %}
+      {% if owes_tuition or tuition_years_started %}
+      {# Four-year progress #}
+      <div class="rounded-lg border border-base-300 p-5 space-y-3">
+        <div class="flex items-baseline justify-between gap-3 flex-wrap">
+          <h3 class="font-medium text-base-content">Progress toward full standing</h3>
+          <p class="text-sm text-base-content/70">
+            ${{ tuition_total_paid }} paid of ${{ tuition_total_goal }} ({{ tuition_total_pct }}%)
+          </p>
+        </div>
+        <p class="text-xs text-base-content/60">
+          Four years of tuition (not necessarily consecutive) lead to full Analyst
+          or Scholar standing. Years you haven't started yet are projected at the
+          current rate; a partially-paid year counts its remainder as still owed.
+        </p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {% for s in tuition_slots %}
+          <div class="space-y-1">
+            <p class="text-xs font-medium text-base-content truncate">
+              {{ s.label }}{% if s.projected %} <span class="text-base-content/50">(projected)</span>{% endif %}
+            </p>
+            <div class="h-2.5 rounded-full bg-base-300 overflow-hidden">
+              <div class="h-full {% if s.projected %}bg-base-content/20{% else %}bg-primary{% endif %}" style="width: {{ s.pct }}%"></div>
+            </div>
+            <p class="text-xs text-base-content/60">${{ s.paid }} / ${{ s.goal }}</p>
+          </div>
+          {% endfor %}
+        </div>
       </div>
-    </div>
+      {% endif %}
+
+      {% if not owes_tuition %}
+      <p class="text-sm text-base-content/70">
+        You're not in a tuition-paying role right now, so there's no decision to record.
+      </p>
+      {% elif not tuition_period %}
+      <p class="text-sm text-base-content/70">No academic year is currently open for tuition.</p>
+      {% else %}
+      <div class="rounded-lg border border-base-300 bg-base-200/40 p-5 text-sm leading-relaxed">
+        <p>Tuition-paying students receive "covered by tuition" pricing on seminars.
+          Students skipping a year still pay the regular per-event fee.</p>
+      </div>
+
+      {% if tuition_enrollment %}
+      <div class="rounded-lg border border-primary/30 bg-primary/5 px-5 py-4 text-sm">
+        <p>Current decision for {{ tuition_period.name }}:
+          <strong>{{ tuition_enrollment.get_status_display }}</strong>
+          <span class="text-base-content/60">(recorded {{ tuition_enrollment.decided_at|user_datetime }})</span>
+        </p>
+      </div>
+
+      {% if tuition_enrollment.status == "committed" and not tuition_installments %}
+      <div class="rounded-lg border border-base-300 p-5 space-y-3">
+        <h3 class="font-serif text-lg text-base-content">Pay tuition</h3>
+        <form method="post" action="{% url 'tuition_pay_in_full' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-primary">Pay ${{ tuition_period.tuition_amount }} now →</button>
+        </form>
+        <p class="text-xs text-base-content/60">Prefer to spread it out? Switch to "payment plan" below.</p>
+      </div>
+      {% endif %}
+
+      {% if tuition_enrollment.status == "payment_plan" and not tuition_installments %}
+      <div class="rounded-lg border border-base-300 p-5 space-y-4">
+        <h3 class="font-serif text-lg text-base-content">Choose a payment plan</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <form method="post" action="{% url 'tuition_setup_plan' %}" class="contents">
+            {% csrf_token %}
+            <input type="hidden" name="installment_count" value="2">
+            <button type="submit" class="btn btn-outline justify-start text-left h-auto py-4">
+              <span class="block"><span class="font-medium block">Two installments</span>
+              <span class="text-xs text-base-content/60 block mt-0.5">September + February</span></span>
+            </button>
+          </form>
+          <form method="post" action="{% url 'tuition_setup_plan' %}" class="contents">
+            {% csrf_token %}
+            <input type="hidden" name="installment_count" value="9">
+            <button type="submit" class="btn btn-outline justify-start text-left h-auto py-4">
+              <span class="block"><span class="font-medium block">Monthly (9 installments)</span>
+              <span class="text-xs text-base-content/60 block mt-0.5">September through May</span></span>
+            </button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if tuition_installments %}
+      <div class="rounded-lg border border-base-300 p-5 space-y-3">
+        <h3 class="font-serif text-lg text-base-content">My installments — {{ tuition_period.name }}</h3>
+        <table class="table table-sm">
+          <thead><tr><th>#</th><th>Due</th><th class="text-right">Amount</th><th></th></tr></thead>
+          <tbody>
+            {% for inst in tuition_installments %}
+            <tr>
+              <td>{{ inst.sequence }}</td>
+              <td class="whitespace-nowrap">{{ inst.due_date|date:"M j, Y" }}</td>
+              <td class="text-right whitespace-nowrap">${{ inst.amount }}</td>
+              <td class="text-right">
+                {% if inst.paid %}
+                  <span class="badge badge-success badge-sm">Paid {{ inst.paid_at|date:"M j" }}</span>
+                {% else %}
+                  <form method="post" action="{% url 'tuition_pay_installment' inst.id %}" class="contents">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary btn-xs">Pay →</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+      {% endif %}
+
+      <form method="post" action="{% url 'tuition' %}" class="space-y-4 rounded-lg border border-base-300 p-5">
+        {% csrf_token %}
+        <fieldset class="space-y-2">
+          <legend class="font-serif text-lg text-base-content mb-2">{{ tuition_form.status.label }}</legend>
+          {% for radio in tuition_form.status %}
+          <label class="flex items-start gap-3 cursor-pointer">
+            {{ radio.tag }}
+            <span class="text-sm">{{ radio.choice_label }}</span>
+          </label>
+          {% endfor %}
+          {% if tuition_form.status.errors %}<p class="text-error text-sm">{{ tuition_form.status.errors|join:", " }}</p>{% endif %}
+        </fieldset>
+        <button type="submit" class="btn btn-primary">Record decision</button>
+      </form>
+      {% endif %}
+    </section>
+
+    {# ---- Dues ---- #}
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-base-content">Membership dues</h2>
+      {% if dues_obligated %}
+        {% if not dues_period %}
+        <p class="text-sm text-base-content/70">No dues year is currently configured.</p>
+        {% elif dues_paid %}
+        <div class="rounded-lg border border-success/30 bg-success/5 px-5 py-4 text-sm">
+          Dues paid for {{ dues_period.name }} <span class="text-success">✓</span>
+        </div>
+        {% else %}
+        <div class="rounded-lg border border-base-300 p-5 space-y-3">
+          <p class="text-sm">My dues for {{ dues_period.name }}: <strong>${{ dues_amount }}</strong>.</p>
+          <form method="post" action="{% url 'dues' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary">Pay ${{ dues_amount }} dues →</button>
+          </form>
+        </div>
+        {% endif %}
+      {% else %}
+      <p class="text-sm text-base-content/60">You don't owe membership dues right now.</p>
+      {% endif %}
+    </section>
+
+    {# ---- My Payments (editable: type, AY for tuition, note) ---- #}
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-base-content">My Payments</h2>
+      {% if my_payments %}
+      <p class="text-sm text-base-content/70">
+        Not sure a charge is categorized right? Set its type, and for tuition
+        choose the academic year it counts toward. Add a note for the treasurer
+        if it helps. Provisional charges came from our records and are a guess.
+      </p>
+      <form method="post" action="{% url 'my_payments_update' %}" class="space-y-3">
+        {% csrf_token %}
+        <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Date</th><th>For</th><th>Type</th>
+              <th class="text-right">Amount</th><th>Status</th><th>Method</th><th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in my_payments %}
+            <tr>
+              <td class="whitespace-nowrap">{{ p.paid_at|default:p.created_at|date:"M j, Y" }}</td>
+              <td>
+                {% if p.payment_type == 'tuition' %}
+                  <select name="period_{{ p.id }}" class="select select-bordered select-xs">
+                    <option value="">— year? —</option>
+                    {% for tp in tuition_periods %}
+                    <option value="{{ tp.id }}" {% if tp.id == p.selected_period_id %}selected{% endif %}>{{ tp.name }}</option>
+                    {% endfor %}
+                  </select>
+                {% elif p.registration and p.registration.event %}
+                  <a href="{% url 'events:detail' p.registration.event.slug %}" class="link link-hover text-primary">{{ p.registration.event.title }}</a>
+                {% elif p.payment_type == 'dues' %}
+                  Dues{% if p.dues_period %} — {{ p.dues_period.name }}{% endif %}
+                {% elif p.payment_type == 'donation' %}
+                  Donation
+                {% else %}
+                  <span class="text-base-content/40">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <select name="type_{{ p.id }}" class="select select-bordered select-xs">
+                  {% for value, label in payment_type_choices %}
+                  <option value="{{ value }}" {% if value == p.payment_type %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                {% if p.source == 'assumed' %}<span class="badge badge-ghost badge-xs ml-1">provisional</span>{% endif %}
+              </td>
+              <td class="text-right whitespace-nowrap">${{ p.amount }}</td>
+              <td>{{ p.get_status_display }}</td>
+              <td>{{ p.get_method_display }}</td>
+              <td><input type="text" name="note_{{ p.id }}" value="{{ p.member_note }}" maxlength="1000" class="input input-bordered input-xs w-40" placeholder="optional"></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+      </form>
+      {% else %}
+      <p class="text-sm text-base-content/60">No payments on record yet.</p>
+      {% endif %}
+    </section>
 
   </div>
+
+  {# ===================== Groups ===================== #}
+  {% elif active_tab == "groups" %}
+  <div class="space-y-6">
+    <section class="space-y-3">
+      <h2 class="font-serif text-xl text-base-content">My current groups</h2>
+      {% if current_groups %}
+      <ul class="divide-y divide-base-300 rounded-xl border border-base-300">
+        {% for g in current_groups %}
+        <li class="flex items-center justify-between gap-3 p-4">
+          <div>
+            <a href="{{ g.workgroup.get_absolute_url }}" class="link link-hover font-medium text-base-content">{{ g.workgroup.name }}</a>
+            <p class="text-xs text-base-content/60">{{ g.kind }} · {{ g.role }}</p>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-sm text-base-content/60">I'm not currently in any groups.</p>
+      {% endif %}
+    </section>
+
+    {% if past_groups %}
+    <section class="space-y-3">
+      <h2 class="font-serif text-xl text-base-content">My past groups</h2>
+      <ul class="divide-y divide-base-300 rounded-xl border border-base-300">
+        {% for g in past_groups %}
+        <li class="flex items-center justify-between gap-3 p-4">
+          <div>
+            <a href="{{ g.workgroup.get_absolute_url }}" class="link link-hover text-base-content/80">{{ g.workgroup.name }}</a>
+            <p class="text-xs text-base-content/60">{{ g.kind }} · {{ g.role }}</p>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </div>
+  {% endif %}
+
 </div>
 {% endblock %}

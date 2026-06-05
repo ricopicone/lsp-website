@@ -46,8 +46,9 @@ def _category_for(kind):
 
 
 def provision_channels(workgroup):
-    """Ensure the workgroup has its Discuss (forum) + Chat channels, per kind.
-    Idempotent per kind — creates only the ones missing."""
+    """Ensure the workgroup has its Discuss (forum) + Chat + Video channels.
+    Idempotent per kind — creates only the ones missing. The Video channel's room
+    resolves to the workgroup's own room (shared with the Meet tab)."""
     if not workgroup.has_channel:
         return
     existing = set(workgroup.channels.values_list("kind", flat=True))
@@ -65,6 +66,13 @@ def provision_channels(workgroup):
             kind=Channel.Kind.CHAT, access=Channel.Access.WORKGROUP,
             workgroup=workgroup, category=category,
             description=f"Chat for {workgroup.name}.",
+        )
+    if Channel.Kind.VIDEO not in existing:
+        Channel.objects.create(
+            name=f"{workgroup.name} video"[:120], slug=_unique_channel_slug(workgroup, "-video"),
+            kind=Channel.Kind.VIDEO, access=Channel.Access.WORKGROUP,
+            workgroup=workgroup, category=category,
+            description=f"Video room for {workgroup.name}.",
         )
 
 

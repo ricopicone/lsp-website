@@ -7,6 +7,8 @@ two interviewers, their reports, and the accept/reject decision.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -21,7 +23,6 @@ from .advancement import (
     can_open_advancement,
     decide_advancement,
     open_advancement,
-    open_advancement_for,
     present_advancement,
     step_label_for_member,
     withdraw_advancement,
@@ -292,44 +293,151 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
 
     user = request.user
     profile = user.profile
-    tab = request.GET.get("tab") or "formation"
 
     advisor = current_advisor(user)
-    existing = (
-        Advancement.objects.filter(member=user)
-        .select_related("advisor")
-        .order_by("-requested_at")
-        .first()
-    )
     if advisor_form is None and profile.needs_advisor:
         advisor_form = AdvisorSelectForm(advisee=user)
 
     ctx = {
-        "active_tab": tab,
         "advisor": advisor,
         "needs_advisor": profile.needs_advisor,
         "advisor_form": advisor_form,
-        "existing": existing,
-        "open_one": open_advancement_for(user),
         "can_open": can_open_advancement(user),
         "step_label": step_label_for_member(user),
+        # The trace of formation steps (Palimpsest, then Passage/Traversée) —
+        # derived from the member's role history so steps completed before this
+        # system (or via import) still show, with any Advancement overlaid.
+        "formation_steps": _formation_steps(user),
         "demande_form": demande_form if demande_form is not None else AdvancementForm(),
         "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
     }
-    ctx.update(_formation_tuition_context(request))
+    ctx.update(_formation_money_context(request))
     ctx.update(_formation_groups_context(user))
+
+    # URL-addressable tabs: each is its own `?tab=<key>` link (shareable). The
+    # Tuition & Dues tab only appears when there's something to show.
+    tabs = [("formation", "Formation")]
+    if ctx["show_money_tab"]:
+        tabs.append(("tuition", "Tuition & Dues"))
+    tabs.append(("groups", "Groups"))
+    keys = {k for k, _ in tabs}
+    tab = request.GET.get("tab") or "formation"
+    ctx["formation_tabs"] = tabs
+    ctx["active_tab"] = tab if tab in keys else "formation"
     return ctx
 
 
-def _formation_tuition_context(request) -> dict:
-    """Tuition decision + installments + the member's own payment history and
-    the subset they can self-reconcile (provisional / ASSUMED charges)."""
-    from accounts.models import Source
+#: Each formation track's role ladder. The step *into* index 1 is the
+#: Palimpsest; the step into index 2 is the Passage (Analyst) / Traversée
+#: (Scholar).
+_FORMATION_TRACKS = {
+    "analyst": ["pre_candidate", "candidate", "analyst"],
+    "scholar": ["pre_candidate_scholar", "candidate_scholar", "scholar"],
+}
+
+
+def _formation_track_for(roles_held):
+    """Which ladder the member is on, from any analyst/scholar-track role they
+    hold now or have held. Returns ``(name, ladder)`` or ``(None, None)``."""
+    for name, ladder in _FORMATION_TRACKS.items():
+        if roles_held & set(ladder):
+            return name, ladder
+    return None, None
+
+
+def _formation_steps(user):
+    """The member's formation steps as a display trace.
+
+    Derived from the **role history** (``MembershipTenure``) so a Palimpsest or
+    Passage/Traversée completed before this system — or set by import — still
+    shows, dated to the academic year the member entered the target role. Any
+    actual ``Advancement`` demande is overlaid for its status/dates and the Work
+    file. Only completed steps (or steps with a demande on file) are listed; the
+    *next* available step is offered by the demande form, not here."""
+    from accounts.models import MembershipTenure
+
+    from .models import Advancement, step_label_for
+
+    tenures = list(MembershipTenure.objects.filter(user=user))
+    roles_held = {t.role for t in tenures} | {user.profile.role}
+    track, ladder = _formation_track_for(roles_held)
+    if ladder is None:
+        return []
+
+    # Earliest AY the member entered each role (the step's "when").
+    entered_ay: dict[str, int] = {}
+    for t in tenures:
+        if t.role not in entered_ay or t.start_ay < entered_ay[t.role]:
+            entered_ay[t.role] = t.start_ay
+
+    max_rank = max(
+        (ladder.index(r) for r in roles_held if r in ladder), default=-1
+    )
+
+    advs = {
+        a.kind: a
+        for a in Advancement.objects.filter(member=user)
+        .select_related("advisor").order_by("requested_at")
+    }
+
+    # The artifact for each step is a real Work (works app), of the matching
+    # Kind, authored by the member — not a file on the demande. Map the step to
+    # the Work.Kind, distinguishing the Analyst Passage from the Scholar
+    # Traversée.
+    from works.models import Work
+
+    scholar = track == "scholar"
+    work_kind_for = {
+        1: Work.Kind.PALIMPSEST,
+        2: Work.Kind.TRAVERSEE if scholar else Work.Kind.PASSAGE,
+    }
+    my_works = (
+        Work.objects.filter(authors=user, kind__in=work_kind_for.values())
+        .order_by("-created_at")
+    )
+    works_by_kind: dict[str, list] = {}
+    for w in my_works:
+        works_by_kind.setdefault(w.kind, []).append(w)
+
+    steps = []
+    for i, kind in ((1, Advancement.Kind.PALIMPSEST), (2, Advancement.Kind.PASSAGE)):
+        from_role, target_role = ladder[i - 1], ladder[i]
+        adv = advs.get(kind)
+        completed = max_rank >= i
+        if not completed and adv is None:
+            continue  # not reached and no demande on file — the form covers it
+        work_kind = work_kind_for[i]
+        steps.append({
+            "kind": kind,
+            "label": step_label_for(kind, from_role),
+            "completed": completed,
+            "when_ay": entered_ay.get(target_role) if completed else None,
+            "advancement": adv,
+            "work_kind": work_kind,
+            "works": works_by_kind.get(work_kind, []),
+        })
+    return steps
+
+
+def _formation_money_context(request) -> dict:
+    """Tuition + dues + the member's own payment history (all on one tab).
+
+    Tuition: the four-year progress, this year's decision/installments. Dues:
+    this year's obligation + status. Payments: full history (editable type/note,
+    and academic year for tuition) from the My Payments table."""
+    from payments.dues import is_dues_obligated, user_paid_for_period
     from payments.forms import TuitionDecisionForm
-    from payments.models import Payment, TuitionEnrollment, TuitionPeriod
+    from payments.models import (
+        DuesPeriod,
+        Payment,
+        TuitionEnrollment,
+        TuitionPeriod,
+    )
 
     user = request.user
     profile = user.profile
+
+    # --- Tuition (current year) ---
     period = TuitionPeriod.current()
     enrollment = None
     installments = []
@@ -339,13 +447,45 @@ def _formation_tuition_context(request) -> dict:
         ).first()
         if enrollment is not None:
             installments = list(enrollment.installments.order_by("sequence"))
+    progress = _tuition_progress(user)
 
-    payments = list(Payment.objects.filter(user=user).order_by("-created_at", "-id"))
-    assumed = [p for p in payments if p.source == Source.ASSUMED]
+    # --- Dues (current year) ---
+    dues_period = DuesPeriod.current()
+    dues_obligated = is_dues_obligated(user)
+    dues_amount = (
+        dues_period.amount_for_role(profile.role) if dues_period is not None else None
+    )
+    dues_paid = user_paid_for_period(user, dues_period)
+
+    # --- Payments (all) — one editable table (type + note + tuition AY) ---
+    payments = list(
+        Payment.objects.filter(user=user)
+        .select_related("registration__event", "dues_period", "tuition_period")
+        .order_by("-created_at", "-id")
+    )
+
+    # For tuition rows, pre-select the assigned AY, else the AY the payment date
+    # falls in (so the "For" column's year picker starts on the right guess).
+    from accounts.membership import current_academic_year_start as ay_of
+    tuition_periods = list(TuitionPeriod.objects.order_by("-start_date"))
+    period_id_by_ay = {ay_of(tp.start_date): tp.id for tp in tuition_periods}
+    for p in payments:
+        if p.payment_type != Payment.Type.TUITION:
+            continue
+        when = p.paid_at or p.created_at
+        p.selected_period_id = p.tuition_period_id or (
+            period_id_by_ay.get(ay_of(when.date())) if when else None
+        )
+
+    show_money_tab = (
+        profile.owes_tuition or dues_obligated or bool(payments)
+        or progress["tuition_years_started"] > 0
+    )
 
     return {
+        "show_money_tab": show_money_tab,
+        # tuition
         "owes_tuition": profile.owes_tuition,
-        "show_tuition_tab": profile.owes_tuition or bool(payments),
         "tuition_period": period,
         "tuition_enrollment": enrollment,
         "tuition_installments": installments,
@@ -353,9 +493,114 @@ def _formation_tuition_context(request) -> dict:
             initial={"status": enrollment.status} if enrollment else {}
         ),
         "tuition_stripe_status": request.GET.get("stripe"),
+        **progress,
+        # dues
+        "dues_period": dues_period,
+        "dues_obligated": dues_obligated,
+        "dues_amount": dues_amount,
+        "dues_paid": dues_paid,
+        # payments
         "my_payments": payments,
-        "my_assumed_payments": assumed,
+        "tuition_periods": tuition_periods,
         "payment_type_choices": Payment.Type.choices,
+    }
+
+
+def _tuition_progress(user) -> dict:
+    """The member's progress toward the four years of tuition required for full
+    standing.
+
+    A year is "started" if the member has a non-skipping enrollment *or* any
+    successful tuition payment dated to it. Progress is driven by **actual
+    SUCCEEDED tuition payments** — not installment flags — so ledger-imported,
+    Stripe-imported, reconciled, and offline payments all count, even when no
+    ``TuitionInstallment`` was ever created. Each started year is one of the
+    four slots (goal = that year's amount; a partially-paid year counts its
+    remainder as still owed); years not yet started are projected at the
+    current rate so there's always a four-slot goal to fill."""
+    from payments.models import Payment, TuitionEnrollment, TuitionPeriod
+
+    required = 4
+
+    def ay_of(d):
+        """Academic-year start year for a date (the AY begins in September)."""
+        return d.year if d.month >= 9 else d.year - 1
+
+    # Goal + name per academic year, and which years count as started.
+    period_by_ay: dict[int, object] = {}
+    paid_by_ay: dict[int, Decimal] = {}
+
+    # 1) Successful tuition payments → paid, bucketed by academic year (via the
+    #    linked period when present, else the payment date).
+    payments = (
+        Payment.objects
+        .filter(user=user, payment_type=Payment.Type.TUITION,
+                status=Payment.Status.SUCCEEDED)
+        .select_related(
+            "tuition_period", "tuition_installment__enrollment__tuition_period",
+        )
+    )
+    for p in payments:
+        # Prefer the member's explicit AY assignment, then the installment's
+        # period, then the payment date.
+        period = p.tuition_period
+        if period is None:
+            inst = p.tuition_installment
+            if inst is not None and inst.enrollment_id:
+                period = inst.enrollment.tuition_period
+        ay = ay_of(period.start_date) if period else ay_of(p.paid_at or p.created_at)
+        if period is not None:
+            period_by_ay.setdefault(ay, period)
+        paid_by_ay[ay] = paid_by_ay.get(ay, Decimal("0")) + p.amount
+
+    # 2) Non-skipping enrollments mark a year started (even if nothing paid yet).
+    for enr in (
+        TuitionEnrollment.objects.filter(user=user)
+        .exclude(status=TuitionEnrollment.Status.SKIPPING)
+        .select_related("tuition_period")
+    ):
+        ay = ay_of(enr.tuition_period.start_date)
+        period_by_ay.setdefault(ay, enr.tuition_period)
+        paid_by_ay.setdefault(ay, Decimal("0"))
+
+    current = (
+        TuitionPeriod.current()
+        or TuitionPeriod.objects.order_by("-start_date").first()
+    )
+    rate = (current.tuition_amount if current else None) or Decimal("0")
+
+    slots = []
+    total_paid = Decimal("0")
+    total_goal = Decimal("0")
+    for ay in sorted(paid_by_ay)[:required]:
+        period = period_by_ay.get(ay)
+        goal = (period.tuition_amount if period else rate) or Decimal("0")
+        paid = min(paid_by_ay[ay], goal) if goal else paid_by_ay[ay]
+        pct = int(paid / goal * 100) if goal else 0
+        slots.append({
+            "label": period.name if period else f"{ay}–{ay + 1}",
+            "goal": goal, "paid": paid, "remaining": max(goal - paid, Decimal("0")),
+            "pct": pct, "projected": False,
+        })
+        total_paid += paid
+        total_goal += goal
+
+    started = len(slots)
+    for _ in range(started, required):
+        slots.append({
+            "label": "Future year", "goal": rate, "paid": Decimal("0"),
+            "remaining": rate, "pct": 0, "projected": True,
+        })
+        total_goal += rate
+
+    total_pct = int(total_paid / total_goal * 100) if total_goal else 0
+    return {
+        "tuition_slots": slots,
+        "tuition_total_paid": total_paid,
+        "tuition_total_goal": total_goal,
+        "tuition_total_pct": total_pct,
+        "tuition_years_started": started,
+        "tuition_required_years": required,
     }
 
 
