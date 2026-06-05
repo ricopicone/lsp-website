@@ -33,6 +33,18 @@
     <p class="text-base-content/60 italic">No channels yet. Check back soon.</p>
   {% endif %}
 
+  {# Who's online right now (anywhere in Parlêtre) — live-updated by the heartbeat. #}
+  <section id="parletre-online" class="rounded-box border border-base-300 bg-base-100 p-3 flex flex-wrap items-center gap-2"
+           {% if not online_now %}hidden{% endif %}>
+    <span class="inline-flex items-center gap-1.5 text-sm font-medium text-base-content/80">
+      {% include "workgroups/_live_dot.html" %}
+      Online now <span class="text-base-content/50">(<span data-online-count>{{ online_now|length }}</span>)</span>
+    </span>
+    <span data-online-list class="flex flex-wrap gap-1.5">
+      {% for p in online_now %}<span class="badge badge-sm badge-ghost">{{ p.name }}</span>{% endfor %}
+    </span>
+  </section>
+
   {% if my_spaces %}
   <section class="space-y-3">
     <h2 class="font-serif text-lg text-base-content/80 border-b border-base-300/60 pb-1">Your groups &amp; private chats</h2>
@@ -108,6 +120,9 @@
           </div>
           {% if channel.live_people %}
           <p class="text-xs text-success/90 mt-0.5">In the room: {{ channel.live_people|slice:":6"|join:", " }}{% if channel.live_people|length > 6 %} +{{ channel.live_people|length|add:"-6" }} more{% endif %}</p>
+          {% endif %}
+          {% if channel.online_here %}
+          <p class="text-xs text-success/90 mt-0.5">{{ channel.online_here|length }} here: {{ channel.online_here|slice:":6"|join:", " }}{% if channel.online_here|length > 6 %} +{{ channel.online_here|length|add:"-6" }} more{% endif %}</p>
           {% endif %}
           {% if channel.description %}
           <p class="text-sm text-base-content/60">{{ channel.description }}</p>

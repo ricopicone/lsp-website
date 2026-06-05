@@ -39,7 +39,7 @@
         <button type="submit" class="text-xs text-error/70 hover:text-error">Leave chat</button>
       </form>
       {% endif %}
-      <span class="text-xs text-success" data-chat-presence aria-live="polite"></span>
+      <span class="text-xs text-success" data-chat-presence aria-live="polite">{% if chat_online %}● {{ chat_online|join:", " }}{% endif %}</span>
     </div>
   </header>
 

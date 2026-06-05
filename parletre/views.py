@@ -193,7 +193,9 @@ def index(request):
     # DailyRoom rows.
     from video.services import participant_names, presence_map
 
-    presence = presence_map() if any(c.is_video for c in general) else {}
+    from . import presence
+
+    video_presence = presence_map() if any(c.is_video for c in general) else {}
 
     # Group into categories, preserving order; uncategorised last.
     groups: list[tuple[str, list[Channel]]] = []
@@ -201,9 +203,12 @@ def index(request):
     for channel in general:
         channel.user_sub_level = subs.get(channel.id)
         channel.is_unread = channel.id in unread
-        people = presence.get(f"lsp-ch-{channel.slug}", []) if channel.is_video else []
+        # Video → who's in the Daily room; chat → who currently has it open.
+        people = video_presence.get(f"lsp-ch-{channel.slug}", []) if channel.is_video else []
         channel.is_live = bool(people)
         channel.live_people = participant_names(people)
+        is_chat = channel.kind == Channel.Kind.CHAT
+        channel.online_here = presence.online_channel(channel.id) if is_chat else []
         key = channel.category_id
         if key not in seen:
             label = channel.category.name if channel.category else "Other"
@@ -220,9 +225,26 @@ def index(request):
         {
             "groups": groups,
             "my_spaces": my_spaces,
+            "online_now": presence.online_global(),
             "any_channels": bool(general) or bool(my_spaces),
         },
     )
+
+
+@login_required
+def heartbeat(request):
+    """Global presence ping fired by every Parlêtre page. Marks the member online
+    (anywhere in Parlêtre) and returns the current 'online now' roster."""
+    from django.http import HttpResponseForbidden, JsonResponse
+
+    from . import presence
+
+    if not can_enter_parletre(request.user):
+        return HttpResponseForbidden()
+    if request.method == "POST":
+        presence.touch_global(request.user)
+    roster = presence.online_global()
+    return JsonResponse({"online": roster, "count": len(roster)})
 
 
 #: Display order for "Your groups", mirroring the Groups overview (KIND_META).
@@ -397,6 +419,9 @@ def channel(request, slug):
     # Member-created private chats: the creator manages / deletes; others leave.
     context["can_delete_chat"] = channel.can_delete(request.user)
     context["can_leave_chat"] = channel.can_leave(request.user)
+    from . import presence
+
+    context["chat_online"] = presence.online_channel(channel.id)
     return render(request, "parletre/channel_chat.html", context)
 
 

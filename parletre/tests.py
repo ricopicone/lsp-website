@@ -1340,8 +1340,8 @@ def test_chat_consumer_posts_and_broadcasts():
         comm = _ws(member, ch.slug)
         connected, _ = await comm.connect()
         assert connected
-        first = await comm.receive_json_from()        # our own join presence
-        assert first["kind"] == "presence" and first["event"] == "join"
+        first = await comm.receive_json_from()        # the presence roster broadcast
+        assert first["kind"] == "presence" and "m@x.co" in first["roster"]
         await comm.send_json_to({"body": "hello **live**"})
         msg = await comm.receive_json_from()
         assert msg["kind"] == "message"

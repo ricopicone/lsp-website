@@ -323,6 +323,11 @@
 
   <script src="{% static 'js/flourishes.js' %}" defer></script>
 
+  {% if user|is_parletre_member and request.resolver_match.app_name == 'parletre' %}
+  {# Global "who's online" heartbeat — fires on every Parlêtre page. #}
+  <script src="{% static 'js/parletre-presence.js' %}" defer></script>
+  {% endif %}
+
   {% if user.is_authenticated and not user.profile.timezone %}
   <script>
     // One-shot browser-TZ detection: if the user has no Profile.timezone

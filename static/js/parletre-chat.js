@@ -26,8 +26,8 @@
   var replyBanner = form ? form.querySelector("[data-reply-banner]") : null;
   var replyName = replyBanner ? replyBanner.querySelector("[data-reply-name]") : null;
   var proto = location.protocol === "https:" ? "wss" : "ws";
-  var online = 0;
   var ws;
+  var pingTimer;
 
   function setReply(id, author) {
     if (!replyField) return;
@@ -107,8 +107,9 @@
   }
 
   function presence(d) {
-    online = d.event === "join" ? online + 1 : Math.max(0, online - 1);
-    if (presenceEl) presenceEl.textContent = online > 0 ? "● " + online + " online" : "";
+    if (!presenceEl) return;
+    var roster = d.roster || [];
+    presenceEl.textContent = roster.length ? "● " + roster.join(", ") : "";
   }
 
   function connect() {
@@ -119,6 +120,14 @@
       if (d.kind === "message") appendMessage(d);
       else if (d.kind === "presence") presence(d);
     };
+    // Keep-alive: refresh presence so the "who's here" list survives idle time.
+    ws.onopen = function () {
+      if (pingTimer) clearInterval(pingTimer);
+      pingTimer = setInterval(function () {
+        if (ws && ws.readyState === 1) ws.send(JSON.stringify({ ping: true }));
+      }, 25000);
+    };
+    ws.onclose = function () { if (pingTimer) clearInterval(pingTimer); };
   }
 
   function autogrow() {

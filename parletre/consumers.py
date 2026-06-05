@@ -13,6 +13,7 @@ from __future__ import annotations
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
+from . import presence
 from .models import Channel, Post
 from .permissions import channel_can_post, channel_visible
 from .realtime import chat_group, message_payload
@@ -37,25 +38,33 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         self.display = self._display_name()
         await self.channel_layer.group_add(self.group, self.channel_name)
         await self.accept()
-        await self.channel_layer.group_send(
-            self.group, {"type": "presence.event", "event": "join", "name": self.display}
-        )
+        presence.join_channel(self.channel_obj.id, self.user)
+        await self._broadcast_roster()
 
     async def disconnect(self, code):
         group = getattr(self, "group", None)
         if group:
-            await self.channel_layer.group_send(
-                group, {"type": "presence.event", "event": "leave", "name": self.display}
-            )
+            presence.leave_channel(self.channel_obj.id, self.user)
+            await self._broadcast_roster()
             await self.channel_layer.group_discard(group, self.channel_name)
 
     async def receive_json(self, content, **kwargs):
+        # A periodic keep-alive ping refreshes presence (no broadcast needed).
+        if content.get("ping"):
+            presence.ping_channel(self.channel_obj.id, self.user)
+            return
         body = (content.get("body") or "").strip()[:MAX_BODY]
         if not body:
             return
         payload = await self._create_post(body, content.get("reply_to"))
         if payload is not None:
             await self.channel_layer.group_send(self.group, payload)
+
+    async def _broadcast_roster(self):
+        roster = presence.online_channel(self.channel_obj.id)
+        await self.channel_layer.group_send(
+            self.group, {"type": "presence.event", "roster": roster}
+        )
 
     # --- group event handlers ---
 
@@ -72,9 +81,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def presence_event(self, event):
-        await self.send_json(
-            {"kind": "presence", "event": event["event"], "name": event["name"]}
-        )
+        await self.send_json({"kind": "presence", "roster": event["roster"]})
 
     # --- db-bound helpers ---
 
