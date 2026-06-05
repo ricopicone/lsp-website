@@ -1,4 +1,4 @@
-Dear {{ data.name }},
+{% autoescape off %}Dear {{ data.name }},
 
 Thank you for reaching out to the Lacanian School of Psychoanalysis. We
 have received your Find-an-Analyst inquiry and the Referral Coordinator
@@ -11,3 +11,4 @@ request, please write to the Referral Coordinator directly at
 Warm regards,
 The Lacanian School of Psychoanalysis
 https://app.lacanschool.org/
+{% endautoescape %}

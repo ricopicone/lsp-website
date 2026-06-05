@@ -1,4 +1,4 @@
-A new Find-an-Analyst inquiry was submitted on the LSP website.
+{% autoescape off %}A new Find-an-Analyst inquiry was submitted on the LSP website.
 
 Name:     {{ data.name }}
 Pronouns: {{ data.pronouns }}
@@ -14,3 +14,4 @@ Anything else for the Referral Coordinator:
 --
 Sent via the Find an Analyst form on app.lacanschool.org. Hitting Reply
 in your mail client goes directly to the inquirer (Reply-To is set).
+{% endautoescape %}

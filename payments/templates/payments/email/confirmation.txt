@@ -1,4 +1,4 @@
-{{ registration.user.first_name|default:"Hello" }},
+{% autoescape off %}{{ registration.user.first_name|default:"Hello" }},
 
 You're registered for "{{ registration.event.title }}".
 {% if is_comp %}
@@ -20,3 +20,4 @@ Event runs:      {{ registration.event.start_date|date:"M j, Y" }} – {{ regist
 
 — Lacanian School of Psychoanalysis
 {{ site_base_url }}
+{% endautoescape %}

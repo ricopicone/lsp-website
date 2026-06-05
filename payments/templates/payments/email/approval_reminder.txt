@@ -1,4 +1,4 @@
-Hello,
+{% autoescape off %}Hello,
 
 A reminder that {{ pending_count }} registration{{ pending_count|pluralize }} for
 "{{ event.title }}" {{ pending_count|pluralize:"is,are" }} still awaiting your
@@ -13,3 +13,4 @@ things moving for them.
 Questions? Reply to this email — it goes to {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
+{% endautoescape %}
