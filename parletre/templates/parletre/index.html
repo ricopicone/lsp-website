@@ -69,7 +69,7 @@
             {% if channel.kind == 'chat' %}
               <span class="badge badge-sm badge-secondary gap-1" title="Live chat">{% icon "chat" %} Chat</span>
             {% elif channel.kind == 'video' %}
-              {% if channel.is_live %}<span class="badge badge-sm badge-success gap-1" title="Someone is in the room">{% icon "video" %} Live</span>
+              {% if channel.is_live %}<span class="badge badge-sm badge-success gap-1 animate-breathe" title="Someone is in the room">{% icon "video" %} Live</span>
               {% else %}<span class="badge badge-sm badge-primary gap-1" title="Video meeting room">{% icon "video" %} Video</span>{% endif %}
             {% else %}
               <span class="badge badge-sm badge-info gap-1" title="Threaded discussion">{% icon "forum" %} Forum</span>
@@ -87,6 +87,9 @@
               <span class="badge badge-sm badge-outline" title="Open to every member (not the public)">Open</span>
             {% endif %}
           </div>
+          {% if channel.live_people %}
+          <p class="text-xs text-success/90 mt-0.5">In the room: {{ channel.live_people|slice:":6"|join:", " }}{% if channel.live_people|length > 6 %} +{{ channel.live_people|length|add:"-6" }} more{% endif %}</p>
+          {% endif %}
           {% if channel.description %}
           <p class="text-sm text-base-content/60">{{ channel.description }}</p>
           {% endif %}

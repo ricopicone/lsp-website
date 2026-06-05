@@ -26,6 +26,9 @@ branded label with registration/live-aware messaging + a tech-check link.
           {% include "workgroups/_live_dot.html" %}
           Live now · {{ event_room_participants }} in the room
         </p>
+        {% if event_room_participant_names %}
+        <p class="text-xs text-success/90">{{ event_room_participant_names|slice:":6"|join:", " }}{% if event_room_participant_names|length > 6 %} +{{ event_room_participant_names|length|add:"-6" }} more{% endif %}</p>
+        {% endif %}
         {% endif %}
         <div class="mt-1 flex flex-wrap items-center gap-3">
           <a href="{% url 'video:event_room' event.slug %}" class="btn btn-primary btn-sm">

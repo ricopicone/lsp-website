@@ -12,6 +12,9 @@ every Join open the same room.{% endcomment %}
         <p class="text-sm text-base-content/60">
           {% if ongoing_meeting %}{{ ongoing_meeting.title|default:"Now meeting" }} · {% endif %}{{ room_participants }} in the room
         </p>
+        {% if room_participant_names %}
+        <p class="text-xs text-success/90">{{ room_participant_names|slice:":6"|join:", " }}{% if room_participant_names|length > 6 %} +{{ room_participant_names|length|add:"-6" }} more{% endif %}</p>
+        {% endif %}
       </div>
     </div>
     <a href="{% url 'video:workgroup_room' workgroup.slug %}" class="btn btn-success btn-sm">Join Meeting in Progress</a>

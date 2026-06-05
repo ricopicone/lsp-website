@@ -17,11 +17,16 @@ daily_on = override_settings(
 
 @pytest.fixture(autouse=True)
 def _mock_daily(monkeypatch):
+    from django.core.cache import cache
+
+    cache.clear()
     monkeypatch.setattr(
         "video.daily.create_room",
         lambda name, properties=None: {"name": name, "url": f"https://lsp.daily.co/{name}"},
     )
     monkeypatch.setattr("video.daily.create_meeting_token", lambda **kw: "tok-1")
+    yield
+    cache.clear()
 
 
 def _member(email="m@x.test", role=Profile.Role.ANALYST):
@@ -63,6 +68,20 @@ def test_post_to_video_channel_is_404(client):
     client.force_login(_member())
     resp = client.post(reverse("parletre:channel", args=[ch.slug]), {"body": "hi"})
     assert resp.status_code == 404
+
+
+@daily_on
+def test_index_shows_who_is_in_the_room(client, monkeypatch):
+    _video_channel()
+    monkeypatch.setattr(
+        "video.daily.get_presence",
+        lambda: {"lsp-ch-all-member": [{"userName": "Rico Picone"}]},
+    )
+    client.force_login(_member())
+    resp = client.get(reverse("parletre:index"))
+    assert resp.status_code == 200
+    assert b"In the room: Rico Picone" in resp.content
+    assert b"animate-breathe" in resp.content  # breathing Live badge
 
 
 def test_disabled_shows_unavailable(client):

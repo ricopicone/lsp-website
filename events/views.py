@@ -66,7 +66,7 @@ def event_summary_context(event, user) -> dict:
         )
     )
     from events.permissions import can_edit_event
-    from video.services import daily_enabled, room_participant_count
+    from video.services import daily_enabled, presence_names, room_participant_count
 
     daily_on = daily_enabled()
     # Real Daily presence in the event's room (people actually meeting now).
@@ -74,6 +74,7 @@ def event_summary_context(event, user) -> dict:
     wg = getattr(event, "workgroup", None)
     room = getattr(wg, "video_room", None) if wg else None
     room_participants = room_participant_count(room) if daily_on else 0
+    room_participant_names = presence_names(room) if daily_on else []
     next_session = event.next_session()
     return {
         "event": event,
@@ -89,6 +90,7 @@ def event_summary_context(event, user) -> dict:
         "can_host": can_edit_event(user, event),
         "event_room_live": bool(room_participants),
         "event_room_participants": room_participants,
+        "event_room_participant_names": room_participant_names,
     }
 
 

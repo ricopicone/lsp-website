@@ -187,14 +187,13 @@ def index(request):
     wg_channels = [c for c in visible if c.access == Channel.Access.WORKGROUP]
     private_chats = [c for c in visible if c.access == Channel.Access.PRIVATE]
 
-    # Light up any board video channel whose room currently has participants.
-    # Channel rooms are deterministically named ``lsp-ch-<slug>`` (see
-    # video.services._room_name), so we needn't touch the DailyRoom rows.
-    live_names: set[str] = set()
-    if any(c.is_video for c in general):
-        from video.services import live_room_names
+    # Light up any board video channel whose room currently has participants,
+    # and surface who's in it. Channel rooms are deterministically named
+    # ``lsp-ch-<slug>`` (see video.services._room_name), so we needn't touch the
+    # DailyRoom rows.
+    from video.services import participant_names, presence_map
 
-        live_names = live_room_names()
+    presence = presence_map() if any(c.is_video for c in general) else {}
 
     # Group into categories, preserving order; uncategorised last.
     groups: list[tuple[str, list[Channel]]] = []
@@ -202,7 +201,9 @@ def index(request):
     for channel in general:
         channel.user_sub_level = subs.get(channel.id)
         channel.is_unread = channel.id in unread
-        channel.is_live = channel.is_video and f"lsp-ch-{channel.slug}" in live_names
+        people = presence.get(f"lsp-ch-{channel.slug}", []) if channel.is_video else []
+        channel.is_live = bool(people)
+        channel.live_people = participant_names(people)
         key = channel.category_id
         if key not in seen:
             label = channel.category.name if channel.category else "Other"

@@ -191,6 +191,28 @@ def live_room_names() -> set[str]:
     return {name for name, people in presence_map().items() if people}
 
 
+def participant_names(people) -> list[str]:
+    """Display names of the participants in a presence list (deduped, in join
+    order). Daily sets ``userName`` from the meeting token."""
+    seen: set[str] = set()
+    names: list[str] = []
+    for p in people or []:
+        n = (p.get("userName") or p.get("user_name") or "").strip()
+        key = n.lower()
+        if n and key not in seen:
+            seen.add(key)
+            names.append(n)
+    return names
+
+
+def presence_names(room) -> list[str]:
+    """Who is currently in a ``DailyRoom`` (or None) — names for the 'who's in
+    the room' lists. Empty when the room is unprovisioned / empty."""
+    if room is None:
+        return []
+    return participant_names(presence_map().get(room.name, []))
+
+
 # ---- Parlêtre channel rooms (board-level video channels) ----------------
 
 def can_enter_channel(channel, user) -> bool:

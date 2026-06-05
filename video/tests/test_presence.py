@@ -81,6 +81,31 @@ def test_presence_is_cached(monkeypatch):
     assert len(calls) == 1  # second call served from cache
 
 
+def test_participant_names_dedupes_and_keeps_order():
+    people = [
+        {"userName": "Rico Picone"}, {"userName": "Alice"},
+        {"userName": "rico picone"},  # dup (case-insensitive)
+        {"userName": ""}, {"user_name": "Bob"},  # blank skipped, fallback key
+    ]
+    assert services.participant_names(people) == ["Rico Picone", "Alice", "Bob"]
+
+
+@pytest.mark.django_db
+@daily_on
+def test_presence_names_for_room(monkeypatch):
+    wg = seminar().ensure_workgroup()
+    from video.models import DailyRoom
+
+    room = DailyRoom.objects.create(
+        workgroup=wg, name="lsp-sem", url="https://lsp.daily.co/lsp-sem", provider_created=True
+    )
+    monkeypatch.setattr(
+        "video.daily.get_presence", lambda: {"lsp-sem": [{"userName": "Rico Picone"}]}
+    )
+    assert services.presence_names(room) == ["Rico Picone"]
+    assert services.presence_names(None) == []
+
+
 def test_presence_empty_when_disabled(monkeypatch):
     # Daily off (default settings) -> no fetch, empty map.
     called = []

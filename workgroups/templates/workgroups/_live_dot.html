@@ -1,6 +1,3 @@
-{% comment %}A pulsing "live" indicator light. Used wherever a meeting is in
-progress (Overview banner, Meet tab, meeting rows).{% endcomment %}
-<span class="relative inline-flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
-  <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75"></span>
-  <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-success"></span>
-</span>
+{% comment %}A gently "breathing" live indicator. Used wherever a meeting is in
+progress (Overview/Meet banners, meeting rows, board video tiles).{% endcomment %}
+<span class="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-success animate-breathe" aria-hidden="true"></span>

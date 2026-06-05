@@ -163,11 +163,12 @@ def workgroup_detail(request, slug):
     # Overview + Meet is driven by *real* Daily presence (people actually in the
     # room now), with the ongoing scheduled meeting only labelling it.
     ongoing_meeting = room_participants = None
+    room_participant_names = []
     if daily_on and is_member:
         ongoing_meeting = wg.ongoing_meeting()
-        room_participants = _video.room_participant_count(
-            getattr(wg, "video_room", None)
-        )
+        _room = getattr(wg, "video_room", None)
+        room_participants = _video.room_participant_count(_room)
+        room_participant_names = _video.presence_names(_room)
 
     tabs = [("overview", "Overview")]
     if discuss_channel:
@@ -274,6 +275,7 @@ def workgroup_detail(request, slug):
         "daily_enabled": daily_on,
         "ongoing_meeting": ongoing_meeting,
         "room_participants": room_participants,
+        "room_participant_names": room_participant_names,
         "room_live": bool(room_participants),
     }
     # Compose kind-specific UI without importing the concrete app: reach the
