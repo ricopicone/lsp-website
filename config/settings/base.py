@@ -272,6 +272,15 @@ DAILY_API_URL = env("DAILY_API_URL", default="https://api.daily.co/v1")
 DAILY_TOKEN_TTL_MINUTES = env.int("DJANGO_DAILY_TOKEN_TTL_MINUTES", default=180)
 DAILY_MAX_PARTICIPANTS = env.int("DJANGO_DAILY_MAX_PARTICIPANTS", default=0)  # 0 = unset
 
+# Recording (opt-in; hosts start it, special events auto-start). Recordings are
+# stored on Daily by default; set RECORDING_OWN_S3=true + AWS_RECORDINGS_BUCKET_NAME
+# (and Daily's domain recordings_bucket) to own them in our S3. The webhook secret
+# is the base64 HMAC secret configured on the Daily webhook.
+DAILY_WEBHOOK_SECRET = env("DAILY_WEBHOOK_SECRET", default="")
+RECORDING_OWN_S3 = env.bool("DJANGO_RECORDING_OWN_S3", default=False)
+AWS_RECORDINGS_BUCKET_NAME = env("AWS_RECORDINGS_BUCKET_NAME", default="")
+RECORDING_RETENTION_DAYS = env.int("DJANGO_RECORDING_RETENTION_DAYS", default=365)
+
 # Launch intake survey: when True, members are nudged (banner + dropdown link)
 # to complete the onboarding survey. Off until launch; the page itself stays
 # reachable at /accounts/survey/ for testing. Flip via DJANGO_SURVEY_ENABLED.

@@ -57,4 +57,19 @@ every Join open the same room.{% endcomment %}
   {% else %}
   <p class="text-sm text-base-content/55">No meetings scheduled. Use <strong>Meet Now</strong> to start one, or add a cadence on the Schedule tab.</p>
   {% endif %}
+
+  {% if recordings %}
+  <section class="space-y-2">
+    <h3 class="font-serif text-lg text-base-content/80 border-b border-base-300/60 pb-1">Recordings</h3>
+    <ul class="divide-y divide-base-300/60">
+      {% for r in recordings %}
+      <li class="flex items-center justify-between gap-3 py-2">
+        <span class="text-sm text-base-content truncate">{{ r.title|default:"Recording" }}{% if r.started_at %} · <span class="text-base-content/50">{{ r.started_at|date:"M j, Y" }}</span>{% endif %}{% if r.keep %} · <span class="text-base-content/45">kept</span>{% endif %}</span>
+        <a href="{% url 'video:recording_play' r.pk %}" class="btn btn-ghost btn-xs">Watch →</a>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="text-xs text-base-content/45">Recordings are kept for 1 year unless marked to keep.</p>
+  </section>
+  {% endif %}
 </div>

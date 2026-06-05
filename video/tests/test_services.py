@@ -67,13 +67,14 @@ def test_ensure_room_recreates_room_deleted_on_daily(monkeypatch):
 
 
 @daily_on
-def test_ensure_room_disables_recording(monkeypatch):
+def test_ensure_room_recording_available_not_auto(monkeypatch):
+    # Recording is *available* to hosts ("cloud"), not auto-on.
     calls: list = []
     monkeypatch.setattr("video.daily.get_room", _missing)
     monkeypatch.setattr("video.daily.create_room", _fake_create_room(calls))
     wg = seminar().ensure_workgroup()
     services.ensure_room(wg)
-    assert calls[0]["properties"]["enable_recording"] is False
+    assert calls[0]["properties"]["enable_recording"] == "cloud"
 
 
 def test_ensure_room_returns_none_when_disabled():

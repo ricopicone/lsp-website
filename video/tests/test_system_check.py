@@ -72,4 +72,4 @@ def test_rooms_enable_chat_and_people_ui(monkeypatch):
     services.ensure_room(wg)
     assert captured["enable_chat"] is True
     assert captured["enable_people_ui"] is True
-    assert captured["enable_recording"] is False
+    assert captured["enable_recording"] == "cloud"

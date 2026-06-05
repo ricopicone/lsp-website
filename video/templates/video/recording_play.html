@@ -1,0 +1,43 @@
+{% extends "core/base.html" %}
+{% block title %}{{ recording.title|default:"Recording" }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-6 space-y-4">
+  <div class="flex items-center justify-between gap-3">
+    <h1 class="font-serif text-2xl text-base-content truncate">{{ recording.title|default:"Recording" }}</h1>
+    {% if back_url %}<a href="{{ back_url }}" class="btn btn-ghost btn-sm">← Back</a>{% endif %}
+  </div>
+
+  <video controls playsinline class="w-full rounded-xl border border-base-300 bg-black"
+         src="{{ play_url }}" style="max-height: 75vh;"></video>
+
+  <div class="flex flex-wrap items-center justify-between gap-2 text-sm text-base-content/60">
+    <span>
+      {% if recording.started_at %}{{ recording.started_at|date:"M j, Y" }} · {% endif %}
+      {% if recording.duration_seconds %}{{ recording.duration_seconds|floatformat:0 }}s · {% endif %}
+      {{ recording.get_content_visibility_display }}
+    </span>
+    <a href="?download=1" class="link">Download</a>
+  </div>
+  <div class="rounded-lg border border-base-300 bg-base-100 p-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+    <span class="text-base-content/70">
+      {% if recording.keep %}
+        <strong>Kept indefinitely.</strong>
+      {% else %}
+        Recordings are kept for <strong>1 year</strong> — this one until {{ expires_on|date:"M j, Y" }}, then deleted.
+      {% endif %}
+      {% if not can_manage %}{% if not recording.keep %} Mark important recordings to keep them longer.{% endif %}{% endif %}
+    </span>
+    {% if can_manage %}
+    <form method="post" action="{% url 'video:recording_keep' recording.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-sm {% if recording.keep %}btn-ghost{% else %}btn-primary{% endif %}">
+        {% if recording.keep %}Allow expiry (back to 1-year){% else %}Keep indefinitely{% endif %}
+      </button>
+    </form>
+    {% endif %}
+  </div>
+
+  <p class="text-xs text-base-content/40">This recording is private to the School; please don't redistribute it.</p>
+</div>
+{% endblock %}

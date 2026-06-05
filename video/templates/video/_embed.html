@@ -9,6 +9,7 @@ Loads the vendored daily.js (window.DailyIframe) — no runtime CDN.{% endcommen
 {{ room_url|json_script:"room-url" }}
 {{ room_token|json_script:"room-token" }}
 {{ back_url|default:""|json_script:"back-url" }}
+{{ auto_record|default:False|json_script:"auto-record" }}
 
 <script src="{% static 'js/vendor/daily.js' %}"></script>
 <script>
@@ -17,6 +18,7 @@ Loads the vendored daily.js (window.DailyIframe) — no runtime CDN.{% endcommen
     var url = JSON.parse(document.getElementById("room-url").textContent);
     var token = JSON.parse(document.getElementById("room-token").textContent);
     var back = JSON.parse(document.getElementById("back-url").textContent);
+    var autoRecord = JSON.parse(document.getElementById("auto-record").textContent);
     if (!window.DailyIframe || !root) { return; }
     var frame = window.DailyIframe.createFrame(root, {
       iframeStyle: { width: "100%", height: "100%", border: "0" },
@@ -27,6 +29,12 @@ Loads the vendored daily.js (window.DailyIframe) — no runtime CDN.{% endcommen
       if (back) { window.location.href = back; }
       else { history.length > 1 ? history.back() : (window.location.href = "/"); }
     });
+    // Auto-start recording for flagged events (host only — Daily dedupes).
+    if (autoRecord) {
+      frame.on("joined-meeting", function () {
+        try { frame.startRecording(); } catch (e) { /* ignore */ }
+      });
+    }
     frame.join({ url: url, token: token });
   })();
 </script>

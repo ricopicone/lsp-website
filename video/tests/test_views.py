@@ -55,7 +55,7 @@ def test_paid_registrant_gets_room(client):
     resp = client.get(_room_url(event))
     assert resp.status_code == 200
     assert b"room-token" in resp.content
-    assert b"This meeting is not recorded" in resp.content
+    assert b"Not recorded by default" in resp.content
 
 
 @daily_on
@@ -67,6 +67,19 @@ def test_faculty_joins_as_moderator(client):
     resp = client.get(_room_url(event))
     assert resp.status_code == 200
     assert b"mute or remove" in resp.content  # host moderation hint
+
+
+@daily_on
+def test_record_video_event_emits_autostart_for_host(client):
+    event = seminar()
+    event.record_video = True
+    event.save()
+    teacher = user("rec@x.test", is_faculty=True)
+    event.add_faculty(teacher)
+    client.force_login(teacher)
+    resp = client.get(_room_url(event))
+    assert resp.status_code == 200
+    assert b"This event is being recorded" in resp.content  # auto_record path
 
 
 def test_disabled_renders_fallback(client):
