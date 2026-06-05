@@ -27,5 +27,5 @@ translations, their earlier layers still showing through—and, in reworking
 them, to take up a position of one's own within the School's ongoing work. In a
 member's formation, the palimpsest marks the step from Precandidate to
 Candidate—on either track—and is the moment the precandidate joins the School:
-the Advisor brings the precandidate's desire before the Meeting of the Analysts,
+the advisor brings the precandidate's desire before the Meeting of the Analysts,
 and the precandidate presents the palimpsest at the next Days of Assembly.
