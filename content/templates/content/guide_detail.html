@@ -1,0 +1,36 @@
+{% extends "core/base.html" %}
+{% block title %}{{ guide.title }}—Guides—LSP{% endblock %}
+
+{% block content %}
+<article class="space-y-8 max-w-3xl">
+
+  <nav class="text-sm text-base-content/50">
+    <a href="{% url 'guides_index' %}" class="hover:text-primary">Guides</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-base-content/70">{{ guide.title }}</span>
+  </nav>
+
+  <header class="space-y-3">
+    <h1 class="font-serif text-3xl sm:text-4xl text-base-content leading-[1.15] tracking-tight">{{ guide.title }}</h1>
+    {% if guide.summary %}
+    <p class="text-base sm:text-lg text-base-content/70 leading-relaxed">{{ guide.summary }}</p>
+    {% endif %}
+  </header>
+
+  {% if try_url %}
+  <div class="rounded-box border border-primary/30 bg-primary/5 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+    <span class="text-sm text-base-content/80">Ready to do it? The checklist in the corner will track your progress.</span>
+    <a href="{{ try_url }}" class="btn btn-primary btn-sm">Try it now <span aria-hidden="true">→</span></a>
+  </div>
+  {% endif %}
+
+  <div class="lsp-prose">
+    {{ guide.body_html|safe }}
+  </div>
+
+  <div class="pt-6 border-t border-base-300/60">
+    <a href="{% url 'guides_index' %}" class="link link-hover text-sm text-base-content/60">← All guides</a>
+  </div>
+
+</article>
+{% endblock %}
