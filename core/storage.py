@@ -60,13 +60,18 @@ def presigned_recordings_url(key, *, download=False, expires=21600):
     import boto3
     from botocore.config import Config
 
+    region = getattr(settings, "AWS_S3_REGION_NAME", "us-west-2")
     params = {"Bucket": bucket, "Key": key}
     if download:
         fname = key.rsplit("/", 1)[-1] or "recording.mp4"
         params["ResponseContentDisposition"] = f'attachment; filename="{fname}"'
     client = boto3.client(
         "s3",
-        region_name=getattr(settings, "AWS_S3_REGION_NAME", "us-west-2"),
+        region_name=region,
+        # Pin the REGIONAL endpoint: the global s3.amazonaws.com host with a
+        # SigV4 signature scoped to us-west-2 is rejected (403); the regional
+        # endpoint validates correctly.
+        endpoint_url=f"https://s3.{region}.amazonaws.com",
         config=Config(signature_version="s3v4"),
     )
     return client.generate_presigned_url("get_object", Params=params, ExpiresIn=expires)
