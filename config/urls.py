@@ -14,6 +14,8 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView
@@ -138,3 +140,9 @@ urlpatterns = [
     path("", include("registrations.urls")),
     path("", include("core.urls")),
 ]
+
+# Serve user-uploaded media from local disk during development. In production
+# uploads live on S3 (served by their own absolute URLs), so this is a no-op
+# there; gating on DEBUG keeps the dev-only route out of prod entirely.
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

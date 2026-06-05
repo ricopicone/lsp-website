@@ -321,6 +321,156 @@
     </div>
   </footer>
 
+  {% if show_preview_tour %}
+  {# ---- Limited-preview onboarding checklist (gated; core.context_processors.preview_tour) ---- #}
+  <style>
+    #lsp-preview-tour .lsp-tour-tick {
+      width: 1.15rem; height: 1.15rem; border-radius: 9999px;
+      border: 2px solid var(--color-base-300); box-sizing: border-box;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; line-height: 1; color: transparent;
+    }
+    #lsp-preview-tour .lsp-tour-tick--done {
+      background: var(--color-primary); border-color: var(--color-primary);
+      color: var(--color-primary-content);
+    }
+    #lsp-preview-tour { animation: lsp-tour-in 0.35s ease-out both; }
+    @keyframes lsp-tour-in { from { opacity: 0; transform: translateY(0.75rem); } to { opacity: 1; transform: none; } }
+    /* Shared contextual-hint styling (used by lspTourHint on profile + event pages). */
+    .lsp-tour-pulse { animation: lsp-tour-pulse 1.7s ease-out infinite; }
+    @keyframes lsp-tour-pulse {
+      0%   { box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-primary) 55%, transparent); }
+      70%  { box-shadow: 0 0 0 12px color-mix(in oklch, var(--color-primary) 0%, transparent); }
+      100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-primary) 0%, transparent); }
+    }
+    .lsp-tour-arrow {
+      position: absolute; top: -6px; left: 24px; width: 12px; height: 12px;
+      background: var(--color-primary); transform: rotate(45deg);
+    }
+  </style>
+  <div id="lsp-preview-tour" class="fixed bottom-4 right-4 z-50"
+       style="width: 20rem; max-width: calc(100vw - 2rem);">
+    {# Collapsed pill #}
+    <button type="button" id="lsp-tour-open"
+            class="hidden btn btn-primary btn-sm shadow-lg gap-2">
+      <span aria-hidden="true">✦</span> Preview tasks
+    </button>
+
+    {# Expanded card #}
+    <div id="lsp-tour-card" class="card bg-base-100 shadow-xl border border-base-300/70">
+      <div class="card-body p-4 gap-3">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <h2 class="font-serif text-base text-base-content leading-tight">Welcome to the preview</h2>
+            <p class="text-xs text-base-content/60">A few things to try.</p>
+          </div>
+          <div class="flex items-center gap-1">
+            <button type="button" id="lsp-tour-min" class="btn btn-ghost btn-xs btn-square" aria-label="Minimize" title="Minimize">–</button>
+            <button type="button" id="lsp-tour-close" class="btn btn-ghost btn-xs btn-square" aria-label="Dismiss" title="Dismiss">✕</button>
+          </div>
+        </div>
+
+        <ul class="space-y-2.5">
+          {# 1. Profile — auto-ticks from real data (headshot + bio) #}
+          <li class="flex items-start gap-3">
+            <span class="lsp-tour-tick {% if preview_profile_done %}lsp-tour-tick--done{% endif %} mt-0.5 shrink-0" aria-hidden="true">{% if preview_profile_done %}✓{% endif %}</span>
+            <span class="text-sm leading-snug">
+              <a href="{% url 'profile_edit' %}" class="link link-hover font-medium {% if preview_profile_done %}line-through text-base-content/50{% else %}text-base-content{% endif %}">Complete your profile</a>
+              <span class="block text-xs text-base-content/55">Add a photo and a short bio.</span>
+            </span>
+          </li>
+          {# 2. Register for the sandbox seminar — auto-ticks from a real registration #}
+          <li class="flex items-start gap-3">
+            <span class="lsp-tour-tick {% if preview_register_done %}lsp-tour-tick--done{% endif %} mt-0.5 shrink-0" aria-hidden="true">{% if preview_register_done %}✓{% endif %}</span>
+            <span class="text-sm leading-snug">
+              {% if preview_seminar_url %}
+              <a href="{{ preview_seminar_url }}" class="link link-hover font-medium {% if preview_register_done %}line-through text-base-content/50{% else %}text-base-content{% endif %}">Register for the preview seminar</a>
+              {% else %}
+              <span class="font-medium text-base-content">Register for the preview seminar</span>
+              {% endif %}
+              <span class="block text-xs text-base-content/55">It's free and instant — try the sign-up flow.</span>
+            </span>
+          </li>
+          {# 3. Say hello in Parlêtre — auto-ticks once the member posts there #}
+          <li class="flex items-start gap-3">
+            <span class="lsp-tour-tick {% if preview_channel_done %}lsp-tour-tick--done{% endif %} mt-0.5 shrink-0" aria-hidden="true">{% if preview_channel_done %}✓{% endif %}</span>
+            <span class="text-sm leading-snug">
+              {% if preview_channel_url %}
+              <a href="{{ preview_channel_url }}" class="link link-hover font-medium {% if preview_channel_done %}line-through text-base-content/50{% else %}text-base-content{% endif %}">Say hello in Parlêtre</a>
+              {% else %}
+              <span class="font-medium text-base-content">Say hello in Parlêtre</span>
+              {% endif %}
+              <span class="block text-xs text-base-content/55">Post a hello in the welcome channel.</span>
+            </span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Reusable contextual hint: pulse a target element and float a popover
+    // (server-rendered, so its classes survive Tailwind purge) anchored beneath
+    // it. Dismisses for good once the member acts. Pages call this on
+    // DOMContentLoaded — this definition runs at body-end, before that fires.
+    window.lspTourHint = function (opts) {
+      var btn = document.querySelector(opts.target);
+      var pop = document.querySelector(opts.popover);
+      if (!btn || !pop) return;
+      try { if (localStorage.getItem(opts.key) === "done") return; } catch (e) {}
+      var above = opts.placement === "above";
+      var arrow = pop.querySelector(".lsp-tour-arrow");
+      if (above && arrow) { arrow.style.top = "auto"; arrow.style.bottom = "-6px"; }
+      btn.classList.add("lsp-tour-pulse");
+      function place() {
+        var r = btn.getBoundingClientRect();
+        pop.style.top = (above ? r.top - pop.offsetHeight - 10 : r.bottom + 10) + "px";
+        pop.style.left = Math.max(8, r.left) + "px";
+      }
+      function dismiss() {
+        pop.classList.add("hidden");
+        btn.classList.remove("lsp-tour-pulse");
+        try { localStorage.setItem(opts.key, "done"); } catch (e) {}
+        window.removeEventListener("resize", place);
+        window.removeEventListener("scroll", place, true);
+      }
+      window.addEventListener("resize", place);
+      window.addEventListener("scroll", place, true);
+      place();
+      // A short beat in reads as a guide, not a flash on load.
+      setTimeout(function () { pop.classList.remove("hidden"); place(); }, 600);
+      var ok = pop.querySelector(".lsp-tour-ok");
+      if (ok) ok.addEventListener("click", dismiss);
+      btn.addEventListener("click", dismiss);
+    };
+  </script>
+  <script>
+    // Floating preview checklist: open / minimized / closed, persisted so it
+    // stays where the member left it across pages. Server-rendered markup —
+    // this only toggles visibility (no Tailwind classes injected from JS).
+    (function () {
+      var root = document.getElementById("lsp-preview-tour");
+      if (!root) return;
+      var card = document.getElementById("lsp-tour-card");
+      var pill = document.getElementById("lsp-tour-open");
+      var KEY = "lsp-preview-tour-state";  // "open" | "min" | "closed"
+      function apply(state) {
+        if (state === "closed") { root.classList.add("hidden"); return; }
+        root.classList.remove("hidden");
+        var min = state === "min";
+        card.classList.toggle("hidden", min);
+        pill.classList.toggle("hidden", !min);
+      }
+      function set(s) { try { localStorage.setItem(KEY, s); } catch (e) {} apply(s); }
+      var saved = "open";
+      try { saved = localStorage.getItem(KEY) || "open"; } catch (e) {}
+      apply(saved);
+      document.getElementById("lsp-tour-min").addEventListener("click", function () { set("min"); });
+      document.getElementById("lsp-tour-open").addEventListener("click", function () { set("open"); });
+      document.getElementById("lsp-tour-close").addEventListener("click", function () { set("closed"); });
+    })();
+  </script>
+  {% endif %}
+
   <script src="{% static 'js/flourishes.js' %}" defer></script>
 
   {% if user.is_authenticated and not user.profile.timezone %}

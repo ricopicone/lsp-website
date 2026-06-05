@@ -168,7 +168,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
     {% if user_registration %}
       <a href="{% url 'registrations:confirm' user_registration.id %}" class="btn btn-primary btn-lg">View your registration →</a>
     {% else %}
-      <a href="{% url 'registrations:register' event.slug %}" class="btn btn-primary btn-lg">Register →</a>
+      <a href="{% url 'registrations:register' event.slug %}" id="register-cta" class="btn btn-primary btn-lg">Register →</a>
     {% endif %}
   {% elif event.status == "draft" %}
     <p class="text-base-content/60">Registration not yet open.</p>
@@ -176,3 +176,26 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
     <p class="text-base-content/60">Registration is closed.</p>
   {% endif %}
 </section>
+
+{% if show_preview_tour and event.slug == preview_seminar_slug and not user_registration and event.status == "open" %}
+{# ---- Preview-tour hint: point first-time members at the Register button ---- #}
+<div id="lsp-register-popover" class="hidden fixed z-50 w-64 card bg-primary text-primary-content shadow-xl"
+     role="dialog" aria-label="Tip">
+  <div class="card-body p-3 gap-2">
+    <p class="text-sm leading-snug"><strong>Try it.</strong> This sandbox seminar is free — register to see the whole sign-up flow. You can cancel afterward.</p>
+    <div class="text-right">
+      <button type="button" class="btn btn-xs lsp-tour-ok">Got it</button>
+    </div>
+  </div>
+  <span class="lsp-tour-arrow" aria-hidden="true"></span>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.lspTourHint) lspTourHint({
+      target: "#register-cta",
+      popover: "#lsp-register-popover",
+      key: "lsp-preview-tour-register-hint",
+    });
+  });
+</script>
+{% endif %}
