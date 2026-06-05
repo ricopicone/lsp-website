@@ -42,9 +42,8 @@ def test_resolved_done_hides_hint(rf):
     """A completed task ticks and stops showing its hint."""
     from io import BytesIO
 
-    from PIL import Image
-
     from django.core.files.uploadedfile import SimpleUploadedFile
+    from PIL import Image
 
     user = get_user_model().objects.create_user(email="done@example.com", password="x")
     buf = BytesIO()
