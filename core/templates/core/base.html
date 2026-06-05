@@ -217,51 +217,42 @@
             </li>
             <li><hr class="border-base-300/60 my-1"></li>
 
-            {% if user.profile.is_listed %}
-            <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">My directory page</a></li>
-            {% endif %}
-            <li><a href="{% url 'works:mine' %}">My works</a></li>
+            <li><a href="{% url 'profile_edit' %}">Edit Profile</a></li>
             <li><a href="{% url 'admissions:formation' %}">My Formation</a></li>
             {% if user.profile.role == 'analyst' or user.profile.role == 'scholar' %}
               {% if user.advancements_advised.exists %}
-              <li><a href="{% url 'admissions:advise_queue' %}">Demandes you advise</a></li>
+              <li><a href="{% url 'admissions:advise_queue' %}">Demandes You Advise</a></li>
               {% endif %}
             {% endif %}
             {% if user.application %}
-            <li><a href="{% url 'admissions:status' %}">My application</a></li>
+            <li><a href="{% url 'admissions:status' %}">My Application</a></li>
             {% elif user.profile.role == 'external' or user.profile.role == 'prospective_applicant' %}
-            <li><a href="{% url 'admissions:apply_start' %}">Apply to join</a></li>
+            <li><a href="{% url 'admissions:apply_start' %}">Apply to Join</a></li>
             {% endif %}
             {% if show_survey_nudge %}
-            <li><a href="{% url 'intake_survey' %}">Finish intake survey</a></li>
+            <li><a href="{% url 'intake_survey' %}">Finish Intake Survey</a></li>
             {% endif %}
-            <li><a href="{% url 'profile_edit' %}">Edit profile</a></li>
+            <li><a href="{% url 'works:mine' %}">My Works</a></li>
+            {% if user.profile.is_listed %}
+            <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">My Directory Page</a></li>
+            {% endif %}
             <li>
               {# Theme toggle: shows the mode you'll switch to. #}
-              <button type="button" data-theme-toggle class="justify-start gap-2">
+              <button type="button" data-theme-toggle class="justify-start gap-2 cursor-pointer">
                 <span data-theme-icon="silk" class="contents">
                   <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-                  Dark mode
+                  Dark Mode
                 </span>
                 <span data-theme-icon="abyss" class="contents hidden">
                   <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-                  Light mode
+                  Light Mode
                 </span>
               </button>
             </li>
 
-            {% if user.is_staff or user|is_on_committee:"programming-committee" %}
-            <li><hr class="border-base-300/60 my-1"></li>
-            <li><a href="{% url 'program_admin_programs' %}">Program Committee Admin</a></li>
-            {% endif %}
-
             {% if user|has_admin_tools %}
+            <li><hr class="border-base-300/60 my-1"></li>
             <li><a href="{% url 'admin_tools' %}">Admin Tools</a></li>
-            {% endif %}
-
-            {% if user.is_staff %}
-            <li><a href="/admin/">Admin</a></li>
-            <li><a href="{% url 'treasurer' %}">Treasurer Admin</a></li>
             {% endif %}
 
             {% if not request.impersonator and user.is_superuser %}
@@ -273,7 +264,7 @@
               {# display:contents on the form lets DaisyUI's `.menu li > button` styling reach the button #}
               <form method="post" action="{% url 'logout' %}" style="display:contents">
                 {% csrf_token %}
-                <button type="submit" class="text-error">Log out</button>
+                <button type="submit" class="text-error cursor-pointer">Log Out</button>
               </form>
             </li>
           </ul>
