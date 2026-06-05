@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the LSP logical pg_dump backup weekly
+
+[Timer]
+# Sunday 09:00 UTC — well clear of the RDS automated-snapshot window (08:17 UTC).
+OnCalendar=Sun *-*-* 09:00:00 UTC
+# Catch up if the host was down at the scheduled time.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
