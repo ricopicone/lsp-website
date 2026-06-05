@@ -65,6 +65,14 @@ class ChannelAdmin(admin.ModelAdmin):
                 "— messages vanish that long after posting. Leave blank for permanent.",
             },
         ),
+        (
+            "Video",
+            {
+                "fields": ("recording_mode",),
+                "description": "For video channels: set to Off to remove the Record "
+                "button (e.g. The Gaze, an open all-member room).",
+            },
+        ),
         ("Display", {"fields": ("position", "archived")}),
     )
 

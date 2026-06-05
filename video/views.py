@@ -98,6 +98,34 @@ def recording_keep(request, pk):
     return HttpResponseRedirect(reverse("video:recording_play", args=[rec.pk]))
 
 
+@login_required
+@require_POST
+def recording_annotate(request, pk):
+    """Save a recording's annotation/notes (host/staff)."""
+    rec = get_object_or_404(Recording, pk=pk)
+    if not rec.can_manage(request.user):
+        raise PermissionDenied("You can't manage this recording.")
+    rec.note = (request.POST.get("note") or "").strip()[:5000]
+    rec.save(update_fields=["note"])
+    return HttpResponseRedirect(reverse("video:recording_play", args=[rec.pk]))
+
+
+@login_required
+@require_POST
+def recording_delete(request, pk):
+    """Delete a recording everywhere (S3 + Daily + row), host/staff only."""
+    rec = get_object_or_404(Recording, pk=pk)
+    if not rec.can_manage(request.user):
+        raise PermissionDenied("You can't manage this recording.")
+    back = "/"
+    if rec.event_id:
+        back = reverse("events:detail", args=[rec.event.slug])
+    elif rec.room and rec.room.workgroup_id:
+        back = rec.room.workgroup.get_absolute_url()
+    rec.delete_everywhere()
+    return HttpResponseRedirect(back)
+
+
 @csrf_exempt
 @require_POST
 def recording_webhook(request):
@@ -152,6 +180,7 @@ def _render_room(request, wg, *, event=None, back_url="/"):
             {"workgroup": wg, "event": event, "back_url": back_url},
         )
 
+    recording_available = getattr(wg, "recording_mode", "on_demand") != "off"
     return render(
         request,
         "video/room.html",
@@ -162,7 +191,10 @@ def _render_room(request, wg, *, event=None, back_url="/"):
             "token": token,
             "is_owner": owner,
             "back_url": back_url,
-            # Owner's browser auto-starts recording for flagged events.
-            "auto_record": bool(owner and event is not None and event.record_video),
+            "recording_available": recording_available,
+            # Owner's browser auto-starts recording for flagged events (when allowed).
+            "auto_record": bool(
+                owner and event is not None and event.record_video and recording_available
+            ),
         },
     )

@@ -28,6 +28,35 @@
   </section>
   {% endif %}
 
+  {% if can_manage and daily_enabled %}
+  <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
+    <div class="space-y-0.5">
+      <h3 class="font-medium text-base-content">Video recording</h3>
+      <p class="text-xs text-base-content/50">
+        Recording is always off until a host starts it. Turn it off entirely to remove
+        the Record button from this group's meetings.
+      </p>
+    </div>
+    <form method="post" action="{% url 'workgroups:recording_settings' workgroup.slug %}"
+          class="flex flex-wrap items-end gap-3">
+      {% csrf_token %}
+      <div class="space-y-1">
+        <label for="recording_mode" class="block text-xs text-base-content/60">Record button</label>
+        <select name="recording_mode" id="recording_mode"
+                class="select select-bordered select-sm">
+          <option value="on_demand" {% if workgroup.recording_mode != "off" %}selected{% endif %}>
+            On demand — hosts can record
+          </option>
+          <option value="off" {% if workgroup.recording_mode == "off" %}selected{% endif %}>
+            Off — no Record button
+          </option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-sm">Save</button>
+    </form>
+  </section>
+  {% endif %}
+
   {% if can_manage_terms %}
   <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
     <div class="space-y-0.5">

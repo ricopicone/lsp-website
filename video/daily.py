@@ -45,6 +45,16 @@ def create_room(name: str, *, properties: dict | None = None) -> dict:
     raise DailyError(f"create_room({name}) -> {resp.status_code}: {resp.text}")
 
 
+def update_room(name: str, properties: dict) -> dict:
+    """Update a room's config (e.g. toggle enable_recording)."""
+    resp = requests.post(
+        _url(f"rooms/{name}"), json={"properties": properties}, headers=_headers(), timeout=15
+    )
+    if resp.status_code == 200:
+        return resp.json()
+    raise DailyError(f"update_room({name}) -> {resp.status_code}: {resp.text}")
+
+
 def get_room(name: str) -> dict | None:
     """Fetch a room, or ``None`` if it doesn't exist (404) — lets callers detect a
     room that was deleted on Daily's side and recreate it."""

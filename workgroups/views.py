@@ -270,6 +270,7 @@ def workgroup_detail(request, slug):
         "active_tab": active,
         "primary_event": primary_event,
         "can_edit_offering": can_edit_offering,
+        "can_manage": can_manage,
         "can_join": can_join,
         "can_leave": can_leave,
         "daily_enabled": daily_on,
@@ -489,6 +490,21 @@ def _can_manage_workgroup(wg, user) -> bool:
     from .permissions import can_manage_workgroup
 
     return can_manage_workgroup(user, wg)
+
+
+@login_required
+@require_POST
+def recording_settings(request, slug):
+    """Set the group's video recording mode (managers): on-demand vs no Record
+    button for its meetings. Reconciled onto the Daily room on next open."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not _can_manage_workgroup(wg, request.user):
+        raise Http404
+    mode = request.POST.get("recording_mode")
+    if mode in dict(Workgroup.RecordingMode.choices):
+        wg.recording_mode = mode
+        wg.save(update_fields=["recording_mode"])
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")
 
 
 @login_required

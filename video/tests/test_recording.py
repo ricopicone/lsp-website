@@ -184,6 +184,58 @@ def test_keep_toggle_host_only(client):
     assert Recording.objects.get(pk=rec.pk).keep is False  # toggles back
 
 
+# --- annotate ---
+
+def test_annotate_host_only(client):
+    event = seminar()
+    wg = event.ensure_workgroup()
+    rec = _recording(wg, content=Recording.Visibility.MEMBERS)
+    member = user("a1@x.test")
+    teacher = user("a2@x.test", is_faculty=True)
+    event.add_faculty(teacher)
+    url = reverse("video:recording_annotate", args=[rec.pk])
+
+    client.force_login(member)
+    assert client.post(url, {"note": "nope"}).status_code == 403
+    assert Recording.objects.get(pk=rec.pk).note == ""
+
+    client.force_login(teacher)
+    assert client.post(url, {"note": "Session 3 — masochism"}).status_code == 302
+    assert Recording.objects.get(pk=rec.pk).note == "Session 3 — masochism"
+
+
+# --- delete ---
+
+def test_delete_host_only_removes_everywhere(client, monkeypatch):
+    event = seminar()
+    wg = event.ensure_workgroup()
+    rec = _recording(wg, content=Recording.Visibility.MEMBERS)
+    rec.s3_key = "k/rec-del.mp4"
+    rec.daily_recording_id = "rec-del"
+    rec.save(update_fields=["s3_key", "daily_recording_id"])
+    member = user("d1@x.test")
+    teacher = user("d2@x.test", is_faculty=True)
+    event.add_faculty(teacher)
+    url = reverse("video:recording_delete", args=[rec.pk])
+
+    deleted = {"s3": [], "daily": []}
+    monkeypatch.setattr(
+        "core.storage.recordings_storage",
+        lambda: type("S", (), {"delete": lambda self, k: deleted["s3"].append(k)})(),
+    )
+    monkeypatch.setattr("video.daily.delete_recording", lambda rid: deleted["daily"].append(rid))
+
+    client.force_login(member)
+    assert client.post(url).status_code == 403
+    assert Recording.objects.filter(pk=rec.pk).exists()
+
+    client.force_login(teacher)
+    assert client.post(url).status_code == 302
+    assert not Recording.objects.filter(pk=rec.pk).exists()
+    assert deleted["s3"] == ["k/rec-del.mp4"]
+    assert deleted["daily"] == ["rec-del"]
+
+
 # --- retention ---
 
 def test_purge_old_recordings_dry_run(capsys):

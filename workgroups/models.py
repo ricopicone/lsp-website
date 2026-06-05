@@ -198,6 +198,15 @@ class Workgroup(models.Model):
             "on for committees, where officers serve defined terms."
         ),
     )
+
+    class RecordingMode(models.TextChoices):
+        ON_DEMAND = "on_demand", "On demand — hosts can record"
+        OFF = "off", "Off — no Record button"
+
+    recording_mode = models.CharField(
+        max_length=12, choices=RecordingMode.choices, default=RecordingMode.ON_DEMAND,
+        help_text="Whether hosts see a Record button in this group's video meetings.",
+    )
     #: Storage quota (bytes) for the shared Files section — sum of all file
     #: versions. Raise per workgroup when members request more space.
     file_quota_bytes = models.PositiveBigIntegerField(
