@@ -534,6 +534,49 @@ def test_archive_view_gated_and_settings_reachable_after_archive(client):
     assert b"Reactivate group" in resp.content
 
 
+def test_working_group_overview_editable_by_member(client):
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Overview",
+             landing_visibility=Visibility.PUBLIC)
+    member = _plain_member(wg, "wg-mem@x.test")
+    client.force_login(member)
+    # The editor is offered on the Settings tab...
+    resp = client.get(f"{wg.get_absolute_url()}?tab=settings")
+    assert resp.status_code == 200
+    assert b"Save overview" in resp.content
+    # ...and saving updates the name + description.
+    resp = client.post(reverse("workgroups:update_overview", args=[wg.slug]), {
+        "name": "Renamed WG", "description": "A fresh overview.",
+    })
+    assert resp.status_code == 302
+    wg.refresh_from_db()
+    assert wg.name == "Renamed WG"
+    assert wg.description == "A fresh overview."
+    # Slug is stable across a rename.
+    assert Workgroup.objects.filter(slug=wg.slug).exists()
+
+
+def test_overview_editor_absent_for_committee_and_non_member(client):
+    # Committees edit their description via the charter form, so the generic
+    # overview editor must not also appear for them.
+    from committees.models import Committee
+
+    committee = Committee.objects.create(name="Ethics", slug="ethics")
+    wg = committee.workgroup
+    wg.landing_visibility = Visibility.PUBLIC
+    wg.save(update_fields=["landing_visibility"])
+    chair = _chair(wg)
+    client.force_login(chair)
+    resp = client.get(f"{wg.get_absolute_url()}?tab=settings")
+    assert resp.status_code == 200
+    assert b"Save overview" not in resp.content
+    # And a non-member can't post the overview endpoint.
+    client.force_login(_user("nope@x.test", role=Profile.Role.ANALYST))
+    assert client.post(
+        reverse("workgroups:update_overview", args=[wg.slug]),
+        {"name": "Hijack", "description": ""},
+    ).status_code == 404
+
+
 def test_reading_group_schedule_is_organizer_only(client):
     """Open-join reading-group members can't manage the calendar — only
     organizers (leads) / staff do."""

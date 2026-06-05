@@ -457,11 +457,25 @@ def workgroup_detail(request, slug):
             from django.utils import timezone as _tz
 
             context["today"] = _tz.localdate()
-    elif active == "settings" and (is_member or can_manage):
+    elif active == "settings" and (is_member or can_manage or stored_member):
         from .forms import WorkgroupDatesForm
 
         context["dates_form"] = WorkgroupDatesForm(instance=wg)
         context["can_manage"] = can_manage
+        # Generic overview editor for kinds whose Overview *is* the free-text
+        # description — working groups and free reading groups. Cartels edit
+        # theirs via the cartel details form, committees via the charter form,
+        # and term-based offerings derive their overview from their event.
+        overview_event = primary_event or wg.current_term()
+        if (
+            is_member
+            and overview_event is None
+            and _attached(wg, "cartel") is None
+            and _attached(wg, "committee") is None
+        ):
+            from .forms import WorkgroupOverviewForm
+
+            context["overview_form"] = WorkgroupOverviewForm(instance=wg)
         # Manager roster tools (add/remove/role) for non-cartel groups — cartels
         # manage membership through their own apply/plus-one flow.
         if can_manage and _attached(wg, "cartel") is None:
@@ -658,6 +672,23 @@ def workgroup_update_dates(request, slug):
     from .forms import WorkgroupDatesForm
 
     form = WorkgroupDatesForm(request.POST, instance=wg)
+    if form.is_valid():
+        form.save()
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")
+
+
+@login_required
+@require_POST
+def workgroup_update_overview(request, slug):
+    """Members edit the group's name + free-text overview (Settings tab). For
+    kinds whose Overview is the description — not cartels / committees /
+    term-based offerings, which edit theirs elsewhere."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not wg.is_member(request.user):
+        raise Http404
+    from .forms import WorkgroupOverviewForm
+
+    form = WorkgroupOverviewForm(request.POST, instance=wg)
     if form.is_valid():
         form.save()
     return redirect(f"{wg.get_absolute_url()}?tab=settings")

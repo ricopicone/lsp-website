@@ -30,6 +30,7 @@ urlpatterns = [
     path("<slug:slug>/roster/term/", views.roster_set_term, name="roster_set_term"),
     path("<slug:slug>/open-term/", views.open_reading_group_term, name="open_term"),
     path("<slug:slug>/dates/", views.workgroup_update_dates, name="update_dates"),
+    path("<slug:slug>/overview/", views.workgroup_update_overview, name="update_overview"),
     path("<slug:slug>/tasks/add/", views.task_add, name="task_add"),
     path("<slug:slug>/tasks/<int:pk>/toggle/", views.task_toggle, name="task_toggle"),
     path("<slug:slug>/tasks/<int:pk>/assign/", views.task_assign, name="task_assign"),

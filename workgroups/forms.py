@@ -38,6 +38,25 @@ class ReadingGroupTermForm(forms.Form):
         return data
 
 
+class WorkgroupOverviewForm(forms.ModelForm):
+    """Edit a group's name + free-text overview (its Overview tab description).
+
+    Used by kinds whose overview *is* the description — working groups and free
+    reading groups. Cartels (own details form), committees (charter form), and
+    term-based offerings (overview = their event) edit theirs elsewhere."""
+
+    class Meta:
+        model = Workgroup
+        fields = ("name", "description")
+        widgets = {
+            "name": forms.TextInput(attrs={"class": _INPUT}),
+            "description": forms.Textarea(attrs={
+                "class": "textarea textarea-bordered w-full", "rows": 4,
+                "placeholder": "What is this group about? (markdown supported)",
+            }),
+        }
+
+
 class WorkgroupDatesForm(forms.ModelForm):
     class Meta:
         model = Workgroup

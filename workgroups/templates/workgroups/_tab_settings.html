@@ -6,6 +6,28 @@
   </div>
   {% endif %}
 
+  {% if overview_form %}
+  <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
+    <div class="space-y-0.5">
+      <h3 class="font-medium text-base-content">Overview</h3>
+      <p class="text-xs text-base-content/50">The name and description shown on this group's page.</p>
+    </div>
+    <form method="post" action="{% url 'workgroups:update_overview' workgroup.slug %}" class="space-y-3">
+      {% csrf_token %}
+      <div class="space-y-1">
+        <label for="{{ overview_form.name.id_for_label }}" class="block text-xs text-base-content/60">Name</label>
+        {{ overview_form.name }}
+      </div>
+      <div class="space-y-1">
+        <label for="{{ overview_form.description.id_for_label }}" class="block text-xs text-base-content/60">Description</label>
+        {{ overview_form.description }}
+        <p class="text-xs text-base-content/50">Markdown supported.</p>
+      </div>
+      <button class="btn btn-primary btn-sm">Save overview</button>
+    </form>
+  </section>
+  {% endif %}
+
   {% if is_member %}
   <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
     <div class="space-y-0.5">
