@@ -19,6 +19,25 @@
     </span>
     <a href="?download=1" class="link">Download</a>
   </div>
+  <div class="rounded-lg border border-base-300 bg-base-100 p-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+    <span class="text-base-content/70">
+      {% if recording.keep %}
+        <strong>Kept indefinitely.</strong>
+      {% else %}
+        Recordings are kept for <strong>1 year</strong> — this one until {{ expires_on|date:"M j, Y" }}, then deleted.
+      {% endif %}
+      {% if not can_manage %}{% if not recording.keep %} Mark important recordings to keep them longer.{% endif %}{% endif %}
+    </span>
+    {% if can_manage %}
+    <form method="post" action="{% url 'video:recording_keep' recording.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-sm {% if recording.keep %}btn-ghost{% else %}btn-primary{% endif %}">
+        {% if recording.keep %}Allow expiry (back to 1-year){% else %}Keep indefinitely{% endif %}
+      </button>
+    </form>
+    {% endif %}
+  </div>
+
   <p class="text-xs text-base-content/40">This recording is private to the School; please don't redistribute it.</p>
 </div>
 {% endblock %}

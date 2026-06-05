@@ -179,6 +179,11 @@ class Recording(models.Model):
     def content_visible_to(self, user) -> bool:
         return self._visible_at(self.content_visibility, user)
 
+    def can_manage(self, user) -> bool:
+        """Whether ``user`` may manage this recording (toggle keep, etc.) — its
+        host (faculty/lead) or staff."""
+        return self._can_host(user)
+
     def clean(self):
         from django.core.exceptions import ValidationError
 

@@ -162,6 +162,28 @@ def test_recording_play_gated(client, monkeypatch):
     assert b"play.mp4" in resp.content
 
 
+# --- keep toggle ---
+
+def test_keep_toggle_host_only(client):
+    event = seminar()
+    wg = event.ensure_workgroup()
+    rec = _recording(wg, content=Recording.Visibility.MEMBERS)
+    member = user("k1@x.test")
+    teacher = user("k2@x.test", is_faculty=True)
+    event.add_faculty(teacher)
+    url = reverse("video:recording_keep", args=[rec.pk])
+
+    client.force_login(member)
+    assert client.post(url).status_code == 403  # non-host can't manage
+    assert Recording.objects.get(pk=rec.pk).keep is False
+
+    client.force_login(teacher)
+    assert client.post(url).status_code == 302  # host toggles
+    assert Recording.objects.get(pk=rec.pk).keep is True
+    client.post(url)
+    assert Recording.objects.get(pk=rec.pk).keep is False  # toggles back
+
+
 # --- retention ---
 
 def test_purge_old_recordings_dry_run(capsys):

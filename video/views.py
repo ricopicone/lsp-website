@@ -68,10 +68,34 @@ def recording_play(request, pk):
         back = reverse("events:detail", args=[rec.event.slug])
     elif rec.room and rec.room.workgroup_id:
         back = rec.room.workgroup.get_absolute_url()
+    from datetime import timedelta
+
+    from django.conf import settings
+
+    expires_on = rec.created_at + timedelta(
+        days=getattr(settings, "RECORDING_RETENTION_DAYS", 365)
+    )
     return render(
         request, "video/recording_play.html",
-        {"recording": rec, "play_url": url, "back_url": back},
+        {
+            "recording": rec, "play_url": url, "back_url": back,
+            "can_manage": rec.can_manage(request.user),
+            "expires_on": expires_on,
+        },
     )
+
+
+@login_required
+@require_POST
+def recording_keep(request, pk):
+    """Toggle a recording's keep flag (host/staff) — kept recordings are exempt
+    from the 1-year retention sweep."""
+    rec = get_object_or_404(Recording, pk=pk)
+    if not rec.can_manage(request.user):
+        raise PermissionDenied("You can't manage this recording.")
+    rec.keep = not rec.keep
+    rec.save(update_fields=["keep"])
+    return HttpResponseRedirect(reverse("video:recording_play", args=[rec.pk]))
 
 
 @csrf_exempt
