@@ -173,6 +173,27 @@ def test_replayed_webhook_does_not_re_send_emails(client, registration):
 
 
 @pytest.mark.django_db
+def test_confirmation_email_does_not_leak_html_entities(event, tier):
+    """Plain-text emails must not HTML-escape free-text fields. Regression:
+    an apostrophe in access_info leaked as ``&#x27;`` because the .txt
+    templates auto-escaped (Django escapes every template regardless of
+    extension). access_info and the recipient's name both flow through the
+    template; neither should be entity-escaped."""
+    event.access_info = "There's a Zoom link & a password once you're in."
+    event.save()
+    user = User.objects.create_user(email="apos@example.com", first_name="O'Brien")
+    reg = Registration.objects.create(
+        user=user, event=event, price_tier=tier,
+        quoted_amount=Decimal("100.00"), status=Registration.Status.PAID,
+    )
+    send_registration_confirmation(reg)
+    body = mail.outbox[0].body
+    assert "&#x27;" not in body and "&amp;" not in body
+    assert "There's a Zoom link & a password once you're in." in body
+    assert "O'Brien," in body
+
+
+@pytest.mark.django_db
 def test_zero_dollar_registration_sends_confirmation_directly(client, event, tier):
     """The $0 short-circuit path also emails the confirmation (with access_info)."""
     tier.sliding_scale = True

@@ -1,4 +1,4 @@
-{{ user.first_name|default:"Hello" }},
+{% autoescape off %}{{ user.first_name|default:"Hello" }},
 
 This is a reminder about tuition for the {{ period.name }} academic year.
 {% if not enrollment %}
@@ -37,3 +37,4 @@ Questions, or having trouble paying? Reply to this email — it goes to
 {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
+{% endautoescape %}
