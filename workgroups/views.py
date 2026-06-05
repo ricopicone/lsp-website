@@ -165,6 +165,16 @@ def workgroup_detail(request, slug):
     from video import services as _video
 
     daily_on = _video.daily_enabled()
+    # One-off events (special events, Days of Assembly, Working Days, the Scholarly
+    # Seminar Series) attach to the Programming Committee's workgroup rather than
+    # getting their own, so this group's recording_mode also governs theirs. Warn a
+    # manager about that before they flip the Record-button switch.
+    recording_governs_events = False
+    if can_manage and daily_on:
+        from events.models import Event
+        recording_governs_events = wg.events.exclude(
+            event_type__in=Event.ANNUAL_PROGRAM_TYPES
+        ).exists()
     # The Meet tab is the group's meeting hub (Meet Now + joinable meetings); it
     # shows to members whenever video is enabled. The "in progress" indicator on
     # Overview + Meet is driven by *real* Daily presence (people actually in the
@@ -274,6 +284,7 @@ def workgroup_detail(request, slug):
         "primary_event": primary_event,
         "can_edit_offering": can_edit_offering,
         "can_manage": can_manage,
+        "recording_governs_events": recording_governs_events,
         "can_join": can_join,
         "can_leave": can_leave,
         "daily_enabled": daily_on,
