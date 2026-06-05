@@ -14,7 +14,7 @@ class EventDescriptionForm(forms.ModelForm):
 
     class Meta:
         model = Event
-        fields = ("description",)
+        fields = ("description", "record_video")
         widgets = {
             "description": forms.Textarea(attrs={"rows": 12, "cols": 80}),
         }
@@ -146,7 +146,7 @@ class ProgramEventForm(forms.ModelForm):
             "start_date", "end_date",
             "format", "status",
             "description", "access_info",
-            "requires_faculty_approval",
+            "requires_faculty_approval", "record_video",
         )
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),

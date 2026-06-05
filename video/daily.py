@@ -6,6 +6,10 @@ Bearer-authenticated against ``DAILY_API_URL`` with ``DAILY_API_KEY``. Uses
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+
 import requests
 from django.conf import settings
 
@@ -74,6 +78,58 @@ def get_presence() -> dict:
     if isinstance(data, dict):
         return data
     return {k: v for k, v in payload.items() if k != "total_count" and isinstance(v, list)}
+
+
+# --- recordings ----------------------------------------------------------
+
+def get_recording(recording_id: str) -> dict | None:
+    resp = requests.get(
+        _url(f"recordings/{recording_id}"), headers=_headers(), timeout=15
+    )
+    if resp.status_code == 200:
+        return resp.json()
+    if resp.status_code == 404:
+        return None
+    raise DailyError(f"get_recording({recording_id}) -> {resp.status_code}: {resp.text}")
+
+
+def recording_access_link(recording_id: str) -> str | None:
+    """A temporary, playable URL for a recording stored on Daily (or our bucket
+    with allow_api_access). ``None`` if the recording isn't available."""
+    resp = requests.get(
+        _url(f"recordings/{recording_id}/access-link"), headers=_headers(), timeout=15
+    )
+    if resp.status_code == 200:
+        return resp.json().get("download_link") or resp.json().get("link")
+    if resp.status_code in (404, 425):  # 425: not ready yet
+        return None
+    raise DailyError(
+        f"recording_access_link({recording_id}) -> {resp.status_code}: {resp.text}"
+    )
+
+
+def delete_recording(recording_id: str) -> bool:
+    resp = requests.delete(
+        _url(f"recordings/{recording_id}"), headers=_headers(), timeout=15
+    )
+    if resp.status_code in (200, 404):
+        return True
+    raise DailyError(f"delete_recording({recording_id}) -> {resp.status_code}: {resp.text}")
+
+
+def verify_webhook(timestamp: str, raw_body: bytes, signature: str) -> bool:
+    """Verify a Daily webhook: base64 HMAC-SHA256 over ``timestamp + "." + body``,
+    keyed by the base64-decoded ``DAILY_WEBHOOK_SECRET``. Constant-time compare."""
+    secret = getattr(settings, "DAILY_WEBHOOK_SECRET", "")
+    if not (secret and timestamp and signature):
+        return False
+    try:
+        key = base64.b64decode(secret)
+    except (ValueError, TypeError):
+        return False
+    msg = timestamp.encode() + b"." + raw_body
+    computed = base64.b64encode(hmac.new(key, msg, hashlib.sha256).digest()).decode()
+    return hmac.compare_digest(computed, signature)
 
 
 def create_meeting_token(

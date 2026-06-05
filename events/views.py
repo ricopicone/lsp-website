@@ -75,6 +75,12 @@ def event_summary_context(event, user) -> dict:
     room = getattr(wg, "video_room", None) if wg else None
     room_participants = room_participant_count(room) if daily_on else 0
     room_participant_names = presence_names(room) if daily_on else []
+    from video.models import Recording
+
+    recordings = [
+        r for r in Recording.objects.filter(event=event, status=Recording.Status.READY)
+        if r.listing_visible_to(user)
+    ]
     next_session = event.next_session()
     return {
         "event": event,
@@ -91,6 +97,7 @@ def event_summary_context(event, user) -> dict:
         "event_room_live": bool(room_participants),
         "event_room_participants": room_participants,
         "event_room_participant_names": room_participant_names,
+        "recordings": recordings,
     }
 
 

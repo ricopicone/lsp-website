@@ -354,6 +354,8 @@ def workgroup_detail(request, slug):
     elif active == "meet" and daily_on and is_member:
         from django.utils import timezone as _tz
 
+        from video.models import Recording
+
         now = _tz.now()
         # Upcoming + still-ongoing meetings, soonest first (ongoing has a
         # future ends_at, so the gte-on-ends_at filter keeps it in the list).
@@ -361,6 +363,12 @@ def workgroup_detail(request, slug):
             wg.meetings.filter(ends_at__gte=now, cancelled=False)
             .select_related("series").order_by("starts_at")
         )
+        context["recordings"] = [
+            r for r in Recording.objects.filter(
+                room__workgroup=wg, status=Recording.Status.READY
+            )
+            if r.listing_visible_to(request.user)
+        ]
     elif active == "schedule" and wg.has_calendar and (is_member or archive_access):
         from django.utils import timezone as _tz
 

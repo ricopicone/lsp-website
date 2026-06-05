@@ -11,12 +11,13 @@
     <a href="{{ back_url }}" class="btn btn-ghost btn-sm">← Back</a>
   </div>
 
-  {% include "video/_embed.html" with room_url=room_url room_token=token back_url=back_url %}
+  {% include "video/_embed.html" with room_url=room_url room_token=token back_url=back_url auto_record=auto_record %}
 
   <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-base-content/50">
     <p>
-      This meeting is not recorded.{% if is_owner %} As a host you can mute or remove
-      participants from the People panel.{% endif %}
+      {% if auto_record %}This event is being recorded.{% else %}Not recorded by default —
+      a host can start recording (you'll see Daily's recording indicator if they do).{% endif %}
+      {% if is_owner %} As a host you can record, and mute or remove participants, from the in-call controls.{% endif %}
     </p>
     <a href="{% url 'video:system_check' %}" class="link">Test your video &amp; audio</a>
   </div>

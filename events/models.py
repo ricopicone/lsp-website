@@ -261,6 +261,12 @@ class Event(models.Model):
         blank=True,
         help_text="Zoom link or similar. Released to registrants only after payment (REG-8).",
     )
+    record_video = models.BooleanField(
+        default=False,
+        help_text="Automatically record this event's online meeting (a host's "
+        "browser starts the recording on join). Off by default; recordings are "
+        "stored privately and shown per their visibility setting.",
+    )
     registration_opens = models.DateTimeField(null=True, blank=True)
     registration_closes = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
