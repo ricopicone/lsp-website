@@ -10,6 +10,8 @@
     <span class="text-base-content/70">{{ channel.name }}</span>
   </nav>
 
+  {% include "parletre/_channel_group_nav.html" %}
+
   <header class="space-y-1">
     <h1 class="font-serif text-2xl tracking-tight text-base-content inline-flex items-center gap-2">
       {% icon "video" css="text-primary" %} {{ channel.name }}

@@ -40,7 +40,8 @@ def test_channel_owned_room_name_is_prefixed():
 @daily_on
 def test_workgroup_access_channel_reuses_workgroup_room():
     wg = seminar().ensure_workgroup()
-    ch = video_channel(slug="sem-video", access=Channel.Access.WORKGROUP, workgroup=wg)
+    # The workgroup auto-provisions a video channel (Discuss/Chat/Video).
+    ch = wg.channels.get(kind=Channel.Kind.VIDEO)
     member = user("m@x.test")
     wg_room = services.ensure_room(wg)
     # The channel context resolves owner = channel.workgroup, so it returns the

@@ -98,7 +98,7 @@ class Channel(models.Model):
         VIDEO = "video", _("Video (meeting room)")
 
     class Access(models.TextChoices):
-        OPEN = "open", _("Open — every member")
+        OPEN = "open", _("All LSP — every member")
         ROLE = "role", _("Specific roles")
         COMMITTEE = "committee", _("Committee")
         WORKGROUP = "workgroup", _("Workgroup")

@@ -39,13 +39,15 @@ def _join(wg, user, role=WorkgroupMembership.Role.MEMBER):
 
 # ---- Auto-provisioning -------------------------------------------------
 
-def test_workgroup_gets_forum_and_chat_channels_on_creation():
+def test_workgroup_gets_forum_chat_video_channels_on_creation():
     wg = _wg(name="Speech and Writing")
     forum = wg.channels.get(kind=Channel.Kind.FORUM)
     chat = wg.channels.get(kind=Channel.Kind.CHAT)
+    video = wg.channels.get(kind=Channel.Kind.VIDEO)
     assert forum.access == Channel.Access.WORKGROUP and forum.workgroup_id == wg.id
     assert chat.access == Channel.Access.WORKGROUP and chat.workgroup_id == wg.id
-    assert wg.channels.count() == 2
+    assert video.access == Channel.Access.WORKGROUP and video.workgroup_id == wg.id
+    assert wg.channels.count() == 3
 
 
 def test_no_channel_when_has_channel_false():
@@ -57,7 +59,7 @@ def test_provision_is_idempotent():
     wg = _wg(name="Once Only")
     wg.description = "edited"
     wg.save()
-    assert wg.channels.count() == 2   # the forum + chat pair, not duplicated
+    assert wg.channels.count() == 3   # forum + chat + video, not duplicated
 
 
 def test_channel_category_matches_kind():
