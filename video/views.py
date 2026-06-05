@@ -81,9 +81,11 @@ def recording_webhook(request):
     timestamp = request.META.get("HTTP_X_WEBHOOK_TIMESTAMP", "")
     signature = request.META.get("HTTP_X_WEBHOOK_SIGNATURE", "")
     raw = request.body
+    # Daily's registration handshake POSTs an unsigned liveness ping — just 200 it
+    # (there's no data to trust). Anything carrying a signature must verify.
+    if not signature:
+        return HttpResponse(status=200)
     if not daily.verify_webhook(timestamp, raw, signature):
-        # Daily does a 200-handshake at registration with a valid signature once
-        # the secret is set; an unverifiable POST is rejected.
         logger.warning("Daily webhook rejected: bad signature")
         return HttpResponseBadRequest("invalid signature")
     try:

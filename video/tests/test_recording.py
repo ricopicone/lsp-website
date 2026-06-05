@@ -52,6 +52,15 @@ def test_webhook_rejects_bad_signature(client):
 
 
 @webhook_on
+def test_webhook_unsigned_handshake_returns_200(client):
+    # Daily's registration liveness ping carries no signature.
+    resp = client.post(
+        reverse("video:recording_webhook"), data=b"{}", content_type="application/json",
+    )
+    assert resp.status_code == 200
+
+
+@webhook_on
 def test_webhook_ready_creates_recording_idempotently(client):
     wg = seminar().ensure_workgroup()
     DailyRoom.objects.create(
