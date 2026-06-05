@@ -15,9 +15,9 @@
 
   <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-base-content/50">
     <p>
-      {% if auto_record %}This event is being recorded.{% else %}Not recorded by default —
+      {% if not recording_available %}Recording is turned off for this meeting.{% elif auto_record %}This event is being recorded.{% else %}Not recorded by default —
       a host can start recording (you'll see Daily's recording indicator if they do).{% endif %}
-      {% if is_owner %} As a host you can record, and mute or remove participants, from the in-call controls.{% endif %}
+      {% if is_owner %} As a host you can {% if recording_available %}record, and {% endif %}mute or remove participants from the in-call controls.{% endif %}
     </p>
     <a href="{% url 'video:system_check' %}" class="link">Test your video &amp; audio</a>
   </div>

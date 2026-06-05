@@ -40,7 +40,8 @@ def test_ensure_room_reuses_existing_daily_room(monkeypatch):
     create_calls: list = []
     monkeypatch.setattr(
         "video.daily.get_room",
-        lambda name: {"name": name, "url": f"https://lsp.daily.co/{name}"},
+        lambda name: {"name": name, "url": f"https://lsp.daily.co/{name}",
+                      "config": {"enable_recording": "cloud"}},
     )
     monkeypatch.setattr("video.daily.create_room", _fake_create_room(create_calls))
     wg = seminar().ensure_workgroup()
@@ -75,6 +76,38 @@ def test_ensure_room_recording_available_not_auto(monkeypatch):
     wg = seminar().ensure_workgroup()
     services.ensure_room(wg)
     assert calls[0]["properties"]["enable_recording"] == "cloud"
+
+
+@daily_on
+def test_ensure_room_recording_off_disables_button(monkeypatch):
+    # recording_mode=off removes the Record button (enable_recording: False).
+    calls: list = []
+    monkeypatch.setattr("video.daily.get_room", _missing)
+    monkeypatch.setattr("video.daily.create_room", _fake_create_room(calls))
+    wg = seminar().ensure_workgroup()
+    wg.recording_mode = "off"
+    wg.save(update_fields=["recording_mode"])
+    services.ensure_room(wg)
+    assert calls[0]["properties"]["enable_recording"] is False
+
+
+@daily_on
+def test_ensure_room_reconciles_recording_toggle(monkeypatch):
+    # An existing Daily room with recording on gets toggled off when the owner
+    # switches to recording_mode=off.
+    monkeypatch.setattr(
+        "video.daily.get_room",
+        lambda name: {"name": name, "url": f"https://x/{name}",
+                      "config": {"enable_recording": "cloud"}},
+    )
+    updates: list = []
+    monkeypatch.setattr("video.daily.update_room", lambda name, props: updates.append(props))
+    monkeypatch.setattr("video.daily.create_room", _fake_create_room([]))
+    wg = seminar().ensure_workgroup()
+    wg.recording_mode = "off"
+    wg.save(update_fields=["recording_mode"])
+    services.ensure_room(wg)
+    assert updates and updates[0]["enable_recording"] is False
 
 
 def test_ensure_room_returns_none_when_disabled():

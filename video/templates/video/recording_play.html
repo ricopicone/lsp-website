@@ -19,6 +19,23 @@
     </span>
     <a href="?download=1" class="link">Download</a>
   </div>
+
+  {# ---- Notes / annotation ---- #}
+  {% if can_manage %}
+  <form method="post" action="{% url 'video:recording_annotate' recording.pk %}" class="space-y-2">
+    {% csrf_token %}
+    <label class="text-sm font-medium text-base-content">Notes</label>
+    <textarea name="note" rows="3" placeholder="Add notes about this recording (agenda, topics, who's in it…)"
+              class="w-full rounded-lg border border-base-300 bg-base-100 p-2 text-sm">{{ recording.note }}</textarea>
+    <button class="btn btn-sm">Save notes</button>
+  </form>
+  {% elif recording.note %}
+  <div class="space-y-1">
+    <h3 class="text-sm font-medium text-base-content">Notes</h3>
+    <p class="text-sm text-base-content/80 whitespace-pre-wrap">{{ recording.note }}</p>
+  </div>
+  {% endif %}
+
   <div class="rounded-lg border border-base-300 bg-base-100 p-3 flex flex-wrap items-center justify-between gap-2 text-sm">
     <span class="text-base-content/70">
       {% if recording.keep %}
@@ -38,6 +55,15 @@
     {% endif %}
   </div>
 
-  <p class="text-xs text-base-content/40">This recording is private to the School; please don't redistribute it.</p>
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <p class="text-xs text-base-content/40">This recording is private to the School; please don't redistribute it.</p>
+    {% if can_manage %}
+    <form method="post" action="{% url 'video:recording_delete' recording.pk %}"
+          onsubmit="return confirm('Delete this recording permanently? It will be removed from AWS storage and Daily — this cannot be undone.');">
+      {% csrf_token %}
+      <button class="btn btn-xs btn-error btn-outline">Delete recording</button>
+    </form>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

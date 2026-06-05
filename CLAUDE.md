@@ -333,17 +333,20 @@ Phase 2 plan for milestone IDs):**
 - **Video / Daily.co** (`video`) — in-site, browser-based meeting rooms (Daily
   Prebuilt, no client install). One persistent `DailyRoom` per **Workgroup** *or*
   per Parlêtre **Channel** (board video channels), provisioned lazily on first
-  join; private + per-user meeting-token gated; **recording never enabled**
-  (case-history privacy). Surfaces: a Workgroup **"Meet" tab** (Meet Now + joinable
-  meetings), a third Parlêtre channel kind **VIDEO**, and **context-aware event
-  location** ("Online · video meeting"; live-gated Join). **Real Daily presence**
-  ("Live now · N in the room", cached `GET /presence`) lights the Meet/Overview
-  tabs, board channel tiles, and event pages. **Tech check** at
-  `/video/system-check/` (throwaway room, auto-closes ~10 min). Hosts (faculty/
-  leads) moderate via Daily's People panel (mute / camera-off / remove); everyone
-  gets chat. **Feature-flagged OFF** until `DJANGO_DAILY_ENABLED=true` +
+  join; private + per-user meeting-token gated. Surfaces: a Workgroup **"Meet" tab**
+  (Meet Now + joinable meetings), a third Parlêtre channel kind **VIDEO**, and
+  **context-aware event location** ("Online · video meeting"; live-gated Join).
+  **Real Daily presence** ("Live now · N in the room", cached `GET /presence`)
+  lights the Meet/Overview tabs, board channel tiles, and event pages. **Tech
+  check** at `/video/system-check/` (throwaway room, auto-closes ~10 min). Hosts
+  (faculty/leads) moderate via Daily's People panel (mute / camera-off / remove);
+  everyone gets chat. **Recording is opt-in** (`video.Recording`): off until a host
+  starts it, `Event.record_video` auto-starts; owned-S3 storage + gated playback +
+  Works-style visibility + 1yr retention; hosts can delete/annotate a recording and
+  a per-Workgroup/Channel `recording_mode` removes the Record button entirely (The
+  Gaze is off). **Feature-flagged OFF** until `DJANGO_DAILY_ENABLED=true` +
   `DAILY_API_KEY`/`DAILY_DOMAIN` on the host. `daily.js` is vendored (see the CSS/JS
-  pipeline note above). See the `video-daily-integration` memory.
+  pipeline note above). See the `video-daily-integration` + `video-recording` memories.
 - **Cartels** (`cartels`, CART-1/2/3) — built on the Workgroup layer.
 - **Directory** (`/directory/`), **Find an Analyst** map, member
   self-service **profile editor** (`/accounts/profile/`), **works**

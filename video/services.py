@@ -65,11 +65,11 @@ def ensure_room(owner) -> DailyRoom | None:
 
     room = getattr(owner, "video_room", None)
     name = room.name if room is not None else _room_name(owner)
+    # Recording availability is per-owner (Workgroup/Channel recording_mode); "cloud"
+    # = hosts get a Record button (off until started), False = no Record button.
+    recording = "cloud" if getattr(owner, "recording_mode", "on_demand") != "off" else False
     properties = {
-        # Recording is *available* to hosts (owners) but never auto-on — it stays
-        # off until a host starts it (and special-event rooms auto-start it client
-        # side). Non-owners can't record; attendees see Daily's recording indicator.
-        "enable_recording": "cloud",
+        "enable_recording": recording,
         "enable_prejoin_ui": True,  # device/mic/camera check before joining
         "enable_knocking": False,  # token-gated, not knock-to-enter
         "enable_chat": True,  # everyone can use text chat
@@ -82,6 +82,11 @@ def ensure_room(owner) -> DailyRoom | None:
         data = daily.get_room(name)  # None if it was deleted on Daily's side
         if data is None:
             data = daily.create_room(name, properties=properties)
+        else:
+            # Reconcile the recording toggle if the owner's mode changed.
+            cur = (data.get("config") or {}).get("enable_recording")
+            if (cur == "cloud") != (recording == "cloud"):
+                daily.update_room(name, {"enable_recording": recording})
     except daily.DailyError:
         logger.exception("Daily ensure_room failed for %s", name)
         return None
@@ -309,4 +314,8 @@ def channel_room_context(request, channel) -> dict:
     except Exception:  # noqa: BLE001 — degrade to the unavailable state
         logger.exception("Daily token mint failed for channel %s", channel.slug)
         return {"room_unavailable": True}
-    return {"room_url": room.url, "room_token": token, "is_owner": owner_flag}
+    recording_available = getattr(owner, "recording_mode", "on_demand") != "off"
+    return {
+        "room_url": room.url, "room_token": token, "is_owner": owner_flag,
+        "recording_available": recording_available,
+    }
