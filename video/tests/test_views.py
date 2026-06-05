@@ -82,6 +82,19 @@ def test_record_video_event_emits_autostart_for_host(client):
     assert b"This event is being recorded" in resp.content  # auto_record path
 
 
+@daily_on
+def test_workgroup_room_back_link_returns_to_meet_tab(client):
+    # Joining from the Meet tab should land back on the Meet tab, not Overview.
+    event = seminar()
+    wg = event.ensure_workgroup()
+    member = user("mt@x.test")
+    register(member, event, status=Registration.Status.PAID)
+    client.force_login(member)
+    resp = client.get(reverse("video:workgroup_room", args=[wg.slug]))
+    assert resp.status_code == 200
+    assert f'{wg.get_absolute_url()}?tab=meet'.encode() in resp.content
+
+
 def test_disabled_renders_fallback(client):
     # Feature flag off (default) -> graceful "unavailable" page, not a crash.
     event = seminar()

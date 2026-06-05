@@ -37,7 +37,8 @@ def system_check(request):
 @login_required
 def workgroup_room(request, slug):
     wg = get_object_or_404(Workgroup, slug=slug)
-    return _render_room(request, wg, back_url=wg.get_absolute_url())
+    # Back to the Meet tab (where the join happened), not the default Overview.
+    return _render_room(request, wg, back_url=f"{wg.get_absolute_url()}?tab=meet")
 
 
 @login_required

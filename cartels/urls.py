@@ -18,6 +18,8 @@ urlpatterns = [
          name="add_external_plus_one"),
     path("<slug:slug>/plus-one/external/<int:pk>/invite/", views.invite_external_plus_one,
          name="invite_external_plus_one"),
+    path("<slug:slug>/plus-one/external/<int:pk>/remove/", views.remove_external_plus_one,
+         name="remove_external_plus_one"),
     path("<slug:slug>/apply/", views.apply, name="apply"),
     path("<slug:slug>/accept-invitation/", views.accept_invitation, name="accept_invitation"),
     path("<slug:slug>/requests/<int:pk>/decide/", views.decide_request, name="decide_request"),

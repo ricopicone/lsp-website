@@ -132,6 +132,13 @@ def workgroup_detail(request, slug):
 
     can_view = wg.content_visible_to(request.user)
     is_member = wg.is_member(request.user)
+    # A stored (roster) membership persists through archiving even though
+    # ``is_member`` goes False — so former members of an archived group can still
+    # reach Settings to reactivate it.
+    stored_member = (
+        request.user.is_authenticated
+        and wg.memberships.serving().filter(user=request.user).exists()
+    )
     # Past-term attendees of an offering keep read-only archive access (channel
     # history + released Works), but aren't active members (can't post).
     archive_access = wg.has_archive_access(request.user)
@@ -191,7 +198,7 @@ def workgroup_detail(request, slug):
         tabs.append(("decisions", "Decisions"))
     if can_edit_offering:
         tabs.append(("roster", "Roster"))
-    if is_member or can_manage:
+    if is_member or can_manage or stored_member:
         tabs.append(("settings", "Settings"))
     tab_keys = [k for k, _ in tabs]
     active = request.GET.get("tab", "overview")
@@ -243,10 +250,6 @@ def workgroup_detail(request, slug):
     members = wg.participants() if (roster_visible or is_member) else []
 
     # Open self-join (reading groups): any LSP member joins directly.
-    stored_member = (
-        request.user.is_authenticated
-        and wg.memberships.serving().filter(user=request.user).exists()
-    )
     from accounts.permissions import is_lsp_member
 
     can_join = wg.open_join and is_lsp_member(request.user) and not stored_member
