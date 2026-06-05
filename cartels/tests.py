@@ -315,6 +315,93 @@ def test_member_can_close_and_archive(client):
     assert cartel.status == Cartel.Status.ARCHIVED
 
 
+def test_open_cartel_details_editable_by_member(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C", guiding_question="Q1")
+    cartel.approve(_coordinator())
+    member = _member("m@x.test")
+    cartel.add_member(member)
+    client.force_login(member)   # any member, not only the generator
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/edit/", {
+        "name": "Renamed cartel",
+        "guiding_question": "A sharper question",
+        "description": "New overview.",
+    })
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    cartel.workgroup.refresh_from_db()
+    assert cartel.guiding_question == "A sharper question"
+    assert cartel.workgroup.name == "Renamed cartel"
+    assert cartel.workgroup.description == "New overview."
+    # Editing an open cartel must NOT bounce it back into review.
+    assert cartel.status == Cartel.Status.OPEN
+
+
+def test_edit_open_cartel_blocks_non_members(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C", guiding_question="Q1")
+    cartel.approve(_coordinator())
+    client.force_login(_member("outsider@x.test"))
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/edit/", {
+        "name": "Hijacked", "guiding_question": "Q", "description": "",
+    })
+    assert resp.status_code == 404
+
+
+def test_internal_plus_one_can_be_unset(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    wg = cartel.workgroup
+    p1 = _member("p1@x.test")
+    cartel.add_member(p1)
+    client.force_login(gen)
+    client.post(f"/cartels/{wg.slug}/plus-one/", {"user": p1.pk})
+    assert wg.memberships.filter(
+        user=p1, role=WorkgroupMembership.Role.PLUS_ONE, end_date__isnull=True
+    ).exists()
+    # Posting with no member selected clears the plus-one (back to member).
+    client.post(f"/cartels/{wg.slug}/plus-one/", {})
+    assert not wg.memberships.filter(
+        role=WorkgroupMembership.Role.PLUS_ONE, end_date__isnull=True
+    ).exists()
+    assert wg.memberships.filter(
+        user=p1, role=WorkgroupMembership.Role.MEMBER, end_date__isnull=True
+    ).exists()
+
+
+def test_external_plus_one_can_be_removed(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    wg = cartel.workgroup
+    client.force_login(gen)
+    client.post(f"/cartels/{wg.slug}/plus-one/external/", {"name": "Jane Ext"})
+    ext = cartel.external_plus_ones.get()
+    client.post(f"/cartels/{wg.slug}/plus-one/external/{ext.pk}/remove/")
+    assert not cartel.external_plus_ones.exists()
+
+
+def test_archived_cartel_can_be_reactivated_by_member(client):
+    gen = _member("gen@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.approve(_coordinator())
+    wg = cartel.workgroup
+    client.force_login(gen)
+    client.post(f"/cartels/{wg.slug}/manage/", {"action": "archive"})
+    cartel.refresh_from_db()
+    assert cartel.status == Cartel.Status.ARCHIVED
+    # The Settings tab + reactivate control stay reachable to the (now frozen)
+    # stored member after archiving.
+    resp = client.get(f"{wg.get_absolute_url()}?tab=settings")
+    assert resp.status_code == 200
+    assert b"Reactivate cartel" in resp.content
+    client.post(f"/cartels/{wg.slug}/manage/", {"action": "reactivate"})
+    cartel.refresh_from_db()
+    assert cartel.status == Cartel.Status.OPEN
+    assert cartel.workgroup.is_archived is False
+
+
 def test_my_cartels_and_status_badge_on_kind_list(client):
     gen = _member("gen@x.test")
     cartel = Cartel.objects.propose(

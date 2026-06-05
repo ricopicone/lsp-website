@@ -104,6 +104,7 @@ class Recording(models.Model):
     s3_key = models.CharField(max_length=512, blank=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.RECORDING)
     title = models.CharField(max_length=200, blank=True)
+    note = models.TextField(blank=True, help_text="Notes / annotation for this recording.")
     started_at = models.DateTimeField(null=True, blank=True)
     duration_seconds = models.PositiveIntegerField(null=True, blank=True)
 
@@ -180,9 +181,26 @@ class Recording(models.Model):
         return self._visible_at(self.content_visibility, user)
 
     def can_manage(self, user) -> bool:
-        """Whether ``user`` may manage this recording (toggle keep, etc.) — its
-        host (faculty/lead) or staff."""
+        """Whether ``user`` may manage this recording (keep / annotate / delete) —
+        its host (faculty/lead) or staff."""
         return self._can_host(user)
+
+    def delete_everywhere(self):
+        """Delete the S3 object + the Daily recording + this row."""
+        from . import daily
+
+        if self.s3_key:
+            try:
+                from core.storage import recordings_storage
+
+                recordings_storage().delete(self.s3_key)
+            except Exception:  # noqa: BLE001 — best-effort cleanup
+                pass
+        try:
+            daily.delete_recording(self.daily_recording_id)
+        except daily.DailyError:
+            pass
+        self.delete()
 
     def clean(self):
         from django.core.exceptions import ValidationError

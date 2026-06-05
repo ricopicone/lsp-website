@@ -216,6 +216,16 @@ class Channel(models.Model):
     archived = models.BooleanField(
         default=False, help_text="Hidden from members; lingers for moderators."
     )
+
+    class RecordingMode(models.TextChoices):
+        ON_DEMAND = "on_demand", "On demand — hosts can record"
+        OFF = "off", "Off — no Record button"
+
+    recording_mode = models.CharField(
+        max_length=12, choices=RecordingMode.choices, default=RecordingMode.ON_DEMAND,
+        help_text="For video channels: whether hosts see a Record button. Set to "
+        "Off for open rooms like The Gaze.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

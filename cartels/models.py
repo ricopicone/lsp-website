@@ -237,6 +237,14 @@ class Cartel(models.Model):
         # while keeping the cartel listed on its program year by proposal status.
         self.workgroup.archive(by=by)
 
+    def unarchive(self, by=None):
+        """Exhume an archived cartel: reopen its proposal and un-freeze the
+        workspace so members can post and grow it again."""
+        proposal = self.workgroup.proposal
+        proposal.status = proposal.Status.OPEN
+        proposal.save(update_fields=["status"])
+        self.workgroup.unarchive(by=by)
+
     def set_internal_plus_one(self, user):
         """Designate an LSP-member plus-one: demote any existing internal
         plus-one to member, then set ``user`` as the plus-one (joining if
@@ -252,6 +260,14 @@ class Cartel(models.Model):
                 m.save(update_fields=["role"])
             return m
         return self.add_member(user, plus_one=True)
+
+    def clear_internal_plus_one(self):
+        """Unset the internal plus-one: demote whoever currently holds the role
+        back to an ordinary member (they stay in the cartel)."""
+        lead = WorkgroupMembership.Role
+        self.workgroup.memberships.filter(
+            role=lead.PLUS_ONE, end_date__isnull=True
+        ).update(role=lead.MEMBER)
 
     def accept_invitation(self, user):
         """A seeded invitee joins directly (Generator pre-approved them)."""
