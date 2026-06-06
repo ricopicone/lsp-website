@@ -18,13 +18,7 @@ from django.views.decorators.http import require_POST
 
 from events.models import Event, PriceTier, PricingCode
 from events.permissions import can_edit_event
-from payments.emails import (
-    send_cancellation_email,
-    send_registration_approved,
-    send_registration_confirmation,
-    send_registration_declined,
-    send_registration_pending_notice,
-)
+from payments import notifications as notify_payments
 from payments.refund import RefundError
 from payments.stripe_checkout import create_checkout_session
 
@@ -196,9 +190,9 @@ def register_for_event(request, event_slug: str):
             ),
         )
         if requires_approval:
-            send_registration_pending_notice(reg)
+            notify_payments.registration_pending(reg)
         else:
-            send_registration_confirmation(reg)
+            notify_payments.registration_confirmed(reg)
         return redirect("registrations:confirm", reg_id=reg.id)
 
     if covered_tier and request.method == "GET":
@@ -221,11 +215,11 @@ def register_for_event(request, event_slug: str):
             )
 
             if reg.status == Registration.Status.PENDING_APPROVAL:
-                send_registration_pending_notice(reg)   # notify faculty
+                notify_payments.registration_pending(reg)   # notify faculty
                 return redirect("registrations:confirm", reg_id=reg.id)
 
             if reg.quoted_amount == Decimal("0"):
-                send_registration_confirmation(reg)
+                notify_payments.registration_confirmed(reg)
                 return redirect("registrations:confirm", reg_id=reg.id)
 
             _payment, session = create_checkout_session(reg)
@@ -297,7 +291,7 @@ def cancel_registration(request, reg_id: int):
         return redirect("registrations:confirm", reg_id=reg.id)
 
     try:
-        send_cancellation_email(reg, refund=refund)
+        notify_payments.registration_cancelled(reg, refund=refund)
     except Exception:
         logger.exception("Failed to send cancellation email for reg %s", reg.id)
         # Cancel went through; just log the email failure.
@@ -326,9 +320,9 @@ def approve_registration(request, reg_id: int):
         return HttpResponseForbidden("You can't approve registrations for this event.")
     if reg.approve(request.user):
         if reg.needs_payment:
-            send_registration_approved(reg)        # "approved — pay to confirm"
+            notify_payments.registration_approved(reg)   # "approved — pay to confirm"
         else:
-            send_registration_confirmation(reg)    # $0 / covered → confirmed + access
+            notify_payments.registration_confirmed(reg)  # $0 / covered → confirmed + access
     return redirect(_safe_next(request, reverse("registrations:confirm", args=[reg.id])))
 
 
@@ -340,7 +334,7 @@ def decline_registration(request, reg_id: int):
     if not can_edit_event(request.user, reg.event):
         return HttpResponseForbidden("You can't decline registrations for this event.")
     if reg.decline(request.user, (request.POST.get("reason") or "").strip()):
-        send_registration_declined(reg)
+        notify_payments.registration_declined(reg)
     return redirect(_safe_next(request, reverse("registrations:confirm", args=[reg.id])))
 
 

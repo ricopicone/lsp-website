@@ -1,0 +1,40 @@
+{% extends "core/base.html" %}
+{% block title %}Notifications{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-5">
+  <div class="flex items-center justify-between gap-3">
+    <h1 class="font-serif text-2xl tracking-tight text-base-content">Notifications</h1>
+    <div class="flex items-center gap-2">
+      {% if unread %}
+      <form method="post" action="{% url 'notifications:mark_all_read' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm">Mark all read</button>
+      </form>
+      {% endif %}
+      <a href="{% url 'notifications:settings' %}" class="btn btn-ghost btn-sm">Settings</a>
+    </div>
+  </div>
+
+  <ul class="divide-y divide-base-300/60 rounded-box border border-base-300 bg-base-100">
+    {% for n in items %}
+    <li class="{% if n.is_unread %}bg-base-200/50{% endif %}">
+      <form method="post" action="{% url 'notifications:open' n.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="flex w-full items-start gap-2 p-3 text-left hover:bg-base-200">
+          {% if n.is_unread %}<span class="mt-1.5 size-2 rounded-full bg-primary shrink-0" aria-label="unread"></span>
+          {% else %}<span class="mt-1.5 size-2 shrink-0"></span>{% endif %}
+          <span class="min-w-0 flex-1 text-sm">
+            <span class="font-medium text-base-content">{{ n.title }}</span>
+            {% if n.body %}<span class="block text-base-content/70">{{ n.body }}</span>{% endif %}
+            <time class="block text-xs text-base-content/40" datetime="{{ n.created_at|date:'c' }}">{{ n.created_at|date:"M j, Y, g:i a" }}</time>
+          </span>
+        </button>
+      </form>
+    </li>
+    {% empty %}
+    <li class="p-6 text-center text-base-content/50 italic">No notifications yet.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

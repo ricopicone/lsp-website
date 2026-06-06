@@ -58,6 +58,13 @@
         Recording is always off until a host starts it. Turn it off entirely to remove
         the Record button from this group's meetings.
       </p>
+      {% if recording_governs_events %}
+      <div class="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-base-content/80">
+        <strong>Heads up:</strong> one-off events — special events, Days of Assembly,
+        Working Days, and the Scholarly Seminar Series — run in this committee's meeting
+        room, so turning the Record button off here removes it from those events too.
+      </div>
+      {% endif %}
     </div>
     <form method="post" action="{% url 'workgroups:recording_settings' workgroup.slug %}"
           class="flex flex-wrap items-end gap-3">

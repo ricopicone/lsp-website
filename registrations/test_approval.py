@@ -60,7 +60,9 @@ def test_register_requires_approval_creates_pending_and_notifies_faculty(client)
     assert any(fac.email in m.to for m in mail.outbox)
 
 
-def test_approve_nonzero_moves_to_awaiting_payment_and_emails_student(client):
+def test_approve_nonzero_moves_to_awaiting_payment_and_emails_student(
+    client, django_capture_on_commit_callbacks
+):
     event = _approval_event("50.00")
     fac = _faculty(event)
     student = _student()
@@ -70,7 +72,8 @@ def test_approve_nonzero_moves_to_awaiting_payment_and_emails_student(client):
     )
     client.force_login(fac)
     mail.outbox.clear()
-    client.post(reverse("registrations:approve", args=[reg.id]))
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post(reverse("registrations:approve", args=[reg.id]))
 
     reg.refresh_from_db()
     assert reg.status == Registration.Status.AWAITING_PAYMENT
@@ -94,7 +97,9 @@ def test_approve_zero_amount_moves_to_paid(client):
     assert reg.status == Registration.Status.PAID
 
 
-def test_decline_sets_declined_and_emails_student(client):
+def test_decline_sets_declined_and_emails_student(
+    client, django_capture_on_commit_callbacks
+):
     event = _approval_event()
     fac = _faculty(event)
     student = _student()
@@ -104,7 +109,8 @@ def test_decline_sets_declined_and_emails_student(client):
     )
     client.force_login(fac)
     mail.outbox.clear()
-    client.post(reverse("registrations:decline", args=[reg.id]), {"reason": "Full this year"})
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post(reverse("registrations:decline", args=[reg.id]), {"reason": "Full this year"})
 
     reg.refresh_from_db()
     assert reg.status == Registration.Status.DECLINED

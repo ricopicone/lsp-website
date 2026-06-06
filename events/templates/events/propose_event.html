@@ -1,0 +1,212 @@
+{% extends "core/base.html" %}
+{% block title %}{% if editing %}Edit proposal{% else %}Propose an event: a seminar, reading group, or special event{% endif %} — LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl space-y-8">
+  <header class="space-y-2">
+    <p class="text-sm">
+      <a href="{% url 'program' %}" class="link link-hover text-base-content/60">← Program</a>
+    </p>
+    <h1 class="font-serif text-3xl text-base-content">
+      {% if editing %}Edit proposal{% else %}Propose an event: a seminar, reading group, or special event{% endif %}
+    </h1>
+    <p class="text-base-content/70">
+      Any member can propose a <strong>seminar</strong>, <strong>reading group</strong>,
+      or <strong>special event</strong>. The Programming Committee reviews proposals and,
+      on approval, mints the event — seminars and reading groups go onto the program;
+      special events are set up by the committee before publishing. The form adapts
+      to the type you pick.
+    </p>
+  </header>
+
+  <form method="post"
+        action="{% if editing %}{% url 'proposal_edit' editing.pk %}{% else %}{% url 'propose_event' %}{% endif %}"
+        class="space-y-5">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert-error text-sm">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    {# ---- Basics (all types) ---- #}
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.event_type %}</div>
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.title %}</div>
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.description %}</div>
+
+    {# ---- Schedule ---- #}
+    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.start_date %}</div>
+    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.end_date %}</div>
+    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.date_tbd %}</div>
+    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.proposed_datetime %}</div>
+
+    {# ---- Location ---- #}
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.location_kind %}</div>
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.location %}</div>
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.contact %}</div>
+
+    {# ---- Seminar continuation ---- #}
+    <div data-types="seminar">{% include "events/_proposal_field.html" with field=form.continues_seminar %}</div>
+
+    {# ---- Conveners / internal speakers ---- #}
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.faculty %}</div>
+
+    {# ---- External speakers (special events) ---- #}
+    <div data-types="special_event" class="space-y-2">
+      <p class="text-sm font-medium">External speakers</p>
+      <p class="text-xs text-base-content/60">Non-LSP presenters — give each a name,
+        contact email, affiliation, and short bio.</p>
+      {{ speakers.management_form }}
+      <div id="speaker-rows" class="space-y-3">
+        {% for sform in speakers %}
+        <div class="speaker-row rounded-lg border border-base-300/60 bg-base-100 p-3 space-y-2">
+          {% for hidden in sform.hidden_fields %}{{ hidden }}{% endfor %}
+          {% for f in sform.visible_fields %}
+          {% if f.name != "DELETE" %}
+          <div class="space-y-1">
+            <label class="block text-xs text-base-content/60">{{ f.label }}</label>
+            {{ f }}
+            {% if f.errors %}<p class="text-error text-xs">{{ f.errors|join:", " }}</p>{% endif %}
+          </div>
+          {% endif %}
+          {% endfor %}
+          <label class="flex items-center gap-2 text-xs text-base-content/60">
+            {{ sform.DELETE }} Remove this speaker
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" id="add-speaker" class="btn btn-ghost btn-xs">+ Add another speaker</button>
+      <template id="speaker-empty">
+        <div class="speaker-row rounded-lg border border-base-300/60 bg-base-100 p-3 space-y-2">
+          {% for f in speakers.empty_form.visible_fields %}
+          {% if f.name != "DELETE" %}
+          <div class="space-y-1">
+            <label class="block text-xs text-base-content/60">{{ f.label }}</label>
+            {{ f }}
+          </div>
+          {% endif %}
+          {% endfor %}
+          <label class="flex items-center gap-2 text-xs text-base-content/60">
+            {{ speakers.empty_form.DELETE }} Remove this speaker
+          </label>
+        </div>
+      </template>
+    </div>
+    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.speaker_arrangement %}</div>
+    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.honoraria_estimate %}</div>
+
+    {# ---- Fee ---- #}
+    <div data-types="seminar reading_group special_event" class="rounded-lg border border-base-300/60 p-3 space-y-3">
+      <p class="text-sm font-medium">Fee</p>
+      {% include "events/_proposal_field.html" with field=form.fee_amount %}
+      <div class="grid grid-cols-2 gap-3">
+        {% include "events/_proposal_field.html" with field=form.fee_sliding_min %}
+        {% include "events/_proposal_field.html" with field=form.fee_sliding_max %}
+      </div>
+      {% include "events/_proposal_field.html" with field=form.tuition_covers %}
+      <p class="text-xs text-base-content/50">Consider “none turned away for lack of
+        funds.” For seminars and reading groups, tuition-current members always attend
+        at no charge.</p>
+    </div>
+
+    {# ---- Readings + style guide (all types) ---- #}
+    <div data-types="seminar reading_group special_event" class="space-y-2">
+      {% include "events/_proposal_field.html" with field=form.readings_text %}
+      <details class="rounded-lg border border-base-300/60 bg-base-200/40 p-3 text-xs text-base-content/70">
+        <summary class="cursor-pointer font-medium text-base-content/80">Readings — guidance &amp; citation style</summary>
+        <div class="mt-2 space-y-2">
+          <p>Readings should include primary writings of Freud and/or Lacan. Secondary
+            sources should enhance engagement with Freud and Lacan. To offer CE credits,
+            include at least 3 references published within the last 5 years.</p>
+          <p>One citation per line, following these MLA-adapted rules: 1) quotation marks
+            around article titles; 2) <em>italicize</em> book titles; 3) periods after
+            author and book names; 4) commas inside quotation marks after an article;
+            5) page numbers and publication dates in parentheses; 6) a period ending each
+            entry.</p>
+          <div class="rounded bg-base-100 p-2 font-mono text-[11px] leading-relaxed">
+            Apollon, W. “The Dream in the Wake of the Freudian Rupture,” in <em>The Dreams of Interpretation</em>, (2007), Eds. C. Liu et al. Minneapolis: University of Minnesota Press, (pp. 23-38).<br>
+            Freud, S. <em>The Interpretation of Dreams</em>, Chapter VII, Volume V, The Standard Edition.<br>
+            Lacan, J. “Beyond the 'Reality Principle',” <em>Écrits</em>, (2006). Trans. Bruce Fink. New York: Norton.
+          </div>
+        </div>
+      </details>
+    </div>
+
+    {# ---- CE (offerings) ---- #}
+    <div data-types="seminar reading_group" class="space-y-1">
+      {% include "events/_proposal_field.html" with field=form.offers_ce %}
+      <p class="text-xs text-base-content/50">If yes, apply to the Greater Pittsburgh
+        Psychological Association (GPPA) for APA-accredited CE credits and email the
+        Programming Committee your approval. Contact Diana Cuello with questions.</p>
+    </div>
+
+    <div class="flex items-center justify-between border-t border-base-300/60 pt-5">
+      <a href="{% url 'program' %}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">
+        {% if editing and editing.status == "declined" %}Save &amp; resubmit{% else %}Submit proposal{% endif %}
+      </button>
+    </div>
+  </form>
+
+  <script>
+  (function () {
+    var sel = document.getElementById("id_event_type");
+    var tuition = document.getElementById("id_tuition_covers");
+    function sync() {
+      var t = sel ? sel.value : "";
+      document.querySelectorAll("[data-types]").forEach(function (el) {
+        el.style.display = el.getAttribute("data-types").split(" ").indexOf(t) === -1 ? "none" : "";
+      });
+      // Tuition always covers seminars & reading groups — force checked + locked.
+      if (tuition) {
+        var offering = t === "seminar" || t === "reading_group";
+        if (offering) { tuition.checked = true; }
+        tuition.disabled = offering;
+      }
+    }
+    if (sel) { sel.addEventListener("change", sync); sync(); }
+
+    // External-speaker formset: clone the empty-form template, fixing :prefix:.
+    var addBtn = document.getElementById("add-speaker");
+    var rows = document.getElementById("speaker-rows");
+    var tmpl = document.getElementById("speaker-empty");
+    var total = document.getElementById("id_speakers-TOTAL_FORMS");
+    if (addBtn && rows && tmpl && total) {
+      addBtn.addEventListener("click", function () {
+        var i = parseInt(total.value, 10);
+        var html = tmpl.innerHTML.replace(/__prefix__/g, i);
+        var wrap = document.createElement("div");
+        wrap.innerHTML = html;
+        rows.appendChild(wrap.firstElementChild);
+        total.value = i + 1;
+      });
+    }
+  })();
+  </script>
+
+  {% if mine %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Your proposals</h2>
+    <ul class="divide-y divide-base-300/50 rounded-xl border border-base-300/60 bg-base-100">
+      {% for p in mine %}
+      <li class="flex flex-wrap items-center gap-2 px-4 py-3">
+        <span class="min-w-0 flex-1">
+          <span class="text-sm font-medium text-base-content">{{ p.title }}</span>
+          <span class="text-xs text-base-content/55"> · {{ p.get_event_type_display }}</span>
+          {% if p.continues_seminar %}<span class="badge badge-ghost badge-xs">continuing</span>{% endif %}
+        </span>
+        {% if p.status == "approved" %}
+        <span class="badge badge-success badge-sm">Approved</span>
+        {% if p.minted_event %}<a href="{% url 'events:detail' p.minted_event.slug %}" class="link text-xs">view →</a>{% endif %}
+        {% elif p.status == "declined" %}
+        <span class="badge badge-ghost badge-sm">Declined</span>
+        <a href="{% url 'proposal_edit' p.pk %}" class="link text-xs">edit &amp; resubmit</a>
+        {% else %}
+        <span class="badge badge-outline badge-sm">Under review</span>
+        <a href="{% url 'proposal_edit' p.pk %}" class="link text-xs">edit</a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

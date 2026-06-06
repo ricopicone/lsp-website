@@ -189,7 +189,9 @@ def test_thanks_page_404_for_registration_payment(client, user):
 
 
 @pytest.mark.django_db
-def test_webhook_for_dues_marks_paid_creates_receipt_sends_email(client, user):
+def test_webhook_for_dues_marks_paid_creates_receipt_sends_email(
+    client, user, django_capture_on_commit_callbacks
+):
     payment = Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=user, amount=Decimal("100.00"),
@@ -203,7 +205,7 @@ def test_webhook_for_dues_marks_paid_creates_receipt_sends_email(client, user):
     with patch(
         "payments.views.stripe.Webhook.construct_event",
         return_value=payload,
-    ):
+    ), django_capture_on_commit_callbacks(execute=True):
         response = client.post(
             reverse("payments:stripe_webhook"),
             data=json.dumps(payload).encode("utf-8"),

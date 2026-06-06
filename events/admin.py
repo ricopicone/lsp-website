@@ -4,23 +4,36 @@ from django.contrib import admin
 from .models import (
     Event,
     EventMemberSpeaker,
+    EventProposal,
     PriceTier,
     PricingCode,
     Program,
-    SeminarProposal,
+    ProposalReading,
+    ProposalSpeaker,
     Session,
     Speaker,
 )
 
 
-@admin.register(SeminarProposal)
-class SeminarProposalAdmin(admin.ModelAdmin):
-    list_display = ("title", "proposed_by", "status", "start_date", "end_date",
-                    "continues_seminar", "minted_event", "created_at")
-    list_filter = ("status", "format")
+class ProposalReadingInline(admin.TabularInline):
+    model = ProposalReading
+    extra = 0
+
+
+class ProposalSpeakerInline(admin.TabularInline):
+    model = ProposalSpeaker
+    extra = 0
+
+
+@admin.register(EventProposal)
+class EventProposalAdmin(admin.ModelAdmin):
+    list_display = ("title", "event_type", "proposed_by", "status", "start_date",
+                    "end_date", "continues_seminar", "minted_event", "created_at")
+    list_filter = ("status", "event_type", "location_kind")
     search_fields = ("title", "proposed_by__email")
     autocomplete_fields = ("proposed_by", "reviewed_by", "continues_seminar",
                            "faculty", "minted_event")
+    inlines = (ProposalReadingInline, ProposalSpeakerInline)
 
 
 class EventAdminForm(forms.ModelForm):

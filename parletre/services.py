@@ -23,14 +23,28 @@ import re
 
 from django.contrib.auth import get_user_model
 
+from notifications.categories import Category
+from notifications.dispatch import notify
+
 from . import emails
-from .models import Notification, Subscription, SubscriptionLevel
+from .models import Subscription, SubscriptionLevel
 from .permissions import channel_visible
 
 User = get_user_model()
 
 _MENTION_RE = re.compile(r"@([a-z0-9][a-z0-9._-]*)", re.IGNORECASE)
 _Level = SubscriptionLevel
+
+
+def _actor_name(user) -> str:
+    return (user.get_full_name() if user else "") or "Someone"
+
+
+def _post_url(post) -> str:
+    """Where a notification about ``post`` should land."""
+    if post.thread_id:
+        return f"{post.thread.get_absolute_url()}#post-{post.id}"
+    return post.channel.get_absolute_url()
 
 
 def _mentioned_users(body: str, channel) -> list:
@@ -71,12 +85,16 @@ def notify_post(post) -> None:
     emailed: set[int] = set()
     mentioned_ids = set()
 
+    actor_name = _actor_name(post.author)
+    url = _post_url(post)
     for user in _mentioned_users(post.body, channel):
         if user.id == actor_id:
             continue
-        Notification.objects.create(
-            recipient=user, actor=post.author,
-            verb=Notification.Verb.MENTION, post=post, thread=thread,
+        notify(
+            user, Category.PARLETRE_MENTION, actor=post.author,
+            title=f"{actor_name} mentioned you",
+            body=(thread.title if thread else f"#{channel.slug}"),
+            url=url, target=post, email=False,
         )
         mentioned_ids.add(user.id)
         if _effective_level(levels, channel, user.id) != _Level.MUTED:
@@ -89,9 +107,10 @@ def notify_post(post) -> None:
         and thread.author_id != actor_id
         and thread.author_id not in mentioned_ids
     ):
-        Notification.objects.create(
-            recipient_id=thread.author_id, actor=post.author,
-            verb=Notification.Verb.REPLY, post=post, thread=thread,
+        notify(
+            thread.author, Category.PARLETRE_REPLY, actor=post.author,
+            title=f"{actor_name} replied in your thread",
+            body=thread.title, url=url, target=post, email=False,
         )
 
     # Email everyone who wants every post.
@@ -114,12 +133,16 @@ def notify_new_thread(thread, first_post) -> None:
     emailed: set[int] = set()
     mentioned_ids = set()
 
+    actor_name = _actor_name(thread.author)
+    thread_url = thread.get_absolute_url()
     for user in _mentioned_users(first_post.body, channel):
         if user.id == actor_id:
             continue
-        Notification.objects.create(
-            recipient=user, actor=thread.author,
-            verb=Notification.Verb.MENTION, post=first_post, thread=thread,
+        notify(
+            user, Category.PARLETRE_MENTION, actor=thread.author,
+            title=f"{actor_name} mentioned you",
+            body=thread.title, url=f"{thread_url}#post-{first_post.id}",
+            target=first_post, email=False,
         )
         mentioned_ids.add(user.id)
         if _effective_level(levels, channel, user.id) != _Level.MUTED:
@@ -139,9 +162,10 @@ def notify_new_thread(thread, first_post) -> None:
             continue
         if not channel_visible(channel, sub.user):
             continue
-        Notification.objects.create(
-            recipient=sub.user, actor=thread.author,
-            verb=Notification.Verb.NEW_THREAD, thread=thread,
+        notify(
+            sub.user, Category.PARLETRE_THREAD, actor=thread.author,
+            title=f"{actor_name} started a thread",
+            body=thread.title, url=thread_url, target=thread, email=False,
         )
         if sub.user_id not in emailed:
             emails.send_post_notification(first_post, sub.user, "new_thread")

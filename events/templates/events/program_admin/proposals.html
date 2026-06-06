@@ -2,8 +2,9 @@
 {% block tab_content %}
 <div class="space-y-8">
   <p class="text-sm text-base-content/60">
-    Seminar proposals from faculty. Approving one mints its seminar into the
-    proposed academic year's program (you still publish the program separately).
+    Event proposals from members. Approving a seminar or reading group mints it
+    into the proposed academic year's program (you still publish the program
+    separately); approving a special event mints a draft for you to finalize.
   </p>
 
   <section class="space-y-3">
@@ -14,26 +15,52 @@
       <li class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-4">
         <div class="space-y-1">
           <p class="font-medium text-base-content">{{ p.title }}
-            <span class="text-xs font-normal text-base-content/55">· {{ p.academic_year }}
-              · {{ p.get_format_display }}
+            <span class="badge badge-outline badge-sm align-middle">{{ p.get_event_type_display }}</span>
+            <span class="text-xs font-normal text-base-content/55">{% if p.academic_year %}· {{ p.academic_year }}{% endif %}
+              · {{ p.get_location_kind_display }}
               {% if p.continues_seminar %}· continues “{{ p.continues_seminar.name }}”{% endif %}</span>
           </p>
           <p class="text-xs text-base-content/60">
             Proposed by {{ p.proposed_by.get_full_name|default:p.proposed_by.email }}
-            · {{ p.start_date|date:"M j, Y" }} – {{ p.end_date|date:"M j, Y" }}
-            {% with names=p.faculty.all %}{% if names %}· faculty:
+            {% if p.date_tbd %}· <span class="text-warning">date/time TBD</span>
+            {% elif p.proposed_datetime %}· {{ p.proposed_datetime|date:"M j, Y · g:i A" }} PT
+            {% elif p.start_date %}· {{ p.start_date|date:"M j, Y" }} – {{ p.end_date|date:"M j, Y" }}{% endif %}
+            {% with names=p.faculty.all %}{% if names %}· conveners/internal:
               {% for f in names %}{{ f.get_full_name|default:f.email }}{% if not forloop.last %}, {% endif %}{% endfor %}
             {% endif %}{% endwith %}
           </p>
           {% if p.description %}<p class="text-sm text-base-content/70 whitespace-pre-line">{{ p.description }}</p>{% endif %}
+          {% if p.location %}<p class="text-xs text-base-content/60">Address/link: {{ p.location }}</p>{% endif %}
+          {% with sp=p.proposal_speakers.all %}{% if sp %}
+          <div class="text-xs text-base-content/70">
+            <span class="font-medium">External speakers:</span>
+            <ul class="mt-1 list-disc space-y-0.5 pl-5">
+              {% for s in sp %}<li>{{ s.name }}{% if s.affiliation %} ({{ s.affiliation }}){% endif %}{% if s.email %} · {{ s.email }}{% endif %}{% if s.bio %} — {{ s.bio }}{% endif %}</li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}{% endwith %}
+          {% if p.speaker_arrangement %}<p class="text-xs text-base-content/60">Arrangement: {{ p.get_speaker_arrangement_display }}</p>{% endif %}
+          {% if p.honoraria_estimate %}<p class="text-xs text-base-content/60">Honoraria estimate: {{ p.honoraria_estimate }}</p>{% endif %}
+          {% if p.offers_ce %}<p class="text-xs text-base-content/60">Requests CE credits.</p>{% endif %}
+          <p class="text-xs text-base-content/60">Fee:
+            {% if p.fee_amount is not None %}${{ p.fee_amount }}{% elif p.fee_sliding_max is not None %}sliding ${{ p.fee_sliding_min|default:"0" }}–${{ p.fee_sliding_max }}{% else %}free{% endif %}{% if p.tuition_covers %} · tuition covers{% endif %}</p>
+          {% with reads=p.readings.all %}{% if reads %}
+          <div class="text-xs text-base-content/70">
+            <span class="font-medium">Readings:</span>
+            <ul class="mt-1 list-disc space-y-0.5 pl-5">
+              {% for r in reads %}<li>{{ r.citation }}</li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}{% endwith %}
+          {% if p.contact %}<p class="text-xs text-base-content/60">Contact: {{ p.contact }}</p>{% endif %}
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <form method="post" action="{% url 'seminar_proposal_decide' p.pk %}">
+          <form method="post" action="{% url 'proposal_decide' p.pk %}">
             {% csrf_token %}
             <input type="hidden" name="decision" value="approve">
             <button class="btn btn-primary btn-sm">Approve &amp; mint</button>
           </form>
-          <form method="post" action="{% url 'seminar_proposal_decide' p.pk %}"
+          <form method="post" action="{% url 'proposal_decide' p.pk %}"
                 class="flex items-center gap-2">
             {% csrf_token %}
             <input type="hidden" name="decision" value="decline">

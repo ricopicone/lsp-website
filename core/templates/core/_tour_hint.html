@@ -1,0 +1,32 @@
+{% comment %}
+Reusable preview-tour contextual hint: a pulsing anchor + popover, driven by a
+resolved checklist task. Expects `task` (one entry from
+preview_tour_tasks_by_id). Renders nothing unless the task wants a hint shown
+(not done, and it has an anchor selector). Page-specific "is this the right
+page" gating belongs in the including template, around this include.
+
+Relies on `window.lspTourHint` and the `.lsp-tour-*` CSS defined in base.html's
+preview-tour block (present whenever show_preview_tour is true).
+{% endcomment %}
+{% if task and task.show_hint and task.hint_selector %}
+<div id="lsp-hint-{{ task.id }}" class="hidden fixed z-50 w-64 card bg-primary text-primary-content shadow-xl"
+     role="dialog" aria-label="Tip">
+  <div class="card-body p-3 gap-2">
+    <p class="text-sm leading-snug">{{ task.hint_text|safe }}</p>
+    <div class="text-right">
+      <button type="button" class="btn btn-xs lsp-tour-ok">Got it</button>
+    </div>
+  </div>
+  <span class="lsp-tour-arrow" aria-hidden="true"></span>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.lspTourHint) lspTourHint({
+      target: "{{ task.hint_selector|escapejs }}",
+      popover: "#lsp-hint-{{ task.id }}",
+      key: "{{ task.hint_key|escapejs }}",
+      placement: "{{ task.hint_placement|escapejs }}",
+    });
+  });
+</script>
+{% endif %}

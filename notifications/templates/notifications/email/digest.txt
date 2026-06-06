@@ -1,0 +1,13 @@
+{% autoescape off %}{{ recipient.first_name|default:"Hello" }},
+
+Here's what's new — {{ count }} notification{{ count|pluralize }} since your last digest.
+{% for section in sections %}
+{{ section.title }}
+{% for n in section.items %}  • {{ n.title }}{% if n.body %} — {{ n.body }}{% endif %}
+    {{ n.abs_url }}
+{% endfor %}{% endfor %}
+See everything: {{ feed_url }}
+Change how you're notified: {{ settings_url }}
+
+— Lacanian School of Psychoanalysis
+{% endautoescape %}

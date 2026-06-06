@@ -18,7 +18,7 @@ from django.db import transaction
 from accounts.models import Source
 from registrations.models import Registration
 
-from .emails import send_paid_emails, send_payment_receipt
+from . import notifications as notify_payments
 from .models import Payment, Receipt
 
 logger = logging.getLogger(__name__)
@@ -49,13 +49,16 @@ def complete_payment(payment: Payment) -> None:
         if not hasattr(payment, "receipt"):
             Receipt.create_for_payment(payment)
 
-    # Emails outside the DB transaction so failures don't roll back.
+    # Notifications + emails outside the DB transaction so failures don't roll
+    # back. Confirmation and receipt are email-locked categories — they always
+    # email, and now also raise an in-app bell row.
     try:
         if payment.registration_id:
             payment.registration.refresh_from_db()
-            send_paid_emails(payment.registration)
+            notify_payments.registration_confirmed(payment.registration)
+            notify_payments.payment_receipt(payment)
         else:
-            send_payment_receipt(payment)
+            notify_payments.payment_receipt(payment)
     except Exception:
         logger.exception(
             "Failed to send post-payment emails for payment %s; "

@@ -20,6 +20,8 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from notifications.categories import Category
+from payments import notifications as notify_payments
 from payments.dues import is_dues_obligated, user_paid_for_period
 from payments.emails import send_dues_reminder
 from payments.models import DuesPeriod, DuesReminder
@@ -79,7 +81,9 @@ class Command(BaseCommand):
                 sent += 1
                 continue
             try:
-                sender.send(send_dues_reminder, user, period)
+                notify_payments.dues_reminder_inapp(user, period)  # bell row
+                if notify_payments.should_email(user, Category.DUES_REMINDER):
+                    sender.send(send_dues_reminder, user, period)
                 DuesReminder.objects.create(user=user, dues_period=period)
                 sent += 1
             except Exception as exc:

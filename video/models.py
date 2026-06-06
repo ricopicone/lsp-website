@@ -36,6 +36,17 @@ class DailyRoom(models.Model):
         on_delete=models.CASCADE,
         related_name="video_room",
     )
+    #: A one-off event (special event / Day of Assembly / Working Day / Scholarly
+    #: Seminar) owns its own room rather than sharing the Programming Committee's
+    #: workgroup room. Offering events (seminar/reading_group/cartel) still use
+    #: their own workgroup's room, so this is null for them.
+    event = models.OneToOneField(
+        "events.Event",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="video_room",
+    )
     #: The Daily room name (the trailing path segment of the join URL).
     name = models.CharField(max_length=128, unique=True)
     #: Full join URL, e.g. ``https://lsp.daily.co/lsp-<slug>``.
@@ -51,8 +62,9 @@ class DailyRoom(models.Model):
         constraints = [
             models.CheckConstraint(
                 condition=(
-                    Q(workgroup__isnull=False, channel__isnull=True)
-                    | Q(workgroup__isnull=True, channel__isnull=False)
+                    Q(workgroup__isnull=False, channel__isnull=True, event__isnull=True)
+                    | Q(workgroup__isnull=True, channel__isnull=False, event__isnull=True)
+                    | Q(workgroup__isnull=True, channel__isnull=True, event__isnull=False)
                 ),
                 name="video_room_exactly_one_owner",
             ),
@@ -63,7 +75,7 @@ class DailyRoom(models.Model):
 
     @property
     def owner(self):
-        return self.workgroup or self.channel
+        return self.workgroup or self.channel or self.event
 
 
 class Recording(models.Model):

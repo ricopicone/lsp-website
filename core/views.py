@@ -110,6 +110,30 @@ def _is_staff(user):
     return user.is_authenticated and user.is_staff
 
 
+def set_walkthrough(request):
+    """Start (or exit) a guide walkthrough: set the ``lsp_walkthrough`` cookie
+    so the floating card follows the viewer through it, then return to the
+    feature. An unknown id — or the default — clears the cookie."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    from core.checklists import CHECKLISTS
+
+    wid = request.GET.get("id", "")
+    nxt = request.GET.get("next") or "/"
+    if not url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        nxt = "/"
+    response = redirect(nxt)
+    if wid in CHECKLISTS:
+        # Session cookie (no max_age): the walkthrough follows the member across
+        # pages but ends with the browser session, so it never lingers.
+        response.set_cookie("lsp_walkthrough", wid, samesite="Lax")
+    else:
+        response.delete_cookie("lsp_walkthrough")
+    return response
+
+
 def calendar_page(request):
     """Render the month-grid calendar shell.
 

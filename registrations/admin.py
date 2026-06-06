@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 from django.utils import timezone
 
-from payments.emails import send_registration_confirmation
+from payments import notifications as notify_payments
 
 from .models import Registration
 
@@ -47,7 +47,7 @@ class RegistrationAdmin(admin.ModelAdmin):
             reg.staff_notes = (reg.staff_notes or "") + note_line
             reg.save(update_fields=("status", "staff_notes"))
             try:
-                send_registration_confirmation(reg)
+                notify_payments.registration_confirmed(reg)
             except Exception:
                 failed += 1
             succeeded += 1

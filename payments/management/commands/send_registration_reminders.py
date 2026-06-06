@@ -20,6 +20,8 @@ from django.core.management.base import BaseCommand
 from django.db.models import Q
 from django.utils import timezone
 
+from notifications.categories import Category
+from payments import notifications as notify_payments
 from payments.emails import send_approval_reminder, send_payment_reminder
 from payments.sending import ThrottledSender
 from registrations.models import Registration
@@ -59,6 +61,7 @@ class Command(BaseCommand):
             if dry:
                 self.stdout.write(f"  would remind faculty of '{event.title}' ({count} pending)")
             else:
+                notify_payments.approval_reminder_inapp(event, count)
                 sender.send(send_approval_reminder, event, count)
                 pending.update(reminded_at=timezone.now())
             faculty_sent += 1
@@ -76,7 +79,9 @@ class Command(BaseCommand):
             if dry:
                 self.stdout.write(f"  would remind {reg.user.email} to pay for '{reg.event.title}'")
             else:
-                sender.send(send_payment_reminder, reg)
+                notify_payments.payment_reminder_inapp(reg)
+                if notify_payments.should_email(reg.user, Category.REGISTRATION_STATUS):
+                    sender.send(send_payment_reminder, reg)
                 reg.reminded_at = timezone.now()
                 reg.save(update_fields=["reminded_at"])
             student_sent += 1
