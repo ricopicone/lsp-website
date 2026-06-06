@@ -73,7 +73,7 @@ def preview_tour(request):
     user = getattr(request, "user", None)
     if not (getattr(settings, "PREVIEW_TOUR_ENABLED", False)
             and user is not None and user.is_authenticated):
-        return {"show_preview_tour": False}
+        return {"show_preview_tour": False, "walkthroughs_enabled": False}
 
     # Public → everyone signed in. Otherwise gate on the allowlist (empty list
     # also means everyone). Empty strings are filtered so `ALLOWLIST=` reads as
@@ -81,13 +81,23 @@ def preview_tour(request):
     public = getattr(settings, "PREVIEW_TOUR_PUBLIC", False)
     allowlist = [a.lower() for a in getattr(settings, "PREVIEW_TOUR_ALLOWLIST", []) if a.strip()]
     if not public and allowlist and (user.email or "").lower() not in allowlist:
-        return {"show_preview_tour": False}
+        return {"show_preview_tour": False, "walkthroughs_enabled": False}
 
-    from core.checklists import PREVIEW_CHECKLIST_ID, get_checklist
+    # Walkthroughs are available to this viewer (the Start buttons show), but the
+    # floating card appears only once one is *active* (started from a guide) —
+    # there's no always-on card.
+    from core.checklists import active_checklist
 
-    tasks = [t.resolved(user, request) for t in get_checklist(PREVIEW_CHECKLIST_ID)]
+    checklist = active_checklist(request)
+    if checklist is None:
+        return {"show_preview_tour": False, "walkthroughs_enabled": True}
+
+    tasks = [t.resolved(user, request) for t in checklist.tasks]
     return {
         "show_preview_tour": True,
+        "walkthroughs_enabled": True,
+        "walkthrough_id": checklist.id,
+        "walkthrough_title": checklist.title,
         "preview_tour_tasks": tasks,
         "preview_tour_tasks_by_id": {t["id"]: t for t in tasks},
         "preview_seminar_slug": getattr(settings, "PREVIEW_TOUR_SEMINAR_SLUG", ""),

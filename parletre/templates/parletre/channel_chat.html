@@ -48,6 +48,6 @@
 
 {# ---- Preview-tour hint: nudge first-time members to post their hello ---- #}
 {% if show_preview_tour and channel.slug == preview_channel_slug %}
-{% include "core/_tour_hint.html" with task=preview_tour_tasks_by_id.say_hello %}
+{% include "core/_tour_hint.html" with task=preview_tour_tasks_by_id.par_post %}
 {% endif %}
 {% endblock %}

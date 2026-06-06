@@ -6,6 +6,7 @@ app_name = "core"
 
 urlpatterns = [
     path("", views.landing, name="landing"),
+    path("walkthrough/", views.set_walkthrough, name="set_walkthrough"),
     path("calendar/", views.calendar_page, name="calendar"),
     path("calendar/events.json", views.calendar_events_json, name="calendar_events"),
     path("impersonate/", views.impersonate_picker, name="impersonate_picker"),

@@ -6,10 +6,10 @@ per-guide pages, each backed by a standalone Markdown file (frontmatter +
 body) so guides can be authored and attributed independently. Add a slug to
 ``GUIDE_SLUGS`` and drop a matching ``.md`` file, and the guide appears.
 
-A guide may name an onboarding *task* in its frontmatter
-(``task: complete_profile``); the guide page then offers a "Try it now" link
-into that feature, and the floating checklist tracks completion. Task ids live
-in ``core.checklists``.
+A guide may name a *walkthrough* in its frontmatter (``checklist: profile``);
+the guide page then offers a "Start this walkthrough" button that turns the
+floating card into that guide's tailored steps and follows the member through
+them. Walkthrough ids live in ``core.checklists``.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class Guide:
     title: str
     summary: str
     body_html: str
-    task: str  # onboarding task id this guide walks through, or ""
+    checklist: str  # walkthrough id this guide steps through, or ""
 
 
 def _load(slug: str) -> Guide | None:
@@ -56,7 +56,7 @@ def _load(slug: str) -> Guide | None:
         title=meta.get("title", slug.replace("-", " ").title()),
         summary=meta.get("summary", ""),
         body_html=loader._render_body(body),
-        task=meta.get("task", ""),
+        checklist=meta.get("checklist", ""),
     )
 
 
