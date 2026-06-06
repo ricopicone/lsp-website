@@ -146,6 +146,10 @@ class EventProposalForm(forms.ModelForm):
         self.fields["end_date"].label = "End date"
         self.fields["location_kind"].label = "Location"
         self.fields["offers_ce"].label = "Offer CE credits"
+        self.fields["contact"].label = "Contact email"
+        self.fields["contact"].help_text = (
+            "An additional contact for this proposal, besides your own account email."
+        )
 
         # Speaker arrangement: a real first option (no blank "---------").
         self.fields["speaker_arrangement"].required = False
