@@ -64,20 +64,43 @@ class ProgramPublishForm(forms.ModelForm):
         }
 
 
+def _member_name(user):
+    return user.get_full_name() or user.email
+
+
 class SeminarProposalForm(forms.ModelForm):
     """Member-facing event proposal (M12.5) — seminar, reading group, or special
-    event. The Programming Committee reviews it and, on approval, mints the Event."""
+    event. Fields are grouped per type in the template (toggled by ``event_type``);
+    validation enforces the per-type requirements here. The Programming Committee
+    reviews it and, on approval, mints the Event."""
+
+    #: Readings entered one MLA-style citation per line; parsed into individual
+    #: ProposalReading rows on save (so they display/format nicely).
+    readings_text = forms.CharField(
+        required=False,
+        label="Readings",
+        widget=forms.Textarea(attrs={"rows": 6}),
+        help_text="One citation per line, following the style guide below.",
+    )
 
     class Meta:
         model = SeminarProposal
         fields = (
-            "event_type", "title", "description", "start_date", "end_date",
-            "format", "continues_seminar", "faculty",
+            "event_type", "title", "description",
+            "date_tbd", "start_date", "end_date", "proposed_time",
+            "format", "location", "contact",
+            "continues_seminar", "faculty",
+            "offers_ce", "fee_note", "biography",
+            "speaker_arrangement", "external_speakers", "honoraria_estimate",
         )
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),
             "end_date": forms.DateInput(attrs={"type": "date"}),
-            "description": forms.Textarea(attrs={"rows": 6}),
+            "description": forms.Textarea(attrs={"rows": 8}),
+            "fee_note": forms.Textarea(attrs={"rows": 2}),
+            "biography": forms.Textarea(attrs={"rows": 4}),
+            "external_speakers": forms.Textarea(attrs={"rows": 4}),
+            "speaker_arrangement": forms.RadioSelect,
         }
 
     def __init__(self, *args, **kwargs):
@@ -86,16 +109,25 @@ class SeminarProposalForm(forms.ModelForm):
         from workgroups.models import Workgroup
 
         self.fields["event_type"].label = "Type of event"
+
+        self.fields["description"].help_text = (
+            "≈250 words. Introduce the central focus and topics, with a clear "
+            "rationale for how you engage Freudian and Lacanian clinical technique "
+            "and theory, plus the format (discussion, lecture, presentations, …)."
+        )
+
         self.fields["faculty"].required = False
         self.fields["faculty"].queryset = User.objects.filter(
             profile__is_faculty=True, is_active=True,
         ).order_by("last_name", "first_name")
-        self.fields["faculty"].label = "Conveners"
+        self.fields["faculty"].label_from_instance = _member_name
+        self.fields["faculty"].label = "Additional conveners / speakers"
         self.fields["faculty"].help_text = (
-            "Seminars: the instructors (teaching confers faculty standing). "
-            "Reading groups: the organizers. Leave blank for special events — the "
-            "Programming Committee sets presenters on approval."
+            "You're counted as a convener — add any co-conveners (seminars / reading "
+            "groups) or internal LSP speakers (special events). Teaching a seminar "
+            "confers faculty standing."
         )
+
         self.fields["continues_seminar"].required = False
         self.fields["continues_seminar"].label = "Continue an existing seminar"
         self.fields["continues_seminar"].help_text = (
@@ -105,22 +137,61 @@ class SeminarProposalForm(forms.ModelForm):
         self.fields["continues_seminar"].queryset = (
             Workgroup.objects.filter(kind=Workgroup.Kind.SEMINAR).order_by("name")
         )
+        self.fields["start_date"].label = "Start / event date"
+        self.fields["end_date"].label = "End date"
+        self.fields["speaker_arrangement"].required = False
+
+        # Prefill the readings textarea from existing rows when editing.
+        if self.instance and self.instance.pk:
+            existing = self.instance.readings.all()
+            if existing:
+                self.fields["readings_text"].initial = "\n".join(
+                    r.citation for r in existing
+                )
 
     def clean(self):
         data = super().clean()
-        start, end = data.get("start_date"), data.get("end_date")
-        if start and end:
-            if end <= start:
-                self.add_error("end_date", "End date must be after the start date.")
-            else:
-                import datetime as _dt
+        import datetime as _dt
 
-                if end < _dt.date.today():
+        etype = data.get("event_type")
+        start, end = data.get("start_date"), data.get("end_date")
+        is_offering = etype in (Event.Type.SEMINAR, Event.Type.READING_GROUP)
+
+        if is_offering:
+            if not start:
+                self.add_error("start_date", "Required for seminars and reading groups.")
+            if not end:
+                self.add_error("end_date", "Required for seminars and reading groups.")
+            if start and end:
+                if end <= start:
+                    self.add_error("end_date", "End date must be after the start date.")
+                elif end < _dt.date.today():
                     self.add_error(
                         "end_date",
                         "End date can't be in the past — the term wouldn't be active.",
                     )
+        else:
+            # Special event: a concrete date is required unless it's TBD.
+            if not data.get("date_tbd") and not start:
+                self.add_error(
+                    "start_date",
+                    "Give a proposed date, or check “date/time TBD”.",
+                )
         return data
+
+    def save_readings(self, proposal):
+        """Replace the proposal's readings from the textarea (one per line)."""
+        from .models import ProposalReading
+
+        lines = [
+            ln.strip() for ln in (self.cleaned_data.get("readings_text") or "").splitlines()
+            if ln.strip()
+        ]
+        proposal.readings.all().delete()
+        ProposalReading.objects.bulk_create([
+            ProposalReading(proposal=proposal, sort_order=i, citation=line)
+            for i, line in enumerate(lines)
+        ])
 
 
 class ProgramEventForm(forms.ModelForm):
@@ -181,6 +252,7 @@ class ProgramEventForm(forms.ModelForm):
         self.fields["faculty"].queryset = User.objects.filter(
             profile__is_faculty=True, is_active=True,
         ).order_by("last_name", "first_name")
+        self.fields["faculty"].label_from_instance = _member_name
         if self.instance.pk:
             self.fields["faculty"].initial = self.instance.faculty_members()
 

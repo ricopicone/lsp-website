@@ -259,7 +259,9 @@ class Event(models.Model):
     )
     access_info = models.TextField(
         blank=True,
-        help_text="Zoom link or similar. Released to registrants only after payment (REG-8).",
+        help_text="Venue/room, dial-in, or an external meeting link. Released to "
+        "registrants only after payment (REG-8). Leave blank if using the in-site "
+        "meeting room — registrants get a Join button automatically.",
     )
     record_video = models.BooleanField(
         default=False,
@@ -864,10 +866,18 @@ class SeminarProposal(models.Model):
     )
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    start_date = models.DateField()
-    end_date = models.DateField()
+    # Nullable so a special event can be proposed with its date still TBD.
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
     format = models.CharField(
         max_length=20, choices=Event.Format.choices, default=Event.Format.ONLINE,
+    )
+    location = models.CharField(
+        max_length=200, blank=True,
+        help_text="Proposed venue (in-person) or platform note.",
+    )
+    contact = models.CharField(
+        max_length=200, blank=True, help_text="Contact email for this proposal.",
     )
     continues_seminar = models.ForeignKey(
         "workgroups.Workgroup", on_delete=models.SET_NULL, null=True, blank=True,
@@ -877,6 +887,45 @@ class SeminarProposal(models.Model):
     faculty = models.ManyToManyField(
         settings.AUTH_USER_MODEL, blank=True, related_name="proposed_seminars",
     )
+
+    # ---- Seminar / reading-group proposal-guide fields ----
+    offers_ce = models.BooleanField(
+        default=False,
+        help_text="Offer APA CE credits (you apply to GPPA separately).",
+    )
+    fee_note = models.TextField(
+        blank=True,
+        help_text="Proposed fee, or donation language (e.g. “$100 donation "
+        "encouraged, none turned away”).",
+    )
+    biography = models.TextField(blank=True, help_text="Instructor/convener biography.")
+
+    # ---- Special-event fields ----
+    date_tbd = models.BooleanField(
+        default=False, help_text="Check if the date/time is not yet decided.",
+    )
+    proposed_time = models.CharField(
+        max_length=120, blank=True, help_text="Proposed time (if a date is set).",
+    )
+
+    class SpeakerArrangement(models.TextChoices):
+        PROPOSER = "proposer", "I'll arrange with the speaker(s) directly"
+        PC = "pc", "I'd like the Programming Committee to arrange it"
+
+    speaker_arrangement = models.CharField(
+        max_length=12, choices=SpeakerArrangement.choices, blank=True,
+        help_text="Who contacts/arranges with the speakers.",
+    )
+    external_speakers = models.TextField(
+        blank=True,
+        help_text="External (non-LSP) speakers: name, affiliation, contact email, "
+        "and a short bio for each.",
+    )
+    honoraria_estimate = models.CharField(
+        max_length=120, blank=True,
+        help_text="Estimated speaker honoraria, if any.",
+    )
+
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.PROPOSED,
     )
@@ -900,7 +949,7 @@ class SeminarProposal(models.Model):
 
     @property
     def academic_year(self) -> str:
-        return academic_year_of(self.start_date)
+        return academic_year_of(self.start_date) if self.start_date else ""
 
     def _unique_event_slug(self) -> str:
         from django.utils.text import slugify
@@ -995,3 +1044,20 @@ class SeminarProposal(models.Model):
         self.reviewed_at = None
         self.review_note = ""
         self.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
+
+
+class ProposalReading(models.Model):
+    """A single reading on a SeminarProposal, stored individually so the list can
+    be formatted (one MLA-style citation per row, ordered)."""
+
+    proposal = models.ForeignKey(
+        SeminarProposal, on_delete=models.CASCADE, related_name="readings",
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+    citation = models.TextField()
+
+    class Meta:
+        ordering = ("sort_order", "id")
+
+    def __str__(self) -> str:
+        return self.citation[:80]
