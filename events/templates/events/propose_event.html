@@ -95,9 +95,9 @@
 
     {# ---- Fee ---- #}
     <div data-types="seminar reading_group special_event" class="rounded-lg border border-base-300/60 p-3 space-y-3">
-      <p class="text-sm font-medium">Fee</p>
-      {% include "events/_proposal_field.html" with field=form.fee_amount %}
-      <div class="grid grid-cols-2 gap-3">
+      {% include "events/_proposal_field.html" with field=form.fee_type %}
+      <div id="fee-fixed">{% include "events/_proposal_field.html" with field=form.fee_amount %}</div>
+      <div id="fee-sliding" class="grid grid-cols-2 gap-3">
         {% include "events/_proposal_field.html" with field=form.fee_sliding_min %}
         {% include "events/_proposal_field.html" with field=form.fee_sliding_max %}
       </div>
@@ -153,8 +153,21 @@
     var dtRow = document.getElementById("datetime-row");
     var locKind = document.getElementById("id_location_kind");
     var locRow = document.getElementById("location-detail-row");
+    var feeRadios = document.querySelectorAll("input[name='fee_type']");
+    var feeFixed = document.getElementById("fee-fixed");
+    var feeSliding = document.getElementById("fee-sliding");
 
     function showRow(row, on) { if (row) row.style.display = on ? "" : "none"; }
+
+    function feeType() {
+      var checked = document.querySelector("input[name='fee_type']:checked");
+      return checked ? checked.value : "free";
+    }
+    function syncFee() {
+      var ft = feeType();
+      showRow(feeFixed, ft === "fixed");
+      showRow(feeSliding, ft === "sliding");
+    }
 
     function sync() {
       var t = sel ? sel.value : "";
@@ -181,7 +194,9 @@
     if (sel) { sel.addEventListener("change", sync); }
     if (tbd) { tbd.addEventListener("change", sync); }
     if (locKind) { locKind.addEventListener("change", sync); }
+    feeRadios.forEach(function (r) { r.addEventListener("change", syncFee); });
     sync();
+    syncFee();
 
     // External-speaker formset: clone the empty-form template, fixing :prefix:.
     var addBtn = document.getElementById("add-speaker");

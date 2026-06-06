@@ -313,6 +313,51 @@ def test_seminar_approve_builds_tuition_covered_tier():
     assert tier.covered_by_tuition is True  # tuition always covers offerings
 
 
+def test_fee_type_sliding_keeps_only_the_range(client):
+    """fee_type=sliding stores min/max and drops any stray fixed amount."""
+    from decimal import Decimal
+    fac = _faculty("slide@x.test")
+    start, end = _future()
+    client.force_login(fac)
+    resp = client.post("/propose/", {
+        **_MGMT, "event_type": Event.Type.SEMINAR, "title": "Sliding Sem",
+        "description": "x", "start_date": start.isoformat(), "end_date": end.isoformat(),
+        "fee_type": "sliding", "fee_amount": "999",  # fixed value must be discarded
+        "fee_sliding_min": "0", "fee_sliding_max": "120",
+    })
+    assert resp.status_code == 302
+    p = EventProposal.objects.get(title="Sliding Sem")
+    assert p.fee_amount is None
+    assert p.fee_sliding_min == Decimal("0") and p.fee_sliding_max == Decimal("120")
+
+
+def test_fee_type_fixed_requires_amount(client):
+    fac = _faculty("fixed@x.test")
+    start, end = _future()
+    client.force_login(fac)
+    resp = client.post("/propose/", {
+        **_MGMT, "event_type": Event.Type.SEMINAR, "title": "No Amount",
+        "description": "x", "start_date": start.isoformat(), "end_date": end.isoformat(),
+        "fee_type": "fixed",  # no fee_amount → invalid
+    })
+    assert resp.status_code == 200
+    assert not EventProposal.objects.filter(title="No Amount").exists()
+
+
+def test_fee_type_free_clears_amounts(client):
+    fac = _faculty("free@x.test")
+    start, end = _future()
+    client.force_login(fac)
+    resp = client.post("/propose/", {
+        **_MGMT, "event_type": Event.Type.SEMINAR, "title": "Free Sem",
+        "description": "x", "start_date": start.isoformat(), "end_date": end.isoformat(),
+        "fee_type": "free", "fee_amount": "50",  # ignored
+    })
+    assert resp.status_code == 302
+    p = EventProposal.objects.get(title="Free Sem")
+    assert p.fee_amount is None and p.fee_sliding_min is None
+
+
 def test_member_can_open_propose_page(client):
     client.force_login(_member("opener@x.test"))
     assert client.get("/propose/").status_code == 200
