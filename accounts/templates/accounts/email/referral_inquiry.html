@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Find-an-Analyst inquiry</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f4f5;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background-color:#ffffff; border:1px solid #e4e4e7; border-radius:10px; overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+          <tr>
+            <td style="padding:28px 32px 20px; border-bottom:1px solid #e4e4e7;">
+              <div style="font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:#71717a;">Lacanian School of Psychoanalysis</div>
+              <div style="margin-top:6px; font-size:20px; font-weight:700; color:#18181b;">New Find-an-Analyst inquiry</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:4px 32px 28px; color:#27272a; font-size:15px; line-height:1.5;">
+
+              <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">What is your name?</p>
+              <p style="margin:0;">{{ data.name }}</p>
+
+              <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">What pronouns do you use?</p>
+              <p style="margin:0;">{{ data.pronouns }}</p>
+
+              <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">What email address would you like to use for the referral process?</p>
+              <p style="margin:0;"><a href="mailto:{{ data.email }}" style="color:#3730a3; text-decoration:underline;">{{ data.email }}</a></p>
+
+              <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">In what city and state (if in the United States) or city and country (if outside of the United States) are you located?</p>
+              <p style="margin:0;">{{ data.location }}</p>
+
+              <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">What language would you prefer to work in?</p>
+              <p style="margin:0;">{{ data.language }}</p>
+
+              <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">How would you like to meet?</p>
+              <p style="margin:0;">{{ data.modality }}</p>
+
+              <p style="margin:30px 0 3px; font-weight:700; color:#18181b;">Anything else for the Referral Coordinator</p>
+              <p style="margin:0 0 12px; font-size:13px; font-style:italic; color:#71717a; line-height:1.5;">This space is for you to share any other information you would like the Referral Coordinator to distribute to your potential Analyst. You may want to share what you are hoping to work on, how you came to an interest in psychoanalysis, or if you have been in therapy or analysis before. Please do not include any identifying information such as your name or email in this section. This information will be kept confidential through the referral process; it will be up to you to contact an analyst whose availability is matched with your own.</p>
+              <div style="margin:0; padding:14px 16px; background-color:#f4f4f5; border-left:3px solid #a1a1aa; border-radius:4px;">{{ data.additional_information|linebreaksbr }}</div>
+
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 32px 24px; border-top:1px solid #e4e4e7; color:#71717a; font-size:12px; line-height:1.5;">
+              Sent via the Find an Analyst form on app.lacanschool.org. Replying to this message goes directly to the inquirer (Reply-To is set).
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
