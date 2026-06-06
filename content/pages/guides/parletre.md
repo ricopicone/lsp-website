@@ -11,10 +11,12 @@ ongoing conversation between gatherings. Find it at `/parletre/`.
 
 The board is organized into **channels**. Some are open to every member; others
 belong to a committee, a cartel, or a working group and appear only to their
-members. Channels come in two shapes:
+members. Channels come in three kinds:
 
 - **Forum** channels hold threaded discussions—start a topic, others reply.
 - **Chat** channels are a live stream of messages, like a group chat.
+- **Video** channels are browser meeting rooms—join with one click, no app to
+  install, and see who's already live from the channel list.
 
 ## Posting
 
