@@ -10,13 +10,13 @@ the directory—this guide shows you how to make it yours.
 
 ## Editing your profile
 
-Open **Edit profile** from the account menu (top right), or go straight to
+Open **Edit Profile** from the account menu (top right), or go straight to
 `/accounts/profile/`. Everything saves together when you press **Save changes**.
 
 ### Your photo
 
-Your photo appears as a **circle** in the directory, on event pages, and beside
-anything you publish. Click **Choose photo…**, then drag and zoom so your face
+Your photo appears as a **circle** in the directory, on the pages of events you
+teach, and across the site. Click **Choose photo…**, then drag and zoom so your face
 and shoulders fill the ring—the guide overlay shows you the frame. We store a
 clean square crop, so the same photo looks right everywhere.
 
