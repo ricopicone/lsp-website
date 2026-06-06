@@ -1,8 +1,19 @@
 {% comment %}Renders one bound form field (label · widget · help · errors).
-Expects: field.{% endcomment %}
+Checkboxes render inline (box on the same line as the label); everything else
+renders the label above the widget. Expects: field.{% endcomment %}
+{% if field.field.widget.input_type == "checkbox" %}
+<div class="space-y-1">
+  <label class="flex items-center gap-2 text-sm font-medium">
+    {{ field }} <span>{{ field.label }}</span>
+  </label>
+  {% if field.help_text %}<p class="text-xs text-base-content/60">{{ field.help_text }}</p>{% endif %}
+  {% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}
+</div>
+{% else %}
 <div class="space-y-1">
   <label for="{{ field.id_for_label }}" class="block text-sm font-medium">{{ field.label }}</label>
   {{ field }}
   {% if field.help_text %}<p class="text-xs text-base-content/60">{{ field.help_text }}</p>{% endif %}
   {% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}
 </div>
+{% endif %}

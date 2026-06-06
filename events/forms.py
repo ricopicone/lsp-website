@@ -83,6 +83,14 @@ class EventProposalForm(forms.ModelForm):
         help_text="One citation per line, following the style guide below.",
     )
 
+    #: Drives which fee inputs apply (the model stores the resolved amounts).
+    fee_type = forms.ChoiceField(
+        required=False, label="Fee",
+        choices=[("free", "Free"), ("fixed", "Fixed amount"),
+                 ("sliding", "Sliding scale")],
+        widget=forms.RadioSelect, initial="free",
+    )
+
     class Meta:
         model = EventProposal
         fields = (
@@ -161,6 +169,16 @@ class EventProposalForm(forms.ModelForm):
                 EventProposal.SpeakerArrangement.PROPOSER
             )
 
+        # Derive the fee type from stored amounts when editing.
+        if self.instance and self.instance.pk and not self.is_bound:
+            inst = self.instance
+            if inst.fee_sliding_min is not None or inst.fee_sliding_max is not None:
+                self.initial["fee_type"] = "sliding"
+            elif inst.fee_amount is not None:
+                self.initial["fee_type"] = "fixed"
+            else:
+                self.initial["fee_type"] = "free"
+
         # Prefill the readings textarea from existing rows when editing.
         if self.instance and self.instance.pk:
             existing = self.instance.readings.all()
@@ -216,10 +234,21 @@ class EventProposalForm(forms.ModelForm):
                     "proposed_datetime",
                     "Give a proposed date & time, or check “date/time TBD”.",
                 )
-        # Sliding scale: min must not exceed max.
+        # Fee: keep only the inputs that match the chosen fee type.
+        fee_type = data.get("fee_type") or "free"
         smin, smax = data.get("fee_sliding_min"), data.get("fee_sliding_max")
-        if smin is not None and smax is not None and smin > smax:
-            self.add_error("fee_sliding_min", "Minimum can't exceed the maximum.")
+        if fee_type == "free":
+            data["fee_amount"] = data["fee_sliding_min"] = data["fee_sliding_max"] = None
+        elif fee_type == "fixed":
+            data["fee_sliding_min"] = data["fee_sliding_max"] = None
+            if data.get("fee_amount") is None:
+                self.add_error("fee_amount", "Enter a fixed fee, or choose Free / Sliding scale.")
+        else:  # sliding
+            data["fee_amount"] = None
+            if smin is None and smax is None:
+                self.add_error("fee_sliding_max", "Enter a sliding-scale range.")
+            elif smin is not None and smax is not None and smin > smax:
+                self.add_error("fee_sliding_min", "Minimum can't exceed the maximum.")
         return data
 
     def save_readings(self, proposal):
