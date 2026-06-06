@@ -95,5 +95,6 @@ def guide_detail(request, slug):
     return render(request, "content/guide_detail.html", {
         "guide": guide,
         "start_url": start_url,
+        "walkthrough_id": guide.checklist if start_url else "",
         "walkthrough_title": walkthrough_title,
     })

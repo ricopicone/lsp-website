@@ -8,8 +8,6 @@ Location: {{ data.location }}
 Preferred language:    {{ data.language }}
 Preferred modalities:  {{ data.modality }}
 
-Anything else for the Referral Coordinator:
-
 This space is for you to share any other information you would like the
 Referral Coordinator to distribute to your potential Analyst.
 

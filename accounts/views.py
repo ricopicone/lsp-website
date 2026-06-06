@@ -356,6 +356,22 @@ def profile_edit(request):
     })
 
 
+@require_POST
+@login_required
+def profile_autosave(request):
+    """Debounced background save of the profile's *text* fields, so a member's
+    typing survives leaving the page. The headshot is NOT handled here — it's
+    saved only via the explicit Save (the cropper pipeline). Returns JSON; an
+    invalid round just doesn't save (the explicit Save surfaces field errors)."""
+    uform = UserNameForm(request.POST, instance=request.user)
+    pform = ProfileEditForm(request.POST, instance=request.user.profile)
+    if uform.is_valid() and pform.is_valid():
+        uform.save()
+        pform.save()
+        return JsonResponse({"ok": True})
+    return JsonResponse({"ok": False})
+
+
 def can_change_email(user) -> bool:
     """Whether ``user`` may use the self-service login-email change.
 

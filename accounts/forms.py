@@ -89,9 +89,7 @@ class ReferralRequestForm(forms.Form):
         required=True,
         label="How would you like to meet?",
         help_text=(
-            "You can select more than one option. If you are only interested "
-            "in meeting in person, please first consult the map on this page "
-            "to see if there are any available clinicians in your area."
+            "You can select more than one option."
         ),
     )
     additional_information = forms.CharField(
