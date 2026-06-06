@@ -840,9 +840,27 @@ class SeminarProposal(models.Model):
         APPROVED = "approved", _("Approved")
         DECLINED = "declined", _("Declined")
 
+    #: Event types a member may propose (others — Days of Assembly, Working Days,
+    #: the Scholarly Seminar Series — stay PC/Board-curated in admin).
+    PROPOSABLE_TYPES = (
+        Event.Type.SEMINAR,
+        Event.Type.READING_GROUP,
+        Event.Type.SPECIAL_EVENT,
+    )
+
     proposed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="seminar_proposals",
+    )
+    event_type = models.CharField(
+        max_length=20,
+        choices=[
+            (Event.Type.SEMINAR, "Seminar"),
+            (Event.Type.READING_GROUP, "Reading group"),
+            (Event.Type.SPECIAL_EVENT, "Special event"),
+        ],
+        default=Event.Type.SEMINAR,
+        help_text="What kind of event you're proposing.",
     )
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -896,28 +914,62 @@ class SeminarProposal(models.Model):
 
     @transaction.atomic
     def approve(self, reviewer):
-        """Mint the seminar Event (+ standing workgroup, faculty, program).
-        Idempotent: returns the already-minted event if not PROPOSED."""
+        """Mint the proposed Event and wire it up per its type.
+        Idempotent: returns the already-minted event if not PROPOSED.
+
+        - Seminar → OPEN; standing SEMINAR workgroup + faculty (confers faculty
+          standing); ``continues_seminar`` adds a new term to an existing one.
+        - Reading group → OPEN; own READING_GROUP workgroup; conveners added as
+          ORGANIZERs (reading groups are organizer-led, not faculty).
+        - Special event → DRAFT (the PC finalizes pricing/access before
+          publishing); links to the PC workgroup for *provenance only* — nobody
+          is added to the PC roster, so proposers/presenters never leak into the
+          committee.
+        """
         if self.status != self.Status.PROPOSED:
             return self.minted_event
         from django.utils import timezone
 
-        program, _created = Program.objects.get_or_create(academic_year=self.academic_year)
+        is_offering = self.event_type in Event.ANNUAL_PROGRAM_TYPES
+        program = None
+        if is_offering:
+            program, _ = Program.objects.get_or_create(academic_year=self.academic_year)
         event = Event.objects.create(
             title=self.title[:200], slug=self._unique_event_slug(),
-            event_type=Event.Type.SEMINAR,
+            event_type=self.event_type,
             start_date=self.start_date, end_date=self.end_date,
-            format=self.format, status=Event.Status.OPEN,
+            format=self.format,
+            status=Event.Status.OPEN if is_offering else Event.Status.DRAFT,
             description=self.description, program=program,
         )
-        # Continuing seminar → attach its existing standing workgroup so
-        # ensure_workgroup() adds a new term rather than spawning a fresh group.
-        if self.continues_seminar_id and event.workgroup_id is None:
-            event.workgroup_id = self.continues_seminar_id
-            event.save(update_fields=["workgroup"])
-        # set_faculty() calls ensure_workgroup() — for a brand-new seminar that
-        # creates the standing SEMINAR workgroup (and its channel).
-        event.set_faculty(list(self.faculty.all()))
+        if self.event_type == Event.Type.SEMINAR:
+            # Continuing seminar → attach its existing standing workgroup so
+            # ensure_workgroup() adds a new term rather than spawning a fresh one.
+            if self.continues_seminar_id and event.workgroup_id is None:
+                event.workgroup_id = self.continues_seminar_id
+                event.save(update_fields=["workgroup"])
+            # set_faculty() calls ensure_workgroup(), creating the standing
+            # SEMINAR workgroup (+ its channel) for a brand-new seminar.
+            event.set_faculty(list(self.faculty.all()))
+        elif self.event_type == Event.Type.READING_GROUP:
+            from workgroups.models import WorkgroupMembership
+
+            wg = event.ensure_workgroup()
+            conveners = list(self.faculty.all())
+            if not conveners and self.proposed_by_id:
+                conveners = [self.proposed_by]
+            for u in conveners:
+                WorkgroupMembership.objects.get_or_create(
+                    workgroup=wg, user=u,
+                    defaults={
+                        "role": WorkgroupMembership.Role.ORGANIZER,
+                        "start_date": timezone.localdate(),
+                    },
+                )
+        else:
+            # Special event: provenance link to the PC workgroup only — no roster
+            # changes (avoids leaking proposers/presenters into the committee).
+            event.ensure_workgroup()
         self.status = self.Status.APPROVED
         self.reviewed_by = reviewer
         self.reviewed_at = timezone.now()

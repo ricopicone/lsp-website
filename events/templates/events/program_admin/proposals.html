@@ -2,8 +2,9 @@
 {% block tab_content %}
 <div class="space-y-8">
   <p class="text-sm text-base-content/60">
-    Seminar proposals from faculty. Approving one mints its seminar into the
-    proposed academic year's program (you still publish the program separately).
+    Event proposals from members. Approving a seminar or reading group mints it
+    into the proposed academic year's program (you still publish the program
+    separately); approving a special event mints a draft for you to finalize.
   </p>
 
   <section class="space-y-3">
@@ -14,6 +15,7 @@
       <li class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-4">
         <div class="space-y-1">
           <p class="font-medium text-base-content">{{ p.title }}
+            <span class="badge badge-outline badge-sm align-middle">{{ p.get_event_type_display }}</span>
             <span class="text-xs font-normal text-base-content/55">· {{ p.academic_year }}
               · {{ p.get_format_display }}
               {% if p.continues_seminar %}· continues “{{ p.continues_seminar.name }}”{% endif %}</span>

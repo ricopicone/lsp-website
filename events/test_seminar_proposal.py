@@ -84,6 +84,7 @@ def test_propose_creates_proposal(client):
     start, end = _future()
     client.force_login(fac)
     resp = client.post("/propose-seminar/", {
+        "event_type": Event.Type.SEMINAR,
         "title": "Reading Seminar XI",
         "description": "Four fundamental concepts.",
         "start_date": start.isoformat(), "end_date": end.isoformat(),
@@ -160,6 +161,7 @@ def test_decline_then_resubmit(client):
 
     client.force_login(fac)
     resp = client.post(f"/propose-seminar/{p.pk}/edit/", {
+        "event_type": Event.Type.SEMINAR,
         "title": "Maybe Seminar v2", "start_date": start.isoformat(),
         "end_date": end.isoformat(), "format": Event.Format.ONLINE,
     })
@@ -173,6 +175,7 @@ def test_form_rejects_end_before_start(client):
     start, _ = _future()
     client.force_login(fac)
     resp = client.post("/propose-seminar/", {
+        "event_type": Event.Type.SEMINAR,
         "title": "Bad Dates", "start_date": start.isoformat(),
         "end_date": (start - dt.timedelta(days=5)).isoformat(),
         "format": Event.Format.ONLINE,
@@ -192,3 +195,58 @@ def test_decide_gated_to_pc(client):
                        {"decision": "approve"}).status_code == 404
     p.refresh_from_db()
     assert p.status == SeminarProposal.Status.PROPOSED
+
+
+# ---- generalized proposals: reading group + special event (M12.5) ----
+
+def test_approve_reading_group_mints_own_workgroup_with_organizer():
+    member = _member("rgorg@x.test")
+    start, end = _future()
+    p = SeminarProposal.objects.create(
+        proposed_by=member, title="Écrits Reading Group",
+        event_type=Event.Type.READING_GROUP,
+        start_date=start, end_date=end, format=Event.Format.ONLINE,
+    )
+    event = p.approve(_pc_member())
+    assert event.event_type == Event.Type.READING_GROUP
+    assert event.status == Event.Status.OPEN
+    wg = event.workgroup
+    assert wg is not None and wg.kind == Workgroup.Kind.READING_GROUP
+    # The proposer becomes an organizer of the group's own workgroup.
+    m = wg.memberships.get(user=member)
+    assert m.role == m.Role.ORGANIZER
+    assert event.is_faculty(member) is False  # reading groups don't confer faculty
+
+
+def test_approve_special_event_drafts_and_never_leaks_into_pc():
+    """A special-event proposal mints a DRAFT linked to the PC workgroup for
+    provenance only — the proposer must NOT become a PC member (the leak guard)."""
+    member = _member("seorg@x.test")
+    start, end = _future(start_days=40, end_days=40)
+    p = SeminarProposal.objects.create(
+        proposed_by=member, title="Working with the Negative",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=start, end_date=end, format=Event.Format.ONLINE,
+    )
+    p.faculty.add(member)  # even if listed, must not join the PC roster
+    event = p.approve(_pc_member())
+    assert event.event_type == Event.Type.SPECIAL_EVENT
+    assert event.status == Event.Status.DRAFT          # PC finalizes before publishing
+    assert event.program is None                       # one-off, not in a program
+    pc_wg = Committee.objects.get(slug="programming-committee").workgroup
+    assert event.workgroup_id == pc_wg.id              # provenance link only
+    assert pc_wg.is_member(member) is False            # the leak guard
+    assert member not in [m.user for m in pc_wg.memberships.all()]
+
+
+def test_member_can_open_propose_page(client):
+    client.force_login(_member("opener@x.test"))
+    assert client.get("/propose-seminar/").status_code == 200
+
+
+def test_outsider_cannot_open_propose_page(client):
+    outsider = User.objects.create_user(email="aud@x.test", password="x")
+    outsider.profile.role = Profile.Role.EXTERNAL
+    outsider.profile.save()
+    client.force_login(outsider)
+    assert client.get("/propose-seminar/").status_code == 404

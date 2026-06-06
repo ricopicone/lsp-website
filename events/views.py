@@ -548,7 +548,9 @@ def seminar_propose(request):
             proposal.save()
             form.save_m2m()
             messages.success(
-                request, "Seminar proposed — the Programming Committee will review it."
+                request,
+                f"{proposal.get_event_type_display()} proposed — the Programming "
+                "Committee will review it.",
             )
             return redirect("seminar_propose")
     else:
