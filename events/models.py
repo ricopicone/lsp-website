@@ -822,7 +822,7 @@ class PricingCode(models.Model):
         return True
 
 
-class SeminarProposal(models.Model):
+class EventProposal(models.Model):
     """A faculty member's proposal to run a seminar (M12.5).
 
     The Programming Committee reviews it; on approval it mints a SEMINAR
@@ -1047,11 +1047,11 @@ class SeminarProposal(models.Model):
 
 
 class ProposalReading(models.Model):
-    """A single reading on a SeminarProposal, stored individually so the list can
+    """A single reading on a EventProposal, stored individually so the list can
     be formatted (one MLA-style citation per row, ordered)."""
 
     proposal = models.ForeignKey(
-        SeminarProposal, on_delete=models.CASCADE, related_name="readings",
+        EventProposal, on_delete=models.CASCADE, related_name="readings",
     )
     sort_order = models.PositiveIntegerField(default=0)
     citation = models.TextField()

@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import Event, PricingCode, Program, SeminarProposal
+from .models import Event, EventProposal, PricingCode, Program
 
 
 class EventDescriptionForm(forms.ModelForm):
@@ -68,7 +68,7 @@ def _member_name(user):
     return user.get_full_name() or user.email
 
 
-class SeminarProposalForm(forms.ModelForm):
+class EventProposalForm(forms.ModelForm):
     """Member-facing event proposal (M12.5) — seminar, reading group, or special
     event. Fields are grouped per type in the template (toggled by ``event_type``);
     validation enforces the per-type requirements here. The Programming Committee
@@ -84,7 +84,7 @@ class SeminarProposalForm(forms.ModelForm):
     )
 
     class Meta:
-        model = SeminarProposal
+        model = EventProposal
         fields = (
             "event_type", "title", "description",
             "date_tbd", "start_date", "end_date", "proposed_time",

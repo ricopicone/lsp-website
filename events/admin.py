@@ -4,11 +4,11 @@ from django.contrib import admin
 from .models import (
     Event,
     EventMemberSpeaker,
+    EventProposal,
     PriceTier,
     PricingCode,
     Program,
     ProposalReading,
-    SeminarProposal,
     Session,
     Speaker,
 )
@@ -19,8 +19,8 @@ class ProposalReadingInline(admin.TabularInline):
     extra = 0
 
 
-@admin.register(SeminarProposal)
-class SeminarProposalAdmin(admin.ModelAdmin):
+@admin.register(EventProposal)
+class EventProposalAdmin(admin.ModelAdmin):
     list_display = ("title", "event_type", "proposed_by", "status", "start_date",
                     "end_date", "continues_seminar", "minted_event", "created_at")
     list_filter = ("status", "event_type", "format")

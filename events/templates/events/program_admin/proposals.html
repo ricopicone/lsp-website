@@ -48,12 +48,12 @@
           {% if p.contact %}<p class="text-xs text-base-content/60">Contact: {{ p.contact }}</p>{% endif %}
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <form method="post" action="{% url 'seminar_proposal_decide' p.pk %}">
+          <form method="post" action="{% url 'proposal_decide' p.pk %}">
             {% csrf_token %}
             <input type="hidden" name="decision" value="approve">
             <button class="btn btn-primary btn-sm">Approve &amp; mint</button>
           </form>
-          <form method="post" action="{% url 'seminar_proposal_decide' p.pk %}"
+          <form method="post" action="{% url 'proposal_decide' p.pk %}"
                 class="flex items-center gap-2">
             {% csrf_token %}
             <input type="hidden" name="decision" value="decline">

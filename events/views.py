@@ -530,18 +530,18 @@ def program_admin_event_edit(request, academic_year: str, slug: str):
 # ---- Seminar proposals (M12.5) ----------------------------------------
 
 @login_required
-def seminar_propose(request):
+def propose_event(request):
     """Any LSP member proposes a seminar (new, or a new year of an existing
     one); the page also lists the proposer's own proposals + statuses. Teaching
     a seminar is what confers faculty standing, so proposing doesn't require it —
     the faculty flag is granted to a seminar's instructors when it's approved."""
     if not is_lsp_member(request.user):
         raise Http404()
-    from .forms import SeminarProposalForm
-    from .models import SeminarProposal
+    from .forms import EventProposalForm
+    from .models import EventProposal
 
     if request.method == "POST":
-        form = SeminarProposalForm(request.POST)
+        form = EventProposalForm(request.POST)
         if form.is_valid():
             proposal = form.save(commit=False)
             proposal.proposed_by = request.user
@@ -555,30 +555,30 @@ def seminar_propose(request):
             )
             return redirect("propose_event")
     else:
-        form = SeminarProposalForm()
-    mine = (SeminarProposal.objects
+        form = EventProposalForm()
+    mine = (EventProposal.objects
             .filter(proposed_by=request.user)
             .select_related("minted_event"))
-    return render(request, "events/seminar_propose.html", {"form": form, "mine": mine})
+    return render(request, "events/propose_event.html", {"form": form, "mine": mine})
 
 
 @login_required
-def seminar_proposal_edit(request, pk: int):
+def proposal_edit(request, pk: int):
     """The proposer edits a still-pending or declined proposal; saving a
     declined one resubmits it for fresh review."""
-    from .forms import SeminarProposalForm
-    from .models import SeminarProposal
+    from .forms import EventProposalForm
+    from .models import EventProposal
 
-    proposal = get_object_or_404(SeminarProposal, pk=pk)
+    proposal = get_object_or_404(EventProposal, pk=pk)
     editable = proposal.status in (
-        SeminarProposal.Status.PROPOSED, SeminarProposal.Status.DECLINED,
+        EventProposal.Status.PROPOSED, EventProposal.Status.DECLINED,
     )
     if proposal.proposed_by_id != request.user.id or not editable:
         raise Http404()
     if request.method == "POST":
-        form = SeminarProposalForm(request.POST, instance=proposal)
+        form = EventProposalForm(request.POST, instance=proposal)
         if form.is_valid():
-            was_declined = proposal.status == SeminarProposal.Status.DECLINED
+            was_declined = proposal.status == EventProposal.Status.DECLINED
             form.save()
             form.save_readings(proposal)
             if was_declined:
@@ -588,8 +588,8 @@ def seminar_proposal_edit(request, pk: int):
                 messages.success(request, "Proposal updated.")
             return redirect("propose_event")
     else:
-        form = SeminarProposalForm(instance=proposal)
-    return render(request, "events/seminar_propose.html", {
+        form = EventProposalForm(instance=proposal)
+    return render(request, "events/propose_event.html", {
         "form": form, "editing": proposal,
     })
 
@@ -599,15 +599,15 @@ def program_admin_proposals(request):
     """PC admin: review queue for seminar proposals."""
     if not _is_pc_or_staff(request.user):
         raise Http404()
-    from .models import SeminarProposal
+    from .models import EventProposal
 
     proposals = list(
-        SeminarProposal.objects
+        EventProposal.objects
         .select_related("proposed_by", "minted_event", "continues_seminar")
         .prefetch_related("faculty")
     )
-    pending = [p for p in proposals if p.status == SeminarProposal.Status.PROPOSED]
-    decided = [p for p in proposals if p.status != SeminarProposal.Status.PROPOSED]
+    pending = [p for p in proposals if p.status == EventProposal.Status.PROPOSED]
+    decided = [p for p in proposals if p.status != EventProposal.Status.PROPOSED]
     return _pc_admin_render(request, "proposals", "events/program_admin/proposals.html", {
         "pending": pending,
         "decided": decided,
@@ -616,14 +616,14 @@ def program_admin_proposals(request):
 
 @login_required
 @require_POST
-def seminar_proposal_decide(request, pk: int):
+def proposal_decide(request, pk: int):
     """PC approves (mints the Event) or declines a seminar proposal."""
     if not _is_pc_or_staff(request.user):
         raise Http404()
-    from .models import SeminarProposal
+    from .models import EventProposal
 
-    proposal = get_object_or_404(SeminarProposal, pk=pk)
-    if proposal.status != SeminarProposal.Status.PROPOSED:
+    proposal = get_object_or_404(EventProposal, pk=pk)
+    if proposal.status != EventProposal.Status.PROPOSED:
         return redirect("program_admin_proposals")
     if request.POST.get("decision") == "approve":
         event = proposal.approve(request.user)
