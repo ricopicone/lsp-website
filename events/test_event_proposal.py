@@ -442,6 +442,67 @@ def test_saved_proposals_hidden_from_pc_queue(client):
     assert b"Still Saved" not in resp.content  # only submitted ones reach the PC
 
 
+# ---- proposal meeting scheduler ----
+
+def test_schedule_choice_set_persists_recurrence(client):
+    fac = _faculty("schedset@x.test")
+    start, end = _future()
+    client.force_login(fac)
+    resp = client.post("/propose/", {
+        **_MGMT, "event_type": Event.Type.SEMINAR, "title": "Sched Sem",
+        "description": "x", "start_date": start.isoformat(), "end_date": end.isoformat(),
+        "schedule_choice": "set", "sched_frequency": "weekly",
+        "sched_weekdays": ["MO", "WE"], "sched_start_time": "18:00",
+        "sched_end_time": "20:00",
+    })
+    assert resp.status_code == 302
+    p = EventProposal.objects.get(title="Sched Sem")
+    assert p.schedule_tbd is False and p.sched_frequency == "weekly"
+    assert p.sched_weekdays == "MO,WE"
+
+
+def test_schedule_set_requires_times(client):
+    fac = _faculty("schedreq@x.test")
+    start, end = _future()
+    client.force_login(fac)
+    resp = client.post("/propose/", {
+        **_MGMT, "event_type": Event.Type.SEMINAR, "title": "Bad Sched",
+        "description": "x", "start_date": start.isoformat(), "end_date": end.isoformat(),
+        "schedule_choice": "set", "sched_frequency": "weekly",
+        "sched_weekdays": ["MO"],  # no times
+    })
+    assert resp.status_code == 200  # re-rendered with an error
+    assert not EventProposal.objects.filter(title="Bad Sched").exists()
+
+
+def test_seminar_schedule_materializes_meeting_series():
+    import datetime as _dt
+    fac = _faculty("mat@x.test")
+    start, end = _future()  # future range so occurrences generate
+    p = EventProposal.objects.create(
+        proposed_by=fac, title="Weekly Sem", event_type=Event.Type.SEMINAR,
+        start_date=start, end_date=end, schedule_tbd=False,
+        sched_frequency="weekly", sched_weekdays="MO",
+        sched_start_time=_dt.time(18, 0), sched_end_time=_dt.time(20, 0),
+    )
+    event = p.approve(_pc_member())
+    series = event.workgroup.meeting_series.get()
+    assert series.frequency == "weekly" and series.weekdays == "MO"
+    assert series.start_date == start and series.end_date == end
+    assert event.workgroup.meetings.exists()  # generate() created occurrences
+
+
+def test_schedule_tbd_creates_no_series():
+    fac = _faculty("notbd@x.test")
+    start, end = _future()
+    p = EventProposal.objects.create(
+        proposed_by=fac, title="TBD Sem", event_type=Event.Type.SEMINAR,
+        start_date=start, end_date=end, schedule_tbd=True,
+    )
+    event = p.approve(_pc_member())
+    assert not event.workgroup.meeting_series.exists()
+
+
 def test_member_can_open_propose_page(client):
     client.force_login(_member("opener@x.test"))
     assert client.get("/propose/").status_code == 200

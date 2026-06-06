@@ -921,6 +921,29 @@ class EventProposal(models.Model):
         help_text="Offer APA CE credits (you apply to GPPA separately).",
     )
 
+    # ---- Seminar / reading-group meeting schedule (optional; materializes into a
+    # MeetingSeries on the workgroup at approval). Date range comes from the term
+    # (start_date/end_date). ----
+    schedule_tbd = models.BooleanField(
+        default=True, help_text="Schedule the recurring meetings now, or leave TBD.",
+    )
+
+    class ScheduleFrequency(models.TextChoices):
+        WEEKLY = "weekly", "Weekly"
+        BIWEEKLY = "biweekly", "Every 2 weeks"
+        MONTHLY = "monthly", "Monthly (nth weekday)"
+
+    sched_frequency = models.CharField(
+        max_length=12, choices=ScheduleFrequency.choices, blank=True,
+    )
+    sched_weekdays = models.CharField(max_length=32, blank=True)  # MO,TU,…
+    sched_week_position = models.SmallIntegerField(null=True, blank=True)
+    sched_start_time = models.TimeField(null=True, blank=True)
+    sched_end_time = models.TimeField(null=True, blank=True)
+    sched_location = models.CharField(max_length=255, blank=True)
+    sched_online_url = models.URLField(blank=True)
+    sched_access_info = models.CharField(max_length=255, blank=True)
+
     # ---- Special-event fields ----
     date_tbd = models.BooleanField(
         default=False, help_text="Check if the date/time is TBD (not yet decided).",
@@ -1001,6 +1024,25 @@ class EventProposal(models.Model):
             minimum_amount=(self.fee_sliding_min or Decimal("0")) if sliding else Decimal("0"),
             covered_by_tuition=self.tuition_covers,
         )
+
+    def _build_meeting_series(self, event, reviewer):
+        """Materialize the proposed recurring schedule into a MeetingSeries on the
+        event's workgroup (+ generate occurrences). Term range = the proposal's
+        start/end dates."""
+        wg = event.workgroup
+        if wg is None or not (self.start_date and self.end_date):
+            return
+        from workgroups.models import MeetingSeries
+        series = MeetingSeries.objects.create(
+            workgroup=wg, title=self.title[:255], frequency=self.sched_frequency,
+            weekdays=self.sched_weekdays or "MO",
+            week_position=self.sched_week_position or 1,
+            start_date=self.start_date, end_date=self.end_date,
+            start_time=self.sched_start_time, end_time=self.sched_end_time,
+            location=self.sched_location, online_url=self.sched_online_url,
+            access_info=self.sched_access_info, created_by=reviewer,
+        )
+        series.generate()
 
     def _attach_speakers(self, event):
         """Mint external Speaker rows from the proposal and attach them."""
@@ -1117,6 +1159,10 @@ class EventProposal(models.Model):
             for u in self.faculty.all():
                 event.member_speakers.add(u)
             self._attach_speakers(event)
+        # Offerings with a scheduled cadence get a real MeetingSeries on their
+        # workgroup (members manage individual occurrences there afterward).
+        if is_offering and not self.schedule_tbd and self.sched_frequency:
+            self._build_meeting_series(event, reviewer)
         self.status = self.Status.APPROVED
         self.reviewed_by = reviewer
         self.reviewed_at = timezone.now()

@@ -91,6 +91,19 @@ class EventProposalForm(forms.ModelForm):
         widget=forms.RadioSelect, initial="free",
     )
 
+    #: Seminars / reading groups: schedule the recurring meetings now, or leave TBD.
+    schedule_choice = forms.ChoiceField(
+        required=False, label="Meeting schedule",
+        choices=[("tbd", "Schedule TBD"), ("set", "Schedule the meetings")],
+        widget=forms.RadioSelect, initial="tbd",
+    )
+    sched_weekdays = forms.MultipleChoiceField(
+        required=False, label="On",
+        choices=[("MO", "Mon"), ("TU", "Tue"), ("WE", "Wed"), ("TH", "Thu"),
+                 ("FR", "Fri"), ("SA", "Sat"), ("SU", "Sun")],
+        widget=forms.CheckboxSelectMultiple,
+    )
+
     class Meta:
         model = EventProposal
         fields = (
@@ -101,6 +114,8 @@ class EventProposalForm(forms.ModelForm):
             "continues_seminar", "faculty",
             "fee_amount", "fee_sliding_min", "fee_sliding_max", "tuition_covers",
             "offers_ce",
+            "sched_frequency", "sched_week_position", "sched_start_time",
+            "sched_end_time", "sched_location", "sched_online_url", "sched_access_info",
             "speaker_arrangement", "honoraria_estimate",
         )
         widgets = {
@@ -111,6 +126,10 @@ class EventProposalForm(forms.ModelForm):
             ),
             "description": forms.Textarea(attrs={"rows": 8}),
             "speaker_arrangement": forms.RadioSelect,
+            "sched_frequency": forms.Select,
+            "sched_week_position": forms.Select,
+            "sched_start_time": forms.TimeInput(attrs={"type": "time"}),
+            "sched_end_time": forms.TimeInput(attrs={"type": "time"}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -154,6 +173,25 @@ class EventProposalForm(forms.ModelForm):
         self.fields["end_date"].label = "End date"
         self.fields["location_kind"].label = "Location"
         self.fields["offers_ce"].label = "Offer CE credits"
+
+        # Recurring-schedule fields (offerings). Frequency optional at field level
+        # — required only when the member chooses to schedule now (in clean()).
+        self.fields["sched_frequency"].required = False
+        self.fields["sched_frequency"].label = "Frequency"
+        self.fields["sched_frequency"].choices = (
+            [("", "—")] + list(EventProposal.ScheduleFrequency.choices)
+        )
+        self.fields["sched_start_time"].label = "Start time"
+        self.fields["sched_end_time"].label = "End time"
+        self.fields["sched_location"].label = "Room / place"
+        self.fields["sched_online_url"].label = "Video-call link"
+        self.fields["sched_access_info"].label = "Passcode / dial-in"
+        self.fields["sched_week_position"] = forms.TypedChoiceField(
+            coerce=int, required=False, empty_value=None, label="Week of month",
+            choices=[(1, "First"), (2, "Second"), (3, "Third"), (4, "Fourth"),
+                     (-1, "Last")],
+            widget=forms.Select, initial=1,
+        )
         self.fields["contact"].label = "Contact email"
         self.fields["contact"].help_text = (
             "An additional contact for this proposal, besides your own account email."
@@ -193,6 +231,12 @@ class EventProposalForm(forms.ModelForm):
                 self.initial["proposed_datetime"] = timezone.localtime(
                     self.instance.proposed_datetime, ZoneInfo("America/Los_Angeles")
                 ).strftime("%Y-%m-%dT%H:%M")
+            if not self.is_bound:
+                self.initial["schedule_choice"] = (
+                    "tbd" if self.instance.schedule_tbd else "set"
+                )
+                if self.instance.sched_weekdays:
+                    self.initial["sched_weekdays"] = self.instance.sched_weekdays.split(",")
 
     def clean_proposed_datetime(self):
         """Interpret the naive datetime-local input as Pacific time."""
@@ -253,6 +297,24 @@ class EventProposalForm(forms.ModelForm):
                 self.add_error("fee_sliding_max", "Enter a sliding-scale range.")
             elif smin is not None and smax is not None and smin > smax:
                 self.add_error("fee_sliding_min", "Minimum can't exceed the maximum.")
+
+        # Recurring meeting schedule (offerings only). sched_weekdays + schedule_tbd
+        # aren't ModelForm fields, so write them onto the instance directly.
+        weekdays = ",".join(data.get("sched_weekdays") or [])
+        scheduled = is_offering and data.get("schedule_choice") == "set"
+        self.instance.schedule_tbd = not scheduled
+        self.instance.sched_weekdays = weekdays if scheduled else ""
+        data["sched_weekdays"] = weekdays  # keep cleaned_data consistent for errors
+        if not scheduled:
+            # Clear any partial schedule so a flip back to TBD leaves no stray data.
+            data["sched_frequency"] = ""
+        elif require:
+            if not data.get("sched_frequency"):
+                self.add_error("sched_frequency", "Pick how often it meets.")
+            if not data.get("sched_weekdays"):
+                self.add_error("sched_weekdays", "Pick at least one weekday.")
+            if not data.get("sched_start_time") or not data.get("sched_end_time"):
+                self.add_error("sched_end_time", "Give the meeting start and end times.")
         return data
 
     def save_readings(self, proposal):

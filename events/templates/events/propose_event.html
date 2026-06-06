@@ -94,6 +94,33 @@
     <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.speaker_arrangement %}</div>
     <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.honoraria_estimate %}</div>
 
+    {# ---- Meeting schedule (seminars & reading groups) ---- #}
+    <div data-types="seminar reading_group" data-series-scheduler
+         class="rounded-lg border border-base-300/60 p-3 space-y-3">
+      {% include "events/_proposal_field.html" with field=form.schedule_choice %}
+      <div id="sched-fields" class="space-y-3">
+        <div class="flex flex-wrap gap-3">
+          {% include "events/_proposal_field.html" with field=form.sched_frequency %}
+          <div data-series-monthly hidden>{% include "events/_proposal_field.html" with field=form.sched_week_position %}</div>
+        </div>
+        <div class="space-y-1">
+          <span class="block text-sm font-medium" data-series-weekday-label>On</span>
+          <div class="flex flex-wrap gap-2 text-sm">{{ form.sched_weekdays }}</div>
+          {% if form.sched_weekdays.errors %}<p class="text-error text-xs">{{ form.sched_weekdays.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          {% include "events/_proposal_field.html" with field=form.sched_start_time %}
+          {% include "events/_proposal_field.html" with field=form.sched_end_time %}
+        </div>
+        {% include "events/_proposal_field.html" with field=form.sched_location %}
+        {% include "events/_proposal_field.html" with field=form.sched_online_url %}
+        {% include "events/_proposal_field.html" with field=form.sched_access_info %}
+        <p class="text-xs text-base-content/50">Meetings recur across the term (the
+          start–end dates above). You can fine-tune individual occurrences in the
+          group's Schedule tab after approval.</p>
+      </div>
+    </div>
+
     {# ---- Fee ---- #}
     <div data-types="seminar reading_group special_event" class="rounded-lg border border-base-300/60 p-3 space-y-3">
       {% include "events/_proposal_field.html" with field=form.fee_type %}
@@ -173,6 +200,13 @@
       showRow(feeSliding, ft === "sliding");
     }
 
+    var schedRadios = document.querySelectorAll("input[name='schedule_choice']");
+    var schedFields = document.getElementById("sched-fields");
+    function syncSchedule() {
+      var checked = document.querySelector("input[name='schedule_choice']:checked");
+      showRow(schedFields, checked && checked.value === "set");
+    }
+
     function sync() {
       var t = sel ? sel.value : "";
       document.querySelectorAll("[data-types]").forEach(function (el) {
@@ -199,8 +233,10 @@
     if (tbd) { tbd.addEventListener("change", sync); }
     if (locKind) { locKind.addEventListener("change", sync); }
     feeRadios.forEach(function (r) { r.addEventListener("change", syncFee); });
+    schedRadios.forEach(function (r) { r.addEventListener("change", syncSchedule); });
     sync();
     syncFee();
+    syncSchedule();
 
     // External-speaker formset: clone the empty-form template, fixing :prefix:.
     var addBtn = document.getElementById("add-speaker");
@@ -219,5 +255,6 @@
     }
   })();
   </script>
+  {% include "events/_series_branching_js.html" %}
 </div>
 {% endblock %}
