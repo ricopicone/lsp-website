@@ -173,8 +173,23 @@ def _formation_url(request):
     return _rev("admissions:formation")
 
 
+def _formation_advisor_url(request):
+    url = _rev("admissions:formation")
+    return f"{url}#advisor" if url else None
+
+
+def _formation_steps_url(request):
+    url = _rev("admissions:formation")
+    return f"{url}#steps" if url else None
+
+
 def _tuition_tab_url(request):
     return _rev("admissions:formation", query="tab=tuition")
+
+
+def _tuition_decision_url(request):
+    url = _rev("admissions:formation", query="tab=tuition")
+    return f"{url}#decision" if url else None
 
 
 # --- The walkthroughs ------------------------------------------------------
@@ -259,10 +274,10 @@ def _formation_walkthrough() -> Checklist:
                       detail="Your personal hub.", resolve_url=_formation_url, manual=True),
         ChecklistTask(id="form_advisor", label="Choose your advisor",
                       detail="They present your demandes to the Meeting of the Analysts.",
-                      resolve_url=_formation_url, manual=True),
+                      resolve_url=_formation_advisor_url, manual=True),
         ChecklistTask(id="form_steps", label="Review your formation steps",
                       detail="Your path so far, and the next step.",
-                      resolve_url=_formation_url, manual=True),
+                      resolve_url=_formation_steps_url, manual=True),
     ])
 
 
@@ -272,7 +287,7 @@ def _tuition_dues_walkthrough() -> Checklist:
                       detail="Everything in one place.", resolve_url=_tuition_tab_url, manual=True),
         ChecklistTask(id="td_decision", label="Record your tuition decision",
                       detail="Committed, payment plan, paid in full, or skipping.",
-                      resolve_url=_tuition_tab_url, manual=True),
+                      resolve_url=_tuition_decision_url, manual=True),
         ChecklistTask(id="td_dues", label="Pay your dues",
                       detail="If your role and standing owe them this year.",
                       resolve_url=lambda r: _rev("dues"), manual=True),

@@ -18,10 +18,46 @@
   </header>
 
   {% if start_url and walkthroughs_enabled %}
-  <div class="rounded-box border border-primary/30 bg-primary/5 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+  <div id="wt-start" data-wt-id="{{ walkthrough_id }}"
+       class="rounded-box border border-primary/30 bg-primary/5 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
     <span class="text-sm text-base-content/80">Want a guided walkthrough? The corner card will step you through it and tick off as you go.</span>
-    <a href="{{ start_url }}" class="btn btn-primary btn-sm">Start this walkthrough <span aria-hidden="true">→</span></a>
+    <div class="flex items-center gap-2">
+      <a href="{{ start_url }}" data-wt-resume class="btn btn-primary btn-sm hidden">Resume <span aria-hidden="true">→</span></a>
+      <a href="{{ start_url }}" data-wt-go class="btn btn-primary btn-sm">Start this walkthrough <span aria-hidden="true">→</span></a>
+    </div>
   </div>
+  <script>
+    // If the member has partway progress (checked steps remembered locally),
+    // offer Resume (keep it) alongside Start over (wipe it). A fresh start —
+    // and Start over — clears this walkthrough's checked steps first; auto
+    // steps still reflect real data.
+    (function () {
+      var box = document.getElementById("wt-start");
+      if (!box) return;
+      var prefix = "lsp-wt:" + box.getAttribute("data-wt-id") + ":";
+      var go = box.querySelector("[data-wt-go]");
+      var resume = box.querySelector("[data-wt-resume]");
+      function progressKeys() {
+        var keys = [];
+        try {
+          for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k && k.indexOf(prefix) === 0) keys.push(k);
+          }
+        } catch (e) {}
+        return keys;
+      }
+      if (progressKeys().length) {
+        resume.classList.remove("hidden");
+        go.textContent = "Start over";
+        go.classList.remove("btn-primary");
+        go.classList.add("btn-ghost");
+      }
+      go.addEventListener("click", function () {
+        progressKeys().forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+      });
+    })();
+  </script>
   {% endif %}
 
   <div class="lsp-prose">

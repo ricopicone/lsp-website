@@ -58,6 +58,7 @@ urlpatterns = [
     path("2fa/disable/", views.twofactor_disable, name="twofactor_disable"),
 
     path("profile/", views.profile_edit, name="profile_edit"),
+    path("profile/autosave/", views.profile_autosave, name="profile_autosave"),
     path("survey/", views.intake_survey, name="intake_survey"),
     path("advisor/", views.advisor_select, name="advisor_select"),
     path("email/change/", views.email_change, name="email_change"),
