@@ -4,11 +4,18 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .categories import CATEGORY_META, SECTION_ORDER, EmailDelivery, meta_for
+from .categories import (
+    CATEGORY_META,
+    SECTION_ORDER,
+    DigestCadence,
+    EmailDelivery,
+    meta_for,
+)
 from .models import Notification, NotificationPreference
 from .preferences import resolve
 
@@ -51,6 +58,35 @@ def open(request, pk):
 
 
 @login_required
+def recent(request):
+    """The dropdown panel's contents: the most recent notifications + count.
+    Loaded lazily when the bell opens."""
+    items = list(
+        Notification.objects.filter(recipient=request.user)
+        .select_related("actor")[:8]
+    )
+    unread = Notification.objects.filter(
+        recipient=request.user, read_at__isnull=True
+    ).count()
+    return render(
+        request,
+        "notifications/_dropdown.html",
+        {"items": items, "unread": unread},
+    )
+
+
+@login_required
+@require_POST
+def mark_read(request, pk):
+    """Mark one notification read without navigating (used by the dropdown
+    before the browser follows the link). Returns 204."""
+    Notification.objects.filter(
+        pk=pk, recipient=request.user, read_at__isnull=True
+    ).update(read_at=timezone.now())
+    return HttpResponse(status=204)
+
+
+@login_required
 def settings_page(request):
     """Per-category delivery preferences, grouped into sections."""
     pref, _ = NotificationPreference.objects.get_or_create(user=request.user)
@@ -66,13 +102,14 @@ def settings_page(request):
             if meta.email_locked or not meta.email_capable:
                 email = meta.default_email
             else:
-                email = (
-                    EmailDelivery.IMMEDIATE
-                    if request.POST.get(f"{category}__email") == "on"
-                    else EmailDelivery.OFF
-                )
+                email = request.POST.get(f"{category}__email", EmailDelivery.OFF)
+                if email not in EmailDelivery.values:
+                    email = EmailDelivery.OFF
             pref.set(category, in_app=in_app, email=email)
-        pref.save(update_fields=["overrides", "updated_at"])
+        cadence = request.POST.get("digest_cadence", "")
+        if cadence in DigestCadence.values:
+            pref.digest_cadence = cadence
+        pref.save(update_fields=["overrides", "digest_cadence", "updated_at"])
         messages.success(request, "Notification preferences saved.")
         return redirect("notifications:settings")
 
@@ -86,7 +123,7 @@ def settings_page(request):
                 "label": meta.label,
                 "help_text": meta.help_text,
                 "in_app": res.in_app,
-                "email": res.email,
+                "email_mode": res.email_mode,
                 "in_app_editable": res.in_app_editable,
                 "email_editable": res.email_editable,
                 "email_locked": meta.email_locked,
@@ -95,4 +132,13 @@ def settings_page(request):
     grouped = [
         {"title": s, "rows": sections[s]} for s in SECTION_ORDER if sections[s]
     ]
-    return render(request, "notifications/settings.html", {"sections": grouped})
+    return render(
+        request,
+        "notifications/settings.html",
+        {
+            "sections": grouped,
+            "cadence": pref.digest_cadence,
+            "cadence_choices": DigestCadence.choices,
+            "email_choices": EmailDelivery.choices,
+        },
+    )

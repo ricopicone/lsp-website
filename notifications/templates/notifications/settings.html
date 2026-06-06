@@ -10,11 +10,22 @@
 
   <p class="text-sm text-base-content/60">
     Choose how each kind of notification reaches you. Some confirmations and
-    security messages are always emailed and can't be turned off.
+    security messages are always emailed and can't be turned off. Items set to
+    <em>In a digest</em> are batched into one periodic email.
   </p>
 
   <form method="post" class="space-y-7">
     {% csrf_token %}
+
+    <div class="flex items-center gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2.5">
+      <label for="digest_cadence" class="text-sm text-base-content">Digest frequency</label>
+      <select name="digest_cadence" id="digest_cadence" class="select select-bordered select-sm">
+        {% for value, label in cadence_choices %}
+        <option value="{{ value }}" {% if value == cadence %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <span class="text-xs text-base-content/50">How often digest emails are sent.</span>
+    </div>
     {% for section in sections %}
     <section class="space-y-2">
       <h2 class="font-medium text-base-content">{{ section.title }}</h2>
@@ -43,7 +54,11 @@
               </td>
               <td class="px-3 py-2.5 text-center">
                 {% if row.email_editable %}
-                  <input type="checkbox" name="{{ row.key }}__email" class="toggle toggle-sm toggle-primary" {% if row.email %}checked{% endif %}>
+                  <select name="{{ row.key }}__email" class="select select-bordered select-xs">
+                    {% for value, label in email_choices %}
+                    <option value="{{ value }}" {% if value == row.email_mode %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
                 {% elif row.email_locked %}
                   <span class="badge badge-ghost badge-sm" title="Always emailed">Always</span>
                 {% else %}

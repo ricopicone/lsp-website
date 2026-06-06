@@ -65,7 +65,14 @@ class Category(models.TextChoices):
 
 class EmailDelivery(models.TextChoices):
     IMMEDIATE = "immediate", _("Email me")
+    DIGEST = "digest", _("In a digest")
     OFF = "off", _("No email")
+
+
+class DigestCadence(models.TextChoices):
+    OFF = "off", _("Off")
+    DAILY = "daily", _("Daily")
+    WEEKLY = "weekly", _("Weekly")
 
 
 # Display sections, in the order they appear on the preferences page.

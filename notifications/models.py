@@ -19,7 +19,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 
-from .categories import Category, EmailDelivery
+from .categories import Category, DigestCadence, EmailDelivery
 
 
 class Notification(models.Model):
@@ -53,6 +53,8 @@ class Notification(models.Model):
     read_at = models.DateTimeField(null=True, blank=True)
     # When an accompanying email was sent (null = no email sent for this row).
     emailed_at = models.DateTimeField(null=True, blank=True)
+    # Waiting to be rolled into the member's next email digest.
+    digest_pending = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -85,6 +87,10 @@ class NotificationPreference(models.Model):
         related_name="notification_preference",
     )
     overrides = models.JSONField(default=dict, blank=True)
+    digest_cadence = models.CharField(
+        max_length=8, choices=DigestCadence.choices, default=DigestCadence.WEEKLY
+    )
+    last_digest_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:

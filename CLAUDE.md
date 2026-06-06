@@ -368,7 +368,14 @@ Phase 2 plan for milestone IDs):**
   decisions/minutes, recordings) is in-app-first. Parlêtre migrated off its own
   notification model (old rows data-migrated; `parletre:notifications` redirects
   to `/notifications/`); its per-channel subscriptions + digest cadence stay.
-  See `notifications-center` memory.
+  The bell is a **live dropdown** — a `BellConsumer` WebSocket
+  (`/ws/notifications/`, over the existing Channels/daphne stack) pushes the
+  unread count to open tabs; the panel lazy-loads recent items and marks them
+  read on click. Email has a third **digest** option per category: items routed
+  to *In a digest* still ring the bell immediately but their email is held and
+  rolled into a daily/weekly digest by `manage.py send_notification_digests`
+  (cadence on `NotificationPreference`; `Notification.digest_pending` flags held
+  rows). See `notifications-center` memory.
 
 ## Open items (M7 wrap-up)
 
@@ -414,6 +421,10 @@ Phase 2 plan for milestone IDs):**
   `sudo systemctl enable --now lsp-dues-cron.timer
   lsp-registration-reminders.timer lsp-parletre-digests.timer`. Note these
   timers live only on the host, not the repo (see `host-cron-timers` memory).
+  **New at launch:** add a daily host timer running
+  `manage.py send_notification_digests` (the cross-category notification
+  digest — daily/weekly per member preference). Member-facing, so keep it off
+  until launch like the others.
 - **Reminder send rate-limiting — DONE.** `payments.sending.ThrottledSender`
   paces the batch reminder jobs to `EMAIL_MAX_SEND_RATE` (msgs/sec, default
   1.0 — sandbox-safe; raise via `DJANGO_EMAIL_MAX_SEND_RATE` once out of the

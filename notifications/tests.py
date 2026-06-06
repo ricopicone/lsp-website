@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 import pytest
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 from notifications.categories import Category, EmailDelivery
 from notifications.dispatch import notify
@@ -144,6 +147,116 @@ def test_group_membership_notifies_added_user(mailoutbox):
     assert wg.name in n.title
     # GROUP_* categories default to email-off, so no email is sent.
     assert mailoutbox == []
+
+
+@pytest.mark.django_db
+def test_recent_panel_and_mark_read(client):
+    user = make_user()
+    n = Notification.objects.create(
+        recipient=user, category=Category.REGISTRATION_STATUS, title="A", url="/x/"
+    )
+    client.force_login(user)
+    resp = client.get("/notifications/recent/")
+    assert resp.status_code == 200
+    assert b"A" in resp.content
+    # the async per-item mark-read endpoint returns 204 and clears unread
+    resp = client.post(f"/notifications/{n.pk}/seen/")
+    assert resp.status_code == 204
+    n.refresh_from_db()
+    assert not n.is_unread
+
+
+@pytest.mark.django_db(transaction=True)
+def test_bell_consumer_receives_live_push():
+    from asgiref.sync import async_to_sync
+    from channels.db import database_sync_to_async
+    from channels.routing import URLRouter
+    from channels.testing import WebsocketCommunicator
+
+    from notifications.realtime import broadcast_to_user
+    from notifications.routing import websocket_urlpatterns
+
+    user = make_user("live@x.co")
+
+    async def scenario():
+        comm = WebsocketCommunicator(
+            URLRouter(websocket_urlpatterns), "/ws/notifications/"
+        )
+        comm.scope["user"] = user
+        connected, _ = await comm.connect()
+        assert connected
+        first = await comm.receive_json_from()   # initial count on connect
+        assert first["unread"] == 0
+        # a server-side broadcast reaches the open socket
+        await database_sync_to_async(broadcast_to_user)(
+            user.id, unread=3, item={"title": "Hi"}
+        )
+        live = await comm.receive_json_from()
+        assert live["unread"] == 3
+        assert live["item"]["title"] == "Hi"
+        await comm.disconnect()
+
+    async_to_sync(scenario)()
+
+
+@pytest.mark.django_db
+def test_digest_preference_holds_email_and_flags_row(
+    mailoutbox, django_capture_on_commit_callbacks
+):
+    user = make_user()
+    pref = NotificationPreference.objects.create(user=user)
+    pref.set(Category.REGISTRATION_STATUS, in_app=True, email=EmailDelivery.DIGEST)
+    pref.save()
+    with django_capture_on_commit_callbacks(execute=True):
+        n = notify(user, Category.REGISTRATION_STATUS, title="Held for digest")
+    assert n.digest_pending is True
+    assert mailoutbox == []  # no immediate email — it waits for the digest
+
+
+@pytest.mark.django_db
+def test_send_notification_digests_batches_and_clears(mailoutbox):
+    from django.core.management import call_command
+
+    user = make_user()
+    pref = NotificationPreference.objects.create(
+        user=user, digest_cadence="weekly"
+    )
+    pref.set(Category.REGISTRATION_STATUS, in_app=True, email=EmailDelivery.DIGEST)
+    pref.save()
+    Notification.objects.create(
+        recipient=user, category=Category.REGISTRATION_STATUS,
+        title="One", url="/a/", digest_pending=True,
+    )
+    Notification.objects.create(
+        recipient=user, category=Category.GROUP_DECISION,
+        title="Two", url="/b/", digest_pending=True,
+    )
+
+    call_command("send_notification_digests")
+
+    assert len(mailoutbox) == 1
+    assert "One" in mailoutbox[0].body and "Two" in mailoutbox[0].body
+    # held rows are cleared so a second run sends nothing
+    assert Notification.objects.filter(recipient=user, digest_pending=True).count() == 0
+    mailoutbox.clear()
+    call_command("send_notification_digests")
+    assert mailoutbox == []
+
+
+@pytest.mark.django_db
+def test_digest_not_due_before_cadence_elapses():
+    from notifications import digests
+
+    user = make_user()
+    now = timezone.now()
+    pref = NotificationPreference.objects.create(
+        user=user, digest_cadence="weekly", last_digest_at=now,
+    )
+    assert digests.is_due(pref, now) is False
+    pref.digest_cadence = "daily"
+    assert digests.is_due(pref, now) is False
+    pref.last_digest_at = now - timedelta(days=2)
+    assert digests.is_due(pref, now) is True
 
 
 @pytest.mark.django_db

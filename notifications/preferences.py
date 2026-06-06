@@ -17,6 +17,7 @@ from .categories import EmailDelivery, meta_for
 class Resolved:
     in_app: bool
     email: bool  # True == send an immediate email
+    email_mode: str  # immediate | digest | off
     # Whether the member is allowed to change each channel on the settings page.
     in_app_editable: bool
     email_editable: bool
@@ -41,15 +42,16 @@ def resolve(user, category: str) -> Resolved:
     if not meta.in_app_capable:
         in_app = False
     if meta.email_locked:
-        email = True
+        email_mode = EmailDelivery.IMMEDIATE
     elif not meta.email_capable:
-        email = False
+        email_mode = EmailDelivery.OFF
     else:
-        email = email_choice == EmailDelivery.IMMEDIATE
+        email_mode = email_choice
 
     return Resolved(
         in_app=in_app,
-        email=email,
+        email=email_mode == EmailDelivery.IMMEDIATE,
+        email_mode=email_mode,
         in_app_editable=meta.in_app_capable,
         email_editable=meta.email_capable and not meta.email_locked,
     )

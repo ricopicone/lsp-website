@@ -22,6 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import emails
+from .categories import EmailDelivery
 from .models import Notification
 from .preferences import resolve
 
@@ -64,6 +65,8 @@ def notify(
 
     res = resolve(recipient, category)
     send_email = res.email if email != False else False  # noqa: E712 — explicit
+    # Defer to the digest only when the caller didn't suppress email here.
+    digest = res.email_mode == EmailDelivery.DIGEST and email != False  # noqa: E712
 
     if not res.in_app and not send_email:
         return None
@@ -80,6 +83,7 @@ def notify(
                 title=title[:255],
                 body=(body or "")[:512],
                 url=url or "",
+                digest_pending=digest,
             )
             if target is not None and getattr(target, "pk", None):
                 notification.target = target
@@ -90,7 +94,34 @@ def notify(
     if send_email:
         _schedule_email(recipient, title, body, url, email_fn)
 
+    if notification is not None:
+        _schedule_bell_push(notification)
+
     return notification
+
+
+def _schedule_bell_push(notification) -> None:
+    """Push the live unread count + a preview to the recipient's open tabs once
+    the row is committed."""
+    recipient_id = notification.recipient_id
+    item = {
+        "id": notification.pk,
+        "title": notification.title,
+        "body": notification.body,
+        "url": notification.url,
+    }
+
+    def _push():
+        try:
+            from .realtime import broadcast_to_user
+            unread = Notification.objects.filter(
+                recipient_id=recipient_id, read_at__isnull=True
+            ).count()
+            broadcast_to_user(recipient_id, unread=unread, item=item)
+        except Exception:
+            log.exception("notifications: bell push failed for user %s", recipient_id)
+
+    transaction.on_commit(_push)
 
 
 def _has_unread_duplicate(recipient, category, target) -> bool:

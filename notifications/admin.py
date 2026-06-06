@@ -8,7 +8,7 @@ class NotificationAdmin(admin.ModelAdmin):
     list_display = (
         "recipient", "category", "title", "actor", "read_at", "emailed_at", "created_at",
     )
-    list_filter = ("category", "read_at", "emailed_at")
+    list_filter = ("category", "read_at", "emailed_at", "digest_pending")
     search_fields = ("recipient__email", "title", "body")
     raw_id_fields = ("recipient", "actor")
     readonly_fields = ("created_at",)
@@ -16,6 +16,6 @@ class NotificationAdmin(admin.ModelAdmin):
 
 @admin.register(NotificationPreference)
 class NotificationPreferenceAdmin(admin.ModelAdmin):
-    list_display = ("user", "updated_at")
+    list_display = ("user", "digest_cadence", "last_digest_at", "updated_at")
     search_fields = ("user__email",)
     raw_id_fields = ("user",)
