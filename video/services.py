@@ -200,6 +200,14 @@ def ingest_recording_event(event_type: str, payload: dict):
     elif event_type == "recording.error":
         rec.status = Recording.Status.ERROR
     rec.save()
+
+    # Notify the group when a recording finishes and members may see it.
+    if (
+        event_type == "recording.ready-to-download"
+        and rec.listing_visibility == Recording.Visibility.MEMBERS
+    ):
+        from workgroups import notifications as notify_groups
+        notify_groups.recording_ready(rec)
     return rec
 
 

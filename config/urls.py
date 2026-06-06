@@ -94,6 +94,7 @@ urlpatterns = [
     path("documents/", include("documents.urls")),
     path("works/", include("works.urls")),
     path("parletre/", include("parletre.urls")),
+    path("notifications/", include("notifications.urls")),
     path("groups/", include("workgroups.urls")),
     path("cartels/", include("cartels.urls")),
     path("working-groups/", include("workinggroups.urls")),

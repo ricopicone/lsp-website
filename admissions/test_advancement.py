@@ -177,20 +177,24 @@ def test_decide_via_view_approves(client, django_capture_on_commit_callbacks):
 
 # ---- reminders -------------------------------------------------------------
 
-def test_reminder_sends_then_throttles_then_stops_after_presented():
+def test_reminder_sends_then_throttles_then_stops_after_presented(
+    django_capture_on_commit_callbacks,
+):
     advisor = _analyst()
     member = _precandidate(advisor=advisor)
     adv = open_advancement(member, statement="ready")
     mail.outbox.clear()
 
-    call_command("send_advancement_reminders")
+    with django_capture_on_commit_callbacks(execute=True):
+        call_command("send_advancement_reminders")
     assert any(advisor.email in m.to for m in mail.outbox)
     adv.refresh_from_db()
     assert adv.last_reminded_at is not None
 
     # Within the interval → throttled.
     mail.outbox.clear()
-    call_command("send_advancement_reminders")
+    with django_capture_on_commit_callbacks(execute=True):
+        call_command("send_advancement_reminders")
     assert mail.outbox == []
 
     # Force the throttle open, but presented demandes are no longer reminded.
@@ -199,7 +203,8 @@ def test_reminder_sends_then_throttles_then_stops_after_presented():
         last_reminded_at=timezone.now() - datetime.timedelta(days=30)
     )
     mail.outbox.clear()
-    call_command("send_advancement_reminders")
+    with django_capture_on_commit_callbacks(execute=True):
+        call_command("send_advancement_reminders")
     assert mail.outbox == []
 
 

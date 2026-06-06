@@ -178,13 +178,13 @@
         </button>
         {% endif %}
 
-        {% if parletre_is_member %}
-        <a href="{% url 'parletre:notifications' %}"
+        {% if user.is_authenticated %}
+        <a href="{% url 'notifications:feed' %}"
            class="btn btn-ghost btn-sm btn-circle relative text-base-content/70"
            aria-label="Notifications" title="Notifications">
           {% icon "bell" css="text-base" %}
-          {% if parletre_unread %}
-          <span class="absolute -top-0.5 -right-0.5 badge badge-xs badge-primary">{{ parletre_unread }}</span>
+          {% if notifications_unread %}
+          <span class="absolute -top-0.5 -right-0.5 badge badge-xs badge-primary">{{ notifications_unread }}</span>
           {% endif %}
         </a>
         {% endif %}

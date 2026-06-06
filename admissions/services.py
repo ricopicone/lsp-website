@@ -13,7 +13,7 @@ from django.utils import timezone
 from accounts.membership import current_academic_year_start, record_membership_change
 from accounts.models import Profile
 
-from .emails import send_application_decision
+from . import notifications as notify_admissions
 from .models import Application
 
 
@@ -35,7 +35,7 @@ def accept_application(application: Application, *, by, effective_ay=None, note=
     application.decided_by = by
     application.decision_note = note
     application.save(update_fields=["status", "decided_at", "decided_by", "decision_note"])
-    transaction.on_commit(lambda: _email(send_application_decision, application))
+    notify_admissions.application_decision(application)
     return application
 
 
@@ -47,17 +47,7 @@ def reject_application(application: Application, *, by, note=""):
     application.decided_by = by
     application.decision_note = note
     application.save(update_fields=["status", "decided_at", "decided_by", "decision_note"])
-    transaction.on_commit(lambda: _email(send_application_decision, application))
+    notify_admissions.application_decision(application)
     return application
 
 
-def _email(fn, application):
-    """Send a notification outside the critical path — a mail failure must not
-    roll back the recorded decision."""
-    import logging
-    try:
-        fn(application)
-    except Exception:
-        logging.getLogger(__name__).exception(
-            "Failed to email application decision for %s", application.pk
-        )

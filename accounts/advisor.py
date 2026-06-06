@@ -60,8 +60,23 @@ def set_advisor(advisee, advisor, *, by=None, note=""):
         defaults={"note": note},
     )
     if created:
-        transaction.on_commit(lambda: _notify(advisorship))
+        _notify_advisor(advisorship)
     return advisorship
+
+
+def _notify_advisor(advisorship: Advisorship) -> None:
+    """In-app bell + (preference-gated) email to the chosen advisor."""
+    from notifications.categories import Category
+    from notifications.dispatch import notify
+
+    advisee = advisorship.advisee
+    name = advisee.get_full_name() or advisee.email
+    notify(
+        advisorship.advisor, Category.ACCOUNT_ADVISOR,
+        title=f"{name} chose you as their Advisor",
+        url="/directory/", target=advisorship,
+        email_fn=lambda: _notify(advisorship),
+    )
 
 
 def _notify(advisorship: Advisorship) -> None:

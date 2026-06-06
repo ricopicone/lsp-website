@@ -355,6 +355,20 @@ Phase 2 plan for milestone IDs):**
   **`content_visibility`** (the PDF *and* the published HTML body; renamed
   from `pdf_visibility`). Gated content lives in the private S3 bucket and is
   served only via access-checked download views — see `media-storage` memory.
+- **Notifications center** (`notifications` app) — site-wide in-app bell
+  (shown for every signed-in member, not just Parlêtre) backed by one generic
+  `Notification` model. A single chokepoint, `notifications.dispatch.notify()`,
+  creates the bell row and sends a preference-gated email (`transaction.on_commit`;
+  rich app templates passed as `email_fn`, generic fallback otherwise).
+  Per-category user controls at `/notifications/settings/` (in-app × email
+  matrix); transactional categories — receipts, registration confirmation,
+  sign-in/security mail — are email-locked. Every email-sending domain
+  (payments/registrations, cartels, admissions, accounts) routes through a
+  `<app>/notifications.py` wrapper, and group activity (membership, meetings,
+  decisions/minutes, recordings) is in-app-first. Parlêtre migrated off its own
+  notification model (old rows data-migrated; `parletre:notifications` redirects
+  to `/notifications/`); its per-channel subscriptions + digest cadence stay.
+  See `notifications-center` memory.
 
 ## Open items (M7 wrap-up)
 

@@ -671,7 +671,8 @@ def _named_member(first, last, email):
 
 @pytest.mark.django_db
 def test_mention_creates_notification(client):
-    from .models import Notification
+    from notifications.categories import Category
+    from notifications.models import Notification
     ch = make_channel("commons")
     author = _named_member("Posy", "Poster", "posy@x.co")
     target = _named_member("Mona", "Member", "mona@x.co")
@@ -682,13 +683,14 @@ def test_mention_creates_notification(client):
         {"title": "Hi", "body": "Welcome @mona-member to the school!"},
     )
     n = Notification.objects.get(recipient=target)
-    assert n.verb == Notification.Verb.MENTION
+    assert n.category == Category.PARLETRE_MENTION
     assert n.actor == author
 
 
 @pytest.mark.django_db
 def test_reply_notifies_thread_author_not_self(client):
-    from .models import Notification
+    from notifications.categories import Category
+    from notifications.models import Notification
     ch = make_channel("commons")
     author = _named_member("Ana", "Author", "ana@x.co")
     replier = _named_member("Ray", "Replier", "ray@x.co")
@@ -704,12 +706,15 @@ def test_reply_notifies_thread_author_not_self(client):
     client.force_login(replier)
     client.post(thread.get_absolute_url(), {"body": "a reply"})
     n = Notification.objects.get(recipient=author)
-    assert n.verb == Notification.Verb.REPLY
+    assert n.category == Category.PARLETRE_REPLY
 
 
 @pytest.mark.django_db
 def test_new_thread_notifies_close_followers(client):
-    from .models import Notification, Subscription, SubscriptionLevel
+    from notifications.categories import Category
+    from notifications.models import Notification
+
+    from .models import Subscription, SubscriptionLevel
     ch = make_channel("commons")
     author = _named_member("Ann", "Author", "ann@x.co")
     follower = _named_member("Fay", "Follower", "fay@x.co")
@@ -721,36 +726,47 @@ def test_new_thread_notifies_close_followers(client):
     client.post(reverse("parletre:new_thread", args=[ch.slug]), {"title": "News", "body": "hi"})
 
     assert Notification.objects.filter(
-        recipient=follower, verb=Notification.Verb.NEW_THREAD
+        recipient=follower, category=Category.PARLETRE_THREAD
     ).exists()
     # digest-level followers don't get an in-app new-thread ping
     assert not Notification.objects.filter(recipient=digester).exists()
 
 
 @pytest.mark.django_db
-def test_notifications_page_marks_all_read(client):
-    from .models import Notification
+def test_notifications_page_marks_read_on_open(client):
+    from notifications.categories import Category
+    from notifications.models import Notification
     recipient = _named_member("Reed", "Recipient", "reed@x.co")
     actor = _named_member("Axe", "Actor", "axe@x.co")
-    Notification.objects.create(
-        recipient=recipient, actor=actor, verb=Notification.Verb.MENTION
+    n = Notification.objects.create(
+        recipient=recipient, actor=actor, category=Category.PARLETRE_MENTION,
+        title="Axe Actor mentioned you", url="/parletre/",
     )
-    assert Notification.objects.filter(recipient=recipient, read_at__isnull=True).count() == 1
     client.force_login(recipient)
-    resp = client.get(reverse("parletre:notifications"))
+    # viewing the feed no longer auto-marks read
+    resp = client.get(reverse("notifications:feed"))
     assert resp.status_code == 200
-    assert Notification.objects.filter(recipient=recipient, read_at__isnull=True).count() == 0
+    n.refresh_from_db()
+    assert n.is_unread
+    # opening an item marks it read
+    client.post(reverse("notifications:open", args=[n.pk]))
+    n.refresh_from_db()
+    assert not n.is_unread
 
 
 @pytest.mark.django_db
 def test_bell_unread_count_in_nav(client):
-    from .models import Notification
+    from notifications.categories import Category
+    from notifications.models import Notification
     member = _named_member("Bell", "Ringer", "bell@x.co")
     actor = _named_member("Axe", "Actor", "axe2@x.co")
-    Notification.objects.create(recipient=member, actor=actor, verb=Notification.Verb.MENTION)
+    Notification.objects.create(
+        recipient=member, actor=actor, category=Category.PARLETRE_MENTION,
+        title="Axe Actor mentioned you",
+    )
     client.force_login(member)
     resp = client.get(reverse("parletre:index"))
-    assert resp.context["parletre_unread"] == 1
+    assert resp.context["notifications_unread"] == 1
     # the bell is now an inline SVG icon, not an emoji
     assert 'aria-label="Notifications"' in resp.content.decode()
 
@@ -1604,7 +1620,8 @@ def test_ephemeral_chat_redacts_expired_keeps_fresh(client):
 
 @pytest.mark.django_db
 def test_ephemeral_channel_skips_notifications(mailoutbox):
-    from .models import Notification
+    from notifications.models import Notification
+
     from .services import notify_post
     ch = make_channel("ple", kind=Channel.Kind.CHAT, message_ttl_seconds=3600)
     author = make_user("a@x.co", role=Role.ANALYST)

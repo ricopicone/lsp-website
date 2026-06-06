@@ -1,0 +1,207 @@
+"""The controlled vocabulary of notification categories and their delivery
+defaults.
+
+Every in-app/email notification belongs to exactly one :class:`Category`. A
+category carries metadata (:class:`CategoryMeta`) describing which section of
+the preferences page it appears under, its human label, and its *default*
+delivery on each channel (in-app bell + email).
+
+Two flags need care:
+
+* ``email_locked`` — transactional/security mail the member may **not** silence
+  (payment receipts, registration confirmations, email-change verification,
+  magic-link and password-reset links). For these, email is always sent
+  regardless of preference.
+* ``in_app_capable`` / ``email_capable`` — some categories only make sense on
+  one channel. Magic-link and password-reset are email-only (no bell row);
+  workgroup activity is in-app-first.
+
+Preferences are resolved against these defaults — see
+:mod:`notifications.preferences`.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+
+class Category(models.TextChoices):
+    # --- Discussion (Parlêtre) ------------------------------------------
+    PARLETRE_MENTION = "parletre_mention", _("You're mentioned")
+    PARLETRE_REPLY = "parletre_reply", _("Replies in your threads")
+    PARLETRE_THREAD = "parletre_thread", _("New threads in channels you follow")
+
+    # --- Registration & payments ----------------------------------------
+    REGISTRATION_STATUS = "registration_status", _("Registration updates")
+    REGISTRATION_CONFIRMED = "registration_confirmed", _("Registration confirmation")
+    PAYMENT_RECEIPT = "payment_receipt", _("Payment receipts")
+    DUES_REMINDER = "dues_reminder", _("Dues reminders")
+    TUITION_REMINDER = "tuition_reminder", _("Tuition reminders")
+
+    # --- Cartels ---------------------------------------------------------
+    CARTEL_INVITE = "cartel_invite", _("Cartel invitations")
+    CARTEL_APPLICATION = "cartel_application", _("Cartel applications")
+    CARTEL_DECISION = "cartel_decision", _("Cartel decisions")
+    CARTEL_PROPOSAL = "cartel_proposal", _("Cartel proposal review")
+
+    # --- Admissions ------------------------------------------------------
+    ADMISSIONS_APPLICATION = "admissions_application", _("Admissions applications")
+    ADMISSIONS_DECISION = "admissions_decision", _("Admissions decisions")
+    ADMISSIONS_ADVANCEMENT = "admissions_advancement", _("Advancement (demande)")
+
+    # --- Groups (workgroups / cartels / committees / seminars) ----------
+    GROUP_MEMBERSHIP = "group_membership", _("Added to or removed from a group")
+    GROUP_MEETING = "group_meeting", _("Group meetings scheduled")
+    GROUP_DECISION = "group_decision", _("Group decisions & minutes")
+    GROUP_RECORDING = "group_recording", _("Meeting recordings ready")
+
+    # --- Account ---------------------------------------------------------
+    ACCOUNT_ADVISOR = "account_advisor", _("Advisor assignments")
+    ACCOUNT_SECURITY = "account_security", _("Account & security")
+
+
+class EmailDelivery(models.TextChoices):
+    IMMEDIATE = "immediate", _("Email me")
+    OFF = "off", _("No email")
+
+
+# Display sections, in the order they appear on the preferences page.
+SECTION_DISCUSSION = _("Discussion (Parlêtre)")
+SECTION_PAYMENTS = _("Registration & payments")
+SECTION_CARTELS = _("Cartels")
+SECTION_ADMISSIONS = _("Admissions")
+SECTION_GROUPS = _("Groups")
+SECTION_ACCOUNT = _("Account")
+
+SECTION_ORDER = [
+    SECTION_DISCUSSION,
+    SECTION_PAYMENTS,
+    SECTION_CARTELS,
+    SECTION_ADMISSIONS,
+    SECTION_GROUPS,
+    SECTION_ACCOUNT,
+]
+
+
+@dataclass(frozen=True)
+class CategoryMeta:
+    section: str
+    label: str
+    help_text: str = ""
+    default_in_app: bool = True
+    default_email: str = EmailDelivery.IMMEDIATE
+    # Email the member may not turn off (transactional/security).
+    email_locked: bool = False
+    # Whether this category can appear on each channel at all.
+    in_app_capable: bool = True
+    email_capable: bool = True
+
+
+_M = CategoryMeta
+_C = Category
+_E = EmailDelivery
+
+CATEGORY_META: dict[str, CategoryMeta] = {
+    # Discussion — email cadence is governed by Parlêtre's own per-channel
+    # subscriptions; these flags drive the in-app bell and the master on/off.
+    _C.PARLETRE_MENTION: _M(
+        SECTION_DISCUSSION, _("You're mentioned"),
+        _("When someone @mentions you on the board."),
+    ),
+    _C.PARLETRE_REPLY: _M(
+        SECTION_DISCUSSION, _("Replies in your threads"),
+        _("When someone replies in a thread you started."),
+    ),
+    _C.PARLETRE_THREAD: _M(
+        SECTION_DISCUSSION, _("New threads"),
+        _("New threads in channels you follow closely."),
+        default_email=_E.OFF,
+    ),
+    # Registration & payments.
+    _C.REGISTRATION_STATUS: _M(
+        SECTION_PAYMENTS, _("Registration updates"),
+        _("When a registration is approved, declined, or cancelled."),
+    ),
+    _C.REGISTRATION_CONFIRMED: _M(
+        SECTION_PAYMENTS, _("Registration confirmation"),
+        _("Your confirmation and access details. Always emailed."),
+        email_locked=True,
+    ),
+    _C.PAYMENT_RECEIPT: _M(
+        SECTION_PAYMENTS, _("Payment receipts"),
+        _("Receipts for payments you make. Always emailed."),
+        email_locked=True,
+    ),
+    _C.DUES_REMINDER: _M(
+        SECTION_PAYMENTS, _("Dues reminders"),
+        _("Periodic reminders when dues are owed."),
+    ),
+    _C.TUITION_REMINDER: _M(
+        SECTION_PAYMENTS, _("Tuition reminders"),
+        _("Periodic reminders about tuition for the year."),
+    ),
+    # Cartels.
+    _C.CARTEL_INVITE: _M(SECTION_CARTELS, _("Cartel invitations")),
+    _C.CARTEL_APPLICATION: _M(SECTION_CARTELS, _("Applications to your cartel")),
+    _C.CARTEL_DECISION: _M(SECTION_CARTELS, _("Decisions on your cartel")),
+    _C.CARTEL_PROPOSAL: _M(
+        SECTION_CARTELS, _("Proposal review"),
+        _("For coordinators and the Programming Committee."),
+    ),
+    # Admissions.
+    _C.ADMISSIONS_APPLICATION: _M(
+        SECTION_ADMISSIONS, _("Applications"),
+        _("For reviewers: a new application or advancement to review."),
+    ),
+    _C.ADMISSIONS_DECISION: _M(
+        SECTION_ADMISSIONS, _("Decisions"),
+        _("Decisions on your application or advancement."),
+    ),
+    _C.ADMISSIONS_ADVANCEMENT: _M(
+        SECTION_ADMISSIONS, _("Advancement (demande)"),
+        _("Advancement demandes you advise or present."),
+    ),
+    # Groups — in-app first; email optional (default off to avoid noise).
+    _C.GROUP_MEMBERSHIP: _M(
+        SECTION_GROUPS, _("Membership changes"),
+        _("When you're added to or removed from a group."),
+        default_email=_E.OFF,
+    ),
+    _C.GROUP_MEETING: _M(
+        SECTION_GROUPS, _("Meetings scheduled"),
+        _("New meetings or series in your groups."),
+        default_email=_E.OFF,
+    ),
+    _C.GROUP_DECISION: _M(
+        SECTION_GROUPS, _("Decisions & minutes"),
+        _("Decisions recorded and minutes posted in your groups."),
+        default_email=_E.OFF,
+    ),
+    _C.GROUP_RECORDING: _M(
+        SECTION_GROUPS, _("Recordings ready"),
+        _("When a meeting recording becomes available."),
+        default_email=_E.OFF,
+    ),
+    # Account.
+    _C.ACCOUNT_ADVISOR: _M(
+        SECTION_ACCOUNT, _("Advisor assignments"),
+        _("When you're chosen as, or assigned, an advisor."),
+    ),
+    _C.ACCOUNT_SECURITY: _M(
+        SECTION_ACCOUNT, _("Account & security"),
+        _("Sign-in links, email changes, password resets. Always emailed."),
+        default_in_app=False, in_app_capable=False, email_locked=True,
+    ),
+}
+
+
+def meta_for(category: str) -> CategoryMeta:
+    """Metadata for ``category``; falls back to a permissive default so an
+    unknown/legacy value never crashes dispatch."""
+    return CATEGORY_META.get(
+        category,
+        CategoryMeta(SECTION_ACCOUNT, str(category)),
+    )
