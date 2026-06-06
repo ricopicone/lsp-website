@@ -28,6 +28,24 @@
             {% endif %}{% endwith %}
           </p>
           {% if p.description %}<p class="text-sm text-base-content/70 whitespace-pre-line">{{ p.description }}</p>{% endif %}
+          {% if p.date_tbd %}<p class="text-xs text-warning">Date/time: TBD</p>{% endif %}
+          {% if p.proposed_time %}<p class="text-xs text-base-content/60">Time: {{ p.proposed_time }}</p>{% endif %}
+          {% if p.location %}<p class="text-xs text-base-content/60">Location: {{ p.location }}</p>{% endif %}
+          {% if p.external_speakers %}<p class="text-xs text-base-content/60"><span class="font-medium">External speakers:</span> <span class="whitespace-pre-line">{{ p.external_speakers }}</span></p>{% endif %}
+          {% if p.speaker_arrangement %}<p class="text-xs text-base-content/60">Arrangement: {{ p.get_speaker_arrangement_display }}</p>{% endif %}
+          {% if p.honoraria_estimate %}<p class="text-xs text-base-content/60">Honoraria estimate: {{ p.honoraria_estimate }}</p>{% endif %}
+          {% if p.offers_ce %}<p class="text-xs text-base-content/60">Requests CE credits.</p>{% endif %}
+          {% if p.fee_note %}<p class="text-xs text-base-content/60">Fee: {{ p.fee_note }}</p>{% endif %}
+          {% with reads=p.readings.all %}{% if reads %}
+          <div class="text-xs text-base-content/70">
+            <span class="font-medium">Readings:</span>
+            <ul class="mt-1 list-disc space-y-0.5 pl-5">
+              {% for r in reads %}<li>{{ r.citation }}</li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}{% endwith %}
+          {% if p.biography %}<p class="text-xs text-base-content/60"><span class="font-medium">Bio:</span> {{ p.biography }}</p>{% endif %}
+          {% if p.contact %}<p class="text-xs text-base-content/60">Contact: {{ p.contact }}</p>{% endif %}
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <form method="post" action="{% url 'seminar_proposal_decide' p.pk %}">

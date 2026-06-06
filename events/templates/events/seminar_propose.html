@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}{% if editing %}Edit proposal{% else %}Propose an event{% endif %} — LSP{% endblock %}
+{% block title %}{% if editing %}Edit proposal{% else %}Propose an event: a seminar, reading group, or special event{% endif %} — LSP{% endblock %}
 {% block content %}
 <div class="max-w-2xl space-y-8">
   <header class="space-y-2">
@@ -7,31 +7,83 @@
       <a href="{% url 'program' %}" class="link link-hover text-base-content/60">← Program</a>
     </p>
     <h1 class="font-serif text-3xl text-base-content">
-      {% if editing %}Edit proposal{% else %}Propose an event{% endif %}
+      {% if editing %}Edit proposal{% else %}Propose an event: a seminar, reading group, or special event{% endif %}
     </h1>
     <p class="text-base-content/70">
       Any member can propose a <strong>seminar</strong>, <strong>reading group</strong>,
       or <strong>special event</strong>. The Programming Committee reviews proposals and,
       on approval, mints the event — seminars and reading groups go onto the program;
-      special events are set up by the committee before publishing.
+      special events are set up by the committee before publishing. The form adapts
+      to the type you pick.
     </p>
   </header>
 
   <form method="post"
-        action="{% if editing %}{% url 'seminar_proposal_edit' editing.pk %}{% else %}{% url 'seminar_propose' %}{% endif %}"
+        action="{% if editing %}{% url 'proposal_edit' editing.pk %}{% else %}{% url 'propose_event' %}{% endif %}"
         class="space-y-5">
     {% csrf_token %}
     {% if form.non_field_errors %}
     <div class="alert alert-error text-sm">{{ form.non_field_errors }}</div>
     {% endif %}
-    {% for field in form %}
-    <div class="space-y-1">
-      <label for="{{ field.id_for_label }}" class="block text-sm font-medium">{{ field.label }}</label>
-      {{ field }}
-      {% if field.help_text %}<p class="text-xs text-base-content/60">{{ field.help_text }}</p>{% endif %}
-      {% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}
+
+    {# ---- Basics (all types) ---- #}
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.event_type %}</div>
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.title %}</div>
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.description %}</div>
+
+    {# ---- Schedule ---- #}
+    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.date_tbd %}</div>
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.start_date %}</div>
+    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.end_date %}</div>
+    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.proposed_time %}</div>
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.format %}</div>
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.location %}</div>
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.contact %}</div>
+
+    {# ---- Seminar continuation ---- #}
+    <div data-types="seminar">{% include "events/_proposal_field.html" with field=form.continues_seminar %}</div>
+
+    {# ---- Conveners / speakers ---- #}
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.faculty %}</div>
+
+    {# ---- Special-event speakers ---- #}
+    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.external_speakers %}</div>
+    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.speaker_arrangement %}</div>
+    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.honoraria_estimate %}</div>
+
+    {# ---- Readings + style guide (all types) ---- #}
+    <div data-types="seminar reading_group special_event" class="space-y-2">
+      {% include "events/_proposal_field.html" with field=form.readings_text %}
+      <details class="rounded-lg border border-base-300/60 bg-base-200/40 p-3 text-xs text-base-content/70">
+        <summary class="cursor-pointer font-medium text-base-content/80">Readings — guidance &amp; citation style</summary>
+        <div class="mt-2 space-y-2">
+          <p>Readings should include primary writings of Freud and/or Lacan. Secondary
+            sources should enhance engagement with Freud and Lacan. To offer CE credits,
+            include at least 3 references published within the last 5 years.</p>
+          <p>One citation per line, following these MLA-adapted rules: 1) quotation marks
+            around article titles; 2) <em>italicize</em> book titles; 3) periods after
+            author and book names; 4) commas inside quotation marks after an article;
+            5) page numbers and publication dates in parentheses; 6) a period ending each
+            entry.</p>
+          <div class="rounded bg-base-100 p-2 font-mono text-[11px] leading-relaxed">
+            Apollon, W. “The Dream in the Wake of the Freudian Rupture,” in <em>The Dreams of Interpretation</em>, (2007), Eds. C. Liu et al. Minneapolis: University of Minnesota Press, (pp. 23-38).<br>
+            Freud, S. <em>The Interpretation of Dreams</em>, Chapter VII, Volume V, The Standard Edition.<br>
+            Lacan, J. “Beyond the 'Reality Principle',” <em>Écrits</em>, (2006). Trans. Bruce Fink. New York: Norton.
+          </div>
+        </div>
+      </details>
     </div>
-    {% endfor %}
+
+    {# ---- CE + fee + bio (offerings) ---- #}
+    <div data-types="seminar reading_group" class="space-y-1">
+      {% include "events/_proposal_field.html" with field=form.offers_ce %}
+      <p class="text-xs text-base-content/50">If yes, apply to the Greater Pittsburgh
+        Psychological Association (GPPA) for APA-accredited CE credits and email the
+        Programming Committee your approval. Contact Diana Cuello with questions.</p>
+    </div>
+    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.fee_note %}</div>
+    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.biography %}</div>
+
     <div class="flex items-center justify-between border-t border-base-300/60 pt-5">
       <a href="{% url 'program' %}" class="btn btn-ghost">Cancel</a>
       <button type="submit" class="btn btn-primary">
@@ -39,6 +91,21 @@
       </button>
     </div>
   </form>
+
+  <script>
+  (function () {
+    var sel = document.getElementById("id_event_type");
+    if (!sel) return;
+    function sync() {
+      var t = sel.value;
+      document.querySelectorAll("[data-types]").forEach(function (el) {
+        el.style.display = el.getAttribute("data-types").split(" ").indexOf(t) === -1 ? "none" : "";
+      });
+    }
+    sel.addEventListener("change", sync);
+    sync();
+  })();
+  </script>
 
   {% if mine %}
   <section class="space-y-3">
@@ -56,10 +123,10 @@
         {% if p.minted_event %}<a href="{% url 'events:detail' p.minted_event.slug %}" class="link text-xs">view →</a>{% endif %}
         {% elif p.status == "declined" %}
         <span class="badge badge-ghost badge-sm">Declined</span>
-        <a href="{% url 'seminar_proposal_edit' p.pk %}" class="link text-xs">edit &amp; resubmit</a>
+        <a href="{% url 'proposal_edit' p.pk %}" class="link text-xs">edit &amp; resubmit</a>
         {% else %}
         <span class="badge badge-outline badge-sm">Under review</span>
-        <a href="{% url 'seminar_proposal_edit' p.pk %}" class="link text-xs">edit</a>
+        <a href="{% url 'proposal_edit' p.pk %}" class="link text-xs">edit</a>
         {% endif %}
       </li>
       {% endfor %}

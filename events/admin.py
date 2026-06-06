@@ -7,10 +7,16 @@ from .models import (
     PriceTier,
     PricingCode,
     Program,
+    ProposalReading,
     SeminarProposal,
     Session,
     Speaker,
 )
+
+
+class ProposalReadingInline(admin.TabularInline):
+    model = ProposalReading
+    extra = 0
 
 
 @admin.register(SeminarProposal)
@@ -21,6 +27,7 @@ class SeminarProposalAdmin(admin.ModelAdmin):
     search_fields = ("title", "proposed_by__email")
     autocomplete_fields = ("proposed_by", "reviewed_by", "continues_seminar",
                            "faculty", "minted_event")
+    inlines = (ProposalReadingInline,)
 
 
 class EventAdminForm(forms.ModelForm):

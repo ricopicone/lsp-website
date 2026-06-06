@@ -547,12 +547,13 @@ def seminar_propose(request):
             proposal.proposed_by = request.user
             proposal.save()
             form.save_m2m()
+            form.save_readings(proposal)
             messages.success(
                 request,
                 f"{proposal.get_event_type_display()} proposed — the Programming "
                 "Committee will review it.",
             )
-            return redirect("seminar_propose")
+            return redirect("propose_event")
     else:
         form = SeminarProposalForm()
     mine = (SeminarProposal.objects
@@ -579,12 +580,13 @@ def seminar_proposal_edit(request, pk: int):
         if form.is_valid():
             was_declined = proposal.status == SeminarProposal.Status.DECLINED
             form.save()
+            form.save_readings(proposal)
             if was_declined:
                 proposal.resubmit()
                 messages.success(request, "Edited and resubmitted for review.")
             else:
                 messages.success(request, "Proposal updated.")
-            return redirect("seminar_propose")
+            return redirect("propose_event")
     else:
         form = SeminarProposalForm(instance=proposal)
     return render(request, "events/seminar_propose.html", {

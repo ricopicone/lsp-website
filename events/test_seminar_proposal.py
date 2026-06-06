@@ -59,11 +59,11 @@ def test_propose_open_to_any_member_not_outsiders(client):
     # Any LSP member may propose (teaching is what makes you faculty, not a
     # prerequisite for proposing).
     client.force_login(_member())
-    assert client.get("/propose-seminar/").status_code == 200
+    assert client.get("/propose/").status_code == 200
     # A non-member (external role) may not.
     outsider = User.objects.create_user(email="ext@x.test", password="x")
     client.force_login(outsider)
-    assert client.get("/propose-seminar/").status_code == 404
+    assert client.get("/propose/").status_code == 404
 
 
 def test_approving_seminar_confers_faculty_on_instructors(client):
@@ -83,7 +83,7 @@ def test_propose_creates_proposal(client):
     fac = _faculty()
     start, end = _future()
     client.force_login(fac)
-    resp = client.post("/propose-seminar/", {
+    resp = client.post("/propose/", {
         "event_type": Event.Type.SEMINAR,
         "title": "Reading Seminar XI",
         "description": "Four fundamental concepts.",
@@ -160,7 +160,7 @@ def test_decline_then_resubmit(client):
     assert p.status == SeminarProposal.Status.DECLINED and "Sharpen" in p.review_note
 
     client.force_login(fac)
-    resp = client.post(f"/propose-seminar/{p.pk}/edit/", {
+    resp = client.post(f"/propose/{p.pk}/edit/", {
         "event_type": Event.Type.SEMINAR,
         "title": "Maybe Seminar v2", "start_date": start.isoformat(),
         "end_date": end.isoformat(), "format": Event.Format.ONLINE,
@@ -174,7 +174,7 @@ def test_form_rejects_end_before_start(client):
     fac = _faculty()
     start, _ = _future()
     client.force_login(fac)
-    resp = client.post("/propose-seminar/", {
+    resp = client.post("/propose/", {
         "event_type": Event.Type.SEMINAR,
         "title": "Bad Dates", "start_date": start.isoformat(),
         "end_date": (start - dt.timedelta(days=5)).isoformat(),
@@ -241,7 +241,7 @@ def test_approve_special_event_drafts_and_never_leaks_into_pc():
 
 def test_member_can_open_propose_page(client):
     client.force_login(_member("opener@x.test"))
-    assert client.get("/propose-seminar/").status_code == 200
+    assert client.get("/propose/").status_code == 200
 
 
 def test_outsider_cannot_open_propose_page(client):
@@ -249,4 +249,51 @@ def test_outsider_cannot_open_propose_page(client):
     outsider.profile.role = Profile.Role.EXTERNAL
     outsider.profile.save()
     client.force_login(outsider)
-    assert client.get("/propose-seminar/").status_code == 404
+    assert client.get("/propose/").status_code == 404
+
+
+# ---- type-aware form: readings, special-event fields, validation ----
+
+def test_seminar_proposal_parses_readings_into_rows(client):
+    fac = _faculty("reads@x.test")
+    start, end = _future()
+    client.force_login(fac)
+    resp = client.post("/propose/", {
+        "event_type": Event.Type.SEMINAR, "title": "With Readings",
+        "description": "x", "start_date": start.isoformat(),
+        "end_date": end.isoformat(), "format": Event.Format.ONLINE,
+        "readings_text": "Freud, S. The Interpretation of Dreams.\n\nLacan, J. Écrits.\n",
+    })
+    assert resp.status_code == 302
+    p = SeminarProposal.objects.get(title="With Readings")
+    citations = list(p.readings.values_list("citation", flat=True))
+    assert citations == [
+        "Freud, S. The Interpretation of Dreams.", "Lacan, J. Écrits.",
+    ]  # blank line dropped, order preserved
+
+
+def test_special_event_proposal_allows_tbd_date(client):
+    member = _member("tbd@x.test")
+    client.force_login(member)
+    resp = client.post("/propose/", {
+        "event_type": Event.Type.SPECIAL_EVENT, "title": "TBD Talk",
+        "description": "A talk, date to come.", "date_tbd": "on",
+        "format": Event.Format.ONLINE,
+        "external_speakers": "Jane Doe — jane@x.test — analyst, Paris",
+        "speaker_arrangement": "pc",
+    })
+    assert resp.status_code == 302
+    p = SeminarProposal.objects.get(title="TBD Talk")
+    assert p.date_tbd is True and p.start_date is None
+    assert p.speaker_arrangement == "pc"
+
+
+def test_special_event_requires_date_unless_tbd(client):
+    member = _member("nodate@x.test")
+    client.force_login(member)
+    resp = client.post("/propose/", {
+        "event_type": Event.Type.SPECIAL_EVENT, "title": "No Date",
+        "description": "x", "format": Event.Format.ONLINE,
+    })
+    assert resp.status_code == 200  # re-rendered with an error
+    assert not SeminarProposal.objects.filter(title="No Date").exists()
