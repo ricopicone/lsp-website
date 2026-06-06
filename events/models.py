@@ -872,7 +872,6 @@ class EventProposal(models.Model):
 
     class LocationKind(models.TextChoices):
         ONLINE_INSITE = "online_insite", "Online — in-site video room"
-        ONLINE_EXTERNAL = "online_external", "Online — external platform (Zoom, etc.)"
         IN_PERSON = "in_person", "In person"
         HYBRID = "hybrid", "Hybrid (in person + online)"
 
@@ -882,8 +881,7 @@ class EventProposal(models.Model):
     )
     location = models.CharField(
         max_length=300, blank=True,
-        help_text="Venue address (in person) or meeting link (external online). "
-        "Leave blank for the in-site video room.",
+        help_text="Venue address (in person or hybrid). Leave blank when online.",
     )
     contact = models.CharField(
         max_length=200, blank=True, help_text="Contact email for this proposal.",
@@ -924,7 +922,7 @@ class EventProposal(models.Model):
 
     # ---- Special-event fields ----
     date_tbd = models.BooleanField(
-        default=False, help_text="Check if the date/time is not yet decided.",
+        default=False, help_text="Check if the date/time is TBD (not yet decided).",
     )
     proposed_datetime = models.DateTimeField(
         null=True, blank=True, help_text="Proposed date & time (Pacific).",
@@ -1038,18 +1036,30 @@ class EventProposal(models.Model):
         program = None
         if is_offering:
             program, _ = Program.objects.get_or_create(academic_year=self.academic_year)
-        # A special event's concrete date comes from proposed_datetime.
-        start_date, end_date = self.start_date, self.end_date
-        if not is_offering and self.proposed_datetime:
+        # A special event's concrete date comes from proposed_datetime; a TBD one
+        # mints with a placeholder date (Event requires one) and stays unpublished.
+        has_real_date = (
+            bool(self.start_date) if is_offering
+            else (bool(self.proposed_datetime) and not self.date_tbd)
+        )
+        if is_offering:
+            start_date, end_date = self.start_date, self.end_date
+        elif self.proposed_datetime:
             start_date = end_date = timezone.localtime(self.proposed_datetime).date()
-        # External online / in-person details flow into access_info.
+        else:
+            start_date = end_date = timezone.localdate()  # TBD placeholder
+        # In-person / hybrid venue details flow into access_info.
         access_info = self.location if self.location_kind != self.LocationKind.ONLINE_INSITE else ""
+        # Approved = a real event (never a "draft"). A special event with a
+        # concrete date is published immediately; a TBD one stays unpublished
+        # until the PC sets its date.
         event = Event.objects.create(
             title=self.title[:200], slug=self._unique_event_slug(),
             event_type=self.event_type,
             start_date=start_date, end_date=end_date,
             format=self.event_format, access_info=access_info,
-            status=Event.Status.OPEN if is_offering else Event.Status.DRAFT,
+            status=Event.Status.OPEN,
+            published=(not is_offering and has_real_date),
             description=self.description, program=program,
         )
         self._build_price_tier(event)

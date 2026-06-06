@@ -126,7 +126,7 @@
     <ul class="divide-y divide-base-300/50">
       {% for m in stored_members %}
       <li class="flex flex-wrap items-center gap-2 py-2">
-        <span class="min-w-0 flex-1 text-sm text-base-content">
+        <span class="min-w-0 w-full break-words text-sm text-base-content sm:w-auto sm:flex-1">
           {{ m.user.get_full_name|default:m.user.email }}
         </span>
         <form method="post" action="{% url 'workgroups:roster_set_role' workgroup.slug %}"
@@ -142,14 +142,14 @@
         </form>
         {% if workgroup.has_terms %}
         <form method="post" action="{% url 'workgroups:roster_set_term' workgroup.slug %}"
-              class="flex items-center gap-1">
+              class="flex flex-wrap items-center gap-1">
           {% csrf_token %}
           <input type="hidden" name="user" value="{{ m.user.pk }}">
           <input type="date" name="start_date" value="{{ m.start_date|date:'Y-m-d' }}"
-                 class="input input-bordered input-xs" aria-label="Term start" title="Term start">
+                 class="input input-bordered input-xs w-36" aria-label="Term start" title="Term start">
           <span class="text-xs text-base-content/40">–</span>
           <input type="date" name="end_date" value="{{ m.end_date|date:'Y-m-d' }}"
-                 class="input input-bordered input-xs" aria-label="Term end (blank = serving)"
+                 class="input input-bordered input-xs w-36" aria-label="Term end (blank = serving)"
                  title="Term end (blank = serving)">
           <button class="btn btn-ghost btn-xs">Term</button>
         </form>

@@ -226,25 +226,38 @@ def test_approve_reading_group_mints_own_workgroup_with_organizer():
     assert event.is_faculty(member) is False  # reading groups don't confer faculty
 
 
-def test_approve_special_event_drafts_and_never_leaks_into_pc():
-    """A special-event proposal mints a DRAFT linked to the PC workgroup for
-    provenance only — the proposer must NOT become a PC member (the leak guard)."""
+def test_approve_special_event_opens_and_never_leaks_into_pc():
+    """A special-event proposal mints a real OPEN event (never a "draft"), linked
+    to the PC workgroup for provenance only — the proposer must NOT become a PC
+    member (the leak guard)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
     member = _member("seorg@x.test")
-    start, end = _future(start_days=40, end_days=40)
     p = EventProposal.objects.create(
         proposed_by=member, title="Working with the Negative",
         event_type=Event.Type.SPECIAL_EVENT,
-        start_date=start, end_date=end,
+        proposed_datetime=datetime(2099, 5, 1, 19, 0, tzinfo=ZoneInfo("America/Los_Angeles")),
     )
     p.faculty.add(member)  # even if listed, must not join the PC roster
     event = p.approve(_pc_member())
     assert event.event_type == Event.Type.SPECIAL_EVENT
-    assert event.status == Event.Status.DRAFT          # PC finalizes before publishing
+    assert event.status == Event.Status.OPEN           # approved = a real event
+    assert event.published is True                      # has a date → goes live
     assert event.program is None                       # one-off, not in a program
     pc_wg = Committee.objects.get(slug="programming-committee").workgroup
     assert event.workgroup_id == pc_wg.id              # provenance link only
     assert pc_wg.is_member(member) is False            # the leak guard
     assert member not in [m.user for m in pc_wg.memberships.all()]
+
+
+def test_approve_tbd_special_event_stays_unpublished():
+    p = EventProposal.objects.create(
+        proposed_by=_member("tbd2@x.test"), title="Someday Talk",
+        event_type=Event.Type.SPECIAL_EVENT, date_tbd=True,
+    )
+    event = p.approve(_pc_member())
+    assert event.status == Event.Status.OPEN
+    assert event.published is False  # no date yet → held until the PC sets one
 
 
 def test_special_event_approve_mints_complete_event():
@@ -265,8 +278,8 @@ def test_special_event_approve_mints_complete_event():
     p = EventProposal.objects.create(
         proposed_by=_member("prop@x.test"), title="An Evening Lecture",
         event_type=Event.Type.SPECIAL_EVENT, proposed_datetime=when,
-        location_kind=EventProposal.LocationKind.ONLINE_EXTERNAL,
-        location="https://zoom.example/abc",
+        location_kind=EventProposal.LocationKind.IN_PERSON,
+        location="123 Rue Lacan, Paris",
         fee_amount=Decimal("25.00"), tuition_covers=False,
     )
     p.faculty.add(insider)
@@ -281,8 +294,8 @@ def test_special_event_approve_mints_complete_event():
     assert event.start_date == when.date()
     tier = event.price_tiers.get()
     assert tier.base_amount == Decimal("25.00") and tier.covered_by_tuition is False
-    assert event.format == Event.Format.ONLINE
-    assert event.access_info == "https://zoom.example/abc"   # external link carried
+    assert event.format == Event.Format.IN_PERSON
+    assert event.access_info == "123 Rue Lacan, Paris"       # venue carried
     assert insider in event.member_speakers.all()            # internal = display-only
     assert event.speakers.get().name == "Dr. Externa"        # external minted
 
@@ -298,6 +311,51 @@ def test_seminar_approve_builds_tuition_covered_tier():
     event = p.approve(_pc_member())
     tier = event.price_tiers.get()
     assert tier.covered_by_tuition is True  # tuition always covers offerings
+
+
+def test_fee_type_sliding_keeps_only_the_range(client):
+    """fee_type=sliding stores min/max and drops any stray fixed amount."""
+    from decimal import Decimal
+    fac = _faculty("slide@x.test")
+    start, end = _future()
+    client.force_login(fac)
+    resp = client.post("/propose/", {
+        **_MGMT, "event_type": Event.Type.SEMINAR, "title": "Sliding Sem",
+        "description": "x", "start_date": start.isoformat(), "end_date": end.isoformat(),
+        "fee_type": "sliding", "fee_amount": "999",  # fixed value must be discarded
+        "fee_sliding_min": "0", "fee_sliding_max": "120",
+    })
+    assert resp.status_code == 302
+    p = EventProposal.objects.get(title="Sliding Sem")
+    assert p.fee_amount is None
+    assert p.fee_sliding_min == Decimal("0") and p.fee_sliding_max == Decimal("120")
+
+
+def test_fee_type_fixed_requires_amount(client):
+    fac = _faculty("fixed@x.test")
+    start, end = _future()
+    client.force_login(fac)
+    resp = client.post("/propose/", {
+        **_MGMT, "event_type": Event.Type.SEMINAR, "title": "No Amount",
+        "description": "x", "start_date": start.isoformat(), "end_date": end.isoformat(),
+        "fee_type": "fixed",  # no fee_amount → invalid
+    })
+    assert resp.status_code == 200
+    assert not EventProposal.objects.filter(title="No Amount").exists()
+
+
+def test_fee_type_free_clears_amounts(client):
+    fac = _faculty("free@x.test")
+    start, end = _future()
+    client.force_login(fac)
+    resp = client.post("/propose/", {
+        **_MGMT, "event_type": Event.Type.SEMINAR, "title": "Free Sem",
+        "description": "x", "start_date": start.isoformat(), "end_date": end.isoformat(),
+        "fee_type": "free", "fee_amount": "50",  # ignored
+    })
+    assert resp.status_code == 302
+    p = EventProposal.objects.get(title="Free Sem")
+    assert p.fee_amount is None and p.fee_sliding_min is None
 
 
 def test_member_can_open_propose_page(client):

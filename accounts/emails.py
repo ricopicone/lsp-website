@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from django.conf import settings
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMessage, EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.urls import reverse
 
@@ -17,17 +17,17 @@ def send_referral_inquiry(form_cleaned: dict) -> None:
     """
     to = [getattr(settings, "REFERRALS_EMAIL", "referrals@lacanschool.org")]
     subject = f"Find-an-Analyst inquiry — {form_cleaned['name']}"
-    body = render_to_string(
-        "accounts/email/referral_inquiry.txt",
-        {"data": form_cleaned},
-    )
-    msg = EmailMessage(
+    context = {"data": form_cleaned}
+    text_body = render_to_string("accounts/email/referral_inquiry.txt", context)
+    html_body = render_to_string("accounts/email/referral_inquiry.html", context)
+    msg = EmailMultiAlternatives(
         subject=subject,
-        body=body,
+        body=text_body,
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=to,
         reply_to=[form_cleaned["email"]],
     )
+    msg.attach_alternative(html_body, "text/html")
     msg.send(fail_silently=False)
 
 

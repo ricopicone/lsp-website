@@ -35,11 +35,11 @@
     <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.start_date %}</div>
     <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.end_date %}</div>
     <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.date_tbd %}</div>
-    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.proposed_datetime %}</div>
+    <div data-types="special_event" id="datetime-row">{% include "events/_proposal_field.html" with field=form.proposed_datetime %}</div>
 
     {# ---- Location ---- #}
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.location_kind %}</div>
-    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.location %}</div>
+    <div data-types="seminar reading_group special_event" id="location-detail-row">{% include "events/_proposal_field.html" with field=form.location %}</div>
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.contact %}</div>
 
     {# ---- Seminar continuation ---- #}
@@ -95,16 +95,15 @@
 
     {# ---- Fee ---- #}
     <div data-types="seminar reading_group special_event" class="rounded-lg border border-base-300/60 p-3 space-y-3">
-      <p class="text-sm font-medium">Fee</p>
-      {% include "events/_proposal_field.html" with field=form.fee_amount %}
-      <div class="grid grid-cols-2 gap-3">
+      {% include "events/_proposal_field.html" with field=form.fee_type %}
+      <div id="fee-fixed">{% include "events/_proposal_field.html" with field=form.fee_amount %}</div>
+      <div id="fee-sliding" class="grid grid-cols-2 gap-3">
         {% include "events/_proposal_field.html" with field=form.fee_sliding_min %}
         {% include "events/_proposal_field.html" with field=form.fee_sliding_max %}
       </div>
       {% include "events/_proposal_field.html" with field=form.tuition_covers %}
-      <p class="text-xs text-base-content/50">Consider “none turned away for lack of
-        funds.” For seminars and reading groups, tuition-current members always attend
-        at no charge.</p>
+      <p class="text-xs text-base-content/50">Faculty and conveners may set alternative
+        rates or waive the fee for individual students who indicate financial need.</p>
     </div>
 
     {# ---- Readings + style guide (all types) ---- #}
@@ -150,6 +149,26 @@
   (function () {
     var sel = document.getElementById("id_event_type");
     var tuition = document.getElementById("id_tuition_covers");
+    var tbd = document.getElementById("id_date_tbd");
+    var dtRow = document.getElementById("datetime-row");
+    var locKind = document.getElementById("id_location_kind");
+    var locRow = document.getElementById("location-detail-row");
+    var feeRadios = document.querySelectorAll("input[name='fee_type']");
+    var feeFixed = document.getElementById("fee-fixed");
+    var feeSliding = document.getElementById("fee-sliding");
+
+    function showRow(row, on) { if (row) row.style.display = on ? "" : "none"; }
+
+    function feeType() {
+      var checked = document.querySelector("input[name='fee_type']:checked");
+      return checked ? checked.value : "free";
+    }
+    function syncFee() {
+      var ft = feeType();
+      showRow(feeFixed, ft === "fixed");
+      showRow(feeSliding, ft === "sliding");
+    }
+
     function sync() {
       var t = sel ? sel.value : "";
       document.querySelectorAll("[data-types]").forEach(function (el) {
@@ -161,8 +180,23 @@
         if (offering) { tuition.checked = true; }
         tuition.disabled = offering;
       }
+      // Branching: hide the datetime picker when the date is TBD (special events).
+      if (t === "special_event" && dtRow) { showRow(dtRow, !(tbd && tbd.checked)); }
+      // Branching: the venue/address only applies to in-person & hybrid.
+      if (locRow) {
+        var needsVenue = locKind && (locKind.value === "in_person" || locKind.value === "hybrid");
+        // locRow is also governed by data-types; only force-hide within visible types.
+        if (locRow.getAttribute("data-types").split(" ").indexOf(t) !== -1) {
+          showRow(locRow, needsVenue);
+        }
+      }
     }
-    if (sel) { sel.addEventListener("change", sync); sync(); }
+    if (sel) { sel.addEventListener("change", sync); }
+    if (tbd) { tbd.addEventListener("change", sync); }
+    if (locKind) { locKind.addEventListener("change", sync); }
+    feeRadios.forEach(function (r) { r.addEventListener("change", syncFee); });
+    sync();
+    syncFee();
 
     // External-speaker formset: clone the empty-form template, fixing :prefix:.
     var addBtn = document.getElementById("add-speaker");

@@ -89,9 +89,7 @@ class ReferralRequestForm(forms.Form):
         required=True,
         label="How would you like to meet?",
         help_text=(
-            "You can select more than one option. If you are only interested "
-            "in meeting in person, please first consult the map on this page "
-            "to see if there are any available clinicians in your area."
+            "You can select more than one option."
         ),
     )
     additional_information = forms.CharField(
@@ -105,7 +103,9 @@ class ReferralRequestForm(forms.Form):
             "how you came to an interest in psychoanalysis, or if you have "
             "been in therapy or analysis before. Please do not include any "
             "identifying information such as your name or email in this "
-            "section."
+            "section. This information will be kept confidential through the "
+            "referral process; it will be up to you to contact an analyst "
+            "whose availability is matched with your own."
         ),
     )
     # Honeypot — humans don't see it; bots fill it. Reject if non-empty.
