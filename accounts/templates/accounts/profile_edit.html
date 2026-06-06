@@ -370,26 +370,6 @@
 })();
 </script>
 
-{% if show_preview_tour and not profile.headshot %}
 {# ---- Preview-tour hint: point first-time members at the photo chooser ---- #}
-<div id="lsp-tour-popover" class="hidden fixed z-50 w-64 card bg-primary text-primary-content shadow-xl"
-     role="dialog" aria-label="Tip">
-  <div class="card-body p-3 gap-2">
-    <p class="text-sm leading-snug"><strong>Start here.</strong> Add a photo — you'll crop it to a circle, and it appears across the site.</p>
-    <div class="text-right">
-      <button type="button" class="btn btn-xs lsp-tour-ok">Got it</button>
-    </div>
-  </div>
-  <span class="lsp-tour-arrow" aria-hidden="true"></span>
-</div>
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    if (window.lspTourHint) lspTourHint({
-      target: "#choose-photo",
-      popover: "#lsp-tour-popover",
-      key: "lsp-preview-tour-photo-hint",
-    });
-  });
-</script>
-{% endif %}
+{% if show_preview_tour %}{% include "core/_tour_hint.html" with task=preview_tour_tasks_by_id.complete_profile %}{% endif %}
 {% endblock %}

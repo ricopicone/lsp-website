@@ -71,8 +71,12 @@ def event_summary_context(event, user) -> dict:
     daily_on = daily_enabled()
     # Real Daily presence in the event's room (people actually meeting now).
     # No provisioning: counts only an already-created room, else 0 (no API call).
+    # Offering events meet in their workgroup's room; one-off events own theirs.
     wg = getattr(event, "workgroup", None)
-    room = getattr(wg, "video_room", None) if wg else None
+    if event.event_type in event.ANNUAL_PROGRAM_TYPES:
+        room = getattr(wg, "video_room", None) if wg else None
+    else:
+        room = getattr(event, "video_room", None)
     room_participants = room_participant_count(room) if daily_on else 0
     room_participant_names = presence_names(room) if daily_on else []
     from video.models import Recording

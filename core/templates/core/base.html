@@ -58,6 +58,7 @@
       <nav class="hidden sm:flex items-center gap-0.5 text-sm">
         {% with cur=request.path %}
           <a href="{% url 'about' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/about/' in cur %}text-primary font-medium{% endif %}">About</a>
+          <a href="{% url 'guides_index' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/guides/' in cur %}text-primary font-medium{% endif %}">Guides</a>
 
           {# Groups #}
           <div class="dropdown dropdown-hover">
@@ -135,6 +136,7 @@
           <ul tabindex="0" style="max-height:80vh"
               class="dropdown-content menu menu-sm mt-2 z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-60 overflow-y-auto flex-nowrap">
             <li><a href="{% url 'about' %}">About</a></li>
+            <li><a href="{% url 'guides_index' %}">Guides</a></li>
 
             <li class="menu-title">Groups</li>
             <li><a href="{% url 'workgroups:list' %}">Overview</a></li>
@@ -370,38 +372,20 @@
         </div>
 
         <ul class="space-y-2.5">
-          {# 1. Profile — auto-ticks from real data (headshot + bio) #}
+          {# Tasks: the "preview" checklist in core.checklists, resolved per-user by the preview_tour context processor. #}
+          {% for task in preview_tour_tasks %}
           <li class="flex items-start gap-3">
-            <span class="lsp-tour-tick {% if preview_profile_done %}lsp-tour-tick--done{% endif %} mt-0.5 shrink-0" aria-hidden="true">{% if preview_profile_done %}✓{% endif %}</span>
+            <span class="lsp-tour-tick {% if task.done %}lsp-tour-tick--done{% endif %} mt-0.5 shrink-0" aria-hidden="true">{% if task.done %}✓{% endif %}</span>
             <span class="text-sm leading-snug">
-              <a href="{% url 'profile_edit' %}" class="link link-hover font-medium {% if preview_profile_done %}line-through text-base-content/50{% else %}text-base-content{% endif %}">Complete your profile</a>
-              <span class="block text-xs text-base-content/55">Add a photo and a short bio.</span>
-            </span>
-          </li>
-          {# 2. Register for the sandbox seminar — auto-ticks from a real registration #}
-          <li class="flex items-start gap-3">
-            <span class="lsp-tour-tick {% if preview_register_done %}lsp-tour-tick--done{% endif %} mt-0.5 shrink-0" aria-hidden="true">{% if preview_register_done %}✓{% endif %}</span>
-            <span class="text-sm leading-snug">
-              {% if preview_seminar_url %}
-              <a href="{{ preview_seminar_url }}" class="link link-hover font-medium {% if preview_register_done %}line-through text-base-content/50{% else %}text-base-content{% endif %}">Register for the preview seminar</a>
+              {% if task.url %}
+              <a href="{{ task.url }}" class="link link-hover font-medium {% if task.done %}line-through text-base-content/50{% else %}text-base-content{% endif %}">{{ task.label }}</a>
               {% else %}
-              <span class="font-medium text-base-content">Register for the preview seminar</span>
+              <span class="font-medium text-base-content">{{ task.label }}</span>
               {% endif %}
-              <span class="block text-xs text-base-content/55">It's free and instant — try the sign-up flow.</span>
+              <span class="block text-xs text-base-content/55">{{ task.detail }}</span>
             </span>
           </li>
-          {# 3. Say hello in Parlêtre — auto-ticks once the member posts there #}
-          <li class="flex items-start gap-3">
-            <span class="lsp-tour-tick {% if preview_channel_done %}lsp-tour-tick--done{% endif %} mt-0.5 shrink-0" aria-hidden="true">{% if preview_channel_done %}✓{% endif %}</span>
-            <span class="text-sm leading-snug">
-              {% if preview_channel_url %}
-              <a href="{{ preview_channel_url }}" class="link link-hover font-medium {% if preview_channel_done %}line-through text-base-content/50{% else %}text-base-content{% endif %}">Say hello in Parlêtre</a>
-              {% else %}
-              <span class="font-medium text-base-content">Say hello in Parlêtre</span>
-              {% endif %}
-              <span class="block text-xs text-base-content/55">Post a hello in the welcome channel.</span>
-            </span>
-          </li>
+          {% endfor %}
         </ul>
       </div>
     </div>

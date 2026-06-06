@@ -46,8 +46,19 @@ def _is_workgroup(owner) -> bool:
     return isinstance(owner, Workgroup)
 
 
+def _is_event(owner) -> bool:
+    from events.models import Event
+
+    return isinstance(owner, Event)
+
+
 def _room_name(owner) -> str:
-    prefix = ROOM_PREFIX if _is_workgroup(owner) else f"{ROOM_PREFIX}ch-"
+    if _is_workgroup(owner):
+        prefix = ROOM_PREFIX
+    elif _is_event(owner):
+        prefix = f"{ROOM_PREFIX}event-"
+    else:
+        prefix = f"{ROOM_PREFIX}ch-"
     return f"{prefix}{owner.slug}"[:128]
 
 
@@ -93,7 +104,12 @@ def ensure_room(owner) -> DailyRoom | None:
 
     url = data.get("url") or f"https://{settings.DAILY_DOMAIN}/{name}"
     if room is None:
-        owner_kwarg = {"workgroup": owner} if _is_workgroup(owner) else {"channel": owner}
+        if _is_workgroup(owner):
+            owner_kwarg = {"workgroup": owner}
+        elif _is_event(owner):
+            owner_kwarg = {"event": owner}
+        else:
+            owner_kwarg = {"channel": owner}
         room = DailyRoom.objects.create(
             name=name, url=url, provider_created=True, **owner_kwarg
         )
@@ -153,7 +169,9 @@ def system_check_context(request) -> dict:
 def _recording_event_and_title(room):
     """Resolve the event + a default title for a recording in ``room``."""
     event = None
-    if room is not None and room.workgroup_id:
+    if room is not None and room.event_id:
+        event = room.event  # a one-off event owns its room directly
+    elif room is not None and room.workgroup_id:
         event = room.workgroup.primary_event() or room.workgroup.current_term()
     name = (event.title if event else (room.workgroup.name if room and room.workgroup_id
             else (room.name if room else "Recording")))
@@ -211,14 +229,33 @@ def ingest_recording_event(event_type: str, payload: dict):
     return rec
 
 
-def can_enter(workgroup, user) -> bool:
-    """Whether ``user`` may join the workgroup's room (the access primitive)."""
-    return workgroup.is_member(user)
+def can_enter(owner, user) -> bool:
+    """Whether ``user`` may join the room (the access primitive). ``owner`` is a
+    Workgroup or a one-off Event that owns its own room."""
+    if _is_event(owner):
+        return can_enter_event(owner, user)
+    return owner.is_member(user)
 
 
-def is_owner(workgroup, user) -> bool:
+def can_enter_event(event, user) -> bool:
+    """Room access for an event that owns its own room: paid/comped registrants,
+    the event's hosts (faculty/PC/staff)."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if event.has_access_registrant(user):
+        return True
+    from events.permissions import can_edit_event
+
+    return can_edit_event(user, event)
+
+
+def is_owner(owner, user) -> bool:
     """Whether ``user`` should join as a moderator (owner controls)."""
-    event = workgroup.primary_event() or workgroup.current_term()
+    if _is_event(owner):
+        from events.permissions import can_edit_event
+
+        return can_edit_event(user, owner)
+    event = owner.primary_event() or owner.current_term()
     if event is not None:
         from events.permissions import can_edit_event
 
@@ -226,7 +263,7 @@ def is_owner(workgroup, user) -> bool:
             return True
     from workgroups.models import WorkgroupMembership
 
-    return workgroup.memberships.serving().filter(
+    return owner.memberships.serving().filter(
         user=user, role__in=WorkgroupMembership.LEAD_ROLES
     ).exists()
 

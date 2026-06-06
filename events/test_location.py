@@ -118,22 +118,15 @@ def test_registered_when_live_sees_join(client):
 
 @daily_on
 def test_registered_sees_live_now_when_room_occupied(client, monkeypatch):
-    # A special event stays on the detail page; attach a workgroup with an
-    # occupied room so only real presence (not the schedule) makes it "live".
-    from workgroups.models import Workgroup, build_workgroup
-
+    # A special event stays on the detail page and owns its own room (it no longer
+    # shares the Programming Committee's). Occupy that room so only real presence
+    # (not the schedule) makes it "live".
     e = _event(slug="live-talk")
     now = timezone.now()
     _session(e, start=now + timedelta(days=3), end=now + timedelta(days=3, hours=1))
-    wg = build_workgroup(
-        Workgroup.Kind.COMMITTEE, name="Talk WG", slug="talk-wg",
-        description="", landing_visibility="members", content_visibility="private",
-    )
-    e.workgroup = wg
-    e.save(update_fields=["workgroup"])
     room = DailyRoom.objects.create(
-        workgroup=wg, name=f"lsp-{wg.slug}", url=f"https://lsp.daily.co/lsp-{wg.slug}",
-        provider_created=True,
+        event=e, name=f"lsp-event-{e.slug}",
+        url=f"https://lsp.daily.co/lsp-event-{e.slug}", provider_created=True,
     )
     monkeypatch.setattr("video.daily.get_presence", lambda: {room.name: [{"u": 1}, {"u": 2}]})
     u = _member()

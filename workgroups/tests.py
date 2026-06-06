@@ -6,6 +6,7 @@ import datetime
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.test import override_settings
 from django.urls import reverse
 
 from accounts.models import Profile, User
@@ -339,6 +340,72 @@ def test_open_term_blocked_for_non_managers(client):
                        {"start_date": "2099-09-01", "end_date": "2100-05-01", "fee": "0"})
     assert resp.status_code == 404
     assert wg.current_term() is None
+
+
+@override_settings(DAILY_ENABLED=True, DAILY_API_KEY="k", DAILY_DOMAIN="lsp.daily.co")
+def test_recording_warning_shows_on_pc_workgroup_only(client):
+    """The Settings tab warns that the Record-button switch also governs one-off
+    events — but only on a workgroup those events actually attach to (the PC)."""
+    from datetime import date
+
+    from events.models import Event
+
+    pc = Committee.objects.get(slug="programming-committee")
+    assert pc.workgroup is not None  # auto-provisioned on committee create
+    chair = _user("pcchair@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=pc.workgroup, user=chair, role=WorkgroupMembership.Role.CHAIR,
+        start_date=date(2026, 1, 1),
+    )
+    # A special event routes to the PC workgroup.
+    ev = Event.objects.create(title="Masochism", slug="masochism-w",
+                              event_type=Event.Type.SPECIAL_EVENT,
+                              start_date=date(2026, 11, 1), end_date=date(2026, 11, 1))
+    ev.ensure_workgroup()
+    assert ev.workgroup_id == pc.workgroup_id
+
+    client.force_login(chair)
+    resp = client.get(pc.workgroup.get_absolute_url() + "?tab=settings")
+    assert resp.context["recording_governs_events"] is True
+    assert b"removes it from those events too" in resp.content
+
+    # A plain seminar workgroup (its own room) shows no such warning.
+    sem = _wg(kind=Workgroup.Kind.SEMINAR, name="Sem No Warn", slug="sem-nowarn")
+    lead = _user("semlead@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=sem, user=lead, role=WorkgroupMembership.Role.FACULTY,
+        start_date=date(2026, 1, 1),
+    )
+    client.force_login(lead)
+    resp2 = client.get(sem.get_absolute_url() + "?tab=settings")
+    assert resp2.context["recording_governs_events"] is False
+
+
+def test_recording_settings_manager_only(client):
+    """A manager can flip the Record-button off switch; a non-manager can't."""
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Rec", slug="wg-rec")
+    lead = _user("lead@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=lead, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    plain = _user("plainrec@x.test", role=Profile.Role.ANALYST)
+    url = reverse("workgroups:recording_settings", args=[wg.slug])
+
+    client.force_login(plain)
+    assert client.post(url, {"recording_mode": "off"}).status_code == 404
+    wg.refresh_from_db()
+    assert wg.recording_mode == "on_demand"  # unchanged
+
+    client.force_login(lead)
+    assert client.post(url, {"recording_mode": "off"}).status_code == 302
+    wg.refresh_from_db()
+    assert wg.recording_mode == "off"
+
+    # An invalid value is ignored, not saved.
+    client.post(url, {"recording_mode": "bogus"})
+    wg.refresh_from_db()
+    assert wg.recording_mode == "off"
 
 
 def test_reading_group_kind_default_open_join():

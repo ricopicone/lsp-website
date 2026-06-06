@@ -46,27 +46,8 @@
   {% include "parletre/_chat_body.html" %}
 </div>
 
-{% if show_preview_tour and channel.slug == preview_channel_slug and not preview_channel_done %}
 {# ---- Preview-tour hint: nudge first-time members to post their hello ---- #}
-<div id="lsp-hello-popover" class="hidden fixed z-50 w-64 card bg-primary text-primary-content shadow-xl"
-     role="dialog" aria-label="Tip">
-  <div class="card-body p-3 gap-2">
-    <p class="text-sm leading-snug"><strong>Say hi 👋</strong> Type a quick hello here and press Enter — the others in the preview will see it.</p>
-    <div class="text-right">
-      <button type="button" class="btn btn-xs lsp-tour-ok">Got it</button>
-    </div>
-  </div>
-  <span class="lsp-tour-arrow" aria-hidden="true"></span>
-</div>
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    if (window.lspTourHint) lspTourHint({
-      target: ".parletre-composer",
-      popover: "#lsp-hello-popover",
-      key: "lsp-preview-tour-hello-hint",
-      placement: "above",
-    });
-  });
-</script>
+{% if show_preview_tour and channel.slug == preview_channel_slug %}
+{% include "core/_tour_hint.html" with task=preview_tour_tasks_by_id.say_hello %}
 {% endif %}
 {% endblock %}

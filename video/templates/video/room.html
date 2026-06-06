@@ -1,12 +1,12 @@
 {% extends "core/base.html" %}
 {% load static %}
-{% block title %}Meeting room — {{ event.title|default:workgroup.name }}{% endblock %}
+{% block title %}Meeting room — {% if event %}{{ event.title }}{% else %}{{ workgroup.name }}{% endif %}{% endblock %}
 
 {% block content %}
 <div class="max-w-5xl mx-auto px-4 py-6 space-y-4">
   <div class="flex items-center justify-between gap-3">
     <h1 class="font-serif text-2xl text-base-content truncate">
-      {{ event.title|default:workgroup.name }}
+      {% if event %}{{ event.title }}{% else %}{{ workgroup.name }}{% endif %}
     </h1>
     <a href="{{ back_url }}" class="btn btn-ghost btn-sm">← Back</a>
   </div>
