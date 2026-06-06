@@ -44,11 +44,18 @@ def workgroup_room(request, slug):
 @login_required
 def event_room(request, slug):
     event = get_object_or_404(Event, slug=slug)
-    wg = event.workgroup or event.ensure_workgroup()
-    if wg is None:
+    # Offering events (seminar/reading_group/cartel) *are* their workgroup, so
+    # they meet in the workgroup's room. One-off events (special events, Days of
+    # Assembly, Working Days, Scholarly Seminars) own their own room instead of
+    # sharing the Programming Committee's, so the Event itself is the room owner.
+    if event.event_type in Event.ANNUAL_PROGRAM_TYPES:
+        owner = event.workgroup or event.ensure_workgroup()
+    else:
+        owner = event
+    if owner is None:
         raise Http404("This event has no meeting room.")
     return _render_room(
-        request, wg, event=event, back_url=reverse("events:detail", args=[event.slug])
+        request, owner, event=event, back_url=reverse("events:detail", args=[event.slug])
     )
 
 
@@ -158,11 +165,16 @@ def recording_webhook(request):
     return HttpResponse(status=200)
 
 
-def _render_room(request, wg, *, event=None, back_url="/"):
-    if not services.can_enter(wg, request.user):
+def _render_room(request, room_owner, *, event=None, back_url="/"):
+    # room_owner is a Workgroup or (for one-off events) the Event itself.
+    if not services.can_enter(room_owner, request.user):
         raise PermissionDenied("You don't have access to this meeting room.")
 
-    room = services.ensure_room(wg)
+    # The template's workgroup context is only for the meeting-room title fallback;
+    # an event-owned room has no workgroup, but always passes ``event``.
+    wg = room_owner if services._is_workgroup(room_owner) else None
+
+    room = services.ensure_room(room_owner)
     if room is None:
         return render(
             request,
@@ -170,18 +182,18 @@ def _render_room(request, wg, *, event=None, back_url="/"):
             {"workgroup": wg, "event": event, "back_url": back_url},
         )
 
-    owner = services.is_owner(wg, request.user)
+    owner = services.is_owner(room_owner, request.user)
     try:
         token = services.mint_token(room, request.user, is_owner=owner)
     except Exception:  # noqa: BLE001 — degrade to the fallback page
-        logger.exception("Daily token mint failed for %s", wg.slug)
+        logger.exception("Daily token mint failed for %s", room_owner.slug)
         return render(
             request,
             "video/room_unavailable.html",
             {"workgroup": wg, "event": event, "back_url": back_url},
         )
 
-    recording_available = getattr(wg, "recording_mode", "on_demand") != "off"
+    recording_available = getattr(room_owner, "recording_mode", "on_demand") != "off"
     return render(
         request,
         "video/room.html",

@@ -267,6 +267,19 @@ class Event(models.Model):
         "browser starts the recording on join). Off by default; recordings are "
         "stored privately and shown per their visibility setting.",
     )
+
+    class RecordingMode(models.TextChoices):
+        ON_DEMAND = "on_demand", "On demand — hosts can record"
+        OFF = "off", "Off — no Record button"
+
+    recording_mode = models.CharField(
+        max_length=12,
+        choices=RecordingMode.choices,
+        default=RecordingMode.ON_DEMAND,
+        help_text="Whether hosts see a Record button in this event's own meeting "
+        "room. Only applies to one-off events (special events, Days of Assembly, "
+        "Working Days, Scholarly Seminars), which get their own room.",
+    )
     registration_opens = models.DateTimeField(null=True, blank=True)
     registration_closes = models.DateTimeField(null=True, blank=True)
     status = models.CharField(

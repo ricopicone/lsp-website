@@ -36,6 +36,14 @@ def seminar(slug="sem"):
     )
 
 
+def special_event(slug="special"):
+    return Event.objects.create(
+        title="Working with Masochism", slug=slug,
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 11, 1), end_date=date(2026, 11, 1),
+    )
+
+
 def register(u, event, status=Registration.Status.PAID):
     tier = event.price_tiers.first() or PriceTier.objects.create(
         event=event, audience=Audience.ALL, base_amount=Decimal("0.00")
