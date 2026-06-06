@@ -271,3 +271,19 @@ def test_settings_saves_preferences(client):
     assert resp.status_code == 302
     res = resolve(user, Category.DUES_REMINDER)
     assert res.in_app is True and res.email is False
+
+
+@pytest.mark.django_db
+def test_settings_digest_forces_in_app_on(client):
+    """Choosing 'digest' email keeps the in-app channel on even if its toggle
+    wasn't submitted (a digest is held in the bell row)."""
+    user = make_user()
+    client.force_login(user)
+    resp = client.post("/notifications/settings/", {
+        f"{Category.DUES_REMINDER}__email": "digest",
+        # deliberately omit the in_app toggle
+    })
+    assert resp.status_code == 302
+    res = resolve(user, Category.DUES_REMINDER)
+    assert res.in_app is True
+    assert res.email_mode == EmailDelivery.DIGEST

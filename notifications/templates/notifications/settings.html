@@ -79,4 +79,25 @@
     </div>
   </form>
 </div>
+
+<script>
+  // A digest is delivered by holding the in-app row's email, so it requires the
+  // in-app channel. When a category's email is set to "digest", force its
+  // in-app toggle on and lock it (the server enforces this too).
+  (function () {
+    document.querySelectorAll('select[name$="__email"]').forEach(function (sel) {
+      var key = sel.name.slice(0, -"__email".length);
+      var toggle = document.querySelector('input[name="' + key + '__in_app"]');
+      if (!toggle) return;
+      function sync() {
+        var digest = sel.value === "digest";
+        if (digest) { toggle.checked = true; }
+        toggle.disabled = digest;
+        toggle.title = digest ? "Digests are shown in the app too" : "";
+      }
+      sel.addEventListener("change", sync);
+      sync();
+    });
+  })();
+</script>
 {% endblock %}

@@ -105,6 +105,10 @@ def settings_page(request):
                 email = request.POST.get(f"{category}__email", EmailDelivery.OFF)
                 if email not in EmailDelivery.values:
                     email = EmailDelivery.OFF
+            # A digest is delivered by holding the bell row's email, so a digest
+            # preference requires the in-app channel — keep them consistent.
+            if email == EmailDelivery.DIGEST and meta.in_app_capable:
+                in_app = True
             pref.set(category, in_app=in_app, email=email)
         cadence = request.POST.get("digest_cadence", "")
         if cadence in DigestCadence.values:
