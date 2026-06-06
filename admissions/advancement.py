@@ -20,11 +20,7 @@ from accounts.advisor import current_advisor
 from accounts.membership import current_academic_year_start, record_membership_change
 from accounts.models import Profile
 
-from .emails import (
-    send_advancement_decision,
-    send_advancement_opened,
-    send_advancement_presented,
-)
+from . import notifications as notify_admissions
 from .models import Advancement
 
 
@@ -75,7 +71,7 @@ def open_advancement(member, *, statement, palimpsest=None):
         status=Advancement.Status.REQUESTED,
         requested_at=timezone.now(),
     )
-    transaction.on_commit(lambda: _email(send_advancement_opened, advancement))
+    notify_admissions.advancement_opened(advancement)
     return advancement
 
 
@@ -88,7 +84,7 @@ def present_advancement(advancement, *, recommendation, presented_on=None, by=No
     if advancement.status == Advancement.Status.REQUESTED:
         advancement.status = Advancement.Status.PRESENTED
     advancement.save(update_fields=["recommendation", "presented_at", "status", "updated_at"])
-    transaction.on_commit(lambda: _email(send_advancement_presented, advancement))
+    notify_admissions.advancement_presented(advancement)
     return advancement
 
 
@@ -122,7 +118,7 @@ def decide_advancement(advancement, *, approve, by, effective_ay=None, note=""):
     advancement.save(
         update_fields=["status", "decided_at", "decided_by", "decision_note", "updated_at"]
     )
-    transaction.on_commit(lambda: _email(send_advancement_decision, advancement))
+    notify_admissions.advancement_decision(advancement)
     return advancement
 
 
@@ -131,15 +127,3 @@ def withdraw_advancement(advancement):
     advancement.status = Advancement.Status.WITHDRAWN
     advancement.save(update_fields=["status", "updated_at"])
     return advancement
-
-
-def _email(fn, advancement):
-    """Notifications run outside the critical path — a mail failure must not roll
-    back the recorded transition."""
-    import logging
-    try:
-        fn(advancement)
-    except Exception:
-        logging.getLogger(__name__).exception(
-            "advancement email failed for %s", advancement.pk
-        )

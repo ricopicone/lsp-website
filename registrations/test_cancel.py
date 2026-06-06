@@ -194,14 +194,17 @@ def test_cancel_view_get_rejected(client, event, tier, user):
     assert response.status_code == 405
 
 
-def test_cancel_view_awaiting_payment_succeeds(client, event, tier, user):
+def test_cancel_view_awaiting_payment_succeeds(
+    client, event, tier, user, django_capture_on_commit_callbacks
+):
     reg = Registration.objects.create(
         user=user, event=event, price_tier=tier,
         quoted_amount=Decimal("100.00"),
         status=Registration.Status.AWAITING_PAYMENT,
     )
     client.force_login(user)
-    response = client.post(reverse("registrations:cancel", args=[reg.id]))
+    with django_capture_on_commit_callbacks(execute=True):
+        response = client.post(reverse("registrations:cancel", args=[reg.id]))
     assert response.status_code == 302
     assert response.url.endswith(
         reverse("registrations:confirm", args=[reg.id]) + "?cancelled=1"
@@ -225,7 +228,9 @@ def test_cancel_view_already_cancelled_is_idempotent(client, event, tier, user):
     assert len(mail.outbox) == 0
 
 
-def test_cancel_view_paid_invokes_stripe_refund(client, event, tier, user):
+def test_cancel_view_paid_invokes_stripe_refund(
+    client, event, tier, user, django_capture_on_commit_callbacks
+):
     reg = Registration.objects.create(
         user=user, event=event, price_tier=tier,
         quoted_amount=Decimal("100.00"),
@@ -243,7 +248,8 @@ def test_cancel_view_paid_invokes_stripe_refund(client, event, tier, user):
     fake_refund.__getitem__ = lambda self, k: {"id": "re_x", "amount": 10000}[k]
     fake_refund.__contains__ = lambda self, k: k in ("id", "amount")
     client.force_login(user)
-    with patch("payments.refund.stripe.Refund.create", return_value=fake_refund) as call:
+    with patch("payments.refund.stripe.Refund.create", return_value=fake_refund) as call, \
+            django_capture_on_commit_callbacks(execute=True):
         response = client.post(reverse("registrations:cancel", args=[reg.id]))
     assert response.status_code == 302
     call.assert_called_once()

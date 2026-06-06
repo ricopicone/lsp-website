@@ -65,7 +65,7 @@ def _admin_request(method, user):
 
 @pytest.mark.django_db
 def test_apply_payment_success_marks_paid_and_creates_receipt(
-    member, event, tier, staff_admin,
+    member, event, tier, staff_admin, django_capture_on_commit_callbacks,
 ):
     reg = Registration.objects.create(
         user=member, event=event, price_tier=tier,
@@ -82,7 +82,8 @@ def test_apply_payment_success_marks_paid_and_creates_receipt(
     )
     admin = site._registry[Payment]
     request = _admin_request("GET", staff_admin)
-    admin.apply_payment_success(request, Payment.objects.filter(pk=payment.pk))
+    with django_capture_on_commit_callbacks(execute=True):
+        admin.apply_payment_success(request, Payment.objects.filter(pk=payment.pk))
 
     payment.refresh_from_db()
     reg.refresh_from_db()
@@ -117,7 +118,9 @@ def test_apply_payment_success_skips_already_succeeded(member, event, tier, staf
 
 
 @pytest.mark.django_db
-def test_apply_payment_success_for_dues_sends_receipt(member, staff_admin):
+def test_apply_payment_success_for_dues_sends_receipt(
+    member, staff_admin, django_capture_on_commit_callbacks
+):
     payment = Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member, amount=Decimal("100.00"),
@@ -126,7 +129,8 @@ def test_apply_payment_success_for_dues_sends_receipt(member, staff_admin):
     )
     admin = site._registry[Payment]
     request = _admin_request("GET", staff_admin)
-    admin.apply_payment_success(request, Payment.objects.filter(pk=payment.pk))
+    with django_capture_on_commit_callbacks(execute=True):
+        admin.apply_payment_success(request, Payment.objects.filter(pk=payment.pk))
     payment.refresh_from_db()
     assert payment.status == Payment.Status.SUCCEEDED
     assert hasattr(payment, "receipt")
@@ -137,7 +141,9 @@ def test_apply_payment_success_for_dues_sends_receipt(member, staff_admin):
 
 
 @pytest.mark.django_db
-def test_comp_registration_marks_comped_and_emails(member, event, tier, staff_admin):
+def test_comp_registration_marks_comped_and_emails(
+    member, event, tier, staff_admin, django_capture_on_commit_callbacks
+):
     reg = Registration.objects.create(
         user=member, event=event, price_tier=tier,
         quoted_amount=Decimal("100.00"),
@@ -145,9 +151,10 @@ def test_comp_registration_marks_comped_and_emails(member, event, tier, staff_ad
     )
     admin = site._registry[Registration]
     request = _admin_request("GET", staff_admin)
-    admin.comp_selected_registrations(
-        request, Registration.objects.filter(pk=reg.pk)
-    )
+    with django_capture_on_commit_callbacks(execute=True):
+        admin.comp_selected_registrations(
+            request, Registration.objects.filter(pk=reg.pk)
+        )
     reg.refresh_from_db()
     assert reg.status == Registration.Status.COMPED
     assert "Comped by admin@example.com" in reg.staff_notes

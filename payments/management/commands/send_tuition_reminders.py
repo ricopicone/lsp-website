@@ -21,6 +21,8 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from accounts.models import Profile
+from notifications.categories import Category
+from payments import notifications as notify_payments
 from payments.emails import send_tuition_reminder
 from payments.models import TuitionEnrollment, TuitionPeriod, TuitionReminder
 from payments.sending import ThrottledSender
@@ -106,7 +108,9 @@ class Command(BaseCommand):
                 sent += 1
                 continue
             try:
-                sender.send(send_tuition_reminder, user, period, enrollment=enrollment)
+                notify_payments.tuition_reminder_inapp(user, period)  # bell row
+                if notify_payments.should_email(user, Category.TUITION_REMINDER):
+                    sender.send(send_tuition_reminder, user, period, enrollment=enrollment)
                 TuitionReminder.objects.create(user=user, tuition_period=period)
                 sent += 1
             except Exception as exc:

@@ -1,0 +1,103 @@
+{% extends "core/base.html" %}
+{% block title %}Notification settings{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-6">
+  <div class="flex items-center justify-between gap-3">
+    <h1 class="font-serif text-2xl tracking-tight text-base-content">Notification settings</h1>
+    <a href="{% url 'notifications:feed' %}" class="btn btn-ghost btn-sm">Back to notifications</a>
+  </div>
+
+  <p class="text-sm text-base-content/60">
+    Choose how each kind of notification reaches you. Some confirmations and
+    security messages are always emailed and can't be turned off. Items set to
+    <em>In a digest</em> are batched into one periodic email.
+  </p>
+
+  <form method="post" class="space-y-7">
+    {% csrf_token %}
+
+    <div class="flex items-center gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2.5">
+      <label for="digest_cadence" class="text-sm text-base-content">Digest frequency</label>
+      <select name="digest_cadence" id="digest_cadence" class="select select-bordered select-sm">
+        {% for value, label in cadence_choices %}
+        <option value="{{ value }}" {% if value == cadence %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <span class="text-xs text-base-content/50">How often digest emails are sent.</span>
+    </div>
+    {% for section in sections %}
+    <section class="space-y-2">
+      <h2 class="font-medium text-base-content">{{ section.title }}</h2>
+      <div class="overflow-hidden rounded-box border border-base-300 bg-base-100">
+        <table class="w-full text-sm">
+          <thead class="bg-base-200/60 text-xs uppercase tracking-wide text-base-content/50">
+            <tr>
+              <th class="px-3 py-2 text-left font-medium">Notify me about</th>
+              <th class="px-3 py-2 text-center font-medium w-24">In app</th>
+              <th class="px-3 py-2 text-center font-medium w-24">Email</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-base-300/60">
+            {% for row in section.rows %}
+            <tr>
+              <td class="px-3 py-2.5">
+                <span class="text-base-content">{{ row.label }}</span>
+                {% if row.help_text %}<span class="block text-xs text-base-content/50">{{ row.help_text }}</span>{% endif %}
+              </td>
+              <td class="px-3 py-2.5 text-center">
+                {% if row.in_app_editable %}
+                  <input type="checkbox" name="{{ row.key }}__in_app" class="toggle toggle-sm toggle-primary" {% if row.in_app %}checked{% endif %}>
+                {% else %}
+                  <span class="text-base-content/30">—</span>
+                {% endif %}
+              </td>
+              <td class="px-3 py-2.5 text-center">
+                {% if row.email_editable %}
+                  <select name="{{ row.key }}__email" class="select select-bordered select-xs">
+                    {% for value, label in email_choices %}
+                    <option value="{{ value }}" {% if value == row.email_mode %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                {% elif row.email_locked %}
+                  <span class="badge badge-ghost badge-sm" title="Always emailed">Always</span>
+                {% else %}
+                  <span class="text-base-content/30">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endfor %}
+
+    <div class="flex items-center gap-3">
+      <button type="submit" class="btn btn-primary btn-sm">Save preferences</button>
+      <a href="{% url 'parletre:settings' %}" class="text-sm text-base-content/60 hover:text-primary">Discussion email cadence (digests) →</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  // A digest is delivered by holding the in-app row's email, so it requires the
+  // in-app channel. When a category's email is set to "digest", force its
+  // in-app toggle on and lock it (the server enforces this too).
+  (function () {
+    document.querySelectorAll('select[name$="__email"]').forEach(function (sel) {
+      var key = sel.name.slice(0, -"__email".length);
+      var toggle = document.querySelector('input[name="' + key + '__in_app"]');
+      if (!toggle) return;
+      function sync() {
+        var digest = sel.value === "digest";
+        if (digest) { toggle.checked = true; }
+        toggle.disabled = digest;
+        toggle.title = digest ? "Digests are shown in the app too" : "";
+      }
+      sel.addEventListener("change", sync);
+      sync();
+    });
+  })();
+</script>
+{% endblock %}

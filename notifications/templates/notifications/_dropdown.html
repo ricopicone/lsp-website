@@ -1,0 +1,31 @@
+{% load static %}
+<div class="flex items-center justify-between gap-3 px-3 py-2 border-b border-base-300">
+  <span class="font-medium text-sm text-base-content">Notifications</span>
+  {% if unread %}
+  <button type="button" data-notif-readall class="text-xs text-base-content/60 hover:text-primary">Mark all read</button>
+  {% endif %}
+</div>
+
+<ul class="max-h-96 overflow-y-auto divide-y divide-base-300/60">
+  {% for n in items %}
+  <li class="{% if n.is_unread %}bg-base-200/50{% endif %}">
+    <a href="{{ n.url|default:'/notifications/' }}" data-notif-id="{{ n.pk }}"
+       class="flex items-start gap-2 px-3 py-2.5 hover:bg-base-200">
+      {% if n.is_unread %}<span class="mt-1.5 size-2 rounded-full bg-primary shrink-0" aria-label="unread"></span>
+      {% else %}<span class="mt-1.5 size-2 shrink-0"></span>{% endif %}
+      <span class="min-w-0 flex-1 text-sm">
+        <span class="block font-medium text-base-content truncate">{{ n.title }}</span>
+        {% if n.body %}<span class="block text-xs text-base-content/60 truncate">{{ n.body }}</span>{% endif %}
+        <time class="block text-xs text-base-content/40" datetime="{{ n.created_at|date:'c' }}">{{ n.created_at|date:"M j, g:i a" }}</time>
+      </span>
+    </a>
+  </li>
+  {% empty %}
+  <li class="px-3 py-6 text-center text-sm text-base-content/50 italic">No notifications yet.</li>
+  {% endfor %}
+</ul>
+
+<div class="flex items-center justify-between gap-3 px-3 py-2 border-t border-base-300">
+  <a href="{% url 'notifications:feed' %}" class="text-xs text-base-content/70 hover:text-primary">See all</a>
+  <a href="{% url 'notifications:settings' %}" class="text-xs text-base-content/70 hover:text-primary">Settings</a>
+</div>

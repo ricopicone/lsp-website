@@ -18,7 +18,7 @@ from django.views.decorators.http import require_POST
 from accounts.permissions import is_lsp_member
 from events.permissions import is_program_committee
 
-from . import emails
+from . import notifications as notify_cartels
 from .forms import CartelProposalForm
 from .models import Cartel, CartelJoinRequest, ExternalPlusOne
 from .permissions import is_cartel_coordinator
@@ -53,7 +53,7 @@ def propose(request):
                 description=form.cleaned_data["description"],
                 invitees=form.cleaned_data["invitees"],
             )
-            emails.notify_proposal(cartel, _abs(request, cartel))
+            notify_cartels.proposal(cartel, _abs(request, cartel))
             messages.success(
                 request,
                 "Cartel proposed. The Cartel Coordinator (for feedback) and the "
@@ -96,13 +96,13 @@ def review_decide(request, pk):
     )
     if request.POST.get("decision") == "approve":
         cartel.approve(request.user)
-        emails.notify_generator_of_decision(cartel, _abs(request, cartel))
+        notify_cartels.generator_decision(cartel, _abs(request, cartel))
         for inv in cartel.invitations.all():
-            emails.notify_invitee(cartel, inv.invited_user, _abs(request, cartel))
+            notify_cartels.invitee(cartel, inv.invited_user, _abs(request, cartel))
         messages.success(request, f"Approved '{cartel.workgroup.name}'.")
     else:
         cartel.decline(request.user, note=request.POST.get("note", ""))
-        emails.notify_generator_of_decision(cartel, _abs(request, cartel))
+        notify_cartels.generator_decision(cartel, _abs(request, cartel))
         messages.success(request, f"Declined '{cartel.workgroup.name}'.")
     return redirect("cartels:review_queue")
 
@@ -118,7 +118,7 @@ def coordinator_feedback(request, pk):
     cartel.coordinator_feedback = (request.POST.get("feedback") or "").strip()
     cartel.save(update_fields=["coordinator_feedback"])
     if cartel.coordinator_feedback:
-        emails.notify_coordinator_feedback(cartel, _abs(request, cartel))
+        notify_cartels.coordinator_feedback(cartel, _abs(request, cartel))
     messages.success(request, f"Feedback recorded for '{cartel.workgroup.name}'.")
     return redirect("cartels:review_queue")
 
@@ -133,7 +133,7 @@ def apply(request, slug):
     if not is_lsp_member(request.user) or cartel.closed or cartel.is_member(request.user):
         raise Http404
     cartel.request_to_join(request.user, message=(request.POST.get("message") or "").strip())
-    emails.notify_members_of_application(cartel, request.user, _abs(request, cartel))
+    notify_cartels.members_of_application(cartel, request.user, _abs(request, cartel))
     messages.success(request, "Application sent — a member of the cartel will review it.")
     return redirect(cartel.get_absolute_url())
 
@@ -173,7 +173,7 @@ def edit(request, slug):
                     )
                 if cartel.status == Cartel.Status.DECLINED:
                     cartel.resubmit()
-                    emails.notify_proposal(cartel, _abs(request, cartel))
+                    notify_cartels.proposal(cartel, _abs(request, cartel))
                     messages.success(request, "Edited and resubmitted for review.")
                 else:
                     messages.success(request, "Proposal updated.")
@@ -277,7 +277,7 @@ def invite_external_plus_one(request, slug, pk):
     ext = get_object_or_404(ExternalPlusOne, pk=pk, cartel=cartel)
     if ext.email:
         signup_url = request.build_absolute_uri(reverse("signup"))
-        emails.invite_external_plus_one(ext, signup_url)
+        notify_cartels.external_plus_one(ext, signup_url)
         ext.invited_at = timezone.now()
         ext.save(update_fields=["invited_at"])
         messages.success(request, f"Invited {ext.name} to create an account.")
@@ -328,5 +328,5 @@ def decide_request(request, slug, pk):
         cartel.accept_request(join_request, decided_by=request.user)
     else:
         cartel.decline_request(join_request, decided_by=request.user)
-    emails.notify_applicant_of_decision(join_request, _abs(request, cartel))
+    notify_cartels.applicant_decision(join_request, _abs(request, cartel))
     return redirect(cartel.get_absolute_url())

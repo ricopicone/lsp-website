@@ -14,6 +14,7 @@ from django.views.decorators.http import require_POST
 
 from works.models import Work
 
+from . import notifications as notify_groups
 from .models import (
     Visibility,
     Workgroup,
@@ -165,6 +166,16 @@ def workgroup_detail(request, slug):
     from video import services as _video
 
     daily_on = _video.daily_enabled()
+    # One-off events (special events, Days of Assembly, Working Days, the Scholarly
+    # Seminar Series) attach to the Programming Committee's workgroup rather than
+    # getting their own, so this group's recording_mode also governs theirs. Warn a
+    # manager about that before they flip the Record-button switch.
+    recording_governs_events = False
+    if can_manage and daily_on:
+        from events.models import Event
+        recording_governs_events = wg.events.exclude(
+            event_type__in=Event.ANNUAL_PROGRAM_TYPES
+        ).exists()
     # The Meet tab is the group's meeting hub (Meet Now + joinable meetings); it
     # shows to members whenever video is enabled. The "in progress" indicator on
     # Overview + Meet is driven by *real* Daily presence (people actually in the
@@ -274,6 +285,7 @@ def workgroup_detail(request, slug):
         "primary_event": primary_event,
         "can_edit_offering": can_edit_offering,
         "can_manage": can_manage,
+        "recording_governs_events": recording_governs_events,
         "can_join": can_join,
         "can_leave": can_leave,
         "daily_enabled": daily_on,
@@ -617,6 +629,8 @@ def roster_add(request, slug):
     user = _resolve_member(request.POST.get("member", ""))
     if user is not None:
         wg.add_member(user)
+        if user != request.user:
+            notify_groups.member_added(wg, user)
     return redirect(f"{wg.get_absolute_url()}?tab=settings")
 
 
@@ -831,6 +845,7 @@ def meeting_add(request, slug):
         meeting.workgroup = wg
         meeting.created_by = request.user
         meeting.save()
+        notify_groups.meeting_scheduled(meeting, actor=request.user)
     return redirect(f"{wg.get_absolute_url()}?tab=schedule")
 
 
@@ -859,6 +874,7 @@ def series_add(request, slug):
         series.created_by = request.user
         series.save()
         series.generate()
+        notify_groups.series_scheduled(series, actor=request.user)
     return redirect(f"{wg.get_absolute_url()}?tab=schedule")
 
 
@@ -936,6 +952,7 @@ def meeting_minutes(request, slug, pk):
     form = MeetingMinutesForm(request.POST, instance=m)
     if form.is_valid():
         form.save()
+        notify_groups.minutes_posted(m, actor=request.user)
     # Return to the tab the edit came from (Schedule or the Minutes record).
     tab = request.POST.get("tab")
     if tab not in ("schedule", "minutes"):
@@ -1466,9 +1483,10 @@ def decision_add(request, slug):
     if not data["title"]:
         messages.error(request, "Give the decision a title.")
         return redirect(back)
-    WorkgroupDecision.objects.create(
+    decision = WorkgroupDecision.objects.create(
         workgroup=wg, created_by=request.user, **data
     )
+    notify_groups.decision_recorded(decision, actor=request.user)
     return redirect(back)
 
 

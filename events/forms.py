@@ -65,12 +65,13 @@ class ProgramPublishForm(forms.ModelForm):
 
 
 class SeminarProposalForm(forms.ModelForm):
-    """Faculty-facing seminar proposal (M12.5)."""
+    """Member-facing event proposal (M12.5) — seminar, reading group, or special
+    event. The Programming Committee reviews it and, on approval, mints the Event."""
 
     class Meta:
         model = SeminarProposal
         fields = (
-            "title", "description", "start_date", "end_date",
+            "event_type", "title", "description", "start_date", "end_date",
             "format", "continues_seminar", "faculty",
         )
         widgets = {
@@ -84,12 +85,23 @@ class SeminarProposalForm(forms.ModelForm):
         from accounts.models import User
         from workgroups.models import Workgroup
 
+        self.fields["event_type"].label = "Type of event"
         self.fields["faculty"].required = False
         self.fields["faculty"].queryset = User.objects.filter(
             profile__is_faculty=True, is_active=True,
         ).order_by("last_name", "first_name")
-        self.fields["faculty"].help_text = "Instructors who will teach it."
+        self.fields["faculty"].label = "Conveners"
+        self.fields["faculty"].help_text = (
+            "Seminars: the instructors (teaching confers faculty standing). "
+            "Reading groups: the organizers. Leave blank for special events — the "
+            "Programming Committee sets presenters on approval."
+        )
         self.fields["continues_seminar"].required = False
+        self.fields["continues_seminar"].label = "Continue an existing seminar"
+        self.fields["continues_seminar"].help_text = (
+            "Seminars only: pick the seminar to run another year of, or leave "
+            "blank for a brand-new one."
+        )
         self.fields["continues_seminar"].queryset = (
             Workgroup.objects.filter(kind=Workgroup.Kind.SEMINAR).order_by("name")
         )

@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}{% if editing %}Edit seminar proposal{% else %}Propose a seminar{% endif %} — LSP{% endblock %}
+{% block title %}{% if editing %}Edit proposal{% else %}Propose an event{% endif %} — LSP{% endblock %}
 {% block content %}
 <div class="max-w-2xl space-y-8">
   <header class="space-y-2">
@@ -7,12 +7,13 @@
       <a href="{% url 'program' %}" class="link link-hover text-base-content/60">← Program</a>
     </p>
     <h1 class="font-serif text-3xl text-base-content">
-      {% if editing %}Edit seminar proposal{% else %}Propose a seminar{% endif %}
+      {% if editing %}Edit proposal{% else %}Propose an event{% endif %}
     </h1>
     <p class="text-base-content/70">
-      Describe the seminar you'd like to run. The Programming Committee reviews
-      proposals and, on approval, adds it to the program. To run another year of
-      an existing seminar, pick it under “Continue an existing seminar”.
+      Any member can propose a <strong>seminar</strong>, <strong>reading group</strong>,
+      or <strong>special event</strong>. The Programming Committee reviews proposals and,
+      on approval, mints the event — seminars and reading groups go onto the program;
+      special events are set up by the committee before publishing.
     </p>
   </header>
 
@@ -47,7 +48,7 @@
       <li class="flex flex-wrap items-center gap-2 px-4 py-3">
         <span class="min-w-0 flex-1">
           <span class="text-sm font-medium text-base-content">{{ p.title }}</span>
-          <span class="text-xs text-base-content/55"> · {{ p.academic_year }}</span>
+          <span class="text-xs text-base-content/55"> · {{ p.get_event_type_display }}</span>
           {% if p.continues_seminar %}<span class="badge badge-ghost badge-xs">continuing</span>{% endif %}
         </span>
         {% if p.status == "approved" %}

@@ -15,9 +15,9 @@ from .models import (
 
 @admin.register(SeminarProposal)
 class SeminarProposalAdmin(admin.ModelAdmin):
-    list_display = ("title", "proposed_by", "status", "start_date", "end_date",
-                    "continues_seminar", "minted_event", "created_at")
-    list_filter = ("status", "format")
+    list_display = ("title", "event_type", "proposed_by", "status", "start_date",
+                    "end_date", "continues_seminar", "minted_event", "created_at")
+    list_filter = ("status", "event_type", "format")
     search_fields = ("title", "proposed_by__email")
     autocomplete_fields = ("proposed_by", "reviewed_by", "continues_seminar",
                            "faculty", "minted_event")
