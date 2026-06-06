@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import Event, PricingCode, Program, SeminarProposal
+from .models import Event, EventProposal, PricingCode, Program
 
 
 class EventDescriptionForm(forms.ModelForm):
@@ -68,7 +68,7 @@ def _member_name(user):
     return user.get_full_name() or user.email
 
 
-class SeminarProposalForm(forms.ModelForm):
+class EventProposalForm(forms.ModelForm):
     """Member-facing event proposal (M12.5) — seminar, reading group, or special
     event. Fields are grouped per type in the template (toggled by ``event_type``);
     validation enforces the per-type requirements here. The Programming Committee
@@ -84,22 +84,24 @@ class SeminarProposalForm(forms.ModelForm):
     )
 
     class Meta:
-        model = SeminarProposal
+        model = EventProposal
         fields = (
             "event_type", "title", "description",
-            "date_tbd", "start_date", "end_date", "proposed_time",
-            "format", "location", "contact",
+            "start_date", "end_date",
+            "date_tbd", "proposed_datetime",
+            "location_kind", "location", "contact",
             "continues_seminar", "faculty",
-            "offers_ce", "fee_note", "biography",
-            "speaker_arrangement", "external_speakers", "honoraria_estimate",
+            "fee_amount", "fee_sliding_min", "fee_sliding_max", "tuition_covers",
+            "offers_ce",
+            "speaker_arrangement", "honoraria_estimate",
         )
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),
             "end_date": forms.DateInput(attrs={"type": "date"}),
+            "proposed_datetime": forms.DateTimeInput(
+                attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M",
+            ),
             "description": forms.Textarea(attrs={"rows": 8}),
-            "fee_note": forms.Textarea(attrs={"rows": 2}),
-            "biography": forms.Textarea(attrs={"rows": 4}),
-            "external_speakers": forms.Textarea(attrs={"rows": 4}),
             "speaker_arrangement": forms.RadioSelect,
         }
 
@@ -109,6 +111,9 @@ class SeminarProposalForm(forms.ModelForm):
         from workgroups.models import Workgroup
 
         self.fields["event_type"].label = "Type of event"
+        # datetime-local needs the value in this exact format to prefill on edit.
+        self.fields["proposed_datetime"].input_formats = ["%Y-%m-%dT%H:%M"]
+        self.fields["proposed_datetime"].label = "Proposed date & time (Pacific)"
 
         self.fields["description"].help_text = (
             "≈250 words. Introduce the central focus and topics, with a clear "
@@ -121,11 +126,11 @@ class SeminarProposalForm(forms.ModelForm):
             profile__is_faculty=True, is_active=True,
         ).order_by("last_name", "first_name")
         self.fields["faculty"].label_from_instance = _member_name
-        self.fields["faculty"].label = "Additional conveners / speakers"
+        self.fields["faculty"].label = "Additional conveners / internal speakers"
         self.fields["faculty"].help_text = (
-            "You're counted as a convener — add any co-conveners (seminars / reading "
-            "groups) or internal LSP speakers (special events). Teaching a seminar "
-            "confers faculty standing."
+            "You're counted as a convener. Add any co-conveners (seminars / reading "
+            "groups) or internal LSP speakers (special events) — their bios come from "
+            "their profiles. Teaching a seminar confers faculty standing."
         )
 
         self.fields["continues_seminar"].required = False
@@ -137,9 +142,20 @@ class SeminarProposalForm(forms.ModelForm):
         self.fields["continues_seminar"].queryset = (
             Workgroup.objects.filter(kind=Workgroup.Kind.SEMINAR).order_by("name")
         )
-        self.fields["start_date"].label = "Start / event date"
+        self.fields["start_date"].label = "Start date"
         self.fields["end_date"].label = "End date"
+        self.fields["location_kind"].label = "Location"
+        self.fields["offers_ce"].label = "Offer CE credits"
+
+        # Speaker arrangement: a real first option (no blank "---------").
         self.fields["speaker_arrangement"].required = False
+        self.fields["speaker_arrangement"].choices = (
+            EventProposal.SpeakerArrangement.choices
+        )
+        if not self.initial.get("speaker_arrangement") and not self.instance.pk:
+            self.initial["speaker_arrangement"] = (
+                EventProposal.SpeakerArrangement.PROPOSER
+            )
 
         # Prefill the readings textarea from existing rows when editing.
         if self.instance and self.instance.pk:
@@ -148,6 +164,23 @@ class SeminarProposalForm(forms.ModelForm):
                 self.fields["readings_text"].initial = "\n".join(
                     r.citation for r in existing
                 )
+            if self.instance.proposed_datetime:
+                from zoneinfo import ZoneInfo
+
+                from django.utils import timezone
+                self.initial["proposed_datetime"] = timezone.localtime(
+                    self.instance.proposed_datetime, ZoneInfo("America/Los_Angeles")
+                ).strftime("%Y-%m-%dT%H:%M")
+
+    def clean_proposed_datetime(self):
+        """Interpret the naive datetime-local input as Pacific time."""
+        from zoneinfo import ZoneInfo
+
+        from django.utils import timezone
+        dt = self.cleaned_data.get("proposed_datetime")
+        if dt and timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, ZoneInfo("America/Los_Angeles"))
+        return dt
 
     def clean(self):
         data = super().clean()
@@ -158,6 +191,8 @@ class SeminarProposalForm(forms.ModelForm):
         is_offering = etype in (Event.Type.SEMINAR, Event.Type.READING_GROUP)
 
         if is_offering:
+            # Tuition always covers seminars & reading groups (REG-4).
+            data["tuition_covers"] = True
             if not start:
                 self.add_error("start_date", "Required for seminars and reading groups.")
             if not end:
@@ -171,12 +206,16 @@ class SeminarProposalForm(forms.ModelForm):
                         "End date can't be in the past — the term wouldn't be active.",
                     )
         else:
-            # Special event: a concrete date is required unless it's TBD.
-            if not data.get("date_tbd") and not start:
+            # Special event: a concrete date/time is required unless it's TBD.
+            if not data.get("date_tbd") and not data.get("proposed_datetime"):
                 self.add_error(
-                    "start_date",
-                    "Give a proposed date, or check “date/time TBD”.",
+                    "proposed_datetime",
+                    "Give a proposed date & time, or check “date/time TBD”.",
                 )
+        # Sliding scale: min must not exceed max.
+        smin, smax = data.get("fee_sliding_min"), data.get("fee_sliding_max")
+        if smin is not None and smax is not None and smin > smax:
+            self.add_error("fee_sliding_min", "Minimum can't exceed the maximum.")
         return data
 
     def save_readings(self, proposal):
@@ -192,6 +231,25 @@ class SeminarProposalForm(forms.ModelForm):
             ProposalReading(proposal=proposal, sort_order=i, citation=line)
             for i, line in enumerate(lines)
         ])
+
+
+def _build_speaker_formset():
+    from .models import EventProposal, ProposalSpeaker
+    return forms.inlineformset_factory(
+        EventProposal, ProposalSpeaker,
+        fields=("name", "email", "affiliation", "bio"),
+        widgets={
+            "bio": forms.Textarea(attrs={"rows": 2}),
+            "name": forms.TextInput(attrs={"placeholder": "Full name"}),
+            "email": forms.EmailInput(attrs={"placeholder": "Contact email"}),
+            "affiliation": forms.TextInput(attrs={"placeholder": "Affiliation"}),
+        },
+        extra=1, can_delete=True,
+    )
+
+
+#: External-speaker formset for special-event proposals (name/email/affiliation/bio).
+ProposalSpeakerFormSet = _build_speaker_formset()
 
 
 class ProgramEventForm(forms.ModelForm):

@@ -4,11 +4,12 @@ from django.contrib import admin
 from .models import (
     Event,
     EventMemberSpeaker,
+    EventProposal,
     PriceTier,
     PricingCode,
     Program,
     ProposalReading,
-    SeminarProposal,
+    ProposalSpeaker,
     Session,
     Speaker,
 )
@@ -19,15 +20,20 @@ class ProposalReadingInline(admin.TabularInline):
     extra = 0
 
 
-@admin.register(SeminarProposal)
-class SeminarProposalAdmin(admin.ModelAdmin):
+class ProposalSpeakerInline(admin.TabularInline):
+    model = ProposalSpeaker
+    extra = 0
+
+
+@admin.register(EventProposal)
+class EventProposalAdmin(admin.ModelAdmin):
     list_display = ("title", "event_type", "proposed_by", "status", "start_date",
                     "end_date", "continues_seminar", "minted_event", "created_at")
-    list_filter = ("status", "event_type", "format")
+    list_filter = ("status", "event_type", "location_kind")
     search_fields = ("title", "proposed_by__email")
     autocomplete_fields = ("proposed_by", "reviewed_by", "continues_seminar",
                            "faculty", "minted_event")
-    inlines = (ProposalReadingInline,)
+    inlines = (ProposalReadingInline, ProposalSpeakerInline)
 
 
 class EventAdminForm(forms.ModelForm):

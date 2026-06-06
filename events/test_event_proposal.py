@@ -9,11 +9,19 @@ import pytest
 
 from accounts.models import Profile, User
 from committees.models import Committee
-from events.models import Audience, Event, PriceTier, SeminarProposal
+from events.models import Audience, Event, EventProposal, PriceTier
 from registrations.models import Registration
 from workgroups.models import Workgroup
 
 pytestmark = pytest.mark.django_db
+
+# Required fields shared by every propose POST: the location dropdown + the
+# external-speaker formset's management form (the propose form embeds both).
+_MGMT = {
+    "location_kind": "online_insite",
+    "speakers-TOTAL_FORMS": "0", "speakers-INITIAL_FORMS": "0",
+    "speakers-MIN_NUM_FORMS": "0", "speakers-MAX_NUM_FORMS": "1000",
+}
 
 
 def _faculty(email="fac@x.test"):
@@ -70,7 +78,7 @@ def test_approving_seminar_confers_faculty_on_instructors(client):
     member = _member("teacher@x.test")
     assert member.profile.is_faculty is False
     start, end = _future()
-    p = SeminarProposal.objects.create(
+    p = EventProposal.objects.create(
         proposed_by=member, title="First Seminar", start_date=start, end_date=end,
     )
     p.faculty.add(member)
@@ -84,30 +92,29 @@ def test_propose_creates_proposal(client):
     start, end = _future()
     client.force_login(fac)
     resp = client.post("/propose/", {
+        **_MGMT,
         "event_type": Event.Type.SEMINAR,
         "title": "Reading Seminar XI",
         "description": "Four fundamental concepts.",
         "start_date": start.isoformat(), "end_date": end.isoformat(),
-        "format": Event.Format.ONLINE,
     })
     assert resp.status_code == 302
-    p = SeminarProposal.objects.get(title="Reading Seminar XI")
-    assert p.proposed_by == fac and p.status == SeminarProposal.Status.PROPOSED
+    p = EventProposal.objects.get(title="Reading Seminar XI")
+    assert p.proposed_by == fac and p.status == EventProposal.Status.PROPOSED
 
 
 def test_approve_mints_new_standing_seminar(client):
     fac = _faculty()
     start, end = _future()
-    p = SeminarProposal.objects.create(
+    p = EventProposal.objects.create(
         proposed_by=fac, title="A New Seminar", start_date=start, end_date=end,
-        format=Event.Format.ONLINE,
     )
     p.faculty.add(fac)
     client.force_login(_pc_member())
     resp = client.post(f"/program-admin/proposals/{p.pk}/decide/", {"decision": "approve"})
     assert resp.status_code == 302
     p.refresh_from_db()
-    assert p.status == SeminarProposal.Status.APPROVED
+    assert p.status == EventProposal.Status.APPROVED
     event = p.minted_event
     assert event is not None and event.event_type == Event.Type.SEMINAR
     assert event.program.academic_year == p.academic_year
@@ -121,7 +128,7 @@ def test_approve_continuing_seminar_adds_term_and_lapses_prior(client):
     fac = _faculty()
     pc = _pc_member()
     # First term (past) of an existing seminar, with a paid student.
-    first = SeminarProposal.objects.create(
+    first = EventProposal.objects.create(
         proposed_by=fac, title="Ongoing Seminar",
         start_date=dt.date(2024, 9, 1), end_date=dt.date(2025, 5, 1),
     )
@@ -135,7 +142,7 @@ def test_approve_continuing_seminar_adds_term_and_lapses_prior(client):
 
     # Continuing term (future) attached to the same standing workgroup.
     start, end = _future()
-    cont = SeminarProposal.objects.create(
+    cont = EventProposal.objects.create(
         proposed_by=fac, title="Ongoing Seminar 2026",
         start_date=start, end_date=end, continues_seminar=wg,
     )
@@ -150,24 +157,25 @@ def test_approve_continuing_seminar_adds_term_and_lapses_prior(client):
 def test_decline_then_resubmit(client):
     fac = _faculty()
     start, end = _future()
-    p = SeminarProposal.objects.create(
+    p = EventProposal.objects.create(
         proposed_by=fac, title="Maybe Seminar", start_date=start, end_date=end,
     )
     client.force_login(_pc_member())
     client.post(f"/program-admin/proposals/{p.pk}/decide/",
                 {"decision": "decline", "note": "Sharpen the focus."})
     p.refresh_from_db()
-    assert p.status == SeminarProposal.Status.DECLINED and "Sharpen" in p.review_note
+    assert p.status == EventProposal.Status.DECLINED and "Sharpen" in p.review_note
 
     client.force_login(fac)
     resp = client.post(f"/propose/{p.pk}/edit/", {
+        **_MGMT,
         "event_type": Event.Type.SEMINAR,
         "title": "Maybe Seminar v2", "start_date": start.isoformat(),
-        "end_date": end.isoformat(), "format": Event.Format.ONLINE,
+        "end_date": end.isoformat(),
     })
     assert resp.status_code == 302
     p.refresh_from_db()
-    assert p.status == SeminarProposal.Status.PROPOSED and p.title == "Maybe Seminar v2"
+    assert p.status == EventProposal.Status.PROPOSED and p.title == "Maybe Seminar v2"
 
 
 def test_form_rejects_end_before_start(client):
@@ -175,26 +183,26 @@ def test_form_rejects_end_before_start(client):
     start, _ = _future()
     client.force_login(fac)
     resp = client.post("/propose/", {
+        **_MGMT,
         "event_type": Event.Type.SEMINAR,
         "title": "Bad Dates", "start_date": start.isoformat(),
         "end_date": (start - dt.timedelta(days=5)).isoformat(),
-        "format": Event.Format.ONLINE,
     })
     assert resp.status_code == 200                 # re-rendered with errors
-    assert not SeminarProposal.objects.filter(title="Bad Dates").exists()
+    assert not EventProposal.objects.filter(title="Bad Dates").exists()
 
 
 def test_decide_gated_to_pc(client):
     fac = _faculty()
     start, end = _future()
-    p = SeminarProposal.objects.create(
+    p = EventProposal.objects.create(
         proposed_by=fac, title="Gate Test", start_date=start, end_date=end,
     )
     client.force_login(_faculty("other@x.test"))   # faculty, but not PC
     assert client.post(f"/program-admin/proposals/{p.pk}/decide/",
                        {"decision": "approve"}).status_code == 404
     p.refresh_from_db()
-    assert p.status == SeminarProposal.Status.PROPOSED
+    assert p.status == EventProposal.Status.PROPOSED
 
 
 # ---- generalized proposals: reading group + special event (M12.5) ----
@@ -202,10 +210,10 @@ def test_decide_gated_to_pc(client):
 def test_approve_reading_group_mints_own_workgroup_with_organizer():
     member = _member("rgorg@x.test")
     start, end = _future()
-    p = SeminarProposal.objects.create(
+    p = EventProposal.objects.create(
         proposed_by=member, title="Écrits Reading Group",
         event_type=Event.Type.READING_GROUP,
-        start_date=start, end_date=end, format=Event.Format.ONLINE,
+        start_date=start, end_date=end,
     )
     event = p.approve(_pc_member())
     assert event.event_type == Event.Type.READING_GROUP
@@ -223,10 +231,10 @@ def test_approve_special_event_drafts_and_never_leaks_into_pc():
     provenance only — the proposer must NOT become a PC member (the leak guard)."""
     member = _member("seorg@x.test")
     start, end = _future(start_days=40, end_days=40)
-    p = SeminarProposal.objects.create(
+    p = EventProposal.objects.create(
         proposed_by=member, title="Working with the Negative",
         event_type=Event.Type.SPECIAL_EVENT,
-        start_date=start, end_date=end, format=Event.Format.ONLINE,
+        start_date=start, end_date=end,
     )
     p.faculty.add(member)  # even if listed, must not join the PC roster
     event = p.approve(_pc_member())
@@ -237,6 +245,59 @@ def test_approve_special_event_drafts_and_never_leaks_into_pc():
     assert event.workgroup_id == pc_wg.id              # provenance link only
     assert pc_wg.is_member(member) is False            # the leak guard
     assert member not in [m.user for m in pc_wg.memberships.all()]
+
+
+def test_special_event_approve_mints_complete_event():
+    """A fully-specified special-event proposal auto-mints a ready event: a
+    session at the proposed time, a price tier, internal speakers as display-only
+    member_speakers, and external speakers as Speaker rows."""
+    from datetime import datetime
+    from decimal import Decimal
+    from zoneinfo import ZoneInfo
+
+    from django.utils import timezone
+
+    from events.models import ProposalSpeaker
+
+    pacific = ZoneInfo("America/Los_Angeles")
+    when = datetime(2099, 11, 1, 18, 0, tzinfo=pacific)
+    insider = _faculty("insider@x.test")
+    p = EventProposal.objects.create(
+        proposed_by=_member("prop@x.test"), title="An Evening Lecture",
+        event_type=Event.Type.SPECIAL_EVENT, proposed_datetime=when,
+        location_kind=EventProposal.LocationKind.ONLINE_EXTERNAL,
+        location="https://zoom.example/abc",
+        fee_amount=Decimal("25.00"), tuition_covers=False,
+    )
+    p.faculty.add(insider)
+    ProposalSpeaker.objects.create(
+        proposal=p, name="Dr. Externa", email="ex@x.test",
+        affiliation="Paris", bio="Analyst.",
+    )
+    event = p.approve(_pc_member())
+
+    session = event.sessions.get()
+    assert timezone.localtime(session.start_at, pacific).hour == 18  # Pacific time kept
+    assert event.start_date == when.date()
+    tier = event.price_tiers.get()
+    assert tier.base_amount == Decimal("25.00") and tier.covered_by_tuition is False
+    assert event.format == Event.Format.ONLINE
+    assert event.access_info == "https://zoom.example/abc"   # external link carried
+    assert insider in event.member_speakers.all()            # internal = display-only
+    assert event.speakers.get().name == "Dr. Externa"        # external minted
+
+
+def test_seminar_approve_builds_tuition_covered_tier():
+    fac = _faculty("semfee@x.test")
+    start, end = _future()
+    p = EventProposal.objects.create(
+        proposed_by=fac, title="Fee Seminar", event_type=Event.Type.SEMINAR,
+        start_date=start, end_date=end, fee_amount=__import__("decimal").Decimal("150"),
+        tuition_covers=True,
+    )
+    event = p.approve(_pc_member())
+    tier = event.price_tiers.get()
+    assert tier.covered_by_tuition is True  # tuition always covers offerings
 
 
 def test_member_can_open_propose_page(client):
@@ -254,18 +315,19 @@ def test_outsider_cannot_open_propose_page(client):
 
 # ---- type-aware form: readings, special-event fields, validation ----
 
-def test_seminar_proposal_parses_readings_into_rows(client):
+def test_proposal_parses_readings_into_rows(client):
     fac = _faculty("reads@x.test")
     start, end = _future()
     client.force_login(fac)
     resp = client.post("/propose/", {
+        **_MGMT,
         "event_type": Event.Type.SEMINAR, "title": "With Readings",
         "description": "x", "start_date": start.isoformat(),
-        "end_date": end.isoformat(), "format": Event.Format.ONLINE,
+        "end_date": end.isoformat(),
         "readings_text": "Freud, S. The Interpretation of Dreams.\n\nLacan, J. Écrits.\n",
     })
     assert resp.status_code == 302
-    p = SeminarProposal.objects.get(title="With Readings")
+    p = EventProposal.objects.get(title="With Readings")
     citations = list(p.readings.values_list("citation", flat=True))
     assert citations == [
         "Freud, S. The Interpretation of Dreams.", "Lacan, J. Écrits.",
@@ -276,24 +338,29 @@ def test_special_event_proposal_allows_tbd_date(client):
     member = _member("tbd@x.test")
     client.force_login(member)
     resp = client.post("/propose/", {
+        "location_kind": "online_insite",
+        "speakers-TOTAL_FORMS": "1", "speakers-INITIAL_FORMS": "0",
+        "speakers-MIN_NUM_FORMS": "0", "speakers-MAX_NUM_FORMS": "1000",
+        "speakers-0-name": "Jane Doe", "speakers-0-email": "jane@x.test",
+        "speakers-0-affiliation": "Analyst, Paris", "speakers-0-bio": "A bio.",
         "event_type": Event.Type.SPECIAL_EVENT, "title": "TBD Talk",
         "description": "A talk, date to come.", "date_tbd": "on",
-        "format": Event.Format.ONLINE,
-        "external_speakers": "Jane Doe — jane@x.test — analyst, Paris",
         "speaker_arrangement": "pc",
     })
     assert resp.status_code == 302
-    p = SeminarProposal.objects.get(title="TBD Talk")
-    assert p.date_tbd is True and p.start_date is None
+    p = EventProposal.objects.get(title="TBD Talk")
+    assert p.date_tbd is True and p.proposed_datetime is None
     assert p.speaker_arrangement == "pc"
+    assert p.proposal_speakers.get().name == "Jane Doe"  # external speaker captured
 
 
 def test_special_event_requires_date_unless_tbd(client):
     member = _member("nodate@x.test")
     client.force_login(member)
     resp = client.post("/propose/", {
+        **_MGMT,
         "event_type": Event.Type.SPECIAL_EVENT, "title": "No Date",
-        "description": "x", "format": Event.Format.ONLINE,
+        "description": "x",
     })
     assert resp.status_code == 200  # re-rendered with an error
-    assert not SeminarProposal.objects.filter(title="No Date").exists()
+    assert not EventProposal.objects.filter(title="No Date").exists()
