@@ -32,5 +32,27 @@
   <p class="text-base-content/60">Guides are coming soon.</p>
   {% endif %}
 
+  {% if staff_guides %}
+  <section class="space-y-5 pt-4 border-t border-base-300/60">
+    <div class="space-y-1">
+      <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">For your roles</p>
+      <h2 class="font-serif text-2xl text-base-content tracking-tight">Your staff guides</h2>
+      <p class="text-sm text-base-content/65">Help for the staff tools you have access to.</p>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      {% for sg in staff_guides %}
+      <a href="{{ sg.url }}"
+         class="group flex flex-col rounded-xl border border-base-300 p-6 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
+        <h3 class="font-serif text-xl text-base-content group-hover:text-primary transition-colors tracking-tight">{{ sg.title }}</h3>
+        <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">{{ sg.summary }}</p>
+        <span class="text-sm text-primary mt-4 inline-flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
+          Open the guide <span aria-hidden="true">→</span>
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
 </div>
 {% endblock %}

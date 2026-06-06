@@ -57,9 +57,13 @@ def the_school(request):
 
 
 def guides_index_view(request):
-    """The Guides index: a card grid of evergreen how-to pages."""
+    """The Guides index: a card grid of evergreen how-to pages, plus a
+    role-gated "Your staff guides" section linking to in-tool staff help."""
+    from . import staff_guides
+
     return render(request, "content/guides_index.html", {
         "guides": guides_index.all_guides(),
+        "staff_guides": staff_guides.for_user(request.user),
     })
 
 
