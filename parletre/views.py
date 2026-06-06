@@ -53,7 +53,6 @@ from .models import (
     Channel,
     ChannelCategory,
     DigestPreference,
-    Notification,
     Post,
     Reaction,
     Subscription,
@@ -878,21 +877,9 @@ def delete_chat(request, slug):
 
 @login_required
 def notifications(request):
-    """The member's notification feed (the nav bell). Viewing it marks all
-    unread notifications read."""
-    if not can_enter_parletre(request.user):
-        return render(request, "parletre/not_a_member.html", status=403)
-    items = list(
-        Notification.objects.filter(recipient=request.user)
-        .select_related(
-            "actor", "thread", "thread__channel", "post", "post__channel", "post__thread"
-        )
-        .order_by("-created_at")[:100]
-    )
-    Notification.objects.filter(recipient=request.user, read_at__isnull=True).update(
-        read_at=timezone.now()
-    )
-    return render(request, "parletre/notifications.html", {"items": items})
+    """Superseded by the site-wide notifications feed; kept so the old URL and
+    any bookmarks still resolve."""
+    return redirect("notifications:feed")
 
 
 @login_required

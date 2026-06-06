@@ -186,15 +186,23 @@
         </button>
         {% endif %}
 
-        {% if parletre_is_member %}
-        <a href="{% url 'parletre:notifications' %}"
-           class="btn btn-ghost btn-sm btn-circle relative text-base-content/70"
-           aria-label="Notifications" title="Notifications">
-          {% icon "bell" css="text-base" %}
-          {% if parletre_unread %}
-          <span class="absolute -top-0.5 -right-0.5 badge badge-xs badge-primary">{{ parletre_unread }}</span>
-          {% endif %}
-        </a>
+        {% if user.is_authenticated %}
+        <div class="dropdown dropdown-end" id="notif-dropdown">
+          <button type="button" tabindex="0"
+                  class="btn btn-ghost btn-sm btn-circle relative text-base-content/70"
+                  aria-label="Notifications" title="Notifications">
+            {% icon "bell" css="text-base" %}
+            <span id="notif-badge"
+                  class="absolute -top-0.5 -right-0.5 badge badge-xs badge-primary{% if not notifications_unread %} hidden{% endif %}">{{ notifications_unread }}</span>
+          </button>
+          <div tabindex="0"
+               class="dropdown-content z-30 mt-2 w-80 rounded-box border border-base-300 bg-base-100 shadow-lg overflow-hidden"
+               id="notif-panel"
+               data-recent-url="{% url 'notifications:recent' %}"
+               data-readall-url="{% url 'notifications:mark_all_read' %}">
+            <div class="px-3 py-6 text-center text-sm text-base-content/50">Loading…</div>
+          </div>
+        </div>
         {% endif %}
 
         {% if user.is_authenticated %}
@@ -481,6 +489,71 @@
           credentials: "same-origin",
         }).catch(function () {});
       } catch (e) { /* no Intl support — bail silently */ }
+    })();
+  </script>
+  {% endif %}
+
+  {% if user.is_authenticated %}
+  <script>
+    // Notifications bell: lazy-load the dropdown panel on open, mark items read
+    // on click, mark-all-read, and update the badge live over a WebSocket.
+    (function () {
+      var dropdown = document.getElementById("notif-dropdown");
+      var panel = document.getElementById("notif-panel");
+      var badge = document.getElementById("notif-badge");
+      if (!dropdown || !panel || !badge) return;
+      var csrf = document.querySelector("meta[name=csrf-token]")?.content || "";
+
+      function setBadge(n) {
+        n = parseInt(n, 10) || 0;
+        badge.textContent = n > 99 ? "99+" : String(n);
+        badge.classList.toggle("hidden", n === 0);
+      }
+
+      function loadPanel() {
+        fetch(panel.dataset.recentUrl, { credentials: "same-origin" })
+          .then(function (r) { return r.text(); })
+          .then(function (html) { panel.innerHTML = html; })
+          .catch(function () {});
+      }
+
+      // DaisyUI dropdowns open on focus — fetch fresh contents each time.
+      dropdown.addEventListener("focusin", loadPanel);
+
+      // Delegated clicks inside the panel.
+      panel.addEventListener("click", function (e) {
+        var readAll = e.target.closest("[data-notif-readall]");
+        if (readAll) {
+          fetch(panel.dataset.readallUrl, {
+            method: "POST",
+            headers: { "X-CSRFToken": csrf },
+            credentials: "same-origin",
+          }).then(function () { setBadge(0); loadPanel(); }).catch(function () {});
+          return;
+        }
+        var item = e.target.closest("a[data-notif-id]");
+        if (item) {
+          // Mark read without blocking navigation.
+          fetch("/notifications/" + item.dataset.notifId + "/seen/", {
+            method: "POST",
+            headers: { "X-CSRFToken": csrf },
+            credentials: "same-origin",
+            keepalive: true,
+          }).catch(function () {});
+        }
+      });
+
+      // Live updates.
+      try {
+        var proto = location.protocol === "https:" ? "wss" : "ws";
+        var ws = new WebSocket(proto + "://" + location.host + "/ws/notifications/");
+        ws.onmessage = function (ev) {
+          try {
+            var data = JSON.parse(ev.data);
+            if (typeof data.unread !== "undefined") setBadge(data.unread);
+          } catch (e) { /* ignore */ }
+        };
+      } catch (e) { /* no WebSocket — badge still works on reload */ }
     })();
   </script>
   {% endif %}

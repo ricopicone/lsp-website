@@ -45,15 +45,16 @@ def test_apply_requires_login(client):
     assert client.get(reverse("admissions:apply_start")).status_code == 302
 
 
-def test_guest_submits_analyst_application(client):
+def test_guest_submits_analyst_application(client, django_capture_on_commit_callbacks):
     guest = _user("g@x.test", role=Profile.Role.EXTERNAL)
     client.force_login(guest)
-    resp = client.post(reverse("admissions:apply", args=["analyst"]), {
-        "background": Application.Background.CLINICAL,
-        "eligibility_note": "PsyD, licensed LCSW",
-        "letter_of_intent": "I wish to study Lacan.",
-        "cv": _cv(),
-    })
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = client.post(reverse("admissions:apply", args=["analyst"]), {
+            "background": Application.Background.CLINICAL,
+            "eligibility_note": "PsyD, licensed LCSW",
+            "letter_of_intent": "I wish to study Lacan.",
+            "cv": _cv(),
+        })
     assert resp.status_code == 302
     app = Application.objects.get(applicant=guest)
     assert app.track == Application.Track.ANALYST

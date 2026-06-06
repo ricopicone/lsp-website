@@ -1,0 +1,15 @@
+{% autoescape off %}{{ recipient.first_name|default:"Hello" }},
+
+{{ title }}
+{% if body %}
+{{ body }}
+{% endif %}{% if url %}
+{{ url }}
+{% endif %}
+Manage which notifications email you:
+{{ settings_url }}
+
+Questions? Reply to this email.
+
+— Lacanian School of Psychoanalysis
+{% endautoescape %}

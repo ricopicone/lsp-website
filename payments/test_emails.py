@@ -81,7 +81,9 @@ def test_confirmation_email_omits_access_info_when_awaiting_payment(registration
 
 
 @pytest.mark.django_db
-def test_webhook_sends_both_emails_and_stamps_receipt(client, registration, tier):
+def test_webhook_sends_both_emails_and_stamps_receipt(
+    client, registration, tier, django_capture_on_commit_callbacks
+):
     """End-to-end: webhook → payment paid → receipt created → both emails sent."""
     payment = Payment.objects.create(
         payment_type=Payment.Type.REGISTRATION,
@@ -107,7 +109,7 @@ def test_webhook_sends_both_emails_and_stamps_receipt(client, registration, tier
     with patch(
         "payments.views.stripe.Webhook.construct_event",
         return_value=payload,
-    ):
+    ), django_capture_on_commit_callbacks(execute=True):
         response = client.post(
             reverse("payments:stripe_webhook"),
             data=json.dumps(payload).encode("utf-8"),
@@ -194,7 +196,9 @@ def test_confirmation_email_does_not_leak_html_entities(event, tier):
 
 
 @pytest.mark.django_db
-def test_zero_dollar_registration_sends_confirmation_directly(client, event, tier):
+def test_zero_dollar_registration_sends_confirmation_directly(
+    client, event, tier, django_capture_on_commit_callbacks
+):
     """The $0 short-circuit path also emails the confirmation (with access_info)."""
     tier.sliding_scale = True
     tier.minimum_amount = Decimal("0.00")
@@ -202,10 +206,11 @@ def test_zero_dollar_registration_sends_confirmation_directly(client, event, tie
 
     user = User.objects.create_user(email="zero@example.com", password="testpass-XYZ")
     client.force_login(user)
-    client.post(
-        reverse("registrations:register", args=[event.slug]),
-        {"price_tier": tier.id, "sliding_amount": "0"},
-    )
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post(
+            reverse("registrations:register", args=[event.slug]),
+            {"price_tier": tier.id, "sliding_amount": "0"},
+        )
     assert len(mail.outbox) == 1
     assert "Registration confirmed" in mail.outbox[0].subject
     assert "Zoom" in mail.outbox[0].body
