@@ -688,15 +688,31 @@ def test_series_materializes_weekly_occurrences(client):
     client.force_login(lead)
     client.post(reverse("workgroups:series_add", args=[wg.slug]), {
         "title": "Weekly seminar", "frequency": "weekly", "weekdays": ["TH"],
-        "week_position": "1", "start_date": "2099-01-01", "end_date": "2099-01-31",
+        "week_positions": ["1"], "start_date": "2099-01-01", "end_date": "2099-01-31",
         "start_time": "18:00", "end_time": "19:30",
-        "location": "Online", "online_url": "https://zoom.example/x",
-        "access_info": "", "description": "",
+        "location": "Online", "description": "",
     })
     series = MeetingSeries.objects.get(workgroup=wg)
     occ = WorkgroupMeeting.objects.filter(series=series)
     assert occ.count() >= 4                       # the Thursdays of Jan 2099
-    assert all(m.online_url == "https://zoom.example/x" for m in occ)
+
+
+def test_series_monthly_multiple_occurrences(client):
+    """First & third weekday-of-month is one series now (no need for two)."""
+    from workgroups.models import MeetingSeries, WorkgroupMeeting
+
+    wg, lead = _scheduler_wg_and_lead()
+    client.force_login(lead)
+    client.post(reverse("workgroups:series_add", args=[wg.slug]), {
+        "title": "1st & 3rd Wed", "frequency": "monthly", "weekdays": ["WE"],
+        "week_positions": ["1", "3"], "start_date": "2099-01-01",
+        "end_date": "2099-03-31", "start_time": "18:00", "end_time": "19:30",
+        "location": "Online", "description": "",
+    })
+    series = MeetingSeries.objects.get(workgroup=wg)
+    assert series.week_positions == "1,3"
+    # 2 occurrences/month × 3 months = 6.
+    assert WorkgroupMeeting.objects.filter(series=series).count() == 6
 
 
 def test_meeting_cancel_reschedule_minutes(client):

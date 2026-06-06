@@ -70,16 +70,12 @@ class WorkgroupDatesForm(forms.ModelForm):
 class WorkgroupMeetingForm(forms.ModelForm):
     class Meta:
         model = WorkgroupMeeting
-        fields = ("title", "starts_at", "ends_at", "location", "online_url",
-                  "access_info", "note")
+        fields = ("title", "starts_at", "ends_at", "location", "note")
         widgets = {
             "title": forms.TextInput(attrs={"class": _INPUT, "placeholder": "Label (optional)"}),
             "starts_at": forms.DateTimeInput(attrs=_DT, format="%Y-%m-%dT%H:%M"),
             "ends_at": forms.DateTimeInput(attrs=_DT, format="%Y-%m-%dT%H:%M"),
             "location": forms.TextInput(attrs={"class": _INPUT, "placeholder": "Room or place"}),
-            "online_url": forms.URLInput(attrs={"class": _INPUT, "placeholder": "Video-call link"}),
-            "access_info": forms.TextInput(
-                attrs={"class": _INPUT, "placeholder": "Passcode / dial-in"}),
             "note": forms.Textarea(attrs={"rows": 2, "class": _TA}),
         }
 
@@ -102,40 +98,35 @@ class MeetingSeriesForm(forms.ModelForm):
         choices=_WEEKDAY_CHOICES, widget=forms.CheckboxSelectMultiple,
         help_text="Which day(s) of the week.",
     )
+    #: Weekday-occurrence ordinals for monthly (e.g. First + Third = 1st & 3rd
+    #: <weekday> of the month).
+    week_positions = forms.MultipleChoiceField(
+        required=False, label="Weekday occurrence(s)",
+        choices=[("1", "First"), ("2", "Second"), ("3", "Third"),
+                 ("4", "Fourth"), ("-1", "Last")],
+        widget=forms.CheckboxSelectMultiple,
+    )
 
     class Meta:
         model = MeetingSeries
-        fields = ("title", "frequency", "weekdays", "week_position",
+        fields = ("title", "frequency", "weekdays", "week_positions",
                   "start_date", "end_date", "start_time", "end_time",
-                  "location", "online_url", "access_info", "description")
+                  "location", "description")
         widgets = {
             "title": forms.TextInput(attrs={"class": _INPUT, "placeholder": "Label (optional)"}),
             "frequency": forms.Select(attrs={"class": "select select-bordered select-sm"}),
-            "week_position": forms.Select(attrs={"class": "select select-bordered select-sm"}),
             "start_date": forms.DateInput(attrs=_DATE),
             "end_date": forms.DateInput(attrs=_DATE),
             "start_time": forms.TimeInput(attrs=_TIME),
             "end_time": forms.TimeInput(attrs=_TIME),
             "location": forms.TextInput(attrs={"class": _INPUT, "placeholder": "Room or place"}),
-            "online_url": forms.URLInput(attrs={"class": _INPUT, "placeholder": "Video-call link"}),
-            "access_info": forms.TextInput(
-                attrs={"class": _INPUT, "placeholder": "Passcode / dial-in"}),
             "description": forms.Textarea(attrs={"rows": 2, "class": _TA}),
         }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["week_position"] = forms.TypedChoiceField(
-            coerce=int, choices=[(1, "First"), (2, "Second"), (3, "Third"),
-                                 (4, "Fourth"), (-1, "Last")],
-            widget=forms.Select(attrs={"class": "select select-bordered select-sm"}),
-            required=False, initial=1,
-            help_text="Which week of the month (monthly only).",
-        )
 
     def clean(self):
         data = super().clean()
         data["weekdays"] = ",".join(data.get("weekdays") or [])
+        data["week_positions"] = ",".join(data.get("week_positions") or ["1"])
         sd, ed = data.get("start_date"), data.get("end_date")
         if sd and ed and ed < sd:
             self.add_error("end_date", "End date must be on or after the start date.")

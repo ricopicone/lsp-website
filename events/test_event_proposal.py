@@ -492,6 +492,25 @@ def test_seminar_schedule_materializes_meeting_series():
     assert event.workgroup.meetings.exists()  # generate() created occurrences
 
 
+def test_proposal_monthly_multiple_occurrences(client):
+    """First & third weekday-of-month in one proposal series (no second series)."""
+    fac = _faculty("multi@x.test")
+    start, end = _future()
+    client.force_login(fac)
+    resp = client.post("/propose/", {
+        **_MGMT, "event_type": Event.Type.READING_GROUP, "title": "Monthly RG",
+        "description": "x", "start_date": start.isoformat(), "end_date": end.isoformat(),
+        "schedule_choice": "set", "sched_frequency": "monthly",
+        "sched_weekdays": ["WE"], "sched_week_positions": ["1", "3"],
+        "sched_start_time": "18:00", "sched_end_time": "20:00",
+    })
+    assert resp.status_code == 302
+    p = EventProposal.objects.get(title="Monthly RG")
+    assert p.sched_week_positions == "1,3"
+    event = p.approve(_pc_member())
+    assert event.workgroup.meeting_series.get().week_positions == "1,3"
+
+
 def test_schedule_tbd_creates_no_series():
     fac = _faculty("notbd@x.test")
     start, end = _future()

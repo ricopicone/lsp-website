@@ -1059,8 +1059,9 @@ class MeetingSeries(models.Model):
                                  default=Frequency.WEEKLY)
     #: Weekday codes, comma-separated: MO,TU,WE,TH,FR,SA,SU.
     weekdays = models.CharField(max_length=32, default="MO")
-    #: Ordinal week-in-month for MONTHLY (1=first … 5, -1=last).
-    week_position = models.SmallIntegerField(default=1)
+    #: Weekday-occurrence ordinals for MONTHLY, comma-separated (1=first … 4,
+    #: -1=last). e.g. "1,3" = the first and third <weekday> of each month.
+    week_positions = models.CharField(max_length=20, default="1")
     start_date = models.DateField()
     end_date = models.DateField(help_text="The series runs through this date.")
     start_time = models.TimeField()
@@ -1092,9 +1093,10 @@ class MeetingSeries(models.Model):
 
         weekdays = [w.strip() for w in self.weekdays.split(",") if w.strip()]
         if self.frequency == self.Frequency.MONTHLY:
+            positions = [int(p) for p in self.week_positions.split(",") if p.strip()]
             return generate_monthly_ordinal(
                 start_date=self.start_date, end_date=self.end_date,
-                weekdays=weekdays, week_positions=[self.week_position],
+                weekdays=weekdays, week_positions=positions or [1],
                 start_time=self.start_time, end_time=self.end_time,
             )
         interval = 2 if self.frequency == self.Frequency.BIWEEKLY else 1

@@ -937,12 +937,11 @@ class EventProposal(models.Model):
         max_length=12, choices=ScheduleFrequency.choices, blank=True,
     )
     sched_weekdays = models.CharField(max_length=32, blank=True)  # MO,TU,…
-    sched_week_position = models.SmallIntegerField(null=True, blank=True)
+    #: Weekday-occurrence ordinals for monthly, comma-coded ("1,3" = 1st & 3rd).
+    sched_week_positions = models.CharField(max_length=20, blank=True)
     sched_start_time = models.TimeField(null=True, blank=True)
     sched_end_time = models.TimeField(null=True, blank=True)
     sched_location = models.CharField(max_length=255, blank=True)
-    sched_online_url = models.URLField(blank=True)
-    sched_access_info = models.CharField(max_length=255, blank=True)
 
     # ---- Special-event fields ----
     date_tbd = models.BooleanField(
@@ -1036,11 +1035,10 @@ class EventProposal(models.Model):
         series = MeetingSeries.objects.create(
             workgroup=wg, title=self.title[:255], frequency=self.sched_frequency,
             weekdays=self.sched_weekdays or "MO",
-            week_position=self.sched_week_position or 1,
+            week_positions=self.sched_week_positions or "1",
             start_date=self.start_date, end_date=self.end_date,
             start_time=self.sched_start_time, end_time=self.sched_end_time,
-            location=self.sched_location, online_url=self.sched_online_url,
-            access_info=self.sched_access_info, created_by=reviewer,
+            location=self.sched_location, created_by=reviewer,
         )
         series.generate()
 

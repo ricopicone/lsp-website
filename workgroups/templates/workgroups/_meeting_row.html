@@ -11,9 +11,7 @@
       </p>
       {% if m.cancelled and m.cancellation_reason %}<p class="text-xs text-error/80">{{ m.cancellation_reason }}</p>{% endif %}
       {% if not m.cancelled %}
-        {% if m.online_url %}<p class="text-xs"><a href="{{ m.online_url }}" class="link text-primary" target="_blank" rel="noopener">Join online ↗</a></p>{% endif %}
         {% if m.location %}<p class="text-xs text-base-content/60 truncate">{{ m.location|urlize }}</p>{% endif %}
-        {% if m.access_info %}<p class="text-xs text-base-content/50">{{ m.access_info }}</p>{% endif %}
       {% endif %}
       {% if m.note %}<p class="text-xs text-base-content/60 whitespace-pre-line">{{ m.note }}</p>{% endif %}
 
@@ -59,8 +57,6 @@
           <p class="label-text text-xs text-base-content/60">Details</p>
           <input type="text" name="title" value="{{ m.title }}" placeholder="Label" class="input input-bordered input-xs w-full">
           <input type="text" name="location" value="{{ m.location }}" placeholder="Location" class="input input-bordered input-xs w-full">
-          <input type="url" name="online_url" value="{{ m.online_url }}" placeholder="Video link" class="input input-bordered input-xs w-full">
-          <input type="text" name="access_info" value="{{ m.access_info }}" placeholder="Passcode / dial-in" class="input input-bordered input-xs w-full">
           <textarea name="note" rows="2" placeholder="Agenda" class="textarea textarea-bordered textarea-xs w-full">{{ m.note }}</textarea>
           <button class="btn btn-xs w-full">Save details</button>
         </form>

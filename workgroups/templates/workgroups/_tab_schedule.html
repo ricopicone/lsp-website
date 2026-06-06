@@ -19,7 +19,7 @@ meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
           <label class="form-control"><span class="label-text text-xs text-base-content/60">Starts</span>{{ meeting_form.starts_at }}</label>
           <label class="form-control"><span class="label-text text-xs text-base-content/60">Ends</span>{{ meeting_form.ends_at }}</label>
         </div>
-        {{ meeting_form.title }}{{ meeting_form.location }}{{ meeting_form.online_url }}{{ meeting_form.access_info }}{{ meeting_form.note }}
+        {{ meeting_form.title }}{{ meeting_form.location }}{{ meeting_form.note }}
         <div class="flex justify-end"><button class="btn btn-primary btn-sm">Schedule</button></div>
       </form>
     </details>
@@ -32,8 +32,8 @@ meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
         {{ series_form.title }}
         <div class="flex flex-wrap gap-2">
           <label class="form-control"><span class="label-text text-xs text-base-content/60">Frequency</span>{{ series_form.frequency }}</label>
-          <label class="form-control" data-series-monthly hidden><span class="label-text text-xs text-base-content/60">Week of month</span>{{ series_form.week_position }}</label>
         </div>
+        <div data-series-monthly hidden><span class="label-text text-xs text-base-content/60">Weekday occurrence(s)</span><div class="flex flex-wrap gap-2 text-xs">{{ series_form.week_positions }}</div></div>
         <div><span class="label-text text-xs text-base-content/60" data-series-weekday-label>On</span><div class="flex flex-wrap gap-2 text-xs">{{ series_form.weekdays }}</div></div>
         <div class="flex flex-wrap gap-2">
           <label class="form-control"><span class="label-text text-xs text-base-content/60">From</span>{{ series_form.start_date }}</label>
@@ -43,7 +43,7 @@ meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
           <label class="form-control"><span class="label-text text-xs text-base-content/60">Start</span>{{ series_form.start_time }}</label>
           <label class="form-control"><span class="label-text text-xs text-base-content/60">End</span>{{ series_form.end_time }}</label>
         </div>
-        {{ series_form.location }}{{ series_form.online_url }}{{ series_form.access_info }}{{ series_form.description }}
+        {{ series_form.location }}{{ series_form.description }}
         {% if series_form.errors %}<p class="text-error text-xs">{{ series_form.non_field_errors|striptags }}{{ series_form.end_date.errors|striptags }}{{ series_form.end_time.errors|striptags }}{{ series_form.weekdays.errors|striptags }}</p>{% endif %}
         <div class="flex justify-end"><button class="btn btn-primary btn-sm">Create series</button></div>
       </form>

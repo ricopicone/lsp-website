@@ -103,6 +103,13 @@ class EventProposalForm(forms.ModelForm):
                  ("FR", "Fri"), ("SA", "Sat"), ("SU", "Sun")],
         widget=forms.CheckboxSelectMultiple,
     )
+    sched_week_positions = forms.MultipleChoiceField(
+        required=False, label="Weekday occurrence(s)",
+        choices=[("1", "First"), ("2", "Second"), ("3", "Third"),
+                 ("4", "Fourth"), ("-1", "Last")],
+        widget=forms.CheckboxSelectMultiple,
+        help_text="Monthly only — e.g. First + Third = the 1st and 3rd of each month.",
+    )
 
     class Meta:
         model = EventProposal
@@ -114,8 +121,8 @@ class EventProposalForm(forms.ModelForm):
             "continues_seminar", "faculty",
             "fee_amount", "fee_sliding_min", "fee_sliding_max", "tuition_covers",
             "offers_ce",
-            "sched_frequency", "sched_week_position", "sched_start_time",
-            "sched_end_time", "sched_location", "sched_online_url", "sched_access_info",
+            "sched_frequency", "sched_start_time", "sched_end_time",
+            "sched_location",
             "speaker_arrangement", "honoraria_estimate",
         )
         widgets = {
@@ -127,7 +134,6 @@ class EventProposalForm(forms.ModelForm):
             "description": forms.Textarea(attrs={"rows": 8}),
             "speaker_arrangement": forms.RadioSelect,
             "sched_frequency": forms.Select,
-            "sched_week_position": forms.Select,
             "sched_start_time": forms.TimeInput(attrs={"type": "time"}),
             "sched_end_time": forms.TimeInput(attrs={"type": "time"}),
         }
@@ -184,14 +190,6 @@ class EventProposalForm(forms.ModelForm):
         self.fields["sched_start_time"].label = "Start time"
         self.fields["sched_end_time"].label = "End time"
         self.fields["sched_location"].label = "Room / place"
-        self.fields["sched_online_url"].label = "Video-call link"
-        self.fields["sched_access_info"].label = "Passcode / dial-in"
-        self.fields["sched_week_position"] = forms.TypedChoiceField(
-            coerce=int, required=False, empty_value=None, label="Week of month",
-            choices=[(1, "First"), (2, "Second"), (3, "Third"), (4, "Fourth"),
-                     (-1, "Last")],
-            widget=forms.Select, initial=1,
-        )
         self.fields["contact"].label = "Contact email"
         self.fields["contact"].help_text = (
             "An additional contact for this proposal, besides your own account email."
@@ -237,6 +235,10 @@ class EventProposalForm(forms.ModelForm):
                 )
                 if self.instance.sched_weekdays:
                     self.initial["sched_weekdays"] = self.instance.sched_weekdays.split(",")
+                if self.instance.sched_week_positions:
+                    self.initial["sched_week_positions"] = (
+                        self.instance.sched_week_positions.split(",")
+                    )
 
     def clean_proposed_datetime(self):
         """Interpret the naive datetime-local input as Pacific time."""
@@ -301,9 +303,11 @@ class EventProposalForm(forms.ModelForm):
         # Recurring meeting schedule (offerings only). sched_weekdays + schedule_tbd
         # aren't ModelForm fields, so write them onto the instance directly.
         weekdays = ",".join(data.get("sched_weekdays") or [])
+        positions = ",".join(data.get("sched_week_positions") or [])
         scheduled = is_offering and data.get("schedule_choice") == "set"
         self.instance.schedule_tbd = not scheduled
         self.instance.sched_weekdays = weekdays if scheduled else ""
+        self.instance.sched_week_positions = positions if scheduled else ""
         data["sched_weekdays"] = weekdays  # keep cleaned_data consistent for errors
         if not scheduled:
             # Clear any partial schedule so a flip back to TBD leaves no stray data.

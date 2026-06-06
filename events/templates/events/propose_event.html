@@ -99,9 +99,12 @@
          class="rounded-lg border border-base-300/60 p-3 space-y-3">
       {% include "events/_proposal_field.html" with field=form.schedule_choice %}
       <div id="sched-fields" class="space-y-3">
-        <div class="flex flex-wrap gap-3">
-          {% include "events/_proposal_field.html" with field=form.sched_frequency %}
-          <div data-series-monthly hidden>{% include "events/_proposal_field.html" with field=form.sched_week_position %}</div>
+        {% include "events/_proposal_field.html" with field=form.sched_frequency %}
+        <div class="space-y-1" data-series-monthly hidden>
+          <span class="block text-sm font-medium">Weekday occurrence(s)</span>
+          <div class="flex flex-wrap gap-2 text-sm">{{ form.sched_week_positions }}</div>
+          <p class="text-xs text-base-content/60">{{ form.sched_week_positions.help_text }}</p>
+          {% if form.sched_week_positions.errors %}<p class="text-error text-xs">{{ form.sched_week_positions.errors|join:", " }}</p>{% endif %}
         </div>
         <div class="space-y-1">
           <span class="block text-sm font-medium" data-series-weekday-label>On</span>
@@ -113,8 +116,6 @@
           {% include "events/_proposal_field.html" with field=form.sched_end_time %}
         </div>
         {% include "events/_proposal_field.html" with field=form.sched_location %}
-        {% include "events/_proposal_field.html" with field=form.sched_online_url %}
-        {% include "events/_proposal_field.html" with field=form.sched_access_info %}
         <p class="text-xs text-base-content/50">Meetings recur across the term (the
           start–end dates above). You can fine-tune individual occurrences in the
           group's Schedule tab after approval.</p>
