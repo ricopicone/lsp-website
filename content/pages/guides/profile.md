@@ -1,7 +1,7 @@
 ---
 title: Your profile & the directory
 summary: How to set your photo, bio, and contact details, and control who sees what.
-task: complete_profile
+checklist: profile
 ---
 
 Your profile is how colleagues, prospective analysands, and the public find and

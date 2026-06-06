@@ -1,6 +1,7 @@
 ---
 title: Tuition & dues
 summary: What you owe and when, how to record a tuition decision, and how to pay.
+checklist: tuition_dues
 ---
 
 The School is sustained by its members. Two things may apply to you—**dues**

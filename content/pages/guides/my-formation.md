@@ -1,6 +1,7 @@
 ---
 title: My Formation
 summary: Your personal hub—advisor, formation steps, tuition, and the groups you belong to.
+checklist: my_formation
 ---
 
 **My Formation** (`/formation/`) is your own place in the School, gathered on one

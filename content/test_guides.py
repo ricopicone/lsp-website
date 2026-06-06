@@ -27,11 +27,24 @@ def test_guide_detail_renders_markdown(client):
 
 
 @pytest.mark.django_db
-def test_guide_detail_shows_try_it_link_for_tasked_guide(client):
-    # profile.md declares `task: complete_profile`, which resolves to /accounts/profile/.
-    r = client.get(reverse("guide_detail", args=["profile"]))
-    assert "Try it now" in r.content.decode()
-    assert reverse("profile_edit") in r.content.decode()
+def test_guide_detail_shows_start_walkthrough_when_enabled(client, settings):
+    # profile.md declares `checklist: profile`; with walkthroughs enabled the
+    # guide offers a "Start this walkthrough" button.
+    settings.PREVIEW_TOUR_ENABLED = True
+    settings.PREVIEW_TOUR_PUBLIC = True
+    from django.contrib.auth import get_user_model
+    user = get_user_model().objects.create_user(email="g@example.com", password="x")
+    client.force_login(user)
+    body = client.get(reverse("guide_detail", args=["profile"])).content.decode()
+    assert "Start this walkthrough" in body
+    assert reverse("core:set_walkthrough") in body
+
+
+@pytest.mark.django_db
+def test_guide_detail_hides_start_when_walkthroughs_disabled(client, settings):
+    settings.PREVIEW_TOUR_ENABLED = False
+    body = client.get(reverse("guide_detail", args=["profile"])).content.decode()
+    assert "Start this walkthrough" not in body
 
 
 @pytest.mark.django_db

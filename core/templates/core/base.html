@@ -337,6 +337,11 @@
       display: inline-flex; align-items: center; justify-content: center;
       font-size: 0.7rem; line-height: 1; color: transparent;
     }
+    /* Manual ticks are <button>s — strip the UA chrome so an empty one reads as
+       an open circle, and signal it's clickable. */
+    #lsp-preview-tour button.lsp-tour-tick {
+      background: transparent; padding: 0; appearance: none; -webkit-appearance: none; cursor: pointer;
+    }
     #lsp-preview-tour .lsp-tour-tick--done {
       background: var(--color-primary); border-color: var(--color-primary);
       color: var(--color-primary-content);
@@ -355,12 +360,12 @@
       background: var(--color-primary); transform: rotate(45deg);
     }
   </style>
-  <div id="lsp-preview-tour" class="fixed bottom-4 right-4 z-50"
+  <div id="lsp-preview-tour" class="fixed bottom-4 right-4 z-50" data-walkthrough="{{ walkthrough_id }}"
        style="width: 20rem; max-width: calc(100vw - 2rem);">
     {# Collapsed pill #}
     <button type="button" id="lsp-tour-open"
             class="hidden btn btn-primary btn-sm shadow-lg gap-2">
-      <span aria-hidden="true">✦</span> Preview tasks
+      <span aria-hidden="true">✦</span> {{ walkthrough_title }}
     </button>
 
     {# Expanded card #}
@@ -368,8 +373,8 @@
       <div class="card-body p-4 gap-3">
         <div class="flex items-start justify-between gap-2">
           <div>
-            <h2 class="font-serif text-base text-base-content leading-tight">Welcome to the preview</h2>
-            <p class="text-xs text-base-content/60">A few things to try.</p>
+            <h2 class="font-serif text-base text-base-content leading-tight">{{ walkthrough_title }}</h2>
+            <p class="text-xs text-base-content/60">Tick each step as you go.</p>
           </div>
           <div class="flex items-center gap-1">
             <button type="button" id="lsp-tour-min" class="btn btn-ghost btn-xs btn-square" aria-label="Minimize" title="Minimize">–</button>
@@ -378,15 +383,19 @@
         </div>
 
         <ul class="space-y-2.5">
-          {# Tasks: the "preview" checklist in core.checklists, resolved per-user by the preview_tour context processor. #}
+          {# Tasks come from the active walkthrough (core.checklists). Auto tasks tick from real data; manual tasks tick client-side (localStorage), applied by the script below. #}
           {% for task in preview_tour_tasks %}
-          <li class="flex items-start gap-3">
+          <li class="flex items-start gap-3" data-wt-task="{{ task.id }}"{% if task.manual %} data-wt-manual="1"{% endif %}>
+            {% if task.manual %}
+            <button type="button" class="lsp-tour-tick mt-0.5 shrink-0" data-wt-toggle aria-label="Mark step done" title="Mark done">✓</button>
+            {% else %}
             <span class="lsp-tour-tick {% if task.done %}lsp-tour-tick--done{% endif %} mt-0.5 shrink-0" aria-hidden="true">{% if task.done %}✓{% endif %}</span>
+            {% endif %}
             <span class="text-sm leading-snug">
               {% if task.url %}
-              <a href="{{ task.url }}" class="link link-hover font-medium {% if task.done %}line-through text-base-content/50{% else %}text-base-content{% endif %}">{{ task.label }}</a>
+              <a href="{{ task.url }}" class="lsp-tour-label link link-hover font-medium {% if task.done %}line-through text-base-content/50{% else %}text-base-content{% endif %}">{{ task.label }}</a>
               {% else %}
-              <span class="font-medium text-base-content">{{ task.label }}</span>
+              <span class="lsp-tour-label font-medium text-base-content">{{ task.label }}</span>
               {% endif %}
               <span class="block text-xs text-base-content/55">{{ task.detail }}</span>
             </span>
@@ -433,29 +442,68 @@
     };
   </script>
   <script>
-    // Floating preview checklist: open / minimized / closed, persisted so it
-    // stays where the member left it across pages. Server-rendered markup —
-    // this only toggles visibility (no Tailwind classes injected from JS).
+    // Walkthrough card lifecycle. The card only renders when a walkthrough is
+    // active (started from a guide). Minimize collapses to a pill (remembered
+    // for the session); Close (✕) ends the walkthrough — it clears the
+    // lsp_walkthrough cookie so the card won't return until re-summoned, and the
+    // matching guide's "Start this walkthrough" brings it back.
     (function () {
       var root = document.getElementById("lsp-preview-tour");
       if (!root) return;
       var card = document.getElementById("lsp-tour-card");
       var pill = document.getElementById("lsp-tour-open");
-      var KEY = "lsp-preview-tour-state";  // "open" | "min" | "closed"
-      function apply(state) {
-        if (state === "closed") { root.classList.add("hidden"); return; }
-        root.classList.remove("hidden");
-        var min = state === "min";
+      var KEY = "lsp-wt-min";  // session-scoped: "1" = minimized
+      function apply(min) {
         card.classList.toggle("hidden", min);
         pill.classList.toggle("hidden", !min);
       }
-      function set(s) { try { localStorage.setItem(KEY, s); } catch (e) {} apply(s); }
-      var saved = "open";
-      try { saved = localStorage.getItem(KEY) || "open"; } catch (e) {}
-      apply(saved);
-      document.getElementById("lsp-tour-min").addEventListener("click", function () { set("min"); });
-      document.getElementById("lsp-tour-open").addEventListener("click", function () { set("open"); });
-      document.getElementById("lsp-tour-close").addEventListener("click", function () { set("closed"); });
+      function setMin(min) {
+        try { min ? sessionStorage.setItem(KEY, "1") : sessionStorage.removeItem(KEY); } catch (e) {}
+        apply(min);
+      }
+      var min = false;
+      try { min = sessionStorage.getItem(KEY) === "1"; } catch (e) {}
+      apply(min);
+      document.getElementById("lsp-tour-min").addEventListener("click", function () { setMin(true); });
+      pill.addEventListener("click", function () { setMin(false); });
+      document.getElementById("lsp-tour-close").addEventListener("click", function () {
+        document.cookie = "lsp_walkthrough=; max-age=0; path=/; samesite=lax";
+        root.classList.add("hidden");
+      });
+    })();
+  </script>
+  <script>
+    // Manual steps tick client-side and persist per walkthrough. Auto steps are
+    // already ticked server-side from real data. Clicking a manual step's tick
+    // toggles it; clicking its link also marks it done (you went and did it).
+    (function () {
+      var root = document.getElementById("lsp-preview-tour");
+      if (!root) return;
+      var wid = root.getAttribute("data-walkthrough") || "";
+      function key(tid) { return "lsp-wt:" + wid + ":" + tid; }
+      function paint(li, done) {
+        var tick = li.querySelector(".lsp-tour-tick");
+        var label = li.querySelector(".lsp-tour-label");
+        if (tick) tick.classList.toggle("lsp-tour-tick--done", done);
+        if (label) label.classList.toggle("line-through", done),
+                   label.classList.toggle("text-base-content/50", done);
+      }
+      root.querySelectorAll("li[data-wt-manual]").forEach(function (li) {
+        var tid = li.getAttribute("data-wt-task");
+        var done = false;
+        try { done = localStorage.getItem(key(tid)) === "done"; } catch (e) {}
+        paint(li, done);
+        var toggle = li.querySelector("[data-wt-toggle]");
+        if (toggle) toggle.addEventListener("click", function () {
+          done = !done;
+          try { done ? localStorage.setItem(key(tid), "done") : localStorage.removeItem(key(tid)); } catch (e) {}
+          paint(li, done);
+        });
+        var link = li.querySelector("a.lsp-tour-label");
+        if (link) link.addEventListener("click", function () {
+          try { localStorage.setItem(key(tid), "done"); } catch (e) {}
+        });
+      });
     })();
   </script>
   {% endif %}

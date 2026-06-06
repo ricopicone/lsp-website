@@ -1,7 +1,7 @@
 ---
 title: Seminars & registration
 summary: How to find a seminar or event, register, and reach your access details.
-task: register_seminar
+checklist: seminars
 ---
 
 The School's teaching happens in seminars and special events—many open to the

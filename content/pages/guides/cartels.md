@@ -1,6 +1,7 @@
 ---
 title: Cartels
 summary: What a cartel is, how to form one, and how its shared workspace works.
+checklist: cartels
 ---
 
 A cartel is a small group that forms around a shared **guiding question**—a few

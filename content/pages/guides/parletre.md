@@ -1,7 +1,7 @@
 ---
 title: Parlêtre—the members' commons
 summary: How the discussion board works: channels, posting, mentions, and notifications.
-task: say_hello
+checklist: parletre
 ---
 
 Parlêtre is the School's members-only commons—part forum, part live chat—for the

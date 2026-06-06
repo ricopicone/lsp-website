@@ -200,5 +200,5 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
 
 {# ---- Preview-tour hint: point first-time members at the Register button ---- #}
 {% if show_preview_tour and event.slug == preview_seminar_slug and event.status == "open" %}
-{% include "core/_tour_hint.html" with task=preview_tour_tasks_by_id.register_seminar %}
+{% include "core/_tour_hint.html" with task=preview_tour_tasks_by_id.sem_register %}
 {% endif %}

@@ -17,10 +17,10 @@
     {% endif %}
   </header>
 
-  {% if try_url %}
+  {% if start_url and walkthroughs_enabled %}
   <div class="rounded-box border border-primary/30 bg-primary/5 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-    <span class="text-sm text-base-content/80">Ready to do it? The checklist in the corner will track your progress.</span>
-    <a href="{{ try_url }}" class="btn btn-primary btn-sm">Try it now <span aria-hidden="true">→</span></a>
+    <span class="text-sm text-base-content/80">Want a guided walkthrough? The corner card will step you through it and tick off as you go.</span>
+    <a href="{{ start_url }}" class="btn btn-primary btn-sm">Start this walkthrough <span aria-hidden="true">→</span></a>
   </div>
   {% endif %}
 

@@ -68,26 +68,32 @@ def guides_index_view(request):
 
 
 def guide_detail(request, slug):
-    """One guide page: rendered Markdown plus an optional "Try it now" link
-    into the feature the guide walks through (resolved from the named task)."""
+    """One guide page: rendered Markdown plus an optional "Start this
+    walkthrough" button that activates the guide's tailored checklist in the
+    floating card and lands the member on its first step."""
     guide = guides_index.get_guide(slug)
     if guide is None:
         raise Http404("guide not found")
 
-    try_url = None
-    if guide.task:
-        from django.urls import NoReverseMatch
+    start_url = None
+    walkthrough_title = ""
+    if guide.checklist:
+        from urllib.parse import urlencode
 
-        from core.checklists import PREVIEW_CHECKLIST_ID, find_task
+        from django.urls import reverse
 
-        task = find_task(PREVIEW_CHECKLIST_ID, guide.task)
-        if task is not None:
-            try:
-                try_url = task.resolve_url(request)
-            except NoReverseMatch:
-                try_url = None
+        from core.checklists import first_step_url, get_checklist
+
+        checklist = get_checklist(guide.checklist)
+        if checklist is not None:
+            walkthrough_title = checklist.title
+            nxt = first_step_url(guide.checklist, request) or request.path
+            start_url = reverse("core:set_walkthrough") + "?" + urlencode(
+                {"id": guide.checklist, "next": nxt}
+            )
 
     return render(request, "content/guide_detail.html", {
         "guide": guide,
-        "try_url": try_url,
+        "start_url": start_url,
+        "walkthrough_title": walkthrough_title,
     })
