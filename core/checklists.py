@@ -150,8 +150,23 @@ def _channel_done(user, request):
     return Post.objects.filter(author=user, channel=channel).exists()
 
 
-def _profile_edit_url(request):
-    return _rev("profile_edit")
+def _profile_anchor(anchor: str) -> str | None:
+    # Same-page anchor: clicking from the profile page scrolls to the section
+    # (no reload, so unsaved input survives); from elsewhere it navigates there.
+    url = _rev("profile_edit")
+    return f"{url}#{anchor}" if url else None
+
+
+def _pe_photo_url(request):
+    return _profile_anchor("photo")
+
+
+def _pe_about_url(request):
+    return _profile_anchor("about")
+
+
+def _pe_public_url(request):
+    return _profile_anchor("public-profile")
 
 
 def _formation_url(request):
@@ -171,20 +186,20 @@ def _profile_walkthrough() -> Checklist:
     return Checklist("profile", "Set up your profile", [
         ChecklistTask(id="pf_photo", label="Add a photo",
                       detail="Crop it to the circle; it appears across the site.",
-                      resolve_url=_profile_edit_url, is_done=_photo_done,
+                      resolve_url=_pe_photo_url, is_done=_photo_done,
                       hint_selector="#choose-photo",
                       hint_text=("<strong>Start here.</strong> Add your photo — "
                                  "you'll crop it to a circle."),
                       hint_key="lsp-wt-hint-pf-photo"),
         ChecklistTask(id="pf_bio", label="Write a short bio",
                       detail="A few sentences in the first person.",
-                      resolve_url=_profile_edit_url, is_done=_bio_done),
+                      resolve_url=_pe_about_url, is_done=_bio_done),
         ChecklistTask(id="pf_visibility", label="Choose who sees each field",
                       detail="Public, members only, or private.",
-                      resolve_url=_profile_edit_url, manual=True),
+                      resolve_url=_pe_about_url, manual=True),
         ChecklistTask(id="pf_listed", label="Confirm your directory listing",
                       detail="Stay listed so colleagues can find you.",
-                      resolve_url=_profile_edit_url, manual=True),
+                      resolve_url=_pe_public_url, manual=True),
     ])
 
 

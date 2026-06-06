@@ -499,10 +499,8 @@
           try { done ? localStorage.setItem(key(tid), "done") : localStorage.removeItem(key(tid)); } catch (e) {}
           paint(li, done);
         });
-        var link = li.querySelector("a.lsp-tour-label");
-        if (link) link.addEventListener("click", function () {
-          try { localStorage.setItem(key(tid), "done"); } catch (e) {}
-        });
+        // The step's link scrolls to the relevant section; it does NOT tick the
+        // step — the member ticks it with the circle once they've done it.
       });
     })();
   </script>

@@ -49,7 +49,7 @@
     {% csrf_token %}
 
     {# ---- Photo ---------------------------------------------------------- #}
-    <section class="space-y-3">
+    <section id="photo" class="space-y-3 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">Photo</h2>
       <p class="text-sm text-base-content/70">
         Your photo appears as a <strong>circle</strong> in several places, so
@@ -124,7 +124,7 @@
     </section>
 
     {# ---- About ---------------------------------------------------------- #}
-    <section class="space-y-4">
+    <section id="about" class="space-y-4 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">About</h2>
       {% if profile.is_in_directory %}
       <p class="text-sm text-base-content/60">Use the visibility menu beside each field to choose who sees it: <strong>Public</strong> (anyone), <strong>Members only</strong> (signed-in members), or <strong>Private</strong> (staff only).</p>
@@ -147,7 +147,7 @@
 
     {% if show_listing %}
     {# ---- Public profile ------------------------------------------------- #}
-    <section class="space-y-4">
+    <section id="public-profile" class="space-y-4 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">Your public profile</h2>
 
       {% if profile.is_in_directory %}
@@ -372,4 +372,30 @@
 
 {# ---- Preview-tour hint: point first-time members at the photo chooser ---- #}
 {% if show_preview_tour %}{% include "core/_tour_hint.html" with task=preview_tour_tasks_by_id.pf_photo %}{% endif %}
+
+{% if show_preview_tour and walkthrough_id == "profile" %}
+<script>
+  // Live-tick the profile walkthrough's auto steps as the member acts, before
+  // they save. A save + reload then confirms them from the server; if they
+  // leave without saving, the server correctly shows them undone again.
+  (function () {
+    function done(taskId) {
+      var li = document.querySelector('#lsp-preview-tour li[data-wt-task="' + taskId + '"]');
+      if (!li) return;
+      var tick = li.querySelector(".lsp-tour-tick");
+      var label = li.querySelector(".lsp-tour-label");
+      if (tick) { tick.classList.add("lsp-tour-tick--done"); tick.textContent = "✓"; }
+      if (label) label.classList.add("line-through", "text-base-content/50");
+    }
+    var bio = document.querySelector('[name="bio"]');
+    if (bio) {
+      var checkBio = function () { if ((bio.value || "").trim()) done("pf_bio"); };
+      bio.addEventListener("input", checkBio);
+      checkBio();
+    }
+    var apply = document.getElementById("cropper-apply");
+    if (apply) apply.addEventListener("click", function () { done("pf_photo"); });
+  })();
+</script>
+{% endif %}
 {% endblock %}
