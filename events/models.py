@@ -869,12 +869,21 @@ class EventProposal(models.Model):
     # Nullable so a special event can be proposed with its date still TBD.
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
-    format = models.CharField(
-        max_length=20, choices=Event.Format.choices, default=Event.Format.ONLINE,
+
+    class LocationKind(models.TextChoices):
+        ONLINE_INSITE = "online_insite", "Online — in-site video room"
+        ONLINE_EXTERNAL = "online_external", "Online — external platform (Zoom, etc.)"
+        IN_PERSON = "in_person", "In person"
+        HYBRID = "hybrid", "Hybrid (in person + online)"
+
+    location_kind = models.CharField(
+        max_length=20, choices=LocationKind.choices, default=LocationKind.ONLINE_INSITE,
+        help_text="Where it meets.",
     )
     location = models.CharField(
-        max_length=200, blank=True,
-        help_text="Proposed venue (in-person) or platform note.",
+        max_length=300, blank=True,
+        help_text="Venue address (in person) or meeting link (external online). "
+        "Leave blank for the in-site video room.",
     )
     contact = models.CharField(
         max_length=200, blank=True, help_text="Contact email for this proposal.",
@@ -888,24 +897,37 @@ class EventProposal(models.Model):
         settings.AUTH_USER_MODEL, blank=True, related_name="proposed_seminars",
     )
 
+    # ---- Fee (offerings + special events) ----
+    fee_amount = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Flat fee in USD. Leave blank for free / sliding-scale.",
+    )
+    fee_sliding_min = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Sliding-scale floor (0 = none turned away).",
+    )
+    fee_sliding_max = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Sliding-scale ceiling / suggested amount.",
+    )
+    tuition_covers = models.BooleanField(
+        default=True,
+        help_text="Tuition-current members attend at no charge. Always on for "
+        "seminars and reading groups.",
+    )
+
     # ---- Seminar / reading-group proposal-guide fields ----
     offers_ce = models.BooleanField(
         default=False,
         help_text="Offer APA CE credits (you apply to GPPA separately).",
     )
-    fee_note = models.TextField(
-        blank=True,
-        help_text="Proposed fee, or donation language (e.g. “$100 donation "
-        "encouraged, none turned away”).",
-    )
-    biography = models.TextField(blank=True, help_text="Instructor/convener biography.")
 
     # ---- Special-event fields ----
     date_tbd = models.BooleanField(
         default=False, help_text="Check if the date/time is not yet decided.",
     )
-    proposed_time = models.CharField(
-        max_length=120, blank=True, help_text="Proposed time (if a date is set).",
+    proposed_datetime = models.DateTimeField(
+        null=True, blank=True, help_text="Proposed date & time (Pacific).",
     )
 
     class SpeakerArrangement(models.TextChoices):
@@ -914,12 +936,8 @@ class EventProposal(models.Model):
 
     speaker_arrangement = models.CharField(
         max_length=12, choices=SpeakerArrangement.choices, blank=True,
+        default=SpeakerArrangement.PROPOSER,
         help_text="Who contacts/arranges with the speakers.",
-    )
-    external_speakers = models.TextField(
-        blank=True,
-        help_text="External (non-LSP) speakers: name, affiliation, contact email, "
-        "and a short bio for each.",
     )
     honoraria_estimate = models.CharField(
         max_length=120, blank=True,
@@ -950,6 +968,43 @@ class EventProposal(models.Model):
     @property
     def academic_year(self) -> str:
         return academic_year_of(self.start_date) if self.start_date else ""
+
+    @property
+    def event_format(self):
+        """The Event.Format derived from the proposed location kind."""
+        return {
+            self.LocationKind.IN_PERSON: Event.Format.IN_PERSON,
+            self.LocationKind.HYBRID: Event.Format.HYBRID,
+        }.get(self.location_kind, Event.Format.ONLINE)
+
+    def _build_price_tier(self, event):
+        """Create a PriceTier on the minted event from the proposed fee."""
+        sliding = self.fee_sliding_min is not None or self.fee_sliding_max is not None
+        if not sliding and self.fee_amount is None and not self.tuition_covers:
+            return  # nothing specified
+        base = self.fee_amount
+        if base is None:
+            base = self.fee_sliding_max if self.fee_sliding_max is not None else Decimal("0")
+        PriceTier.objects.create(
+            event=event, audience=Audience.ALL, base_amount=base,
+            sliding_scale=sliding,
+            minimum_amount=(self.fee_sliding_min or Decimal("0")) if sliding else Decimal("0"),
+            covered_by_tuition=self.tuition_covers,
+        )
+
+    def _attach_speakers(self, event):
+        """Mint external Speaker rows from the proposal and attach them."""
+        from django.utils.text import slugify
+        for ps in self.proposal_speakers.all():
+            base = slugify(ps.name) or "speaker"
+            slug, n = base, 2
+            while Speaker.objects.filter(slug=slug).exists():
+                slug, n = f"{base[:46]}-{n}", n + 1
+            speaker = Speaker.objects.create(
+                name=ps.name[:200], slug=slug[:200], bio=ps.bio,
+                affiliation=ps.affiliation[:200], email=ps.email,
+            )
+            event.speakers.add(speaker)
 
     def _unique_event_slug(self) -> str:
         from django.utils.text import slugify
@@ -983,14 +1038,29 @@ class EventProposal(models.Model):
         program = None
         if is_offering:
             program, _ = Program.objects.get_or_create(academic_year=self.academic_year)
+        # A special event's concrete date comes from proposed_datetime.
+        start_date, end_date = self.start_date, self.end_date
+        if not is_offering and self.proposed_datetime:
+            start_date = end_date = timezone.localtime(self.proposed_datetime).date()
+        # External online / in-person details flow into access_info.
+        access_info = self.location if self.location_kind != self.LocationKind.ONLINE_INSITE else ""
         event = Event.objects.create(
             title=self.title[:200], slug=self._unique_event_slug(),
             event_type=self.event_type,
-            start_date=self.start_date, end_date=self.end_date,
-            format=self.format,
+            start_date=start_date, end_date=end_date,
+            format=self.event_format, access_info=access_info,
             status=Event.Status.OPEN if is_offering else Event.Status.DRAFT,
             description=self.description, program=program,
         )
+        self._build_price_tier(event)
+        # A concrete special-event date/time becomes the event's first Session.
+        if not is_offering and self.proposed_datetime:
+            from datetime import timedelta
+            Session.objects.create(
+                event=event, start_at=self.proposed_datetime,
+                end_at=self.proposed_datetime + timedelta(hours=2), sequence=1,
+                location=self.location,
+            )
         if self.event_type == Event.Type.SEMINAR:
             # Continuing seminar → attach its existing standing workgroup so
             # ensure_workgroup() adds a new term rather than spawning a fresh one.
@@ -1019,6 +1089,12 @@ class EventProposal(models.Model):
             # Special event: provenance link to the PC workgroup only — no roster
             # changes (avoids leaking proposers/presenters into the committee).
             event.ensure_workgroup()
+            # Internal LSP speakers → display-only member_speakers (NOT faculty,
+            # which would add them to the PC workgroup roster). External speakers
+            # → Speaker rows. The PC owns/edits the event.
+            for u in self.faculty.all():
+                event.member_speakers.add(u)
+            self._attach_speakers(event)
         self.status = self.Status.APPROVED
         self.reviewed_by = reviewer
         self.reviewed_at = timezone.now()
@@ -1061,3 +1137,23 @@ class ProposalReading(models.Model):
 
     def __str__(self) -> str:
         return self.citation[:80]
+
+
+class ProposalSpeaker(models.Model):
+    """An external (non-LSP) speaker proposed for a special event — minted into a
+    Speaker row on approval. Internal speakers use the member picker instead."""
+
+    proposal = models.ForeignKey(
+        EventProposal, on_delete=models.CASCADE, related_name="proposal_speakers",
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+    name = models.CharField(max_length=200)
+    email = models.EmailField(blank=True)
+    affiliation = models.CharField(max_length=200, blank=True)
+    bio = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("sort_order", "id")
+
+    def __str__(self) -> str:
+        return self.name

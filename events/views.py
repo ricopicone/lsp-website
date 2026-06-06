@@ -537,17 +537,20 @@ def propose_event(request):
     the faculty flag is granted to a seminar's instructors when it's approved."""
     if not is_lsp_member(request.user):
         raise Http404()
-    from .forms import EventProposalForm
+    from .forms import EventProposalForm, ProposalSpeakerFormSet
     from .models import EventProposal
 
     if request.method == "POST":
         form = EventProposalForm(request.POST)
-        if form.is_valid():
+        speakers = ProposalSpeakerFormSet(request.POST, prefix="speakers")
+        if form.is_valid() and speakers.is_valid():
             proposal = form.save(commit=False)
             proposal.proposed_by = request.user
             proposal.save()
             form.save_m2m()
             form.save_readings(proposal)
+            speakers.instance = proposal
+            speakers.save()
             messages.success(
                 request,
                 f"{proposal.get_event_type_display()} proposed — the Programming "
@@ -556,17 +559,20 @@ def propose_event(request):
             return redirect("propose_event")
     else:
         form = EventProposalForm()
+        speakers = ProposalSpeakerFormSet(prefix="speakers")
     mine = (EventProposal.objects
             .filter(proposed_by=request.user)
             .select_related("minted_event"))
-    return render(request, "events/propose_event.html", {"form": form, "mine": mine})
+    return render(request, "events/propose_event.html", {
+        "form": form, "speakers": speakers, "mine": mine,
+    })
 
 
 @login_required
 def proposal_edit(request, pk: int):
     """The proposer edits a still-pending or declined proposal; saving a
     declined one resubmits it for fresh review."""
-    from .forms import EventProposalForm
+    from .forms import EventProposalForm, ProposalSpeakerFormSet
     from .models import EventProposal
 
     proposal = get_object_or_404(EventProposal, pk=pk)
@@ -577,10 +583,14 @@ def proposal_edit(request, pk: int):
         raise Http404()
     if request.method == "POST":
         form = EventProposalForm(request.POST, instance=proposal)
-        if form.is_valid():
+        speakers = ProposalSpeakerFormSet(
+            request.POST, instance=proposal, prefix="speakers"
+        )
+        if form.is_valid() and speakers.is_valid():
             was_declined = proposal.status == EventProposal.Status.DECLINED
             form.save()
             form.save_readings(proposal)
+            speakers.save()
             if was_declined:
                 proposal.resubmit()
                 messages.success(request, "Edited and resubmitted for review.")
@@ -589,8 +599,9 @@ def proposal_edit(request, pk: int):
             return redirect("propose_event")
     else:
         form = EventProposalForm(instance=proposal)
+        speakers = ProposalSpeakerFormSet(instance=proposal, prefix="speakers")
     return render(request, "events/propose_event.html", {
-        "form": form, "editing": proposal,
+        "form": form, "speakers": speakers, "editing": proposal,
     })
 
 

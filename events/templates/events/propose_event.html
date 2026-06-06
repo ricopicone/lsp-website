@@ -32,24 +32,80 @@
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.description %}</div>
 
     {# ---- Schedule ---- #}
-    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.date_tbd %}</div>
-    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.start_date %}</div>
+    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.start_date %}</div>
     <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.end_date %}</div>
-    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.proposed_time %}</div>
-    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.format %}</div>
+    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.date_tbd %}</div>
+    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.proposed_datetime %}</div>
+
+    {# ---- Location ---- #}
+    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.location_kind %}</div>
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.location %}</div>
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.contact %}</div>
 
     {# ---- Seminar continuation ---- #}
     <div data-types="seminar">{% include "events/_proposal_field.html" with field=form.continues_seminar %}</div>
 
-    {# ---- Conveners / speakers ---- #}
+    {# ---- Conveners / internal speakers ---- #}
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.faculty %}</div>
 
-    {# ---- Special-event speakers ---- #}
-    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.external_speakers %}</div>
+    {# ---- External speakers (special events) ---- #}
+    <div data-types="special_event" class="space-y-2">
+      <p class="text-sm font-medium">External speakers</p>
+      <p class="text-xs text-base-content/60">Non-LSP presenters — give each a name,
+        contact email, affiliation, and short bio.</p>
+      {{ speakers.management_form }}
+      <div id="speaker-rows" class="space-y-3">
+        {% for sform in speakers %}
+        <div class="speaker-row rounded-lg border border-base-300/60 bg-base-100 p-3 space-y-2">
+          {% for hidden in sform.hidden_fields %}{{ hidden }}{% endfor %}
+          {% for f in sform.visible_fields %}
+          {% if f.name != "DELETE" %}
+          <div class="space-y-1">
+            <label class="block text-xs text-base-content/60">{{ f.label }}</label>
+            {{ f }}
+            {% if f.errors %}<p class="text-error text-xs">{{ f.errors|join:", " }}</p>{% endif %}
+          </div>
+          {% endif %}
+          {% endfor %}
+          <label class="flex items-center gap-2 text-xs text-base-content/60">
+            {{ sform.DELETE }} Remove this speaker
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" id="add-speaker" class="btn btn-ghost btn-xs">+ Add another speaker</button>
+      <template id="speaker-empty">
+        <div class="speaker-row rounded-lg border border-base-300/60 bg-base-100 p-3 space-y-2">
+          {% for f in speakers.empty_form.visible_fields %}
+          {% if f.name != "DELETE" %}
+          <div class="space-y-1">
+            <label class="block text-xs text-base-content/60">{{ f.label }}</label>
+            {{ f }}
+          </div>
+          {% endif %}
+          {% endfor %}
+          <label class="flex items-center gap-2 text-xs text-base-content/60">
+            {{ speakers.empty_form.DELETE }} Remove this speaker
+          </label>
+        </div>
+      </template>
+    </div>
     <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.speaker_arrangement %}</div>
     <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.honoraria_estimate %}</div>
+
+    {# ---- Fee ---- #}
+    <div data-types="seminar reading_group special_event" class="rounded-lg border border-base-300/60 p-3 space-y-3">
+      <p class="text-sm font-medium">Fee</p>
+      {% include "events/_proposal_field.html" with field=form.fee_amount %}
+      <div class="grid grid-cols-2 gap-3">
+        {% include "events/_proposal_field.html" with field=form.fee_sliding_min %}
+        {% include "events/_proposal_field.html" with field=form.fee_sliding_max %}
+      </div>
+      {% include "events/_proposal_field.html" with field=form.tuition_covers %}
+      <p class="text-xs text-base-content/50">Consider “none turned away for lack of
+        funds.” For seminars and reading groups, tuition-current members always attend
+        at no charge.</p>
+    </div>
 
     {# ---- Readings + style guide (all types) ---- #}
     <div data-types="seminar reading_group special_event" class="space-y-2">
@@ -74,15 +130,13 @@
       </details>
     </div>
 
-    {# ---- CE + fee + bio (offerings) ---- #}
+    {# ---- CE (offerings) ---- #}
     <div data-types="seminar reading_group" class="space-y-1">
       {% include "events/_proposal_field.html" with field=form.offers_ce %}
       <p class="text-xs text-base-content/50">If yes, apply to the Greater Pittsburgh
         Psychological Association (GPPA) for APA-accredited CE credits and email the
         Programming Committee your approval. Contact Diana Cuello with questions.</p>
     </div>
-    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.fee_note %}</div>
-    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.biography %}</div>
 
     <div class="flex items-center justify-between border-t border-base-300/60 pt-5">
       <a href="{% url 'program' %}" class="btn btn-ghost">Cancel</a>
@@ -95,15 +149,36 @@
   <script>
   (function () {
     var sel = document.getElementById("id_event_type");
-    if (!sel) return;
+    var tuition = document.getElementById("id_tuition_covers");
     function sync() {
-      var t = sel.value;
+      var t = sel ? sel.value : "";
       document.querySelectorAll("[data-types]").forEach(function (el) {
         el.style.display = el.getAttribute("data-types").split(" ").indexOf(t) === -1 ? "none" : "";
       });
+      // Tuition always covers seminars & reading groups — force checked + locked.
+      if (tuition) {
+        var offering = t === "seminar" || t === "reading_group";
+        if (offering) { tuition.checked = true; }
+        tuition.disabled = offering;
+      }
     }
-    sel.addEventListener("change", sync);
-    sync();
+    if (sel) { sel.addEventListener("change", sync); sync(); }
+
+    // External-speaker formset: clone the empty-form template, fixing :prefix:.
+    var addBtn = document.getElementById("add-speaker");
+    var rows = document.getElementById("speaker-rows");
+    var tmpl = document.getElementById("speaker-empty");
+    var total = document.getElementById("id_speakers-TOTAL_FORMS");
+    if (addBtn && rows && tmpl && total) {
+      addBtn.addEventListener("click", function () {
+        var i = parseInt(total.value, 10);
+        var html = tmpl.innerHTML.replace(/__prefix__/g, i);
+        var wrap = document.createElement("div");
+        wrap.innerHTML = html;
+        rows.appendChild(wrap.firstElementChild);
+        total.value = i + 1;
+      });
+    }
   })();
   </script>
 
