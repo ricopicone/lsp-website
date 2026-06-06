@@ -15,9 +15,10 @@ from workgroups.models import Workgroup
 
 pytestmark = pytest.mark.django_db
 
-# Required fields shared by every propose POST: the location dropdown + the
-# external-speaker formset's management form (the propose form embeds both).
+# Shared bits for every propose POST: submit intent (vs save), the location
+# dropdown, and the external-speaker formset's management form.
 _MGMT = {
+    "action": "submit",
     "location_kind": "online_insite",
     "speakers-TOTAL_FORMS": "0", "speakers-INITIAL_FORMS": "0",
     "speakers-MIN_NUM_FORMS": "0", "speakers-MAX_NUM_FORMS": "1000",
@@ -358,6 +359,89 @@ def test_fee_type_free_clears_amounts(client):
     assert p.fee_amount is None and p.fee_sliding_min is None
 
 
+# ---- save / manage proposals ----
+
+def test_save_allows_incomplete_then_manage_lists_it(client):
+    fac = _faculty("saver@x.test")
+    client.force_login(fac)
+    # Save with no dates (incomplete) — allowed because it's not a submission.
+    resp = client.post("/propose/", {
+        **_MGMT, "action": "save", "event_type": Event.Type.SEMINAR,
+        "title": "Draft Seminar", "description": "wip",
+    })
+    assert resp.status_code == 302
+    p = EventProposal.objects.get(title="Draft Seminar")
+    assert p.status == EventProposal.Status.SAVED and p.start_date is None
+    # It shows on the manage page.
+    page = client.get("/propose/mine/")
+    assert page.status_code == 200 and b"Draft Seminar" in page.content
+
+
+def test_submit_incomplete_saved_proposal_is_blocked(client):
+    fac = _faculty("blk@x.test")
+    p = EventProposal.objects.create(
+        proposed_by=fac, title="Needs Dates", event_type=Event.Type.SEMINAR,
+        status=EventProposal.Status.SAVED,
+    )
+    client.force_login(fac)
+    resp = client.post(f"/propose/{p.pk}/submit/")
+    assert resp.status_code == 302  # bounced back to edit
+    p.refresh_from_db()
+    assert p.status == EventProposal.Status.SAVED  # not submitted
+
+
+def test_submit_complete_saved_proposal(client):
+    fac = _faculty("ok@x.test")
+    start, end = _future()
+    p = EventProposal.objects.create(
+        proposed_by=fac, title="Ready", event_type=Event.Type.SEMINAR,
+        start_date=start, end_date=end, status=EventProposal.Status.SAVED,
+    )
+    client.force_login(fac)
+    assert client.post(f"/propose/{p.pk}/submit/").status_code == 302
+    p.refresh_from_db()
+    assert p.status == EventProposal.Status.PROPOSED
+
+
+def test_delete_proposal_but_not_approved(client):
+    fac = _faculty("del@x.test")
+    saved = EventProposal.objects.create(
+        proposed_by=fac, title="Trash Me", event_type=Event.Type.SEMINAR,
+        status=EventProposal.Status.SAVED,
+    )
+    approved = EventProposal.objects.create(
+        proposed_by=fac, title="Kept", event_type=Event.Type.SEMINAR,
+        status=EventProposal.Status.APPROVED,
+    )
+    client.force_login(fac)
+    client.post(f"/propose/{saved.pk}/delete/")
+    client.post(f"/propose/{approved.pk}/delete/")
+    assert not EventProposal.objects.filter(pk=saved.pk).exists()
+    assert EventProposal.objects.filter(pk=approved.pk).exists()  # approved kept
+
+
+def test_cannot_manage_others_proposals(client):
+    owner = _faculty("owner@x.test")
+    p = EventProposal.objects.create(
+        proposed_by=owner, title="Mine", event_type=Event.Type.SEMINAR,
+        status=EventProposal.Status.SAVED,
+    )
+    client.force_login(_member("intruder@x.test"))
+    assert client.post(f"/propose/{p.pk}/delete/").status_code == 404
+    assert client.post(f"/propose/{p.pk}/submit/").status_code == 404
+
+
+def test_saved_proposals_hidden_from_pc_queue(client):
+    fac = _faculty("hide@x.test")
+    EventProposal.objects.create(
+        proposed_by=fac, title="Still Saved", event_type=Event.Type.SEMINAR,
+        status=EventProposal.Status.SAVED,
+    )
+    client.force_login(_pc_member())
+    resp = client.get("/program-admin/proposals/")
+    assert b"Still Saved" not in resp.content  # only submitted ones reach the PC
+
+
 def test_member_can_open_propose_page(client):
     client.force_login(_member("opener@x.test"))
     assert client.get("/propose/").status_code == 200
@@ -396,7 +480,7 @@ def test_special_event_proposal_allows_tbd_date(client):
     member = _member("tbd@x.test")
     client.force_login(member)
     resp = client.post("/propose/", {
-        "location_kind": "online_insite",
+        "action": "submit", "location_kind": "online_insite",
         "speakers-TOTAL_FORMS": "1", "speakers-INITIAL_FORMS": "0",
         "speakers-MIN_NUM_FORMS": "0", "speakers-MAX_NUM_FORMS": "1000",
         "speakers-0-name": "Jane Doe", "speakers-0-email": "jane@x.test",

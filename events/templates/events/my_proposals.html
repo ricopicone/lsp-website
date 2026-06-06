@@ -1,0 +1,59 @@
+{% extends "core/base.html" %}
+{% block title %}My proposals — LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl space-y-6">
+  <header class="flex flex-wrap items-center justify-between gap-3">
+    <h1 class="font-serif text-3xl text-base-content">My proposals</h1>
+    <a href="{% url 'propose_event' %}" class="btn btn-primary btn-sm">＋ New proposal</a>
+  </header>
+
+  {% if proposals %}
+  <ul class="divide-y divide-base-300/50 rounded-xl border border-base-300/60 bg-base-100">
+    {% for p in proposals %}
+    <li class="space-y-2 px-4 py-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="min-w-0 flex-1">
+          <span class="text-sm font-medium text-base-content">{{ p.title|default:"(untitled)" }}</span>
+          <span class="text-xs text-base-content/55"> · {{ p.get_event_type_display }}</span>
+        </span>
+        {% if p.status == "saved" %}<span class="badge badge-ghost badge-sm">Saved · not submitted</span>
+        {% elif p.status == "proposed" %}<span class="badge badge-info badge-sm">Under review</span>
+        {% elif p.status == "approved" %}<span class="badge badge-success badge-sm">Approved</span>
+        {% else %}<span class="badge badge-warning badge-sm">Declined</span>{% endif %}
+      </div>
+
+      {% if p.status == "declined" and p.review_note %}
+      <p class="rounded bg-warning/10 px-2 py-1 text-xs text-base-content/80">
+        <span class="font-medium">Committee note:</span> {{ p.review_note }}
+      </p>
+      {% endif %}
+
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        {% if p.status == "approved" %}
+          {% if p.minted_event %}<a href="{% url 'events:detail' p.minted_event.slug %}" class="link link-primary">View the event →</a>{% endif %}
+        {% else %}
+          <a href="{% url 'proposal_edit' p.pk %}" class="btn btn-ghost btn-xs">Edit</a>
+          {% if p.status == "saved" or p.status == "declined" %}
+          <form method="post" action="{% url 'proposal_submit' p.pk %}" class="inline">
+            {% csrf_token %}
+            <button class="btn btn-primary btn-xs">Submit for review</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{% url 'proposal_delete' p.pk %}" class="inline"
+                onsubmit="return confirm('Delete this proposal?');">
+            {% csrf_token %}
+            <button class="btn btn-ghost btn-xs text-error">Delete</button>
+          </form>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="rounded-xl border border-dashed border-base-300/70 bg-base-200/30 p-8 text-center text-sm text-base-content/55">
+    You haven't proposed anything yet.
+    <a href="{% url 'propose_event' %}" class="link link-primary">Propose an event →</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

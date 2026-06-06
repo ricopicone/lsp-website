@@ -3,8 +3,9 @@
 {% block content %}
 <div class="max-w-2xl space-y-8">
   <header class="space-y-2">
-    <p class="text-sm">
+    <p class="flex items-center justify-between text-sm">
       <a href="{% url 'program' %}" class="link link-hover text-base-content/60">← Program</a>
+      <a href="{% url 'my_proposals' %}" class="link link-hover text-base-content/60">My proposals →</a>
     </p>
     <h1 class="font-serif text-3xl text-base-content">
       {% if editing %}Edit proposal{% else %}Propose an event: a seminar, reading group, or special event{% endif %}
@@ -137,11 +138,14 @@
         Programming Committee your approval. Contact Diana Cuello with questions.</p>
     </div>
 
-    <div class="flex items-center justify-between border-t border-base-300/60 pt-5">
-      <a href="{% url 'program' %}" class="btn btn-ghost">Cancel</a>
-      <button type="submit" class="btn btn-primary">
-        {% if editing and editing.status == "declined" %}Save &amp; resubmit{% else %}Submit proposal{% endif %}
-      </button>
+    <div class="flex flex-wrap items-center justify-between gap-2 border-t border-base-300/60 pt-5">
+      <a href="{% url 'my_proposals' %}" class="btn btn-ghost btn-sm">Cancel</a>
+      <div class="flex gap-2">
+        <button type="submit" name="action" value="save" class="btn btn-ghost btn-sm">Save for later</button>
+        <button type="submit" name="action" value="submit" class="btn btn-primary btn-sm">
+          {% if editing and editing.status == "declined" %}Resubmit for review{% else %}Submit for review{% endif %}
+        </button>
+      </div>
     </div>
   </form>
 
@@ -215,32 +219,5 @@
     }
   })();
   </script>
-
-  {% if mine %}
-  <section class="space-y-3">
-    <h2 class="font-serif text-xl text-base-content">Your proposals</h2>
-    <ul class="divide-y divide-base-300/50 rounded-xl border border-base-300/60 bg-base-100">
-      {% for p in mine %}
-      <li class="flex flex-wrap items-center gap-2 px-4 py-3">
-        <span class="min-w-0 flex-1">
-          <span class="text-sm font-medium text-base-content">{{ p.title }}</span>
-          <span class="text-xs text-base-content/55"> · {{ p.get_event_type_display }}</span>
-          {% if p.continues_seminar %}<span class="badge badge-ghost badge-xs">continuing</span>{% endif %}
-        </span>
-        {% if p.status == "approved" %}
-        <span class="badge badge-success badge-sm">Approved</span>
-        {% if p.minted_event %}<a href="{% url 'events:detail' p.minted_event.slug %}" class="link text-xs">view →</a>{% endif %}
-        {% elif p.status == "declined" %}
-        <span class="badge badge-ghost badge-sm">Declined</span>
-        <a href="{% url 'proposal_edit' p.pk %}" class="link text-xs">edit &amp; resubmit</a>
-        {% else %}
-        <span class="badge badge-outline badge-sm">Under review</span>
-        <a href="{% url 'proposal_edit' p.pk %}" class="link text-xs">edit</a>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-  </section>
-  {% endif %}
 </div>
 {% endblock %}

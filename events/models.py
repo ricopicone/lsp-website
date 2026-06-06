@@ -838,6 +838,7 @@ class EventProposal(models.Model):
     """
 
     class Status(models.TextChoices):
+        SAVED = "saved", _("Saved — not yet submitted")
         PROPOSED = "proposed", _("Proposed — under review")
         APPROVED = "approved", _("Approved")
         DECLINED = "declined", _("Declined")
@@ -966,6 +967,17 @@ class EventProposal(models.Model):
     @property
     def academic_year(self) -> str:
         return academic_year_of(self.start_date) if self.start_date else ""
+
+    def missing_for_submission(self) -> str:
+        """Human list of what's still needed before a saved proposal can be
+        submitted for review (empty string when ready)."""
+        missing = []
+        if self.event_type in Event.ANNUAL_PROGRAM_TYPES:
+            if not self.start_date or not self.end_date:
+                missing.append("start and end dates")
+        elif not self.date_tbd and not self.proposed_datetime:
+            missing.append("a date/time (or mark it TBD)")
+        return ", ".join(missing)
 
     @property
     def event_format(self):

@@ -208,6 +208,10 @@ class EventProposalForm(forms.ModelForm):
         data = super().clean()
         import datetime as _dt
 
+        # A saved (not-yet-submitted) proposal may be incomplete; only enforce the
+        # full requirements when the member is actually submitting for review.
+        require = getattr(self, "require_complete", True)
+
         etype = data.get("event_type")
         start, end = data.get("start_date"), data.get("end_date")
         is_offering = etype in (Event.Type.SEMINAR, Event.Type.READING_GROUP)
@@ -215,21 +219,21 @@ class EventProposalForm(forms.ModelForm):
         if is_offering:
             # Tuition always covers seminars & reading groups (REG-4).
             data["tuition_covers"] = True
-            if not start:
+            if require and not start:
                 self.add_error("start_date", "Required for seminars and reading groups.")
-            if not end:
+            if require and not end:
                 self.add_error("end_date", "Required for seminars and reading groups.")
             if start and end:
                 if end <= start:
                     self.add_error("end_date", "End date must be after the start date.")
-                elif end < _dt.date.today():
+                elif require and end < _dt.date.today():
                     self.add_error(
                         "end_date",
                         "End date can't be in the past — the term wouldn't be active.",
                     )
         else:
             # Special event: a concrete date/time is required unless it's TBD.
-            if not data.get("date_tbd") and not data.get("proposed_datetime"):
+            if require and not data.get("date_tbd") and not data.get("proposed_datetime"):
                 self.add_error(
                     "proposed_datetime",
                     "Give a proposed date & time, or check “date/time TBD”.",
@@ -241,11 +245,11 @@ class EventProposalForm(forms.ModelForm):
             data["fee_amount"] = data["fee_sliding_min"] = data["fee_sliding_max"] = None
         elif fee_type == "fixed":
             data["fee_sliding_min"] = data["fee_sliding_max"] = None
-            if data.get("fee_amount") is None:
+            if require and data.get("fee_amount") is None:
                 self.add_error("fee_amount", "Enter a fixed fee, or choose Free / Sliding scale.")
         else:  # sliding
             data["fee_amount"] = None
-            if smin is None and smax is None:
+            if require and smin is None and smax is None:
                 self.add_error("fee_sliding_max", "Enter a sliding-scale range.")
             elif smin is not None and smax is not None and smin > smax:
                 self.add_error("fee_sliding_min", "Minimum can't exceed the maximum.")

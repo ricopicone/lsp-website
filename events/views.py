@@ -529,74 +529,90 @@ def program_admin_event_edit(request, academic_year: str, slug: str):
 
 # ---- Seminar proposals (M12.5) ----------------------------------------
 
+def _save_proposal_form(request, form, speakers, proposal, *, is_submit):
+    """Persist a valid proposal form + its readings/speakers; set status by intent
+    (Save → SAVED, Submit → PROPOSED, resetting any prior review)."""
+    from .models import EventProposal
+
+    proposal = form.save(commit=False)
+    if proposal.proposed_by_id is None:
+        proposal.proposed_by = request.user
+    if is_submit:
+        proposal.status = EventProposal.Status.PROPOSED
+        proposal.reviewed_by = None
+        proposal.reviewed_at = None
+        proposal.review_note = ""
+    else:
+        proposal.status = EventProposal.Status.SAVED
+    proposal.save()
+    form.save_m2m()
+    form.save_readings(proposal)
+    speakers.instance = proposal
+    speakers.save()
+    return proposal
+
+
 @login_required
 def propose_event(request):
-    """Any LSP member proposes a seminar (new, or a new year of an existing
-    one); the page also lists the proposer's own proposals + statuses. Teaching
-    a seminar is what confers faculty standing, so proposing doesn't require it —
-    the faculty flag is granted to a seminar's instructors when it's approved."""
+    """Any LSP member proposes a seminar, reading group, or special event. They
+    can Save a work-in-progress (incomplete OK) or Submit it for PC review.
+    Teaching a seminar confers faculty standing, granted on approval."""
     if not is_lsp_member(request.user):
         raise Http404()
     from .forms import EventProposalForm, ProposalSpeakerFormSet
-    from .models import EventProposal
 
     if request.method == "POST":
+        is_submit = request.POST.get("action") == "submit"
         form = EventProposalForm(request.POST)
+        form.require_complete = is_submit
         speakers = ProposalSpeakerFormSet(request.POST, prefix="speakers")
         if form.is_valid() and speakers.is_valid():
-            proposal = form.save(commit=False)
-            proposal.proposed_by = request.user
-            proposal.save()
-            form.save_m2m()
-            form.save_readings(proposal)
-            speakers.instance = proposal
-            speakers.save()
+            proposal = _save_proposal_form(
+                request, form, speakers, None, is_submit=is_submit
+            )
             messages.success(
                 request,
-                f"{proposal.get_event_type_display()} proposed — the Programming "
-                "Committee will review it.",
+                f"{proposal.get_event_type_display()} submitted — the Programming "
+                "Committee will review it." if is_submit
+                else f"{proposal.get_event_type_display()} saved. Submit it when ready.",
             )
-            return redirect("propose_event")
+            return redirect("my_proposals")
     else:
         form = EventProposalForm()
         speakers = ProposalSpeakerFormSet(prefix="speakers")
-    mine = (EventProposal.objects
-            .filter(proposed_by=request.user)
-            .select_related("minted_event"))
     return render(request, "events/propose_event.html", {
-        "form": form, "speakers": speakers, "mine": mine,
+        "form": form, "speakers": speakers,
     })
 
 
 @login_required
 def proposal_edit(request, pk: int):
-    """The proposer edits a still-pending or declined proposal; saving a
-    declined one resubmits it for fresh review."""
+    """The proposer edits a saved / pending / declined proposal; Save keeps it a
+    draft, Submit (re)sends it for review."""
     from .forms import EventProposalForm, ProposalSpeakerFormSet
     from .models import EventProposal
 
     proposal = get_object_or_404(EventProposal, pk=pk)
     editable = proposal.status in (
-        EventProposal.Status.PROPOSED, EventProposal.Status.DECLINED,
+        EventProposal.Status.SAVED, EventProposal.Status.PROPOSED,
+        EventProposal.Status.DECLINED,
     )
     if proposal.proposed_by_id != request.user.id or not editable:
         raise Http404()
     if request.method == "POST":
+        is_submit = request.POST.get("action") == "submit"
         form = EventProposalForm(request.POST, instance=proposal)
+        form.require_complete = is_submit
         speakers = ProposalSpeakerFormSet(
             request.POST, instance=proposal, prefix="speakers"
         )
         if form.is_valid() and speakers.is_valid():
-            was_declined = proposal.status == EventProposal.Status.DECLINED
-            form.save()
-            form.save_readings(proposal)
-            speakers.save()
-            if was_declined:
-                proposal.resubmit()
-                messages.success(request, "Edited and resubmitted for review.")
-            else:
-                messages.success(request, "Proposal updated.")
-            return redirect("propose_event")
+            _save_proposal_form(request, form, speakers, proposal, is_submit=is_submit)
+            messages.success(
+                request,
+                "Submitted for review." if is_submit else "Proposal saved.",
+            )
+            return redirect("my_proposals")
     else:
         form = EventProposalForm(instance=proposal)
         speakers = ProposalSpeakerFormSet(instance=proposal, prefix="speakers")
@@ -606,14 +622,64 @@ def proposal_edit(request, pk: int):
 
 
 @login_required
+def my_proposals(request):
+    """Manage your event proposals — statuses, review notes, and actions."""
+    if not is_lsp_member(request.user):
+        raise Http404()
+    from .models import EventProposal
+
+    proposals = (
+        EventProposal.objects.filter(proposed_by=request.user)
+        .select_related("minted_event")
+    )
+    return render(request, "events/my_proposals.html", {"proposals": proposals})
+
+
+@login_required
+@require_POST
+def proposal_submit(request, pk: int):
+    """Submit a saved (or declined) proposal for PC review, if it's complete."""
+    from .models import EventProposal
+
+    p = get_object_or_404(EventProposal, pk=pk, proposed_by=request.user)
+    if p.status not in (EventProposal.Status.SAVED, EventProposal.Status.DECLINED):
+        return redirect("my_proposals")
+    missing = p.missing_for_submission()
+    if missing:
+        messages.error(request, f"Add {missing} before submitting.")
+        return redirect("proposal_edit", pk=p.pk)
+    p.status = EventProposal.Status.PROPOSED
+    p.reviewed_by = p.reviewed_at = None
+    p.review_note = ""
+    p.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
+    messages.success(request, "Submitted for review.")
+    return redirect("my_proposals")
+
+
+@login_required
+@require_POST
+def proposal_delete(request, pk: int):
+    """Withdraw/delete one of your proposals (not an approved one)."""
+    from .models import EventProposal
+
+    p = get_object_or_404(EventProposal, pk=pk, proposed_by=request.user)
+    if p.status != EventProposal.Status.APPROVED:
+        p.delete()
+        messages.success(request, "Proposal deleted.")
+    return redirect("my_proposals")
+
+
+@login_required
 def program_admin_proposals(request):
     """PC admin: review queue for seminar proposals."""
     if not _is_pc_or_staff(request.user):
         raise Http404()
     from .models import EventProposal
 
+    # Saved (not-yet-submitted) proposals never reach the PC queue.
     proposals = list(
         EventProposal.objects
+        .exclude(status=EventProposal.Status.SAVED)
         .select_related("proposed_by", "minted_event", "continues_seminar")
         .prefetch_related("faculty")
     )
