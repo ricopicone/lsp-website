@@ -32,9 +32,9 @@ meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
         {{ series_form.title }}
         <div class="flex flex-wrap gap-2">
           <label class="form-control"><span class="label-text text-xs text-base-content/60">Frequency</span>{{ series_form.frequency }}</label>
-          <label class="form-control"><span class="label-text text-xs text-base-content/60">Week (monthly)</span>{{ series_form.week_position }}</label>
+          <label class="form-control" data-series-monthly hidden><span class="label-text text-xs text-base-content/60">Week of month</span>{{ series_form.week_position }}</label>
         </div>
-        <div><span class="label-text text-xs text-base-content/60">On</span><div class="flex flex-wrap gap-2 text-xs">{{ series_form.weekdays }}</div></div>
+        <div><span class="label-text text-xs text-base-content/60" data-series-weekday-label>On</span><div class="flex flex-wrap gap-2 text-xs">{{ series_form.weekdays }}</div></div>
         <div class="flex flex-wrap gap-2">
           <label class="form-control"><span class="label-text text-xs text-base-content/60">From</span>{{ series_form.start_date }}</label>
           <label class="form-control"><span class="label-text text-xs text-base-content/60">Through</span>{{ series_form.end_date }}</label>
@@ -72,4 +72,6 @@ meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
     </ul>
   </section>
   {% endif %}
+
+  {% include "events/_series_branching_js.html" %}
 </div>

@@ -1,0 +1,23 @@
+{% comment %}Shared recurring-series branching: the week-of-month picker only
+applies to monthly frequency, and the weekday picker's label clarifies for
+monthly. Works for any series form (matches any `name$="frequency"` select),
+scoped to its nearest [data-series-scheduler] container when present. Used by
+the workgroup Schedule tab and the proposal scheduler so both behave the same.
+{% endcomment %}
+<script>
+(function () {
+  document.querySelectorAll("select[name$='frequency']").forEach(function (sel) {
+    var scope = sel.closest("[data-series-scheduler]") || document;
+    function sync() {
+      var monthly = sel.value === "monthly";
+      scope.querySelectorAll("[data-series-monthly]").forEach(function (el) {
+        el.hidden = !monthly;
+      });
+      var lbl = scope.querySelector("[data-series-weekday-label]");
+      if (lbl) lbl.textContent = monthly ? "On (which weekday)" : "On";
+    }
+    sel.addEventListener("change", sync);
+    sync();
+  });
+})();
+</script>
