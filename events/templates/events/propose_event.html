@@ -30,7 +30,17 @@
     {# ---- Basics (all types) ---- #}
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.event_type %}</div>
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.title %}</div>
-    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.description %}</div>
+    <div data-types="seminar reading_group special_event" class="space-y-1">
+      <p class="text-xs text-base-content/60">Your description introduces the central
+        focus and topics to be covered. It is also used by the Program Committee to
+        assess the relevance of your proposal to the Mission of the School in
+        contributing to the formation of the Lacanian analyst of the future. All
+        descriptions should be approximately 250 words. Please include a clear
+        rationale for how you are structuring your engagement with Freudian and
+        Lacanian clinical technique and theory as well as an overview of the proposal
+        format (open-ended discussion, lecture, presentations, etc.).</p>
+      {% include "events/_proposal_field.html" with field=form.description %}
+    </div>
 
     {# ---- Special-event date (offering term dates move down by the schedule) ---- #}
     <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.date_tbd %}</div>
@@ -138,13 +148,15 @@
 
     {# ---- Readings + style guide (all types) ---- #}
     <div data-types="seminar reading_group special_event" class="space-y-2">
+      <p class="text-xs text-base-content/60">Readings should include primary writings
+        of Freud and/or Lacan. If you are selecting secondary source material, please
+        make sure that it enhances and supports participants’ engagement with Freud and
+        Lacan. If you plan to offer CE credits, you will need to include at least 3
+        references published within the last 5 years.</p>
       {% include "events/_proposal_field.html" with field=form.readings_text %}
       <details class="rounded-lg border border-base-300/60 bg-base-200/40 p-3 text-xs text-base-content/70">
-        <summary class="cursor-pointer font-medium text-base-content/80">Readings — guidance &amp; citation style</summary>
+        <summary class="cursor-pointer font-medium text-base-content/80">Citation style</summary>
         <div class="mt-2 space-y-2">
-          <p>Readings should include primary writings of Freud and/or Lacan. Secondary
-            sources should enhance engagement with Freud and Lacan. To offer CE credits,
-            include at least 3 references published within the last 5 years.</p>
           <p>One citation per line, following these MLA-adapted rules: 1) quotation marks
             around article titles; 2) <em>italicize</em> book titles; 3) periods after
             author and book names; 4) commas inside quotation marks after an article;
@@ -162,9 +174,13 @@
     {# ---- CE (offerings) ---- #}
     <div data-types="seminar reading_group" class="space-y-1">
       {% include "events/_proposal_field.html" with field=form.offers_ce %}
-      <p class="text-xs text-base-content/50">If yes, apply to the Greater Pittsburgh
-        Psychological Association (GPPA) for APA-accredited CE credits and email the
-        Programming Committee your approval. Contact Diana Cuello with questions.</p>
+      <p class="text-xs text-base-content/50">Note: If interested, you will need to
+        apply to the Greater Pittsburgh Psychological Association (GPPA) for APA
+        Accredited Continuing Education Credits for your proposal. We request that you
+        email the program committee with your email of approval from GPPA by May 15th.
+        Not all proposals will be suitable for CEs and the choice to apply lies
+        entirely with individual instructors. If you have questions about how to offer
+        CE credits, please contact Diana Cuello, program committee convener.</p>
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-2 border-t border-base-300/60 pt-5">

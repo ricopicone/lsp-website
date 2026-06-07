@@ -147,11 +147,7 @@ class EventProposalForm(forms.ModelForm):
         self.fields["proposed_datetime"].input_formats = ["%Y-%m-%dT%H:%M"]
         self.fields["proposed_datetime"].label = "Proposed date & time (Pacific)"
 
-        self.fields["description"].help_text = (
-            "≈250 words. Introduce the central focus and topics, with a clear "
-            "rationale for how you engage Freudian and Lacanian clinical technique "
-            "and theory, plus the format (discussion, lecture, presentations, …)."
-        )
+        self.fields["description"].help_text = ""  # guidance shown above the field
 
         self.fields["faculty"].required = False
         self.fields["faculty"].queryset = User.objects.filter(
