@@ -7,6 +7,38 @@
     <p class="text-base-content/60">Every group you're part of or have been part of—cartels, committees, seminars, working groups, reading groups—and the events you're registered for.</p>
   </header>
 
+  {% if calendar_feed_url and has_any %}
+  <section class="rounded-lg border border-base-300/50 bg-base-200/30 p-4">
+    <div class="sm:flex sm:items-start sm:justify-between gap-4">
+      <div class="space-y-1 min-w-0">
+        <h2 class="font-medium flex items-center gap-2">
+          <svg class="size-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          My Calendar
+        </h2>
+        <p class="text-sm text-base-content/60">Subscribe to keep every group meeting and registered event in your own calendar app—Google Calendar, Apple Calendar, Outlook. It stays up to date automatically.</p>
+      </div>
+      <div class="mt-3 sm:mt-0 shrink-0 flex items-center gap-2">
+        <a href="{{ webcal_url }}" class="btn btn-primary btn-sm">Subscribe</a>
+        <button type="button" class="btn btn-ghost btn-sm" data-copy-feed="{{ calendar_feed_url }}">Copy link</button>
+      </div>
+    </div>
+    <p class="text-xs text-base-content/45 mt-2">Keep this link private—it's tied to your account. <a href="{{ calendar_feed_url }}" class="link link-hover">Download .ics</a></p>
+  </section>
+  <script>
+    (function () {
+      var btn = document.querySelector('[data-copy-feed]');
+      if (!btn || !navigator.clipboard) return;
+      btn.addEventListener('click', function () {
+        navigator.clipboard.writeText(btn.getAttribute('data-copy-feed')).then(function () {
+          var prev = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(function () { btn.textContent = prev; }, 1500);
+        });
+      });
+    })();
+  </script>
+  {% endif %}
+
   {% if not has_any %}
   <div class="rounded-lg border border-base-300/50 p-8 text-center space-y-3">
     <p class="text-base-content/60">You're not part of any groups or events yet.</p>

@@ -798,6 +798,41 @@ def test_ical_feeds(client):
     assert client.get(reverse("workgroups:my_calendar_ics", args=["bogus"])).status_code == 404
 
 
+def test_my_calendar_feed_includes_registered_events():
+    """The personal feed folds in the events the member is registered for —
+    an all-day span when the event has no sessions."""
+    from registrations.models import Registration
+
+    u = _user("cal@x.test")
+    u.profile.calendar_token = "cal-tok"
+    u.profile.save()
+    committee = Committee.objects.create(name="Prog Cal", slug="prog-cal")
+    ev, tier = _committee_event(
+        committee, title="Day of Assembly", slug="doa-cal",
+        start=datetime.date(2099, 5, 1), end=datetime.date(2099, 5, 2),
+    )
+    _register(u, ev, tier, Registration.Status.PAID)
+    from django.test import Client
+    body = Client().get(
+        reverse("workgroups:my_calendar_ics", args=["cal-tok"])
+    ).content
+    assert b"Day of Assembly" in body
+    assert b"DTSTART;VALUE=DATE:20990501" in body
+    assert b"DTEND;VALUE=DATE:20990503" in body          # exclusive end (+1 day)
+
+
+def test_my_groups_page_shows_calendar_subscribe(client):
+    u = _user("sub@x.test")
+    wg = _wg(name="Subscribe Cartel")
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=u, start_date=datetime.date(2026, 1, 1)
+    )
+    client.force_login(u)
+    resp = client.get(reverse("workgroups:mine"))
+    assert b"My Calendar" in resp.content
+    assert b"webcal://" in resp.content                   # one-click subscribe link
+
+
 # ---- Collaborative working documents (Work tab) ------------------------
 
 def _member_of(wg, email="docmember@x.test"):

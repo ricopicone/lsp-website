@@ -3,6 +3,8 @@ group kind renders through."""
 
 from __future__ import annotations
 
+import re
+
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
@@ -100,6 +102,18 @@ def my_groups_view(request):
     events = my_events(request.user, {r.workgroup.id for r in rows})
     current = [r for r in rows if r.is_current]
     past = [r for r in rows if not r.is_current]
+
+    # Personal calendar subscription — a token-authed feed of every group
+    # meeting + registered event. Don't mint a token while impersonating
+    # (we're only viewing as this member, not acting as them).
+    calendar_feed_url = webcal_url = None
+    if not getattr(request, "impersonator", None):
+        token = _ensure_calendar_token(request.user)
+        calendar_feed_url = request.build_absolute_uri(
+            reverse("workgroups:my_calendar_ics", args=[token])
+        )
+        webcal_url = re.sub(r"^https?://", "webcal://", calendar_feed_url)
+
     return render(
         request,
         "workgroups/my_groups.html",
@@ -109,6 +123,8 @@ def my_groups_view(request):
             "upcoming_events": [e for e in events if e.is_upcoming],
             "past_events": [e for e in events if not e.is_upcoming],
             "has_any": bool(rows) or bool(events),
+            "calendar_feed_url": calendar_feed_url,
+            "webcal_url": webcal_url,
         },
     )
 
@@ -1025,13 +1041,13 @@ def _calendar_feed_url(request, wg):
     return None
 
 
-def _ics_response(name, meetings, host):
+def _ics_response(name, meetings, host, entries=()):
     from django.http import HttpResponse
 
     from .icalendar import build_ics
 
     resp = HttpResponse(
-        build_ics(name, meetings, host=host),
+        build_ics(name, meetings, host=host, entries=entries),
         content_type="text/calendar; charset=utf-8",
     )
     resp["Content-Disposition"] = 'inline; filename="lsp.ics"'
@@ -1061,8 +1077,66 @@ def workgroup_calendar_ics(request, slug):
     return _ics_response(wg.name, _ics_window(wg.meetings), request.get_host())
 
 
+def _registered_event_entries(request, user):
+    """Normalized VEVENT entries for the events ``user`` is registered for
+    (paid / comped) — their sessions if scheduled, else an all-day span over
+    the event's dates. Mirrors the 90-day trailing window of the meeting feed
+    so a subscription stays a manageable size."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from registrations.models import Registration
+
+    now = timezone.now()
+    cutoff = now - timedelta(days=90)
+    regs = (
+        Registration.objects
+        .filter(
+            user=user,
+            status__in=(Registration.Status.PAID, Registration.Status.COMPED),
+        )
+        .select_related("event")
+    )
+    entries: list[dict] = []
+    seen: set[int] = set()
+    for r in regs:
+        ev = r.event
+        if ev is None or ev.id in seen:
+            continue
+        seen.add(ev.id)
+        url = request.build_absolute_uri(reverse("events:detail", args=[ev.slug]))
+        sessions = list(ev.sessions.filter(start_at__gte=cutoff).order_by("start_at"))
+        if sessions:
+            for s in sessions:
+                summary = ev.title if not s.title else f"{ev.title} — {s.title}"
+                entries.append({
+                    "uid": f"event-session-{s.pk}",
+                    "dtstamp": now,
+                    "summary": summary,
+                    "start": s.start_at,
+                    "end": s.end_at,
+                    "location": s.location,
+                    "description": ev.access_info,
+                    "url": url,
+                })
+        elif ev.end_date and ev.end_date >= cutoff.date():
+            entries.append({
+                "uid": f"event-{ev.pk}",
+                "dtstamp": now,
+                "summary": ev.title,
+                "start": ev.start_date,
+                "end": ev.end_date,
+                "all_day": True,
+                "description": ev.access_info,
+                "url": url,
+            })
+    return entries
+
+
 def my_calendar_ics(request, token):
-    """Personal iCal feed: every meeting of every group the token's owner is in."""
+    """Personal iCal feed: every meeting of every group the token's owner is in,
+    plus the events they're registered for (sessions / Days of Assembly / …)."""
     from accounts.models import Profile
 
     profile = Profile.objects.filter(calendar_token=token).first() if token else None
@@ -1074,7 +1148,8 @@ def my_calendar_ics(request, token):
         if wg.is_member(user)
     ]
     meetings = _ics_window(WorkgroupMeeting.objects.filter(workgroup_id__in=wg_ids))
-    return _ics_response("LSP — my meetings", meetings, request.get_host())
+    entries = _registered_event_entries(request, user)
+    return _ics_response("LSP — my calendar", meetings, request.get_host(), entries)
 
 
 # --- Collaborative working documents (Work tab) -----------------------------
