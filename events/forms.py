@@ -108,7 +108,7 @@ class EventProposalForm(forms.ModelForm):
         choices=[("1", "First"), ("2", "Second"), ("3", "Third"),
                  ("4", "Fourth"), ("-1", "Last")],
         widget=forms.CheckboxSelectMultiple,
-        help_text="Monthly only — e.g. First + Third = the 1st and 3rd of each month.",
+        help_text="e.g. First + Third = the 1st and 3rd of each month.",
     )
 
     class Meta:
@@ -122,7 +122,6 @@ class EventProposalForm(forms.ModelForm):
             "fee_amount", "fee_sliding_min", "fee_sliding_max", "tuition_covers",
             "offers_ce",
             "sched_frequency", "sched_start_time", "sched_end_time",
-            "sched_location",
             "speaker_arrangement", "honoraria_estimate",
         )
         widgets = {
@@ -189,7 +188,6 @@ class EventProposalForm(forms.ModelForm):
         )
         self.fields["sched_start_time"].label = "Start time"
         self.fields["sched_end_time"].label = "End time"
-        self.fields["sched_location"].label = "Room / place"
         self.fields["contact"].label = "Contact email"
         self.fields["contact"].help_text = (
             "An additional contact for this proposal, besides your own account email."

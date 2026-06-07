@@ -941,7 +941,6 @@ class EventProposal(models.Model):
     sched_week_positions = models.CharField(max_length=20, blank=True)
     sched_start_time = models.TimeField(null=True, blank=True)
     sched_end_time = models.TimeField(null=True, blank=True)
-    sched_location = models.CharField(max_length=255, blank=True)
 
     # ---- Special-event fields ----
     date_tbd = models.BooleanField(
@@ -1038,7 +1037,7 @@ class EventProposal(models.Model):
             week_positions=self.sched_week_positions or "1",
             start_date=self.start_date, end_date=self.end_date,
             start_time=self.sched_start_time, end_time=self.sched_end_time,
-            location=self.sched_location, created_by=reviewer,
+            location=self.location, created_by=reviewer,  # the event's own venue
         )
         series.generate()
 

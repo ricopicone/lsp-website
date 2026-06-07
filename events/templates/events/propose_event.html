@@ -32,9 +32,7 @@
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.title %}</div>
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.description %}</div>
 
-    {# ---- Schedule ---- #}
-    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.start_date %}</div>
-    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.end_date %}</div>
+    {# ---- Special-event date (offering term dates move down by the schedule) ---- #}
     <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.date_tbd %}</div>
     <div data-types="special_event" id="datetime-row">{% include "events/_proposal_field.html" with field=form.proposed_datetime %}</div>
 
@@ -94,6 +92,10 @@
     <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.speaker_arrangement %}</div>
     <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.honoraria_estimate %}</div>
 
+    {# ---- Term dates (offerings) — sit just above the meeting schedule ---- #}
+    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.start_date %}</div>
+    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.end_date %}</div>
+
     {# ---- Meeting schedule (seminars & reading groups) ---- #}
     <div data-types="seminar reading_group" data-series-scheduler
          class="rounded-lg border border-base-300/60 p-3 space-y-3">
@@ -115,7 +117,6 @@
           {% include "events/_proposal_field.html" with field=form.sched_start_time %}
           {% include "events/_proposal_field.html" with field=form.sched_end_time %}
         </div>
-        {% include "events/_proposal_field.html" with field=form.sched_location %}
         <p class="text-xs text-base-content/50">Meetings recur across the term (the
           start–end dates above). You can fine-tune individual occurrences in the
           group's Schedule tab after approval.</p>
