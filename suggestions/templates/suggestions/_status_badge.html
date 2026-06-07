@@ -1,0 +1,6 @@
+{% if s.status == "new" %}<span class="badge badge-info badge-sm">New</span>
+{% elif s.status == "acknowledged" %}<span class="badge badge-ghost badge-sm">Acknowledged</span>
+{% elif s.status == "planned" %}<span class="badge badge-primary badge-sm">Planned</span>
+{% elif s.status == "in_progress" %}<span class="badge badge-warning badge-sm">In progress</span>
+{% elif s.status == "done" %}<span class="badge badge-success badge-sm">Done</span>
+{% else %}<span class="badge badge-ghost badge-sm opacity-70">Declined</span>{% endif %}

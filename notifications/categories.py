@@ -58,6 +58,10 @@ class Category(models.TextChoices):
     GROUP_DECISION = "group_decision", _("Group decisions & minutes")
     GROUP_RECORDING = "group_recording", _("Meeting recordings ready")
 
+    # --- Suggestions -----------------------------------------------------
+    SUGGESTION_FILED = "suggestion_filed", _("Suggestion review")
+    SUGGESTION_UPDATE = "suggestion_update", _("Updates on your suggestions")
+
     # --- Account ---------------------------------------------------------
     ACCOUNT_ADVISOR = "account_advisor", _("Advisor assignments")
     ACCOUNT_SECURITY = "account_security", _("Account & security")
@@ -81,6 +85,7 @@ SECTION_PAYMENTS = _("Registration & payments")
 SECTION_CARTELS = _("Cartels")
 SECTION_ADMISSIONS = _("Admissions")
 SECTION_GROUPS = _("Groups")
+SECTION_SUGGESTIONS = _("Suggestions")
 SECTION_ACCOUNT = _("Account")
 
 SECTION_ORDER = [
@@ -89,6 +94,7 @@ SECTION_ORDER = [
     SECTION_CARTELS,
     SECTION_ADMISSIONS,
     SECTION_GROUPS,
+    SECTION_SUGGESTIONS,
     SECTION_ACCOUNT,
 ]
 
@@ -191,6 +197,16 @@ CATEGORY_META: dict[str, CategoryMeta] = {
         SECTION_GROUPS, _("Recordings ready"),
         _("When a meeting recording becomes available."),
         default_email=_E.OFF,
+    ),
+    # Suggestions.
+    _C.SUGGESTION_FILED: _M(
+        SECTION_SUGGESTIONS, _("Suggestion review"),
+        _("For site staff: a member filed a suggestion to triage."),
+        default_email=_E.OFF,
+    ),
+    _C.SUGGESTION_UPDATE: _M(
+        SECTION_SUGGESTIONS, _("Updates on your suggestions"),
+        _("When staff respond to or change the status of a suggestion you filed."),
     ),
     # Account.
     _C.ACCOUNT_ADVISOR: _M(

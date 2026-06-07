@@ -25,6 +25,7 @@ from content import views as _content_views
 from core import staff as _staff_views
 from events import views as _event_views
 from payments import views as _payment_views
+from suggestions import views as _suggestion_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -86,6 +87,7 @@ urlpatterns = [
          name="web_coordinator_admin"),
     path("admin-tools/web-developer/", _staff_views.web_developer_admin,
          name="web_developer_admin"),
+    path("admin-tools/suggestions/", _suggestion_views.triage, name="suggestions_triage"),
     path("admin-tools/aphorisms/", _staff_views.aphorism_list, name="staff_aphorisms"),
     path("admin-tools/aphorisms/new/", _staff_views.aphorism_create, name="staff_aphorism_new"),
     path("admin-tools/aphorisms/<int:pk>/edit/", _staff_views.aphorism_edit,
@@ -104,6 +106,7 @@ urlpatterns = [
     path("notifications/", include("notifications.urls")),
     path("groups/", include("workgroups.urls")),
     path("cartels/", include("cartels.urls")),
+    path("suggestions/", include("suggestions.urls")),
     path("working-groups/", include("workinggroups.urls")),
     path("committees/", include("committees.urls")),
     path("", include("admissions.urls")),

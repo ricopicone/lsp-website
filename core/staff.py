@@ -149,6 +149,20 @@ def _panels_for(user) -> list[dict]:
             "blurb": "Technical operations: the Django back office, deploys, internals.",
             "url": reverse("web_developer_admin"),
         })
+    if user.is_superuser or has_staff_role(
+        user, StaffRole.WEB_COORDINATOR, StaffRole.WEB_DEVELOPER
+    ):
+        from suggestions.models import Suggestion
+        panels.append({
+            "title": "Suggestions",
+            "blurb": "Member suggestions for the site — triage and export as "
+                     "Claude Code briefs.",
+            "url": reverse("suggestions_triage"),
+            "count": Suggestion.objects.filter(
+                status__in=Suggestion.ACTIONABLE_STATUSES
+            ).count(),
+            "count_label": "open",
+        })
 
     if user.is_staff:
         panels.append({

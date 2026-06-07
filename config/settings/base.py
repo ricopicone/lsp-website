@@ -69,6 +69,7 @@ LOCAL_APPS = [
     "cartels",
     "workinggroups",
     "video",
+    "suggestions",
     "core",
 ]
 
@@ -107,6 +108,7 @@ TEMPLATES = [
                 "core.context_processors.survey_nudge",
                 "core.context_processors.preview_tour",
                 "notifications.context_processors.bell",
+                "suggestions.context_processors.widget",
             ],
         },
     },
@@ -298,6 +300,12 @@ PREVIEW_TOUR_ENABLED = env.bool("DJANGO_PREVIEW_TOUR_ENABLED", default=False)
 # allowlist (mirrors EMAIL_CHANGE_PUBLIC). Flip on to broaden the preview
 # beyond the named cohort.
 PREVIEW_TOUR_PUBLIC = env.bool("DJANGO_PREVIEW_TOUR_PUBLIC", default=False)
+
+# Member suggestion box: when True, members see the floating "Suggest a change"
+# widget and the /suggestions/ form, and may file suggestions; staff triage them
+# at /admin-tools/suggestions/. Off until launch (like SURVEY_ENABLED). Flip via
+# DJANGO_SUGGESTIONS_ENABLED.
+SUGGESTIONS_ENABLED = env.bool("DJANGO_SUGGESTIONS_ENABLED", default=False)
 PREVIEW_TOUR_ALLOWLIST = env.list(
     "DJANGO_PREVIEW_TOUR_ALLOWLIST", default=["dr@ricopic.one"]
 )

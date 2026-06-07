@@ -1,0 +1,72 @@
+{% load static %}
+{% comment %}
+Floating "Suggest a change" widget. Gated by show_suggestion_widget
+(suggestions.context_processors.widget): enabled feature + signed-in member.
+Fields are hand-written (not a bound form) so the widget needs nothing in
+context; names match the Suggestion model / SuggestionForm.
+{% endcomment %}
+<button type="button" data-suggest-open
+        class="btn btn-primary btn-sm fixed bottom-4 right-4 z-40 shadow-lg gap-1.5 print:hidden"
+        aria-label="Suggest a change to this page">
+  <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+  </svg>
+  Suggest
+</button>
+
+<dialog id="lsp-suggest-modal" class="modal">
+  <div class="modal-box max-w-lg">
+    <h3 class="font-serif text-xl">Suggest a change</h3>
+    <p class="mt-1 text-sm text-base-content/60" data-suggest-page-label></p>
+
+    <form action="{% url 'suggestions:submit' %}" method="post" enctype="multipart/form-data"
+          data-suggest-form class="mt-4 space-y-4">
+      {% csrf_token %}
+      <input type="hidden" name="page_url" data-suggest-page-url>
+      <input type="hidden" name="page_title" data-suggest-page-title>
+      <input type="hidden" name="context" data-suggest-context>
+
+      <div class="space-y-1">
+        <label for="lsp-suggest-kind" class="block text-sm font-medium">What kind of change?</label>
+        <select id="lsp-suggest-kind" name="kind" class="select select-bordered w-full">
+          <option value="bug">Something's broken</option>
+          <option value="content">Wording / typo / content</option>
+          <option value="feature">New feature or idea</option>
+          <option value="design">Design / layout</option>
+          <option value="other" selected>Something else</option>
+        </select>
+      </div>
+
+      <div class="space-y-1">
+        <label for="lsp-suggest-title" class="block text-sm font-medium">Summary</label>
+        <input id="lsp-suggest-title" name="title" maxlength="200" required
+               class="input input-bordered w-full" placeholder="A short summary">
+      </div>
+
+      <div class="space-y-1">
+        <label for="lsp-suggest-body" class="block text-sm font-medium">Details</label>
+        <textarea id="lsp-suggest-body" name="body" rows="4" required
+                  class="textarea textarea-bordered w-full"
+                  placeholder="What would you change? For a bug, what did you expect instead?"></textarea>
+      </div>
+
+      <div class="space-y-1">
+        <label for="lsp-suggest-shot" class="block text-sm font-medium">
+          Screenshot <span class="text-base-content/50">(optional)</span></label>
+        <input id="lsp-suggest-shot" name="screenshot" type="file" accept="image/*"
+               class="file-input file-input-bordered w-full">
+      </div>
+
+      <p class="hidden text-error text-sm" data-suggest-error></p>
+
+      <div class="flex items-center justify-end gap-2 border-t border-base-300/60 pt-4">
+        <button type="button" class="btn btn-ghost" data-suggest-cancel>Cancel</button>
+        <button type="submit" class="btn btn-primary" data-suggest-submit>Send suggestion</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button aria-label="Close">close</button></form>
+</dialog>
+
+<script src="{% static 'suggestions/widget.js' %}" defer></script>

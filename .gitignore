@@ -37,3 +37,6 @@ htmlcov/
 node_modules/
 /static/css/site.css
 /private-media/
+
+# Exported member-suggestion briefs (handed to Claude Code sessions locally)
+/suggestions-briefs/
