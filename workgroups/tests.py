@@ -1566,3 +1566,238 @@ def test_minutes_save_returns_to_minutes_tab(client):
     assert "tab=minutes" in resp.url            # returns to the record, not Schedule
     mt.refresh_from_db()
     assert mt.minutes == "Recorded here."
+
+
+# ---- "My Groups" (current + former, all kinds) -------------------------
+
+from workgroups.membership import my_events, my_groups  # noqa: E402
+
+
+def _offering_term(wg, *, start, end):
+    """Attach a published term Event (with an all-audience tier) to ``wg``."""
+    from decimal import Decimal
+
+    from events.models import Audience, Event, PriceTier
+
+    ev = Event.objects.create(
+        title=wg.name, slug=f"{wg.slug}-{start.year}",
+        event_type=Event.Type.SEMINAR,
+        start_date=start, end_date=end,
+        published=True, status=Event.Status.OPEN, workgroup=wg,
+    )
+    tier = PriceTier.objects.create(
+        event=ev, audience=Audience.ALL, base_amount=Decimal("10")
+    )
+    return ev, tier
+
+
+def _register(user, event, tier, status):
+    from decimal import Decimal
+
+    from registrations.models import Registration
+
+    return Registration.objects.create(
+        user=user, event=event, price_tier=tier,
+        quoted_amount=Decimal("10"), status=status,
+    )
+
+
+def test_my_groups_splits_current_and_former_stored_memberships():
+    u = _user("mg@x.test")
+    current = _wg(name="Live Cartel")
+    former = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="Old WG")
+    WorkgroupMembership.objects.create(
+        workgroup=current, user=u, start_date=datetime.date(2026, 1, 1),
+        role=WorkgroupMembership.Role.CHAIR,
+    )
+    WorkgroupMembership.objects.create(
+        workgroup=former, user=u,
+        start_date=datetime.date(2023, 1, 1), end_date=datetime.date(2024, 1, 1),
+    )
+    by_id = {g.workgroup.id: g for g in my_groups(u)}
+    assert by_id[current.id].is_current is True
+    assert by_id[current.id].is_lead is True            # CHAIR is a lead role
+    assert by_id[former.id].is_current is False
+    assert by_id[former.id].ended_on == datetime.date(2024, 1, 1)
+
+
+def test_my_groups_archived_group_is_former_not_current():
+    u = _user("arch@x.test")
+    wg = _wg(name="Dissolved")
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=u, start_date=datetime.date(2026, 1, 1)
+    )
+    wg.archive()
+    g = my_groups(u)[0]
+    assert g.is_current is False                         # archived → not active
+    assert g.status_note == "Archived"
+
+
+def test_my_groups_offering_current_term_registration_is_current():
+    u = _user("stud@x.test")
+    wg = Workgroup.objects.create(kind=Workgroup.Kind.SEMINAR, name="Seminar XI")
+    today = datetime.date.today()
+    ev, tier = _offering_term(
+        wg, start=today - datetime.timedelta(days=10),
+        end=today + datetime.timedelta(days=30),
+    )
+    from registrations.models import Registration
+    _register(u, ev, tier, Registration.Status.PAID)
+    g = my_groups(u)[0]
+    assert g.is_current is True
+    assert g.via_registration is True
+    assert g.role_label == "Participant"
+
+
+def test_my_groups_offering_past_term_registration_is_former():
+    u = _user("alum@x.test")
+    wg = Workgroup.objects.create(kind=Workgroup.Kind.SEMINAR, name="Seminar X")
+    ev, tier = _offering_term(
+        wg, start=datetime.date(2022, 9, 1), end=datetime.date(2023, 6, 1),
+    )
+    from registrations.models import Registration
+    _register(u, ev, tier, Registration.Status.PAID)
+    g = my_groups(u)[0]
+    assert g.is_current is False                         # no current term
+    assert g.status_note == "Past term"
+
+
+def _committee_event(committee, *, title, slug, start, end, type_=None):
+    from decimal import Decimal
+
+    from events.models import Audience, Event, PriceTier
+
+    ev = Event.objects.create(
+        title=title, slug=slug,
+        event_type=type_ or Event.Type.DAY_OF_ASSEMBLY,
+        start_date=start, end_date=end,
+        published=True, status=Event.Status.OPEN, workgroup=committee.workgroup,
+    )
+    tier = PriceTier.objects.create(
+        event=ev, audience=Audience.ALL, base_amount=Decimal("10")
+    )
+    return ev, tier
+
+
+def test_my_groups_committee_event_registration_does_not_grant_membership():
+    """Registering for a committee-organized event (a Day of Assembly) must not
+    add the organizing committee to your groups — it surfaces under Events."""
+    u = _user("attendee@x.test")
+    committee = Committee.objects.create(name="Programming", slug="programming")
+    from registrations.models import Registration
+    ev, tier = _committee_event(
+        committee, title="Day of Assembly", slug="doa-2026",
+        start=datetime.date(2026, 5, 1), end=datetime.date(2026, 5, 2),
+    )
+    _register(u, ev, tier, Registration.Status.PAID)
+    group_ids = {g.workgroup.id for g in my_groups(u)}
+    assert committee.workgroup.id not in group_ids       # committee not a group
+    titles = [e.title for e in my_events(u, group_ids)]
+    assert "Day of Assembly" in titles                   # surfaces as an event
+
+
+def test_my_events_excludes_seminar_already_shown_as_group():
+    """A seminar registration shows as a group, not double-listed as an event."""
+    u = _user("dual@x.test")
+    wg = Workgroup.objects.create(kind=Workgroup.Kind.SEMINAR, name="Seminar XII")
+    today = datetime.date.today()
+    ev, tier = _offering_term(
+        wg, start=today - datetime.timedelta(days=5),
+        end=today + datetime.timedelta(days=30),
+    )
+    from registrations.models import Registration
+    _register(u, ev, tier, Registration.Status.PAID)
+    group_ids = {g.workgroup.id for g in my_groups(u)}
+    assert wg.id in group_ids                             # seminar is a group
+    assert my_events(u, group_ids) == []                 # not also an event
+
+
+def test_my_events_includes_awaiting_payment_with_nudge():
+    u = _user("owes@x.test")
+    committee = Committee.objects.create(name="PCx", slug="pcx")
+    today = datetime.date.today()
+    ev, tier = _committee_event(
+        committee, title="Special Talk", slug="special-talk",
+        start=today + datetime.timedelta(days=20),
+        end=today + datetime.timedelta(days=20),
+    )
+    from registrations.models import Registration
+    _register(u, ev, tier, Registration.Status.AWAITING_PAYMENT)
+    events = my_events(u, set())
+    assert len(events) == 1
+    assert events[0].needs_payment is True
+    assert events[0].is_upcoming is True
+
+
+def test_my_events_skips_stale_unpaid_past_event():
+    """An unpaid registration for an event that's already over is abandoned —
+    no nag."""
+    u = _user("stale@x.test")
+    committee = Committee.objects.create(name="PCy", slug="pcy")
+    ev, tier = _committee_event(
+        committee, title="Old Talk", slug="old-talk",
+        start=datetime.date(2020, 1, 1), end=datetime.date(2020, 1, 1),
+    )
+    from registrations.models import Registration
+    _register(u, ev, tier, Registration.Status.AWAITING_PAYMENT)
+    assert my_events(u, set()) == []
+
+
+def test_my_events_splits_upcoming_and_past():
+    u = _user("goer@x.test")
+    committee = Committee.objects.create(name="Prog", slug="prog")
+    today = datetime.date.today()
+    soon, tier1 = _committee_event(
+        committee, title="Working Day Soon", slug="wd-soon",
+        start=today + datetime.timedelta(days=10),
+        end=today + datetime.timedelta(days=10),
+        type_=None,
+    )
+    old, tier2 = _committee_event(
+        committee, title="Working Day Past", slug="wd-past",
+        start=datetime.date(2020, 1, 1), end=datetime.date(2020, 1, 1),
+    )
+    from registrations.models import Registration
+    _register(u, soon, tier1, Registration.Status.PAID)
+    _register(u, old, tier2, Registration.Status.COMPED)
+    events = my_events(u, set())
+    upcoming = [e for e in events if e.is_upcoming]
+    past = [e for e in events if not e.is_upcoming]
+    assert [e.title for e in upcoming] == ["Working Day Soon"]
+    assert [e.title for e in past] == ["Working Day Past"]
+    assert past[0].is_comped is True
+
+
+def test_my_groups_role_derived_membership_is_current():
+    u = _user("analyst@x.test", role=Profile.Role.ANALYST)
+    wg = Workgroup.objects.create(
+        kind=Workgroup.Kind.COMMITTEE, name="Analyst Circle (test)",
+        auto_member_role=Profile.Role.ANALYST,
+    )
+    by_id = {g.workgroup.id: g for g in my_groups(u)}
+    assert wg.id in by_id
+    assert by_id[wg.id].is_current is True
+    assert by_id[wg.id].role_label == "Member"
+
+
+def test_my_groups_page_renders_and_requires_login(client):
+    u = _user("page@x.test")
+    wg = _wg(name="My Visible Cartel")
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=u, start_date=datetime.date(2026, 1, 1)
+    )
+    committee = Committee.objects.create(name="PC", slug="pc")
+    ev, tier = _committee_event(
+        committee, title="Annual Day of Assembly", slug="ada",
+        start=datetime.date(2030, 5, 1), end=datetime.date(2030, 5, 1),
+    )
+    from registrations.models import Registration
+    _register(u, ev, tier, Registration.Status.PAID)
+    url = reverse("workgroups:mine")
+    assert client.get(url).status_code == 302           # anonymous → login
+    client.force_login(u)
+    resp = client.get(url)
+    assert resp.status_code == 200
+    assert b"My Visible Cartel" in resp.content          # the group
+    assert b"Annual Day of Assembly" in resp.content     # the standalone event
+    assert b"Groups" in resp.content and b"Events" in resp.content

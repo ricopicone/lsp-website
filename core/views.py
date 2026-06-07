@@ -57,27 +57,11 @@ def landing(request):
         .count()
     )
 
-    user_registrations_url = None
     dues_period_unpaid = None
     dues_amount_owed = None
     if request.user.is_authenticated:
         from payments.dues import is_dues_obligated, user_paid_for_period
         from payments.models import DuesPeriod
-        from registrations.models import Registration
-
-        latest = (
-            Registration.objects.filter(user=request.user)
-            .exclude(status__in=(
-                Registration.Status.CANCELLED,
-                Registration.Status.REFUNDED,
-            ))
-            .order_by("-created_at")
-            .first()
-        )
-        if latest is not None:
-            user_registrations_url = reverse(
-                "registrations:confirm", args=[latest.id]
-            )
 
         # Dues banner for obligated unpaid members.
         current_period = DuesPeriod.current()
@@ -99,7 +83,6 @@ def landing(request):
             "directory_count": directory_count,
             "analyst_count": analyst_count,
             "seminar_count": seminar_count,
-            "user_registrations_url": user_registrations_url,
             "dues_period_unpaid": dues_period_unpaid,
             "dues_amount_owed": dues_amount_owed,
         },

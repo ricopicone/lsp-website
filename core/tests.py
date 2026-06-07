@@ -155,25 +155,6 @@ def test_landing_page_skips_draft_events(client, draft_event_with_sessions):
     assert b"Draft Event" not in response.content
 
 
-def test_landing_page_logged_in_shows_recent_registration_link(
-    client, regular_user, event_with_sessions,
-):
-    from decimal import Decimal
-
-    from events.models import Audience, PriceTier
-    from registrations.models import Registration
-    tier = PriceTier.objects.create(
-        event=event_with_sessions, audience=Audience.ALL,
-        base_amount=Decimal("100.00"),
-    )
-    Registration.objects.create(
-        user=regular_user, event=event_with_sessions, price_tier=tier,
-        quoted_amount=Decimal("100.00"),
-        status=Registration.Status.AWAITING_PAYMENT,
-    )
-    client.force_login(regular_user)
-    response = client.get(reverse("core:landing"))
-    assert b"View your most recent registration" in response.content
 
 
 # ---- Public events list -----------------------------------------------

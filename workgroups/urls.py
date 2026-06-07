@@ -18,6 +18,7 @@ urlpatterns = [
          name="kind_working_groups"),
     path("reading-groups/", views.workgroup_kind_list, {"kind": "reading_group"},
          name="kind_reading_groups"),
+    path("mine/", views.my_groups_view, name="mine"),
     path("my-meetings/<str:token>.ics", views.my_calendar_ics, name="my_calendar_ics"),
     path("<slug:slug>/", views.workgroup_detail, name="detail"),
     path("<slug:slug>/join/", views.workgroup_join, name="join"),

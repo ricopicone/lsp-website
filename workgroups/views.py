@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST
 from works.models import Work
 
 from . import notifications as notify_groups
+from .membership import my_events, my_groups
 from .models import (
     Visibility,
     Workgroup,
@@ -69,6 +70,47 @@ def workgroup_list(request):
         for kind, name, label, blurb in KIND_META
     ]
     return render(request, "workgroups/list.html", {"kinds": kinds})
+
+
+def _my_groups_by_kind(rows):
+    """Bucket :class:`MyGroup` rows by kind in ``KIND_META`` order; within a
+    kind, by academic year (latest first) then name. Returns a list of
+    ``(plural_label, [rows])``."""
+    buckets: dict = {}
+    for r in rows:
+        buckets.setdefault(r.kind, []).append(r)
+    out = []
+    for kind, _name, label, _blurb in KIND_META:
+        items = buckets.get(kind)
+        if not items:
+            continue
+        items.sort(key=lambda r: r.name.lower())
+        items.sort(key=lambda r: r.academic_year or "", reverse=True)
+        out.append((label, items))
+    return out
+
+
+@login_required
+def my_groups_view(request):
+    """'My Groups and Events' — the member's current and former groups of every
+    kind, plus the standalone events (Days of Assembly, Working Days, special
+    events) they're registered for but that aren't tied to one of those groups.
+    See :func:`workgroups.membership.my_groups` / :func:`~.my_events`."""
+    rows = my_groups(request.user)
+    events = my_events(request.user, {r.workgroup.id for r in rows})
+    current = [r for r in rows if r.is_current]
+    past = [r for r in rows if not r.is_current]
+    return render(
+        request,
+        "workgroups/my_groups.html",
+        {
+            "current_by_kind": _my_groups_by_kind(current),
+            "past_by_kind": _my_groups_by_kind(past),
+            "upcoming_events": [e for e in events if e.is_upcoming],
+            "past_events": [e for e in events if not e.is_upcoming],
+            "has_any": bool(rows) or bool(events),
+        },
+    )
 
 
 def _group_by_academic_year(groups):

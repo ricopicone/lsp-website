@@ -79,9 +79,8 @@ sections (alerts, "Coming up") never leave an orphaned gap.
   </header>
 
   {# ===================== Member alerts (functional) ===================== #}
-  {% if dues_period_unpaid or user_registrations_url %}
+  {% if dues_period_unpaid %}
   <div class="space-y-3 mt-8">
-    {% if dues_period_unpaid %}
     <div role="alert" class="alert alert-warning">
       <span>
         Your <strong>{{ dues_period_unpaid.name }}</strong> dues
@@ -89,12 +88,6 @@ sections (alerts, "Coming up") never leave an orphaned gap.
         haven't been paid yet—<a href="{% url 'dues' %}" class="link">pay now</a>.
       </span>
     </div>
-    {% endif %}
-    {% if user_registrations_url %}
-    <div role="alert" class="alert alert-info">
-      <span>Welcome back. <a href="{{ user_registrations_url }}" class="link">View your most recent registration</a>.</span>
-    </div>
-    {% endif %}
   </div>
   {% endif %}
 
@@ -265,7 +258,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
       </nav>
 
       <nav class="space-y-3">
-        <div class="{{ lbl }}">People</div>
+        <div class="{{ lbl }}">Persons</div>
         <ul class="space-y-2 text-sm">
           <li><a href="{% url 'directory' %}" class="{{ lnk }}">Directory</a></li>
           <li><a href="{% url 'find_an_analyst' %}" class="{{ lnk }}">Find an Analyst</a></li>

@@ -78,11 +78,11 @@
             </ul>
           </div>
 
-          {# People #}
+          {# Persons #}
           <div class="dropdown dropdown-hover">
             <div tabindex="0" role="button"
                  class="px-3 py-1.5 rounded-md hover:bg-base-200 cursor-pointer flex items-center gap-1 {% if '/directory/' in cur or '/find-an-analyst/' in cur %}text-primary font-medium{% endif %}">
-              People
+              Persons
               <svg class="size-3 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
             </div>
             <ul tabindex="0" class="dropdown-content menu menu-sm z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-52">
@@ -149,8 +149,9 @@
             <li><a href="{% url 'workgroups:kind_committees' %}">Committees</a></li>
             <li><a href="{% url 'workgroups:kind_working_groups' %}">Working Groups</a></li>
             <li><a href="{% url 'workgroups:kind_reading_groups' %}">Reading Groups</a></li>
+            {% if user.is_authenticated %}<li><a href="{% url 'workgroups:mine' %}">My Groups &amp; Events</a></li>{% endif %}
 
-            <li class="menu-title">People</li>
+            <li class="menu-title">Persons</li>
             <li><a href="{% url 'directory' %}">Directory</a></li>
             <li><a href="{% url 'find_an_analyst' %}">Find an Analyst</a></li>
 
@@ -250,6 +251,7 @@
             {% if show_survey_nudge %}
             <li><a href="{% url 'intake_survey' %}">Finish Intake Survey</a></li>
             {% endif %}
+            <li><a href="{% url 'workgroups:mine' %}">My Groups &amp; Events</a></li>
             <li><a href="{% url 'works:mine' %}">My Works</a></li>
             {% if user.profile.is_listed %}
             <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">My Directory Page</a></li>

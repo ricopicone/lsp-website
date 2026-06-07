@@ -1,0 +1,14 @@
+{% comment %}A card on the "My Groups" page. Expects `r` (a
+workgroups.membership.MyGroup): the group plus the viewer's own standing —
+role and a current/past status note.{% endcomment %}
+<li class="rounded-lg border border-base-300/50 p-4 hover:bg-base-200/40">
+  <div class="flex items-start justify-between gap-2">
+    <a href="{{ r.url }}" class="font-medium link link-hover">{{ r.name }}</a>
+    <span class="badge badge-sm shrink-0 {% if r.is_lead %}badge-primary{% else %}badge-ghost{% endif %}">{{ r.role_label }}</span>
+  </div>
+  {% if r.academic_year or r.status_note %}
+  <p class="text-sm text-base-content/55 mt-1">
+    {{ r.academic_year }}{% if r.academic_year and r.status_note %} · {% endif %}{{ r.status_note }}
+  </p>
+  {% endif %}
+</li>
