@@ -1,0 +1,3 @@
+# Install at /etc/sudoers.d/lsp-deploy (root:root, 0440); validate with `visudo -c`.
+# Grants the deploy user exactly one privilege: run the nginx color-flip helper.
+ec2-user ALL=(root) NOPASSWD: /usr/local/bin/lsp-activate-color
