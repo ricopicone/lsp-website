@@ -31,6 +31,7 @@
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.event_type %}</div>
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.title %}</div>
     <div data-types="seminar reading_group special_event" class="space-y-1">
+      <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium">{{ form.description.label }}</label>
       <p class="text-xs text-base-content/60">Your description introduces the central
         focus and topics to be covered. It is also used by the Program Committee to
         assess the relevance of your proposal to the Mission of the School in
@@ -39,7 +40,8 @@
         rationale for how you are structuring your engagement with Freudian and
         Lacanian clinical technique and theory as well as an overview of the proposal
         format (open-ended discussion, lecture, presentations, etc.).</p>
-      {% include "events/_proposal_field.html" with field=form.description %}
+      {{ form.description }}
+      {% if form.description.errors %}<p class="text-error text-xs mt-1">{{ form.description.errors|join:", " }}</p>{% endif %}
     </div>
 
     {# ---- Special-event date (offering term dates move down by the schedule) ---- #}
@@ -148,12 +150,15 @@
 
     {# ---- Readings + style guide (all types) ---- #}
     <div data-types="seminar reading_group special_event" class="space-y-2">
+      <label for="{{ form.readings_text.id_for_label }}" class="block text-sm font-medium">{{ form.readings_text.label }}</label>
       <p class="text-xs text-base-content/60">Readings should include primary writings
         of Freud and/or Lacan. If you are selecting secondary source material, please
         make sure that it enhances and supports participants’ engagement with Freud and
         Lacan. If you plan to offer CE credits, you will need to include at least 3
         references published within the last 5 years.</p>
-      {% include "events/_proposal_field.html" with field=form.readings_text %}
+      {{ form.readings_text }}
+      {% if form.readings_text.help_text %}<p class="text-xs text-base-content/60">{{ form.readings_text.help_text }}</p>{% endif %}
+      {% if form.readings_text.errors %}<p class="text-error text-xs mt-1">{{ form.readings_text.errors|join:", " }}</p>{% endif %}
       <details class="rounded-lg border border-base-300/60 bg-base-200/40 p-3 text-xs text-base-content/70">
         <summary class="cursor-pointer font-medium text-base-content/80">Citation style</summary>
         <div class="mt-2 space-y-2">
