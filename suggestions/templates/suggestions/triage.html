@@ -1,0 +1,107 @@
+{% extends "core/base.html" %}
+{% block title %}Suggestions — Admin Tools{% endblock %}
+{% block content %}
+<div class="max-w-4xl space-y-6">
+  <header class="space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="font-serif text-3xl text-base-content">Suggestions</h1>
+      <a href="{% url 'admin_tools' %}" class="btn btn-ghost btn-sm">← Admin Tools</a>
+    </div>
+    <p class="text-base-content/70 text-sm">
+      Member suggestions for the site. {{ open_count }} open. Export a batch as
+      Claude Code briefs with
+      <code class="text-xs">uv run python manage.py export_suggestions</code>
+      (or the “Export to Claude Code brief” action in the Django admin).
+    </p>
+  </header>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  {# Filters #}
+  <form method="get" class="flex flex-wrap items-end gap-3">
+    <label class="space-y-1">
+      <span class="block text-xs font-medium text-base-content/60">Status</span>
+      <select name="status" class="select select-bordered select-sm">
+        <option value="">All</option>
+        <option value="open" {% if status_filter == "open" %}selected{% endif %}>Open</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="space-y-1">
+      <span class="block text-xs font-medium text-base-content/60">Kind</span>
+      <select name="kind" class="select select-bordered select-sm">
+        <option value="">All</option>
+        {% for value, label in kind_choices %}
+        <option value="{{ value }}" {% if kind_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn btn-sm">Filter</button>
+  </form>
+
+  {% if suggestions %}
+  <div class="space-y-4">
+    {% for s in suggestions %}
+    <div class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-3">
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div class="min-w-0 space-y-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-sm font-medium text-base-content">#{{ s.pk }} · {{ s.title }}</span>
+            <span class="badge badge-outline badge-sm">{{ s.get_kind_display }}</span>
+            {% include "suggestions/_status_badge.html" %}
+            {% if s.priority %}<span class="badge badge-sm badge-error/70">{{ s.get_priority_display }} priority</span>{% endif %}
+          </div>
+          <div class="text-xs text-base-content/55">
+            {{ s.submitted_by.get_full_name|default:s.submitted_by.email|default:"(unknown)" }}
+            · {{ s.created_at|date:"M j, Y" }}
+            {% if s.page_url %}· <a href="{{ s.page_url }}" class="link link-hover">{{ s.page_url }}</a>{% endif %}
+            {% if s.exported_at %}· <span class="text-base-content/40">exported {{ s.exported_at|date:"M j" }}</span>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% if s.body %}<p class="text-sm text-base-content/80 whitespace-pre-line">{{ s.body }}</p>{% endif %}
+      {% if s.screenshot %}
+      <a href="{% url 'suggestions:screenshot' s.pk %}" class="link link-primary text-xs" target="_blank" rel="noopener">View screenshot ↗</a>
+      {% endif %}
+
+      <form method="post" action="{% url 'suggestions_triage' %}?{{ request.GET.urlencode }}"
+            class="grid gap-2 sm:grid-cols-[auto_auto_1fr_auto] sm:items-end border-t border-base-300/50 pt-3">
+        {% csrf_token %}
+        <input type="hidden" name="pk" value="{{ s.pk }}">
+        <label class="space-y-1">
+          <span class="block text-xs text-base-content/60">Status</span>
+          <select name="status" class="select select-bordered select-sm">
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if s.status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="space-y-1">
+          <span class="block text-xs text-base-content/60">Priority</span>
+          <select name="priority" class="select select-bordered select-sm">
+            <option value="">—</option>
+            {% for value, label in priority_choices %}
+            <option value="{{ value }}" {% if s.priority == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="space-y-1">
+          <span class="block text-xs text-base-content/60">Staff notes</span>
+          <input type="text" name="staff_notes" value="{{ s.staff_notes }}"
+                 class="input input-bordered input-sm w-full" placeholder="Triage notes (private)">
+        </label>
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-base-content/60">No suggestions match these filters.</p>
+  {% endif %}
+</div>
+{% endblock %}

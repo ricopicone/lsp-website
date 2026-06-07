@@ -251,6 +251,7 @@
             {% endif %}
             <li><a href="{% url 'workgroups:mine' %}">My Groups &amp; Events</a></li>
             {% if user|is_lsp_member %}<li><a href="{% url 'my_proposals' %}">My Proposals</a></li>{% endif %}
+            {% if show_suggestion_widget %}<li><a href="{% url 'suggestions:mine' %}">My Suggestions</a></li>{% endif %}
             <li><a href="{% url 'works:mine' %}">My Works</a></li>
             {% if user.profile.is_listed %}
             <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">My Directory Page</a></li>
@@ -325,6 +326,7 @@
       <div class="text-xs text-base-content/60 flex flex-wrap gap-x-6 gap-y-2 items-center justify-between pt-4 border-t border-base-300/40">
         <span>© {% now "Y" %} Lacanian School of Psychoanalysis</span>
         <div class="flex items-center gap-4">
+          {% if show_suggestion_widget %}<a href="{% url 'suggestions:suggest' %}" class="hover:text-primary">Suggest a change</a>{% endif %}
           <a href="mailto:website@lacanschool.org" class="hover:text-primary">website@lacanschool.org</a>
         </div>
       </div>
@@ -631,5 +633,7 @@
       });
     })();
   </script>
+
+  {% if show_suggestion_widget %}{% include "suggestions/_widget.html" %}{% endif %}
 </body>
 </html>
