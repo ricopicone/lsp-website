@@ -327,10 +327,7 @@ class ProfileEditForm(forms.ModelForm):
                     choices=Profile.Visibility.choices,
                     initial=current.get(key, Profile.Visibility.PUBLIC),
                     widget=forms.Select(
-                        # `unstyled` opts out of the global `form select` base
-                        # rule (big font/padding) which otherwise fights the
-                        # DaisyUI sizing and clips the text on a small select.
-                        attrs={"class": "select select-sm select-bordered unstyled",
+                        attrs={"class": "select select-sm select-bordered",
                                "aria-label": "Visibility"}
                     ),
                 )
