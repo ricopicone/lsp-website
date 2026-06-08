@@ -23,11 +23,15 @@ from django.views.generic import RedirectView
 from accounts import views as _account_views
 from content import views as _content_views
 from core import staff as _staff_views
+from core import views as _core_views
 from events import views as _event_views
 from payments import views as _payment_views
 from suggestions import views as _suggestion_views
 
 urlpatterns = [
+    # Readiness probe for the blue-green deploy flip (ops/deploy/). Mounted first
+    # so nothing shadows it.
+    path("healthz", _core_views.healthz, name="healthz"),
     path("admin/", admin.site.urls),
     path("accounts/", include("accounts.urls")),
     path("about/", _content_views.about, name="about"),

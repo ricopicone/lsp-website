@@ -1,0 +1,24 @@
+#!/bin/bash
+# Privileged nginx flip for the blue-green deploy. Writes the active `lsp_app`
+# upstream and gracefully reloads nginx. Installed at /usr/local/bin/ (root:root,
+# 0755) and invoked by deploy.sh (running as ec2-user) through a confined sudoers
+# rule:  ec2-user ALL=(root) NOPASSWD: /usr/local/bin/lsp-activate-color
+#
+# Usage: lsp-activate-color <port>     # port MUST be 8001 or 8002
+set -euo pipefail
+
+PORT="${1:-}"
+case "$PORT" in
+  8001|8002) ;;
+  *) echo "refusing: port must be 8001 or 8002 (got '${PORT}')" >&2; exit 2 ;;
+esac
+
+CONF=/etc/nginx/conf.d/lsp-active.conf
+printf 'upstream lsp_app { server 127.0.0.1:%s; }\n' "$PORT" > "$CONF"
+
+if ! nginx -t; then
+  echo "nginx config test failed — not reloading" >&2
+  exit 1
+fi
+nginx -s reload
+echo "nginx now routing lsp_app -> 127.0.0.1:${PORT}"

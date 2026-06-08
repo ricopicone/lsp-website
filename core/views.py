@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.db import models
-from django.http import Http404, JsonResponse
+from django.db import connections, models
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -15,6 +15,23 @@ from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_POST
 
 from events.models import Event, Session
+
+
+def healthz(request):
+    """Readiness probe for the blue-green deploy flip (ops/deploy/deploy.sh).
+
+    Returns 200 only when the app is serving *and* can reach the database — so a
+    new container that can't talk to RDS (e.g. after a master-credential rotation)
+    fails the check and the deploy aborts before flipping traffic to it, rather
+    than swapping in a broken color. Cheap, unauthenticated, no template.
+    """
+    try:
+        with connections["default"].cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+    except Exception:
+        return HttpResponse("db unavailable", status=503, content_type="text/plain")
+    return HttpResponse("ok", content_type="text/plain")
 
 
 def landing(request):

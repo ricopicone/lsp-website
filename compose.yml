@@ -1,24 +1,43 @@
+# Blue-green app containers for zero-downtime deploys. Host nginx proxies to
+# whichever color is active via the `lsp_app` upstream in
+# /etc/nginx/conf.d/lsp-active.conf; ~/bin/deploy.sh starts the idle color,
+# health-checks /healthz, flips the upstream with a graceful `nginx -s reload`,
+# then stops the old color. See ops/deploy/README.md.
+
+# Shared service template (a `x-` extension — ignored by Compose as a service).
+# Both colors merge it; the deploy script always targets a concrete color.
+x-app: &app
+  build: .
+  image: lsp-website:latest
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    # Parlêtre realtime chat shares its WebSocket layer across processes via
+    # Redis (config/settings/production.py reads REDIS_URL). Both colors share
+    # the one Redis, so chat/notification fan-out stays consistent during the
+    # brief blue↔green overlap of a deploy.
+    - REDIS_URL=redis://redis:6379/0
+  depends_on:
+    - redis
+  volumes:
+    # Public user uploads go to S3 in production (see
+    # config/settings/production.py — AWS_STORAGE_BUCKET_NAME triggers
+    # S3Storage). Parlêtre *attachments* are deliberately kept off any public
+    # URL (parletre/storage.py) and stored on disk; this named volume persists
+    # them across restarts/redeploys. Both colors mount it — the attachments
+    # they write are distinct files, so concurrent mounts are safe.
+    - lsp-private-media:/app/private-media
+
 services:
-  web:
-    build: .
-    image: lsp-website:latest
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      # Parlêtre realtime chat shares its WebSocket layer across processes
-      # via Redis (config/settings/production.py reads REDIS_URL).
-      - REDIS_URL=redis://redis:6379/0
+  web_blue:
+    <<: *app
     ports:
-      - "127.0.0.1:8000:8000"
-    depends_on:
-      - redis
-    volumes:
-      # Public user uploads go to S3 in production (see
-      # config/settings/production.py — AWS_STORAGE_BUCKET_NAME triggers
-      # S3Storage). Parlêtre *attachments* are deliberately kept off any
-      # public URL (parletre/storage.py) and stored on disk; this named
-      # volume persists them across container restarts/redeploys.
-      - lsp-private-media:/app/private-media
+      - "127.0.0.1:8001:8000"
+
+  web_green:
+    <<: *app
+    ports:
+      - "127.0.0.1:8002:8000"
 
   redis:
     image: redis:7-alpine

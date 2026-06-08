@@ -1,0 +1,7 @@
+# /etc/nginx/conf.d/lsp-active.conf — managed by /usr/local/bin/lsp-activate-color.
+#
+# The single source of truth for which app color receives traffic. http-context
+# include (like 00-ws-upgrade.conf); lsp.conf's `proxy_pass http://lsp_app` for
+# both `location /` and `location /ws/` resolves against this upstream. deploy.sh
+# rewrites it via the helper and reloads — do not hand-edit during normal ops.
+upstream lsp_app { server 127.0.0.1:8001; }
