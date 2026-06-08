@@ -828,9 +828,11 @@ def test_my_groups_page_shows_calendar_subscribe(client):
         workgroup=wg, user=u, start_date=datetime.date(2026, 1, 1)
     )
     client.force_login(u)
-    resp = client.get(reverse("workgroups:mine"))
+    # The calendar-subscribe box now lives on the My LSP hub's Events tab.
+    resp = client.get(reverse("admissions:formation") + "?tab=events")
     assert b"My Calendar" in resp.content
-    assert b"webcal://" in resp.content                   # one-click subscribe link
+    assert b"webcal://" in resp.content                   # Apple Calendar link
+    assert b"calendar.google.com" in resp.content         # Google Calendar option
 
 
 # ---- Collaborative working documents (Work tab) ------------------------
@@ -1828,11 +1830,13 @@ def test_my_groups_page_renders_and_requires_login(client):
     )
     from registrations.models import Registration
     _register(u, ev, tier, Registration.Status.PAID)
-    url = reverse("workgroups:mine")
-    assert client.get(url).status_code == 302           # anonymous → login
+    legacy = reverse("workgroups:mine")
+    assert client.get(legacy).status_code == 302         # anonymous → login
     client.force_login(u)
-    resp = client.get(url)
-    assert resp.status_code == 200
-    assert b"My Visible Cartel" in resp.content          # the group
-    assert b"Annual Day of Assembly" in resp.content     # the standalone event
-    assert b"Groups" in resp.content and b"Events" in resp.content
+    # The legacy /groups/mine/ now redirects into the My LSP hub's Groups tab.
+    r = client.get(legacy)
+    assert r.status_code == 302 and "tab=groups" in r.url
+    groups = client.get(reverse("admissions:formation") + "?tab=groups").content
+    assert b"My Visible Cartel" in groups                 # the group
+    events = client.get(reverse("admissions:formation") + "?tab=events").content
+    assert b"Annual Day of Assembly" in events            # the standalone event

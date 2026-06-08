@@ -37,6 +37,7 @@ from .forms import (
 )
 from .models import Advancement, Application, ApplicationInterview
 from .services import accept_application, reject_application
+from .tabs import available_tabs
 
 # Eligibility copy shown on each track's page (from the formation guidelines).
 TRACK_ELIGIBILITY = {
@@ -290,6 +291,7 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     passed in so a failed POST can re-render with errors on the right tab."""
     from accounts.advisor import current_advisor
     from accounts.forms import AdvisorSelectForm
+    from payments.dues import is_dues_obligated
 
     user = request.user
     profile = user.profile
@@ -311,20 +313,61 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
         "demande_form": demande_form if demande_form is not None else AdvancementForm(),
         "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
     }
-    ctx.update(_formation_money_context(request))
-    ctx.update(_formation_groups_context(user))
 
-    # URL-addressable tabs: each is its own `?tab=<key>` link (shareable). The
-    # Tuition & Dues tab only appears when there's something to show.
-    tabs = [("formation", "Formation")]
-    if ctx["show_money_tab"]:
-        tabs.append(("tuition", "Tuition & Dues"))
-    tabs.append(("groups", "Groups"))
+    # The page tab bar shows Tuition/Dues on obligation OR payment history; the
+    # global avatar menu (available_tabs default) uses obligation only (cheap).
+    show_money_tab = (
+        profile.owes_tuition
+        or is_dues_obligated(user)
+        or _has_money_history(user)
+    )
+    ctx["show_money_tab"] = show_money_tab
+
+    tabs = available_tabs(user, tuition=show_money_tab, dues=show_money_tab)
     keys = {k for k, _ in tabs}
-    tab = request.GET.get("tab") or "formation"
+    active = request.GET.get("tab") or "formation"
+    if active not in keys:
+        active = "formation"
     ctx["formation_tabs"] = tabs
-    ctx["active_tab"] = tab if tab in keys else "formation"
+    ctx["active_tab"] = active
+
+    # Lazy per-tab context — only the active tab pays for its queries. (The
+    # Formation tab's advisor/steps above are always built: it's the default.)
+    if active in ("groups", "events"):
+        ctx.update(_formation_groups_events_context(request))
+    elif active in ("tuition", "dues"):
+        ctx.update(_formation_money_context(request))
+    elif active == "works":
+        from works.queries import my_works_qs
+        ctx["works"] = my_works_qs(user)
+    elif active == "proposals":
+        from events.models import EventProposal
+        ctx["proposals"] = (
+            EventProposal.objects.filter(proposed_by=user)
+            .select_related("minted_event")
+        )
+    elif active == "suggestions":
+        from suggestions.models import Suggestion
+        ctx["suggestions"] = Suggestion.objects.filter(submitted_by=user)
+    elif active == "profile":
+        from accounts.views import _profile_edit_context
+        ctx.update(_profile_edit_context(request))
+        ctx["profile_next"] = _formation_url("profile")
+
     return ctx
+
+
+def _has_money_history(user) -> bool:
+    """Whether the member has any payment or (non-skipping) tuition enrollment —
+    so the Tuition/Dues tabs stay reachable after the obligation lapses."""
+    from payments.models import Payment, TuitionEnrollment
+
+    return (
+        Payment.objects.filter(user=user).exists()
+        or TuitionEnrollment.objects.filter(user=user)
+        .exclude(status=TuitionEnrollment.Status.SKIPPING)
+        .exists()
+    )
 
 
 #: Each formation track's role ladder. The step *into* index 1 is the
@@ -604,50 +647,49 @@ def _tuition_progress(user) -> dict:
     }
 
 
-def _formation_groups_context(user) -> dict:
-    """The user's current and past groups: stored ``WorkgroupMembership`` rows
-    plus seminars / reading groups they attended as a paid/comped registrant."""
-    from registrations.models import Registration
+def _formation_groups_events_context(request) -> dict:
+    """The Groups and Events tabs: the member's current/former groups of every
+    kind (the improved ``workgroups.membership`` selectors) and the standalone
+    events they're registered for, plus the personal calendar-subscribe URLs.
 
-    current, past = [], []
-    seen: set[int] = set()
+    One pass over ``my_groups`` feeds both tabs — Events excludes anything
+    already shown as a group. A calendar token is *not* minted while
+    impersonating (we're only viewing as the member)."""
+    import re
 
-    memberships = (
-        user.workgroup_memberships
-        .select_related("workgroup")
-        .order_by("workgroup__name", "-start_date")
+    from django.urls import reverse
+
+    from workgroups.membership import (
+        ensure_calendar_token,
+        my_events,
+        my_groups,
+        my_groups_by_kind,
     )
-    for m in memberships:
-        if m.workgroup_id in seen:
-            continue
-        seen.add(m.workgroup_id)
-        entry = {
-            "workgroup": m.workgroup,
-            "kind": m.workgroup.get_kind_display(),
-            "role": m.get_role_display(),
-        }
-        (current if m.is_active else past).append(entry)
 
-    # Derived: seminars / reading groups joined via a paid or comped
-    # registration (no stored membership row).
-    regs = (
-        Registration.objects
-        .filter(user=user, status__in=(
-            Registration.Status.PAID, Registration.Status.COMPED,
-        ))
-        .select_related("event", "event__workgroup")
-    )
-    for reg in regs:
-        wg = reg.event.workgroup if reg.event_id else None
-        if wg is None or wg.id in seen:
-            continue
-        seen.add(wg.id)
-        entry = {"workgroup": wg, "kind": wg.get_kind_display(), "role": "Participant"}
-        (current if wg.is_member(user) else past).append(entry)
+    user = request.user
+    rows = my_groups(user)
+    events = my_events(user, {r.workgroup.id for r in rows})
+    current = [r for r in rows if r.is_current]
+    past = [r for r in rows if not r.is_current]
 
-    current.sort(key=lambda e: e["workgroup"].name.lower())
-    past.sort(key=lambda e: e["workgroup"].name.lower())
-    return {"current_groups": current, "past_groups": past}
+    calendar_feed_url = webcal_url = None
+    if not getattr(request, "impersonator", None):
+        token = ensure_calendar_token(user)
+        calendar_feed_url = request.build_absolute_uri(
+            reverse("workgroups:my_calendar_ics", args=[token])
+        )
+        webcal_url = re.sub(r"^https?://", "webcal://", calendar_feed_url)
+
+    return {
+        "current_by_kind": my_groups_by_kind(current),
+        "past_by_kind": my_groups_by_kind(past),
+        "groups_has_any": bool(rows),
+        "upcoming_events": [e for e in events if e.is_upcoming],
+        "past_events": [e for e in events if not e.is_upcoming],
+        "calendar_has_any": bool(rows) or bool(events),
+        "calendar_feed_url": calendar_feed_url,
+        "webcal_url": webcal_url,
+    }
 
 
 @login_required

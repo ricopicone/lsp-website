@@ -6,6 +6,7 @@ import datetime as dt
 from decimal import Decimal
 
 import pytest
+from django.urls import reverse
 
 from accounts.models import Profile, User
 from committees.models import Committee
@@ -372,8 +373,8 @@ def test_save_allows_incomplete_then_manage_lists_it(client):
     assert resp.status_code == 302
     p = EventProposal.objects.get(title="Draft Seminar")
     assert p.status == EventProposal.Status.SAVED and p.start_date is None
-    # It shows on the manage page.
-    page = client.get("/propose/mine/")
+    # It shows on the My LSP hub's Proposals tab (the old /propose/mine/ redirects there).
+    page = client.get(reverse("admissions:formation") + "?tab=proposals")
     assert page.status_code == 200 and b"Draft Seminar" in page.content
 
 

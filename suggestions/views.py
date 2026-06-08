@@ -106,9 +106,10 @@ def submit(request):
 
 @login_required
 def mine(request):
-    _require_member(request)
-    suggestions = Suggestion.objects.filter(submitted_by=request.user)
-    return render(request, "suggestions/mine.html", {"suggestions": suggestions})
+    """Legacy ``/suggestions/mine/`` — now the My LSP hub's Suggestions tab."""
+    from django.urls import reverse
+
+    return redirect(reverse("admissions:formation") + "?tab=suggestions")
 
 
 @login_required

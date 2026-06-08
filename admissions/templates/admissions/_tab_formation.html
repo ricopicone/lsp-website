@@ -1,0 +1,141 @@
+{# Formation tab — Advisor + formation-step trace (Palimpsest/Passage/Traversée). #}
+  <div class="space-y-6">
+
+    {# ---- Advisor ---- #}
+    <section id="advisor" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
+      <h2 class="font-serif text-xl text-base-content">My Advisor</h2>
+      {% if advisor %}
+      <div>
+        <p class="font-medium text-base-content">{{ advisor.get_full_name|default:advisor.email }}</p>
+        <p class="text-sm text-base-content/60">{{ advisor.profile.get_role_display }}</p>
+      </div>
+      {% endif %}
+      {% if needs_advisor %}
+      <form method="post" action="{% url 'advisor_select' %}" class="space-y-3">
+        {% csrf_token %}
+        <label class="block text-sm font-medium text-base-content">
+          {% if advisor %}Change my Advisor{% else %}Choose my Advisor{% endif %}
+        </label>
+        {{ advisor_form.advisor }}
+        {% if advisor_form.advisor.errors %}<p class="text-error text-xs">{{ advisor_form.advisor.errors|striptags }}</p>{% endif %}
+        <p class="text-xs text-base-content/50">
+          {% if advisor_form.advisor.field.queryset.exists %}
+            My Advisor supports me through my training and presents my demandes
+            to the Meeting of the Analysts. They'll be notified of my choice.
+          {% else %}
+            No eligible advisors are listed yet. Please contact the School.
+          {% endif %}
+        </p>
+        {% if advisor_form.advisor.field.queryset.exists %}
+        <button class="btn btn-primary btn-sm">Save Advisor</button>
+        {% endif %}
+      </form>
+      {% elif not advisor %}
+      <p class="text-sm text-base-content/60">
+        Advisors are chosen by members in formation (Precandidates and Candidates).
+      </p>
+      {% endif %}
+    </section>
+
+    {# ---- Formation steps (demande + trace) ---- #}
+    <section id="steps" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
+      <h2 class="font-serif text-xl text-base-content">My formation steps</h2>
+      <p class="text-sm text-base-content/70">
+        A demande is my request to present my Palimpsest or Passage / Traversée
+        to the entire School at the next Days of Assembly — sent to my Advisor in
+        lieu of an email. My Advisor presents it, with a recommendation, to the
+        Meeting of the Analysts, who decide.
+      </p>
+
+      {# Open a new demande #}
+      {% if can_open %}
+      {% if advisor %}
+      <form method="post" action="{% url 'admissions:advancement' %}" class="space-y-3 rounded-lg border border-base-300 bg-base-200/40 p-4">
+        {% csrf_token %}
+        <p class="text-sm text-base-content/70">
+          Request to present my <strong>{{ step_label }}</strong> at the next Days of
+          Assembly. {{ advisor.get_full_name|default:advisor.email }} will be asked
+          to present it on my behalf.
+        </p>
+        <div class="space-y-1">
+          <label class="block text-sm text-base-content/70">{{ demande_form.statement.label }}</label>
+          {{ demande_form.statement }}
+          <p class="text-xs text-base-content/50">{{ demande_form.statement.help_text }}</p>
+          {% if demande_form.statement.errors %}<p class="text-error text-xs">{{ demande_form.statement.errors|striptags }}</p>{% endif %}
+        </div>
+        <button class="btn btn-primary btn-sm">Demande my {{ step_label }}</button>
+      </form>
+      {% else %}
+      <div class="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm">
+        <p class="text-base-content/80">Choose my Advisor (above) before sending a demande — they present it to the Meeting on my behalf.</p>
+      </div>
+      {% endif %}
+      {% endif %}
+
+      {# Trace of every step (derived from role history, demande overlaid) #}
+      {% if formation_steps %}
+      <ol class="space-y-3">
+        {% for s in formation_steps %}
+        {% with a=s.advancement %}
+        <li class="rounded-lg border border-base-300 p-4 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-medium text-base-content">{{ s.label }}</span>
+            {% if a %}
+            <span class="badge badge-sm
+              {% if a.status == 'approved' %}badge-success
+              {% elif a.status == 'declined' or a.status == 'withdrawn' %}badge-ghost
+              {% elif a.status == 'presented' %}badge-info
+              {% else %}badge-warning{% endif %}">{{ a.get_status_display }}</span>
+            {% elif s.completed %}
+            <span class="badge badge-sm badge-success">Completed</span>
+            {% endif %}
+          </div>
+          <ul class="text-sm text-base-content/70 space-y-0.5">
+            {% if a %}
+              <li>Requested {{ a.requested_at|date:"M j, Y" }}</li>
+              {% if a.presented_at %}<li>Presented to the Meeting {{ a.presented_at|date:"M j, Y" }}{% if a.advisor %} by {{ a.advisor.get_full_name|default:a.advisor.email }}{% endif %}</li>{% endif %}
+              {% if a.decided_at %}<li>Decision {{ a.decided_at|date:"M j, Y" }}{% if a.decision_note %} — {{ a.decision_note }}{% endif %}</li>{% endif %}
+            {% elif s.when_ay %}
+              <li>Completed in AY {{ s.when_ay }}–{{ s.when_ay|add:1 }}</li>
+            {% else %}
+              <li>Completed.</li>
+            {% endif %}
+          </ul>
+
+          {# The Work I presented — a real entry in Works (not a file here). #}
+          <div class="flex items-center gap-3 flex-wrap pt-1 border-t border-base-300/60">
+            {% if s.works %}
+            <ul class="flex-1 min-w-0 space-y-0.5">
+              {% for w in s.works %}
+              <li><a href="{{ w.get_absolute_url }}" class="link link-primary text-sm">{{ w.title }} →</a></li>
+              {% endfor %}
+            </ul>
+            <a href="{% url 'works:add' %}?kind={{ s.work_kind }}&next={{ request.get_full_path|urlencode }}"
+               class="btn btn-ghost btn-xs">Add another</a>
+            {% else %}
+            <span class="text-sm text-base-content/60">No {{ s.label }} added yet.</span>
+            <a href="{% url 'works:add' %}?kind={{ s.work_kind }}&next={{ request.get_full_path|urlencode }}"
+               class="btn btn-primary btn-xs">Add my {{ s.label }}</a>
+            {% endif %}
+          </div>
+
+          {% if a and a.is_open %}
+          <form method="post" action="{% url 'admissions:advancement_withdraw' a.pk %}"
+                onsubmit="return confirm('Withdraw this demande?');">
+            {% csrf_token %}
+            <button class="btn btn-ghost btn-xs text-error">Withdraw demande</button>
+          </form>
+          {% endif %}
+        </li>
+        {% endwith %}
+        {% endfor %}
+      </ol>
+      {% elif not can_open %}
+      <p class="text-sm text-base-content/60">
+        Formation demandes (Palimpsest, Passage / Traversée) are sent by members in
+        training when they're ready for the next step. There's nothing here yet.
+      </p>
+      {% endif %}
+    </section>
+
+  </div>

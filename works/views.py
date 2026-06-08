@@ -181,22 +181,7 @@ def delete(request, slug):
 
 @login_required
 def my_works(request):
-    """List the works ``request.user`` authored or submitted."""
-    qs = (
-        Work.objects.filter(
-            Q(authorships__user=request.user) | Q(submitted_by=request.user)
-        )
-        .prefetch_related(
-            Prefetch(
-                "authorships",
-                queryset=WorkAuthor.objects.select_related("user").order_by("display_order"),
-            ),
-            Prefetch(
-                "files",
-                queryset=WorkFile.objects.order_by("display_order"),
-            ),
-        )
-        .distinct()
-        .order_by("-publication_date", "-created_at")
-    )
-    return render(request, "works/my_works.html", {"works": qs})
+    """Legacy ``/works/mine/`` — now the My LSP hub's Works tab."""
+    from django.urls import reverse
+
+    return redirect(reverse("admissions:formation") + "?tab=works")

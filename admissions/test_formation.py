@@ -87,10 +87,11 @@ def test_formation_page_shows_tabs_for_candidate(client):
     member = _user("c@x.test", role=Profile.Role.CANDIDATE)
     client.force_login(member)
     body = client.get(reverse("admissions:formation")).content
-    assert b"My Formation" in body
-    assert b"Formation" in body and b"Tuition" in body and b"Groups" in body
-    # Tabs are real, shareable ?tab= links (not client-only state).
-    assert b'href="?tab=tuition"' in body and b'href="?tab=groups"' in body
+    assert b"My LSP" in body
+    # A candidate owes tuition + dues, so those tabs appear alongside the
+    # always-on ones. Tabs are real, shareable ?tab= links.
+    for key in (b"groups", b"events", b"works", b"tuition", b"dues", b"profile"):
+        assert b'href="?tab=' + key + b'"' in body
 
 
 # ---- groups tab ------------------------------------------------------------
@@ -113,7 +114,8 @@ def test_groups_tab_lists_current_and_past(client):
     body = client.get(reverse("admissions:formation") + "?tab=groups").content
     assert b"Desire Cartel" in body
     assert b"Old WG" in body
-    assert b"My current groups" in body and b"My past groups" in body
+    # New groups tab: Current / Past sections (from workgroups.membership).
+    assert b">Current<" in body and b">Past<" in body
 
 
 # ---- editable My Payments table (type / note / AY) -------------------------
@@ -326,7 +328,8 @@ def test_skipping_year_is_not_one_of_the_four(current_period):
 def test_dues_section_offers_payment_when_unpaid(client, current_period):
     member = _user("dues@x.test", role=Profile.Role.CANDIDATE)
     client.force_login(member)
-    body = client.get(reverse("admissions:formation") + "?tab=tuition").content
+    # Dues now have their own tab (split from Tuition).
+    body = client.get(reverse("admissions:formation") + "?tab=dues").content
     assert b"Membership dues" in body
     # An obligated, unpaid member is offered a pay action.
     assert b"dues" in body.lower()

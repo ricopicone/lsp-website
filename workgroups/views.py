@@ -3,8 +3,6 @@ group kind renders through."""
 
 from __future__ import annotations
 
-import re
-
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
@@ -17,7 +15,7 @@ from django.views.decorators.http import require_POST
 from works.models import Work
 
 from . import notifications as notify_groups
-from .membership import my_events, my_groups
+from .membership import ensure_calendar_token
 from .models import (
     Visibility,
     Workgroup,
@@ -74,59 +72,11 @@ def workgroup_list(request):
     return render(request, "workgroups/list.html", {"kinds": kinds})
 
 
-def _my_groups_by_kind(rows):
-    """Bucket :class:`MyGroup` rows by kind in ``KIND_META`` order; within a
-    kind, by academic year (latest first) then name. Returns a list of
-    ``(plural_label, [rows])``."""
-    buckets: dict = {}
-    for r in rows:
-        buckets.setdefault(r.kind, []).append(r)
-    out = []
-    for kind, _name, label, _blurb in KIND_META:
-        items = buckets.get(kind)
-        if not items:
-            continue
-        items.sort(key=lambda r: r.name.lower())
-        items.sort(key=lambda r: r.academic_year or "", reverse=True)
-        out.append((label, items))
-    return out
-
-
 @login_required
 def my_groups_view(request):
-    """'My Groups and Events' — the member's current and former groups of every
-    kind, plus the standalone events (Days of Assembly, Working Days, special
-    events) they're registered for but that aren't tied to one of those groups.
-    See :func:`workgroups.membership.my_groups` / :func:`~.my_events`."""
-    rows = my_groups(request.user)
-    events = my_events(request.user, {r.workgroup.id for r in rows})
-    current = [r for r in rows if r.is_current]
-    past = [r for r in rows if not r.is_current]
-
-    # Personal calendar subscription — a token-authed feed of every group
-    # meeting + registered event. Don't mint a token while impersonating
-    # (we're only viewing as this member, not acting as them).
-    calendar_feed_url = webcal_url = None
-    if not getattr(request, "impersonator", None):
-        token = _ensure_calendar_token(request.user)
-        calendar_feed_url = request.build_absolute_uri(
-            reverse("workgroups:my_calendar_ics", args=[token])
-        )
-        webcal_url = re.sub(r"^https?://", "webcal://", calendar_feed_url)
-
-    return render(
-        request,
-        "workgroups/my_groups.html",
-        {
-            "current_by_kind": _my_groups_by_kind(current),
-            "past_by_kind": _my_groups_by_kind(past),
-            "upcoming_events": [e for e in events if e.is_upcoming],
-            "past_events": [e for e in events if not e.is_upcoming],
-            "has_any": bool(rows) or bool(events),
-            "calendar_feed_url": calendar_feed_url,
-            "webcal_url": webcal_url,
-        },
-    )
+    """Legacy ``/groups/mine/`` — the member's groups + events now live on the
+    My LSP hub's Groups / Events tabs. Kept as a redirect so old links resolve."""
+    return redirect(reverse("admissions:formation") + "?tab=groups")
 
 
 def _group_by_academic_year(groups):
@@ -1020,15 +970,6 @@ def meeting_minutes(request, slug, pk):
 
 # --- iCal feeds (subscribe) -------------------------------------------------
 
-def _ensure_calendar_token(user) -> str:
-    profile = user.profile
-    if not profile.calendar_token:
-        import secrets
-        profile.calendar_token = secrets.token_urlsafe(24)
-        profile.save(update_fields=["calendar_token"])
-    return profile.calendar_token
-
-
 def _calendar_feed_url(request, wg):
     """The iCal subscribe URL for this group's Schedule tab — open for a public
     group, else the viewer's token-authed feed. None while impersonating (so we
@@ -1037,7 +978,7 @@ def _calendar_feed_url(request, wg):
     if wg.landing_visibility == Visibility.PUBLIC:
         return base
     if request.user.is_authenticated and not getattr(request, "impersonator", None):
-        return f"{base}?token={_ensure_calendar_token(request.user)}"
+        return f"{base}?token={ensure_calendar_token(request.user)}"
     return None
 
 

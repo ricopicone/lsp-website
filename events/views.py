@@ -623,16 +623,10 @@ def proposal_edit(request, pk: int):
 
 @login_required
 def my_proposals(request):
-    """Manage your event proposals — statuses, review notes, and actions."""
-    if not is_lsp_member(request.user):
-        raise Http404()
-    from .models import EventProposal
+    """Legacy ``/propose/mine/`` — now the My LSP hub's Proposals tab."""
+    from django.urls import reverse
 
-    proposals = (
-        EventProposal.objects.filter(proposed_by=request.user)
-        .select_related("minted_event")
-    )
-    return render(request, "events/my_proposals.html", {"proposals": proposals})
+    return redirect(reverse("admissions:formation") + "?tab=proposals")
 
 
 @login_required

@@ -148,7 +148,6 @@
             <li><a href="{% url 'workgroups:kind_committees' %}">Committees</a></li>
             <li><a href="{% url 'workgroups:kind_working_groups' %}">Working Groups</a></li>
             <li><a href="{% url 'workgroups:kind_reading_groups' %}">Reading Groups</a></li>
-            {% if user.is_authenticated %}<li><a href="{% url 'workgroups:mine' %}">My Groups &amp; Events</a></li>{% endif %}
 
             <li class="menu-title">Persons</li>
             <li><a href="{% url 'directory' %}">Directory</a></li>
@@ -234,8 +233,12 @@
             </li>
             <li><hr class="border-base-300/60 my-1"></li>
 
-            <li><a href="{% url 'profile_edit' %}">Edit Profile</a></li>
-            <li><a href="{% url 'admissions:formation' %}">My Formation</a></li>
+            {# My LSP — the member hub; each tab is an indented deep link (my_lsp_tabs, the same list the hub page uses). #}
+            <li><a href="{% url 'admissions:formation' %}" class="font-medium">My LSP</a></li>
+            {% for key, label in my_lsp_tabs %}
+            <li><a href="{% url 'admissions:formation' %}?tab={{ key }}" class="pl-6 text-sm">{{ label }}</a></li>
+            {% endfor %}
+
             {% if user.profile.role == 'analyst' or user.profile.role == 'scholar' %}
               {% if user.advancements_advised.exists %}
               <li><a href="{% url 'admissions:advise_queue' %}">Demandes You Advise</a></li>
@@ -249,10 +252,6 @@
             {% if show_survey_nudge %}
             <li><a href="{% url 'intake_survey' %}">Finish Intake Survey</a></li>
             {% endif %}
-            <li><a href="{% url 'workgroups:mine' %}">My Groups &amp; Events</a></li>
-            {% if user|is_lsp_member %}<li><a href="{% url 'my_proposals' %}">My Proposals</a></li>{% endif %}
-            {% if show_suggestion_widget %}<li><a href="{% url 'suggestions:mine' %}">My Suggestions</a></li>{% endif %}
-            <li><a href="{% url 'works:mine' %}">My Works</a></li>
             {% if user.profile.is_listed %}
             <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">My Directory Page</a></li>
             {% endif %}

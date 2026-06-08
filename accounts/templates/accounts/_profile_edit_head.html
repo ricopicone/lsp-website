@@ -1,0 +1,23 @@
+{% load static %}
+{# Cropper.js CSS + framing styles, shared by the standalone profile editor and the embedded My LSP Profile tab. #}
+<link rel="stylesheet" href="{% static 'vendor/cropper-1.6.2.min.css' %}">
+<style>
+  /* Make the cropper's crop box read as the circle the photo will become,
+     and drop a faint head-and-shoulders guide inside it so members know how
+     to frame themselves. */
+  .lsp-cropper .cropper-view-box,
+  .lsp-cropper .cropper-face { border-radius: 50%; }
+  .lsp-cropper .cropper-view-box { outline-color: rgba(255,255,255,0.9); }
+  /* The guide is injected into .cropper-crop-box so it tracks the crop area
+     exactly; it fills that square and the SVG is centered within it. */
+  .lsp-bust-guide {
+    position: absolute; inset: 0; pointer-events: none; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lsp-bust-guide svg { width: 100%; height: 100%; opacity: 0.32; }
+  /* CheckboxSelectMultiple renders <ul><li><label><input>…; lay the options
+     out inline with a little breathing room (avoids fragile arbitrary
+     variants in this Tailwind build). */
+  .lsp-checklist ul { display: flex; flex-wrap: wrap; gap: 0.25rem 1.5rem; list-style: none; padding: 0; margin: 0; }
+  .lsp-checklist label { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+</style>

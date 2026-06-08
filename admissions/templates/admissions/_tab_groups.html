@@ -1,0 +1,37 @@
+{# Groups tab — the member's current and former groups of every kind, via the workgroups.membership selectors (grouped by kind). #}
+{% if current_by_kind or past_by_kind %}
+<div class="space-y-8">
+  {% if current_by_kind %}
+  <div class="space-y-5">
+    <h2 class="font-serif text-xl text-base-content">Current</h2>
+    {% for kind_label, rows in current_by_kind %}
+    <div class="space-y-2">
+      <p class="text-xs uppercase tracking-wide text-base-content/45">{{ kind_label }}</p>
+      <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {% for r in rows %}{% include "workgroups/_my_group_card.html" %}{% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if past_by_kind %}
+  <div class="space-y-5">
+    <h2 class="font-serif text-xl text-base-content/70">Past</h2>
+    {% for kind_label, rows in past_by_kind %}
+    <div class="space-y-2">
+      <p class="text-xs uppercase tracking-wide text-base-content/45">{{ kind_label }}</p>
+      <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {% for r in rows %}{% include "workgroups/_my_group_card.html" %}{% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<div class="rounded-lg border border-base-300/50 p-8 text-center space-y-3">
+  <p class="text-base-content/60">You're not part of any groups yet.</p>
+  <a href="{% url 'workgroups:list' %}" class="btn btn-primary btn-sm">Explore groups</a>
+</div>
+{% endif %}

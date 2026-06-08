@@ -1,11 +1,8 @@
-{% extends "core/base.html" %}
-{% block title %}My suggestions — LSP{% endblock %}
-{% block content %}
-<div class="max-w-2xl space-y-6">
-  <header class="flex flex-wrap items-center justify-between gap-3">
-    <h1 class="font-serif text-3xl text-base-content">My suggestions</h1>
+{# Suggestions tab — the member's own suggestions (suggestions.Suggestion). The tab is only offered when SUGGESTIONS_ENABLED and the user is a member. #}
+<div class="space-y-6">
+  <div class="flex items-center justify-end">
     <a href="{% url 'suggestions:suggest' %}" class="btn btn-primary btn-sm">＋ New suggestion</a>
-  </header>
+  </div>
 
   {% if suggestions %}
   <ul class="divide-y divide-base-300/50 rounded-xl border border-base-300/60 bg-base-100">
@@ -33,4 +30,3 @@
   </div>
   {% endif %}
 </div>
-{% endblock %}

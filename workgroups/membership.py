@@ -278,3 +278,45 @@ def my_events(user, exclude_workgroup_ids=()) -> list[MyEvent]:
 
     events.sort(key=_order)
     return events
+
+
+#: Display order + plural labels for grouping a member's groups by kind. Kept
+#: here (not in ``workgroups.views``) so non-view callers — the My LSP hub — can
+#: bucket groups without importing a views module.
+GROUP_KIND_LABELS = [
+    (Workgroup.Kind.SEMINAR, "Seminars"),
+    (Workgroup.Kind.CARTEL, "Cartels"),
+    (Workgroup.Kind.COMMITTEE, "Committees"),
+    (Workgroup.Kind.WORKING_GROUP, "Working Groups"),
+    (Workgroup.Kind.READING_GROUP, "Reading Groups"),
+]
+
+
+def my_groups_by_kind(rows):
+    """Bucket :class:`MyGroup` rows by kind in :data:`GROUP_KIND_LABELS` order;
+    within a kind, by academic year (latest first) then name. Returns a list of
+    ``(plural_label, [rows])``."""
+    buckets: dict = {}
+    for r in rows:
+        buckets.setdefault(r.kind, []).append(r)
+    out = []
+    for kind, label in GROUP_KIND_LABELS:
+        items = buckets.get(kind)
+        if not items:
+            continue
+        items.sort(key=lambda r: r.name.lower())
+        items.sort(key=lambda r: r.academic_year or "", reverse=True)
+        out.append((label, items))
+    return out
+
+
+def ensure_calendar_token(user) -> str:
+    """The user's personal calendar-feed token, minted on first use. Writes to
+    the DB — callers must not invoke it while impersonating."""
+    import secrets
+
+    profile = user.profile
+    if not profile.calendar_token:
+        profile.calendar_token = secrets.token_urlsafe(24)
+        profile.save(update_fields=["calendar_token"])
+    return profile.calendar_token

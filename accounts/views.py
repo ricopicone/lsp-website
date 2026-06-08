@@ -15,6 +15,7 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from workgroups.models import Workgroup, WorkgroupMembership
@@ -300,6 +301,52 @@ def _apply_headshot(profile, new_file, crop, remove):
     profile.headshot_crop = crop or {}
 
 
+def _profile_edit_context(request, *, uform=None, pform=None, image_error=None):
+    """Context for the profile editor — shared by the standalone page and the
+    embedded My LSP Profile tab. Bound forms may be passed in to re-render a
+    failed POST with errors.
+
+    Field-group flags: only show listing/practice sections to members who
+    actually appear on public pages, and billing only to faculty. The public
+    directory lists everyone in a directory role (Profile.public is not a gate
+    anywhere — see _directory_qs), and faculty show on event pages.
+    """
+    user = request.user
+    profile = user.profile
+    if uform is None:
+        uform = UserNameForm(instance=user)
+    if pform is None:
+        pform = ProfileEditForm(instance=profile)
+    show_practice = profile.role in {
+        Profile.Role.ANALYST,
+        Profile.Role.CANDIDATE,
+        Profile.Role.PRE_CANDIDATE,
+    }
+    return {
+        "uform":         uform,
+        "pform":         pform,
+        "profile":       profile,
+        "saved":         request.GET.get("saved") == "1",
+        "image_error":   image_error,
+        "show_listing":  profile.is_in_directory or profile.is_faculty,
+        "show_practice": show_practice,
+        "show_billing":  profile.is_faculty,
+        "can_change_email": can_change_email(user),
+    }
+
+
+def _profile_saved_redirect(request) -> str:
+    """Where to land after a successful save: a validated posted ``next`` (the
+    My LSP Profile tab, when embedded), else the standalone editor."""
+    next_url = request.POST.get("next")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}
+    ):
+        sep = "&" if "?" in next_url else "?"
+        return f"{next_url}{sep}saved=1#saved"
+    return reverse("profile_edit") + "?saved=1#saved"
+
+
 @login_required
 def profile_edit(request):
     """Self-service profile editor (USR-6+): name, headshot, bio, listing.
@@ -307,11 +354,12 @@ def profile_edit(request):
     Edits ``User`` name fields and the member-editable ``Profile`` fields in
     one page. ``role`` / ``is_faculty`` stay staff-only and render read-only.
     The headshot is processed through the Pillow square-crop pipeline so it
-    renders correctly in every circle/square frame across the site.
+    renders correctly in every circle/square frame across the site. The same
+    editor is embedded as the My LSP Profile tab; a posted ``next`` (validated)
+    sends a successful save back there.
     """
     user = request.user
     profile = user.profile
-    image_error = None
 
     if request.method == "POST":
         uform = UserNameForm(request.POST, instance=user)
@@ -324,36 +372,20 @@ def profile_edit(request):
                 prof = pform.save(commit=False)
                 _apply_headshot(prof, new_file, crop, remove)
             except InvalidImage as exc:
-                image_error = str(exc)
-            else:
-                uform.save()
-                prof.save()
-                return redirect(reverse("profile_edit") + "?saved=1#saved")
-    else:
-        uform = UserNameForm(instance=user)
-        pform = ProfileEditForm(instance=profile)
-
-    # Field-group flags: only show listing/practice sections to members who
-    # actually appear on public pages, and billing only to faculty. The
-    # public directory lists everyone in a directory role (Profile.public is
-    # not a gate anywhere — see _directory_qs), and faculty show on event pages.
-    show_listing = profile.is_in_directory or profile.is_faculty
-    show_practice = profile.role in {
-        Profile.Role.ANALYST,
-        Profile.Role.CANDIDATE,
-        Profile.Role.PRE_CANDIDATE,
-    }
-    return render(request, "accounts/profile_edit.html", {
-        "uform":         uform,
-        "pform":         pform,
-        "profile":       profile,
-        "saved":         request.GET.get("saved") == "1",
-        "image_error":   image_error,
-        "show_listing":  show_listing,
-        "show_practice": show_practice,
-        "show_billing":  profile.is_faculty,
-        "can_change_email": can_change_email(user),
-    })
+                return render(
+                    request, "accounts/profile_edit.html",
+                    _profile_edit_context(request, uform=uform, pform=pform,
+                                          image_error=str(exc)),
+                )
+            uform.save()
+            prof.save()
+            return redirect(_profile_saved_redirect(request))
+        return render(
+            request, "accounts/profile_edit.html",
+            _profile_edit_context(request, uform=uform, pform=pform),
+        )
+    return render(request, "accounts/profile_edit.html",
+                  _profile_edit_context(request))
 
 
 @require_POST
