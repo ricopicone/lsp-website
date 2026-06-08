@@ -24,7 +24,13 @@ reference. Keep them in sync when you change either.
 | `ops/deploy/lsp-active.conf.example` | `/etc/nginx/conf.d/lsp-active.conf` (helper-managed) |
 | `ops/deploy/lsp.conf.snippet`        | the proxy_pass lines in `/etc/nginx/conf.d/lsp.conf` |
 | `ops/deploy/sudoers.d-lsp-deploy`    | `/etc/sudoers.d/lsp-deploy` (root:root, 0440) |
+| `ops/deploy/lsp-web-exec`            | `/usr/local/bin/lsp-web-exec` (root:root, 0755) |
 | —                                    | `~/lsp-website/.active-color` (state: `blue`/`green`) |
+
+Because the active container name alternates (`lsp-website-web_blue-1` ↔
+`web_green-1`), anything that `docker exec`s the app — notably the host systemd
+timer services — must resolve the live color via `lsp-web-exec python manage.py
+<cmd>`, never a hardcoded name.
 
 `compose.yml` (in the repo) defines `web_blue` (:8001) and `web_green` (:8002)
 plus shared `redis`; the deploy script always targets one color by name.

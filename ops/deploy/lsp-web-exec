@@ -1,0 +1,11 @@
+#!/bin/bash
+# Run a command in whichever blue-green app container is currently live
+# (lsp-website-web_blue-1 / lsp-website-web_green-1). Installed at
+# /usr/local/bin/lsp-web-exec (root:root, 0755). Host systemd timer services use
+# this instead of a hardcoded container name, since the active color alternates
+# every deploy. Reference copy — the host is the source of truth (see README.md).
+#   Usage: lsp-web-exec python manage.py <command>
+set -euo pipefail
+name=$(docker ps --filter "name=lsp-website-web_" --format "{{.Names}}" | head -1)
+[ -n "$name" ] || { echo "lsp-web-exec: no running app container" >&2; exit 1; }
+exec docker exec "$name" "$@"
