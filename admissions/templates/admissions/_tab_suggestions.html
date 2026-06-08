@@ -1,7 +1,8 @@
 {# Suggestions tab — the member's own suggestions (suggestions.Suggestion). The tab is only offered when SUGGESTIONS_ENABLED and the user is a member. #}
 <div class="space-y-6">
-  <div class="flex items-center justify-end">
-    <a href="{% url 'suggestions:suggest' %}" class="btn btn-primary btn-sm">＋ New suggestion</a>
+  <div class="flex items-start justify-between gap-3">
+    <p class="text-sm text-base-content/60">Your suggestions for improving this <strong>website</strong>—a bug, a typo, or an idea for a feature or design change. (Not seminar or event proposals.)</p>
+    <a href="{% url 'suggestions:suggest' %}" class="btn btn-primary btn-sm shrink-0">＋ New suggestion</a>
   </div>
 
   {% if suggestions %}

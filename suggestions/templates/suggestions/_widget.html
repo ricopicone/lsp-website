@@ -17,8 +17,9 @@ context; names match the Suggestion model / SuggestionForm.
 
 <dialog id="lsp-suggest-modal" class="modal">
   <div class="modal-box max-w-lg">
-    <h3 class="font-serif text-xl">Suggest a change</h3>
-    <p class="mt-1 text-sm text-base-content/60" data-suggest-page-label></p>
+    <h3 class="font-serif text-xl">Suggest a website change</h3>
+    <p class="mt-1 text-sm text-base-content/70">Spotted a bug, typo, or have an idea for this site? Tell us.</p>
+    <p class="text-sm text-base-content/60" data-suggest-page-label></p>
 
     <form action="{% url 'suggestions:submit' %}" method="post" enctype="multipart/form-data"
           data-suggest-form class="mt-4 space-y-4">
