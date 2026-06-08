@@ -267,7 +267,7 @@ def test_index_lists_open_channel_but_not_inaccessible_private(client):
     assert "Open One" in body
     assert private.name not in body
     # the privacy promise is on the page
-    assert "including channels marked" in body
+    assert "visible only to LSP members" in body
 
 
 @pytest.mark.django_db
