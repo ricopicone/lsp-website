@@ -325,3 +325,29 @@ def test_schedule_note_renders_without_sessions(client):
 def test_readings_entries_splits_nonblank_lines():
     e = Event(readings="A. One.\n\n  B. Two.  \nC. Three.")
     assert e.readings_entries() == ["A. One.", "B. Two.", "C. Three."]
+
+
+@pytest.mark.django_db
+def test_asterisk_italics_render_and_html_is_escaped(client, published_event):
+    """*Title* renders as <em>Title</em> in readings and description; raw HTML
+    in member-authored text stays escaped."""
+    published_event.description = "First paragraph on *Écrits*.\n\nSecond paragraph. <b>raw</b>"
+    published_event.readings = "Lacan, J. *Écrits*, (2006). <script>x</script>"
+    published_event.save()
+    html = client.get(
+        reverse("events:detail", args=[published_event.slug])
+    ).content.decode()
+    assert html.count("<em>Écrits</em>") == 2
+    assert "*Écrits*" not in html
+    assert "<script>x</script>" not in html and "&lt;script&gt;x&lt;/script&gt;" in html
+    assert "<b>raw</b>" not in html and "&lt;b&gt;raw&lt;/b&gt;" in html
+
+
+def test_inline_italics_filter_edge_cases():
+    from events.templatetags.event_format import inline_italics
+
+    assert inline_italics("a *b* c") == "a <em>b</em> c"
+    # A lone asterisk stays literal; empty pairs don't match.
+    assert inline_italics("5 * 3") == "5 * 3"
+    assert inline_italics("**") == "**"
+    assert inline_italics("<i>x</i>") == "&lt;i&gt;x&lt;/i&gt;"

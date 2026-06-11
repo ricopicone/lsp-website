@@ -33,7 +33,7 @@ SEMINARS = [
         "event_type": Event.Type.SEMINAR,
         "description": """This seminar introduces a close reading of Freud’s 1930 treatise, exploring the structural antagonism between individual drive and the demands of the collective. In the current American political landscape, characterized by intensifying polarizations and the shifting boundaries of the commons, Freud’s insights into the cultural superego and the aggressive underside of communal bonds take on a renewed, albeit ambiguous, urgency. We will examine how the renunciation of drives—once considered the price of entry into civilization—is being renegotiated in a digital and fragmented social field.""",
         "readings": [
-            "Freud, S. Civilization and Its Discontents, (2015). Trans. G. C. Richter. Broadview Press.",
+            "Freud, S. *Civilization and Its Discontents*, (2015). Trans. G. C. Richter. Broadview Press.",
         ],
         "schedule_note": "Thursdays, 5:00 PM – 7:00 PM Pacific Time. Weekly for 5 sessions, starting October 1st. Online via Zoom.",
         "contact": "besharaster@gmail.com",
@@ -66,17 +66,17 @@ Prospective participants are asked to reach out to the faculty facilitators at l
         # Description + readings were refined in prod admin after the first
         # import (2026-06) — this entry mirrors that richer version.
         "readings": [
-            "Apollon, Willy. Psychoses: L’offre de l’analyste. GIFRIC, 1999. Excerpts.",
-            "Apollon, Willy. “Le transfert du psychotique.” Le traitement psychanalytique des psychoses: Sa clinique et ses résultats, collectif sous la direction du Gifric, Éditions du Gifric, 2024, pp. 163-185.",
-            "Apollon, Willy, Danielle Bergeron, and Lucie Cantin. \"The Treatment of Psychosis.\" The Subject of Lacan: A Lacanian Reader for Psychologists, edited by Kareen Ror Malone and Stephen R. Friedlander, State University of New York Press, 2000, pp. 209-227.",
-            "Bergeron, Danielle. “De la crise à l'impasse dans la cure psychanalytique\" [“From Crisis to Impasse in the Psychoanalytic Cure\"]. Santé mentale au Québec, vol. 35, no. 2, 2010, pp. 13–29. Excerpts.",
-            "Cantin, Lucie, Jeffrey S. Librett, and Tracy McNulty, editors. A Psychoanalysis for a Reemergent Humanity: The Metapsychology of Willy Apollon. State University of New York Press, 2025.",
-            "Fimiani, Bret. “Towards a New Ethics.” Psychosis and Extreme States: An Ethic for Treatment, Palgrave Macmillan, 2021, pp. 103–135.",
-            "Lacan, Jacques. “A Lacanian Psychosis: Interview by Jacques Lacan.” Returning to Freud: Clinical Psychoanalysis in the School of Lacan, edited and translated by Stuart Schneiderman, Yale University Press, 1980, pp. 19–41.",
-            "Miller, Alexander Reid. “What Was the 388? Opening the Dossier.” Psychoanalysis and History, vol. 27, no. 2, 2025, pp. 203–221.",
-            "Rogers, Annie G. “Hallucinated Bodies: Art and Its Alphabets in Psychosis.” Incandescent Alphabets: Psychosis and the Enigma of Language, Routledge, 2018, pp. 45-71.",
-            "Rogers, Annie G. “Infinite Code: Clocks, Calendars, Numbers, Music, Scripts.” Incandescent Alphabets: Psychosis and the Enigma of Language, Routledge, 2018, pp. 73-101.",
-            "Vanderwees, Chris. “Treating Psychosis in Québec: A Conversation with the Founders of GIFRIC and the 388.” The Museum of Dreams, translated by Daniel Wilson, Dec. 2019, The Museum of Dreams.",
+            "Apollon, Willy. *Psychoses: L’offre de l’analyste*. GIFRIC, 1999. Excerpts.",
+            "Apollon, Willy. “Le transfert du psychotique.” *Le traitement psychanalytique des psychoses: Sa clinique et ses résultats*, collectif sous la direction du Gifric, Éditions du Gifric, 2024, pp. 163-185.",
+            "Apollon, Willy, Danielle Bergeron, and Lucie Cantin. \"The Treatment of Psychosis.\" *The Subject of Lacan: A Lacanian Reader for Psychologists*, edited by Kareen Ror Malone and Stephen R. Friedlander, State University of New York Press, 2000, pp. 209-227.",
+            "Bergeron, Danielle. “De la crise à l'impasse dans la cure psychanalytique\" [“From Crisis to Impasse in the Psychoanalytic Cure\"]. *Santé mentale au Québec*, vol. 35, no. 2, 2010, pp. 13–29. Excerpts.",
+            "Cantin, Lucie, Jeffrey S. Librett, and Tracy McNulty, editors. *A Psychoanalysis for a Reemergent Humanity: The Metapsychology of Willy Apollon*. State University of New York Press, 2025.",
+            "Fimiani, Bret. “Towards a New Ethics.” *Psychosis and Extreme States: An Ethic for Treatment*, Palgrave Macmillan, 2021, pp. 103–135.",
+            "Lacan, Jacques. “A Lacanian Psychosis: Interview by Jacques Lacan.” *Returning to Freud: Clinical Psychoanalysis in the School of Lacan*, edited and translated by Stuart Schneiderman, Yale University Press, 1980, pp. 19–41.",
+            "Miller, Alexander Reid. “What Was the 388? Opening the Dossier.” *Psychoanalysis and History*, vol. 27, no. 2, 2025, pp. 203–221.",
+            "Rogers, Annie G. “Hallucinated Bodies: Art and Its Alphabets in Psychosis.” *Incandescent Alphabets: Psychosis and the Enigma of Language*, Routledge, 2018, pp. 45-71.",
+            "Rogers, Annie G. “Infinite Code: Clocks, Calendars, Numbers, Music, Scripts.” *Incandescent Alphabets: Psychosis and the Enigma of Language*, Routledge, 2018, pp. 73-101.",
+            "Vanderwees, Chris. “Treating Psychosis in Québec: A Conversation with the Founders of GIFRIC and the 388.” *The Museum of Dreams*, translated by Daniel Wilson, Dec. 2019, The Museum of Dreams.",
         ],
         "schedule_note": "1st, 3rd, and 5th Saturdays, October 3, 2026 – April 17, 2027 (except December 19 and January 2), 9am-11:30am Pacific Time. Online.",
         "contact": "Garret Barnwell, Bret Fimiani, Richard Reinhardt, and Shanna Carlson de la Torre at lsppsychosisworkshop@gmail.com",
@@ -89,11 +89,11 @@ Prospective participants are asked to reach out to the faculty facilitators at l
         "start_date": date(2026, 9, 1),
         "end_date":   date(2027, 5, 31),
         "event_type": Event.Type.SEMINAR,
-        "description": """We move on slowly. But this is the real tempo of psychoanalysis because the searching for truth, like what we experience in analysis, takes detours. So in this year’s seminar, we will continue to read Lacan’s Seminar VIII: Transference.
+        "description": """We move on slowly. But this is the real tempo of psychoanalysis because the searching for truth, like what we experience in analysis, takes detours. So in this year’s seminar, we will continue to read Lacan’s *Seminar VIII: Transference*.
 
 We read and we talk. In talking we associate from the text of Lacan, and when we associate we do not know the destination but the signifiers will bring us to it.""",
         "readings": [
-            "Lacan, Jacques. The Seminar of Jacques Lacan Book VIII: Transference. Trans. Bruce Fink. Cambridge: Polity Press, 2015.",
+            "Lacan, Jacques. *The Seminar of Jacques Lacan Book VIII: Transference*. Trans. Bruce Fink. Cambridge: Polity Press, 2015.",
         ],
         "schedule_note": "9:00-11:00 am (Beijing time), every third and fourth Wednesday each month, from September to May. Online.",
         "contact": "celavieglove@126.com; cissyhongzhou@126.com",
@@ -111,14 +111,14 @@ We read and we talk. In talking we associate from the text of Lacan, and when we
 
 Our aim is to demystify and spark interest in Lacanian psychoanalytic practice and invite participants to consider how this tradition may inform their own. Toward this end, in addition to guided discussion of assigned readings, participants will be encouraged to share and discuss clinical work in relation to the material we read. As a condition of joining the seminar everyone will sign a confidentiality agreement. This seminar is limited to 12 participants.""",
         "readings": [
-            "Freud, S. Notes Upon a Case of Obsessional Neurosis (1909) and other selections from The Standard Edition of the Complete Psychological Works of Sigmund Freud. Ed. James Strachey.",
-            "Gessert, A. “What We Can Still Learn from the Rat Man” in Freud’s Principle Case Studies Revisited (2025). Eds. Helena Texier and Eve Watson. Routledge, (99-108).",
-            "Lacan, J. Selections from Écrits: The First Complete Edition in English (2006). Trans. Bruce Fink. W. W. Norton & Company.",
-            "Lacan, J. “The Neurotic's Individual Myth,” Trans. Martha Noel Evans. Psychoanalytic Quarterly (1979), vol. 48. Routledge, (pp.405-425).",
-            "Lévi-Strauss, C. Selections from Structural Anthropology (1963). Trans. Claire Jacobson and Brooke Grundfest Schoepf. New York: Basic Books, Inc.",
-            "de Saussure, F. Selections from Course in General Linguistics (1915). Trans. Roy Harris. Chicago: Open Court Classics.",
-            "Rogers, Annie. “Surprising Sounds” in The Unsayable (2007). New York: Ballantine Books, (pp. 97-210).",
-            "Verhaeghe, Paul. Selections from On Being Normal and Other Disorders: A Manual for Clinical Pscyhodiagnostics (2004). Trans. Sigi Jottkandt. New York: Other Press.",
+            "Freud, S. Notes Upon a Case of Obsessional Neurosis (1909) and other selections from *The Standard Edition of the Complete Psychological Works of Sigmund Freud*. Ed. James Strachey.",
+            "Gessert, A. “What We Can Still Learn from the Rat Man” in *Freud’s Principle Case Studies Revisited* (2025). Eds. Helena Texier and Eve Watson. Routledge, (99-108).",
+            "Lacan, J. Selections from *Écrits: The First Complete Edition in English* (2006). Trans. Bruce Fink. W. W. Norton & Company.",
+            "Lacan, J. “The Neurotic's Individual Myth,” Trans. Martha Noel Evans. *Psychoanalytic Quarterly* (1979), vol. 48. Routledge, (pp.405-425).",
+            "Lévi-Strauss, C. Selections from *Structural Anthropology* (1963). Trans. Claire Jacobson and Brooke Grundfest Schoepf. New York: Basic Books, Inc.",
+            "de Saussure, F. Selections from *Course in General Linguistics* (1915). Trans. Roy Harris. Chicago: Open Court Classics.",
+            "Rogers, Annie. “Surprising Sounds” in *The Unsayable* (2007). New York: Ballantine Books, (pp. 97-210).",
+            "Verhaeghe, Paul. Selections from *On Being Normal and Other Disorders: A Manual for Clinical Pscyhodiagnostics* (2004). Trans. Sigi Jottkandt. New York: Other Press.",
             "Further readings will be added from time to time throughout the year.",
         ],
         "schedule_note": "First Saturday of the month, September 2026-May 2027, 11am-1pm EST. January meeting will instead be held on 1/9/27 and May meeting will be held on 5/8/27. In person in Philadelphia, PA; exact location TBD.",
@@ -134,9 +134,9 @@ Our aim is to demystify and spark interest in Lacanian psychoanalytic practice a
         "event_type": Event.Type.SEMINAR,
         "description": """In this seminar, we will continue to retrace the signifying chain of Lacan’s early published seminar, reading aloud and discussing one lecture therefrom each time we meet. Between sessions, participants will be encouraged to read the texts Lacan cites. By proceeding this way, we will revisit Freud’s writings impacted by the effects of an encounter with the symbolic apparatus of Lacan’s teaching and our own speaking in session. Those who are practicing are invited to share any clinical material that resonates with what emerges in our readings and conversations. As a condition for participation, all will sign a confidentiality agreement. We will pick up in Book III - The Psychoses where we left off in June 2026 - about halfway through, but previous participation is not required to join. Upon concluding the seminar (sometime in the winter of 2027), we will move to reading and discussion of more contemporary writing on the Lacanian clinic of psychosis.""",
         "readings": [
-            "Freud, S. Selections from The Standard Edition of the Complete Psychological Works of Sigmund Freud. Ed. J. Strachey.",
-            "Lacan, J. (1993). The Seminar of Jacques Lacan, Book 3: The Psychoses – 1955-1956. Trans. R. Grigg. WW Norton & Company.",
-            "Schreber, D.P. (2000). Memoirs of My Nervous Illness. Trans. I. Macalpine & R. A. Hunter. New York Review of Books.",
+            "Freud, S. Selections from *The Standard Edition of the Complete Psychological Works of Sigmund Freud*. Ed. J. Strachey.",
+            "Lacan, J. (1993). *The Seminar of Jacques Lacan, Book 3: The Psychoses – 1955-1956*. Trans. R. Grigg. WW Norton & Company.",
+            "Schreber, D.P. (2000). *Memoirs of My Nervous Illness*. Trans. I. Macalpine & R. A. Hunter. New York Review of Books.",
             "Further readings will be added upon our completion of Seminar III.",
         ],
         "schedule_note": "1st and 3rd Tuesday of the month at 8:00pm-10pm EST, September 2026 through May 2027. There will be no meeting on the 3rd Tuesday of December. On Zoom.",
@@ -159,11 +159,11 @@ Respecting the limits of language and the unknown unsayable that comes with drea
 As a condition of joining the seminar, everyone will sign a confidentiality agreement. Limited to 12 participants presenting cases with dreams.""",
         "readings": [
             "Please read or re-read the following foundational texts prior to our first meeting.",
-            "Freud, S. (1915-16). The Standard Edition of the Complete Psychological Works of Sigmund Freud, Volume XV: Introductory Lectures on Psycho-Analysis (Part II).",
-            "Freud, S. (1933). New Introductory Lectures On Psycho-Analysis. The Standard Edition of the Complete Psychological Works of Sigmund Freud, Volume XXII (1932-1936): New Introductory Lectures on Psycho-Analysis and Other Works, Lecture XXIX Revision of the Theory of Dreams (pages 6-29).",
-            "Additional readings will be added monthly during the year. I will continue to draw from Ecrits and Seminar V.",
-            "Lacan, J. (2007). Ecrits (B. Fink, Trans.). WW Norton.",
-            "Lacan, J. (1998). Seminar 5-Formations of the unconscious. (R Grigg, Trans.). WW Norton.",
+            "Freud, S. (1915-16). *The Standard Edition of the Complete Psychological Works of Sigmund Freud, Volume XV: Introductory Lectures on Psycho-Analysis (Part II)*.",
+            "Freud, S. (1933). *New Introductory Lectures On Psycho-Analysis*. *The Standard Edition of the Complete Psychological Works of Sigmund Freud, Volume XXII (1932-1936): New Introductory Lectures on Psycho-Analysis and Other Works*, Lecture XXIX Revision of the Theory of Dreams (pages 6-29).",
+            "Additional readings will be added monthly during the year. I will continue to draw from *Ecrits* and Seminar V.",
+            "Lacan, J. (2007). *Ecrits* (B. Fink, Trans.). WW Norton.",
+            "Lacan, J. (1998). *Seminar 5-Formations of the unconscious*. (R Grigg, Trans.). WW Norton.",
         ],
         "schedule_note": "Monthly, September to May, 1st Fridays, 12-2pm Eastern Standard Time. On Zoom, by invitation.",
         "contact": "Diana Cuello at dianacuellophd@gmail.com",
@@ -184,11 +184,11 @@ So Lacan, 1968:  The truth is fractured.  Me, the truth, I speak
 ...in the two years between these resonant utterances Lacan undertook, as the watershed of May ’68 approached, a search for models that would advance, with the most discrete steps, away from refined or renewed forms of positivism towards what he called exercises of skepticism.  This (re)search would take up, he said, the misunderstandings and fragmentary things, still so alive, that tradition has bequeathed to us—not simply as brilliant jugglings between opposed doctrines but as veritable spiritual exercises, corresponding to an ethical praxis, imposed by the clinic.  He sought, as do we Lacanians today, a rubric that would give veritable density to the theory that remains to us.
 This search reached its apotheosis in the forging of a radical ‘algorithm’ that aimed to articulate the logic always at work, between a divided subject and the object cause of desire, in the mixed blood of conscious and unconscious scenarios, originary fantasies, grammatical transformations and infinite substitutions, myths, drives, history....
 What does it mean to act psychoanalytically, and what is the logic of the psychoanalytic act?  How does acting out inhere in repetition, and how does analytic play diverge from alienation and passage-à-l’acte, where a subject might fall, as Lacan says, off the stage and into the world?
-We’ll spend the next two years in a close line-by-line reading and discussion of Lacan’s Seminars XIV (1966— ‘67) and XV (1967— ‘68):  The Logic of Phantasy and The Psychoanalytic Act in English translation, alongside French versions of the texts.
+We’ll spend the next two years in a close line-by-line reading and discussion of Lacan’s Seminars XIV (1966— ‘67) and XV (1967— ‘68):  *The Logic of Phantasy and The Psychoanalytic Act* in English translation, alongside French versions of the texts.
 
 Enrollment limited.""",
         "readings": [
-            "Lacan, J. Seminar Books XIV and XV (Cormac Gallagher, transl). Additional readings as suggested.",
+            "Lacan, J. *Seminar Books XIV and XV* (Cormac Gallagher, transl). Additional readings as suggested.",
         ],
         "schedule_note": "Biweekly, Wednesdays 5—7 pm Pacific Time beginning 9 September, 2026. Online.",
         "contact": "benjamdavidson@me.com",
@@ -202,17 +202,17 @@ Enrollment limited.""",
         "end_date":   date(2027, 5, 8),
         "event_type": Event.Type.SEMINAR,
         "description": """“The Direction of Treatment and the Principles of its Power” is Lacan’s most explicit writing on clinical work where he criticizes his contemporaries for reversing Freud’s direction of treatment.  For Lacan, remaining true to Freud would be to begin with what Lacan calls the “rectification of the real,” thereby opening the way for transference and, subsequently, a bold interpretation.  Lacan accuses his contemporaries of inverting this direction by starting instead with weak interpretations, waiting for a transference to develop, and then slowly liquidating it through encouraging the analysand’s identification with their reality tested, securely attached ego.
-Lacan’s polemic is directed specifically against the 1956 collection of articles in La Psychanalyse d’aujourd’hui.  While familiarizing ourselves with this background material, we will more vigorously test Lacan’s claims against our own contemporaries.  Following Thomos Svolos’s Twenty-First Century Psychoanalysis, we will examine a clinical case of Thomas Ogden.  Expanding on Svolos’s analysis with the help of Stijn VanHeule, we will consider from a Lacanian perspective the more general treatment recommendations of Nancy McWilliams and Jonathan Shedler, two key authors of the Psychodynamic Diagnostic Manual.
+Lacan’s polemic is directed specifically against the 1956 collection of articles in *La Psychanalyse d’aujourd’hui*.  While familiarizing ourselves with this background material, we will more vigorously test Lacan’s claims against our own contemporaries.  Following Thomos Svolos’s *Twenty-First Century Psychoanalysis*, we will examine a clinical case of Thomas Ogden.  Expanding on Svolos’s analysis with the help of Stijn VanHeule, we will consider from a Lacanian perspective the more general treatment recommendations of Nancy McWilliams and Jonathan Shedler, two key authors of the *Psychodynamic Diagnostic Manual*.
 To orient ourselves, each class will begin with a brief review of Lacan’s Graph of Desire drawing on topologies from Lacan’s Seminars IX, X and XI.  The floor will then be opened for students to present their own clinical material while working through the week’s reading, focusing especially on selected citations from Lacan.
 Throughout, we will examine the clinical perils of drawing boundaries between Freud’s alleged standard direction of treatment, its acceptable variations, and its unacceptable deviations.""",
         "readings": [
-            "Lacan, J.  “The Direction of Treatment and the Principles of its Powers,” Écrits, (2006). Trans. Bruce Fink. New York: Norton (pp. 489-542).",
+            "Lacan, J.  “The Direction of Treatment and the Principles of its Powers,” *Écrits*, (2006). Trans. Bruce Fink. New York: Norton (pp. 489-542).",
             "Secondary",
-            "McWilliams, N and Shedler, J. “Personality Styles and Disorders – P Axis,” (2026).  In Psychodynamic Diagnostic Manual: (PDM-3), USA: Guilford Press, (pp. 651-708).",
-            "Ogden, T. “The Analytic Third: Working with Intersubjective Clinical Facts,” Subjects of Analysis, (1994), USA: Jason Aronson Inc. (pp. 61-95).",
-            "Shedler, J.  “Integrating clinical and empirical approaches to personality: The Shedler-Westen Assessment Procedure (SWAP),” (2022). In R.E. Feinstein (Ed.), Personality Disorders. Oxford: Oxford University Press (pp. 87-108).",
-            "Svolos, T.  “Introducing the Symptom,” “Introducing the new symptoms,” and “Countertransference is the symptom of the analyst,” Twenty-First Century Psychoanalysis, (2018). New York: Routledge (pp. 71-81, 113-125, 207-220).",
-            "VanHeule, S. “In between the signifier and the Real: On depressive experiences,” in Lacan on Depression and Melancholia, (2023), Eds. Derek Hook and Stijn VanHeule.  New York: Routledge, (pp. 29-40).",
+            "McWilliams, N and Shedler, J. “Personality Styles and Disorders – P Axis,” (2026).  In *Psychodynamic Diagnostic Manual: (PDM-3)*, USA: Guilford Press, (pp. 651-708).",
+            "Ogden, T. “The Analytic Third: Working with Intersubjective Clinical Facts,” *Subjects of Analysis*, (1994), USA: Jason Aronson Inc. (pp. 61-95).",
+            "Shedler, J.  “Integrating clinical and empirical approaches to personality: The Shedler-Westen Assessment Procedure (SWAP),” (2022). In R.E. Feinstein (Ed.), *Personality Disorders*. Oxford: Oxford University Press (pp. 87-108).",
+            "Svolos, T.  “Introducing the Symptom,” “Introducing the new symptoms,” and “Countertransference is the symptom of the analyst,” *Twenty-First Century Psychoanalysis*, (2018). New York: Routledge (pp. 71-81, 113-125, 207-220).",
+            "VanHeule, S. “In between the signifier and the Real: On depressive experiences,” in *Lacan on Depression and Melancholia*, (2023), Eds. Derek Hook and Stijn VanHeule.  New York: Routledge, (pp. 29-40).",
         ],
         # Source said "running through May 2026" — corrected to 2027 (matches
         # the event's end date).
@@ -227,10 +227,10 @@ Throughout, we will examine the clinical perils of drawing boundaries between Fr
         "start_date": date(2027, 1, 17),
         "end_date":   date(2027, 6, 20),
         "event_type": Event.Type.SEMINAR,
-        "description": """This peer consultation seminar takes as its crux the radical shift in psychoanalytic theory instantiated by Beyond the Pleasure Principle (1920) and its introduction of the death drives (notably plural in the original German Todestriebe). We will engage in a close reading of the Freudian text alongside clinical case discussion, exploring how the death drives operate as fundamental dynamics (de)structuring subjective experience. Particular emphasis will be given to the unique rhythm(s) of repetition - traumatic, uncanny, ludic or otherwise. Supplemental readings from Lacan’s Four Fundamental Concepts will be considered. Participants will be invited to present case material on moments of repetition, impasse, and insistences—or other themes that emerge from our reading. This seminar is designed for clinicians already seeing patients who wish to deepen their engagement with analytic technique and expand their capacity to work with  the death drives and repetition in clinical practice. Limited to 8 participants.""",
+        "description": """This peer consultation seminar takes as its crux the radical shift in psychoanalytic theory instantiated by *Beyond the Pleasure Principle* (1920) and its introduction of the death drives (notably plural in the original German Todestriebe). We will engage in a close reading of the Freudian text alongside clinical case discussion, exploring how the death drives operate as fundamental dynamics (de)structuring subjective experience. Particular emphasis will be given to the unique rhythm(s) of repetition - traumatic, uncanny, ludic or otherwise. Supplemental readings from Lacan’s Four Fundamental Concepts will be considered. Participants will be invited to present case material on moments of repetition, impasse, and insistences—or other themes that emerge from our reading. This seminar is designed for clinicians already seeing patients who wish to deepen their engagement with analytic technique and expand their capacity to work with  the death drives and repetition in clinical practice. Limited to 8 participants.""",
         "readings": [
-            "Freud, S. Beyond the Pleasure Principle, (1920), The Standard Edition of the Complete Psychological Works of Sigmund Freud, Volume XVIII.",
-            "Lacan, J. The Seminar of Jacques Lacan, Book XI: The Four Fundamental Concepts of Psychoanalysis, (1998), Ed. Jacques-Alain Miller, Trans. Alan Sheridan. New York: Norton.",
+            "Freud, S. *Beyond the Pleasure Principle*, (1920), *The Standard Edition of the Complete Psychological Works of Sigmund Freud*, Volume XVIII.",
+            "Lacan, J. *The Seminar of Jacques Lacan, Book XI: The Four Fundamental Concepts of Psychoanalysis*, (1998), Ed. Jacques-Alain Miller, Trans. Alan Sheridan. New York: Norton.",
         ],
         "schedule_note": "Third Sunday of the month, January 2027 – June 2027, 10:00am-12:00pm ET. Virtual (Zoom).",
         "contact": "smosblech@proton.me",
@@ -247,7 +247,7 @@ Throughout, we will examine the clinical perils of drawing boundaries between Fr
 
 Each session will be a chapter of the Seminar. This will not be a reading-aloud-together class – rather, each is expected to have read, and – following a mode in this early Lacan – each session will – usually – begin with a participant presenting questions and thoughts about the chapter.
 
-We will also read in their entirety Freud’s Beyond The Pleasure Principle; and – aloud, together – Sophocles’ Oedipus At Colonus.
+We will also read in their entirety Freud’s *Beyond The Pleasure Principle*; and – aloud, together – Sophocles’ *Oedipus At Colonus*.
 
 It is notable that Lacan, in these first, foundational, remarkable teachings, is at play in the metaphors of light and reflection – and ends, almost thirty years later – like Oedipus himself – in haptic blindness, feeling his way with his hands, signifying with string. Like Oedipus – his end audible in this, his beginning.
 
@@ -259,10 +259,10 @@ So, in such a time – ours – a return to the initial caustic applied to the s
 A threshold, as was Seminar III, to psychosis – here in ‘our time’.
 Towards tuning an analyst’s ears to a register of speech as solvent – a hearing speaking – these two Seminars are exemplars.""",
         "readings": [
-            "Lacan, Jacques. The Seminar of Jacques Lacan, Book I. Freud’s Papers On Technique, 1953-1954. Trans. John Forrester. New York:  Norton, 1988.",
-            "Lacan, Jacques. The Seminar of Jacques Lacan, Book II. The Ego in Freud’s Theory and in the Technique of Psychoanalysis, 1954-1955. Trans. Sylvia Tomaselli. New York:  Norton, 1991.",
-            "Freud, S. Beyond The Pleasure Principle. Trans. James Strachey. New York:  Norton, 1961.",
-            "Sophocles. “Oedipus at Colonus,” in Sophocles I. Trans. David Greene. Chicago:  University of Chicago, 1991. (One of various translations.)",
+            "Lacan, Jacques. *The Seminar of Jacques Lacan, Book I. Freud’s Papers On Technique, 1953-1954*. Trans. John Forrester. New York:  Norton, 1988.",
+            "Lacan, Jacques. *The Seminar of Jacques Lacan, Book II. The Ego in Freud’s Theory and in the Technique of Psychoanalysis, 1954-1955*. Trans. Sylvia Tomaselli. New York:  Norton, 1991.",
+            "Freud, S. *Beyond The Pleasure Principle*. Trans. James Strachey. New York:  Norton, 1961.",
+            "Sophocles. “Oedipus at Colonus,” in *Sophocles I*. Trans. David Greene. Chicago:  University of Chicago, 1991. (One of various translations.)",
         ],
         "schedule_note": "Every other Monday, 5-7 pm PT, 8-10 pm ET, 9/28/26 - 6/28/27. Virtual.",
         "contact": "half.outside.it@gmail.com",
@@ -279,12 +279,12 @@ Towards tuning an analyst’s ears to a register of speech as solvent – a hear
 
 At the heart of this discourse, or in the position of the agent proper, is the position of the analyst and the analytic act itself as one that makes way for the subject of the unconscious as a barred subject. This seminar will work on the question of the “act” from the perspective of the psychoanalytic experience insofar as it concerns a desire and its cause, jouissance and its work and transformation, and the Thing at work in the life and being of the subject.""",
         "readings": [
-            "Freud, S. Selections from The Standard Edition of the Complete Psychological Works of Sigmund Freud. Ed. J.Strachey.",
-            "Lacan, J. (2006). “The Instance of the Letter in the Unconscious or Reason Since Freud,” Écrits. (2006). Trans. Bruce Fink, New York: Norton.",
-            "Lacan, J. Seminar XV, The Psychoanalytic Act, 1967-1968. Trans., C. Ghallager.",
-            "Lacan, J. Selections from the Seminars of Jacques Lacan, Seminars XVII, XIX, XX, Encore, and Seminar XXI, Les Non-dupes Errent, 1973-1974. Trans. C. Ghallager",
-            "Lacan, J. (1990). “Founding Act,” in Television, A Challenge to the Psychoanalytic Establishment. Trans. Denis Hollier, Rosalind Krauss, and Annette Michelson. New York: Norton.",
-            "Lacan, J. (1990). “Letter of Dissolution,” in Television, A Challenge to the Psychoanalytic Establishment. Trans. Denis Hollier, Rosalind Krauss, and Annette Michelson. New York: Norton.",
+            "Freud, S. Selections from *The Standard Edition of the Complete Psychological Works of Sigmund Freud*. Ed. J.Strachey.",
+            "Lacan, J. (2006). “The Instance of the Letter in the Unconscious or Reason Since Freud,” *Écrits*. (2006). Trans. Bruce Fink, New York: Norton.",
+            "Lacan, J. *Seminar XV, The Psychoanalytic Act*, 1967-1968. Trans., C. Ghallager.",
+            "Lacan, J. Selections from the Seminars of Jacques Lacan, Seminars XVII, XIX, XX, *Encore*, and Seminar XXI, *Les Non-dupes Errent*, 1973-1974. Trans. C. Ghallager",
+            "Lacan, J. (1990). “Founding Act,” in *Television, A Challenge to the Psychoanalytic Establishment*. Trans. Denis Hollier, Rosalind Krauss, and Annette Michelson. New York: Norton.",
+            "Lacan, J. (1990). “Letter of Dissolution,” in *Television, A Challenge to the Psychoanalytic Establishment*. Trans. Denis Hollier, Rosalind Krauss, and Annette Michelson. New York: Norton.",
         ],
         "schedule_note": "Every 4th Saturday of the month September, November, January, March, May, and June, 2026 through 2027, beginning September 26, 10:00 am-12 noon Pacific Standard Time. Online via Zoom.",
         "contact": "Christopher Meyer, PhD, (323) 930-9662, cmeyerwoeswar@gmail.com",
@@ -302,8 +302,8 @@ At the heart of this discourse, or in the position of the agent proper, is the p
 
 The seminar will be organized around the topics of the work of the dream, the symptom, and the logic of fantasy as an articulation of the subject of the unconscious in relationship to desire and jouissance as they are set to work in the life of the speaking-being in their place and time. As an in-person seminar, each meeting of the seminar will offer a Freudian-Lacanian practitioner working in the greater Los Angeles area the opportunity to present their clinical work based upon their experience of the analytic encounter, or clinical engagement, as it relates to what Lacan referred to as “factor C,” or the cultural factor in his essay “The Function and Field of Speech and Language.”""",
         "readings": [
-            "Freud, S. Selections from The Standard Edition of the Complete Psychological Works of Sigmund Freud. Ed. J.Strachey.",
-            "Lacan, J. (2006). “The Function and Field of Speech and Language,” Écrits. (2006). Trans. Bruce Fink, New York: Norton.",
+            "Freud, S. Selections from *The Standard Edition of the Complete Psychological Works of Sigmund Freud*. Ed. J.Strachey.",
+            "Lacan, J. (2006). “The Function and Field of Speech and Language,” *Écrits*. (2006). Trans. Bruce Fink, New York: Norton.",
         ],
         "schedule_note": "4th Saturday of the month October, February, and April — October 24, February 27, 2027, and April 24, 2027, 10:00 am-12 noon Pacific Standard Time. In person; location TBD, mid-City Los Angeles, California.",
         "contact": "Christopher Meyer, PhD, (323) 930-9662, cmeyerwoeswar@gmail.com",
@@ -316,14 +316,14 @@ The seminar will be organized around the topics of the work of the dream, the sy
         "start_date": date(2026, 10, 13),
         "end_date":   date(2027, 6, 8),
         "event_type": Event.Type.SEMINAR,
-        "description": """The logic and experience of this seminar proposes and assumes a methodology and a praxis: our reading of Freud focuses on the ways in which Lacan’s teaching in his seminar and writing in the Écrits transmits a savoir that orients clinical practice insofar as it welcomes the dream, symptom and unconscious formations as they break through as representative of a censored unconscious. We begin with the question of how the position of the analyst in Lacanian clinical practice creates a frame for the work of the unconscious as it manifests in the speech of the analysand.
+        "description": """The logic and experience of this seminar proposes and assumes a methodology and a praxis: our reading of Freud focuses on the ways in which Lacan’s teaching in his seminar and writing in the *Écrits* transmits a savoir that orients clinical practice insofar as it welcomes the dream, symptom and unconscious formations as they break through as representative of a censored unconscious. We begin with the question of how the position of the analyst in Lacanian clinical practice creates a frame for the work of the unconscious as it manifests in the speech of the analysand.
 
 As participants in the seminar present their cases, our work will be oriented by moments in which unconscious formations make a rupture in the ego’s discourse, and articulate the position of the subject of the unconscious in relation to desire and jouissance.""",
         "readings": [
-            "Freud, S. (1900). The Interpretations of Dreams, Volume IV, The Standard Edition of the Complete Psychological Works of Sigmund Freud.",
-            "Freud, S (1917). “The Sense of the Symptom,” Volume XI, The Standard Edition of the Complete Psychological Works of Sigmund Freud.",
-            "Lacan, J. (1991). The Seminar of Jacques Lacan, Book II, The Ego in Freud’s Theory and in the Technique of Psychoanalysis, 1954-1955. Trans. Sylvana Tomaselli. New York: Norton.",
-            "Lacan, J. (2006). “The Direction of the Treatment and the Principle of its Power,” Écrits, (2006). Trans. Bruce Fink. New York: Norton.",
+            "Freud, S. (1900). *The Interpretations of Dreams*, Volume IV, *The Standard Edition of the Complete Psychological Works of Sigmund Freud*.",
+            "Freud, S (1917). “The Sense of the Symptom,” Volume XI, *The Standard Edition of the Complete Psychological Works of Sigmund Freud*.",
+            "Lacan, J. (1991). *The Seminar of Jacques Lacan, Book II, The Ego in Freud’s Theory and in the Technique of Psychoanalysis, 1954-1955*. Trans. Sylvana Tomaselli. New York: Norton.",
+            "Lacan, J. (2006). “The Direction of the Treatment and the Principle of its Power,” *Écrits*, (2006). Trans. Bruce Fink. New York: Norton.",
         ],
         "schedule_note": "Second and fourth Tuesdays of the month, October 13, 2026 through June 8, 2027, 7-8:20 pm Pacific Time, with a break from December until classes resume January 12, and no class March 23. Online via Zoom.",
         "contact": "Christopher Meyer, PhD, (323) 930-9662, cmeyerwoeswar@gmail.com",
@@ -344,14 +344,14 @@ While there is no perfect founding father, one cannot in good conscience practic
 
 Together, we'll explore Freud's theoretical papers, case studies and metapsychological texts. We’ll discuss the ways they challenge and inspire us and, importantly, how they inform our clinical practice.""",
         "readings": [
-            "Freud, S. A Case of Hysteria (1905). Volume VII, The Standard Edition of the Complete Psychological Works of Sigmund Freud.",
-            "Freud, S. “The Dynamics of the Transference,” (1912). Volume XII, The Standard Edition of the Complete Psychological Works of Sigmund Freud.",
-            "Freud, S. “Recommendations for Physicians on the Psychoanalytic Method of Treatment,” (1912). Volume XII, The Standard Edition of the Complete Psychological Works of Sigmund Freud.",
-            "Freud, S., “On Beginning the Treatment (Further Recommendations on the Technique of Psychoanalysis I),” (1913). Volume XII, The Standard Edition of the Complete Psychological Works of Sigmund Freud.",
-            "Freud S. “Remembering, Repeating and Working Through (Further Recommendations on the Technique of Psychoanalysis II),” (1914). Volume XII, The Standard Edition of the Complete Psychological Works of Sigmund Freud.",
-            "Freud, S. “Observations on Transference-Love (Further Recommendations in the Technique of Psychoanalysis III),” (1915). Volume XII, The Standard Edition of the Complete Psychological Works of Sigmund Freud.",
-            "Freud, S. The Ego and the Id (1923). Volume XIX, The Standard Edition of the Complete Psychological Works of Sigmund Freud.",
-            "Freud, S. “A Child is Being Beaten,” (1919). Volume XIX, The Standard Edition of the Complete Psychological Works of Sigmund Freud.",
+            "Freud, S. *A Case of Hysteria* (1905). Volume VII, *The Standard Edition of the Complete Psychological Works of Sigmund Freud*.",
+            "Freud, S. “The Dynamics of the Transference,” (1912). Volume XII, *The Standard Edition of the Complete Psychological Works of Sigmund Freud*.",
+            "Freud, S. “Recommendations for Physicians on the Psychoanalytic Method of Treatment,” (1912). Volume XII, *The Standard Edition of the Complete Psychological Works of Sigmund Freud*.",
+            "Freud, S., “On Beginning the Treatment (Further Recommendations on the Technique of Psychoanalysis I),” (1913). Volume XII, *The Standard Edition of the Complete Psychological Works of Sigmund Freud*.",
+            "Freud S. “Remembering, Repeating and Working Through (Further Recommendations on the Technique of Psychoanalysis II),” (1914). Volume XII, *The Standard Edition of the Complete Psychological Works of Sigmund Freud*.",
+            "Freud, S. “Observations on Transference-Love (Further Recommendations in the Technique of Psychoanalysis III),” (1915). Volume XII, *The Standard Edition of the Complete Psychological Works of Sigmund Freud*.",
+            "Freud, S. *The Ego and the Id* (1923). Volume XIX, *The Standard Edition of the Complete Psychological Works of Sigmund Freud*.",
+            "Freud, S. “A Child is Being Beaten,” (1919). Volume XIX, *The Standard Edition of the Complete Psychological Works of Sigmund Freud*.",
             "This will be a Reading Group. Readings should be completed prior to meetings.",
         ],
         # Source said "Starting September 8th" — corrected to the 13th (the

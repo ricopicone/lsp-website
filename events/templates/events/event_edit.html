@@ -17,7 +17,7 @@
         <h2 class="font-serif text-lg text-base-content">Description</h2>
       </label>
       {{ form.description }}
-      <p class="text-xs text-base-content/60">Plain text. Line breaks become paragraphs on the event page.</p>
+      <p class="text-xs text-base-content/60">Plain text. Line breaks become paragraphs on the event page; wrap text in *asterisks* to italicize it.</p>
       {% if form.description.errors %}
       <p class="text-xs text-error">{{ form.description.errors|join:", " }}</p>
       {% endif %}
@@ -28,7 +28,7 @@
         <h2 class="font-serif text-lg text-base-content">Readings</h2>
       </label>
       {{ form.readings }}
-      <p class="text-xs text-base-content/60">One citation per line — each renders as its own entry. Notes ("Further readings will be added…") and sub-headings may be lines too.</p>
+      <p class="text-xs text-base-content/60">One citation per line — each renders as its own entry. Wrap book and journal titles in *asterisks* to italicize them. Notes ("Further readings will be added…") and sub-headings may be lines too.</p>
       {% if form.readings.errors %}
       <p class="text-xs text-error">{{ form.readings.errors|join:", " }}</p>
       {% endif %}

@@ -86,7 +86,10 @@ class EventProposalForm(forms.ModelForm):
         required=False,
         label="Readings",
         widget=forms.Textarea(attrs={"rows": 6}),
-        help_text="One citation per line, following the style guide below.",
+        help_text=(
+            "One citation per line, following the style guide below. Wrap book "
+            "and journal titles in *asterisks* to italicize them."
+        ),
     )
 
     #: Drives which fee inputs apply (the model stores the resolved amounts).

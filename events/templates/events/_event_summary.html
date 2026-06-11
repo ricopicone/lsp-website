@@ -1,4 +1,4 @@
-{% load tz_filters %}
+{% load tz_filters event_format %}
 {% comment %}The public-facing summary of an Event — faculty/speakers, about,
 access details, sessions, pricing, and the register/your-status CTA. Shared by
 the standalone event page (events/event_detail.html) and the seminar Workspace
@@ -32,7 +32,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
         {% endif %}
         <div class="flex-1">
           <h3 class="font-serif text-lg text-base-content mb-1">{{ f.first_name }} {{ f.last_name }}</h3>
-          {% if f.profile.bio %}<div class="text-sm text-base-content/80 leading-relaxed">{{ f.profile.bio|linebreaks }}</div>{% endif %}
+          {% if f.profile.bio %}<div class="text-sm text-base-content/80 leading-relaxed space-y-2">{{ f.profile.bio|linebreaks }}</div>{% endif %}
         </div>
       </article>
     {% endfor %}
@@ -46,7 +46,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
         {% endif %}
         <div class="flex-1">
           <h3 class="font-serif text-lg text-base-content mb-1">{{ u.first_name }} {{ u.last_name }}</h3>
-          {% if u.profile.display_event_bio %}<div class="text-sm text-base-content/80 leading-relaxed">{{ u.profile.display_event_bio|linebreaks }}</div>{% endif %}
+          {% if u.profile.display_event_bio %}<div class="text-sm text-base-content/80 leading-relaxed space-y-2">{{ u.profile.display_event_bio|linebreaks }}</div>{% endif %}
         </div>
       </article>
       {% endif %}
@@ -61,7 +61,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
           <h3 class="font-serif text-lg text-base-content mb-1">
             {{ s.name }}{% if s.affiliation %}<span class="text-base-content/60 font-normal text-base"> — {{ s.affiliation }}</span>{% endif %}
           </h3>
-          {% if s.bio %}<div class="text-sm text-base-content/80 leading-relaxed">{{ s.bio|linebreaks }}</div>{% endif %}
+          {% if s.bio %}<div class="text-sm text-base-content/80 leading-relaxed space-y-2">{{ s.bio|linebreaks }}</div>{% endif %}
         </div>
       </article>
       {% endif %}
@@ -75,7 +75,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
 {% if event.description %}
 <section class="space-y-3">
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">About</h2>
-  <div class="text-base-content/90 leading-relaxed">{{ event.description|linebreaks }}</div>
+  <div class="text-base-content/90 leading-relaxed space-y-4">{{ event.description|inline_italics|linebreaks }}</div>
 </section>
 {% endif %}
 
@@ -85,7 +85,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Readings</h2>
   <ul class="space-y-3 text-base-content/90 leading-relaxed">
     {% for entry in event.readings_entries %}
-    <li class="pl-6 -indent-6">{{ entry }}</li>
+    <li class="pl-6 -indent-6">{{ entry|inline_italics }}</li>
     {% endfor %}
   </ul>
 </section>
@@ -128,7 +128,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Sessions</h2>
     {% if event.schedule_note %}
-    <p class="text-base-content/80 leading-relaxed">{{ event.schedule_note }}</p>
+    <p class="text-base-content/80 leading-relaxed">{{ event.schedule_note|inline_italics }}</p>
     {% endif %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table">
@@ -172,7 +172,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
 {% elif event.schedule_note %}
 <section class="space-y-3">
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Schedule</h2>
-  <p class="text-base-content/80 leading-relaxed">{{ event.schedule_note }}</p>
+  <p class="text-base-content/80 leading-relaxed">{{ event.schedule_note|inline_italics }}</p>
 </section>
 {% endif %}
 
@@ -181,7 +181,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
 <section class="space-y-3">
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Fee</h2>
   {% if event.fee_note %}
-  <p class="text-base-content/80 leading-relaxed">{{ event.fee_note }}</p>
+  <p class="text-base-content/80 leading-relaxed">{{ event.fee_note|inline_italics }}</p>
   {% endif %}
   {% if price_tiers %}
   <div class="overflow-x-auto rounded-lg border border-base-300">
