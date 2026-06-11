@@ -1,0 +1,20 @@
+{% load tz_filters %}
+{% comment %}The full sessions table for a seminar's Schedule section.
+Expects: event, sessions.{% endcomment %}
+<div class="overflow-x-auto rounded-lg border border-base-300">
+  <table class="table">
+    <thead>
+      <tr><th class="w-12">#</th><th>Date</th><th>Time</th><th>Location</th></tr>
+    </thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        <td class="text-base-content/60">{{ s.sequence }}</td>
+        <td>{{ s.start_at|user_datetime }}</td>
+        <td class="whitespace-nowrap">{{ s.start_at|user_time }}–{{ s.end_at|user_time }}</td>
+        <td>{% if event.format == 'online' %}Online{% else %}{{ s.location }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

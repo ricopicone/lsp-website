@@ -191,9 +191,11 @@ def test_special_event_collapses_session_into_event_details(client, special_even
 
 
 def test_seminar_keeps_sessions_table(client, published_event):
-    """The existing published_event fixture is a seminar with a session."""
+    """The existing published_event fixture is a seminar with one session —
+    short list, so the Schedule table renders inline (no collapse)."""
     response = client.get(reverse("events:detail", args=["lacan-seminar-xi"]))
-    assert b"Sessions" in response.content
+    assert b"Schedule" in response.content
+    assert b"<details>" not in response.content
 
 
 def test_speaker_section_renders_speaker_bios_on_special_event(
@@ -351,3 +353,31 @@ def test_inline_italics_filter_edge_cases():
     assert inline_italics("5 * 3") == "5 * 3"
     assert inline_italics("**") == "**"
     assert inline_italics("<i>x</i>") == "&lt;i&gt;x&lt;/i&gt;"
+
+
+@pytest.mark.django_db
+def test_long_session_list_collapses_with_upcoming_preview(client, published_event):
+    """5+ sessions: the next few meetings preview above the fold and the full
+    table collapses behind a <details>; past sessions stay out of the preview."""
+    import datetime as dt
+
+    from django.utils import timezone as tz
+
+    published_event.sessions.all().delete()
+    now = tz.now()
+    for i in range(6):
+        start = now + dt.timedelta(days=i * 14 - 21)  # 1-2 past, 3-6 future
+        Session.objects.create(
+            event=published_event, start_at=start,
+            end_at=start + dt.timedelta(hours=2), sequence=i + 1,
+        )
+    html = client.get(
+        reverse("events:detail", args=[published_event.slug])
+    ).content.decode()
+    assert ">Schedule<" in html
+    assert "Next sessions" in html
+    assert "All 6 sessions" in html
+    assert "<details>" in html
+    # Preview shows the next three upcoming (#3-#5), not past or later ones.
+    assert "#3" in html and "#4" in html and "#5" in html
+    assert "#1" not in html and "#2" not in html and "#6" not in html

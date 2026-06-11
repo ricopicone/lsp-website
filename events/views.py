@@ -86,9 +86,16 @@ def event_summary_context(event, user) -> dict:
         if r.listing_visible_to(user)
     ]
     next_session = event.next_session()
+    from django.utils import timezone as _tz
+
+    sessions = list(event.sessions.order_by("start_at"))
+    # Above-the-fold preview for long session lists: the next few meetings
+    # (the full table collapses behind a <details>).
+    sessions_upcoming = [s for s in sessions if s.start_at >= _tz.now()][:3]
     return {
         "event": event,
-        "sessions": event.sessions.order_by("start_at"),
+        "sessions": sessions,
+        "sessions_upcoming": sessions_upcoming,
         "price_tiers": event.price_tiers.select_related("session").order_by(
             "session", "audience"
         ),

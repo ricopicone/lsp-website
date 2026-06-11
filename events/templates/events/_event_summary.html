@@ -126,27 +126,32 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
 {% if sessions %}
   {% if event.event_type == "seminar" %}
   <section class="space-y-3">
-    <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Sessions</h2>
+    <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Schedule</h2>
     {% if event.schedule_note %}
     <p class="text-base-content/80 leading-relaxed">{{ event.schedule_note|inline_italics }}</p>
     {% endif %}
-    <div class="overflow-x-auto rounded-lg border border-base-300">
-      <table class="table">
-        <thead>
-          <tr><th class="w-12">#</th><th>Date</th><th>Time</th><th>Location</th></tr>
-        </thead>
-        <tbody>
-          {% for s in sessions %}
-          <tr>
-            <td class="text-base-content/60">{{ s.sequence }}</td>
-            <td>{{ s.start_at|user_datetime }}</td>
-            <td class="whitespace-nowrap">{{ s.start_at|user_time }}–{{ s.end_at|user_time }}</td>
-            <td>{% if event.format == 'online' %}Online{% else %}{{ s.location }}{% endif %}</td>
-          </tr>
+    {% if sessions|length > 4 %}
+      {# Long list: next few meetings above the fold, full table collapsed. #}
+      {% if sessions_upcoming %}
+      <div class="space-y-1">
+        <p class="text-xs uppercase tracking-wider text-base-content/50">Next sessions</p>
+        <ul class="space-y-1 text-sm text-base-content/80">
+          {% for s in sessions_upcoming %}
+          <li>
+            <span class="text-base-content/45">#{{ s.sequence }}</span>
+            {{ s.start_at|user_datetime }}–{{ s.end_at|user_time }}{% if event.format != 'online' and s.location %} · {{ s.location }}{% endif %}
+          </li>
           {% endfor %}
-        </tbody>
-      </table>
-    </div>
+        </ul>
+      </div>
+      {% endif %}
+      <details>
+        <summary class="cursor-pointer text-sm link link-hover text-base-content/70">All {{ sessions|length }} sessions</summary>
+        <div class="mt-2">{% include "events/_sessions_table.html" %}</div>
+      </details>
+    {% else %}
+      {% include "events/_sessions_table.html" %}
+    {% endif %}
   </section>
   {% else %}
     {% with first=sessions.0 %}
