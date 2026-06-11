@@ -203,6 +203,34 @@ class Event(models.Model):
         blank=True,
         help_text="Editable by faculty for events they teach (PROG-7).",
     )
+    readings = models.TextField(
+        blank=True,
+        help_text=(
+            "Reading list, one citation per line (notes and sub-headings may "
+            "be lines too). Rendered as a formatted list on the event page."
+        ),
+    )
+    schedule_note = models.TextField(
+        blank=True,
+        help_text=(
+            "Human-readable meeting cadence ('1st and 3rd Saturdays, 9–11:30am "
+            "Pacific'). Shown alongside the sessions table — keeps the faculty's "
+            "own phrasing even once sessions are generated."
+        ),
+    )
+    contact = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Public contact for questions about the event (email/phone).",
+    )
+    fee_note = models.TextField(
+        blank=True,
+        help_text=(
+            "Fee in the faculty's own words ('$100 donation encouraged, none "
+            "turned away'). Shown with the pricing table — the table drives "
+            "checkout; this preserves the human phrasing."
+        ),
+    )
     event_type = models.CharField(
         max_length=20,
         choices=Type.choices,
@@ -354,6 +382,11 @@ class Event(models.Model):
         if self.status == self.Status.CLOSED:
             return {"label": "Registration closed", "css": "badge-ghost"}
         return {"label": "Opening soon", "css": "badge-outline"}
+
+    def readings_entries(self) -> list[str]:
+        """The reading list as individual entries (one per non-blank line),
+        for formatted rendering on the event page."""
+        return [ln.strip() for ln in self.readings.splitlines() if ln.strip()]
 
     @property
     def is_offering(self) -> bool:
@@ -1112,6 +1145,8 @@ class EventProposal(models.Model):
             status=Event.Status.OPEN,
             published=(not is_offering and has_real_date),
             description=self.description, program=program,
+            readings="\n".join(r.citation for r in self.readings.all()),
+            contact=self.contact,
         )
         self._build_price_tier(event)
         # A concrete special-event date/time becomes the event's first Session.

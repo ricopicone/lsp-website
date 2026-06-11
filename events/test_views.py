@@ -268,3 +268,60 @@ def test_guest_label_replaces_external_in_pricing(client):
     assert b"Guest" in response.content
     # The old wording should be gone.
     assert b"External / non-LSP" not in response.content
+
+
+# ---- Structured seminar sections (task #245: description/readings/fee split) ----
+
+
+@pytest.mark.django_db
+def test_event_page_renders_structured_sections(client, published_event):
+    """Readings render as individual entries under a real header; the schedule
+    note, fee note, and contact each surface in their sections."""
+    published_event.readings = "Freud, S. One.\nLacan, J. Two."
+    published_event.schedule_note = "First Saturdays, 9-11am Pacific."
+    published_event.fee_note = "$100 or school tuition; none turned away."
+    published_event.contact = "faculty@example.org"
+    published_event.save()
+    html = client.get(
+        reverse("events:detail", args=[published_event.slug])
+    ).content.decode()
+    assert ">Readings<" in html
+    assert "Freud, S. One." in html and "Lacan, J. Two." in html
+    assert "First Saturdays, 9-11am Pacific." in html
+    assert "$100 or school tuition; none turned away." in html
+    assert "faculty@example.org" in html
+
+
+@pytest.mark.django_db
+def test_fee_note_renders_without_price_tiers(client):
+    """The Fee section shows the faculty's phrasing even before tiers exist."""
+    e = Event.objects.create(
+        title="Fee note only", slug="fee-note-only",
+        start_date=date(2026, 9, 1), end_date=date(2026, 12, 1),
+        published=True, status=Event.Status.OPEN,
+        event_type=Event.Type.SPECIAL_EVENT,
+        fee_note="Donation encouraged, none turned away.",
+    )
+    html = client.get(reverse("events:detail", args=[e.slug])).content.decode()
+    assert ">Fee<" in html
+    assert "Donation encouraged, none turned away." in html
+
+
+@pytest.mark.django_db
+def test_schedule_note_renders_without_sessions(client):
+    """With no generated sessions yet, the schedule note gets its own section."""
+    e = Event.objects.create(
+        title="Schedule note only", slug="schedule-note-only",
+        start_date=date(2026, 9, 1), end_date=date(2026, 12, 1),
+        published=True, status=Event.Status.OPEN,
+        event_type=Event.Type.SPECIAL_EVENT,
+        schedule_note="Every other Monday, 5-7 pm PT.",
+    )
+    html = client.get(reverse("events:detail", args=[e.slug])).content.decode()
+    assert ">Schedule<" in html
+    assert "Every other Monday, 5-7 pm PT." in html
+
+
+def test_readings_entries_splits_nonblank_lines():
+    e = Event(readings="A. One.\n\n  B. Two.  \nC. Three.")
+    assert e.readings_entries() == ["A. One.", "B. Two.", "C. Three."]

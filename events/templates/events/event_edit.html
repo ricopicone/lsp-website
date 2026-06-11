@@ -10,7 +10,7 @@
     </p>
   </header>
 
-  <form method="post" class="space-y-4">
+  <form method="post" class="space-y-6">
     {% csrf_token %}
     <div class="form-control space-y-1">
       <label for="id_description" class="label-text">
@@ -22,6 +22,56 @@
       <p class="text-xs text-error">{{ form.description.errors|join:", " }}</p>
       {% endif %}
     </div>
+
+    <div class="form-control space-y-1">
+      <label for="id_readings" class="label-text">
+        <h2 class="font-serif text-lg text-base-content">Readings</h2>
+      </label>
+      {{ form.readings }}
+      <p class="text-xs text-base-content/60">One citation per line — each renders as its own entry. Notes ("Further readings will be added…") and sub-headings may be lines too.</p>
+      {% if form.readings.errors %}
+      <p class="text-xs text-error">{{ form.readings.errors|join:", " }}</p>
+      {% endif %}
+    </div>
+
+    <div class="form-control space-y-1">
+      <label for="id_schedule_note" class="label-text">
+        <h2 class="font-serif text-lg text-base-content">Schedule</h2>
+      </label>
+      {{ form.schedule_note }}
+      <p class="text-xs text-base-content/60">Meeting cadence in your own words, e.g. "1st and 3rd Saturdays, 9–11:30am Pacific".</p>
+      {% if form.schedule_note.errors %}
+      <p class="text-xs text-error">{{ form.schedule_note.errors|join:", " }}</p>
+      {% endif %}
+    </div>
+
+    <div class="form-control space-y-1">
+      <label for="id_contact" class="label-text">
+        <h2 class="font-serif text-lg text-base-content">Contact</h2>
+      </label>
+      {{ form.contact }}
+      <p class="text-xs text-base-content/60">Public contact for questions about the event (email/phone).</p>
+      {% if form.contact.errors %}
+      <p class="text-xs text-error">{{ form.contact.errors|join:", " }}</p>
+      {% endif %}
+    </div>
+
+    <div class="form-control space-y-1">
+      <label for="id_fee_note" class="label-text">
+        <h2 class="font-serif text-lg text-base-content">Fee</h2>
+      </label>
+      {{ form.fee_note }}
+      <p class="text-xs text-base-content/60">The fee in your own words, e.g. "$100 donation encouraged, none turned away". Registration checkout uses the pricing tiers; this text is shown on the event page.</p>
+      {% if form.fee_note.errors %}
+      <p class="text-xs text-error">{{ form.fee_note.errors|join:", " }}</p>
+      {% endif %}
+    </div>
+
+    <label class="flex items-center gap-2 cursor-pointer">
+      {{ form.record_video }}
+      <span class="label-text">Record this event's online meetings</span>
+    </label>
+
     <button type="submit" class="btn btn-primary">Save</button>
   </form>
 

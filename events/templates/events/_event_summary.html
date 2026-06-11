@@ -79,6 +79,18 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
 </section>
 {% endif %}
 
+{# ---------- Readings ---------- #}
+{% if event.readings %}
+<section class="space-y-3">
+  <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Readings</h2>
+  <ul class="space-y-3 text-base-content/90 leading-relaxed">
+    {% for entry in event.readings_entries %}
+    <li class="pl-6 -indent-6">{{ entry }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 {# ---------- Where: context-aware location + meeting room ---------- #}
 {% include "events/_location.html" %}
 
@@ -115,6 +127,9 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
   {% if event.event_type == "seminar" %}
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Sessions</h2>
+    {% if event.schedule_note %}
+    <p class="text-base-content/80 leading-relaxed">{{ event.schedule_note }}</p>
+    {% endif %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table">
         <thead>
@@ -146,16 +161,29 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
         <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Location</dt>
         <dd class="m-0">{{ first.location }}</dd>
         {% endif %}
+        {% if event.schedule_note %}
+        <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Schedule</dt>
+        <dd class="m-0">{{ event.schedule_note }}</dd>
+        {% endif %}
       </dl>
     </section>
     {% endwith %}
   {% endif %}
+{% elif event.schedule_note %}
+<section class="space-y-3">
+  <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Schedule</h2>
+  <p class="text-base-content/80 leading-relaxed">{{ event.schedule_note }}</p>
+</section>
 {% endif %}
 
 {# ---------- Pricing ---------- #}
-{% if price_tiers %}
+{% if price_tiers or event.fee_note %}
 <section class="space-y-3">
-  <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Pricing</h2>
+  <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Fee</h2>
+  {% if event.fee_note %}
+  <p class="text-base-content/80 leading-relaxed">{{ event.fee_note }}</p>
+  {% endif %}
+  {% if price_tiers %}
   <div class="overflow-x-auto rounded-lg border border-base-300">
     <table class="table">
       <thead>
@@ -180,6 +208,7 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
       </tbody>
     </table>
   </div>
+  {% endif %}
 </section>
 {% endif %}
 

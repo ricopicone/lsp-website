@@ -49,4 +49,8 @@ branded label with registration/live-aware messaging + a tech-check link.
       </p>
     {% endif %}
   {% endif %}
+
+  {% if event.contact %}
+  <p class="mt-1 text-sm text-base-content/70">Questions: {{ event.contact|urlize }}</p>
+  {% endif %}
 </section>

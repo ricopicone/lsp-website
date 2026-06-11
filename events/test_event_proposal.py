@@ -557,6 +557,24 @@ def test_proposal_parses_readings_into_rows(client):
     ]  # blank line dropped, order preserved
 
 
+def test_approve_carries_readings_and_contact_onto_event():
+    from events.models import ProposalReading
+
+    fac = _faculty("carries@x.test")
+    start, end = _future()
+    p = EventProposal.objects.create(
+        proposed_by=fac, title="Carries Readings", start_date=start, end_date=end,
+        contact="ask@x.test",
+    )
+    p.faculty.add(fac)
+    ProposalReading.objects.create(proposal=p, sort_order=0, citation="Freud, S. One.")
+    ProposalReading.objects.create(proposal=p, sort_order=1, citation="Lacan, J. Two.")
+    event = p.approve(_pc_member("pc-carries@x.test"))
+    assert event.readings == "Freud, S. One.\nLacan, J. Two."
+    assert event.contact == "ask@x.test"
+    assert event.readings_entries() == ["Freud, S. One.", "Lacan, J. Two."]
+
+
 def test_special_event_proposal_allows_tbd_date(client):
     member = _member("tbd@x.test")
     client.force_login(member)

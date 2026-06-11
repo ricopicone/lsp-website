@@ -14,9 +14,15 @@ class EventDescriptionForm(forms.ModelForm):
 
     class Meta:
         model = Event
-        fields = ("description", "record_video")
+        fields = (
+            "description", "readings", "schedule_note", "contact", "fee_note",
+            "record_video",
+        )
         widgets = {
             "description": forms.Textarea(attrs={"rows": 12, "cols": 80}),
+            "readings": forms.Textarea(attrs={"rows": 8, "cols": 80}),
+            "schedule_note": forms.Textarea(attrs={"rows": 2, "cols": 80}),
+            "fee_note": forms.Textarea(attrs={"rows": 2, "cols": 80}),
         }
 
 
