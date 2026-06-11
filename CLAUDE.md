@@ -284,6 +284,18 @@ Done (see `git log` for specifics):
   `DJANGO_TWO_FACTOR_ENFORCED` (default false) so current testers aren't
   blocked — enrollment at `/accounts/2fa/setup/` works regardless. See
   `email-auth-2fa` memory.
+- **Event page structured content** (task #245, Reinhardt feedback, shipped
+  2026-06-11). `Event` gained `readings` (one citation per line),
+  `schedule_note`, `contact`, `fee_note`, rendered as real sections
+  (Readings = hanging-indent citation list); the faculty edit form exposes
+  them and proposal approval now mints `ProposalReading`s + contact onto the
+  Event. Member-text italics via `*asterisks*`
+  (`events.event_format.inline_italics` — escape-then-`<em>`; the proposal
+  citation style guide teaches it). Sessions section renamed **Schedule**;
+  >4 sessions collapse behind "All N sessions" with a next-3-upcoming
+  preview. 2026-27 program re-imported with split fields —
+  **`import_program_2026_2027` re-runs clobber admin-side edits; diff prod
+  against the script first** (see `event-structured-content` memory).
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
