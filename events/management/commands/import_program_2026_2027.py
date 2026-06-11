@@ -44,7 +44,9 @@ SEMINARS = [
     {
         "title": 'Workshop for a Clinic of Psychosis',
         "slug":  'workshop-clinic-of-psychosis-2026-27',
-        "faculty": [('Bret', 'Fimiani'), ('Richard', 'Reinhardt'), ('Shanna', 'Carlson de la Torre')],
+        # NB: Richard's account has first_name="Richard Hoffman" — the tuple
+        # must match it exactly or set_faculty() drops him from the roster.
+        "faculty": [('Bret', 'Fimiani'), ('Richard Hoffman', 'Reinhardt'), ('Shanna', 'Carlson de la Torre')],
         "start_date": date(2026, 10, 3),
         "end_date":   date(2027, 4, 17),
         "event_type": Event.Type.SEMINAR,
@@ -56,12 +58,25 @@ Key areas of focus will include: the roles of geography and place; the forms of 
 
 Many meetings will feature either guest speakers or roundtable discussions with analysts, clinicians, and researchers currently involved in the development and running of Lacanian and post-Lacanian clinics of psychosis; the other meetings will be devoted to working together with what we have heard and to discussing assigned readings.
 
+Guest presenters confirmed so far include: Felix Acuña Olivos (formerly Rayo); Barri Belnap, MD; Hannah Bennett; Marisa Berwald; Loren Dent (Constellations); Gardner Fair; Bret Fimiani; Daniel Garcia (The MendCenter); Christopher Meyer; Matthew Oyer (Constellations); Richard Reinhardt (Openings); Annie Rogers
+
 Through engaging with guest presentations, roundtable discussions, and readings, workshop participants will work towards their own proposals for a future clinical project, to be presented in the final meetings of the workshop.
 
 Prospective participants are asked to reach out to the faculty facilitators at lsppsychosisworkshop@gmail.com with a brief description of their desire and interest to work together on questions related to the creation of a clinic of psychosis.""",
+        # Description + readings were refined in prod admin after the first
+        # import (2026-06) — this entry mirrors that richer version.
         "readings": [
-            "Cantin, Lucie, Librett, Jeffrey, and Tracy McNulty, editors. A Psychoanalysis for a Reemergent Humanity: The Metapsychology of Willy Apollon. SUNY Press, 2025.",
-            "Lacan, J. “A Lacanian Psychosis.” Returning to Freud: Clinical Psychoanalysis in the School of Lacan, edited by Stuart Schniederman, Yale University Press, 1980, pp. 19-41.",
+            "Apollon, Willy. Psychoses: L’offre de l’analyste. GIFRIC, 1999. Excerpts.",
+            "Apollon, Willy. “Le transfert du psychotique.” Le traitement psychanalytique des psychoses: Sa clinique et ses résultats, collectif sous la direction du Gifric, Éditions du Gifric, 2024, pp. 163-185.",
+            "Apollon, Willy, Danielle Bergeron, and Lucie Cantin. \"The Treatment of Psychosis.\" The Subject of Lacan: A Lacanian Reader for Psychologists, edited by Kareen Ror Malone and Stephen R. Friedlander, State University of New York Press, 2000, pp. 209-227.",
+            "Bergeron, Danielle. “De la crise à l'impasse dans la cure psychanalytique\" [“From Crisis to Impasse in the Psychoanalytic Cure\"]. Santé mentale au Québec, vol. 35, no. 2, 2010, pp. 13–29. Excerpts.",
+            "Cantin, Lucie, Jeffrey S. Librett, and Tracy McNulty, editors. A Psychoanalysis for a Reemergent Humanity: The Metapsychology of Willy Apollon. State University of New York Press, 2025.",
+            "Fimiani, Bret. “Towards a New Ethics.” Psychosis and Extreme States: An Ethic for Treatment, Palgrave Macmillan, 2021, pp. 103–135.",
+            "Lacan, Jacques. “A Lacanian Psychosis: Interview by Jacques Lacan.” Returning to Freud: Clinical Psychoanalysis in the School of Lacan, edited and translated by Stuart Schneiderman, Yale University Press, 1980, pp. 19–41.",
+            "Miller, Alexander Reid. “What Was the 388? Opening the Dossier.” Psychoanalysis and History, vol. 27, no. 2, 2025, pp. 203–221.",
+            "Rogers, Annie G. “Hallucinated Bodies: Art and Its Alphabets in Psychosis.” Incandescent Alphabets: Psychosis and the Enigma of Language, Routledge, 2018, pp. 45-71.",
+            "Rogers, Annie G. “Infinite Code: Clocks, Calendars, Numbers, Music, Scripts.” Incandescent Alphabets: Psychosis and the Enigma of Language, Routledge, 2018, pp. 73-101.",
+            "Vanderwees, Chris. “Treating Psychosis in Québec: A Conversation with the Founders of GIFRIC and the 388.” The Museum of Dreams, translated by Daniel Wilson, Dec. 2019, The Museum of Dreams.",
         ],
         "schedule_note": "1st, 3rd, and 5th Saturdays, October 3, 2026 – April 17, 2027 (except December 19 and January 2), 9am-11:30am Pacific Time. Online.",
         "contact": "Garret Barnwell, Bret Fimiani, Richard Reinhardt, and Shanna Carlson de la Torre at lsppsychosisworkshop@gmail.com",
