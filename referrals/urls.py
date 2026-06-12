@@ -15,6 +15,7 @@ _ADMIN = "admin-tools/referrals"
 
 urlpatterns = [
     path(f"{_ADMIN}/", views.dashboard, name="dashboard"),
+    path(f"{_ADMIN}/help/", views.help_view, name="help"),
     path(f"{_ADMIN}/settings/", views.settings_view, name="settings"),
     path(f"{_ADMIN}/templates/", views.templates_list, name="templates"),
     path(f"{_ADMIN}/templates/<str:key>/", views.template_edit,

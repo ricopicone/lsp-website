@@ -1,26 +1,14 @@
-{% extends "core/base.html" %}
-{% block title %}Referral list — Referrals{% endblock %}
-{% block content %}
+{% extends "referrals/base.html" %}
+{% block tab_content %}
 <div class="max-w-4xl space-y-6">
-  <header class="space-y-2">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="font-serif text-3xl text-base-content">Referral list</h1>
-      <a href="{% url 'referrals:dashboard' %}" class="btn btn-ghost btn-sm">← Referrals</a>
-    </div>
-    <p class="text-base-content/70 text-sm">
-      Clinicians who receive referral requests. Each maintains their own
-      practice details on their profile; the override here replaces that
-      block verbatim when you need to. New additions
-      {% if config.onboarding_mode == "auto" %}are sent the New Member
-      Instructions automatically{% else %}wait for you to send the New
-      Member Instructions{% endif %} (change in
-      <a href="{% url 'referrals:settings' %}" class="link">Settings</a>).
-    </p>
-  </header>
-
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
+  <p class="text-base-content/70 text-sm">
+    Clinicians who receive referral requests. Each maintains their own
+    practice details on their profile; the override here replaces that
+    block verbatim when you need to. New additions
+    {% if config.onboarding_mode == "auto" %}are sent the New Member
+    Instructions automatically{% else %}wait for you to send the New
+    Member Instructions{% endif %} (change on the Settings tab).
+  </p>
 
   <form method="post" class="flex flex-wrap items-end gap-3 rounded-xl border border-base-300/60 bg-base-100 p-4">
     {% csrf_token %}

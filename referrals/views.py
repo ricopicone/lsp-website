@@ -53,6 +53,37 @@ def _get_request(reference: str) -> ReferralRequest:
     return get_object_or_404(ReferralRequest, reference=reference)
 
 
+#: (key, label) for the coordinator surface's tabs, in display order.
+TABS = [
+    ("requests",   "Requests"),
+    ("clinicians", "Referral list"),
+    ("templates",  "Templates"),
+    ("settings",   "Settings"),
+    ("help",       "Help"),
+]
+
+
+def _tab_links() -> list[tuple[str, str, str]]:
+    """[(key, label, url), ...] for core/_admin_tab_nav.html."""
+    from django.urls import reverse
+    name_to_url = {
+        "requests":   reverse("referrals:dashboard"),
+        "clinicians": reverse("referrals:clinicians"),
+        "templates":  reverse("referrals:templates"),
+        "settings":   reverse("referrals:settings"),
+        "help":       reverse("referrals:help"),
+    }
+    return [(key, label, name_to_url[key]) for key, label in TABS]
+
+
+def _render(request, tab_key: str, template: str, ctx: dict):
+    """Common render helper: injects the tab nav into every coordinator page.
+    Sub-pages (request detail, compose, edits) pass their parent tab's key."""
+    return render(request, template, {
+        **ctx, "tab_key": tab_key, "tabs": _tab_links(),
+    })
+
+
 # ---- Coordinator: requests ---------------------------------------------
 
 
@@ -66,7 +97,7 @@ def dashboard(request):
         qs = qs.filter(status=status)
     else:
         status = "all"
-    return render(request, "referrals/dashboard.html", {
+    return _render(request, "requests", "referrals/dashboard.html", {
         "requests": qs,
         "status_filter": status,
         "status_choices": ReferralRequest.Status.choices,
@@ -80,7 +111,7 @@ def dashboard(request):
 @coordinator_required
 def detail(request, reference):
     req = _get_request(reference)
-    return render(request, "referrals/detail.html", {
+    return _render(request, "requests", "referrals/detail.html", {
         "req": req,
         "responses": req.responses.select_related(
             "member__user__profile", "recorded_by",
@@ -162,7 +193,7 @@ def followup(request, reference):
     else:
         subject, body = services.build_followup(req)
         form = FollowupForm(initial={"subject": subject, "body": body})
-    return render(request, "referrals/followup.html", {
+    return _render(request, "requests", "referrals/followup.html", {
         "req": req,
         "form": form,
         "interested_count": req.interested_responses().count(),
@@ -227,7 +258,7 @@ def clinicians(request):
             return redirect("referrals:clinicians")
     else:
         form = AddClinicianForm()
-    return render(request, "referrals/clinicians.html", {
+    return _render(request, "clinicians", "referrals/clinicians.html", {
         "members": ReferralListMember.objects.select_related("user__profile"),
         "form": form,
         "config": ReferralSettings.load(),
@@ -268,7 +299,7 @@ def clinician_edit(request, pk):
         return redirect("referrals:clinicians")
     # What requesters would receive with no override in place.
     profile_block = ReferralListMember(user=member.user).details_block()
-    return render(request, "referrals/clinician_edit.html", {
+    return _render(request, "clinicians", "referrals/clinician_edit.html", {
         "member": member,
         "form": form,
         "profile_block": profile_block,
@@ -285,7 +316,7 @@ def templates_list(request):
         existing.get(key) or MessageTemplate.get(key)
         for key in MessageTemplate.Key.values
     ]
-    return render(request, "referrals/templates.html", {"templates": items})
+    return _render(request, "templates", "referrals/templates.html", {"templates": items})
 
 
 @coordinator_required
@@ -298,9 +329,18 @@ def template_edit(request, key):
         form.save()
         messages.success(request, f"Saved “{template.get_key_display()}”.")
         return redirect("referrals:templates")
-    return render(request, "referrals/template_edit.html", {
+    return _render(request, "templates", "referrals/template_edit.html", {
         "template": template,
         "form": form,
+    })
+
+
+@coordinator_required
+def help_view(request):
+    """Help tab — renders the referral coordinator guide markdown doc."""
+    from core.docs import render_doc
+    return _render(request, "help", "referrals/help.html", {
+        "rendered_html": render_doc("referrals-guide"),
     })
 
 
@@ -312,7 +352,7 @@ def settings_view(request):
         form.save()
         messages.success(request, "Referral settings saved.")
         return redirect("referrals:settings")
-    return render(request, "referrals/settings.html", {"form": form})
+    return _render(request, "settings", "referrals/settings.html", {"form": form})
 
 
 # ---- Clinicians: the respond page (step 4) -------------------------------

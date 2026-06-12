@@ -1,10 +1,10 @@
-{% extends "core/base.html" %}
+{% extends "referrals/base.html" %}
 {% block title %}{{ template.get_key_display }} — Templates{% endblock %}
-{% block content %}
+{% block tab_content %}
 <div class="max-w-3xl space-y-6">
   <header class="space-y-2">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="font-serif text-3xl text-base-content">{{ template.get_key_display }}</h1>
+      <h2 class="font-serif text-2xl text-base-content">{{ template.get_key_display }}</h2>
       <a href="{% url 'referrals:templates' %}" class="btn btn-ghost btn-sm">← Templates</a>
     </div>
     <p class="text-base-content/70 text-sm">

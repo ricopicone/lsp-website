@@ -417,6 +417,11 @@ def test_coordinator_can_use_surface(client, coordinator):
     assert client.get(reverse("referrals:templates")).status_code == 200
     assert client.get(reverse("referrals:clinicians")).status_code == 200
     assert client.get(reverse("referrals:settings")).status_code == 200
+    help_page = client.get(reverse("referrals:help"))
+    assert help_page.status_code == 200
+    assert b"Referral Coordinator" in help_page.content
+    # The shared tab nav renders on every coordinator page.
+    assert b"Referral list" in help_page.content
 
 
 def test_coordinator_actions_roundtrip(client, coordinator, listed):
