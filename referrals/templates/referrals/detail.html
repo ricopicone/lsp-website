@@ -1,11 +1,11 @@
-{% extends "core/base.html" %}
-{% block title %}{{ req.reference }} — Referrals{% endblock %}
-{% block content %}
+{% extends "referrals/base.html" %}
+{% block title %}{{ req.reference }} — Referral Coordinator Admin{% endblock %}
+{% block tab_content %}
 <div class="max-w-4xl space-y-6">
   <header class="space-y-2">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="font-serif text-3xl text-base-content">Referral {{ req.reference }}</h1>
-      <a href="{% url 'referrals:dashboard' %}" class="btn btn-ghost btn-sm">← Referrals</a>
+      <h2 class="font-serif text-2xl text-base-content">Referral {{ req.reference }}</h2>
+      <a href="{% url 'referrals:dashboard' %}" class="btn btn-ghost btn-sm">← Requests</a>
     </div>
     <div class="flex flex-wrap items-center gap-2 text-sm text-base-content/70">
       <span class="badge badge-outline">{{ req.get_status_display }}</span>
@@ -13,10 +13,6 @@
       {% if req.is_purged %}<span class="badge badge-warning badge-sm">redacted {{ req.purged_at|date:"M j, Y" }}</span>{% endif %}
     </div>
   </header>
-
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
 
   {# --- The request -------------------------------------------------- #}
   <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-3">

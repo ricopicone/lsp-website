@@ -49,8 +49,11 @@ def clinician():
         first_name="Anna", last_name="Analyst",
     )
     profile = user.profile
+    profile.role = "analyst"  # directory role → public profile page exists
+    profile.public = True
     profile.credentials = "PhD"
     profile.public_email = "anna.practice@example.com"
+    profile.public_phone = "+12065550100"
     profile.website = "https://anna.example.com"
     profile.save()
     return user
@@ -94,9 +97,9 @@ INTAKE_DATA = {
 def test_render_template_substitutes_known_tokens_only():
     out = services.render_template(
         "Dear {name}, re {reference}: {unknown} stays {literal",
-        {"name": "Alex", "reference": "R-2026-001"},
+        {"name": "Alex", "reference": "26-0612"},
     )
-    assert out == "Dear Alex, re R-2026-001: {unknown} stays {literal"
+    assert out == "Dear Alex, re 26-0612: {unknown} stays {literal"
 
 
 def test_message_template_get_restores_deleted_row():
@@ -110,12 +113,23 @@ def test_message_template_get_restores_deleted_row():
 # ---- Reference allocation --------------------------------------------------
 
 
-def test_references_are_sequential_per_year():
-    year = timezone.now().year
+def test_references_are_year_date_with_same_day_suffix():
+    base = timezone.localtime().strftime("%y-%m%d")
     first = make_request()
     second = make_request(email="other@example.com")
-    assert first.reference == f"R-{year}-001"
-    assert second.reference == f"R-{year}-002"
+    third = make_request(email="third@example.com")
+    assert first.reference == base  # e.g. 26-0612
+    assert second.reference == f"{base}-2"
+    assert third.reference == f"{base}-3"
+
+
+def test_reference_skips_gaps_left_by_deletes():
+    base = timezone.localtime().strftime("%y-%m%d")
+    make_request()
+    second = make_request(email="other@example.com")
+    second.delete()
+    third = make_request(email="third@example.com")
+    assert third.reference == f"{base}-2"
 
 
 # ---- Intake (steps 1–2) -----------------------------------------------------
@@ -270,7 +284,29 @@ def test_followup_variant_single_includes_profile_details(listed):
     assert "Anna Analyst" in body
     assert "PhD" in body
     assert "anna.practice@example.com" in body
+    assert "(206) 555-0100" in body  # US number formatted nationally
     assert "https://anna.example.com" in body
+    assert "Profile: " in body and "/directory/anna-analyst/" in body
+
+
+def test_details_block_omits_profile_link_when_not_public(listed):
+    profile = listed.user.profile
+    profile.public = False
+    profile.save()
+    assert "/directory/" not in listed.details_block()
+
+
+def test_followup_email_html_links_email_and_profile(listed):
+    req = make_request()
+    ReferralResponse.objects.create(request=req, member=listed)
+    subject, body = services.build_followup(req)
+    services.send_followup(req, subject, body)
+    msg = mail.outbox[-1]
+    assert msg.body == body  # plain-text part is exactly what was edited
+    html = next(c for c, t in msg.alternatives if t == "text/html")
+    assert 'href="mailto:anna.practice@example.com"' in html
+    assert 'href="https://anna.example.com"' in html
+    assert "/directory/anna-analyst/" in html
 
 
 def test_followup_variant_many_and_override(listed):
@@ -392,6 +428,11 @@ def test_coordinator_can_use_surface(client, coordinator):
     assert client.get(reverse("referrals:templates")).status_code == 200
     assert client.get(reverse("referrals:clinicians")).status_code == 200
     assert client.get(reverse("referrals:settings")).status_code == 200
+    help_page = client.get(reverse("referrals:help"))
+    assert help_page.status_code == 200
+    assert b"Referral Coordinator" in help_page.content
+    # The shared tab nav renders on every coordinator page.
+    assert b"Referral list" in help_page.content
 
 
 def test_coordinator_actions_roundtrip(client, coordinator, listed):
@@ -437,6 +478,71 @@ def test_template_edit_changes_outgoing_mail(client, coordinator):
     msg = mail.outbox[-1]
     assert msg.subject == "We hear you, Alex Patient"
     assert msg.body == "Soon, Alex Patient."
+
+
+# ---- Google Groups list import ----------------------------------------------
+
+
+def _gg_csv(tmp_path, rows):
+    path = tmp_path / "members.csv"
+    header = "Group Email [Required],Member Email,Member Name,Member Role,Member Type\n"
+    body = "".join(
+        f"g@lacanschool.org,{email},Member,{role},USER\n" for email, role in rows
+    )
+    path.write_text(header + body)
+    return path
+
+
+def test_import_referral_list_matches_and_skips(tmp_path, clinician):
+    from django.core.management import call_command
+
+    # Matched by public_email rather than login email.
+    by_public = User.objects.create_user(
+        email="login@example.com", password="pw",
+        first_name="Pub", last_name="Lique",
+    )
+    by_public.profile.public_email = "public@example.com"
+    by_public.profile.save()
+
+    path = _gg_csv(tmp_path, [
+        ("admin@lacanschool.org", "OWNER"),        # skipped: role
+        ("referrals@lacanschool.org", "MANAGER"),  # skipped: role
+        ("ANALYST@example.com", "MEMBER"),         # clinician, case-insensitive
+        ("public@example.com", "MEMBER"),          # matched via public_email
+        ("nobody@example.com", "MEMBER"),          # unmatched
+    ])
+    call_command("import_referral_list", str(path))
+
+    assert ReferralListMember.objects.filter(user=clinician).exists()
+    assert ReferralListMember.objects.filter(user=by_public).exists()
+    assert ReferralListMember.objects.count() == 2
+    # Import never sends mail (no onboarding auto-send).
+    assert mail.outbox == []
+    # Imported rows await an explicit instructions send.
+    assert ReferralListMember.objects.filter(onboarded_at__isnull=False).count() == 0
+
+    # Idempotent: re-run changes nothing.
+    call_command("import_referral_list", str(path))
+    assert ReferralListMember.objects.count() == 2
+
+
+def test_import_referral_list_dry_run_writes_nothing(tmp_path, clinician):
+    from django.core.management import call_command
+
+    path = _gg_csv(tmp_path, [("analyst@example.com", "MEMBER")])
+    call_command("import_referral_list", str(path), "--dry-run")
+    assert ReferralListMember.objects.count() == 0
+
+
+def test_import_referral_list_reactivates(tmp_path, clinician):
+    from django.core.management import call_command
+
+    ReferralListMember.objects.create(user=clinician, is_active=False)
+    path = _gg_csv(tmp_path, [("analyst@example.com", "MEMBER")])
+    call_command("import_referral_list", str(path))
+    member = ReferralListMember.objects.get(user=clinician)
+    assert member.is_active
+    assert mail.outbox == []
 
 
 # ---- Cron command ---------------------------------------------------------------

@@ -1,22 +1,11 @@
-{% extends "core/base.html" %}
-{% block title %}Message templates — Referrals{% endblock %}
-{% block content %}
+{% extends "referrals/base.html" %}
+{% block tab_content %}
 <div class="max-w-4xl space-y-6">
-  <header class="space-y-2">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="font-serif text-3xl text-base-content">Message templates</h1>
-      <a href="{% url 'referrals:dashboard' %}" class="btn btn-ghost btn-sm">← Referrals</a>
-    </div>
-    <p class="text-base-content/70 text-sm">
-      Every outgoing referral message, editable. Placeholders in braces
-      (like <code class="text-xs">{name}</code>) are filled in at send time;
-      anything you write stays exactly as written.
-    </p>
-  </header>
-
-  {% if messages %}{% for m in messages %}
-  <div class="alert alert-success py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
+  <p class="text-base-content/70 text-sm">
+    Every outgoing referral message, editable. Placeholders in braces
+    (like <code class="text-xs">{name}</code>) are filled in at send time;
+    anything you write stays exactly as written.
+  </p>
 
   <div class="space-y-3">
     {% for t in templates %}

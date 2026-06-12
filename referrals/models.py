@@ -174,19 +174,22 @@ class ReferralRequest(models.Model):
         super().save(*args, **kwargs)
 
     def _allocate_reference(self) -> str:
-        """Next sequential reference for the current year (R-2026-001)."""
-        year = timezone.now().year
-        prefix = f"R-{year}-"
+        """Year-date reference, the coordinator's own convention: ``26-0612``
+        for 2026-06-12 (local date), with ``-2``, ``-3``, … appended when more
+        than one request arrives the same day."""
+        base = timezone.localtime().strftime("%y-%m%d")
         with transaction.atomic():
-            last = (
+            taken = set(
                 type(self).objects.select_for_update()
-                .filter(reference__startswith=prefix)
-                .order_by("-reference")
+                .filter(reference__startswith=base)
                 .values_list("reference", flat=True)
-                .first()
             )
-            seq = int(last.rsplit("-", 1)[1]) + 1 if last else 1
-        return f"{prefix}{seq:03d}"
+        if base not in taken:
+            return base
+        n = 2
+        while f"{base}-{n}" in taken:
+            n += 1
+        return f"{base}-{n}"
 
     @property
     def is_purged(self) -> bool:
@@ -247,7 +250,10 @@ class ReferralListMember(models.Model):
 
         Mirrors the coordinator's historical format (name / title / email /
         phone, plus a website when listed) — built from the profile so the
-        member maintains it themselves.
+        member maintains it themselves. Ends with a link to the member's
+        public directory profile when they have one. The block is plain
+        text; the email layer linkifies URLs and email addresses in the
+        HTML alternative (see ``referrals.emails``).
         """
         if self.details_override.strip():
             return self.details_override.strip()
@@ -257,10 +263,35 @@ class ReferralListMember(models.Model):
             lines.append(profile.credentials)
         lines.append(profile.public_email or self.user.email)
         if profile.public_phone:
-            lines.append(str(profile.public_phone))
+            lines.append(_format_phone(profile.public_phone))
         if profile.website:
             lines.append(profile.website)
+        if self.directory_url():
+            lines.append(f"Profile: {self.directory_url()}")
         return "\n".join(line for line in lines if line)
+
+    def directory_url(self) -> str:
+        """Absolute URL of the member's public directory page, or '' when
+        they have none (not a directory role, or opted out of listing)."""
+        from django.urls import reverse
+
+        profile = self.user.profile
+        if not (profile.public and profile.role in profile.DIRECTORY_ROLES):
+            return ""
+        return settings.SITE_BASE_URL.rstrip("/") + reverse(
+            "directory_detail", args=[profile.directory_slug],
+        )
+
+
+def _format_phone(phone) -> str:
+    """Human-readable phone: national format for US numbers ((206) 555-0100),
+    international for the rest (+33 1 23 45 67 89)."""
+    try:
+        if getattr(phone, "country_code", None) == 1:
+            return phone.as_national
+        return phone.as_international
+    except Exception:
+        return str(phone)
 
 
 class ReferralResponse(models.Model):

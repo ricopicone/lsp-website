@@ -1,25 +1,9 @@
-{% extends "core/base.html" %}
-{% block title %}Referrals — Admin Tools{% endblock %}
-{% block content %}
+{% extends "referrals/base.html" %}
+{% block tab_content %}
 <div class="max-w-4xl space-y-6">
-  <header class="space-y-2">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="font-serif text-3xl text-base-content">Referral Coordinator</h1>
-      <a href="{% url 'admin_tools' %}" class="btn btn-ghost btn-sm">← Admin Tools</a>
-    </div>
-    <p class="text-base-content/70 text-sm">
-      Find-an-Analyst requests, tracked from intake to reply. {{ open_count }} open.
-    </p>
-    <nav class="flex flex-wrap gap-2">
-      <a href="{% url 'referrals:clinicians' %}" class="btn btn-outline btn-sm">Referral list</a>
-      <a href="{% url 'referrals:templates' %}" class="btn btn-outline btn-sm">Message templates</a>
-      <a href="{% url 'referrals:settings' %}" class="btn btn-outline btn-sm">Settings</a>
-    </nav>
-  </header>
-
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
+  <p class="text-base-content/70 text-sm">
+    Find-an-Analyst requests, tracked from intake to reply. {{ open_count }} open.
+  </p>
 
   <form method="get" class="flex flex-wrap items-end gap-3">
     <label class="space-y-1">
@@ -68,7 +52,7 @@
   <div class="rounded-xl border border-base-300/60 bg-base-100 p-4 text-sm text-base-content/70 space-y-1">
     <p class="font-medium text-base-content">Current automation</p>
     <p>Acknowledgment: {{ config.get_ack_mode_display|lower }} · Distribution: {{ config.get_distribution_mode_display|lower }} · Follow-up: {{ config.get_followup_mode_display|lower }} · Onboarding: {{ config.get_onboarding_mode_display|lower }} · Response window: {{ config.response_window_days }} days.</p>
-    <p>Each step can be switched between automatic and review-first anytime in <a href="{% url 'referrals:settings' %}" class="link">Settings</a>.</p>
+    <p>Each step can be switched between automatic and review-first anytime on the Settings tab.</p>
   </div>
 </div>
 {% endblock %}
