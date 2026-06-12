@@ -58,6 +58,9 @@ class Category(models.TextChoices):
     GROUP_DECISION = "group_decision", _("Group decisions & minutes")
     GROUP_RECORDING = "group_recording", _("Meeting recordings ready")
 
+    # --- Referrals ---------------------------------------------------------
+    REFERRAL_REQUEST = "referral_request", _("Referral requests")
+
     # --- Suggestions -----------------------------------------------------
     SUGGESTION_FILED = "suggestion_filed", _("Suggestion review")
     SUGGESTION_UPDATE = "suggestion_update", _("Updates on your suggestions")
@@ -85,6 +88,7 @@ SECTION_PAYMENTS = _("Registration & payments")
 SECTION_CARTELS = _("Cartels")
 SECTION_ADMISSIONS = _("Admissions")
 SECTION_GROUPS = _("Groups")
+SECTION_REFERRALS = _("Referrals")
 SECTION_SUGGESTIONS = _("Suggestions")
 SECTION_ACCOUNT = _("Account")
 
@@ -94,6 +98,7 @@ SECTION_ORDER = [
     SECTION_CARTELS,
     SECTION_ADMISSIONS,
     SECTION_GROUPS,
+    SECTION_REFERRALS,
     SECTION_SUGGESTIONS,
     SECTION_ACCOUNT,
 ]
@@ -197,6 +202,13 @@ CATEGORY_META: dict[str, CategoryMeta] = {
         SECTION_GROUPS, _("Recordings ready"),
         _("When a meeting recording becomes available."),
         default_email=_E.OFF,
+    ),
+    # Referrals — distribution to the referral list. Email defaults on (a
+    # clinician who never checks the bell would otherwise miss requests).
+    _C.REFERRAL_REQUEST: _M(
+        SECTION_REFERRALS, _("Referral requests"),
+        _("For clinicians on the referral list: an anonymized request "
+          "seeking an analyst."),
     ),
     # Suggestions.
     _C.SUGGESTION_FILED: _M(

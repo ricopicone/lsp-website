@@ -1,0 +1,258 @@
+"""The referral workflow's five steps, as callable services.
+
+Steps (the coordinator's own numbering, from her process):
+
+1–2. ``intake`` — the Find-an-Analyst form submission becomes a tracked
+     :class:`ReferralRequest`; the inquiry goes to the referrals mailbox and
+     (in auto mode) the requester gets the process reply.
+3.   ``distribute`` — the anonymized request (name + email withheld) goes to
+     every active clinician on the referral list, individually, with a link
+     to respond on the site.
+4.   Clinicians respond on the respond page (or the coordinator records a
+     response manually); responses aggregate on the request.
+5.   ``build_followup`` + ``send_followup`` — the reply to the requester,
+     assembled from the right template variant with each available
+     clinician's practice details filled in.
+
+Every step that sends respects the per-step auto/review toggle on
+:class:`ReferralSettings`; callers in views invoke these directly when the
+coordinator presses the button (review mode), while ``intake`` and the
+``process_referrals`` cron invoke them when the toggle says auto.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from datetime import timedelta
+
+from django.conf import settings as django_settings
+from django.urls import reverse
+from django.utils import timezone
+
+from . import emails, notifications
+from .models import (
+    MessageTemplate,
+    Mode,
+    ReferralListMember,
+    ReferralRequest,
+    ReferralSettings,
+)
+
+logger = logging.getLogger(__name__)
+
+_TOKEN = re.compile(r"\{([a-z_]+)\}")
+
+
+def render_template(text: str, context: dict) -> str:
+    """Substitute ``{token}`` placeholders for keys present in ``context``.
+
+    Unknown tokens (and any other braces) are left untouched, so a hand-edited
+    template can never crash a send.
+    """
+    return _TOKEN.sub(
+        lambda m: str(context[m.group(1)]) if m.group(1) in context else m.group(0),
+        text,
+    )
+
+
+def _absolute(path: str) -> str:
+    return django_settings.SITE_BASE_URL.rstrip("/") + path
+
+
+def intake(data: dict) -> ReferralRequest:
+    """Steps 1–2: persist the submission, alert the coordinator, acknowledge.
+
+    The record is the one thing that must succeed; either email failing is
+    logged but never bubbles up to the form (the request is on the dashboard
+    regardless).
+    """
+    config = ReferralSettings.load()
+    req = ReferralRequest.objects.create(
+        name=data["name"],
+        pronouns=data.get("pronouns", ""),
+        email=data["email"],
+        location=data["location"],
+        language=data["language"],
+        modalities=data.get("modality", ""),
+        additional_information=data.get("additional_information", ""),
+    )
+    try:
+        emails.send_coordinator_inquiry(
+            req, _absolute(reverse("referrals:detail", args=[req.reference])),
+        )
+    except Exception:
+        logger.exception(
+            "Failed to email referral inquiry %s to the coordinator",
+            req.reference,
+        )
+    if config.ack_mode == Mode.AUTO:
+        try:
+            send_acknowledgment(req)
+        except Exception:
+            logger.exception(
+                "Failed to send referral acknowledgment for %s", req.reference,
+            )
+    if config.distribution_mode == Mode.AUTO:
+        try:
+            distribute(req)
+        except Exception:
+            logger.exception(
+                "Failed to auto-distribute referral %s", req.reference,
+            )
+    return req
+
+
+def send_acknowledgment(req: ReferralRequest) -> None:
+    """Step 2: the process reply to the requester (editable template)."""
+    tpl = MessageTemplate.get(MessageTemplate.Key.ACKNOWLEDGMENT)
+    context = {"name": req.name, "reference": req.reference}
+    emails.send_to_requester(
+        req,
+        render_template(tpl.subject, context),
+        render_template(tpl.body, context),
+    )
+    req.acknowledged_at = timezone.now()
+    if req.status == ReferralRequest.Status.NEW:
+        req.status = ReferralRequest.Status.ACKNOWLEDGED
+    req.save(update_fields=["acknowledged_at", "status"])
+
+
+def distribute(req: ReferralRequest) -> int:
+    """Step 3: the anonymized request to every active list member.
+
+    Each clinician is reached individually (bell + email via the
+    notifications center) so their response attributes to them. Returns the
+    number of clinicians notified.
+    """
+    config = ReferralSettings.load()
+    members = list(
+        ReferralListMember.objects.filter(is_active=True)
+        .select_related("user")
+    )
+    due = timezone.now() + timedelta(days=config.response_window_days)
+    tpl = MessageTemplate.get(MessageTemplate.Key.DISTRIBUTION)
+    context = {
+        "reference": req.reference,
+        "pronouns": req.pronouns or "(not given)",
+        "location": req.location,
+        "language": req.language,
+        "modalities": req.modalities or "(not given)",
+        "details": req.additional_information,
+        "due_date": due.strftime("%B %-d, %Y"),
+        "respond_url": _absolute(
+            reverse("referrals:respond", args=[req.reference]),
+        ),
+    }
+    subject = render_template(tpl.subject, context)
+    body = render_template(tpl.body, context)
+    for member in members:
+        notifications.referral_request(member.user, req, subject, body)
+    req.distributed_at = timezone.now()
+    req.responses_due_at = due
+    req.status = ReferralRequest.Status.DISTRIBUTED
+    req.save(update_fields=["distributed_at", "responses_due_at", "status"])
+    return len(members)
+
+
+def build_followup(req: ReferralRequest) -> tuple[str, str]:
+    """Step 5 draft: pick the variant by response count and assemble the
+    available clinicians' practice details. Returns ``(subject, body)``."""
+    available = [r.member for r in req.interested_responses()]
+    if not available:
+        key = MessageTemplate.Key.FOLLOWUP_NONE
+    elif len(available) == 1:
+        key = MessageTemplate.Key.FOLLOWUP_ONE
+    else:
+        key = MessageTemplate.Key.FOLLOWUP_MANY
+    tpl = MessageTemplate.get(key)
+    context = {
+        "name": req.name,
+        "reference": req.reference,
+        "location": req.location,
+        "clinicians": "\n\n".join(m.details_block() for m in available),
+    }
+    return (
+        render_template(tpl.subject, context),
+        render_template(tpl.body, context),
+    )
+
+
+def send_followup(req: ReferralRequest, subject: str, body: str) -> None:
+    """Step 5 send: the (possibly coordinator-edited) reply to the requester."""
+    emails.send_to_requester(req, subject, body)
+    req.replied_at = timezone.now()
+    if req.status != ReferralRequest.Status.CLOSED:
+        req.status = ReferralRequest.Status.REPLIED
+    req.save(update_fields=["replied_at", "status"])
+
+
+def add_to_list(user) -> ReferralListMember:
+    """Add (or reactivate) a clinician on the referral list; in auto mode
+    this also sends the New Member Instructions on first add."""
+    config = ReferralSettings.load()
+    member, created = ReferralListMember.objects.get_or_create(user=user)
+    if not created and not member.is_active:
+        member.is_active = True
+        member.save(update_fields=["is_active"])
+    if (
+        member.onboarded_at is None
+        and config.onboarding_mode == Mode.AUTO
+    ):
+        try:
+            send_onboarding(member)
+        except Exception:
+            logger.exception(
+                "Failed to send referral onboarding to %s", user.email,
+            )
+    return member
+
+
+def send_onboarding(member: ReferralListMember) -> None:
+    """The New Member Instructions to a clinician joining the list."""
+    tpl = MessageTemplate.get(MessageTemplate.Key.ONBOARDING)
+    context = {
+        "name": member.user.profile.display_full_name,
+        "profile_url": _absolute(reverse("profile_edit")),
+    }
+    emails.send_to_clinician(
+        member.user,
+        render_template(tpl.subject, context),
+        render_template(tpl.body, context),
+    )
+    member.onboarded_at = timezone.now()
+    member.save(update_fields=["onboarded_at"])
+
+
+def purge_expired(now=None) -> int:
+    """Privacy retention: redact identifying details on requests whose
+    follow-up (or closure) is older than the retention window. Returns the
+    number of requests redacted."""
+    config = ReferralSettings.load()
+    now = now or timezone.now()
+    cutoff = now - timedelta(days=30 * config.retention_months)
+    expired = ReferralRequest.objects.filter(
+        purged_at__isnull=True,
+        status__in=(
+            ReferralRequest.Status.REPLIED, ReferralRequest.Status.CLOSED,
+        ),
+    )
+    count = 0
+    for req in expired:
+        done_at = req.closed_at or req.replied_at
+        if done_at is None or done_at > cutoff:
+            continue
+        req.name = "(redacted)"
+        req.email = ""
+        req.pronouns = ""
+        req.additional_information = (
+            f"(redacted after {config.retention_months} months)"
+        )
+        req.coordinator_notes = ""
+        req.purged_at = now
+        req.save(update_fields=[
+            "name", "email", "pronouns", "additional_information",
+            "coordinator_notes", "purged_at",
+        ])
+        count += 1
+    return count

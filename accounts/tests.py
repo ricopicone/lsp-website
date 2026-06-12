@@ -246,26 +246,37 @@ def _valid_referral_post():
 
 
 @pytest.mark.django_db
-def test_find_an_analyst_post_sends_inquiry_and_acknowledgment(client, mailoutbox, settings):
+def test_find_an_analyst_post_tracks_request_and_sends_emails(
+    client, mailoutbox, settings,
+):
     settings.REFERRALS_EMAIL = "referrals@lacanschool.org"
     resp = client.post("/find-an-analyst/", _valid_referral_post(), follow=False)
     assert resp.status_code == 302
     assert resp.url.endswith("?submitted=1#submitted")
     assert len(mailoutbox) == 2
 
+    # The submission is now a tracked ReferralRequest (referrals app).
+    from referrals.models import ReferralRequest
+
+    req = ReferralRequest.objects.get(email="inquirer@example.com")
+    assert req.name == "Alex Patient"
+    assert req.status == ReferralRequest.Status.ACKNOWLEDGED
+
     # The coordinator inquiry: To = referrals, Reply-To = inquirer.
     inquiry = next(
         m for m in mailoutbox if m.to == ["referrals@lacanschool.org"]
     )
     assert "Alex Patient" in inquiry.subject
+    assert req.reference in inquiry.subject
     assert inquiry.reply_to == ["inquirer@example.com"]
     assert "Brooklyn, NY" in inquiry.body
 
-    # The acknowledgment: To = inquirer, Reply-To = referrals.
+    # The acknowledgment (the coordinator's editable process reply):
+    # To = inquirer, Reply-To = referrals.
     ack = next(m for m in mailoutbox if m.to == ["inquirer@example.com"])
     assert ack.reply_to == ["referrals@lacanschool.org"]
-    assert "Alex Patient" in ack.body
-    assert "referrals@lacanschool.org" in ack.body
+    assert "Dear Alex Patient," in ack.body
+    assert "Diana C. Cuello" in ack.body
 
 
 @pytest.mark.django_db
@@ -273,15 +284,18 @@ def test_find_an_analyst_ack_failure_does_not_block_redirect(
     client, mailoutbox, settings, monkeypatch,
 ):
     """If the acknowledgment email fails to send, the form still succeeds —
-    the coordinator already received the inquiry, which is what matters."""
+    the request is persisted and the coordinator received the inquiry."""
     settings.REFERRALS_EMAIL = "referrals@lacanschool.org"
-    from accounts import emails as accounts_emails
+    from referrals import services as referral_services
 
-    def _boom(_data):
+    def _boom(*_args, **_kwargs):
         raise RuntimeError("SMTP down")
 
-    monkeypatch.setattr(accounts_emails, "send_referral_acknowledgment", _boom)
+    monkeypatch.setattr(referral_services.emails, "send_to_requester", _boom)
     resp = client.post("/find-an-analyst/", _valid_referral_post(), follow=False)
     assert resp.status_code == 302
-    # Inquiry to coordinator still went through.
+    # Inquiry to coordinator still went through, and the request is tracked.
     assert any(m.to == ["referrals@lacanschool.org"] for m in mailoutbox)
+    from referrals.models import ReferralRequest
+
+    assert ReferralRequest.objects.filter(email="inquirer@example.com").exists()

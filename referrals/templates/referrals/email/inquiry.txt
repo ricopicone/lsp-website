@@ -1,12 +1,13 @@
 {% autoescape off %}A new Find-an-Analyst inquiry was submitted on the LSP website.
 
-Name:     {{ data.name }}
-Pronouns: {{ data.pronouns }}
-Email:    {{ data.email }}
-Location: {{ data.location }}
+Referral: {{ req.reference }}
+Name:     {{ req.name }}
+Pronouns: {{ req.pronouns }}
+Email:    {{ req.email }}
+Location: {{ req.location }}
 
-Preferred language:    {{ data.language }}
-Preferred modalities:  {{ data.modality }}
+Preferred language:    {{ req.language }}
+Preferred modalities:  {{ req.modalities }}
 
 This space is for you to share any other information you would like the
 Referral Coordinator to distribute to your potential Analyst.
@@ -20,7 +21,10 @@ email in this section. This information will be kept confidential through
 the referral process; it will be up to you to contact an analyst whose
 availability is matched with your own.
 
-{{ data.additional_information }}
+{{ req.additional_information }}
+
+Manage this request (acknowledge, distribute, collect responses, reply):
+{{ manage_url }}
 
 --
 Sent via the Find an Analyst form on app.lacanschool.org. Hitting Reply

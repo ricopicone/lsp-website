@@ -1,0 +1,167 @@
+{% extends "core/base.html" %}
+{% block title %}{{ req.reference }} — Referrals{% endblock %}
+{% block content %}
+<div class="max-w-4xl space-y-6">
+  <header class="space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="font-serif text-3xl text-base-content">Referral {{ req.reference }}</h1>
+      <a href="{% url 'referrals:dashboard' %}" class="btn btn-ghost btn-sm">← Referrals</a>
+    </div>
+    <div class="flex flex-wrap items-center gap-2 text-sm text-base-content/70">
+      <span class="badge badge-outline">{{ req.get_status_display }}</span>
+      <span>Received {{ req.created_at|date:"M j, Y, g:i a" }}</span>
+      {% if req.is_purged %}<span class="badge badge-warning badge-sm">redacted {{ req.purged_at|date:"M j, Y" }}</span>{% endif %}
+    </div>
+  </header>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  {# --- The request -------------------------------------------------- #}
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Request</h2>
+    <dl class="grid gap-x-8 gap-y-2 sm:grid-cols-2 text-sm">
+      <div><dt class="text-base-content/60">Name <span class="text-xs">(withheld from clinicians)</span></dt><dd class="font-medium">{{ req.name }}</dd></div>
+      <div><dt class="text-base-content/60">Email <span class="text-xs">(withheld from clinicians)</span></dt><dd class="font-medium">{% if req.email %}<a href="mailto:{{ req.email }}" class="link">{{ req.email }}</a>{% else %}—{% endif %}</dd></div>
+      <div><dt class="text-base-content/60">Pronouns</dt><dd>{{ req.pronouns|default:"—" }}</dd></div>
+      <div><dt class="text-base-content/60">Location</dt><dd>{{ req.location }}</dd></div>
+      <div><dt class="text-base-content/60">Preferred language</dt><dd>{{ req.language }}</dd></div>
+      <div><dt class="text-base-content/60">Preferred modalities</dt><dd>{{ req.modalities|default:"—" }}</dd></div>
+    </dl>
+    <div>
+      <p class="text-base-content/60 text-sm">For the Referral Coordinator</p>
+      <p class="whitespace-pre-line text-sm mt-1">{{ req.additional_information }}</p>
+    </div>
+  </section>
+
+  {# --- Steps / actions ----------------------------------------------- #}
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
+    <h2 class="font-serif text-xl text-base-content">Steps</h2>
+    <ol class="space-y-3 text-sm">
+      <li class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <span class="font-medium">2 · Acknowledgment</span>
+          {% if req.acknowledged_at %}
+          <span class="text-base-content/60">— sent {{ req.acknowledged_at|date:"M j, Y, g:i a" }}</span>
+          {% else %}
+          <span class="text-base-content/60">— not sent</span>
+          {% endif %}
+        </div>
+        {% if not req.is_purged %}
+        <form method="post" action="{% url 'referrals:send_ack' req.reference %}">{% csrf_token %}
+          <button class="btn btn-sm {% if req.acknowledged_at %}btn-ghost{% else %}btn-primary{% endif %}">
+            {% if req.acknowledged_at %}Resend{% else %}Send acknowledgment{% endif %}
+          </button>
+        </form>
+        {% endif %}
+      </li>
+      <li class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <span class="font-medium">3 · Distribute to the referral list</span>
+          {% if req.distributed_at %}
+          <span class="text-base-content/60">— sent {{ req.distributed_at|date:"M j, Y" }}; responses due {{ req.responses_due_at|date:"M j, Y" }}{% if req.window_closed %} (window closed){% endif %}</span>
+          {% else %}
+          <span class="text-base-content/60">— not distributed (name and email are withheld)</span>
+          {% endif %}
+        </div>
+        {% if not req.is_purged %}
+        <form method="post" action="{% url 'referrals:distribute' req.reference %}">{% csrf_token %}
+          <button class="btn btn-sm {% if req.distributed_at %}btn-ghost{% else %}btn-primary{% endif %}">
+            {% if req.distributed_at %}Redistribute{% else %}Distribute{% endif %}
+          </button>
+        </form>
+        {% endif %}
+      </li>
+      <li class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <span class="font-medium">5 · Follow-up to the requester</span>
+          {% if req.replied_at %}
+          <span class="text-base-content/60">— sent {{ req.replied_at|date:"M j, Y, g:i a" }}</span>
+          {% else %}
+          <span class="text-base-content/60">— {{ interested_count }} clinician{{ interested_count|pluralize }} available so far</span>
+          {% endif %}
+        </div>
+        {% if not req.is_purged %}
+        <a href="{% url 'referrals:followup' req.reference %}" class="btn btn-sm {% if req.replied_at %}btn-ghost{% elif req.window_closed %}btn-primary{% endif %}">
+          {% if req.replied_at %}Compose again{% else %}Compose follow-up{% endif %}
+        </a>
+        {% endif %}
+      </li>
+    </ol>
+    <div class="flex flex-wrap gap-2 border-t border-base-300/60 pt-3">
+      {% if req.status != "closed" %}
+      <form method="post" action="{% url 'referrals:close' req.reference %}">{% csrf_token %}
+        <button class="btn btn-outline btn-sm">Close request</button>
+      </form>
+      {% else %}
+      <form method="post" action="{% url 'referrals:reopen' req.reference %}">{% csrf_token %}
+        <button class="btn btn-outline btn-sm">Reopen</button>
+      </form>
+      {% endif %}
+    </div>
+  </section>
+
+  {# --- Responses (step 4) --------------------------------------------- #}
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
+    <h2 class="font-serif text-xl text-base-content">Clinician responses</h2>
+    {% if responses %}
+    <ul class="space-y-3">
+      {% for resp in responses %}
+      <li class="rounded-lg border border-base-300/60 p-3 text-sm space-y-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-medium">{{ resp.member }}</span>
+          {% if resp.available %}
+          <span class="badge badge-success badge-sm">available</span>
+          {% else %}
+          <span class="badge badge-ghost badge-sm">not available</span>
+          {% endif %}
+          <span class="text-base-content/55">{{ resp.created_at|date:"M j, Y, g:i a" }}</span>
+          {% if resp.recorded_by %}<span class="badge badge-outline badge-sm">recorded by {{ resp.recorded_by.get_full_name|default:resp.recorded_by.email }}</span>{% endif %}
+        </div>
+        {% if resp.message %}<p class="whitespace-pre-line text-base-content/80">{{ resp.message }}</p>{% endif %}
+        <details class="text-xs text-base-content/60">
+          <summary class="cursor-pointer">Details the requester would receive</summary>
+          <pre class="mt-1 whitespace-pre-wrap font-sans">{{ resp.member.details_block }}</pre>
+        </details>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-base-content/60 text-sm">No responses yet.</p>
+    {% endif %}
+
+    {% if not req.is_purged %}
+    <details class="rounded-lg border border-base-300/60 p-3">
+      <summary class="cursor-pointer text-sm font-medium">Record a response manually</summary>
+      <form method="post" action="{% url 'referrals:record_response' req.reference %}" class="mt-3 space-y-3">
+        {% csrf_token %}
+        <label class="block space-y-1 text-sm">
+          <span class="text-base-content/60">{{ record_form.member.label }}</span>
+          {{ record_form.member }}
+        </label>
+        <label class="block space-y-1 text-sm">
+          <span class="text-base-content/60">Availability</span>
+          {{ record_form.available }}
+        </label>
+        <label class="block space-y-1 text-sm">
+          <span class="text-base-content/60">{{ record_form.message.label }}</span>
+          {{ record_form.message }}
+        </label>
+        <button class="btn btn-sm btn-primary">Record response</button>
+      </form>
+    </details>
+    {% endif %}
+  </section>
+
+  {# --- Notes ----------------------------------------------------------- #}
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Notes</h2>
+    <form method="post" action="{% url 'referrals:notes' req.reference %}" class="space-y-3">
+      {% csrf_token %}
+      {{ notes_form.coordinator_notes }}
+      <button class="btn btn-sm">Save notes</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

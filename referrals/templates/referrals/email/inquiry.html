@@ -13,33 +13,38 @@
           <tr>
             <td style="padding:28px 32px 20px; border-bottom:1px solid #e4e4e7;">
               <div style="font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:#71717a;">Lacanian School of Psychoanalysis</div>
-              <div style="margin-top:6px; font-size:20px; font-weight:700; color:#18181b;">New Find-an-Analyst inquiry</div>
+              <div style="margin-top:6px; font-size:20px; font-weight:700; color:#18181b;">New Find-an-Analyst inquiry — {{ req.reference }}</div>
             </td>
           </tr>
           <tr>
             <td style="padding:4px 32px 28px; color:#27272a; font-size:15px; line-height:1.5;">
 
               <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">What is your name?</p>
-              <p style="margin:0;">{{ data.name }}</p>
+              <p style="margin:0;">{{ req.name }}</p>
 
               <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">What pronouns do you use?</p>
-              <p style="margin:0;">{{ data.pronouns }}</p>
+              <p style="margin:0;">{{ req.pronouns }}</p>
 
               <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">What email address would you like to use for the referral process?</p>
-              <p style="margin:0;"><a href="mailto:{{ data.email }}" style="color:#3730a3; text-decoration:underline;">{{ data.email }}</a></p>
+              <p style="margin:0;"><a href="mailto:{{ req.email }}" style="color:#3730a3; text-decoration:underline;">{{ req.email }}</a></p>
 
               <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">In what city and state (if in the United States) or city and country (if outside of the United States) are you located?</p>
-              <p style="margin:0;">{{ data.location }}</p>
+              <p style="margin:0;">{{ req.location }}</p>
 
               <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">What language would you prefer to work in?</p>
-              <p style="margin:0;">{{ data.language }}</p>
+              <p style="margin:0;">{{ req.language }}</p>
 
               <p style="margin:24px 0 3px; font-weight:700; color:#18181b;">How would you like to meet?</p>
-              <p style="margin:0;">{{ data.modality }}</p>
+              <p style="margin:0;">{{ req.modalities }}</p>
 
               <p style="margin:30px 0 3px; font-weight:700; color:#18181b;">Anything else for the Referral Coordinator</p>
               <p style="margin:0 0 12px; font-size:13px; font-style:italic; color:#71717a; line-height:1.5;">This space is for you to share any other information you would like the Referral Coordinator to distribute to your potential Analyst. You may want to share what you are hoping to work on, how you came to an interest in psychoanalysis, or if you have been in therapy or analysis before. Please do not include any identifying information such as your name or email in this section. This information will be kept confidential through the referral process; it will be up to you to contact an analyst whose availability is matched with your own.</p>
-              <div style="margin:0; padding:14px 16px; background-color:#f4f4f5; border-left:3px solid #a1a1aa; border-radius:4px;">{{ data.additional_information|linebreaksbr }}</div>
+              <div style="margin:0; padding:14px 16px; background-color:#f4f4f5; border-left:3px solid #a1a1aa; border-radius:4px;">{{ req.additional_information|linebreaksbr }}</div>
+
+              <p style="margin:28px 0 0;">
+                <a href="{{ manage_url }}" style="display:inline-block; padding:10px 18px; background-color:#18181b; color:#ffffff; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px;">Manage this request</a>
+              </p>
+              <p style="margin:8px 0 0; font-size:12px; color:#71717a;">Acknowledge, distribute to the referral list, collect responses, and reply — all on the site.</p>
 
             </td>
           </tr>

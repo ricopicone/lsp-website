@@ -1,0 +1,37 @@
+{% extends "core/base.html" %}
+{% block title %}{{ member }} — Referral list{% endblock %}
+{% block content %}
+<div class="max-w-3xl space-y-6">
+  <header class="space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="font-serif text-3xl text-base-content">{{ member }}</h1>
+      <a href="{% url 'referrals:clinicians' %}" class="btn btn-ghost btn-sm">← Referral list</a>
+    </div>
+  </header>
+
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-2">
+    <h2 class="font-serif text-lg text-base-content">From their profile</h2>
+    <p class="text-base-content/60 text-sm">
+      What requesters receive unless you set an override below. The member
+      maintains this themselves at their profile editor.
+    </p>
+    <pre class="whitespace-pre-wrap rounded-lg bg-base-200 p-3 text-sm font-sans">{{ profile_block }}</pre>
+  </section>
+
+  <form method="post" class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
+    {% csrf_token %}
+    <label class="block space-y-1">
+      <span class="text-xs font-medium text-base-content/60">Details override (optional — sent verbatim instead of the profile block)</span>
+      {{ form.details_override }}
+    </label>
+    <label class="block space-y-1">
+      <span class="text-xs font-medium text-base-content/60">Coordinator notes (private)</span>
+      {{ form.notes }}
+    </label>
+    <div class="flex gap-2">
+      <button class="btn btn-primary btn-sm">Save</button>
+      <a href="{% url 'referrals:clinicians' %}" class="btn btn-ghost btn-sm">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

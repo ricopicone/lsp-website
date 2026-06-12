@@ -388,6 +388,30 @@ Phase 2 plan for milestone IDs):**
   rolled into a daily/weekly digest by `manage.py send_notification_digests`
   (cadence on `NotificationPreference`; `Notification.digest_pending` flags held
   rows). See `notifications-center` memory.
+- **Referral Coordinator workflow** (`referrals`, task #229) — Diana's
+  email-shuffle moved in-site. Every Find-an-Analyst submission becomes a
+  tracked `ReferralRequest` (sequential `R-YYYY-NNN` reference, status
+  lifecycle NEW → ACKNOWLEDGED → DISTRIBUTED → REPLIED/CLOSED), managed from
+  `/admin-tools/referrals/` — gated to the new **`referral_coordinator`
+  StaffRole + superusers only** (deliberately *not* generic `is_staff`;
+  requests carry sensitive disclosures). The referral list lives in-site
+  (`ReferralListMember`; clinician practice info is **self-service via the
+  profile editor**, with a coordinator `details_override` escape hatch).
+  Distribution reaches each clinician individually (bell + email, new
+  `REFERRAL_REQUEST` notification category) with name+email withheld;
+  responses attribute on an in-site respond page and aggregate on the
+  request; the step-5 follow-up auto-assembles the right template variant
+  (none/one/many) with each available clinician's details. **Every outgoing
+  message is an editable `MessageTemplate` seeded verbatim from Diana's
+  wording** (`referrals/seed_templates.py` — do not paraphrase), and **each
+  sending step has a per-step auto/review toggle** on the
+  `ReferralSettings` singleton (defaults: ack auto, distribution review,
+  follow-up review, onboarding auto) per do-not-over-automate. New-member
+  onboarding ("New Member Instructions", reworded to point at the profile
+  editor) fires on list-add. `manage.py process_referrals` (daily host
+  timer at launch) sends due auto-followups + redacts requests
+  `retention_months` after reply/close. `DJANGO_REFERRALS_EMAIL` now a real
+  setting. See `referral-workflow` memory.
 
 ## Open items (M7 wrap-up)
 

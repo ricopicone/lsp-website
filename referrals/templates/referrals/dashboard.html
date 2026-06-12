@@ -1,0 +1,74 @@
+{% extends "core/base.html" %}
+{% block title %}Referrals — Admin Tools{% endblock %}
+{% block content %}
+<div class="max-w-4xl space-y-6">
+  <header class="space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="font-serif text-3xl text-base-content">Referral Coordinator</h1>
+      <a href="{% url 'admin_tools' %}" class="btn btn-ghost btn-sm">← Admin Tools</a>
+    </div>
+    <p class="text-base-content/70 text-sm">
+      Find-an-Analyst requests, tracked from intake to reply. {{ open_count }} open.
+    </p>
+    <nav class="flex flex-wrap gap-2">
+      <a href="{% url 'referrals:clinicians' %}" class="btn btn-outline btn-sm">Referral list</a>
+      <a href="{% url 'referrals:templates' %}" class="btn btn-outline btn-sm">Message templates</a>
+      <a href="{% url 'referrals:settings' %}" class="btn btn-outline btn-sm">Settings</a>
+    </nav>
+  </header>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <form method="get" class="flex flex-wrap items-end gap-3">
+    <label class="space-y-1">
+      <span class="block text-xs font-medium text-base-content/60">Status</span>
+      <select name="status" class="select select-bordered select-sm" onchange="this.form.submit()">
+        <option value="open" {% if status_filter == "open" %}selected{% endif %}>Open</option>
+        <option value="all" {% if status_filter == "all" %}selected{% endif %}>All</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <noscript><button type="submit" class="btn btn-sm">Filter</button></noscript>
+  </form>
+
+  {% if requests %}
+  <div class="overflow-x-auto rounded-xl border border-base-300/60 bg-base-100">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Referral</th><th>Name</th><th>Location</th><th>Status</th>
+          <th>Received</th><th>Responses due</th><th class="text-right">Available</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in requests %}
+        <tr class="hover">
+          <td><a href="{% url 'referrals:detail' r.reference %}" class="link font-medium">{{ r.reference }}</a></td>
+          <td>{% if r.is_purged %}<span class="italic text-base-content/50">redacted</span>{% else %}{{ r.name }}{% endif %}</td>
+          <td>{{ r.location }}</td>
+          <td><span class="badge badge-outline badge-sm">{{ r.get_status_display }}</span></td>
+          <td class="whitespace-nowrap">{{ r.created_at|date:"M j, Y" }}</td>
+          <td class="whitespace-nowrap">{{ r.responses_due_at|date:"M j, Y"|default:"—" }}</td>
+          <td class="text-right">
+            {% with n=r.interested_responses.count %}{{ n }}{% endwith %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-base-content/60 text-sm">No requests match this filter.</p>
+  {% endif %}
+
+  <div class="rounded-xl border border-base-300/60 bg-base-100 p-4 text-sm text-base-content/70 space-y-1">
+    <p class="font-medium text-base-content">Current automation</p>
+    <p>Acknowledgment: {{ config.get_ack_mode_display|lower }} · Distribution: {{ config.get_distribution_mode_display|lower }} · Follow-up: {{ config.get_followup_mode_display|lower }} · Onboarding: {{ config.get_onboarding_mode_display|lower }} · Response window: {{ config.response_window_days }} days.</p>
+    <p>Each step can be switched between automatic and review-first anytime in <a href="{% url 'referrals:settings' %}" class="link">Settings</a>.</p>
+  </div>
+</div>
+{% endblock %}
