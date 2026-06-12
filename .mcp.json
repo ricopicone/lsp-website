@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "lsp-admin": {
+      "command": "uv",
+      "args": ["run", "--group", "mcp", "python", "mcp/lsp_mcp_server.py"],
+      "env": {
+        "LSP_DEVAPI_URL": "${LSP_DEVAPI_URL:-https://app.lacanschool.org}",
+        "LSP_DEVAPI_TOKEN": "${LSP_DEVAPI_TOKEN}"
+      }
+    }
+  }
+}

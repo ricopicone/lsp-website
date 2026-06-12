@@ -296,6 +296,24 @@ Done (see `git log` for specifics):
   preview. 2026-27 program re-imported with split fields —
   **`import_program_2026_2027` re-runs clobber admin-side edits; diff prod
   against the script first** (see `event-structured-content` memory).
+- **Web-developer API + MCP server** (task #252, shipped 2026-06-12). A
+  token-authenticated JSON surface (`devapi` app, mounted at `/devapi/`) plus a
+  thin stdio MCP server (`mcp/lsp_mcp_server.py`) that lets a Claude Code
+  session manage the site directly — closing the suggestion-box loop (no more
+  `export_suggestions` → read markdown files). `DevApiToken` stores only a
+  SHA-256 hash of a `lspdev_…` token **bound to a real user**; every request is
+  authorized through that user's existing `core.StaffRole` checks
+  (`@dev_api` decorator), so the API can never do more than the holder could in
+  the web UI. Endpoints/tools (Suggestions slice): `whoami`,
+  `list_suggestions`, `get_suggestion` (incl. server-resolved view + URL name),
+  `update_suggestion` (same triage side-effects as the human view —
+  reviewed_by/at + submitter notification), `suggestion_stats`. Mint a token
+  with `manage.py create_devapi_token --user … --label …` (printed once). The
+  `mcp`+`httpx` deps live in a separate `mcp` dependency group (laptop-only —
+  out of Docker/CI); committed `.mcp.json` reads `${LSP_DEVAPI_TOKEN}` from the
+  env (never committed). Kill switch `DJANGO_DEVAPI_ENABLED=false`. Built to
+  grow into a broader admin surface (health/deploy, member lookups, treasurer/
+  referral read models). See `mcp/README.md` + the `devapi-mcp-server` memory.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

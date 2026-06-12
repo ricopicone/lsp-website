@@ -71,6 +71,7 @@ LOCAL_APPS = [
     "video",
     "suggestions",
     "referrals",
+    "devapi",
     "core",
 ]
 
@@ -312,6 +313,13 @@ PREVIEW_TOUR_PUBLIC = env.bool("DJANGO_PREVIEW_TOUR_PUBLIC", default=False)
 # at /admin-tools/suggestions/. Off until launch (like SURVEY_ENABLED). Flip via
 # DJANGO_SUGGESTIONS_ENABLED.
 SUGGESTIONS_ENABLED = env.bool("DJANGO_SUGGESTIONS_ENABLED", default=False)
+
+# Web-developer API (/devapi/): token-authenticated JSON surface a Claude Code
+# session uses to read + triage the work the site produces (member suggestions
+# today). Independent of SUGGESTIONS_ENABLED — the dev needs API access before
+# the box opens to members. On by default; every request still needs a valid
+# bearer token. Set DJANGO_DEVAPI_ENABLED=false to kill the surface entirely.
+DEVAPI_ENABLED = env.bool("DJANGO_DEVAPI_ENABLED", default=True)
 PREVIEW_TOUR_ALLOWLIST = env.list(
     "DJANGO_PREVIEW_TOUR_ALLOWLIST", default=["dr@ricopic.one"]
 )

@@ -111,6 +111,7 @@ urlpatterns = [
     path("groups/", include("workgroups.urls")),
     path("cartels/", include("cartels.urls")),
     path("suggestions/", include("suggestions.urls")),
+    path("devapi/", include("devapi.urls")),
     # Referral Coordinator surface (admin-tools/referrals/) + the clinician
     # respond page (referrals/<reference>/respond/).
     path("", include("referrals.urls")),
