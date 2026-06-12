@@ -439,6 +439,71 @@ def test_template_edit_changes_outgoing_mail(client, coordinator):
     assert msg.body == "Soon, Alex Patient."
 
 
+# ---- Google Groups list import ----------------------------------------------
+
+
+def _gg_csv(tmp_path, rows):
+    path = tmp_path / "members.csv"
+    header = "Group Email [Required],Member Email,Member Name,Member Role,Member Type\n"
+    body = "".join(
+        f"g@lacanschool.org,{email},Member,{role},USER\n" for email, role in rows
+    )
+    path.write_text(header + body)
+    return path
+
+
+def test_import_referral_list_matches_and_skips(tmp_path, clinician):
+    from django.core.management import call_command
+
+    # Matched by public_email rather than login email.
+    by_public = User.objects.create_user(
+        email="login@example.com", password="pw",
+        first_name="Pub", last_name="Lique",
+    )
+    by_public.profile.public_email = "public@example.com"
+    by_public.profile.save()
+
+    path = _gg_csv(tmp_path, [
+        ("admin@lacanschool.org", "OWNER"),        # skipped: role
+        ("referrals@lacanschool.org", "MANAGER"),  # skipped: role
+        ("ANALYST@example.com", "MEMBER"),         # clinician, case-insensitive
+        ("public@example.com", "MEMBER"),          # matched via public_email
+        ("nobody@example.com", "MEMBER"),          # unmatched
+    ])
+    call_command("import_referral_list", str(path))
+
+    assert ReferralListMember.objects.filter(user=clinician).exists()
+    assert ReferralListMember.objects.filter(user=by_public).exists()
+    assert ReferralListMember.objects.count() == 2
+    # Import never sends mail (no onboarding auto-send).
+    assert mail.outbox == []
+    # Imported rows await an explicit instructions send.
+    assert ReferralListMember.objects.filter(onboarded_at__isnull=False).count() == 0
+
+    # Idempotent: re-run changes nothing.
+    call_command("import_referral_list", str(path))
+    assert ReferralListMember.objects.count() == 2
+
+
+def test_import_referral_list_dry_run_writes_nothing(tmp_path, clinician):
+    from django.core.management import call_command
+
+    path = _gg_csv(tmp_path, [("analyst@example.com", "MEMBER")])
+    call_command("import_referral_list", str(path), "--dry-run")
+    assert ReferralListMember.objects.count() == 0
+
+
+def test_import_referral_list_reactivates(tmp_path, clinician):
+    from django.core.management import call_command
+
+    ReferralListMember.objects.create(user=clinician, is_active=False)
+    path = _gg_csv(tmp_path, [("analyst@example.com", "MEMBER")])
+    call_command("import_referral_list", str(path))
+    member = ReferralListMember.objects.get(user=clinician)
+    assert member.is_active
+    assert mail.outbox == []
+
+
 # ---- Cron command ---------------------------------------------------------------
 
 
