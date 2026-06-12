@@ -49,8 +49,11 @@ def clinician():
         first_name="Anna", last_name="Analyst",
     )
     profile = user.profile
+    profile.role = "analyst"  # directory role → public profile page exists
+    profile.public = True
     profile.credentials = "PhD"
     profile.public_email = "anna.practice@example.com"
+    profile.public_phone = "+12065550100"
     profile.website = "https://anna.example.com"
     profile.save()
     return user
@@ -270,7 +273,29 @@ def test_followup_variant_single_includes_profile_details(listed):
     assert "Anna Analyst" in body
     assert "PhD" in body
     assert "anna.practice@example.com" in body
+    assert "(206) 555-0100" in body  # US number formatted nationally
     assert "https://anna.example.com" in body
+    assert "Profile: " in body and "/directory/anna-analyst/" in body
+
+
+def test_details_block_omits_profile_link_when_not_public(listed):
+    profile = listed.user.profile
+    profile.public = False
+    profile.save()
+    assert "/directory/" not in listed.details_block()
+
+
+def test_followup_email_html_links_email_and_profile(listed):
+    req = make_request()
+    ReferralResponse.objects.create(request=req, member=listed)
+    subject, body = services.build_followup(req)
+    services.send_followup(req, subject, body)
+    msg = mail.outbox[-1]
+    assert msg.body == body  # plain-text part is exactly what was edited
+    html = next(c for c, t in msg.alternatives if t == "text/html")
+    assert 'href="mailto:anna.practice@example.com"' in html
+    assert 'href="https://anna.example.com"' in html
+    assert "/directory/anna-analyst/" in html
 
 
 def test_followup_variant_many_and_override(listed):
