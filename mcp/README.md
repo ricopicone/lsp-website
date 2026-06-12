@@ -36,17 +36,29 @@ so it can never do more than that user could in the web UI.
 
    It prints the raw token **once** (`lspdev_…`). Copy it.
 
-2. **Expose it to the MCP server.** The committed `.mcp.json` reads two env vars
-   (the token is never committed). Export them in your shell — or, for Claude
-   Code, in a `.env` it loads — before launching:
+2. **Give the token to the server** (it's never committed). The server reads
+   `LSP_DEVAPI_TOKEN` from the environment, falling back to a gitignored dotenv
+   file — so you don't have to re-export it in every shell or tmux pane. Pick one:
 
-   ```
-   export LSP_DEVAPI_TOKEN="lspdev_…"
-   export LSP_DEVAPI_URL="https://app.lacanschool.org"   # optional; this is the default
-   ```
+   - **A file (recommended, survives across worktrees):**
 
-   Point `LSP_DEVAPI_URL` at `http://localhost:8000` to work against a local dev
-   server instead of production.
+     ```
+     mkdir -p ~/.config/lsp-mcp
+     printf 'LSP_DEVAPI_TOKEN=lspdev_…\n' >> ~/.config/lsp-mcp/.env
+     ```
+
+     The server also reads the repo-root `.env` (alongside Django's), or any path
+     in `LSP_DEVAPI_ENV_FILE`. An exported env var always wins over a file.
+
+   - **A shell export** (one pane / one session, or add to `~/.zshrc` to persist):
+
+     ```
+     export LSP_DEVAPI_TOKEN="lspdev_…"
+     ```
+
+   `LSP_DEVAPI_URL` is optional (defaults to `https://app.lacanschool.org`); set
+   it — env or dotenv — to `http://localhost:8000` to work against a local dev
+   server instead.
 
 3. **Use it.** `.mcp.json` registers the server for this repo; Claude Code starts
    it on demand. Run `whoami` to confirm it's wired up.

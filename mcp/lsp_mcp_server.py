@@ -14,17 +14,59 @@ Run it via the project's MCP config (see mcp/README.md):
 
     uv run --group mcp python mcp/lsp_mcp_server.py
 
-Environment:
-    LSP_DEVAPI_URL    Base site URL (default https://app.lacanschool.org)
+Configuration (an exported env var wins; otherwise read from a dotenv file —
+see ``_load_env_files`` for the search order):
     LSP_DEVAPI_TOKEN  Bearer token from `manage.py create_devapi_token` (required)
+    LSP_DEVAPI_URL    Base site URL (default https://app.lacanschool.org)
 """
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+
+#: Keys we'll honour from a dotenv file (we never slurp the whole file into the
+#: process — just these two).
+_ENV_KEYS = ("LSP_DEVAPI_TOKEN", "LSP_DEVAPI_URL")
+
+
+def _load_env_files() -> None:
+    """Populate config from a gitignored dotenv file so the token need not be
+    exported in every shell/tmux pane.
+
+    An already-set environment variable always wins (``setdefault``), so a shell
+    export or Claude Code's own ``${VAR}`` expansion still takes precedence. Among
+    files, the first to define a key wins, in this order:
+
+      1. ``$LSP_DEVAPI_ENV_FILE`` (explicit override)
+      2. ``~/.config/lsp-mcp/.env`` (one place, shared across all git worktrees)
+      3. ``./.env`` (the repo-root .env, alongside Django's own settings)
+    """
+    candidates = [
+        os.environ.get("LSP_DEVAPI_ENV_FILE", ""),
+        str(Path.home() / ".config" / "lsp-mcp" / ".env"),
+        str(Path.cwd() / ".env"),
+    ]
+    for raw in candidates:
+        if not raw:
+            continue
+        path = Path(raw)
+        if not path.is_file():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            if key in _ENV_KEYS:
+                os.environ.setdefault(key, val.strip().strip("\"'"))
+
+
+_load_env_files()
 
 BASE_URL = os.environ.get("LSP_DEVAPI_URL", "https://app.lacanschool.org").rstrip("/")
 TOKEN = os.environ.get("LSP_DEVAPI_TOKEN", "")
@@ -37,8 +79,8 @@ def _client() -> httpx.Client:
     if not TOKEN:
         raise RuntimeError(
             "LSP_DEVAPI_TOKEN is not set. Mint one with "
-            "`uv run python manage.py create_devapi_token --user <email> --label <name>` "
-            "and set it in the MCP server's environment."
+            "`manage.py create_devapi_token --user <email> --label <name>`, then "
+            "export it or add it to ~/.config/lsp-mcp/.env (or the repo .env)."
         )
     return httpx.Client(
         base_url=f"{BASE_URL}/devapi/",
