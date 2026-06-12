@@ -71,6 +71,7 @@ class StaffRole(models.Model):
     LSP_STAFF = "lsp_staff"
     ADMIN_ASSISTANT = "admin_assistant"
     WEB_DEVELOPER = "web_developer"
+    REFERRAL_COORDINATOR = "referral_coordinator"
 
     key = models.SlugField(
         max_length=50,

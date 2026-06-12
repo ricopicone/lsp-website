@@ -151,15 +151,18 @@ def directory_detail(request, slug: str):
 def find_an_analyst(request):
     """Public Find-an-Analyst page: referral form + interactive map of members.
 
-    Handles form GET (display) and POST (validate, email coordinator,
-    redirect to ``?submitted=1``).
+    Handles form GET (display) and POST. A valid submission becomes a tracked
+    ``referrals.ReferralRequest`` (the coordinator inquiry email and, in auto
+    mode, the acknowledgment are sent by ``referrals.services.intake``).
     """
     submitted = request.GET.get("submitted") == "1"
     if request.method == "POST":
         form = ReferralRequestForm(request.POST)
         if form.is_valid():
+            from referrals.services import intake
+
             modality_labels = dict(form.fields["modality"].choices)
-            data = {
+            intake({
                 "name":      form.cleaned_data["name"],
                 "pronouns":  form.pronouns_display(),
                 "email":     form.cleaned_data["email"],
@@ -169,14 +172,7 @@ def find_an_analyst(request):
                     modality_labels.get(v, v) for v in form.cleaned_data["modality"]
                 ),
                 "additional_information": form.cleaned_data["additional_information"],
-            }
-            emails.send_referral_inquiry(data)
-            # Acknowledgment to the inquirer — failure here shouldn't
-            # mask the success of the coordinator email above.
-            try:
-                emails.send_referral_acknowledgment(data)
-            except Exception:
-                logger.exception("Failed to send referral acknowledgment to %s", data["email"])
+            })
             return redirect(f"{request.path}?submitted=1#submitted")
     else:
         form = ReferralRequestForm()

@@ -1,0 +1,41 @@
+{% extends "core/base.html" %}
+{% block title %}{{ template.get_key_display }} — Templates{% endblock %}
+{% block content %}
+<div class="max-w-3xl space-y-6">
+  <header class="space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="font-serif text-3xl text-base-content">{{ template.get_key_display }}</h1>
+      <a href="{% url 'referrals:templates' %}" class="btn btn-ghost btn-sm">← Templates</a>
+    </div>
+    <p class="text-base-content/70 text-sm">
+      Placeholders available for this message —
+      {% if template.key == "acknowledgment" %}
+      <code class="text-xs">{name}</code> (the requester's name), <code class="text-xs">{reference}</code> (the referral number).
+      {% elif template.key == "distribution" %}
+      <code class="text-xs">{reference}</code>, <code class="text-xs">{pronouns}</code>, <code class="text-xs">{location}</code>, <code class="text-xs">{language}</code>, <code class="text-xs">{modalities}</code>, <code class="text-xs">{details}</code> (what the requester shared), <code class="text-xs">{due_date}</code>, <code class="text-xs">{respond_url}</code>. The requester's name and email are never available here.
+      {% elif template.key == "onboarding" %}
+      <code class="text-xs">{name}</code> (the clinician's name), <code class="text-xs">{profile_url}</code> (the profile editor).
+      {% else %}
+      <code class="text-xs">{name}</code> (the requester's name), <code class="text-xs">{reference}</code>, <code class="text-xs">{location}</code>, <code class="text-xs">{clinicians}</code> (the available clinicians' practice details).
+      {% endif %}
+      Unknown placeholders are left as-is.
+    </p>
+  </header>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <label class="block space-y-1">
+      <span class="text-xs font-medium text-base-content/60">Subject</span>
+      {{ form.subject }}
+    </label>
+    <label class="block space-y-1">
+      <span class="text-xs font-medium text-base-content/60">Body</span>
+      {{ form.body }}
+    </label>
+    <div class="flex gap-2">
+      <button class="btn btn-primary">Save</button>
+      <a href="{% url 'referrals:templates' %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

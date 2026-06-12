@@ -1,0 +1,38 @@
+{% extends "core/base.html" %}
+{% block title %}Follow-up — {{ req.reference }}{% endblock %}
+{% block content %}
+<div class="max-w-3xl space-y-6">
+  <header class="space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="font-serif text-3xl text-base-content">Follow-up — {{ req.reference }}</h1>
+      <a href="{% url 'referrals:detail' req.reference %}" class="btn btn-ghost btn-sm">← Back to the request</a>
+    </div>
+    <p class="text-base-content/70 text-sm">
+      Drafted from your template for
+      {% if interested_count == 0 %}no responses{% elif interested_count == 1 %}a single clinician{% else %}{{ interested_count }} clinicians{% endif %},
+      with each available clinician's practice details filled in. Adjust anything before sending —
+      it goes to <span class="font-medium">{{ req.email }}</span>.
+    </p>
+  </header>
+
+  {% if form.errors %}
+  <div class="alert alert-error py-2 text-sm">Both a subject and a body are required.</div>
+  {% endif %}
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <label class="block space-y-1">
+      <span class="text-xs font-medium text-base-content/60">Subject</span>
+      {{ form.subject }}
+    </label>
+    <label class="block space-y-1">
+      <span class="text-xs font-medium text-base-content/60">Body</span>
+      {{ form.body }}
+    </label>
+    <div class="flex flex-wrap gap-2">
+      <button class="btn btn-primary">Send to {{ req.email }}</button>
+      <a href="{% url 'referrals:detail' req.reference %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

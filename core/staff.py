@@ -33,6 +33,7 @@ PANEL_ROLES = (
     StaffRole.CARTEL_COORDINATOR,
     StaffRole.ADMIN_ASSISTANT,
     StaffRole.WEB_DEVELOPER,
+    StaffRole.REFERRAL_COORDINATOR,
 )
 
 
@@ -148,6 +149,20 @@ def _panels_for(user) -> list[dict]:
             "title": "Web Developer Admin",
             "blurb": "Technical operations: the Django back office, deploys, internals.",
             "url": reverse("web_developer_admin"),
+        })
+    # Referral Coordinator — deliberately NOT opened to generic is_staff:
+    # requests carry sensitive personal disclosures.
+    if user.is_superuser or has_staff_role(user, StaffRole.REFERRAL_COORDINATOR):
+        from referrals.models import ReferralRequest
+        panels.append({
+            "title": "Referral Coordinator Admin",
+            "blurb": "Find-an-Analyst requests: distribute to the referral "
+                     "list, collect responses, reply to requesters.",
+            "url": reverse("referrals:dashboard"),
+            "count": ReferralRequest.objects.filter(
+                status__in=ReferralRequest.OPEN_STATUSES
+            ).count(),
+            "count_label": "open",
         })
     if user.is_superuser or has_staff_role(
         user, StaffRole.WEB_COORDINATOR, StaffRole.WEB_DEVELOPER

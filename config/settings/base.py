@@ -70,6 +70,7 @@ LOCAL_APPS = [
     "workinggroups",
     "video",
     "suggestions",
+    "referrals",
     "core",
 ]
 
@@ -201,6 +202,10 @@ AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-west-2")
 
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")
 SUPPORT_EMAIL = env("DJANGO_SUPPORT_EMAIL", default="website@lacanschool.org")
+# The Referral Coordinator's mailbox: Find-an-Analyst inquiries land here, and
+# referral-flow mail (acknowledgments, distributions, follow-ups) carries it
+# as Reply-To so any reply reaches the coordinator.
+REFERRALS_EMAIL = env("DJANGO_REFERRALS_EMAIL", default="referrals@lacanschool.org")
 
 # All mail flows through a persona-safe wrapper that never delivers to persona
 # test accounts (their addresses aren't real mailboxes). Each environment sets
