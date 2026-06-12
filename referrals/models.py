@@ -174,19 +174,22 @@ class ReferralRequest(models.Model):
         super().save(*args, **kwargs)
 
     def _allocate_reference(self) -> str:
-        """Next sequential reference for the current year (R-2026-001)."""
-        year = timezone.now().year
-        prefix = f"R-{year}-"
+        """Year-date reference, the coordinator's own convention: ``26-0612``
+        for 2026-06-12 (local date), with ``-2``, ``-3``, … appended when more
+        than one request arrives the same day."""
+        base = timezone.localtime().strftime("%y-%m%d")
         with transaction.atomic():
-            last = (
+            taken = set(
                 type(self).objects.select_for_update()
-                .filter(reference__startswith=prefix)
-                .order_by("-reference")
+                .filter(reference__startswith=base)
                 .values_list("reference", flat=True)
-                .first()
             )
-            seq = int(last.rsplit("-", 1)[1]) + 1 if last else 1
-        return f"{prefix}{seq:03d}"
+        if base not in taken:
+            return base
+        n = 2
+        while f"{base}-{n}" in taken:
+            n += 1
+        return f"{base}-{n}"
 
     @property
     def is_purged(self) -> bool:

@@ -22,9 +22,11 @@ clinician directly from your own mailbox instead—the site doesn't mind.
 
 ## The Requests tab
 
-Every form submission appears here as a tracked request with a reference
-number like **R-2026-014**—that's "the number of the referral" and it's what
-clinicians see; they never see the requester's name. The status column shows
+Every form submission appears here as a tracked request with a date-based
+reference number—**26-0612** for a request received June 12, 2026, with
+**26-0612-2** and so on if several arrive the same day. That's "the number
+of the referral" and it's what clinicians see; they never see the
+requester's name. The status column shows
 where each request is in the process:
 
 - **New**—just arrived; no acknowledgment sent yet.

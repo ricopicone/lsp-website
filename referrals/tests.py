@@ -97,9 +97,9 @@ INTAKE_DATA = {
 def test_render_template_substitutes_known_tokens_only():
     out = services.render_template(
         "Dear {name}, re {reference}: {unknown} stays {literal",
-        {"name": "Alex", "reference": "R-2026-001"},
+        {"name": "Alex", "reference": "26-0612"},
     )
-    assert out == "Dear Alex, re R-2026-001: {unknown} stays {literal"
+    assert out == "Dear Alex, re 26-0612: {unknown} stays {literal"
 
 
 def test_message_template_get_restores_deleted_row():
@@ -113,12 +113,23 @@ def test_message_template_get_restores_deleted_row():
 # ---- Reference allocation --------------------------------------------------
 
 
-def test_references_are_sequential_per_year():
-    year = timezone.now().year
+def test_references_are_year_date_with_same_day_suffix():
+    base = timezone.localtime().strftime("%y-%m%d")
     first = make_request()
     second = make_request(email="other@example.com")
-    assert first.reference == f"R-{year}-001"
-    assert second.reference == f"R-{year}-002"
+    third = make_request(email="third@example.com")
+    assert first.reference == base  # e.g. 26-0612
+    assert second.reference == f"{base}-2"
+    assert third.reference == f"{base}-3"
+
+
+def test_reference_skips_gaps_left_by_deletes():
+    base = timezone.localtime().strftime("%y-%m%d")
+    make_request()
+    second = make_request(email="other@example.com")
+    second.delete()
+    third = make_request(email="third@example.com")
+    assert third.reference == f"{base}-2"
 
 
 # ---- Intake (steps 1–2) -----------------------------------------------------

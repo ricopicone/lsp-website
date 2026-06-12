@@ -390,7 +390,8 @@ Phase 2 plan for milestone IDs):**
   rows). See `notifications-center` memory.
 - **Referral Coordinator workflow** (`referrals`, task #229) — Diana's
   email-shuffle moved in-site. Every Find-an-Analyst submission becomes a
-  tracked `ReferralRequest` (sequential `R-YYYY-NNN` reference, status
+  tracked `ReferralRequest` (date-based reference, Diana's convention:
+  `26-0612` + `-2`/`-3` same-day suffixes, status
   lifecycle NEW → ACKNOWLEDGED → DISTRIBUTED → REPLIED/CLOSED), managed from
   `/admin-tools/referrals/` — gated to the new **`referral_coordinator`
   StaffRole + superusers only** (deliberately *not* generic `is_staff`;
