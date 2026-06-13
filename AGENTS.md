@@ -1,9 +1,9 @@
-# Resuming task #253
+# Resuming task #255
 
-**Task:** Handle outstanding suggestions queue
+**Task:** codex testy
 
 ## Description
-We have our first suggestion. Let's handle it.
+list projects with projects-direct
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -65,17 +65,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=253`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=255`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.
-
-## Session update — 2026-06-12
-
-- The `lsp-admin` shell command is not on PATH in Codex. The repo MCP client can still be used directly with:
-  `uv run --group mcp python -c 'import importlib.util, json; spec=importlib.util.spec_from_file_location("lsp_mcp_server", "mcp/lsp_mcp_server.py"); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); print(json.dumps(mod.whoami(), indent=2))'`
-  Import by file path because `import mcp...` collides with the installed `mcp` package.
-- MCP whoami succeeded against `https://app.lacanschool.org/devapi/whoami/` as Rico Picone (`dr@ricopic.one`), roles `lsp_staff`, `web_coordinator`, `web_developer`, superuser, token label `fichte`.
-- Suggestions queue had one open item: #1, “Adding a Donatation Page,” from John Kreitzberg. The donation flow already existed at `/donate/`; implementation added a logged-in account/avatar menu link labeled “Donate to LSP” and a nav regression test.
-- Suggestion #1 was marked `planned`, then `done`, through the dev API. Focused verification passed: `uv run pytest core/tests.py::test_nav_staff_tools_link_visibility core/tests.py::test_account_menu_shows_donation_link payments/test_dues_donations.py` (`19 passed`, one existing Django 6.0 URLField warning).
-- The Projects connector tool `_complete_task(project_slug="lsp-management", task_id=253)` failed with `400: "We couldn't connect your account. Please try again."` even though the dev API MCP token works; likely separate Projects connector auth/token, not the LSP dev API token.

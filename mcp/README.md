@@ -63,6 +63,20 @@ so it can never do more than that user could in the web UI.
 3. **Use it.** `.mcp.json` registers the server for this repo; Claude Code starts
    it on demand. Run `whoami` to confirm it's wired up.
 
+### Codex and Projects MCP gotcha
+
+The `LSP_DEVAPI_TOKEN` file above is for this repo's local `lsp-admin` stdio
+server only. It does not configure the separate remote `projects-direct` MCP
+server in `~/.codex/config.toml`.
+
+For `projects-direct`, use either a real exported environment variable name in
+`bearer_token_env_var`, or a static header under
+`[mcp_servers.projects-direct.http_headers]`. Do not put the token value itself
+in `bearer_token_env_var`; Codex treats that value as the name of an environment
+variable and startup fails with "Environment variable ... is not set." If a
+static `Authorization = "Bearer ..."` header is present, omit
+`bearer_token_env_var`.
+
 ## Notes
 
 - The `mcp` + `httpx` deps live in the `mcp` dependency group (`uv run --group

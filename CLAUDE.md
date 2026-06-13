@@ -310,10 +310,14 @@ Done (see `git log` for specifics):
   reviewed_by/at + submitter notification), `suggestion_stats`. Mint a token
   with `manage.py create_devapi_token --user … --label …` (printed once). The
   `mcp`+`httpx` deps live in a separate `mcp` dependency group (laptop-only —
-  out of Docker/CI); committed `.mcp.json` reads `${LSP_DEVAPI_TOKEN}` from the
-  env (never committed). Kill switch `DJANGO_DEVAPI_ENABLED=false`. Built to
-  grow into a broader admin surface (health/deploy, member lookups, treasurer/
-  referral read models). See `mcp/README.md` + the `devapi-mcp-server` memory.
+  out of Docker/CI); the server reads `LSP_DEVAPI_TOKEN` from the env, falling
+  back to `~/.config/lsp-mcp/.env` across worktrees. This is distinct from
+  Codex's remote `projects-direct` MCP config: `bearer_token_env_var` must name
+  an exported variable, not contain the token value itself; if a static
+  `Authorization = "Bearer …"` header is present, omit `bearer_token_env_var`.
+  Kill switch `DJANGO_DEVAPI_ENABLED=false`. Built to grow into a broader admin
+  surface (health/deploy, member lookups, treasurer/referral read models). See
+  `mcp/README.md` + the `devapi-mcp-server` memory.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
@@ -554,4 +558,6 @@ The eight Phase 1 milestones and broader project context live in the "LSP
 Management" project of the web coordinator's project-management app, reached
 through an MCP "projects connector" (tasks #213–#220). That connector is
 configured in the Cowork environment used for planning; add it to this Claude
-Code session's MCP config if you want to update those tasks from here.
+Code session's MCP config if you want to update those tasks from here. In Codex,
+the equivalent remote MCP server is `projects-direct` in `~/.codex/config.toml`;
+with a static `Authorization` header, do not also set `bearer_token_env_var`.
