@@ -255,6 +255,7 @@
             {% if user.profile.is_listed %}
             <li><a href="{% url 'directory_detail' user.profile.directory_slug %}">My Directory Page</a></li>
             {% endif %}
+            <li><a href="{% url 'donate' %}">Donate to LSP</a></li>
             <li>
               {# Theme toggle: shows the mode you'll switch to. #}
               <button type="button" data-theme-toggle class="justify-start gap-2 cursor-pointer">

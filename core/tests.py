@@ -412,6 +412,14 @@ def test_nav_staff_tools_link_visibility(client, web_coordinator, regular_user):
     assert b"Admin Tools" not in client.get(reverse("core:landing")).content
 
 
+def test_account_menu_shows_donation_link(client, regular_user):
+    client.force_login(regular_user)
+    response = client.get(reverse("core:landing"))
+    assert response.status_code == 200
+    assert b"Donate to LSP" in response.content
+    assert b'href="/donate/"' in response.content
+
+
 @pytest.fixture
 def treasurer_member(db):
     from core.models import StaffRole
