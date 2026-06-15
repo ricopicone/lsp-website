@@ -84,10 +84,17 @@ auto-covered.
    philosophy, tuition ($2,500/yr × 4), control-analysis requirements, the two
    tracks, equity statement, and an **Apply to join** on-ramp (the apply flow is
    now publicly discoverable from the landing page, The School, and Formation).
-3. **A governance home** (still open): mission/501(c)(3)/"Guarantee of the Lack" narrative (→ `/about/`), and **Board + Program Committee rosters with terms** entered on Committee pages under `/groups/`.
+3. ~~Governance narrative + rosters~~ — **DONE.** `/about/` carries the mission,
+   501(c)(3)/Bylaws, the full **"Guarantee of the Lack of the School"** narrative,
+   Meeting of Analysts, and the Ethical Complaints process; the **Board and Program
+   Committee rosters render live with current members** (verified on prod).
 4. ~~A Resources/Links page~~ — **DONE.** `/resources/` carries the external links
    + disclaimer; member books/articles seeded into **Works** (`seed_resource_works`).
-5. **Policy texts to preserve** (still open): the Archive usage agreement (`thearchive`) and the revoke-permission terms (`contribute`) → new publishing/terms copy.
+5. ~~Policy texts~~ — **effectively handled** (optional polish only). The old
+   "revoke permission in writing" rule is obviated by self-service Works (members
+   add/remove their own); the "don't redistribute members' materials" rule is
+   covered by the members-only `content_visibility`. Optional: a one-line
+   publishing-terms note on the Works submission form. No content-loss risk.
 6. ~~The "Archive" naming decision~~ — **resolved**: "The Archive" is intentionally
    subsumed by Documents + Parlêtre + Works + My LSP. No Archive landing needed.
 7. **Sweep the seminar catalog**: re-enter every old seminar/offering as an `Event`, preserving the rich ones verbatim (✍️ rows above). Diff the old page list against the `events` table before discarding anything (note: `import_program_2026_2027` re-runs clobber admin edits — reconcile, don't re-import).
@@ -103,7 +110,8 @@ The old **"Archive"** is subsumed by **Documents + Parlêtre + Works + My LSP**;
 **Documents** carries the governance/formation/founding/cartel PDFs, the
 **Newsletters archive**, and the Statement of Teaching + Tuition Assistance; the
 old **Resources** page is fully migrated (links + disclaimer on `/resources/`,
-member publications in **Works**); and **Formation** has its own page. What's
-left is small and non-functional: the **governance narrative + committee
-rosters**, two **policy texts**, the **seminar-catalog sweep**, and a few pages
-to **verify in Wix before sunset**.
+member publications in **Works**); **Formation** has its own page; and the
+**governance narrative + committee rosters** are on `/about/` (live, current).
+What actually remains is small and non-functional: the **seminar-catalog sweep**
+(re-enter old offerings as Events) and a few pages to **verify in Wix before
+sunset** — plus optional artwork capture and an optional publishing-terms line.
