@@ -544,6 +544,17 @@ def recording_settings(request, slug):
     return redirect(f"{wg.get_absolute_url()}?tab=settings")
 
 
+@require_POST
+def reminder_settings(request, slug):
+    """Toggle the group's ~15-min pre-meeting reminder emails (managers)."""
+    wg = get_object_or_404(Workgroup, slug=slug)
+    if not _can_manage_workgroup(wg, request.user):
+        raise Http404
+    wg.meeting_reminders = request.POST.get("meeting_reminders") == "on"
+    wg.save(update_fields=["meeting_reminders"])
+    return redirect(f"{wg.get_absolute_url()}?tab=settings")
+
+
 @login_required
 @require_POST
 def open_reading_group_term(request, slug):

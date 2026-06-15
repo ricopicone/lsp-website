@@ -31,6 +31,7 @@ urlpatterns = [
     path("<slug:slug>/roster/term/", views.roster_set_term, name="roster_set_term"),
     path("<slug:slug>/open-term/", views.open_reading_group_term, name="open_term"),
     path("<slug:slug>/recording/", views.recording_settings, name="recording_settings"),
+    path("<slug:slug>/reminders/", views.reminder_settings, name="reminder_settings"),
     path("<slug:slug>/dates/", views.workgroup_update_dates, name="update_dates"),
     path("<slug:slug>/overview/", views.workgroup_update_overview, name="update_overview"),
     path("<slug:slug>/tasks/add/", views.task_add, name="task_add"),

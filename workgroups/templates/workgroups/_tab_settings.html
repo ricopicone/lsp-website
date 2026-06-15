@@ -50,6 +50,29 @@
   </section>
   {% endif %}
 
+  {% if can_manage and workgroup.has_calendar %}
+  <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
+    <div class="space-y-0.5">
+      <h3 class="font-medium text-base-content">Meeting reminders</h3>
+      <p class="text-xs text-base-content/50">
+        Email members about 15 minutes before each scheduled meeting, with a
+        one-tap link to join. Members can still turn these off for themselves in
+        their own notification settings.
+      </p>
+    </div>
+    <form method="post" action="{% url 'workgroups:reminder_settings' workgroup.slug %}"
+          class="flex items-center gap-3">
+      {% csrf_token %}
+      <label class="flex cursor-pointer items-center gap-2 text-sm">
+        <input type="checkbox" name="meeting_reminders" class="toggle toggle-primary toggle-sm"
+               {% if workgroup.meeting_reminders %}checked{% endif %}>
+        <span>Send pre-meeting reminders</span>
+      </label>
+      <button class="btn btn-primary btn-sm">Save</button>
+    </form>
+  </section>
+  {% endif %}
+
   {% if can_manage and daily_enabled %}
   <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
     <div class="space-y-0.5">

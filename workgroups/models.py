@@ -207,6 +207,13 @@ class Workgroup(models.Model):
         max_length=12, choices=RecordingMode.choices, default=RecordingMode.ON_DEMAND,
         help_text="Whether hosts see a Record button in this group's video meetings.",
     )
+    meeting_reminders = models.BooleanField(
+        default=True,
+        help_text=(
+            "Email members a reminder ~15 minutes before each scheduled meeting, "
+            "with a personal one-tap join link."
+        ),
+    )
     #: Storage quota (bytes) for the shared Files section — sum of all file
     #: versions. Raise per workgroup when members request more space.
     file_quota_bytes = models.PositiveBigIntegerField(
@@ -1158,6 +1165,9 @@ class WorkgroupMeeting(models.Model):
     minutes = models.TextField(blank=True, help_text="Minutes / notes recorded after.")
     cancelled = models.BooleanField(default=False)
     cancellation_reason = models.CharField(max_length=255, blank=True)
+    #: Set when the ~15-min-before reminder has been sent, so the cron never
+    #: re-sends for the same occurrence.
+    reminder_sent_at = models.DateTimeField(null=True, blank=True)
     #: True once this occurrence is individually edited, so series regeneration
     #: won't overwrite it.
     is_override = models.BooleanField(default=False)
