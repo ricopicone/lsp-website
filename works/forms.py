@@ -19,7 +19,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Max, Q
 from django.utils.text import slugify
 
-from .models import Work, WorkFile
+from .models import VideoUploadSettings, Work, WorkFile
 
 User = get_user_model()
 
@@ -70,6 +70,10 @@ class WorkForm(forms.ModelForm):
         }),
         help_text="Required when the work has multiple files.",
     )
+    #: Set by the direct-to-S3 uploader (JS): the temporary incoming/ key of a
+    #: video already uploaded straight to the bucket. When present it wins over
+    #: the server-side ``video`` file input (the no-JS / dev fallback).
+    video_key = forms.CharField(required=False, widget=forms.HiddenInput())
 
     class Meta:
         model = Work
@@ -81,6 +85,7 @@ class WorkForm(forms.ModelForm):
             "url",
             "publication_date",
             "cover_image",
+            "video",
             "external_authors",
             "workgroup",
             "in_progress",
@@ -115,14 +120,18 @@ class WorkForm(forms.ModelForm):
             "in_progress": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "listing_visibility": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "content_visibility": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "video": forms.ClearableFileInput(attrs={
+                "class": "file-input file-input-bordered w-full",
+                "accept": "video/mp4,video/webm,video/quicktime",
+            }),
         }
         labels = {
-            "content_visibility": "Contents (PDFs & HTML)",
+            "content_visibility": "Contents (PDFs, HTML & video)",
         }
         help_texts = {
             "content_visibility": (
-                "Who can open the contents — attached PDFs and the published "
-                "HTML body. Can't be more public than the listing."
+                "Who can open the contents — attached PDFs, the published HTML "
+                "body, and any video. Can't be more public than the listing."
             ),
         }
 
@@ -211,6 +220,58 @@ class WorkForm(forms.ModelForm):
             )
         return users
 
+    def clean_video(self):
+        """Enforce the web-developer video controls: uploads can be switched
+        off, and each file is capped (cost control). Only a *newly uploaded*
+        file is checked — keeping or clearing an existing one is always fine."""
+        video = self.cleaned_data.get("video")
+        # An unchanged existing file comes back as the FieldFile, not an upload.
+        if not video or not hasattr(video, "file") or not hasattr(video, "size"):
+            return video
+        cfg = VideoUploadSettings.load()
+        if not cfg.enabled:
+            raise forms.ValidationError(
+                "Video uploads are currently turned off. Contact the web team."
+            )
+        if video.size > cfg.max_file_bytes:
+            mb = video.size / (1024 * 1024)
+            raise forms.ValidationError(
+                f"That video is {mb:.0f} MB — the limit is {cfg.max_file_mb} MB. "
+                "Please compress it or share a shorter excerpt."
+            )
+        name = getattr(video, "name", "").lower()
+        if not name.endswith((".mp4", ".webm", ".mov", ".m4v")):
+            raise forms.ValidationError(
+                "Please upload an MP4, WebM, or MOV file."
+            )
+        return video
+
+    def clean_video_key(self):
+        """Validate a direct-to-S3 upload before we trust it: it must sit under
+        our incoming/ prefix (no arbitrary keys), the object must exist, uploads
+        must be enabled, and it must be within the size cap. The S3 POST already
+        enforced size, but we re-check on attach in case settings changed."""
+        key = (self.cleaned_data.get("video_key") or "").strip()
+        if not key:
+            return ""
+        from core.storage import head_private_object
+
+        if not key.startswith("works/videos/incoming/"):
+            raise forms.ValidationError("Invalid upload reference.")
+        cfg = VideoUploadSettings.load()
+        if not cfg.enabled:
+            raise forms.ValidationError("Video uploads are currently turned off.")
+        head = head_private_object(key)
+        if head is None:
+            raise forms.ValidationError(
+                "That upload didn't finish. Please try again."
+            )
+        if head["size"] > cfg.max_file_bytes:
+            raise forms.ValidationError(
+                f"That video exceeds the {cfg.max_file_mb} MB limit."
+            )
+        return key
+
     def clean(self):
         cleaned = super().clean()
 
@@ -274,6 +335,23 @@ class WorkForm(forms.ModelForm):
         if not instance.pk and self.current_user:
             instance.submitted_by = self.current_user
 
+        # Direct-to-S3 video: promote the verified incoming/ object to a
+        # permanent key (server-side S3 copy — no app bandwidth) and point the
+        # field at it. Wins over any server-side ``video`` upload.
+        video_key = self.cleaned_data.get("video_key")
+        if video_key:
+            import os
+            import uuid
+
+            from django.utils import timezone
+
+            from core.storage import copy_private_object
+
+            ext = os.path.splitext(video_key)[1]
+            dest = f"works/videos/{timezone.now():%Y}/{uuid.uuid4().hex}{ext}"
+            if copy_private_object(video_key, dest):
+                instance.video.name = dest
+
         co_authors = self.cleaned_data.get("lsp_authors") or []
         byline: list = []
         if self.current_user:
@@ -321,3 +399,21 @@ class WorkForm(forms.ModelForm):
                 )
 
         return instance
+
+
+class VideoUploadSettingsForm(forms.ModelForm):
+    """Web-developer controls for Works video uploads."""
+
+    class Meta:
+        model = VideoUploadSettings
+        fields = ("enabled", "max_file_mb")
+        widgets = {
+            "enabled": forms.CheckboxInput(attrs={"class": "toggle toggle-primary"}),
+            "max_file_mb": forms.NumberInput(attrs={
+                "class": "input input-bordered w-40", "min": 1,
+            }),
+        }
+        labels = {
+            "enabled": "Allow video uploads",
+            "max_file_mb": "Max size per file (MB)",
+        }

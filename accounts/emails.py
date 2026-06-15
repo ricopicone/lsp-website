@@ -40,15 +40,22 @@ def send_email_change_verification(change_request) -> None:
     msg.send(fail_silently=False)
 
 
-def send_magic_link(link) -> None:
+def send_magic_link(link, next_url: str = "") -> None:
     """Email a passwordless sign-in link to the account's address.
 
     ``link`` is a :class:`accounts.models.MagicLoginLink`. The link is
     single-use and short-lived (:attr:`MagicLoginLink.TOKEN_TTL`).
+    ``next_url`` (a validated, site-relative path) is carried through so the
+    user lands back where they were headed — e.g. a meeting deep link that
+    bounced them through sign-in. It's a path, not a credential.
     """
     sign_in_url = settings.SITE_BASE_URL.rstrip("/") + reverse(
         "magic_link_consume", args=[link.token]
     )
+    if next_url:
+        from urllib.parse import urlencode
+
+        sign_in_url += "?" + urlencode({"next": next_url})
     body = render_to_string(
         "accounts/email/magic_link.txt",
         {

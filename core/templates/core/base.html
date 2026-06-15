@@ -1,15 +1,22 @@
 {% load static committee_filters parletre_tags core_tags %}<!DOCTYPE html>
-<html lang="en" data-theme="silk">
+<html lang="en" data-theme="silk" data-site-theme="{{ site_theme }}">
 <head>
   <meta charset="utf-8">
   <title>{% block title %}Lacanian School of Psychoanalysis{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  {# Fonts: Inter for body sans, Cutive (+ Mono) for proportional-typewriter serif. #}
+  {% comment %}Fonts are loaded per site-theme. modern: Inter (sans) + Cutive
+  (serif headings) + Cutive Mono. wix: Inter + Playfair Display + Cinzel
+  (hero/display) + Cutive Mono.{% endcomment %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  {% if site_theme == "wix" %}
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cutive+Mono&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&display=swap">
+  {% else %}
   <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Cutive&family=Cutive+Mono&family=Inter:wght@400;500;600;700&display=swap">
+  {% endif %}
 
   <link rel="stylesheet" href="{% static 'css/site.css' %}">
   <meta name="csrf-token" content="{{ csrf_token }}">
@@ -58,6 +65,7 @@
       <nav class="hidden sm:flex items-center gap-0.5 text-sm">
         {% with cur=request.path %}
           <a href="{% url 'about' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/about/' in cur %}text-primary font-medium{% endif %}">About</a>
+          <a href="{% url 'formation' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/about/formation/' in cur %}text-primary font-medium{% endif %}">Formation</a>
           <a href="{% url 'guides_index' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/guides/' in cur %}text-primary font-medium{% endif %}">Guides</a>
 
           {# Groups #}
@@ -118,6 +126,7 @@
             <ul tabindex="0" class="dropdown-content menu menu-sm z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-52">
               <li><a href="{% url 'works:index' %}">Works</a></li>
               <li><a href="{% url 'documents:index' %}">Documents</a></li>
+              <li><a href="{% url 'resources' %}">Resources</a></li>
             </ul>
           </div>
 
@@ -139,6 +148,7 @@
           <ul tabindex="0" style="max-height:80vh"
               class="dropdown-content menu menu-sm mt-2 z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-60 overflow-y-auto flex-nowrap">
             <li><a href="{% url 'about' %}">About</a></li>
+            <li><a href="{% url 'formation' %}">Formation</a></li>
             <li><a href="{% url 'guides_index' %}">Guides</a></li>
 
             <li class="menu-title">Groups</li>
@@ -164,6 +174,7 @@
             <li class="menu-title">Artifacts</li>
             <li><a href="{% url 'works:index' %}">Works</a></li>
             <li><a href="{% url 'documents:index' %}">Documents</a></li>
+            <li><a href="{% url 'resources' %}">Resources</a></li>
 
             {% if user|is_parletre_member %}
             <li><hr class="border-base-300/60 my-1"></li>
@@ -297,6 +308,10 @@
   </header>
   {% endblock %}
 
+  {% comment %}Full-bleed section-landing hero (page title over artwork).
+  Section-landing templates override this; everything else leaves it empty.{% endcomment %}
+  {% block page_hero %}{% endblock %}
+
   <main class="flex-1 mx-auto w-full max-w-5xl px-4 sm:px-6 py-8 sm:py-10">
     {% if show_survey_nudge %}
     <div class="alert mb-6 flex-wrap gap-2 border border-primary/30 bg-primary/5">
@@ -326,6 +341,21 @@
       <div class="text-xs text-base-content/60 flex flex-wrap gap-x-6 gap-y-2 items-center justify-between pt-4 border-t border-base-300/40">
         <span>© {% now "Y" %} Lacanian School of Psychoanalysis</span>
         <div class="flex items-center gap-4">
+          {% comment %}Site-theme switch (task #259): lets the Board preview the
+          modern (default) vs classic/artwork look. Current is bold, the other a
+          link that sets the cookie and returns here.{% endcomment %}
+          <span class="inline-flex items-center gap-1.5" title="Page style">
+            <span class="text-base-content/45">Style:</span>
+            {% if site_theme == "wix" %}
+            <a href="{% url 'core:set_site_theme' 'modern' %}?next={{ request.path|urlencode }}" class="hover:text-primary">Modern</a>
+            <span class="text-base-content/30">·</span>
+            <span class="font-medium text-base-content/80">Classic</span>
+            {% else %}
+            <span class="font-medium text-base-content/80">Modern</span>
+            <span class="text-base-content/30">·</span>
+            <a href="{% url 'core:set_site_theme' 'wix' %}?next={{ request.path|urlencode }}" class="hover:text-primary">Classic</a>
+            {% endif %}
+          </span>
           {% if show_suggestion_widget %}<a href="{% url 'suggestions:suggest' %}" class="hover:text-primary">Suggest a change</a>{% endif %}
           <a href="mailto:website@lacanschool.org" class="hover:text-primary">website@lacanschool.org</a>
         </div>

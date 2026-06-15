@@ -1,20 +1,16 @@
 {% extends "core/base.html" %}
 {% block title %}Works — LSP{% endblock %}
+
+{% block page_hero %}{% include "core/_page_hero.html" with title="Works" subtitle="Work by members of the school, including external publications, Palimpsests, Passages, Traversées, and Cartel-produced texts." %}{% endblock %}
+
 {% block content %}
 <div class="space-y-8">
 
-  <header class="flex items-start justify-between gap-4">
-    <div class="space-y-2">
-      <h1 class="font-serif text-3xl text-base-content">Works</h1>
-      <p class="text-base-content/70 max-w-2xl">
-        Work by members of the school, including external publications,
-        Palimpsests, Passages, Traversées, and Cartel-produced texts.
-      </p>
-    </div>
-    {% if user.is_authenticated %}
+  {% if user.is_authenticated %}
+  <header class="flex justify-end">
     <a href="{% url 'works:add' %}" class="btn btn-primary btn-sm shrink-0">Add a work</a>
-    {% endif %}
   </header>
+  {% endif %}
 
   <form method="get" class="flex flex-wrap gap-3 items-end border-y border-base-300/60 py-4">
     <div class="grow min-w-[16rem]">

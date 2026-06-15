@@ -1,15 +1,10 @@
 {% extends "core/base.html" %}
 {% block title %}Documents — LSP{% endblock %}
+
+{% block page_hero %}{% include "core/_page_hero.html" with title="Documents" subtitle="Foundational documents of the school — governance, formation guidelines, founding texts, and resources for cartel work." %}{% endblock %}
+
 {% block content %}
 <div class="space-y-10">
-
-  <header class="space-y-2">
-    <h1 class="font-serif text-3xl text-base-content">Documents</h1>
-    <p class="text-base-content/70 max-w-2xl">
-      Foundational documents of the school — governance, formation guidelines,
-      founding texts, and resources for cartel work.
-    </p>
-  </header>
 
   {% for section in sections %}
   <section class="space-y-4">

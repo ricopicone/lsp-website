@@ -154,6 +154,15 @@ def test_intake_persists_and_sends_inquiry_and_ack(settings):
     assert ack.reply_to == ["referrals@lacanschool.org"]
 
 
+def test_intake_dedupes_rapid_duplicate_submissions():
+    """A repeated identical submission within the guard window returns the
+    existing request instead of creating (and re-emailing) a duplicate."""
+    first = services.intake(INTAKE_DATA)
+    second = services.intake(INTAKE_DATA)
+    assert second.pk == first.pk
+    assert ReferralRequest.objects.count() == 1
+
+
 def test_intake_review_mode_skips_ack():
     config = ReferralSettings.load()
     config.ack_mode = Mode.REVIEW
@@ -465,6 +474,19 @@ def test_coordinator_actions_roundtrip(client, coordinator, listed):
     client.post(reverse("referrals:reopen", args=[req.reference]))
     req.refresh_from_db()
     assert req.status != ReferralRequest.Status.CLOSED
+
+
+def test_template_edit_page_renders_working_preview(client, coordinator):
+    """The live-preview wiring must reach the page intact: the sample-data key
+    comes through a data attribute (not an auto-escaped JS string literal, which
+    would break the whole inline script and leave the preview box empty)."""
+    client.force_login(coordinator)
+    resp = client.get(reverse("referrals:template_edit", args=["acknowledgment"]))
+    body = resp.content.decode()
+    assert resp.status_code == 200
+    assert 'data-template-key="acknowledgment"' in body
+    assert "out.dataset.templateKey" in body
+    assert "stringformat" not in body and "&#x27;" not in body  # no escaping leak
 
 
 def test_template_edit_changes_outgoing_mail(client, coordinator):

@@ -24,6 +24,20 @@ def _member(email="m@x.test"):
     return u
 
 
+def _board_member(email="board@x.test"):
+    """A Board member — submission is now restricted to the Board."""
+    from datetime import date
+
+    from committees.models import Committee
+    from workgroups.models import WorkgroupMembership
+
+    u = _member(email)
+    Committee.objects.get(slug="board").add_member(
+        u, role=WorkgroupMembership.Role.MEMBER, start_date=date(2026, 1, 1)
+    )
+    return u
+
+
 def _web_coordinator(email="web@x.test"):
     u = _member(email)
     StaffRole.objects.get(key=StaffRole.WEB_COORDINATOR).holders.add(u)
@@ -43,7 +57,7 @@ def _tiny_png():
 
 def test_member_submits_from_page(client, settings):
     settings.SUGGESTIONS_ENABLED = True
-    client.force_login(_member())
+    client.force_login(_board_member())
     resp = client.post(reverse("suggestions:submit"), {
         "kind": "content", "title": "Fix the typo",
         "body": "It says 'teh' on the directory.",
@@ -59,7 +73,7 @@ def test_member_submits_from_page(client, settings):
 
 def test_widget_fetch_returns_json(client, settings):
     settings.SUGGESTIONS_ENABLED = True
-    client.force_login(_member())
+    client.force_login(_board_member())
     resp = client.post(
         reverse("suggestions:submit"),
         {"kind": "bug", "title": "Broken", "body": "404 on save", "page_url": "/x/"},
@@ -69,9 +83,21 @@ def test_widget_fetch_returns_json(client, settings):
     assert resp.json()["ok"] is True
 
 
-def test_body_required(client, settings):
+def test_non_board_member_cannot_submit(client, settings):
     settings.SUGGESTIONS_ENABLED = True
     client.force_login(_member())
+    resp = client.post(
+        reverse("suggestions:submit"),
+        {"kind": "bug", "title": "Nope", "body": "blocked", "page_url": "/x/"},
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+    assert resp.status_code == 403
+    assert Suggestion.objects.count() == 0
+
+
+def test_body_required(client, settings):
+    settings.SUGGESTIONS_ENABLED = True
+    client.force_login(_board_member())
     resp = client.post(
         reverse("suggestions:submit"),
         {"kind": "bug", "title": "No body", "body": "", "page_url": "/x/"},
@@ -91,7 +117,7 @@ def test_feature_off_forbids(client, settings):
 def test_submission_notifies_triagers(client, settings):
     settings.SUGGESTIONS_ENABLED = True
     coord = _web_coordinator()
-    client.force_login(_member("author@x.test"))
+    client.force_login(_board_member("author@x.test"))
     client.post(reverse("suggestions:submit"), {
         "kind": "feature", "title": "Add a thing", "body": "please", "page_url": "/",
     })

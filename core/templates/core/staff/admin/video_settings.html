@@ -1,0 +1,40 @@
+{% extends "core/staff/admin/_base.html" %}
+{% block admin_heading_title %}Video uploads{% endblock %}
+{% block admin_kicker %}Staff · Web Developer{% endblock %}
+{% block admin_heading %}Video upload controls{% endblock %}
+{% block admin_intro %}Members can attach a video to their works (e.g. an audiovisual Palimpsest). Video is the costliest content to host, so it has a kill switch and a per-file size cap.{% endblock %}
+{% block admin_sections %}
+  {% if saved %}
+  <div role="alert" class="alert alert-success"><span>Saved.</span></div>
+  {% endif %}
+
+  <section class="rounded-xl border border-base-300 p-5 space-y-4 max-w-lg">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <label class="flex items-center gap-3">
+        {{ form.enabled }}
+        <span class="text-sm font-medium">{{ form.enabled.label }}</span>
+      </label>
+      <div class="space-y-1">
+        <label for="{{ form.max_file_mb.id_for_label }}" class="block text-sm font-medium">
+          {{ form.max_file_mb.label }}
+        </label>
+        {{ form.max_file_mb }}
+        <p class="text-xs text-base-content/55">
+          A 30–60 min recording at reasonable quality is roughly 500 MB–1 GB.
+          Storage is cheap; bandwidth (each view) is the real cost, so keep this
+          modest. Default 1024 MB (1 GB).
+        </p>
+        {% if form.max_file_mb.errors %}<p class="text-error text-xs">{{ form.max_file_mb.errors|join:", " }}</p>{% endif %}
+      </div>
+      <button class="btn btn-primary btn-sm">Save</button>
+    </form>
+  </section>
+
+  <section class="rounded-xl border border-base-300 p-5">
+    <p class="text-sm text-base-content/65">
+      <span class="font-mono">{{ video_count }}</span> work{{ video_count|pluralize }}
+      currently {{ video_count|pluralize:"has,have" }} a video attached.
+    </p>
+  </section>
+{% endblock %}

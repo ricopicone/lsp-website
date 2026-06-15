@@ -68,6 +68,25 @@ def intake(data: dict) -> ReferralRequest:
     regardless).
     """
     config = ReferralSettings.load()
+    # Duplicate-submit guard: a slow form response can invite repeated clicks,
+    # each of which would otherwise create its own request (and, in auto mode,
+    # email the whole referral list again). If an identical submission landed in
+    # the last minute, return it instead of creating — and skip re-sending.
+    recent = (
+        ReferralRequest.objects.filter(
+            name=data["name"],
+            email=data["email"],
+            created_at__gte=timezone.now() - timedelta(minutes=1),
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if recent is not None:
+        logger.info(
+            "Skipping duplicate referral submission from %s (matches %s)",
+            data["email"], recent.reference,
+        )
+        return recent
     req = ReferralRequest.objects.create(
         name=data["name"],
         pronouns=data.get("pronouns", ""),

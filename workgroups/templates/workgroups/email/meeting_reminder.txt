@@ -1,0 +1,18 @@
+Hi {{ user.first_name|default:user.email }},
+
+{% if meeting.title %}{{ meeting.title }}{% else %}Your {{ workgroup.name }} meeting{% endif %} starts at {{ starts_at|date:"g:i A" }} (about 15 minutes from now).
+
+Join here (you'll need to be signed in):
+{{ meet_url }}
+
+Or use your personal one-tap link — it signs you in and opens the meeting, and works until the meeting is over:
+{{ personal_url }}
+
+That second link is personal to you. Please don't forward or share it — anyone who has it could sign in as you until it expires.
+
+See you there,
+The Lacanian School
+
+—
+Questions? {{ support_email }}
+You can turn these reminders off in your notification settings.

@@ -33,7 +33,7 @@
 
   <div class="divider text-xs text-base-content/40">or</div>
 
-  <a href="{% url 'magic_link_request' %}" class="btn btn-outline w-full">Email me a sign-in link</a>
+  <a href="{% url 'magic_link_request' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="btn btn-outline w-full">Email me a sign-in link</a>
 
   <p class="text-sm text-base-content/60 text-center">
     No account?

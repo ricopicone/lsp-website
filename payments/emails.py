@@ -22,12 +22,17 @@ from registrations.models import Registration
 from .models import Payment
 
 
-def _send(*, subject: str, body: str, to: list[str]) -> None:
-    """Send a transactional email with the right From and Reply-To headers."""
+def _send(*, subject: str, body: str, to: list[str], sender: str = "LSP Registration") -> None:
+    """Send a transactional email with the right From and Reply-To headers.
+
+    ``sender`` is the friendly From display name (most payments mail is event
+    registration; receipts and dues/tuition reminders pass "LSP Treasurer")."""
+    from core.email import school_from
+
     msg = EmailMessage(
         subject=subject,
         body=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=school_from(sender),
         to=to,
         reply_to=[settings.SUPPORT_EMAIL],
     )
@@ -100,7 +105,7 @@ def send_receipt(payment: Payment) -> None:
     if not to_email:
         # Defensive — should never happen for a paid Payment.
         return
-    _send(subject=subject, body=body, to=[to_email])
+    _send(subject=subject, body=body, to=[to_email], sender="LSP Treasurer")
     receipt.emailed_at = timezone.now()
     receipt.save(update_fields=("emailed_at",))
 
@@ -146,7 +151,7 @@ def send_dues_reminder(user, period) -> None:
                 "site_base_url": settings.SITE_BASE_URL,
             },
         )
-    _send(subject=subject, body=body, to=[user.email])
+    _send(subject=subject, body=body, to=[user.email], sender="LSP Treasurer")
 
 
 def send_tuition_reminder(user, period, *, enrollment=None) -> None:
@@ -169,7 +174,7 @@ def send_tuition_reminder(user, period, *, enrollment=None) -> None:
                 "site_base_url": settings.SITE_BASE_URL,
             },
         )
-    _send(subject=subject, body=body, to=[user.email])
+    _send(subject=subject, body=body, to=[user.email], sender="LSP Treasurer")
 
 
 def send_cancellation_email(registration: Registration, refund=None) -> None:

@@ -36,6 +36,36 @@ def aphorism(request):
     return {"aphorism": random.choice(items) if items else None}
 
 
+SITE_THEMES = ("modern", "wix")
+SITE_THEME_COOKIE = "lsp-site-theme"
+
+
+def site_theme(request):
+    """The active site-theme skin: ``modern`` (default) or ``wix`` (the opt-in
+    artwork/serif/all-caps look from task #259). Read from a cookie set by
+    ``core:set_site_theme``; rendered onto ``<html data-site-theme>`` and used by
+    the hero partial to decide between an artwork band and a plain header."""
+    value = request.COOKIES.get(SITE_THEME_COOKIE, "modern")
+    if value not in SITE_THEMES:
+        value = "modern"
+    return {"site_theme": value}
+
+
+def page_artwork(request):
+    """Artwork for the current page's section-landing hero, if any.
+
+    Resolved from the static map in ``core.page_artwork`` keyed by the
+    namespaced view name. Section-landing templates override the base
+    ``page_hero`` block and the partial reads this; unmapped pages get an
+    image-less header.
+    """
+    from . import page_artwork as artwork_map
+
+    match = getattr(request, "resolver_match", None)
+    view_name = match.view_name if match is not None else None
+    return {"page_artwork": artwork_map.for_view(view_name)}
+
+
 def survey_nudge(request):
     """Whether to show the launch intake-survey banner: enabled, the user is an
     authenticated member, and they haven't submitted yet. Cheap — one indexed

@@ -60,10 +60,16 @@ TRACK_ELIGIBILITY = {
 # Applicant side
 # --------------------------------------------------------------------------
 
-@login_required
 def apply_start(request):
-    """Choose a track (or jump to your existing application)."""
-    if Application.objects.filter(applicant=request.user).exists():
+    """Choose a track (or jump to your existing application).
+
+    Public on purpose: an anonymous visitor can read the tracks and eligibility
+    here, then sign in when they click through to a track (``apply`` is
+    login-required and carries ``?next=`` back). This is the public on-ramp the
+    apply flow previously lacked."""
+    if request.user.is_authenticated and Application.objects.filter(
+        applicant=request.user
+    ).exists():
         return redirect("admissions:status")
     return render(request, "admissions/apply_start.html", {
         "tracks": [
