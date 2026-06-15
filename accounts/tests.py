@@ -131,6 +131,27 @@ def test_directory_detail_404_for_unknown_slug(client):
     assert resp.status_code == 404
 
 
+@pytest.mark.django_db
+def test_directory_badges_board_appointee_staff_roles(client):
+    """Board-appointed StaffRole holders get a coordinator badge on both the
+    grid and the detail page; non-holders don't."""
+    from core.models import StaffRole
+
+    casey = _mk_member("casey@x.test", "Casey", "Butcher", Profile.Role.ANALYST)
+    StaffRole.objects.get(key=StaffRole.CARTEL_COORDINATOR).holders.add(casey)
+    _mk_member("plain@x.test", "Plain", "Member", Profile.Role.ANALYST)
+
+    grid = client.get("/directory/").content
+    assert b"Cartel Coordinator" in grid
+    # Only Casey holds it.
+    assert grid.count(b"Cartel Coordinator") == 1
+
+    detail = client.get("/directory/casey-butcher/").content
+    assert b"Cartel Coordinator" in detail
+    other = client.get("/directory/plain-member/").content
+    assert b"Cartel Coordinator" not in other
+
+
 def test_split_location_single():
     from accounts.geocoding import split_location
     assert split_location("Paris, France") == ["Paris, France"]

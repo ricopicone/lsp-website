@@ -37,8 +37,8 @@
             </div>
             <div class="font-serif text-base leading-tight text-base-content">{{ p.display_full_name }}</div>
             {% if m.show_location and p.location %}<div class="text-xs text-base-content/60 mt-0.5">{{ p.location }}</div>{% endif %}
-            {% with mems=p.user.active_public_memberships %}
-            {% if p.is_faculty or mems %}
+            {% with mems=p.user.active_public_memberships roles=p.user.staff_roles.all %}
+            {% if p.is_faculty or mems or roles %}
             <div class="flex flex-wrap gap-1 mt-1.5">
               {% if p.is_faculty %}
               <span class="inline-flex items-center text-[0.65rem] leading-none font-medium px-1.5 py-0.5 rounded
@@ -46,6 +46,12 @@
                 Faculty
               </span>
               {% endif %}
+              {% for role in roles %}
+              <span class="inline-flex items-center text-[0.65rem] leading-none font-medium px-1.5 py-0.5 rounded
+                           bg-secondary/15 text-secondary border border-secondary/25">
+                {{ role.name }}
+              </span>
+              {% endfor %}
               {% for mem in mems %}
               <span class="inline-flex items-center text-[0.65rem] leading-none font-medium px-1.5 py-0.5 rounded
                            {% if mem.role != "member" %}bg-primary/15 text-primary border border-primary/25
