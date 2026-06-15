@@ -37,5 +37,64 @@
       <a href="{% url 'referrals:templates' %}" class="btn btn-ghost">Cancel</a>
     </div>
   </form>
+
+  {# Live preview — shows how the body renders in the actual email (sample data
+     fills the placeholders). Updates as you type. #}
+  <section class="space-y-2 border-t border-base-300 pt-5">
+    <h3 class="text-xs font-medium uppercase tracking-wide text-base-content/60">
+      Preview <span class="normal-case font-normal">— with sample values</span>
+    </h3>
+    <div id="tpl-preview"
+         class="rounded-lg border border-base-300 bg-base-100 p-4"
+         style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.6;"></div>
+  </section>
 </div>
+
+<script>
+  (function () {
+    var body = document.getElementById("id_body");
+    var out = document.getElementById("tpl-preview");
+    if (!body || !out) return;
+
+    // Sample values for every placeholder, by template key.
+    var SAMPLES = {
+      acknowledgment: {name: "Alex Rivera", reference: "26-0612"},
+      distribution: {
+        reference: "26-0612", pronouns: "she/her", location: "Scranton, PA",
+        language: "English", modalities: "In-person or video",
+        details: "Looking for help with anxiety; prefers an evening schedule.",
+        due_date: "June 19, 2026",
+        respond_url: "https://app.lacanschool.org/referrals/26-0612/respond/"
+      },
+      onboarding: {
+        name: "Dr. Sam Cohen",
+        profile_url: "https://app.lacanschool.org/accounts/profile/"
+      }
+    };
+    var FOLLOWUP = {
+      name: "Alex Rivera", reference: "26-0612", location: "Scranton, PA",
+      clinicians: "Dr. Sam Cohen — (570) 555-0123 — sam@example.com — "
+        + "video & in-person\nDr. Lee Park — (570) 555-0456 — lee@example.com — "
+        + "video only"
+    };
+    var sample = SAMPLES[{{ template.key|stringformat:'r' }}] || FOLLOWUP;
+
+    function esc(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    function render() {
+      var text = body.value.replace(/\{([a-z_]+)\}/g, function (m, k) {
+        return (k in sample) ? sample[k] : m;
+      });
+      // Mirror the email: escape, then turn blank lines into paragraphs and
+      // single newlines into <br>.
+      var html = esc(text).split(/\n{2,}/).map(function (p) {
+        return "<p style='margin:0 0 1em;'>" + p.replace(/\n/g, "<br>") + "</p>";
+      }).join("");
+      out.innerHTML = html;
+    }
+    body.addEventListener("input", render);
+    render();
+  })();
+</script>
 {% endblock %}

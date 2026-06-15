@@ -154,6 +154,15 @@ def test_intake_persists_and_sends_inquiry_and_ack(settings):
     assert ack.reply_to == ["referrals@lacanschool.org"]
 
 
+def test_intake_dedupes_rapid_duplicate_submissions():
+    """A repeated identical submission within the guard window returns the
+    existing request instead of creating (and re-emailing) a duplicate."""
+    first = services.intake(INTAKE_DATA)
+    second = services.intake(INTAKE_DATA)
+    assert second.pk == first.pk
+    assert ReferralRequest.objects.count() == 1
+
+
 def test_intake_review_mode_skips_ack():
     config = ReferralSettings.load()
     config.ack_mode = Mode.REVIEW
