@@ -79,6 +79,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
     <div class="lsp-reveal flex flex-wrap items-center gap-3 pt-1" style="--d:2">
       <a href="{% url 'find_an_analyst' %}" class="btn btn-primary">Find an analyst</a>
       <a href="{% url 'program' %}" class="btn btn-outline">Explore the program</a>
+      <a href="{% url 'admissions:apply_start' %}" class="btn btn-outline">Apply to join</a>
       <a href="{% url 'about' %}" class="btn btn-ghost">About the School</a>
     </div>
   </header>
@@ -128,16 +129,16 @@ sections (alerts, "Coming up") never leave an orphaned gap.
         </span>
       </a>
 
-      <a href="{% url 'about' %}"
+      <a href="{% url 'formation' %}"
          class="group flex flex-col rounded-xl border border-base-300 p-6 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
         <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45"><span class="text-primary/70">03</span> · Toward formation</span>
         <h3 class="font-serif text-xl text-base-content mt-2 tracking-tight">Join the work</h3>
         <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">
           Formation proceeds through analysis, study, and the cartel, along two
-          tracks: Analyst and Scholar. Learn how candidacy and membership work.
+          tracks: Analyst and Scholar. Learn how it works and how to apply.
         </p>
         <span class="text-sm text-primary mt-4 inline-flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
-          About the School <span aria-hidden="true">→</span>
+          About formation <span aria-hidden="true">→</span>
         </span>
       </a>
 

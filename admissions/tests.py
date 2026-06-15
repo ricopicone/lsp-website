@@ -41,8 +41,15 @@ def _cv():
 # ---- Applicant intake --------------------------------------------------
 
 
-def test_apply_requires_login(client):
-    assert client.get(reverse("admissions:apply_start")).status_code == 302
+def test_apply_start_is_public_but_submit_requires_login(client):
+    # The track/eligibility intro is a public on-ramp...
+    start = client.get(reverse("admissions:apply_start"))
+    assert start.status_code == 200
+    assert b"Apply \xe2\x80\x94" in start.content  # "Apply —" track buttons render
+    # ...but actually submitting a track still requires signing in.
+    resp = client.get(reverse("admissions:apply", args=["analyst"]))
+    assert resp.status_code == 302
+    assert "/accounts/login" in resp["Location"]
 
 
 def test_guest_submits_analyst_application(client, django_capture_on_commit_callbacks):

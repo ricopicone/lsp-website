@@ -43,10 +43,13 @@ We strongly encourage prospective applicants to:
 ## How to apply
 
 Applicants submit a résumé and a letter of intent and then meet with analysts of
-the School for interview. Write to
-[applications@lacanschool.org](mailto:applications@lacanschool.org) to begin, or
-start an application through the site. General questions can go to
+the School for interview. You can begin your application here on the site, or
+write to
+[applications@lacanschool.org](mailto:applications@lacanschool.org); general
+questions can go to
 [admin@lacanschool.org](mailto:admin@lacanschool.org).
+
+<a href="/apply/" class="btn btn-primary">Apply to join</a>
 
 ## Guidelines and founding texts
 
