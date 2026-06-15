@@ -43,7 +43,8 @@ for the equivalent page, or a reused image for a page that is new to this site.
 
 | Page (view) | File | Attribution (as known) | Source |
 |---|---|---|---|
-| About (`about`) | `about.jpg` | Paul Klee | old About page |
+| Front page (`core:landing`) | `front.jpg` | Cy Twombly, *Untitled* | old home page |
+| About (`about`) | `about.jpg` | Paul Klee, *White Framed Polyphonically* | old About page |
 | The School (`the_school`) | `the-school.jpg` | Wassily Kandinsky | reused |
 | Program (`program`) | `program.jpg` | unknown | old seminars page |
 | Events (`events:list`) | `events.jpg` | unknown | old Other Offerings page |
@@ -55,5 +56,6 @@ for the equivalent page, or a reused image for a page that is new to this site.
 | Guides (`guides_index`) | `guides.jpg` | Beinecke Library, Yale (photo) | reused |
 | Parlêtre (`parletre:index`) | `parletre.jpg` | Bibliothèque Sainte-Geneviève, Paris (photo) | reused |
 
-The front page (landing) keeps its own existing hero treatment for now; the old
-front-page Twombly can be added there later if the Board wants it.
+In the Classic theme the front page shows the old home-page Twombly over the
+school name; in Modern it keeps its bespoke text hero. The Twombly is only
+available at ~600px from the old site, so it is a little soft under the scrim.
