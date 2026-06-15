@@ -44,6 +44,19 @@ def about(request):
     })
 
 
+def page(request, slug):
+    """Render a plain Markdown content page (no roster injection): the body in
+    ``.lsp-prose`` under the standard section hero. Used for evergreen pages like
+    Formation and Resources. 404s if ``content/pages/<slug>.md`` doesn't exist."""
+    loaded = loader.load(slug)
+    if loaded is None:
+        raise Http404(f"content page not found: {slug}")
+    return render(request, "content/page.html", {
+        "page": loaded,
+        "body_html": loaded.body_html,
+    })
+
+
 def the_school(request):
     """The School: a graphical index — visual table of contents over the
     School's concepts and bodies, with an encyclopedia-style entry per block.

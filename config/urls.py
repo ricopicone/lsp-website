@@ -36,6 +36,8 @@ urlpatterns = [
     path("accounts/", include("accounts.urls")),
     path("about/", _content_views.about, name="about"),
     path("the-school/", _content_views.the_school, name="the_school"),
+    path("formation/", _content_views.page, {"slug": "formation"}, name="formation"),
+    path("resources/", _content_views.page, {"slug": "resources"}, name="resources"),
     path("guides/", _content_views.guides_index_view, name="guides_index"),
     path("guides/<slug:slug>/", _content_views.guide_detail, name="guide_detail"),
     path("directory/", _account_views.directory, name="directory"),
