@@ -68,10 +68,12 @@ def send_meeting_reminder(user, meeting) -> None:
     }
     text_body = render_to_string("workgroups/email/meeting_reminder.txt", context)
     title = meeting.title or wg.name
+    from core.email import school_from
+
     msg = EmailMultiAlternatives(
         subject=f"Starting soon: {title}",
         body=text_body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=school_from("LSP Groups"),
         to=[user.email],
         reply_to=[settings.SUPPORT_EMAIL],
     )

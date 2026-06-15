@@ -9,9 +9,11 @@ from .models import Advancement, Application
 
 
 def _send(*, subject, body, to):
+    from core.email import school_from
+
     EmailMessage(
         subject=subject, body=body,
-        from_email=settings.DEFAULT_FROM_EMAIL, to=to,
+        from_email=school_from("LSP Admissions"), to=to,
         reply_to=[settings.SUPPORT_EMAIL],
     ).send(fail_silently=False)
 

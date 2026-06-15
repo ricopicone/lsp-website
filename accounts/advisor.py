@@ -81,6 +81,8 @@ def _notify_advisor(advisorship: Advisorship) -> None:
 
 def _notify(advisorship: Advisorship) -> None:
     import logging
+
+    from core.email import school_from
     try:
         advisee = advisorship.advisee
         name = advisee.get_full_name() or advisee.email
@@ -93,7 +95,7 @@ def _notify(advisorship: Advisorship) -> None:
                 "steps of their formation.\n\n"
                 "— The Lacanian School of Psychoanalysis"
             ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=school_from("LSP Formation"),
             to=[advisorship.advisor.email],
             reply_to=[settings.SUPPORT_EMAIL],
         ).send(fail_silently=False)
