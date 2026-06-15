@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
+from urllib.parse import quote
 
 import pyotp
 import pytest
@@ -121,6 +122,37 @@ def test_magic_link_consume_logs_in_and_is_single_use(client):
     resp = client.get(reverse("magic_link_consume", args=[link.token]))
     assert resp.status_code == 410
     assert "_auth_user_id" not in client.session
+
+
+@pytest.mark.django_db
+def test_magic_link_carries_next_into_email_and_back(client):
+    """A logged-out user bounced from a deep link (e.g. a meeting room) gets
+    the destination embedded in the emailed link and lands there after sign-in."""
+    _user("dest@x.test")
+    dest = "/groups/board/room/"
+    resp = client.post(
+        reverse("magic_link_request"), {"email": "dest@x.test", "next": dest}
+    )
+    assert resp.status_code == 200
+    body = mail.outbox[0].body
+    assert f"next={quote(dest, safe='')}" in body or f"next={dest}" in body
+
+
+@pytest.mark.django_db
+def test_magic_link_consume_redirects_to_safe_next(client):
+    u = _user("nx@x.test")
+    link = MagicLoginLink.objects.create(user=u)
+    dest = "/groups/board/room/"
+    resp = client.get(reverse("magic_link_consume", args=[link.token]) + f"?next={dest}")
+    assert resp.status_code == 302 and resp.url == dest
+    # An off-site next is ignored — falls back to the default landing.
+    u2 = _user("nx2@x.test")
+    link2 = MagicLoginLink.objects.create(user=u2)
+    client.logout()
+    resp = client.get(
+        reverse("magic_link_consume", args=[link2.token]) + "?next=https://evil.test/"
+    )
+    assert resp.status_code == 302 and resp.url != "https://evil.test/"
 
 
 @pytest.mark.django_db
