@@ -49,7 +49,9 @@ Whatever the choice, we should publish a short **image-credits** line/page that 
 
 ### A reassurance on content
 
-Independent of the design and image decisions: **nothing from the old site is being lost.** The directory, program/registration, payments/donations, calendar, and Find-an-Analyst referral flow are all in place; the members' "Archive" is subsumed by Documents + Works + the members' area (bylaws, formation/founding/cartel texts, newsletters); the old "Resources" page is migrated (member publications in Works, external links on `/resources/`); and there's a Formation page plus a public "Apply to join" path. The full old→new accounting, with the short remaining punch list, is in `content-migration-map.md`.
+Independent of the design and image decisions: **nothing the old site said or held is being lost.** Its writing carries over (mission, formation, the front-page description → home/About/Formation); the members' "Archive" moves intact into Documents (bylaws, formation/founding/cartel texts, newsletters); and the old "Resources" page is migrated (member publications → Works, external links → `/resources/`), with the membership listing preserved in the directory.
+
+Separately — and worth saying to the Board as a gain, not as "preservation" — the new site does **far more than the old one could**: registration/payment tied to each seminar, a searchable directory + Find-an-Analyst map, an in-house referral process, an online application for formation, a members' discussion space, group workspaces, a unified calendar, and more. The old site was essentially a brochure; this is a working platform. (Don't fold these new capabilities into the "nothing is lost" reassurance — most were never on the old site.) The full old→new accounting is in `content-migration-map.md`.
 
 *(This memo is also drafted as a Board email — see the Gmail draft in the website@lacanschool.org account.)*
 
