@@ -47,6 +47,12 @@ The old website set page titles over artworks—a Cy Twombly on the front page, 
 
 Whatever the choice, we should publish a short **image-credits** line/page that names the artists we can identify and offers a good-faith takedown contact. The machinery makes any of these reversible in one small code change—see below.
 
+### A reassurance on content
+
+Independent of the design and image decisions: **nothing from the old site is being lost.** The directory, program/registration, payments/donations, calendar, and Find-an-Analyst referral flow are all in place; the members' "Archive" is subsumed by Documents + Works + the members' area (bylaws, formation/founding/cartel texts, newsletters); the old "Resources" page is migrated (member publications in Works, external links on `/resources/`); and there's a Formation page plus a public "Apply to join" path. The full old→new accounting, with the short remaining punch list, is in `content-migration-map.md`.
+
+*(This memo is also drafted as a Board email — see the Gmail draft in the website@lacanschool.org account.)*
+
 ## How it's wired (for whoever maintains it)
 
 - Heroes appear on **section-landing pages only** (not detail, list, form, or
