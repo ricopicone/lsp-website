@@ -19,6 +19,15 @@ def referrals_address() -> str:
     return getattr(settings, "REFERRALS_EMAIL", "referrals@lacanschool.org")
 
 
+def _coordinator_from() -> str:
+    """Friendly sender — shows as "LSP Referral Coordinator" in the inbox while
+    still sending from the verified address; replies route to the referrals
+    mailbox via Reply-To."""
+    from core.email import school_from
+
+    return school_from("LSP Referral Coordinator")
+
+
 def _html_alternative(body: str) -> str:
     """The template-rendered plain text as simple HTML: paragraphs kept,
     URLs linked, and email addresses turned into mailto links (``urlize``
@@ -47,7 +56,7 @@ def send_coordinator_inquiry(request_obj, manage_url: str) -> None:
             f"{request_obj.name}"
         ),
         body=text_body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=_coordinator_from(),
         to=[referrals_address()],
         reply_to=[request_obj.email],
     )
@@ -60,7 +69,7 @@ def send_to_requester(request_obj, subject: str, body: str) -> None:
     msg = EmailMultiAlternatives(
         subject=subject,
         body=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=_coordinator_from(),
         to=[request_obj.email],
         reply_to=[referrals_address()],
     )
@@ -73,7 +82,7 @@ def send_to_clinician(user, subject: str, body: str) -> None:
     msg = EmailMultiAlternatives(
         subject=subject,
         body=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=_coordinator_from(),
         to=[user.email],
         reply_to=[referrals_address()],
     )

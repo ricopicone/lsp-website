@@ -9,9 +9,26 @@ impersonating one) is silently dropped for those recipients.
 
 from __future__ import annotations
 
+from email.utils import formataddr
+
 from django.conf import settings
 from django.core.mail import get_connection
 from django.core.mail.backends.base import BaseEmailBackend
+
+
+def school_from(name: str | None = None) -> str:
+    """A friendly ``From`` — ``"<name> <no-reply@…>"`` — using the configured
+    sending address. ``name`` defaults to the site-wide ``EMAIL_FROM_NAME``.
+
+    Inboxes show the address's local part ("no-reply") as the sender unless a
+    display name is attached. Use this when a kind of mail should present a more
+    specific sender (e.g. "LSP Referral Coordinator") from the same verified
+    address. Generic mail can just use ``settings.DEFAULT_FROM_EMAIL``, which is
+    already wrapped with the school's name.
+    """
+    address = getattr(settings, "DEFAULT_FROM_ADDRESS", "") or settings.DEFAULT_FROM_EMAIL
+    display = name or getattr(settings, "EMAIL_FROM_NAME", "") or ""
+    return formataddr((display, address)) if display else address
 
 INNER_SETTING = "PERSONA_SAFE_INNER_EMAIL_BACKEND"
 DEFAULT_INNER = "django.core.mail.backends.console.EmailBackend"

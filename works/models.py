@@ -76,9 +76,9 @@ class Work(models.Model):
         choices=Visibility.choices,
         default=Visibility.MEMBERS,
         help_text=(
-            "Who can access the contents — the attached PDFs and the published "
-            "HTML body. Cannot be more public than the listing — listing=Members "
-            "blocks a Public contents setting."
+            "Who can access the contents — the attached PDFs, the published "
+            "HTML body, and any video. Cannot be more public than the listing — "
+            "listing=Members blocks a Public contents setting."
         ),
     )
 
@@ -191,9 +191,9 @@ class Work(models.Model):
         return self._visible_at(self.listing_visibility, user)
 
     def content_visible_to(self, user) -> bool:
-        """Whether ``user`` may access the contents — the published HTML body and
-        any attached PDFs. A pure visibility-level check; callers that render a
-        download button also check that a file exists (the template does)."""
+        """Whether ``user`` may access the contents — the published HTML body,
+        any attached PDFs, and any video. A pure visibility-level check; callers
+        that render a download/play control also check a file exists (templates do)."""
         return self._visible_at(self.content_visibility, user)
 
     @classmethod

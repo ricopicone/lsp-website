@@ -126,12 +126,12 @@ class WorkForm(forms.ModelForm):
             }),
         }
         labels = {
-            "content_visibility": "Contents (PDFs & HTML)",
+            "content_visibility": "Contents (PDFs, HTML & video)",
         }
         help_texts = {
             "content_visibility": (
-                "Who can open the contents — attached PDFs and the published "
-                "HTML body. Can't be more public than the listing."
+                "Who can open the contents — attached PDFs, the published HTML "
+                "body, and any video. Can't be more public than the listing."
             ),
         }
 

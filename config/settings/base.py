@@ -203,7 +203,19 @@ AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-west-2")
 
 # --- Email --------------------------------------------------------------
 
-DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")
+# The bare sending address (e.g. no-reply@lacanschool.org). Inboxes show the
+# local part ("no-reply") as the sender name unless a display name is attached,
+# so we wrap it with EMAIL_FROM_NAME below — every email then shows a friendly
+# "From" (e.g. "Lacanian School of Psychoanalysis <no-reply@lacanschool.org>").
+# Per-type senders can substitute their own name via core.email.school_from().
+DEFAULT_FROM_ADDRESS = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")
+EMAIL_FROM_NAME = env("DJANGO_EMAIL_FROM_NAME", default="Lacanian School of Psychoanalysis")
+if "@" in DEFAULT_FROM_ADDRESS and "<" not in DEFAULT_FROM_ADDRESS:
+    from email.utils import formataddr as _formataddr
+
+    DEFAULT_FROM_EMAIL = _formataddr((EMAIL_FROM_NAME, DEFAULT_FROM_ADDRESS))
+else:
+    DEFAULT_FROM_EMAIL = DEFAULT_FROM_ADDRESS
 SUPPORT_EMAIL = env("DJANGO_SUPPORT_EMAIL", default="website@lacanschool.org")
 # The Referral Coordinator's mailbox: Find-an-Analyst inquiries land here, and
 # referral-flow mail (acknowledgments, distributions, follow-ups) carries it
