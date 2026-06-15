@@ -1,17 +1,22 @@
 {% load static committee_filters parletre_tags core_tags %}<!DOCTYPE html>
-<html lang="en" data-theme="silk">
+<html lang="en" data-theme="silk" data-site-theme="{{ site_theme }}">
 <head>
   <meta charset="utf-8">
   <title>{% block title %}Lacanian School of Psychoanalysis{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  {% comment %}Fonts: Inter for body sans; Playfair Display is the site heading
-  serif and Cinzel the display face for artwork-hero titles (echoing the old
-  site); Cutive Mono stays as the mono.{% endcomment %}
+  {% comment %}Fonts are loaded per site-theme. modern: Inter (sans) + Cutive
+  (serif headings) + Cutive Mono. wix: Inter + Playfair Display + Cinzel
+  (hero/display) + Cutive Mono.{% endcomment %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  {% if site_theme == "wix" %}
   <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cutive+Mono&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&display=swap">
+  {% else %}
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cutive&family=Cutive+Mono&family=Inter:wght@400;500;600;700&display=swap">
+  {% endif %}
 
   <link rel="stylesheet" href="{% static 'css/site.css' %}">
   <meta name="csrf-token" content="{{ csrf_token }}">
@@ -332,6 +337,21 @@
       <div class="text-xs text-base-content/60 flex flex-wrap gap-x-6 gap-y-2 items-center justify-between pt-4 border-t border-base-300/40">
         <span>© {% now "Y" %} Lacanian School of Psychoanalysis</span>
         <div class="flex items-center gap-4">
+          {% comment %}Site-theme switch (task #259): lets the Board preview the
+          modern (default) vs classic/artwork look. Current is bold, the other a
+          link that sets the cookie and returns here.{% endcomment %}
+          <span class="inline-flex items-center gap-1.5" title="Page style">
+            <span class="text-base-content/45">Style:</span>
+            {% if site_theme == "wix" %}
+            <a href="{% url 'core:set_site_theme' 'modern' %}?next={{ request.path|urlencode }}" class="hover:text-primary">Modern</a>
+            <span class="text-base-content/30">·</span>
+            <span class="font-medium text-base-content/80">Classic</span>
+            {% else %}
+            <span class="font-medium text-base-content/80">Modern</span>
+            <span class="text-base-content/30">·</span>
+            <a href="{% url 'core:set_site_theme' 'wix' %}?next={{ request.path|urlencode }}" class="hover:text-primary">Classic</a>
+            {% endif %}
+          </span>
           {% if show_suggestion_widget %}<a href="{% url 'suggestions:suggest' %}" class="hover:text-primary">Suggest a change</a>{% endif %}
           <a href="mailto:website@lacanschool.org" class="hover:text-primary">website@lacanschool.org</a>
         </div>

@@ -12,9 +12,30 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from core.context_processors import SITE_THEME_COOKIE, SITE_THEMES
 from events.models import Event, Session
+
+
+def set_site_theme(request, theme):
+    """Persist the site-theme skin choice (``modern`` | ``wix``) in a cookie and
+    return to where the visitor was. Drives the footer switch and works as a
+    shareable link (e.g. ``/site-theme/wix/?next=/about/``) so the Board can
+    preview either look. See core.context_processors.site_theme."""
+    if theme not in SITE_THEMES:
+        theme = "modern"
+    nxt = request.GET.get("next") or request.META.get("HTTP_REFERER") or "/"
+    if not url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        nxt = "/"
+    response = redirect(nxt)
+    response.set_cookie(
+        SITE_THEME_COOKIE, theme, max_age=60 * 60 * 24 * 365, samesite="Lax"
+    )
+    return response
 
 
 def healthz(request):

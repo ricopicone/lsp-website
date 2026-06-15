@@ -42,7 +42,9 @@ class Artwork:
 # works are likely under copyright; see the ``image-rights`` note (task #259).
 # This map is the one place to swap, recrop (``focal``), or clear any banner.
 PAGE_ARTWORK: dict[str, Artwork] = {
-    "about": Artwork("img/artwork/about.jpg", artist="Paul Klee"),
+    "about": Artwork(
+        "img/artwork/about.jpg", artist="Paul Klee", title="White Framed Polyphonically"
+    ),
     "the_school": Artwork("img/artwork/the-school.jpg", artist="Wassily Kandinsky"),
     "program": Artwork("img/artwork/program.jpg"),
     "events:list": Artwork("img/artwork/events.jpg"),

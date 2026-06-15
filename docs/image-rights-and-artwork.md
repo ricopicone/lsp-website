@@ -6,37 +6,18 @@ images and a **note for the Board** about the rights question they raise.
 
 ## Note for the Board (decision needed)
 
-The old website set page titles over artworks—a Cy Twombly on the front page, a
-Paul Klee on the About page, and others elsewhere. We have carried that look
-onto the new site. Most of these images are works by 20th-century artists
-(Twombly, Klee, Kandinsky, Agnes Martin, Louise Nevelson, and others), several
-of which are **still under copyright**, and we do not hold licenses for them. A
-few are photographs of library interiors, which are lower-risk but not
-necessarily free of claims either.
+The old website set page titles over artworks—a Cy Twombly on the front page, a Paul Klee on the About page, and others elsewhere. We have carried that look onto the new site. Most of these images are works by 20th-century artists (Twombly, Klee, Kandinsky, Agnes Martin, Louise Nevelson, and others), several of which are **still under copyright**, and we do not hold licenses for them. A few are photographs of library interiors, which are lower-risk but not necessarily free of claims either.
 
-**This is an institutional-risk decision for the Board, not a settled legal
-matter.** To be clear: the Web Coordinator is not a copyright lawyer, and this
-is not legal advice. There may be a **fair-use argument**—we are a non-profit
-school, the use is non-commercial, and the works appear small and as part of a
-larger editorial whole—but decorative banner use is one of the *weaker* fair-use
-postures (it is not commentary on or analysis of the artwork itself), so the
-argument is genuinely uncertain. A rights-holder could ask us to take an image
-down, and in the worst case seek damages.
+**This is an institutional-risk decision for the Board, not a settled legal matter.** To be clear: the Web Coordinator is not a copyright lawyer, and this is not legal advice. There may be a **fair-use argument**—we are a non-profit school, the use is non-commercial, and the works appear small and as part of a larger editorial whole—but decorative banner use is one of the *weaker* fair-use postures (it is not commentary on or analysis of the artwork itself), so the argument is genuinely uncertain. A rights-holder could ask us to take an image down, and in the worst case seek damages.
 
-**The Board needs to decide whether the visual benefit is worth that risk.**
-Options, roughly in order of decreasing risk:
+**The Board needs to decide whether the visual benefit is worth that risk.** Options, roughly in order of decreasing risk:
 
-1. **Use the artworks as-is** (current state), accepting the risk, and respond
-   to any takedown request promptly.
-2. **Keep only the lower-risk images** (library/architecture photographs, plus
-   any works confirmed to be in the public domain) and drop the rest.
-3. **License** specific images (e.g. via the artists' estates or Artists Rights
-   Society) for the few the Board cares most about.
+1. **Use the artworks as-is** (current state), accepting the risk, and respond to any takedown request promptly.
+2. **Keep only the lower-risk images** (library/architecture photographs, plus any works confirmed to be in the public domain) and drop the rest.
+3. **License** specific images (e.g. via the artists' estates or Artists Rights Society) for the few the Board cares most about.
 4. **Commission or source openly-licensed art** in the same spirit.
 
-Whatever the choice, we should publish a short **image-credits** line/page that
-names the artists we can identify and offers a good-faith takedown contact. The
-machinery makes any of these reversible in one small code change—see below.
+Whatever the choice, we should publish a short **image-credits** line/page that names the artists we can identify and offers a good-faith takedown contact. The machinery makes any of these reversible in one small code change—see below.
 
 ## How it's wired (for whoever maintains it)
 
