@@ -19,7 +19,10 @@ _SELECT = forms.Select(attrs={"class": "select select-bordered w-full"})
 
 def _textarea(rows: int) -> forms.Textarea:
     return forms.Textarea(attrs={
-        "rows": rows, "class": "textarea textarea-bordered w-full font-mono text-sm",
+        "rows": rows,
+        "class": (
+            "textarea textarea-bordered w-full font-sans text-sm leading-relaxed"
+        ),
     })
 
 
