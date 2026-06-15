@@ -22,6 +22,7 @@
   {% else %}
   <form method="post" class="space-y-4">
     {% csrf_token %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
     <div class="form-control space-y-1">
       <label for="{{ form.email.id_for_label }}" class="label-text text-sm">Email</label>
       {{ form.email }}

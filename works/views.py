@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Prefetch, Q
-from django.http import FileResponse, Http404, HttpResponseForbidden
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponseForbidden,
+    HttpResponseRedirect,
+)
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -96,14 +102,87 @@ def detail(request, slug):
         from workgroups.permissions import can_manage_workgroup
 
         can_unpublish = can_manage_workgroup(request.user, draft.workgroup)
+    # Streamed video (gated like the PDFs): a direct presigned S3 URL in prod
+    # so the browser streams/seeks straight from S3; the local streaming view
+    # as a dev fallback.
+    video_url = None
+    if work.video and work.content_visible_to(request.user):
+        from core.storage import presigned_private_url
+
+        video_url = presigned_private_url(work.video.name) or reverse(
+            "works:video", args=[work.slug]
+        )
     return render(request, "works/detail.html", {
         "work": work,
         "can_edit": work.editable_by(request.user),
         "content_visible": work.content_visible_to(request.user),
+        "video_url": video_url,
         "revisions": revisions,
         "source_draft": draft,
         "can_unpublish": can_unpublish,
     })
+
+
+VIDEO_EXTS = (".mp4", ".webm", ".mov", ".m4v")
+_INCOMING_PREFIX = "works/videos/incoming/"
+
+
+@login_required
+@require_POST
+def video_presign(request):
+    """Hand the browser a one-time ticket to upload a video straight to S3,
+    bypassing the app server. Gated like the upload itself (member + the
+    web-developer enable switch); the size cap is enforced by S3 via the
+    presigned POST conditions. Returns ``{fallback: true}`` when there's no
+    private bucket (dev), so the form falls back to a server-side upload."""
+    import json
+    import uuid
+
+    from django.http import JsonResponse
+
+    from accounts.permissions import is_lsp_member
+    from core.storage import presigned_upload_post
+
+    from .models import VideoUploadSettings
+
+    if not is_lsp_member(request.user):
+        raise Http404()
+    cfg = VideoUploadSettings.load()
+    if not cfg.enabled:
+        return JsonResponse({"error": "Video uploads are turned off."}, status=403)
+
+    try:
+        payload = json.loads(request.body or "{}")
+    except ValueError:
+        return JsonResponse({"error": "Bad request."}, status=400)
+    filename = (payload.get("filename") or "").strip()
+    content_type = (payload.get("content_type") or "").strip()
+    ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
+    if ext not in VIDEO_EXTS or not content_type.startswith("video/"):
+        return JsonResponse({"error": "Please choose an MP4, WebM, or MOV file."}, status=400)
+
+    # A locked, unique key under the temporary incoming/ prefix (an S3 lifecycle
+    # rule expires anything left here; attach promotes it to a permanent key).
+    key = f"{_INCOMING_PREFIX}{uuid.uuid4().hex}{ext}"
+    post = presigned_upload_post(key, max_bytes=cfg.max_file_bytes, content_type=content_type)
+    if post is None:
+        return JsonResponse({"fallback": True})  # dev: no bucket → server-side upload
+    return JsonResponse({"key": key, "url": post["url"], "fields": post["fields"]})
+
+
+def video(request, slug):
+    """Stream a work's video, gated by content visibility. Redirects to a
+    presigned S3 URL in prod (range-capable), or streams the local file in dev."""
+    work = get_object_or_404(Work, slug=slug)
+    if not work.content_visible_to(request.user) or not work.video:
+        raise Http404()
+    from core.storage import presigned_private_url
+
+    url = presigned_private_url(work.video.name)
+    if url:
+        return HttpResponseRedirect(url)
+    filename = work.video.name.rsplit("/", 1)[-1]
+    return FileResponse(work.video.open("rb"), filename=filename)
 
 
 def download(request, slug, file_id):

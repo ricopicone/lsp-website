@@ -1,17 +1,10 @@
 {% extends "core/base.html" %}
 {% block title %}Guides—LSP{% endblock %}
 
+{% block page_hero %}{% include "core/_page_hero.html" with kicker="Help & how-to" title="Guides" subtitle="Short, practical walkthroughs of the things you can do here—setting up your profile, registering for seminars, joining the conversation, and more." %}{% endblock %}
+
 {% block content %}
 <div class="space-y-10">
-
-  <header class="space-y-3 max-w-3xl">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/50">Help &amp; how-to</p>
-    <h1 class="font-serif text-3xl sm:text-4xl text-base-content leading-[1.1] tracking-tight">Guides</h1>
-    <p class="text-base sm:text-lg text-base-content/70 leading-relaxed">
-      Short, practical walkthroughs of the things you can do here—setting up your
-      profile, registering for seminars, joining the conversation, and more.
-    </p>
-  </header>
 
   {% if guides %}
   <div class="grid grid-cols-1 md:grid-cols-2 gap-5">

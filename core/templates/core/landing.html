@@ -42,6 +42,10 @@
 </style>
 {% endblock %}
 
+{% comment %}Classic site-theme only: the front-page Twombly over the school
+name (the old front door). Modern keeps the bespoke text hero below.{% endcomment %}
+{% block page_hero %}{% if site_theme == "wix" %}{% include "core/_page_hero.html" with kicker="A worldwide school · based in San Francisco" title="Lacanian School of Psychoanalysis" subtitle="A community for the practice, transmission, and study of psychoanalysis—Freud's discovery as read, and reopened, by Jacques Lacan." %}{% endif %}{% endblock %}
+
 {% block content %}
 {% comment %}
 Vertical rhythm is set per-section (not a blanket space-y) so the two ruled
@@ -50,7 +54,8 @@ sections (alerts, "Coming up") never leave an orphaned gap.
 {% endcomment %}
 <div>
 
-  {# ===================== Hero ===================== #}
+  {# ===================== Hero (modern only; classic uses the artwork hero) ===================== #}
+  {% if site_theme != "wix" %}
   <header class="lsp-hero space-y-7 max-w-3xl sm:pt-2">
     <p class="lsp-reveal font-mono text-xs uppercase tracking-[0.2em] text-base-content/50" style="--d:0">
       A worldwide school · based in San Francisco
@@ -74,9 +79,11 @@ sections (alerts, "Coming up") never leave an orphaned gap.
     <div class="lsp-reveal flex flex-wrap items-center gap-3 pt-1" style="--d:2">
       <a href="{% url 'find_an_analyst' %}" class="btn btn-primary">Find an analyst</a>
       <a href="{% url 'program' %}" class="btn btn-outline">Explore the program</a>
+      <a href="{% url 'admissions:apply_start' %}" class="btn btn-outline">Apply to join</a>
       <a href="{% url 'about' %}" class="btn btn-ghost">About the School</a>
     </div>
   </header>
+  {% endif %}
 
   {# ===================== Member alerts (functional) ===================== #}
   {% if dues_period_unpaid %}
@@ -122,16 +129,16 @@ sections (alerts, "Coming up") never leave an orphaned gap.
         </span>
       </a>
 
-      <a href="{% url 'about' %}"
+      <a href="{% url 'formation' %}"
          class="group flex flex-col rounded-xl border border-base-300 p-6 hover:border-primary/60 hover:bg-base-200/40 transition-colors">
         <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45"><span class="text-primary/70">03</span> · Toward formation</span>
         <h3 class="font-serif text-xl text-base-content mt-2 tracking-tight">Join the work</h3>
         <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">
           Formation proceeds through analysis, study, and the cartel, along two
-          tracks: Analyst and Scholar. Learn how candidacy and membership work.
+          tracks: Analyst and Scholar. Learn how it works and how to apply.
         </p>
         <span class="text-sm text-primary mt-4 inline-flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
-          About the School <span aria-hidden="true">→</span>
+          About formation <span aria-hidden="true">→</span>
         </span>
       </a>
 

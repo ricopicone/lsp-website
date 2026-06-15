@@ -798,6 +798,31 @@ def test_ical_feeds(client):
     assert client.get(reverse("workgroups:my_calendar_ics", args=["bogus"])).status_code == 404
 
 
+def test_ical_location_carries_video_room_join_link(client, settings):
+    """With video enabled, a meeting with no external link gets its group's
+    in-site room URL in LOCATION (one-tap Join); an explicit online_url wins."""
+    from workgroups.models import Visibility, WorkgroupMeeting, build_workgroup
+
+    settings.DAILY_ENABLED = True
+    settings.DAILY_API_KEY = "k"
+    settings.DAILY_DOMAIN = "lsp.daily.co"
+
+    pub = build_workgroup(Workgroup.Kind.READING_GROUP, name="Lacan RG", slug="lacan-ical")
+    assert pub.landing_visibility == Visibility.PUBLIC
+    WorkgroupMeeting.objects.create(
+        workgroup=pub, title="In-site",
+        starts_at=datetime.datetime(2099, 3, 1, 18, tzinfo=datetime.timezone.utc),
+    )
+    WorkgroupMeeting.objects.create(
+        workgroup=pub, title="External", online_url="https://zoom.us/j/123",
+        starts_at=datetime.datetime(2099, 3, 2, 18, tzinfo=datetime.timezone.utc),
+    )
+    body = client.get(reverse("workgroups:calendar_ics", args=[pub.slug])).content.decode()
+    room = reverse("video:workgroup_room", args=[pub.slug])
+    assert "LOCATION:" in body and room in body            # in-site room link present
+    assert "LOCATION:https://zoom.us/j/123" in body        # external link wins
+
+
 def test_my_calendar_feed_includes_registered_events():
     """The personal feed folds in the events the member is registered for —
     an all-day span when the event has no sessions."""

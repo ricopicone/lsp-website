@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import Work, WorkAuthor, WorkFile
+from .models import VideoUploadSettings, Work, WorkAuthor, WorkFile
+
+
+@admin.register(VideoUploadSettings)
+class VideoUploadSettingsAdmin(admin.ModelAdmin):
+    list_display = ("__str__", "enabled", "max_file_mb")
 
 
 class WorkAuthorInline(admin.TabularInline):

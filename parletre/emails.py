@@ -16,6 +16,8 @@ from django.conf import settings
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 
+from core.email import school_from
+
 from . import tokens
 
 log = logging.getLogger("parletre")
@@ -74,7 +76,7 @@ def send_post_notification(post, recipient, reason: str) -> None:
     msg = EmailMessage(
         subject=subject,
         body=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=school_from("LSP Parl\u00eatre"),
         to=[recipient.email],
         reply_to=_reply_to(kind, target_id, recipient),
     )
@@ -97,7 +99,7 @@ def send_digest(user, sections, *, period_label: str) -> bool:
     msg = EmailMessage(
         subject=f"[Parlêtre] {period_label} digest",
         body=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=school_from("LSP Parl\u00eatre"),
         to=[user.email],
         reply_to=[settings.SUPPORT_EMAIL],
     )

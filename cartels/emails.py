@@ -19,11 +19,13 @@ def _send(*, subject: str, body: str, to: list[str]) -> None:
     to = [addr for addr in to if addr]
     if not to:
         return
+    from core.email import school_from
+
     try:
         EmailMessage(
             subject=subject,
             body=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=school_from("LSP Cartels"),
             to=to,
             reply_to=[settings.SUPPORT_EMAIL],
         ).send(fail_silently=False)

@@ -49,8 +49,8 @@
       {% if work.publication_info or work.publication_date %}
       <p class="text-sm text-base-content/70">
         {% if work.publication_info %}{{ work.publication_info }}{% endif %}
-        {% if work.publication_date %}
-          {% if work.publication_info %} · {% endif %}{{ work.publication_date|date:"F j, Y" }}
+        {% if work.publication_date and not work.publication_info %}
+          {{ work.publication_date|date:"F j, Y" }}
         {% endif %}
       </p>
       {% endif %}
@@ -95,6 +95,24 @@
     </form>
     {% endif %}
   </div>
+  {% endif %}
+
+  {# ---- Video ---- #}
+  {% if work.video %}
+    {% if video_url %}
+    <div class="my-6">
+      <video controls preload="metadata" class="w-full rounded-lg border border-base-300 bg-black"
+             style="max-height:70vh">
+        <source src="{{ video_url }}">
+        Your browser can't play this video.
+        <a href="{{ video_url }}" class="link link-primary">Open it directly</a>.
+      </video>
+    </div>
+    {% else %}
+    <p class="my-6 text-sm text-base-content/60">
+      🎬 This work includes a video, available to members who can open its contents.
+    </p>
+    {% endif %}
   {% endif %}
 
   {# ---- Files section ---- #}

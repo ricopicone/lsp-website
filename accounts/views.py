@@ -535,8 +535,11 @@ def magic_link_request(request):
     either way. Repeat submits reuse the most recent unexpired link rather
     than minting a pile of them.
     """
+    # Where to land after sign-in (e.g. a meeting deep link that bounced the
+    # user through login). Carried into the emailed link and honored on consume.
+    nxt = _safe_next(request)
     if request.user.is_authenticated:
-        return redirect(_safe_next(request) or "/")
+        return redirect(nxt or "/")
     sent = False
     if request.method == "POST":
         form = MagicLinkRequestForm(request.POST)
@@ -553,7 +556,7 @@ def magic_link_request(request):
                 if link is None or link.is_expired():
                     link = MagicLoginLink.objects.create(user=user)
                 try:
-                    emails.send_magic_link(link)
+                    emails.send_magic_link(link, next_url=nxt or "")
                 except Exception:  # delivery failure must not leak existence
                     logger.exception("magic-link email to %s failed", user.email)
             sent = True
@@ -561,7 +564,7 @@ def magic_link_request(request):
     else:
         form = MagicLinkRequestForm()
     return render(request, "accounts/magic_link_request.html", {
-        "form": form, "sent": sent,
+        "form": form, "sent": sent, "next": nxt or "",
     })
 
 
@@ -574,7 +577,7 @@ def magic_link_consume(request, token):
         return render(request, "accounts/magic_link_invalid.html", status=410)
     link.consume()
     login(request, link.user)
-    return redirect(settings.LOGIN_REDIRECT_URL)
+    return redirect(_safe_next(request) or settings.LOGIN_REDIRECT_URL)
 
 
 # --- Two-factor authentication (TOTP) -----------------------------------

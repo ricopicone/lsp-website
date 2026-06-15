@@ -36,6 +36,10 @@ urlpatterns = [
     path("accounts/", include("accounts.urls")),
     path("about/", _content_views.about, name="about"),
     path("the-school/", _content_views.the_school, name="the_school"),
+    # Public "Formation" content page. Lives under /about/ so it doesn't shadow
+    # the member-facing formation hub at /formation/ (admissions.urls).
+    path("about/formation/", _content_views.page, {"slug": "formation"}, name="formation"),
+    path("resources/", _content_views.page, {"slug": "resources"}, name="resources"),
     path("guides/", _content_views.guides_index_view, name="guides_index"),
     path("guides/<slug:slug>/", _content_views.guide_detail, name="guide_detail"),
     path("directory/", _account_views.directory, name="directory"),
@@ -91,6 +95,8 @@ urlpatterns = [
          name="web_coordinator_admin"),
     path("admin-tools/web-developer/", _staff_views.web_developer_admin,
          name="web_developer_admin"),
+    path("admin-tools/web-developer/video/", _staff_views.video_upload_settings,
+         name="video_upload_settings"),
     path("admin-tools/suggestions/", _suggestion_views.triage, name="suggestions_triage"),
     path("admin-tools/aphorisms/", _staff_views.aphorism_list, name="staff_aphorisms"),
     path("admin-tools/aphorisms/new/", _staff_views.aphorism_create, name="staff_aphorism_new"),

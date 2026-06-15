@@ -518,6 +518,30 @@ def web_developer_admin(request):
     return render(request, "core/staff/admin/web_developer.html", {})
 
 
+@login_required
+@staff_role_required(StaffRole.WEB_DEVELOPER)
+def video_upload_settings(request):
+    """Control surface for Works video uploads: on/off + per-file size cap
+    (cost control), with a quick usage count."""
+    from works.forms import VideoUploadSettingsForm
+    from works.models import VideoUploadSettings, Work
+
+    cfg = VideoUploadSettings.load()
+    saved = False
+    if request.method == "POST":
+        form = VideoUploadSettingsForm(request.POST, instance=cfg)
+        if form.is_valid():
+            form.save()
+            saved = True
+    else:
+        form = VideoUploadSettingsForm(instance=cfg)
+    return render(request, "core/staff/admin/video_settings.html", {
+        "form": form,
+        "saved": saved,
+        "video_count": Work.objects.exclude(video="").count(),
+    })
+
+
 # ---- Aphorisms panel --------------------------------------------------------
 
 
