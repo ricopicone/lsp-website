@@ -142,6 +142,11 @@
 }
 .lsp-prose a:hover { text-decoration-thickness: 1.5px; }
 .lsp-prose strong { font-weight: 600; }
+/* Button-styled links inside rendered Markdown shouldn't take the prose
+   link treatment (underline + link color). */
+.lsp-prose a.btn { text-decoration: none; }
+.lsp-prose a.btn:hover { text-decoration: none; }
+.lsp-prose a.btn-primary { color: var(--color-primary-content); }
 .lsp-prose em { font-style: italic; }
 .lsp-prose blockquote {
   border-left: 3px solid var(--color-base-300);

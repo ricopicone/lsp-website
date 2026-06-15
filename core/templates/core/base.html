@@ -65,7 +65,7 @@
       <nav class="hidden sm:flex items-center gap-0.5 text-sm">
         {% with cur=request.path %}
           <a href="{% url 'about' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/about/' in cur %}text-primary font-medium{% endif %}">About</a>
-          <a href="{% url 'formation' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/formation/' in cur %}text-primary font-medium{% endif %}">Formation</a>
+          <a href="{% url 'formation' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/about/formation/' in cur %}text-primary font-medium{% endif %}">Formation</a>
           <a href="{% url 'guides_index' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/guides/' in cur %}text-primary font-medium{% endif %}">Guides</a>
 
           {# Groups #}
