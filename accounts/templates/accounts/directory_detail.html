@@ -27,6 +27,11 @@
           Faculty
         </span>
         {% endif %}
+        {% for role in profile.user.staff_roles.all %}
+        <span class="inline-block text-xs uppercase tracking-widest px-2 py-1 rounded bg-secondary/15 text-secondary border border-secondary/25">
+          {{ role.name }}
+        </span>
+        {% endfor %}
         {% for mem in profile.user.active_public_memberships %}
         <span class="inline-block text-xs uppercase tracking-widest px-2 py-1 rounded
                      {% if mem.role != "member" %}bg-primary/15 text-primary border border-primary/25

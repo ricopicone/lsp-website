@@ -73,7 +73,10 @@ def _directory_qs():
                 "user__workgroup_memberships",
                 queryset=membership_qs,
                 to_attr="active_public_memberships",
-            )
+            ),
+            # Board-appointed operational roles (Treasurer, Cartel Coordinator,
+            # …) badge the directory. StaffRole.Meta orders by name.
+            "user__staff_roles",
         )
         .order_by("user__last_name", "user__first_name")
     )
