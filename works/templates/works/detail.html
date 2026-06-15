@@ -49,8 +49,8 @@
       {% if work.publication_info or work.publication_date %}
       <p class="text-sm text-base-content/70">
         {% if work.publication_info %}{{ work.publication_info }}{% endif %}
-        {% if work.publication_date %}
-          {% if work.publication_info %} · {% endif %}{{ work.publication_date|date:"F j, Y" }}
+        {% if work.publication_date and not work.publication_info %}
+          {{ work.publication_date|date:"F j, Y" }}
         {% endif %}
       </p>
       {% endif %}
