@@ -27,7 +27,7 @@
           Faculty
         </span>
         {% endif %}
-        {% for role in profile.user.staff_roles.all %}
+        {% for role in profile.badge_staff_roles %}
         <span class="inline-block text-xs uppercase tracking-widest px-2 py-1 rounded bg-secondary/15 text-secondary border border-secondary/25">
           {{ role.name }}
         </span>

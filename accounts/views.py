@@ -18,6 +18,7 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from core.models import StaffRole
 from workgroups.models import Workgroup, WorkgroupMembership
 
 from . import emails, twofactor
@@ -75,11 +76,38 @@ def _directory_qs():
                 to_attr="active_public_memberships",
             ),
             # Board-appointed operational roles (Treasurer, Cartel Coordinator,
-            # …) badge the directory. StaffRole.Meta orders by name.
-            "user__staff_roles",
+            # …) badge the directory. LSP Staff is an internal access
+            # designation, not a public position — exclude it. StaffRole.Meta
+            # orders by name.
+            Prefetch(
+                "user__staff_roles",
+                queryset=StaffRole.objects.exclude(key=StaffRole.LSP_STAFF),
+                to_attr="public_staff_roles",
+            ),
         )
         .order_by("user__last_name", "user__first_name")
     )
+
+
+def _badge_staff_roles(user):
+    """The user's board-appointee StaffRole badges, minus any whose position is
+    already shown by a committee officer badge.
+
+    A Treasurer who is the Board's Treasurer would otherwise get both a
+    standalone "Treasurer" badge and a "Board of Directors · Treasurer" badge —
+    the committee one is more informative, so drop the redundant standalone.
+    StaffRole keys and ``WorkgroupMembership.Role`` values share strings for the
+    overlapping positions (treasurer, web_coordinator, referral_coordinator,
+    admin_assistant), so a key match is a position match.
+
+    Relies on the ``public_staff_roles`` / ``active_public_memberships``
+    prefetches set by ``_directory_qs``.
+    """
+    officer_keys = {m.role for m in getattr(user, "active_public_memberships", [])}
+    return [
+        role for role in getattr(user, "public_staff_roles", [])
+        if role.key not in officer_keys
+    ]
 
 
 def signup(request):
@@ -105,6 +133,7 @@ def directory(request):
     """Grid of all members grouped by role section."""
     by_role: dict[str, list[dict]] = {}
     for profile in _directory_qs():
+        profile.badge_staff_roles = _badge_staff_roles(profile.user)
         by_role.setdefault(profile.role, []).append({
             "profile": profile,
             "slug": profile.directory_slug,
@@ -123,6 +152,7 @@ def directory_detail(request, slug: str):
     from works.models import Work, WorkAuthor
     for profile in _directory_qs():
         if profile.directory_slug == slug:
+            profile.badge_staff_roles = _badge_staff_roles(profile.user)
             works = (
                 Work.listing_for(request.user)
                 .filter(authors=profile.user)

@@ -152,6 +152,39 @@ def test_directory_badges_board_appointee_staff_roles(client):
     assert b"Cartel Coordinator" not in other
 
 
+@pytest.mark.django_db
+def test_directory_excludes_lsp_staff_badge(client):
+    """LSP Staff is an internal access designation, not a public position —
+    it must not badge the directory, even though other roles do."""
+    from core.models import StaffRole
+
+    u = _mk_member("stan@x.test", "Stan", "Staffer", Profile.Role.ANALYST)
+    StaffRole.objects.get(key=StaffRole.LSP_STAFF).holders.add(u)
+    StaffRole.objects.get(key=StaffRole.CARTEL_COORDINATOR).holders.add(u)
+
+    detail = client.get("/directory/stan-staffer/").content
+    assert b"Cartel Coordinator" in detail
+    assert b"LSP Staff" not in detail
+
+
+@pytest.mark.django_db
+def test_directory_dedups_staff_role_against_committee_officer(client):
+    """A Treasurer who is also the Board's Treasurer gets only the more
+    informative committee officer badge, not a redundant standalone one."""
+    from committees.models import Committee
+    from core.models import StaffRole
+
+    u = _mk_member("tess@x.test", "Tess", "Banks", Profile.Role.ANALYST)
+    StaffRole.objects.get(key=StaffRole.TREASURER).holders.add(u)
+    committee = Committee.objects.create(name="Finance", slug="finance", public=True)
+    committee.add_member(u, role="treasurer")
+
+    detail = client.get("/directory/tess-banks/").content
+    assert b"Finance" in detail
+    # "Finance · Treasurer" only — no extra standalone "Treasurer" badge.
+    assert detail.count(b"Treasurer") == 1
+
+
 def test_split_location_single():
     from accounts.geocoding import split_location
     assert split_location("Paris, France") == ["Paris, France"]
