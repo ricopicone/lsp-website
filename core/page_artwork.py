@@ -52,7 +52,9 @@ PAGE_ARTWORK: dict[str, Artwork] = {
     "core:calendar": Artwork("img/artwork/calendar.jpg", artist="George Peabody Library"),
     "workgroups:list": Artwork("img/artwork/groups.jpg", artist="Bibliothèque Mazarine, Paris"),
     "guides_index": Artwork("img/artwork/guides.jpg", artist="Beinecke Library, Yale"),
-    "parletre:index": Artwork("img/artwork/parletre.jpg", artist="Bibliothèque Sainte-Geneviève, Paris"),
+    "parletre:index": Artwork(
+        "img/artwork/parletre.jpg", artist="Bibliothèque Sainte-Geneviève, Paris"
+    ),
 }
 
 
