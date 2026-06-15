@@ -109,6 +109,8 @@ TEMPLATES = [
                 "core.context_processors.aphorism",
                 "core.context_processors.survey_nudge",
                 "core.context_processors.preview_tour",
+                "core.context_processors.site_theme",
+                "core.context_processors.page_artwork",
                 "notifications.context_processors.bell",
                 "suggestions.context_processors.widget",
                 "admissions.context_processors.my_lsp_tabs",

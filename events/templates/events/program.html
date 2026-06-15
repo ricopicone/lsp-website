@@ -1,14 +1,13 @@
 {% extends "core/base.html" %}
 {% block title %}Program {{ year }} — LSP{% endblock %}
 
+{% block page_hero %}{% with ys=year|stringformat:"s" %}{% include "core/_page_hero.html" with title="Program "|add:ys subtitle="The Lacanian School's seminars and other offerings. Click any title for full details, dates, and registration." %}{% endwith %}{% endblock %}
+
 {% block content %}
 <div class="space-y-10">
 
   <header class="space-y-3 max-w-3xl">
-    <div class="flex flex-wrap items-baseline justify-between gap-3">
-      <h1 class="font-serif text-3xl sm:text-4xl text-base-content leading-[1.15] tracking-tight">
-        Program {{ year }}
-      </h1>
+    <div class="flex flex-wrap items-center gap-3">
       {% if available_years|length > 1 %}
       <form method="get" class="flex items-center gap-2 text-sm">
         <label for="year-select" class="text-base-content/60">Academic year</label>
@@ -20,15 +19,10 @@
         </select>
       </form>
       {% endif %}
+      {% if can_propose_seminar %}
+      <a href="{% url 'propose_event' %}" class="btn btn-outline btn-sm">Propose an event →</a>
+      {% endif %}
     </div>
-    <p class="text-sm text-base-content/70 leading-relaxed">
-      The Lacanian School's seminars and other offerings for the
-      {% if is_current_year %}current{% else %}{{ year }}{% endif %} academic year.
-      Click any title for full details, dates, and registration.
-    </p>
-    {% if can_propose_seminar %}
-    <p><a href="{% url 'propose_event' %}" class="btn btn-outline btn-sm">Propose an event →</a></p>
-    {% endif %}
   </header>
 
   {# ----- Seminars ----- #}

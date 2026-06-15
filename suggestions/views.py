@@ -21,12 +21,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from accounts.permissions import is_lsp_member
-
 from . import notifications as notify_suggestions
 from .forms import SuggestionForm
 from .models import Suggestion
-from .permissions import can_triage_suggestions
+from .permissions import can_submit_suggestion, can_triage_suggestions
 
 
 def _feature_on() -> bool:
@@ -38,7 +36,7 @@ def _wants_json(request) -> bool:
 
 
 def _require_member(request) -> None:
-    if not (_feature_on() and is_lsp_member(request.user)):
+    if not (_feature_on() and can_submit_suggestion(request.user)):
         raise PermissionDenied
 
 
@@ -88,7 +86,7 @@ def suggest_page(request):
 def submit(request):
     """Widget endpoint: accepts a fetch POST (JSON reply) and is the non-JS
     fallback target for the widget form."""
-    if not (_feature_on() and is_lsp_member(request.user)):
+    if not (_feature_on() and can_submit_suggestion(request.user)):
         if _wants_json(request):
             return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
         raise PermissionDenied

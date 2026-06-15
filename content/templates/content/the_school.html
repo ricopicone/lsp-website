@@ -1,22 +1,10 @@
 {% extends "core/base.html" %}
 {% block title %}The School—LSP{% endblock %}
 
+{% block page_hero %}{% include "core/_page_hero.html" with kicker="An orientation" title="The School, gathered in one map" subtitle="The School has many parts—ways of working one by one, kinds of group, gatherings of the whole, and the bodies that carry its common life. This map draws them together. Select any block to read about it and explore where it leads." %}{% endblock %}
+
 {% block content %}
 <div class="space-y-14 sm:space-y-20">
-
-  {# ===================== Header ===================== #}
-  <header class="space-y-4 max-w-3xl">
-    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/50">An orientation</p>
-    <h1 class="font-serif text-3xl sm:text-5xl text-base-content leading-[1.08] tracking-tight">
-      The School, gathered in one map
-    </h1>
-    <p class="text-base sm:text-lg text-base-content/70 leading-relaxed">
-      The School has many parts—ways of working one by one, kinds of group,
-      gatherings of the whole, and the bodies that carry its common life. This
-      map draws them together. Select any block to read about it and explore
-      where it leads.
-    </p>
-  </header>
 
   {# ===================== The graphic (visual table of contents) ===================== #}
   {% comment %}

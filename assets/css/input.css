@@ -8,14 +8,58 @@
   themes: silk --default, abyss --prefersdark;
 }
 
-/* Typography. `Inter` (sans) is the body workhorse — crisp, neutral, designed
-   for screens. `Cutive` is a proportional typewriter-style serif — mechanical
-   character without being fixed-width — used wherever we'd reach for a
-   display serif (font-serif). */
+/* Typography (modern theme — the default). `Inter` (sans) is the body
+   workhorse; `Cutive` is the proportional-typewriter serif used for headings
+   (font-serif); `Cutive Mono` is the mono. The "wix" site-theme overrides
+   --font-serif / --font-display below. `--font-display` defaults to Cinzel so
+   the hero partial's font-display utility exists even in modern (unused there). */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: "Cutive", Georgia, "Iowan Old Style", "Apple Garamond", serif;
+  --font-display: "Cinzel", "Playfair Display", Georgia, serif;
   --font-mono: "Cutive Mono", ui-monospace, "JetBrains Mono", monospace;
+}
+
+/* ============================================================================
+   "Classic" site-theme (internal id: wix) — an OPT-IN skin recalling the old
+   Wix site: artwork-over-title heroes, classical display serifs, all-caps
+   headings, and the old white/neutral palette. Activated by
+   data-site-theme="wix" on <html> (set server-side from a cookie; see
+   core.context_processors.site_theme + core:set_site_theme). The default
+   (modern) theme is the site as shipped before task #259.
+   ========================================================================== */
+
+/* Palette — light pairing only (keep abyss intact in dark mode). Matches the
+   old site: white page, near-black ink, neutral greys, restrained slate accent.
+   The doubled selector outweighs DaisyUI's [data-theme=silk] block. */
+[data-theme="silk"][data-site-theme="wix"] {
+  --color-base-100: #f8f7f3;   /* old-site page background (color-picked) */
+  --color-base-200: #f1efe9;
+  --color-base-300: #e3e1dd;
+  --color-base-content: #212121;
+  --color-primary: #3a3f47;
+  --color-primary-content: #ffffff;
+  --color-secondary: #646464;
+  --color-secondary-content: #ffffff;
+  --color-accent: #5d5d61;
+  --color-accent-content: #ffffff;
+  --color-neutral: #212121;
+  --color-neutral-content: #ffffff;
+}
+
+/* Display serifs in both light and dark. */
+[data-site-theme="wix"] {
+  --font-serif: "Playfair Display", Georgia, "Iowan Old Style", serif;
+  --font-display: "Cinzel", "Playfair Display", Georgia, serif;
+}
+
+/* All-caps headings (the old Cinzel-capitals look). Limited to h1/h2 + the
+   prose H2 so small sub-labels don't shout. */
+[data-site-theme="wix"] h1,
+[data-site-theme="wix"] h2,
+[data-site-theme="wix"] .lsp-prose h2 {
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
 }
 
 /* Base styling for raw Django form widget output (text inputs, textareas,

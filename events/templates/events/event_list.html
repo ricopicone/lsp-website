@@ -1,11 +1,12 @@
 {% extends "core/base.html" %}
 {% block title %}Events — Lacanian School of Psychoanalysis{% endblock %}
 
+{% block page_hero %}{% include "core/_page_hero.html" with title="Upcoming events" %}{% endblock %}
+
 {% block content %}
 <div class="space-y-8">
 
-  <header class="flex flex-wrap items-baseline justify-between gap-4 border-b border-base-300/60 pb-4">
-    <h1 class="font-serif text-3xl text-base-content">Upcoming events</h1>
+  <header class="flex justify-end border-b border-base-300/60 pb-4">
     <a href="{% url 'core:calendar' %}" class="text-sm link link-hover text-base-content/70 hover:text-primary">Calendar view →</a>
   </header>
 
