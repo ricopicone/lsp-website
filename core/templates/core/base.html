@@ -65,6 +65,7 @@
       <nav class="hidden sm:flex items-center gap-0.5 text-sm">
         {% with cur=request.path %}
           <a href="{% url 'about' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/about/' in cur %}text-primary font-medium{% endif %}">About</a>
+          <a href="{% url 'formation' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/formation/' in cur %}text-primary font-medium{% endif %}">Formation</a>
           <a href="{% url 'guides_index' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/guides/' in cur %}text-primary font-medium{% endif %}">Guides</a>
 
           {# Groups #}
@@ -125,6 +126,7 @@
             <ul tabindex="0" class="dropdown-content menu menu-sm z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-52">
               <li><a href="{% url 'works:index' %}">Works</a></li>
               <li><a href="{% url 'documents:index' %}">Documents</a></li>
+              <li><a href="{% url 'resources' %}">Resources</a></li>
             </ul>
           </div>
 
@@ -146,6 +148,7 @@
           <ul tabindex="0" style="max-height:80vh"
               class="dropdown-content menu menu-sm mt-2 z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-60 overflow-y-auto flex-nowrap">
             <li><a href="{% url 'about' %}">About</a></li>
+            <li><a href="{% url 'formation' %}">Formation</a></li>
             <li><a href="{% url 'guides_index' %}">Guides</a></li>
 
             <li class="menu-title">Groups</li>
@@ -171,6 +174,7 @@
             <li class="menu-title">Artifacts</li>
             <li><a href="{% url 'works:index' %}">Works</a></li>
             <li><a href="{% url 'documents:index' %}">Documents</a></li>
+            <li><a href="{% url 'resources' %}">Resources</a></li>
 
             {% if user|is_parletre_member %}
             <li><hr class="border-base-300/60 my-1"></li>
