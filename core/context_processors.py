@@ -36,6 +36,21 @@ def aphorism(request):
     return {"aphorism": random.choice(items) if items else None}
 
 
+def page_artwork(request):
+    """Artwork for the current page's section-landing hero, if any.
+
+    Resolved from the static map in ``core.page_artwork`` keyed by the
+    namespaced view name. Section-landing templates override the base
+    ``page_hero`` block and the partial reads this; unmapped pages get an
+    image-less header.
+    """
+    from . import page_artwork as artwork_map
+
+    match = getattr(request, "resolver_match", None)
+    view_name = match.view_name if match is not None else None
+    return {"page_artwork": artwork_map.for_view(view_name)}
+
+
 def survey_nudge(request):
     """Whether to show the launch intake-survey banner: enabled, the user is an
     authenticated member, and they haven't submitted yet. Cheap — one indexed

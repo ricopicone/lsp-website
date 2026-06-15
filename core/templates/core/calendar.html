@@ -39,12 +39,13 @@
 </style>
 {% endblock %}
 
+{% block page_hero %}{% include "core/_page_hero.html" with title="Calendar" subtitle="All sessions across all events. Click an entry to open its parent event." %}{% endblock %}
+
 {% block content %}
 <div class="space-y-4">
-  <header class="space-y-1">
-    <h1 class="font-serif text-3xl text-base-content">Calendar</h1>
-    <p class="text-sm text-base-content/60">All sessions across all events. Click an entry to open its parent event{% if user.is_staff %} in <a href="/admin/" class="link link-hover">admin</a>{% endif %}.</p>
-  </header>
+  {% if user.is_staff %}
+  <p class="text-sm text-base-content/60">Open an entry's parent event in <a href="/admin/" class="link link-hover">admin</a>.</p>
+  {% endif %}
 
   <div id="calendar" class="rounded-lg border border-base-300 bg-base-100 p-3 sm:p-4"></div>
 </div>

@@ -1,0 +1,52 @@
+{% load static %}
+{% comment %}
+  Section-landing hero: the page title set over an artwork band (echoing the old
+  site), or a plain header when no artwork is mapped for this page.
+
+  Args:
+    title    — required; the page title.
+    subtitle — optional; a short descriptive line.
+    kicker   — optional; a small uppercase label above the title.
+
+  Artwork (image + attribution + focal point) comes from `page_artwork`, set by
+  core.context_processors.page_artwork from the static map in core.page_artwork.
+{% endcomment %}
+{% if page_artwork and page_artwork.image %}
+<section class="relative w-full overflow-hidden bg-neutral text-neutral-content">
+  {# Artwork layer #}
+  <div class="absolute inset-0 bg-cover bg-no-repeat"
+       style="background-image:url('{% static page_artwork.image %}');background-position:{{ page_artwork.focal }};"
+       aria-hidden="true"></div>
+  {# Scrim — keeps white title legible over any artwork, in silk and abyss alike #}
+  <div class="absolute inset-0" aria-hidden="true"
+       style="background:linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.30) 48%, rgba(0,0,0,0.18) 100%);"></div>
+
+  <div class="relative mx-auto max-w-5xl px-4 sm:px-6 h-48 sm:h-64 flex flex-col justify-end pb-7">
+    {% if kicker %}
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-white/70 mb-2">{{ kicker }}</p>
+    {% endif %}
+    <h1 class="font-display text-3xl sm:text-5xl text-white tracking-tight leading-[1.1]">{{ title }}</h1>
+    {% if subtitle %}
+    <p class="mt-3 max-w-2xl text-sm sm:text-base text-white/85 leading-relaxed">{{ subtitle }}</p>
+    {% endif %}
+  </div>
+
+  {% if page_artwork.artist %}
+  <p class="absolute bottom-1.5 right-3 text-xs text-white/55">
+    {{ page_artwork.artist }}{% if page_artwork.title %}, <span class="italic">{{ page_artwork.title }}</span>{% endif %}
+  </p>
+  {% endif %}
+</section>
+{% else %}
+<section class="w-full border-b border-base-300/60 bg-base-200/30">
+  <div class="mx-auto max-w-5xl px-4 sm:px-6 py-10 sm:py-14">
+    {% if kicker %}
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45 mb-2">{{ kicker }}</p>
+    {% endif %}
+    <h1 class="font-display text-3xl sm:text-5xl text-base-content tracking-tight leading-[1.1]">{{ title }}</h1>
+    {% if subtitle %}
+    <p class="mt-3 max-w-2xl text-sm sm:text-base text-base-content/70 leading-relaxed">{{ subtitle }}</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}

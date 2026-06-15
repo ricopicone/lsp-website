@@ -1,18 +1,18 @@
 {% extends "core/base.html" %}
 {% block title %}{{ kind_label_plural }} — LSP{% endblock %}
+
+{% block page_hero %}{% include "core/_page_hero.html" with title=kind_label_plural %}{% endblock %}
+
 {% block content %}
 <div class="space-y-8">
-  <header class="space-y-2">
+  <header class="flex flex-wrap items-center justify-between gap-4">
     <p class="text-sm">
       <a href="{% url 'workgroups:list' %}" class="link link-hover text-base-content/60">← Groups</a>
     </p>
-    <div class="flex items-start justify-between gap-4">
-      <h1 class="font-serif text-3xl text-base-content">{{ kind_label_plural }}</h1>
-      <div class="flex flex-col gap-1 shrink-0">
-        {% if can_propose_cartel %}<a href="{% url 'cartels:propose' %}" class="btn btn-primary btn-sm">Propose a cartel</a>{% endif %}
-        {% if is_cartel_coordinator %}<a href="{% url 'cartels:review_queue' %}" class="btn btn-ghost btn-sm">Review proposals</a>{% endif %}
-        {% if can_create_working_group %}<a href="{% url 'workinggroups:create' %}" class="btn btn-primary btn-sm">New working group</a>{% endif %}
-      </div>
+    <div class="flex flex-wrap gap-2 shrink-0">
+      {% if can_propose_cartel %}<a href="{% url 'cartels:propose' %}" class="btn btn-primary btn-sm">Propose a cartel</a>{% endif %}
+      {% if is_cartel_coordinator %}<a href="{% url 'cartels:review_queue' %}" class="btn btn-ghost btn-sm">Review proposals</a>{% endif %}
+      {% if can_create_working_group %}<a href="{% url 'workinggroups:create' %}" class="btn btn-primary btn-sm">New working group</a>{% endif %}
     </div>
   </header>
 

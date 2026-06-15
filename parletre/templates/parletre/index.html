@@ -2,20 +2,16 @@
 {% load parletre_tags %}
 {% block title %}Parlêtre — LSP{% endblock %}
 
+{% block page_hero %}{% include "core/_page_hero.html" with title="Parlêtre" subtitle="Forums, text chats, and video chats—offerings to the Other." %}{% endblock %}
+
 {% block content %}
 <div class="space-y-6">
-  <header class="flex flex-wrap items-start justify-between gap-3">
-    <div class="space-y-1">
-      <h1 class="font-serif text-3xl tracking-tight text-base-content">Parlêtre</h1>
-      <p class="text-base-content/70">Forums, text chats, and video chats—offerings to the Other.</p>
-    </div>
-    <div class="flex items-center gap-2">
-      <a href="{% url 'parletre:create_private_chat' %}" class="btn btn-sm btn-primary gap-1">{% icon "lock" %} New private chat</a>
-      <form method="get" action="{% url 'parletre:search' %}" class="flex gap-1">
-        <input type="search" name="q" placeholder="Search…" class="input input-bordered input-sm w-44">
-        <button type="submit" class="btn btn-sm">Search</button>
-      </form>
-    </div>
+  <header class="flex flex-wrap items-center justify-end gap-2">
+    <a href="{% url 'parletre:create_private_chat' %}" class="btn btn-sm btn-primary gap-1">{% icon "lock" %} New private chat</a>
+    <form method="get" action="{% url 'parletre:search' %}" class="flex gap-1">
+      <input type="search" name="q" placeholder="Search…" class="input input-bordered input-sm w-44">
+      <button type="submit" class="btn btn-sm">Search</button>
+    </form>
   </header>
 
   {% comment %} The privacy promise, stated plainly: open ≠ public. {% endcomment %}

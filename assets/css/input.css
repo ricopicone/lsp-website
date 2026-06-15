@@ -8,13 +8,52 @@
   themes: silk --default, abyss --prefersdark;
 }
 
+/* Tune the built-in silk theme toward the old site's quiet, classical palette:
+   white page, near-black ink (#212121), warm-neutral greys, and a restrained
+   slate accent (the old site carried no loud brand color). abyss (dark) is left
+   as DaisyUI ships it. Redefining the theme by name overrides the built-in. */
+@plugin "daisyui/theme" {
+  name: "silk";
+  default: true;
+  color-scheme: light;
+
+  --color-base-100: #ffffff;   /* page */
+  --color-base-200: #f4f3f1;   /* subtle fills, cards */
+  --color-base-300: #e3e1dd;   /* hairlines, borders */
+  --color-base-content: #212121;  /* ink */
+
+  --color-primary: #3a3f47;       /* muted slate ink — links/accents */
+  --color-primary-content: #ffffff;
+  --color-secondary: #646464;     /* the old grey */
+  --color-secondary-content: #ffffff;
+  --color-accent: #5d5d61;
+  --color-accent-content: #ffffff;
+  --color-neutral: #212121;
+  --color-neutral-content: #ffffff;
+
+  --color-info: #3a3f47;
+  --color-info-content: #ffffff;
+  --color-success: #2f6f4f;
+  --color-success-content: #ffffff;
+  --color-warning: #b3760a;
+  --color-warning-content: #ffffff;
+  --color-error: #b3261e;
+  --color-error-content: #ffffff;
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+}
+
 /* Typography. `Inter` (sans) is the body workhorse — crisp, neutral, designed
-   for screens. `Cutive` is a proportional typewriter-style serif — mechanical
-   character without being fixed-width — used wherever we'd reach for a
-   display serif (font-serif). */
+   for screens. `Playfair Display` is the site heading serif (font-serif),
+   echoing the old site. `Cinzel` (font-display) is reserved for artwork-hero
+   titles — the old front-door capitals — so it doesn't shout on every heading.
+   `Cutive Mono` stays the monospace face. */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-serif: "Cutive", Georgia, "Iowan Old Style", "Apple Garamond", serif;
+  --font-serif: "Playfair Display", Georgia, "Iowan Old Style", "Apple Garamond", serif;
+  --font-display: "Cinzel", "Playfair Display", Georgia, serif;
   --font-mono: "Cutive Mono", ui-monospace, "JetBrains Mono", monospace;
 }
 

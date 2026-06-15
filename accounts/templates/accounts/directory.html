@@ -1,11 +1,12 @@
 {% extends "core/base.html" %}
 {% block title %}Directory — Lacanian School of Psychoanalysis{% endblock %}
 
+{% block page_hero %}{% include "core/_page_hero.html" with title="Directory" subtitle="Analysts, candidates, and scholars of the Lacanian School of Psychoanalysis. Click a name for credentials, contact, and bio." %}{% endblock %}
+
 {% block content %}
 <div class="space-y-8">
 
-  <header class="flex flex-wrap items-baseline justify-between gap-4 border-b border-base-300/60 pb-4">
-    <h1 class="font-serif text-3xl text-base-content">Directory</h1>
+  <header class="flex justify-end border-b border-base-300/60 pb-4">
     <label class="input input-bordered input-sm w-full sm:max-w-xs flex items-center gap-2">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="opacity-60"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="search" id="dir-search" placeholder="Search…"
@@ -14,11 +15,6 @@
              class="grow bg-transparent outline-none placeholder:text-base-content/40">
     </label>
   </header>
-
-  <p class="text-base-content/70 max-w-2xl text-sm">
-    Analysts, candidates, and scholars of the Lacanian School of Psychoanalysis.
-    Click a name for credentials, contact, and bio.
-  </p>
 
   <div id="dir-root" class="space-y-12">
     {% for section in sections %}

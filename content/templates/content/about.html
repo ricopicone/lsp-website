@@ -1,17 +1,10 @@
 {% extends "core/base.html" %}
 {% block title %}{{ page.title }} — LSP{% endblock %}
 
+{% block page_hero %}{% include "core/_page_hero.html" with title=page.title subtitle=page.summary %}{% endblock %}
+
 {% block content %}
 <article class="space-y-10">
-
-  <header class="space-y-3 max-w-3xl">
-    <h1 class="font-serif text-3xl sm:text-4xl text-base-content leading-[1.15] tracking-tight">
-      {{ page.title }}
-    </h1>
-    {% if page.summary %}
-    <p class="text-base sm:text-lg text-base-content/70 leading-relaxed">{{ page.summary }}</p>
-    {% endif %}
-  </header>
 
   <div class="lsp-prose max-w-3xl">
     {{ body_html|safe }}
