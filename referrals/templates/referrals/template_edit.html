@@ -44,7 +44,7 @@
     <h3 class="text-xs font-medium uppercase tracking-wide text-base-content/60">
       Preview <span class="normal-case font-normal">— with sample values</span>
     </h3>
-    <div id="tpl-preview"
+    <div id="tpl-preview" data-template-key="{{ template.key }}"
          class="rounded-lg border border-base-300 bg-base-100 p-4"
          style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.6;"></div>
   </section>
@@ -52,7 +52,7 @@
 
 <script>
   (function () {
-    var body = document.getElementById("id_body");
+    var body = document.querySelector("textarea[name=body]");
     var out = document.getElementById("tpl-preview");
     if (!body || !out) return;
 
@@ -77,7 +77,7 @@
         + "video & in-person\nDr. Lee Park — (570) 555-0456 — lee@example.com — "
         + "video only"
     };
-    var sample = SAMPLES[{{ template.key|stringformat:'r' }}] || FOLLOWUP;
+    var sample = SAMPLES[out.dataset.templateKey] || FOLLOWUP;
 
     function esc(s) {
       return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
