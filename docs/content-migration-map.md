@@ -28,7 +28,7 @@ lost when Wix is sunset. Built from a full audit of the live old site
 | `secretaries` | Actually a single seminar page — "Secretaries to the Psychotic Subject – Seminar III" (Casey Butcher; readings; 1st/3rd Tue; $150 or tuition) | An `Event` under `/program/` | ✅ — fits the Event model 1:1 |
 | `thearchive` | Members-only repository landing; usage/permission agreement; forum discontinued | Subsumed by Parlêtre + `/documents/` + Works + My LSP | ✅ — Archive considered fully migrated; the usage-agreement policy text is the only optional leftover (publishing-terms copy) |
 | `archivewelcome` | Members-archive onboarding prose; ~24h account-approval; benefits incl. Newsletters archive | Subsumed; newsletters → `/documents/` (**already there**) | ✅ — Newsletters migrated (1.1–3.2 in Documents); onboarding copy optional |
-| `resources` | **Member-author article/book bibliography** (Bennett, Carlson de la Torre, Cavanagh, Davidson, Lovett, Rogers, Swales, Vanderwees, Yu) + curated **external links** (peer schools & journals) + disclaimer | Member articles → `/works/`; external links → a new "Resources/Links" `content/pages/` page | ⚠️ — highest-risk: links + legacy citations have no auto-populated home; hand-migrate, keep the disclaimer |
+| `resources` | **Member-author article/book bibliography** (Bennett, Carlson de la Torre, Cavanagh, Davidson, Lovett, Rogers, Swales, Vanderwees, Yu) + curated **external links** (peer schools & journals) + disclaimer | Member books/articles → `/works/` (**seeded** via `seed_resource_works`); external links → the new `/resources/` page | ✅ — both migrated: publications now in Works, links + disclaimer on `/resources/` |
 | `contribute` | Member submission invite (Passage/Palimpsest); **revoke-permission policy** ("posted until you revoke in writing to the web coordinator") | Works/Documents submission flow | ✍️ — capture the revoke-permission terms in the new publishing copy |
 | `payments` | Payments hub; 501(c)(3) tax-deductible language; **Tuition Assistance PDF** | `/dues/`, `/donate/`, event registration | ✍️ — download & re-host the Tuition Assistance PDF; carry the 501(c)(3) language to `/donate/` |
 | `payforeventorseminar` | Wix/Stripe payment widget (event/seminar) | Event registration → Stripe Checkout | ✅/🔍 — replaced; verify no fee schedule is hidden in the widget |
@@ -76,16 +76,18 @@ full migration means re-entering each as an Event, not paraphrasing it to a stub
 These are the items that will be **lost on sunset** unless someone acts. None are
 auto-covered.
 
-1. **Documents — largely done.** `/documents/` already holds the Bylaws, both
-   Formation Guidelines, the Founding Texts (incl. Scholar Founding Text + Patsalides
-   & Adler papers), the Cartel texts, and the full **Newsletters archive** (1.1–3.2).
-   **Only two PDFs remain to download & re-host** before Wix dies:
-   - **Statement of Teaching** (from `psychoanalyticformation`)
-   - **Tuition Assistance PDF** (from `payments`)
-2. **A formation content page** (`content/pages/formation.md`): philosophy, **tuition $2,500/yr × 4**, control-analysis requirements, Analyst vs Scholar tracks, equity statement.
-3. **A governance home**: mission/501(c)(3)/"Guarantee of the Lack" narrative (→ `/about/`), and **Board + Program Committee rosters with terms** entered on Committee pages under `/groups/`.
-4. **A Resources/Links page**: the curated external links (peer Lacanian schools + journals) and the legacy member-article citations + disclaimer (articles also → `/works/`).
-5. **Policy texts to preserve** in new publishing/terms copy: the Archive usage agreement (`thearchive`) and the revoke-permission terms (`contribute`).
+1. ~~Documents~~ — **DONE.** `/documents/` holds the Bylaws, both Formation
+   Guidelines, the Founding Texts, the Cartel texts, the Newsletters archive
+   (1.1–3.2), and now **Statement of Teaching** + **Tuition Assistance** (uploaded
+   to prod 2026-06-15).
+2. ~~A formation content page~~ — **DONE.** `/about/formation/` carries the
+   philosophy, tuition ($2,500/yr × 4), control-analysis requirements, the two
+   tracks, equity statement, and an **Apply to join** on-ramp (the apply flow is
+   now publicly discoverable from the landing page, The School, and Formation).
+3. **A governance home** (still open): mission/501(c)(3)/"Guarantee of the Lack" narrative (→ `/about/`), and **Board + Program Committee rosters with terms** entered on Committee pages under `/groups/`.
+4. ~~A Resources/Links page~~ — **DONE.** `/resources/` carries the external links
+   + disclaimer; member books/articles seeded into **Works** (`seed_resource_works`).
+5. **Policy texts to preserve** (still open): the Archive usage agreement (`thearchive`) and the revoke-permission terms (`contribute`) → new publishing/terms copy.
 6. ~~The "Archive" naming decision~~ — **resolved**: "The Archive" is intentionally
    subsumed by Documents + Parlêtre + Works + My LSP. No Archive landing needed.
 7. **Sweep the seminar catalog**: re-enter every old seminar/offering as an `Event`, preserving the rich ones verbatim (✍️ rows above). Diff the old page list against the `events` table before discarding anything (note: `import_program_2026_2027` re-runs clobber admin edits — reconcile, don't re-import).
@@ -95,10 +97,13 @@ auto-covered.
 ## What's already safe
 
 The member **Directory**, the **Find-an-Analyst** map + referral workflow, event
-**registration/payments** (Stripe), **Dues/Donate**, the **Calendar**, and the
-**2026–27 Program** are already built and (for the directory/program) populated.
-The old **"Archive"** is intentionally subsumed by **Documents + Parlêtre + Works
-+ My LSP**, and **Documents** already carries the governance/formation/founding/
-cartel PDFs and the full **Newsletters archive**. So the bulk of the old site —
-features *and* its core documents — is covered. What remains is a short list of
-**loose written content + two PDFs** (see the punch list), not features.
+**registration/payments** (Stripe), **Dues/Donate**, the **Calendar**, the
+**2026–27 Program**, and the **apply-to-join** flow are all built and surfaced.
+The old **"Archive"** is subsumed by **Documents + Parlêtre + Works + My LSP**;
+**Documents** carries the governance/formation/founding/cartel PDFs, the
+**Newsletters archive**, and the Statement of Teaching + Tuition Assistance; the
+old **Resources** page is fully migrated (links + disclaimer on `/resources/`,
+member publications in **Works**); and **Formation** has its own page. What's
+left is small and non-functional: the **governance narrative + committee
+rosters**, two **policy texts**, the **seminar-catalog sweep**, and a few pages
+to **verify in Wix before sunset**.
