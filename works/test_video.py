@@ -110,6 +110,91 @@ def test_video_settings_page_requires_web_developer(client):
     assert client.get(reverse("video_upload_settings")).status_code in (302, 403, 404)
 
 
+# ---- direct-to-S3 upload ---------------------------------------------------
+
+import json  # noqa: E402
+
+
+def test_presign_requires_member(client):
+    # Anonymous → login redirect.
+    assert client.post(reverse("works:video_presign")).status_code == 302
+    # Logged in but not an LSP member → 404.
+    client.force_login(_user("ext@x.test", role=Profile.Role.EXTERNAL))
+    assert client.post(
+        reverse("works:video_presign"),
+        data=json.dumps({"filename": "x.mp4", "content_type": "video/mp4"}),
+        content_type="application/json",
+    ).status_code == 404
+
+
+def test_presign_falls_back_without_bucket(client):
+    """In dev/test there's no private bucket, so the endpoint tells the client
+    to fall back to a server-side upload."""
+    client.force_login(_user())
+    resp = client.post(
+        reverse("works:video_presign"),
+        data=json.dumps({"filename": "x.mp4", "content_type": "video/mp4"}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200 and resp.json().get("fallback") is True
+
+
+def test_presign_rejects_non_video(client):
+    client.force_login(_user())
+    resp = client.post(
+        reverse("works:video_presign"),
+        data=json.dumps({"filename": "x.exe", "content_type": "application/octet-stream"}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 400
+
+
+def test_presign_blocked_when_disabled(client):
+    cfg = VideoUploadSettings.load()
+    cfg.enabled = False
+    cfg.save()
+    client.force_login(_user())
+    resp = client.post(
+        reverse("works:video_presign"),
+        data=json.dumps({"filename": "x.mp4", "content_type": "video/mp4"}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 403
+
+
+def test_form_attaches_via_video_key(monkeypatch):
+    """A verified incoming/ upload is promoted (S3 copy) and attached, with no
+    file passing through the app server."""
+    import core.storage as storage
+
+    monkeypatch.setattr(storage, "head_private_object",
+                        lambda key: {"size": 1024, "content_type": "video/mp4"})
+    copied = {}
+    def _copy(src, dest):
+        copied["src"], copied["dest"] = src, dest
+        return True
+    monkeypatch.setattr(storage, "copy_private_object", _copy)
+
+    u = _user()
+    key = "works/videos/incoming/abc123.mp4"
+    form = WorkForm(_form_data(video_key=key), current_user=u)
+    assert form.is_valid(), form.errors
+    work = form.save()
+    assert copied["src"] == key
+    assert work.video.name == copied["dest"]
+    assert work.video.name.startswith("works/videos/") and "incoming" not in work.video.name
+
+
+def test_form_rejects_video_key_outside_prefix(monkeypatch):
+    import core.storage as storage
+    monkeypatch.setattr(storage, "head_private_object",
+                        lambda key: {"size": 1, "content_type": "video/mp4"})
+    u = _user()
+    form = WorkForm(_form_data(video_key="evil/secret.mp4"), current_user=u)
+    assert not form.is_valid()
+    assert "video_key" in form.errors
+
+
 def test_web_developer_can_change_settings(client):
     dev = _user("dev@x.test")
     role, _ = StaffRole.objects.get_or_create(

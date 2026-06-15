@@ -70,6 +70,10 @@ class WorkForm(forms.ModelForm):
         }),
         help_text="Required when the work has multiple files.",
     )
+    #: Set by the direct-to-S3 uploader (JS): the temporary incoming/ key of a
+    #: video already uploaded straight to the bucket. When present it wins over
+    #: the server-side ``video`` file input (the no-JS / dev fallback).
+    video_key = forms.CharField(required=False, widget=forms.HiddenInput())
 
     class Meta:
         model = Work
@@ -242,6 +246,32 @@ class WorkForm(forms.ModelForm):
             )
         return video
 
+    def clean_video_key(self):
+        """Validate a direct-to-S3 upload before we trust it: it must sit under
+        our incoming/ prefix (no arbitrary keys), the object must exist, uploads
+        must be enabled, and it must be within the size cap. The S3 POST already
+        enforced size, but we re-check on attach in case settings changed."""
+        key = (self.cleaned_data.get("video_key") or "").strip()
+        if not key:
+            return ""
+        from core.storage import head_private_object
+
+        if not key.startswith("works/videos/incoming/"):
+            raise forms.ValidationError("Invalid upload reference.")
+        cfg = VideoUploadSettings.load()
+        if not cfg.enabled:
+            raise forms.ValidationError("Video uploads are currently turned off.")
+        head = head_private_object(key)
+        if head is None:
+            raise forms.ValidationError(
+                "That upload didn't finish. Please try again."
+            )
+        if head["size"] > cfg.max_file_bytes:
+            raise forms.ValidationError(
+                f"That video exceeds the {cfg.max_file_mb} MB limit."
+            )
+        return key
+
     def clean(self):
         cleaned = super().clean()
 
@@ -304,6 +334,23 @@ class WorkForm(forms.ModelForm):
 
         if not instance.pk and self.current_user:
             instance.submitted_by = self.current_user
+
+        # Direct-to-S3 video: promote the verified incoming/ object to a
+        # permanent key (server-side S3 copy — no app bandwidth) and point the
+        # field at it. Wins over any server-side ``video`` upload.
+        video_key = self.cleaned_data.get("video_key")
+        if video_key:
+            import os
+            import uuid
+
+            from django.utils import timezone
+
+            from core.storage import copy_private_object
+
+            ext = os.path.splitext(video_key)[1]
+            dest = f"works/videos/{timezone.now():%Y}/{uuid.uuid4().hex}{ext}"
+            if copy_private_object(video_key, dest):
+                instance.video.name = dest
 
         co_authors = self.cleaned_data.get("lsp_authors") or []
         byline: list = []

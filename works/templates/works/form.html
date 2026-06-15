@@ -203,5 +203,70 @@
     </div>
   </form>
 
+  {% comment %}Direct-to-S3 video upload: when a private bucket is configured,
+  the file goes straight to S3 (bypassing the app server) and only its key is
+  submitted with the form. Falls back to a normal server-side upload otherwise
+  (dev) or if anything fails.{% endcomment %}
+  <script>
+  (function () {
+    var input = document.getElementById("id_video");
+    var keyField = document.getElementById("id_video_key");
+    if (!input || !keyField) return;
+    var form = input.form;
+    var submit = form ? form.querySelector("[type=submit]") : null;
+    var presignUrl = "{% url 'works:video_presign' %}";
+    var csrfEl = form && form.querySelector("[name=csrfmiddlewaretoken]");
+    var csrf = csrfEl ? csrfEl.value : "";
+
+    var status = document.createElement("p");
+    input.parentNode.appendChild(status);
+    function setStatus(msg, cls) {
+      status.textContent = msg || "";
+      status.className = "text-xs mt-1 " + (cls || "text-base-content/60");
+    }
+    function setBusy(b) { if (submit) submit.disabled = b; }
+
+    input.addEventListener("change", function () {
+      var file = input.files && input.files[0];
+      keyField.value = "";
+      if (!file) { setStatus(""); return; }
+      setBusy(true);
+      setStatus("Preparing upload…");
+      fetch(presignUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+        body: JSON.stringify({ filename: file.name, content_type: file.type || "video/mp4" })
+      })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) { setBusy(false); input.value = ""; setStatus(res.j.error || "Upload couldn't start.", "text-error"); return; }
+        if (res.j.fallback) { setBusy(false); setStatus("Will upload when you save."); return; }
+        var fd = new FormData();
+        Object.keys(res.j.fields).forEach(function (k) { fd.append(k, res.j.fields[k]); });
+        fd.append("file", file);
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", res.j.url, true);
+        xhr.upload.onprogress = function (e) {
+          if (e.lengthComputable) setStatus("Uploading… " + Math.round(e.loaded / e.total * 100) + "%");
+        };
+        xhr.onload = function () {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            keyField.value = res.j.key;
+            input.value = "";  // don't also send the file to the app server
+            setStatus("Uploaded ✓ — save to attach it.", "text-success");
+          } else {
+            setStatus("Upload failed (" + xhr.status + "). Please try again.", "text-error");
+          }
+          setBusy(false);
+        };
+        xhr.onerror = function () { setBusy(false); setStatus("Upload failed. Please try again.", "text-error"); };
+        setStatus("Uploading… 0%");
+        xhr.send(fd);
+      })
+      .catch(function () { setBusy(false); input.value = ""; setStatus("Upload couldn't start.", "text-error"); });
+    });
+  })();
+  </script>
+
 </div>
 {% endblock %}
