@@ -12,4 +12,5 @@ urlpatterns = [
     path("<slug:slug>/edit/", views.edit, name="edit"),
     path("<slug:slug>/delete/", views.delete, name="delete"),
     path("<slug:slug>/pdf/<int:file_id>/", views.download, name="download"),
+    path("<slug:slug>/video/", views.video, name="video"),
 ]

@@ -95,6 +95,8 @@ urlpatterns = [
          name="web_coordinator_admin"),
     path("admin-tools/web-developer/", _staff_views.web_developer_admin,
          name="web_developer_admin"),
+    path("admin-tools/web-developer/video/", _staff_views.video_upload_settings,
+         name="video_upload_settings"),
     path("admin-tools/suggestions/", _suggestion_views.triage, name="suggestions_triage"),
     path("admin-tools/aphorisms/", _staff_views.aphorism_list, name="staff_aphorisms"),
     path("admin-tools/aphorisms/new/", _staff_views.aphorism_create, name="staff_aphorism_new"),

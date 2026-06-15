@@ -19,7 +19,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Max, Q
 from django.utils.text import slugify
 
-from .models import Work, WorkFile
+from .models import VideoUploadSettings, Work, WorkFile
 
 User = get_user_model()
 
@@ -81,6 +81,7 @@ class WorkForm(forms.ModelForm):
             "url",
             "publication_date",
             "cover_image",
+            "video",
             "external_authors",
             "workgroup",
             "in_progress",
@@ -115,6 +116,10 @@ class WorkForm(forms.ModelForm):
             "in_progress": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "listing_visibility": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "content_visibility": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "video": forms.ClearableFileInput(attrs={
+                "class": "file-input file-input-bordered w-full",
+                "accept": "video/mp4,video/webm,video/quicktime",
+            }),
         }
         labels = {
             "content_visibility": "Contents (PDFs & HTML)",
@@ -210,6 +215,32 @@ class WorkForm(forms.ModelForm):
                 "For people not in our system, list them under 'External co-authors' instead."
             )
         return users
+
+    def clean_video(self):
+        """Enforce the web-developer video controls: uploads can be switched
+        off, and each file is capped (cost control). Only a *newly uploaded*
+        file is checked — keeping or clearing an existing one is always fine."""
+        video = self.cleaned_data.get("video")
+        # An unchanged existing file comes back as the FieldFile, not an upload.
+        if not video or not hasattr(video, "file") or not hasattr(video, "size"):
+            return video
+        cfg = VideoUploadSettings.load()
+        if not cfg.enabled:
+            raise forms.ValidationError(
+                "Video uploads are currently turned off. Contact the web team."
+            )
+        if video.size > cfg.max_file_bytes:
+            mb = video.size / (1024 * 1024)
+            raise forms.ValidationError(
+                f"That video is {mb:.0f} MB — the limit is {cfg.max_file_mb} MB. "
+                "Please compress it or share a shorter excerpt."
+            )
+        name = getattr(video, "name", "").lower()
+        if not name.endswith((".mp4", ".webm", ".mov", ".m4v")):
+            raise forms.ValidationError(
+                "Please upload an MP4, WebM, or MOV file."
+            )
+        return video
 
     def clean(self):
         cleaned = super().clean()
@@ -321,3 +352,21 @@ class WorkForm(forms.ModelForm):
                 )
 
         return instance
+
+
+class VideoUploadSettingsForm(forms.ModelForm):
+    """Web-developer controls for Works video uploads."""
+
+    class Meta:
+        model = VideoUploadSettings
+        fields = ("enabled", "max_file_mb")
+        widgets = {
+            "enabled": forms.CheckboxInput(attrs={"class": "toggle toggle-primary"}),
+            "max_file_mb": forms.NumberInput(attrs={
+                "class": "input input-bordered w-40", "min": 1,
+            }),
+        }
+        labels = {
+            "enabled": "Allow video uploads",
+            "max_file_mb": "Max size per file (MB)",
+        }

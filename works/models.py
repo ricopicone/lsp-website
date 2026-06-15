@@ -107,6 +107,15 @@ class Work(models.Model):
     #: attached as a WorkFile (so existing download + visibility apply).
     body_html = models.TextField(blank=True)
 
+    #: An audiovisual piece for this work (e.g. a recorded palimpsest). Stored
+    #: in the private bucket and streamed via a presigned, range-capable URL,
+    #: gated by ``content_visibility`` — same access rule as the PDFs.
+    video = models.FileField(
+        upload_to="works/videos/%Y/", storage=private_storage, blank=True,
+        help_text="Audio/video file (mp4, webm, or mov). Streamed to members "
+        "who can open the contents.",
+    )
+
     external_authors = models.CharField(
         max_length=255,
         blank=True,
@@ -426,3 +435,38 @@ class WorkDraftVersion(models.Model):
 
     def __str__(self) -> str:
         return f"{self.draft.title} @ {self.saved_at:%Y-%m-%d %H:%M}"
+
+
+class VideoUploadSettings(models.Model):
+    """Singleton: web-developer controls for Works video uploads.
+
+    Video is the most expensive content we host (storage + egress), so it has
+    its own kill switch and per-file cap, tunable from the Web Developer admin
+    without a deploy.
+    """
+
+    enabled = models.BooleanField(
+        default=True,
+        help_text="Allow members to upload video to their works.",
+    )
+    max_file_mb = models.PositiveIntegerField(
+        default=1024,
+        help_text="Maximum size per video file, in megabytes (cost control).",
+    )
+
+    class Meta:
+        verbose_name = "Video upload settings"
+        verbose_name_plural = "Video upload settings"
+
+    def __str__(self) -> str:
+        state = "on" if self.enabled else "off"
+        return f"Video uploads {state} (≤ {self.max_file_mb} MB/file)"
+
+    @property
+    def max_file_bytes(self) -> int:
+        return self.max_file_mb * 1024 * 1024
+
+    @classmethod
+    def load(cls) -> VideoUploadSettings:
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj

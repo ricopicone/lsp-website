@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Prefetch, Q
-from django.http import FileResponse, Http404, HttpResponseForbidden
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponseForbidden,
+    HttpResponseRedirect,
+)
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -96,14 +102,40 @@ def detail(request, slug):
         from workgroups.permissions import can_manage_workgroup
 
         can_unpublish = can_manage_workgroup(request.user, draft.workgroup)
+    # Streamed video (gated like the PDFs): a direct presigned S3 URL in prod
+    # so the browser streams/seeks straight from S3; the local streaming view
+    # as a dev fallback.
+    video_url = None
+    if work.video and work.content_visible_to(request.user):
+        from core.storage import presigned_private_url
+
+        video_url = presigned_private_url(work.video.name) or reverse(
+            "works:video", args=[work.slug]
+        )
     return render(request, "works/detail.html", {
         "work": work,
         "can_edit": work.editable_by(request.user),
         "content_visible": work.content_visible_to(request.user),
+        "video_url": video_url,
         "revisions": revisions,
         "source_draft": draft,
         "can_unpublish": can_unpublish,
     })
+
+
+def video(request, slug):
+    """Stream a work's video, gated by content visibility. Redirects to a
+    presigned S3 URL in prod (range-capable), or streams the local file in dev."""
+    work = get_object_or_404(Work, slug=slug)
+    if not work.content_visible_to(request.user) or not work.video:
+        raise Http404()
+    from core.storage import presigned_private_url
+
+    url = presigned_private_url(work.video.name)
+    if url:
+        return HttpResponseRedirect(url)
+    filename = work.video.name.rsplit("/", 1)[-1]
+    return FileResponse(work.video.open("rb"), filename=filename)
 
 
 def download(request, slug, file_id):

@@ -42,20 +42,15 @@ def private_storage():
     return FileSystemStorage(location=settings.PRIVATE_MEDIA_ROOT)
 
 
-def presigned_recordings_url(key, *, download=False, expires=21600):
-    """A signed, time-limited GET URL for a recording object in our bucket.
+def _presigned_get(bucket, key, *, download=False, expires=21600, default_name="file"):
+    """A signed, time-limited GET URL for ``key`` in ``bucket``.
 
     Generated directly via boto3 with **SigV4** (Storage.url() defaults to the
     deprecated SigV2 here, and video playback needs reliable range requests). The
     URL is valid until ``expires`` or the signing instance-role credentials lapse,
     whichever is sooner (~6h). ``download`` forces a Content-Disposition attachment.
     """
-    from django.conf import settings
-
-    bucket = getattr(settings, "AWS_RECORDINGS_BUCKET_NAME", "") or getattr(
-        settings, "AWS_PRIVATE_STORAGE_BUCKET_NAME", ""
-    )
-    if not bucket:
+    if not bucket or not key:
         return None
     import boto3
     from botocore.config import Config
@@ -63,7 +58,7 @@ def presigned_recordings_url(key, *, download=False, expires=21600):
     region = getattr(settings, "AWS_S3_REGION_NAME", "us-west-2")
     params = {"Bucket": bucket, "Key": key}
     if download:
-        fname = key.rsplit("/", 1)[-1] or "recording.mp4"
+        fname = key.rsplit("/", 1)[-1] or default_name
         params["ResponseContentDisposition"] = f'attachment; filename="{fname}"'
     client = boto3.client(
         "s3",
@@ -75,6 +70,25 @@ def presigned_recordings_url(key, *, download=False, expires=21600):
         config=Config(signature_version="s3v4"),
     )
     return client.generate_presigned_url("get_object", Params=params, ExpiresIn=expires)
+
+
+def presigned_recordings_url(key, *, download=False, expires=21600):
+    """A signed, range-capable GET URL for a recording object in our bucket."""
+    bucket = getattr(settings, "AWS_RECORDINGS_BUCKET_NAME", "") or getattr(
+        settings, "AWS_PRIVATE_STORAGE_BUCKET_NAME", ""
+    )
+    return _presigned_get(bucket, key, download=download, expires=expires,
+                          default_name="recording.mp4")
+
+
+def presigned_private_url(key, *, download=False, expires=21600):
+    """A signed, range-capable GET URL for an object in the private bucket
+    (gated Work/Document content — e.g. a Work's streamed video). Returns None
+    in local/dev where there is no private bucket (callers fall back to the
+    storage URL)."""
+    bucket = getattr(settings, "AWS_PRIVATE_STORAGE_BUCKET_NAME", "")
+    return _presigned_get(bucket, key, download=download, expires=expires,
+                          default_name="video.mp4")
 
 
 def recordings_storage():

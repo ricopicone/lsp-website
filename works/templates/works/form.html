@@ -104,6 +104,20 @@
       {% if form.cover_image.errors %}<p class="text-error text-xs mt-1">{{ form.cover_image.errors|join:", " }}</p>{% endif %}
     </div>
 
+    {% if form.video %}
+    <div class="space-y-1">
+      <label for="{{ form.video.id_for_label }}" class="block text-sm font-medium">
+        Video <span class="text-base-content/50 font-normal">(optional)</span>
+      </label>
+      {{ form.video }}
+      {% if form.instance.video %}
+      <p class="text-xs text-base-content/60">Current: {{ form.instance.video.name }}</p>
+      {% endif %}
+      <p class="text-xs text-base-content/60">{{ form.video.help_text }}</p>
+      {% if form.video.errors %}<p class="text-error text-xs mt-1">{{ form.video.errors|join:", " }}</p>{% endif %}
+    </div>
+    {% endif %}
+
     {# ---- Files: existing (relabel/remove) + add another ---- #}
     <fieldset class="space-y-4 border-t border-base-300/60 pt-5">
       <legend class="font-serif text-lg">PDF files</legend>
