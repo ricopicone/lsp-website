@@ -554,25 +554,48 @@ ARTICLES: list[SeedWork] = [
 
 
 def _resolve_user(author: Author):
-    """Case-insensitive first+last lookup, with a last-name fallback.
+    """Resolve a byline to a member User, or None.
 
-    Returns a User or None. The fallback (first + final word of the surname)
-    catches members whose stored surname differs from the byline spelling
-    (e.g. a particle-laden compound surname), while staying specific enough
-    to avoid false positives within an ~80-member roster.
+    Tried in order, each accepted only on a *unique* hit (so a near-match
+    never silently attributes a work to the wrong member of the ~80-person
+    roster):
+
+    1. exact first + last;
+    2. first + the final word of the surname (particle-laden compounds);
+    3. first + surname-word *contained* in the stored last name (a middle
+       name landed in ``last_name`` — e.g. "Hannah Patricia Bennett");
+    4. a distinctive surname-word that is unique across the roster, even if
+       the stored first name differs from the byline (e.g. "Annie" vs a
+       fuller given name). Skipped for short/common surname words.
     """
-    exact = User.objects.filter(
-        first_name__iexact=author.first, last_name__iexact=author.last,
-    )
-    if exact.count() == 1:
-        return exact.first()
     surname_tail = author.last.split()[-1] if author.last else author.last
+
+    def unique(qs):
+        return qs.first() if qs.count() == 1 else None
+
+    hit = unique(User.objects.filter(
+        first_name__iexact=author.first, last_name__iexact=author.last,
+    ))
+    if hit:
+        return hit
     if surname_tail and surname_tail.lower() != author.last.lower():
-        loose = User.objects.filter(
+        hit = unique(User.objects.filter(
             first_name__iexact=author.first, last_name__iexact=surname_tail,
-        )
-        if loose.count() == 1:
-            return loose.first()
+        ))
+        if hit:
+            return hit
+    if surname_tail:
+        hit = unique(User.objects.filter(
+            first_name__iexact=author.first, last_name__icontains=surname_tail,
+        ))
+        if hit:
+            return hit
+    # Surname-only, first name may differ — only for a distinctive (>=5 char)
+    # surname word that is unique in the roster.
+    if surname_tail and len(surname_tail) >= 5:
+        hit = unique(User.objects.filter(last_name__icontains=surname_tail))
+        if hit:
+            return hit
     return None
 
 
