@@ -70,11 +70,21 @@ def build_ics(calendar_name: str, meetings, *, host: str, entries=()) -> str:
         f"X-WR-CALNAME:{_esc(calendar_name)}",
     ]
     for m in meetings:
+        # The link a subscriber taps to join: an explicit external URL (Zoom,
+        # …) wins; otherwise the group's in-site video room (set on the meeting
+        # by the feed view as ``join_url`` when video is enabled). Login is the
+        # gate, so the link itself is not a credential — safe to sit in a synced
+        # calendar.
+        join = m.online_url or getattr(m, "join_url", "")
         desc = []
         if m.note:
             desc.append(m.note)
-        if m.online_url:
-            desc.append(f"Join: {m.online_url}")
+        if join:
+            desc.append(f"Join: {join}")
+        if m.location and join:
+            # Keep a physical room in the body when LOCATION is carrying the
+            # join link instead.
+            desc.append(f"Location: {m.location}")
         if m.access_info:
             desc.append(m.access_info)
         if m.minutes:
@@ -88,12 +98,15 @@ def build_ics(calendar_name: str, meetings, *, host: str, entries=()) -> str:
         if m.ends_at:
             lines.append(f"DTEND:{_utc(m.ends_at)}")
         lines.append(f"SUMMARY:{_esc(m.title or m.workgroup.name)}")
-        if m.location:
-            lines.append(f"LOCATION:{_esc(m.location)}")
+        # Put the join link in LOCATION so calendar apps surface a one-tap
+        # "Join"; a physical room wins only when there's no join link.
+        loc = m.location if (m.location and not join) else join
+        if loc:
+            lines.append(f"LOCATION:{_esc(loc)}")
         if desc:
             lines.append(f"DESCRIPTION:{_esc(chr(10).join(desc))}")
-        if m.online_url:
-            lines.append(f"URL:{m.online_url}")
+        if join:
+            lines.append(f"URL:{join}")
         lines.append("STATUS:" + ("CANCELLED" if m.cancelled else "CONFIRMED"))
         lines.append("END:VEVENT")
     for e in entries:

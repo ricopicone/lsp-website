@@ -982,13 +982,29 @@ def _calendar_feed_url(request, wg):
     return None
 
 
-def _ics_response(name, meetings, host, entries=()):
+def _ics_response(request, name, meetings, entries=()):
     from django.http import HttpResponse
 
     from .icalendar import build_ics
 
+    # When video is on, give each meeting its group's in-site room link so the
+    # calendar entry's LOCATION becomes a one-tap "Join" (login-gated, not a
+    # credential — see build_ics). An explicit external online_url still wins.
+    meetings = list(meetings)
+    try:
+        from video.services import daily_enabled
+
+        video_on = daily_enabled()
+    except Exception:
+        video_on = False
+    if video_on:
+        for m in meetings:
+            m.join_url = request.build_absolute_uri(
+                reverse("video:workgroup_room", args=[m.workgroup.slug])
+            )
+
     resp = HttpResponse(
-        build_ics(name, meetings, host=host, entries=entries),
+        build_ics(name, meetings, host=request.get_host(), entries=entries),
         content_type="text/calendar; charset=utf-8",
     )
     resp["Content-Disposition"] = 'inline; filename="lsp.ics"'
@@ -1015,7 +1031,7 @@ def workgroup_calendar_ics(request, slug):
         profile = Profile.objects.filter(calendar_token=token).first() if token else None
         if profile is None or not wg.is_member(profile.user):
             raise Http404
-    return _ics_response(wg.name, _ics_window(wg.meetings), request.get_host())
+    return _ics_response(request, wg.name, _ics_window(wg.meetings))
 
 
 def _registered_event_entries(request, user):
@@ -1090,7 +1106,7 @@ def my_calendar_ics(request, token):
     ]
     meetings = _ics_window(WorkgroupMeeting.objects.filter(workgroup_id__in=wg_ids))
     entries = _registered_event_entries(request, user)
-    return _ics_response("LSP — my calendar", meetings, request.get_host(), entries)
+    return _ics_response(request, "LSP — my calendar", meetings, entries)
 
 
 # --- Collaborative working documents (Work tab) -----------------------------
