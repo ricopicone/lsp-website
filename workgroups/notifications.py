@@ -54,6 +54,29 @@ def series_scheduled(series, actor=None) -> None:
         )
 
 
+def meeting_reminder(meeting) -> int:
+    """Remind each active member ~15 min before ``meeting``. In-app bell links
+    to the Meet tab; the email (sent only if the member's preference allows —
+    they can opt out of GROUP_MEETING_REMINDER) carries a personal join link.
+    Returns the number of members notified."""
+    from . import emails
+
+    wg = meeting.workgroup
+    url = f"{wg.get_absolute_url()}?tab=meet"
+    title = meeting.title or wg.name
+    count = 0
+    for user in _members(wg):
+        notify(
+            user, Category.GROUP_MEETING_REMINDER,
+            title=f"Starting soon: {title}",
+            body=meeting.starts_at.strftime("%-I:%M %p"),
+            url=url, target=meeting,
+            email_fn=(lambda u=user: emails.send_meeting_reminder(u, meeting)),
+        )
+        count += 1
+    return count
+
+
 def decision_recorded(decision, actor=None) -> None:
     wg = decision.workgroup
     url = f"{wg.get_absolute_url()}?tab=decisions"

@@ -55,6 +55,7 @@ class Category(models.TextChoices):
     # --- Groups (workgroups / cartels / committees / seminars) ----------
     GROUP_MEMBERSHIP = "group_membership", _("Added to or removed from a group")
     GROUP_MEETING = "group_meeting", _("Group meetings scheduled")
+    GROUP_MEETING_REMINDER = "group_meeting_reminder", _("Meeting starting soon")
     GROUP_DECISION = "group_decision", _("Group decisions & minutes")
     GROUP_RECORDING = "group_recording", _("Meeting recordings ready")
 
@@ -192,6 +193,14 @@ CATEGORY_META: dict[str, CategoryMeta] = {
         SECTION_GROUPS, _("Meetings scheduled"),
         _("New meetings or series in your groups."),
         default_email=_E.OFF,
+    ),
+    # Reminder 15 min before a meeting, with a personal one-tap join link.
+    # Email defaults ON (a reminder you only see in the bell is little use),
+    # but it's not locked — members can turn it off here.
+    _C.GROUP_MEETING_REMINDER: _M(
+        SECTION_GROUPS, _("Meeting starting soon"),
+        _("A reminder ~15 minutes before a meeting in your groups, with a "
+          "link to join."),
     ),
     _C.GROUP_DECISION: _M(
         SECTION_GROUPS, _("Decisions & minutes"),

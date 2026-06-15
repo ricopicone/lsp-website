@@ -561,6 +561,16 @@ class MagicLoginLink(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     used_at = models.DateTimeField(null=True, blank=True)
+    #: Explicit expiry, overriding TOKEN_TTL when set. Used by meeting-reminder
+    #: links, whose window tracks the meeting (capped — see MAX_TTL).
+    expires_at = models.DateTimeField(null=True, blank=True)
+    #: Reusable until expiry (vs. consumed on first click). Meeting links are
+    #: multi-use so a reconnect — or an email prefetcher hitting the URL first
+    #: — doesn't lock the member out during the meeting.
+    multi_use = models.BooleanField(default=False)
+
+    #: Hard cap on any explicit expiry (defense in depth for meeting links).
+    MAX_TTL = timedelta(hours=9)
 
     class Meta:
         ordering = ("-created_at",)
@@ -570,16 +580,31 @@ class MagicLoginLink(models.Model):
         return f"magic link for {self.user.email} ({state})"
 
     def is_expired(self, now=None) -> bool:
-        return (now or timezone.now()) - self.created_at > self.TOKEN_TTL
+        now = now or timezone.now()
+        if self.expires_at is not None:
+            return now > self.expires_at
+        return now - self.created_at > self.TOKEN_TTL
 
     @property
     def is_valid(self) -> bool:
-        return self.used_at is None and not self.is_expired()
+        used_ok = self.multi_use or self.used_at is None
+        return used_ok and not self.is_expired()
 
     def consume(self) -> None:
-        """Mark the link used so it cannot be replayed."""
-        self.used_at = timezone.now()
-        self.save(update_fields=["used_at"])
+        """Record use. Single-use links can't be replayed afterwards; multi-use
+        links stay valid until they expire (we still stamp the first use)."""
+        if self.used_at is None:
+            self.used_at = timezone.now()
+            self.save(update_fields=["used_at"])
+
+    @classmethod
+    def create_for_window(cls, user, *, expires_at):
+        """Mint a reusable sign-in link valid until ``expires_at`` (clamped to
+        :attr:`MAX_TTL` from now). For time-boxed flows like meeting reminders."""
+        cap = timezone.now() + cls.MAX_TTL
+        return cls.objects.create(
+            user=user, multi_use=True, expires_at=min(expires_at, cap),
+        )
 
 
 class TOTPDevice(models.Model):
