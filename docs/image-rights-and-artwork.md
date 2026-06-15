@@ -6,7 +6,35 @@ images and a **note for the Board** about the rights question they raise.
 
 ## Note for the Board (decision needed)
 
-The old website set page titles over artworks—a Cy Twombly on the front page, a Paul Klee on the About page, and others elsewhere. We have carried that look onto the new site. Most of these images are works by 20th-century artists (Twombly, Klee, Kandinsky, Agnes Martin, Louise Nevelson, and others), several of which are **still under copyright**, and we do not hold licenses for them. A few are photographs of library interiors, which are lower-risk but not necessarily free of claims either.
+**Two themes to choose from.** I've built the new site so it can present in two
+looks, and the Board can pick:
+
+- **Modern** (my recommendation) — a clean, content-first design. We can keep
+  refining it together.
+- **Classic** — clones the old site's design elements: artwork images behind
+  large page titles, the old serif type, the old palette.
+
+You can flip between them on the live site with the **"Style: Modern · Classic"**
+switch in the footer, so it's easy to compare the same pages side by side.
+
+**Why I'm advocating Modern.** Web design has moved away from the heavy "hero"
+image banner—the big picture with a title sitting on top of it. The trend is to
+put **content up front** rather than bury it below a tall decorative header, so a
+visitor who came for information gets it immediately. The Classic style's large
+hero titles, while striking, now read as **dated** for exactly that reason. (It's
+also worth saying the modern look is not finished—it's a starting point we can
+shape to taste.)
+
+**On the images themselves.** The actual **artworks** (the Twombly, the Klee,
+etc.) are the most beautiful option—and also the **riskiest** (see rights, below).
+The substitute images we used where no artwork existed—library interiors and the
+like—are lower-risk but have a bit of a **stock-photo feel**, which doesn't do
+the school any favors. So the most attractive version of Classic is also the one
+that carries the most legal exposure.
+
+### The image-rights question
+
+The old website set page titles over artworks—a Cy Twombly on the front page, a Paul Klee on the About page, and others elsewhere. We have carried that look onto the new site (in the Classic theme). Most of these images are works by 20th-century artists (Twombly, Klee, Kandinsky, Agnes Martin, Louise Nevelson, and others), several of which are **still under copyright**, and we do not hold licenses for them. A few are photographs of library interiors, which are lower-risk but not necessarily free of claims either.
 
 **This is an institutional-risk decision for the Board, not a settled legal matter.** To be clear: the Web Coordinator is not a copyright lawyer, and this is not legal advice. There may be a **fair-use argument**—we are a non-profit school, the use is non-commercial, and the works appear small and as part of a larger editorial whole—but decorative banner use is one of the *weaker* fair-use postures (it is not commentary on or analysis of the artwork itself), so the argument is genuinely uncertain. A rights-holder could ask us to take an image down, and in the worst case seek damages.
 
