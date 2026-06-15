@@ -5,17 +5,19 @@
   <title>{% block title %}Lacanian School of Psychoanalysis{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  {% comment %}Fonts are loaded per site-theme. modern: Inter (sans) + Cutive
-  (serif headings) + Cutive Mono. wix: Inter + Playfair Display + Cinzel
-  (hero/display) + Cutive Mono.{% endcomment %}
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  {% comment %}Fonts are self-hosted (bundled — no Google Fonts CDN). The
+  @font-face declarations live in static/css/site.css (built from
+  assets/css/input.css); here we only preload the latin woff2 files that paint
+  above the fold so the bundled font is ready before first paint (no swap /
+  reflow). modern: Inter (body) + Cutive (serif headings). wix (Classic):
+  Inter + Playfair Display + Cinzel (display).{% endcomment %}
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="{% static 'fonts/inter-400.woff2' %}">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="{% static 'fonts/inter-600.woff2' %}">
   {% if site_theme == "wix" %}
-  <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cutive+Mono&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&display=swap">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="{% static 'fonts/playfair-400.woff2' %}">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="{% static 'fonts/cinzel-400.woff2' %}">
   {% else %}
-  <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Cutive&family=Cutive+Mono&family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="{% static 'fonts/cutive-400.woff2' %}">
   {% endif %}
 
   <link rel="stylesheet" href="{% static 'css/site.css' %}">
