@@ -2,8 +2,9 @@
 
 Surfaces a single boolean, ``show_suggestion_widget``, that gates the floating
 "Suggest a change" button, the avatar-menu "My Suggestions" link, and the footer
-link — true only when the feature is enabled and the viewer is a signed-in LSP
-member. Mirrors ``core.context_processors.survey_nudge``.
+link — true only when the feature is enabled and the viewer may submit a
+suggestion (Board members + superusers). Mirrors
+``core.context_processors.survey_nudge``.
 """
 
 from __future__ import annotations
@@ -20,6 +21,6 @@ def widget(request):
     ):
         return {"show_suggestion_widget": False}
 
-    from accounts.permissions import is_lsp_member
+    from .permissions import can_submit_suggestion
 
-    return {"show_suggestion_widget": is_lsp_member(user)}
+    return {"show_suggestion_widget": can_submit_suggestion(user)}
