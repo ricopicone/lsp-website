@@ -3,6 +3,30 @@ title: About the Lacanian School of Psychoanalysis
 summary: Founded in 1990, the Lacanian School transmits Freudian and Lacanian psychoanalytic theory, offers formation to clinicians, and provides clinical supervision.
 ---
 
+Founded in 1990, the Lacanian School of Psychoanalysis (LSP) offers a
+transmission of psychoanalysis through a *savoir* of the unconscious, built
+gradually in personal analysis and control analyses. These direct experiences
+of the unconscious, alongside an immersion in theory through seminars, events,
+reading groups, and cartels, inform ethical practices of analysis and
+scholarship.
+
+Through LSP you may study Lacanian or Freudian theory, pursue psychoanalytic
+formation, obtain clinical supervision from a Lacanian perspective, and find a
+clinician with whom to undertake or complete a personal analysis. Unless
+specifically noted, LSP seminars and events are open to the general public, with
+no commitment to or enrollment in the School.
+
+The School's purpose is to transmit psychoanalytic ethics and theory in the
+historical context of both the Freudian and Lacanian fields. Begun locally, the
+School is now international in its reach—part of a broader worldwide
+psychoanalytic movement to conduct education, research, and treatment for the
+benefit of local and global communities.
+
+Applications for formation at LSP are currently open; see the
+[Formation](/about/formation/) page for detailed information. If you are looking
+for a referral to begin a personal analysis with a clinician affiliated with
+LSP, please use the survey on the [Find an Analyst](/find-an-analyst/) page.
+
 ## Mission Statement
 
 Founded in 1990, the Lacanian School of Psychoanalysis was created within
