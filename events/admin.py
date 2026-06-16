@@ -2,6 +2,7 @@ from django import forms
 from django.contrib import admin
 
 from .models import (
+    ArchivedProgram,
     Event,
     EventMemberSpeaker,
     EventProposal,
@@ -13,6 +14,13 @@ from .models import (
     Session,
     Speaker,
 )
+
+
+@admin.register(ArchivedProgram)
+class ArchivedProgramAdmin(admin.ModelAdmin):
+    list_display = ("academic_year", "label", "file", "created_at")
+    search_fields = ("academic_year", "label")
+    ordering = ("-academic_year",)
 
 
 class ProposalReadingInline(admin.TabularInline):

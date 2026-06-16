@@ -8,14 +8,16 @@
 
   <header class="space-y-3 max-w-3xl">
     <div class="flex flex-wrap items-center gap-3">
-      {% if available_years|length > 1 %}
+      {% if available_years|length > 1 or has_archive %}
       <form method="get" class="flex items-center gap-2 text-sm">
         <label for="year-select" class="text-base-content/60">Academic year</label>
-        <select name="year" id="year-select" onchange="this.form.submit()"
+        <select name="year" id="year-select"
+                onchange="if(this.value==='__archive__'){window.location='{% url 'program_archive' %}';}else{this.form.submit();}"
                 class="select select-sm select-bordered max-w-[12rem]">
           {% for y in available_years %}
           <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
           {% endfor %}
+          {% if has_archive %}<option value="__archive__">Archive…</option>{% endif %}
         </select>
       </form>
       {% endif %}

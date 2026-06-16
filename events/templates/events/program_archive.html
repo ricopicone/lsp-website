@@ -1,0 +1,45 @@
+{% extends "core/base.html" %}
+{% block title %}Program archive — LSP{% endblock %}
+
+{% block page_hero %}{% include "core/_page_hero.html" with title="Program archive" subtitle="The Lacanian School's programs from past academic years, preserved as their original PDFs." %}{% endblock %}
+
+{% block content %}
+<div class="space-y-8 max-w-3xl">
+
+  <p class="text-sm">
+    <a href="{% url 'program' %}" class="link link-hover text-base-content/60">← Current program</a>
+  </p>
+
+  {% if not is_member %}
+  <div class="alert bg-base-200 border border-base-300 text-base-content/80 text-sm">
+    <span>
+      These archived programs are available to members.
+      {% if not user.is_authenticated %}<a href="{% url 'login' %}?next={{ request.path|urlencode }}" class="link link-primary">Sign in</a> to open them.{% else %}Sign in with a member account to open them.{% endif %}
+    </span>
+  </div>
+  {% endif %}
+
+  {% if programs %}
+  <ul class="divide-y divide-base-300/60 border-y border-base-300/60">
+    {% for p in programs %}
+    <li class="flex items-center justify-between gap-4 py-3.5">
+      <span class="font-serif text-lg text-base-content">{{ p.display_label }}</span>
+      {% if is_member %}
+      <a href="{% url 'program_archive_download' p.pk %}"
+         class="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+         target="_blank" rel="noopener">
+        <span class="lsp-doc-badge">PDF</span>
+        Open
+      </a>
+      {% else %}
+      <span class="text-xs text-base-content/45">Members only</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-base-content/60">No archived programs yet.</p>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -20,6 +20,8 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 
+from core.storage import private_storage
+
 # Excludes visually ambiguous characters (0/O, 1/I/L).
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
@@ -1257,3 +1259,35 @@ class ProposalSpeaker(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class ArchivedProgram(models.Model):
+    """A past academic-year program preserved as a downloadable PDF.
+
+    The new ``Program``/``Event`` model only goes back so far; earlier years
+    live on as the original program PDFs, surfaced from the /program/ Archive.
+    Files are kept in private storage and served only through the gated
+    download view (members-only for now)."""
+
+    academic_year = models.CharField(
+        max_length=20,
+        unique=True,
+        help_text="e.g. '2008-2009' or '1994'.",
+    )
+    label = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text="Optional display label; defaults to the academic year.",
+    )
+    file = models.FileField(upload_to="program-archive/", storage=private_storage)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-academic_year",)
+
+    def __str__(self) -> str:
+        return self.label or f"Program {self.academic_year}"
+
+    @property
+    def display_label(self) -> str:
+        return self.label or self.academic_year

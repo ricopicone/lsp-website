@@ -7,6 +7,7 @@ import csv
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import (
+    FileResponse,
     Http404,
     HttpResponse,
     HttpResponseForbidden,
@@ -21,6 +22,7 @@ from accounts.permissions import is_lsp_member
 
 from .forms import EventDescriptionForm, PricingCodeForm
 from .models import (
+    ArchivedProgram,
     Event,
     PricingCode,
     academic_year_date_range,
@@ -200,7 +202,31 @@ def program(request):
         "is_current_year": year == current,
         "is_preview":      not program_obj.is_public_now,
         "can_propose_seminar": is_lsp_member(request.user),
+        "has_archive":     ArchivedProgram.objects.exists(),
     })
+
+
+def program_archive(request):
+    """A list of past program PDFs (years predating the live Program model).
+
+    The list is public so anyone can see which years exist; the PDFs
+    themselves download only for members via ``program_archive_download``."""
+    programs = list(ArchivedProgram.objects.all())  # ordered -academic_year
+    return render(request, "events/program_archive.html", {
+        "programs": programs,
+        "is_member": is_lsp_member(request.user),
+    })
+
+
+def program_archive_download(request, pk: int):
+    """Serve an archived program PDF — members only (for now)."""
+    if not is_lsp_member(request.user):
+        raise Http404()
+    archived = get_object_or_404(ArchivedProgram, pk=pk)
+    if not archived.file:
+        raise Http404()
+    filename = archived.file.name.rsplit("/", 1)[-1]
+    return FileResponse(archived.file.open("rb"), as_attachment=False, filename=filename)
 
 
 def event_detail(request, slug: str):
