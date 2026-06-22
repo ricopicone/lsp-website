@@ -216,7 +216,7 @@ Throughout, we will examine the clinical perils of drawing boundaries between Fr
         ],
         # Source said "running through May 2026" — corrected to 2027 (matches
         # the event's end date).
-        "schedule_note": "The 2nd Saturday of each month, 9 am – 11 am Pacific Time, beginning September 12th 2026, skipping October, running through May 2027. Online.",
+        "schedule_note": "The 2nd Saturday of each month, 9 am – 11 am Pacific Time, beginning September 12th 2026, skipping November, running through May 2027. Online.",
         "contact": "gardnerfair@yahoo.com",
         "fee_note": "$200 or School Tuition.",
     },

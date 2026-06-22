@@ -135,7 +135,7 @@ SCHEDULES = [
         "location": "Online",
     },
     # 8. Topology of Direction of Treatment — 2nd Sat each month,
-    #    9am-11am PT, beginning Sept 12 2026, skipping October,
+    #    9am-11am PT, beginning Sept 12 2026, skipping November,
     #    running through May 2027.
     {
         "slug": "topology-direction-of-treatment-2026-27",
@@ -144,7 +144,7 @@ SCHEDULES = [
         "start": date(2026, 9, 1), "end": date(2027, 5, 31),
         "start_time": time(9, 0), "end_time": time(11, 0),
         "location": "Online",
-        "exclude": [date(2026, 10, 10)],  # skip October
+        "exclude": [date(2026, 11, 14)],  # skip November
     },
     # 9. Clinic of the Death Drives — 3rd Sun, Jan 2027 – Jun 2027,
     #    10am-12pm ET = 7am-9am PT.
