@@ -21,6 +21,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from . import notifications, services
@@ -229,6 +230,46 @@ def template_edit(request):
     return _render(request, "templates", "availability/templates.html", {
         "template": template, "form": form,
     })
+
+
+@login_required
+@require_POST
+def self_update(request):
+    """An analyst sets their own availability from the profile editor.
+
+    Self-service complement to the coordinator grid (source=self); the
+    coordinator can always override. Gated to eligible analysts editing their
+    own profile."""
+    profile = request.user.profile
+    if not services.is_eligible(profile):
+        raise PermissionDenied
+    valid_status = set(Status.values)
+    changed = 0
+    for fn in AnalystFunction.objects.filter(is_active=True):
+        status = request.POST.get(f"fn_{fn.pk}")
+        if status not in valid_status:
+            continue
+        note = (request.POST.get(f"note_{fn.pk}") or "").strip()[:200]
+        current = services.current_status(profile, fn)
+        existing = profile.availability_spans.filter(
+            function=fn, end_date__isnull=True
+        ).first()
+        if current == status and (existing.note if existing else "") == note:
+            continue
+        services.set_availability(
+            profile, fn, status,
+            source=AvailabilitySpan.Source.SELF, by=request.user, note=note,
+        )
+        changed += 1
+    if changed:
+        messages.success(request, "Your availability has been updated.")
+    else:
+        messages.info(request, "No changes to your availability.")
+
+    nxt = request.POST.get("next")
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+        return redirect(nxt)
+    return redirect(reverse("profile_edit") + "#availability")
 
 
 @coordinator_required

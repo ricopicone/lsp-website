@@ -43,6 +43,8 @@ urlpatterns = [
     path("guides/", _content_views.guides_index_view, name="guides_index"),
     path("guides/<slug:slug>/", _content_views.guide_detail, name="guide_detail"),
     path("directory/", _account_views.directory, name="directory"),
+    path("directory/availability/", _account_views.directory_availability,
+         name="directory_availability"),
     path("directory/<slug:slug>/", _account_views.directory_detail, name="directory_detail"),
     path("find-an-analyst/", _account_views.find_an_analyst, name="find_an_analyst"),
     path("find-an-analyst/pins.json", _account_views.find_an_analyst_pins,

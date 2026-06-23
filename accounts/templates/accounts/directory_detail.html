@@ -84,6 +84,25 @@
   </div>
   {% endif %}
 
+  {% if availability %}
+  <section class="space-y-3 pt-6 border-t border-base-300/60">
+    <h2 class="font-serif text-xl text-base-content">Availability this year</h2>
+    <p class="text-xs text-base-content/50">Which LSP functions {{ profile.user.first_name }} is open for. Visible to members.</p>
+    <dl class="grid grid-cols-1 sm:grid-cols-[12rem_1fr] gap-x-6 gap-y-1 text-sm">
+      {% for a in availability %}
+      <dt class="text-base-content/70">{{ a.function.name }}</dt>
+      <dd class="m-0">
+        {% if a.status == "yes" %}<span class="text-success font-medium">Yes</span>
+        {% elif a.status == "no" %}<span class="text-base-content/50">No</span>
+        {% else %}<span class="text-base-content/40">Unknown</span>{% endif %}
+        {% if a.note %}<span class="text-base-content/50">— {{ a.note }}</span>{% endif %}
+      </dd>
+      {% endfor %}
+    </dl>
+    <a href="{% url 'directory_availability' %}" class="link link-primary text-sm">See all analysts ↗</a>
+  </section>
+  {% endif %}
+
   {% if works %}
   <section class="space-y-4 pt-6 border-t border-base-300/60">
     <h2 class="font-serif text-xl text-base-content">Selected works</h2>

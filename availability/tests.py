@@ -419,3 +419,125 @@ def test_import_rejects_unknown_column(tmp_path):
     csv_path = _write_csv(tmp_path, "Analyst,Bogus Column\nAnnie Rogers,Y\n")
     with pytest.raises(CommandError):
         call_command("import_analyst_availability", csv_path, stdout=StringIO())
+
+
+# ---- Phase 4: member surfacing -------------------------------------------
+
+
+def _login(client, email="m@example.com"):
+    user = User.objects.create_user(email=email, password="pw")
+    client.force_login(user)
+    return user
+
+
+def test_availability_table_requires_login(client):
+    resp = client.get(reverse("directory_availability"))
+    assert resp.status_code == 302  # redirected to login
+
+
+def test_availability_table_lists_public_analysts(client, analyst, interviews):
+    analyst.public = True
+    analyst.save()
+    services.set_availability(analyst, interviews, Status.YES)
+    _login(client)
+    resp = client.get(reverse("directory_availability"))
+    assert resp.status_code == 200
+    assert b"Anna Analyst" in resp.content
+    assert b"Application Interviews" in resp.content
+
+
+def test_availability_table_filter_only(client, analyst, interviews):
+    analyst.public = True
+    analyst.save()
+    # available analyst
+    services.set_availability(analyst, interviews, Status.YES)
+    # a second analyst who is NOT available for interviews
+    other = User.objects.create_user(
+        email="bob@example.com", password="pw",
+        first_name="Bob", last_name="Other",
+    )
+    other.profile.role = Profile.Role.ANALYST
+    other.profile.public = True
+    other.profile.save()
+    services.set_availability(other.profile, interviews, Status.NO)
+
+    _login(client)
+    resp = client.get(reverse("directory_availability"), {"only": "application-interviews"})
+    assert b"Anna Analyst" in resp.content
+    assert b"Bob Other" not in resp.content
+
+
+def test_availability_table_excludes_opted_out(client, analyst, interviews):
+    analyst.public = False  # opted out of the directory
+    analyst.save()
+    _login(client)
+    resp = client.get(reverse("directory_availability"))
+    assert b"Anna Analyst" not in resp.content
+
+
+def test_detail_section_members_only(client, analyst, interviews):
+    analyst.public = True
+    analyst.save()
+    services.set_availability(analyst, interviews, Status.YES)
+    url = reverse("directory_detail", args=[analyst.directory_slug])
+
+    # anonymous: no availability section
+    anon = client.get(url)
+    assert anon.status_code == 200
+    assert b"Availability this year" not in anon.content
+
+    # member: section shows
+    _login(client)
+    member = client.get(url)
+    assert b"Availability this year" in member.content
+
+
+def test_detail_section_absent_for_non_analyst(client):
+    user = User.objects.create_user(
+        email="cand@example.com", password="pw",
+        first_name="Cara", last_name="Candidate",
+    )
+    user.profile.role = Profile.Role.CANDIDATE
+    user.profile.public = True
+    user.profile.save()
+    _login(client, email="viewer@example.com")
+    resp = client.get(reverse("directory_detail", args=[user.profile.directory_slug]))
+    assert resp.status_code == 200
+    assert b"Availability this year" not in resp.content
+
+
+# ---- Phase 3: self-service -----------------------------------------------
+
+
+def test_self_update_sets_availability(client, analyst, interviews):
+    advisor = AnalystFunction.objects.get(slug="advisor")
+    client.force_login(analyst.user)
+    resp = client.post(reverse("availability:self_update"), {
+        f"fn_{interviews.pk}": Status.YES,
+        f"note_{interviews.pk}": "Mornings only",
+        f"fn_{advisor.pk}": Status.NO,
+    })
+    assert resp.status_code == 302
+    span = AvailabilitySpan.objects.get(
+        profile=analyst, function=interviews, end_date__isnull=True
+    )
+    assert span.status == Status.YES
+    assert span.note == "Mornings only"
+    assert span.source == AvailabilitySpan.Source.SELF
+    assert services.current_status(analyst, advisor) == Status.NO
+
+
+def test_self_update_blocked_for_non_analyst(client):
+    user = User.objects.create_user(email="cand2@example.com", password="pw")
+    user.profile.role = Profile.Role.CANDIDATE
+    user.profile.save()
+    client.force_login(user)
+    resp = client.post(reverse("availability:self_update"), {})
+    assert resp.status_code == 403
+
+
+def test_profile_editor_shows_availability_section_for_analyst(client, analyst):
+    client.force_login(analyst.user)
+    resp = client.get(reverse("profile_edit"))
+    assert resp.status_code == 200
+    assert b'id="availability"' in resp.content

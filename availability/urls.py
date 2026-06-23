@@ -18,4 +18,6 @@ urlpatterns = [
     path(f"{_ADMIN}/reminders/send/", views.send_reminders, name="send_reminders"),
     path(f"{_ADMIN}/message/", views.template_edit, name="templates"),
     path(f"{_ADMIN}/analyst/<int:pk>/", views.analyst, name="analyst"),
+    # Member self-service (from the profile editor).
+    path("accounts/availability/", views.self_update, name="self_update"),
 ]
