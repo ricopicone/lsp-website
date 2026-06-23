@@ -33,6 +33,10 @@ htmlcov/
 # the workstation; ship to prod via scp/SSM.
 /import-staging/
 
+# Source data drops that carry member info (e.g. the analyst-availability
+# sheet). Kept on the workstation for import; never committed.
+/*Availability*.pdf
+
 # Tailwind/DaisyUI CSS build pipeline
 node_modules/
 /static/css/site.css

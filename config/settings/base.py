@@ -71,6 +71,7 @@ LOCAL_APPS = [
     "video",
     "suggestions",
     "referrals",
+    "availability",
     "devapi",
     "core",
 ]
