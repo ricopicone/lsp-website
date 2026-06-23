@@ -38,16 +38,6 @@ _STATUS = {
     "uk": Status.UNKNOWN, "unknown": Status.UNKNOWN, "": Status.UNKNOWN,
 }
 
-#: Keyword → function slug, to attach a free-text Notes cell to the function it
-#: names. Notes that match no function (or several) are reported, not guessed.
-_NOTE_KEYWORDS = {
-    "interview": "application-interviews",
-    "advisor": "advisor",
-    "advising": "advisor",
-    "control": "control-analysis",
-    "personal": "personal-analysis",
-}
-
 _SPECIAL_COLUMNS = {"analyst", "notes"}
 
 
@@ -86,7 +76,6 @@ class Command(BaseCommand):
 
         changes = 0
         unmatched: list[str] = []
-        unassigned_notes: list[str] = []
 
         for row in rows:
             raw_name = (row.get(self._analyst_key) or "").strip()
@@ -97,8 +86,6 @@ class Command(BaseCommand):
                 unmatched.append(raw_name)
                 continue
 
-            note_target = self._note_target(row, columns, unassigned_notes, raw_name)
-
             for col, fn in columns.items():
                 status = _STATUS.get((row.get(col) or "").strip().casefold())
                 if status is None:
@@ -107,25 +94,30 @@ class Command(BaseCommand):
                         f"{row.get(col)!r} for {fn.name} — treated as Unknown"
                     )
                     status = Status.UNKNOWN
-                note = note_target.get(fn.pk, "")
-                current = services.current_status(profile, fn)
-                if current == status and not note:
+                if services.current_status(profile, fn) == status:
                     continue
                 changes += 1
                 verb = "would set" if dry_run else "set"
                 self.stdout.write(
                     f"  {verb} {raw_name} · {fn.name} → {Status(status).label}"
-                    + (f"  ({note})" if note else "")
                 )
                 if not dry_run:
                     services.set_availability(
                         profile, fn, status,
                         on_date=start,
                         source=AvailabilitySpan.Source.IMPORT,
-                        note=note,
                     )
 
-        self._report(rows, changes, unmatched, unassigned_notes, dry_run)
+            # The sheet's per-row Notes cell becomes the analyst's note.
+            note = (row.get("Notes") or row.get("notes") or "").strip()
+            if note and note != services.current_note(profile):
+                changes += 1
+                verb = "would set" if dry_run else "set"
+                self.stdout.write(f"  {verb} {raw_name} · note → {note}")
+                if not dry_run:
+                    services.set_note(profile, note)
+
+        self._report(rows, changes, unmatched, dry_run)
 
     # -- helpers ----------------------------------------------------------
 
@@ -175,30 +167,10 @@ class Command(BaseCommand):
             index.setdefault(_normalize(full), profile)
         return index
 
-    def _note_target(self, row, columns, unassigned, raw_name):
-        """Map a row's Notes cell to a function span by keyword.
-
-        Returns ``{function_id: note}``. A note that names no function — or
-        more than one — is reported for the coordinator to place by hand
-        (do-not-over-automate; we don't guess where an ambiguous note belongs).
-        """
-        note = (row.get("Notes") or row.get("notes") or "").strip()
-        if not note:
-            return {}
-        low = note.casefold()
-        slugs = {slug for kw, slug in _NOTE_KEYWORDS.items() if kw in low}
-        if len(slugs) == 1:
-            slug = next(iter(slugs))
-            for fn in columns.values():
-                if fn.slug == slug:
-                    return {fn.pk: note}
-        unassigned.append(f"{raw_name}: {note}")
-        return {}
-
-    def _report(self, rows, changes, unmatched, unassigned, dry_run):
+    def _report(self, rows, changes, unmatched, dry_run):
         head = "Dry run — no changes written." if dry_run else "Import complete."
         self.stdout.write(self.style.SUCCESS(
-            f"\n{head} {len(rows)} rows, {changes} cell change(s)."
+            f"\n{head} {len(rows)} rows, {changes} change(s)."
         ))
         if unmatched:
             self.stdout.write(self.style.WARNING(
@@ -207,10 +179,3 @@ class Command(BaseCommand):
             ))
             for name in unmatched:
                 self.stdout.write(f"  - {name}")
-        if unassigned:
-            self.stdout.write(self.style.WARNING(
-                f"\n{len(unassigned)} note(s) not tied to a single function "
-                f"(place by hand in the console):"
-            ))
-            for line in unassigned:
-                self.stdout.write(f"  - {line}")

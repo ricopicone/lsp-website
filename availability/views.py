@@ -46,6 +46,7 @@ def coordinator_required(view):
 #: (key, label) for the console tabs, in display order.
 TABS = [
     ("grid", "Availability"),
+    ("overview", "Overview"),
     ("settings", "Settings"),
     ("templates", "Reminder message"),
 ]
@@ -54,6 +55,7 @@ TABS = [
 def _tab_links() -> list[tuple[str, str, str]]:
     name_to_url = {
         "grid": reverse("availability:grid"),
+        "overview": reverse("availability:overview"),
         "settings": reverse("availability:settings"),
         "templates": reverse("availability:templates"),
     }
@@ -95,6 +97,7 @@ def grid(request):
         return _save_grid(request, profiles, functions)
 
     open_map = _open_spans_map(profiles, functions)
+    notes = {p.pk: services.current_note(p) for p in profiles}
     rows = []
     for profile in profiles:
         cells = []
@@ -103,10 +106,9 @@ def grid(request):
             cells.append({
                 "function": fn,
                 "status": span.status if span else Status.UNKNOWN,
-                "note": span.note if span else "",
                 "field": f"cell_{profile.pk}_{fn.pk}",
             })
-        rows.append({"profile": profile, "cells": cells})
+        rows.append({"profile": profile, "cells": cells, "note": notes[profile.pk]})
 
     return _render(request, "grid", "availability/grid.html", {
         "functions": functions,
@@ -132,15 +134,27 @@ def _save_grid(request, profiles, functions):
                 profile, fn, new_status,
                 source=AvailabilitySpan.Source.COORDINATOR,
                 by=request.user,
-                note=span.note if span else "",  # carry the note forward
             )
+            changed += 1
+        note = (request.POST.get(f"note_{profile.pk}") or "").strip()
+        if services.set_note(profile, note, by=request.user) is not None:
             changed += 1
 
     if changed:
-        messages.success(request, f"Updated {changed} cell{'s' if changed != 1 else ''}.")
+        messages.success(request, f"Saved {changed} change{'s' if changed != 1 else ''}.")
     else:
         messages.info(request, "No changes to save.")
     return redirect("availability:grid")
+
+
+@coordinator_required
+def overview(request):
+    """At-a-glance coverage: how many analysts are available for each function
+    now, plus a monthly history chart."""
+    return _render(request, "overview", "availability/overview.html", {
+        "coverage": services.current_coverage(),
+        "series": services.coverage_series(months=12),
+    })
 
 
 # ---- Per-analyst (history + coverage) ------------------------------------
@@ -152,7 +166,9 @@ def analyst(request, pk):
     functions = list(AnalystFunction.objects.filter(is_active=True))
 
     if request.method == "POST":
-        return _save_analyst_cell(request, profile, functions)
+        if request.POST.get("action") == "note":
+            return _save_analyst_note(request, profile)
+        return _save_analyst_cell(request, profile)
 
     current_ay, upcoming_ay = services.current_and_upcoming_ay()
     open_map = _open_spans_map([profile], functions)
@@ -171,7 +187,6 @@ def analyst(request, pk):
         fn_rows.append({
             "function": fn,
             "status": span.status if span else Status.UNKNOWN,
-            "note": span.note if span else "",
             "history": history_by_fn.get(fn.pk, []),
             "coverage_current": round(
                 services.coverage_fraction(profile, fn, current_ay) * 100
@@ -187,10 +202,12 @@ def analyst(request, pk):
         "status_choices": Status.choices,
         "current_ay": current_ay,
         "upcoming_ay": upcoming_ay,
+        "current_note": services.current_note(profile),
+        "note_history": services.note_history(profile),
     })
 
 
-def _save_analyst_cell(request, profile, functions):
+def _save_analyst_cell(request, profile):
     fn = get_object_or_404(AnalystFunction, pk=request.POST.get("function"))
     status = request.POST.get("status")
     if status not in set(Status.values):
@@ -199,9 +216,17 @@ def _save_analyst_cell(request, profile, functions):
         profile, fn, status,
         source=AvailabilitySpan.Source.COORDINATOR,
         by=request.user,
-        note=(request.POST.get("note") or "").strip()[:200],
     )
     messages.success(request, f"Updated {fn.name} for {profile.display_full_name}.")
+    return redirect("availability:analyst", pk=profile.pk)
+
+
+def _save_analyst_note(request, profile):
+    note = (request.POST.get("note") or "").strip()
+    if services.set_note(profile, note, by=request.user) is not None:
+        messages.success(request, f"Saved a note for {profile.display_full_name}.")
+    else:
+        messages.info(request, "Note unchanged.")
     return redirect("availability:analyst", pk=profile.pk)
 
 
@@ -249,16 +274,11 @@ def self_update(request):
         status = request.POST.get(f"fn_{fn.pk}")
         if status not in valid_status:
             continue
-        note = (request.POST.get(f"note_{fn.pk}") or "").strip()[:200]
-        current = services.current_status(profile, fn)
-        existing = profile.availability_spans.filter(
-            function=fn, end_date__isnull=True
-        ).first()
-        if current == status and (existing.note if existing else "") == note:
+        if services.current_status(profile, fn) == status:
             continue
         services.set_availability(
             profile, fn, status,
-            source=AvailabilitySpan.Source.SELF, by=request.user, note=note,
+            source=AvailabilitySpan.Source.SELF, by=request.user,
         )
         changed += 1
     if changed:

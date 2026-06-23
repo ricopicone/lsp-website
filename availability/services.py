@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from events.models import academic_year_date_range, academic_year_of
 
-from .models import AnalystFunction, AvailabilitySpan
+from .models import AnalystFunction, AvailabilityNote, AvailabilitySpan
 
 _TOKEN = re.compile(r"\{(\w+)\}")
 
@@ -76,14 +76,13 @@ def set_availability(
     on_date: _dt.date | None = None,
     source: str = AvailabilitySpan.Source.ADMIN,
     by=None,
-    note: str = "",
 ) -> AvailabilitySpan | None:
     """Record ``profile``'s ``status`` for ``function`` as of ``on_date``.
 
     Closes the current open span and opens a new one, preserving history. A
-    no-op (returns the existing open span) when the status *and* note already
-    match, so re-running an import doesn't churn the log. Returns the new (or
-    unchanged) open span.
+    no-op (returns the existing open span) when the status already matches, so
+    re-running an import doesn't churn the log. Returns the new (or unchanged)
+    open span.
     """
     on_date = on_date or timezone.localdate()
     open_span = (
@@ -93,7 +92,7 @@ def set_availability(
     )
 
     if open_span is not None:
-        if open_span.status == status and open_span.note == note:
+        if open_span.status == status:
             return open_span  # nothing changed — leave the log untouched
         # Close the old span the day before the new one takes effect, but never
         # before it began (same-day changes close as a zero-length span).
@@ -105,10 +104,30 @@ def set_availability(
         function=function,
         status=status,
         start_date=on_date,
-        note=note,
         source=source,
         created_by=by,
     )
+
+
+def current_note(profile) -> str:
+    """``profile``'s most recent availability note (empty string if none)."""
+    note = profile.availability_notes.first()  # ordered -created_at
+    return note.text if note else ""
+
+
+def set_note(profile, text: str, *, by=None) -> AvailabilityNote | None:
+    """Record a new availability note for ``profile`` if it differs from the
+    current one (append-only, preserving history). Returns the new note, or
+    None when unchanged."""
+    text = (text or "").strip()[:300]
+    if text == current_note(profile):
+        return None
+    return AvailabilityNote.objects.create(profile=profile, text=text, created_by=by)
+
+
+def note_history(profile) -> list:
+    """All notes for ``profile``, most recent first."""
+    return list(profile.availability_notes.select_related("created_by"))
 
 
 def current_status(profile, function: AnalystFunction) -> str:
@@ -170,3 +189,79 @@ def coverage_fraction(
             covered += (end - start).days
 
     return min(covered / total_days, 1.0)
+
+
+def _coverage_profile_ids() -> list[int]:
+    """PKs of the analysts the coverage report counts — eligible, active, real."""
+    return list(
+        eligible_profiles()
+        .filter(is_persona=False, user__is_active=True)
+        .values_list("pk", flat=True)
+    )
+
+
+def current_coverage(*, as_of=None) -> list[dict]:
+    """How many analysts are currently available (YES) for each active function.
+
+    Returns ``[{function, yes, total, pct}, ...]`` — the school's present
+    capacity in each area, for the coordinator's overview.
+    """
+    from collections import Counter
+
+    functions = list(AnalystFunction.objects.filter(is_active=True))
+    profs = _coverage_profile_ids()
+    total = len(profs)
+    counts = Counter(
+        AvailabilitySpan.objects.filter(
+            function__in=functions, status=Status.YES, end_date__isnull=True,
+            profile_id__in=profs,
+        ).values_list("function_id", flat=True)
+    )
+    return [
+        {
+            "function": f,
+            "yes": counts.get(f.pk, 0),
+            "total": total,
+            "pct": round(counts.get(f.pk, 0) / total * 100) if total else 0,
+        }
+        for f in functions
+    ]
+
+
+def coverage_series(*, months: int = 12, as_of=None) -> dict:
+    """Monthly count of analysts available (YES) per function over the last
+    ``months`` months — the data for the historical coverage chart.
+
+    Returns ``{"labels": [...], "datasets": [{"label", "data"}, ...]}`` shaped
+    for Chart.js. A month's count is the analysts whose YES span covers that
+    month's first day.
+    """
+    as_of = as_of or timezone.localdate()
+    functions = list(AnalystFunction.objects.filter(is_active=True))
+    profs = set(_coverage_profile_ids())
+
+    dates = []
+    base = as_of.year * 12 + (as_of.month - 1)
+    for i in range(months - 1, -1, -1):
+        yy, mm = divmod(base - i, 12)
+        dates.append(_dt.date(yy, mm + 1, 1))
+
+    yes_spans = [
+        s for s in AvailabilitySpan.objects.filter(
+            function__in=functions, status=Status.YES
+        ).values("function_id", "profile_id", "start_date", "end_date")
+        if s["profile_id"] in profs
+    ]
+
+    datasets = []
+    for f in functions:
+        spans_f = [s for s in yes_spans if s["function_id"] == f.pk]
+        data = []
+        for d in dates:
+            data.append(sum(
+                1 for s in spans_f
+                if s["start_date"] <= d and (s["end_date"] is None or s["end_date"] > d)
+            ))
+        datasets.append({"label": f.column_label, "data": data})
+
+    return {"labels": [d.strftime("%b %Y") for d in dates], "datasets": datasets}

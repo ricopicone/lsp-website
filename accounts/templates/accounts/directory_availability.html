@@ -46,24 +46,27 @@
             </a>
           </th>
           {% endfor %}
+          <th>Notes</th>
         </tr>
       </thead>
       <tbody>
         {% for row in rows %}
         <tr class="hover">
           <td class="whitespace-nowrap">
-            <a href="{% url 'directory_detail' row.slug %}" class="link font-medium">
-              {{ row.profile.display_full_name }}
-            </a>
+            {% if row.linkable %}
+            <a href="{% url 'directory_detail' row.slug %}" class="link font-medium">{{ row.profile.display_full_name }}</a>
+            {% else %}
+            <span class="font-medium">{{ row.profile.display_full_name }}</span>
+            {% endif %}
           </td>
           {% for cell in row.cells %}
-          <td class="text-center" title="{{ cell.note }}">
+          <td class="text-center">
             {% if cell.status == "yes" %}<span class="text-success font-semibold">✓</span>
             {% elif cell.status == "no" %}<span class="text-base-content/30">—</span>
             {% else %}<span class="text-base-content/30">·</span>{% endif %}
-            {% if cell.note %}<span class="block text-[0.65rem] leading-tight text-base-content/50">{{ cell.note }}</span>{% endif %}
           </td>
           {% endfor %}
+          <td class="text-sm text-base-content/70">{{ row.note }}</td>
         </tr>
         {% endfor %}
       </tbody>

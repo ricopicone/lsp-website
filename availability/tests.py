@@ -99,18 +99,23 @@ def test_changing_status_closes_old_span_and_opens_new(analyst, interviews):
     assert services.current_status(analyst, interviews) == Status.NO
 
 
-def test_idempotent_when_status_and_note_unchanged(analyst, interviews):
-    first = services.set_availability(analyst, interviews, Status.YES, note="ok")
-    again = services.set_availability(analyst, interviews, Status.YES, note="ok")
+def test_idempotent_when_status_unchanged(analyst, interviews):
+    first = services.set_availability(analyst, interviews, Status.YES)
+    again = services.set_availability(analyst, interviews, Status.YES)
     assert first.pk == again.pk
     assert AvailabilitySpan.objects.filter(profile=analyst, function=interviews).count() == 1
 
 
-def test_note_change_is_recorded_as_new_span(analyst, interviews):
-    services.set_availability(analyst, interviews, Status.YES, note="")
-    services.set_availability(analyst, interviews, Status.YES, note="Interviews OK Sept 2026")
-    assert AvailabilitySpan.objects.filter(profile=analyst, function=interviews).count() == 2
-    assert services.current_status(analyst, interviews) == Status.YES
+def test_note_is_per_analyst_with_history(analyst):
+    assert services.current_note(analyst) == ""
+    services.set_note(analyst, "Except Oct-Dec 2026")
+    assert services.current_note(analyst) == "Except Oct-Dec 2026"
+    # Unchanged → no new row.
+    assert services.set_note(analyst, "Except Oct-Dec 2026") is None
+    # Changed → appends, history preserved.
+    services.set_note(analyst, "Available all year")
+    assert services.current_note(analyst) == "Available all year"
+    assert len(services.note_history(analyst)) == 2
 
 
 def test_unknown_is_default_when_never_set(analyst, interviews):
@@ -269,15 +274,36 @@ def test_analyst_page_and_cell_save(client, coordinator, analyst, interviews):
     url = reverse("availability:analyst", args=[analyst.pk])
     assert client.get(url).status_code == 200
     resp = client.post(url, {
-        "function": interviews.pk, "status": Status.YES,
-        "note": "Interviews OK Sept 2026",
+        "action": "status", "function": interviews.pk, "status": Status.YES,
     })
     assert resp.status_code == 302
     span = AvailabilitySpan.objects.get(
         profile=analyst, function=interviews, end_date__isnull=True
     )
     assert span.status == Status.YES
-    assert span.note == "Interviews OK Sept 2026"
+
+
+def test_analyst_page_note_save(client, coordinator, analyst):
+    url = reverse("availability:analyst", args=[analyst.pk])
+    resp = client.post(url, {"action": "note", "note": "Except Oct-Dec 2026"})
+    assert resp.status_code == 302
+    assert services.current_note(analyst) == "Except Oct-Dec 2026"
+
+
+def test_overview_renders(client, coordinator, analyst, interviews):
+    services.set_availability(analyst, interviews, Status.YES)
+    resp = client.get(reverse("availability:overview"))
+    assert resp.status_code == 200
+    assert b"Current coverage" in resp.content
+    assert b"coverage-series" in resp.content
+
+
+def test_grid_note_column_save(client, coordinator, analyst):
+    resp = client.post(reverse("availability:grid"), {
+        f"note_{analyst.pk}": "Applications coordinator",
+    })
+    assert resp.status_code == 302
+    assert services.current_note(analyst) == "Applications coordinator"
 
 
 def test_send_reminders_notifies_and_emails(
@@ -291,6 +317,44 @@ def test_send_reminders_notifies_and_emails(
     ).exists()
     assert len(mail.outbox) == 1
     assert analyst.user.email in mail.outbox[0].to
+
+
+def test_reminder_email_substitutes_coordinator_token(
+    client, coordinator, analyst, django_capture_on_commit_callbacks
+):
+    # Coordinator's name should replace {applications_coordinator} in the body.
+    ReminderTemplate.objects.update_or_create(
+        key=ReminderTemplate.Key.REVIEW_REQUEST,
+        defaults={"subject": "Review", "body": "Hi {name}, from {applications_coordinator}."},
+    )
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post(reverse("availability:send_reminders"))
+    assert "Cecile Gouffrant" in mail.outbox[0].body
+    assert "{applications_coordinator}" not in mail.outbox[0].body
+
+
+def test_auto_reminder_command_respects_mode_and_runs_once(
+    coordinator, analyst, django_capture_on_commit_callbacks
+):
+    from django.core.management import call_command
+
+    cfg = AvailabilitySettings.load()
+    cfg.reminder_mode = AvailabilitySettings.Mode.REVIEW
+    cfg.save()
+    # Review-first: nothing sent.
+    with django_capture_on_commit_callbacks(execute=True):
+        call_command("send_availability_reminders", stdout=StringIO())
+    assert len(mail.outbox) == 0
+
+    cfg.reminder_mode = AvailabilitySettings.Mode.AUTO
+    cfg.save()
+    with django_capture_on_commit_callbacks(execute=True):
+        call_command("send_availability_reminders", stdout=StringIO())
+    assert len(mail.outbox) == 1
+    # Second run in the same AY is a no-op.
+    with django_capture_on_commit_callbacks(execute=True):
+        call_command("send_availability_reminders", stdout=StringIO())
+    assert len(mail.outbox) == 1
 
 
 def test_settings_save(client, coordinator):
@@ -350,30 +414,13 @@ def test_import_creates_spans(tmp_path):
     assert span.source == AvailabilitySpan.Source.IMPORT
 
 
-def test_import_note_keyword_attaches_to_function(tmp_path):
-    davidson = _make_analyst("Ben", "Davidson")
-    csv_path = _write_csv(
-        tmp_path, _HEADER + "Ben Davidson,N,N,Y,Y,Interviews OK Sept 2026\n"
-    )
-    call_command("import_analyst_availability", csv_path, stdout=StringIO())
-
-    interviews = AnalystFunction.objects.get(slug="application-interviews")
-    span = AvailabilitySpan.objects.get(profile=davidson, function=interviews)
-    assert span.status == Status.NO
-    assert span.note == "Interviews OK Sept 2026"
-
-
-def test_import_reports_unassigned_note(tmp_path):
-    _make_analyst("Stephanie", "Swales")
+def test_import_sets_per_analyst_note(tmp_path):
+    swales = _make_analyst("Stephanie", "Swales")
     csv_path = _write_csv(
         tmp_path, _HEADER + "Stephanie Swales,Y,Y,Y,Y,Except Oct-Dec 2026\n"
     )
-    out = StringIO()
-    call_command("import_analyst_availability", csv_path, stdout=out)
-    assert "not tied to a single function" in out.getvalue()
-    assert "Except Oct-Dec 2026" in out.getvalue()
-    # The ambiguous note is not auto-attached to any span.
-    assert not AvailabilitySpan.objects.exclude(note="").exists()
+    call_command("import_analyst_availability", csv_path, stdout=StringIO())
+    assert services.current_note(swales) == "Except Oct-Dec 2026"
 
 
 def test_import_reports_unmatched_analyst(tmp_path):
@@ -467,12 +514,16 @@ def test_availability_table_filter_only(client, analyst, interviews):
     assert b"Bob Other" not in resp.content
 
 
-def test_availability_table_excludes_opted_out(client, analyst, interviews):
-    analyst.public = False  # opted out of the directory
+def test_availability_table_includes_opted_out_unlinked(client, analyst):
+    # The members-only table lists every analyst (even directory opt-outs),
+    # but a non-public analyst's name isn't a link (no public detail page).
+    analyst.public = False
     analyst.save()
     _login(client)
     resp = client.get(reverse("directory_availability"))
-    assert b"Anna Analyst" not in resp.content
+    assert b"Anna Analyst" in resp.content
+    slug = analyst.directory_slug
+    assert f'/directory/{slug}/'.encode() not in resp.content
 
 
 def test_detail_section_members_only(client, analyst, interviews):
@@ -514,7 +565,6 @@ def test_self_update_sets_availability(client, analyst, interviews):
     client.force_login(analyst.user)
     resp = client.post(reverse("availability:self_update"), {
         f"fn_{interviews.pk}": Status.YES,
-        f"note_{interviews.pk}": "Mornings only",
         f"fn_{advisor.pk}": Status.NO,
     })
     assert resp.status_code == 302
@@ -522,7 +572,6 @@ def test_self_update_sets_availability(client, analyst, interviews):
         profile=analyst, function=interviews, end_date__isnull=True
     )
     assert span.status == Status.YES
-    assert span.note == "Mornings only"
     assert span.source == AvailabilitySpan.Source.SELF
     assert services.current_status(analyst, advisor) == Status.NO
 

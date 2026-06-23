@@ -3,8 +3,9 @@
 ``{placeholder}`` tokens are substituted at send time (see
 ``services.render_template``); unknown tokens are left intact so a hand-edited
 template can never crash a send. Available tokens: ``{name}`` (the analyst's
-name) and ``{update_url}`` (their personal sign-in link to the availability
-section of the profile editor).
+name), ``{update_url}`` (their sign-in link to the availability section of the
+profile editor), and ``{applications_coordinator}`` (the appointed
+coordinator's name).
 """
 
 from __future__ import annotations
@@ -26,6 +27,6 @@ The link signs you in and takes you straight to the Availability section of your
 
 Sincerely,
 
-The LSP Applications Coordinator""",
+{applications_coordinator}""",
     ),
 }

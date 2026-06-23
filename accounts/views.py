@@ -178,6 +178,7 @@ def directory_detail(request, slug: str):
                     "vis": profile.visible_fields(request.user),
                     # Members-only: which LSP functions this analyst is open for.
                     "availability": _availability_rows(profile, request.user),
+                    "availability_note": _availability_note(profile, request.user),
                 },
             )
     raise Http404("Member not found")
@@ -204,18 +205,29 @@ def _availability_rows(profile, user):
         rows.append({
             "function": fn,
             "status": span.status if span else AvailabilitySpan.Status.UNKNOWN,
-            "note": span.note if span else "",
         })
     return rows
+
+
+def _availability_note(profile, user):
+    """The analyst's current availability note for an authenticated viewer
+    (members-only); None otherwise."""
+    if not getattr(user, "is_authenticated", False):
+        return None
+    from availability import services
+    if not services.is_eligible(profile):
+        return None
+    return services.current_note(profile)
 
 
 @login_required
 def directory_availability(request):
     """Members-only table of which Analysts of the School are available for each
-    LSP function. Sortable and filterable by column; the sort/filter state lives
-    in the URL (?sort=<slug>, ?only=<slug>) so any view is linkable."""
+    LSP function. Lists every analyst (new ones appear automatically); sortable
+    and filterable by column, with the sort/filter state in the URL
+    (?sort=<slug>, ?only=<slug>) so any view is linkable."""
     from availability import services
-    from availability.models import AnalystFunction, AvailabilitySpan
+    from availability.models import AnalystFunction, AvailabilityNote, AvailabilitySpan
 
     Status = AvailabilitySpan.Status
     functions = list(AnalystFunction.objects.filter(is_active=True))
@@ -223,7 +235,7 @@ def directory_availability(request):
 
     profiles = list(
         services.eligible_profiles()
-        .filter(public=True, is_persona=False, user__is_active=True)
+        .filter(is_persona=False, user__is_active=True)
         .select_related("user")
         .order_by("user__last_name", "user__first_name")
     )
@@ -231,6 +243,10 @@ def directory_availability(request):
         profile__in=profiles, function__in=functions, end_date__isnull=True
     )
     smap = {(s.profile_id, s.function_id): s for s in spans}
+    # Current note per analyst (latest row), in one pass.
+    notes = {}
+    for n in AvailabilityNote.objects.filter(profile__in=profiles).order_by("created_at"):
+        notes[n.profile_id] = n.text  # later rows overwrite → ends on the latest
 
     rows = []
     for p in profiles:
@@ -240,11 +256,12 @@ def directory_availability(request):
             by_fn[f.pk] = {
                 "function": f,
                 "status": span.status if span else Status.UNKNOWN,
-                "note": span.note if span else "",
             }
         rows.append({
             "profile": p,
             "slug": p.directory_slug,
+            "linkable": p.is_listed,  # only public profiles have a detail page
+            "note": notes.get(p.pk, ""),
             "by_fn": by_fn,
             "cells": [by_fn[f.pk] for f in functions],
         })

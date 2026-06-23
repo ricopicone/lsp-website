@@ -50,12 +50,33 @@ def _html_alternative(body: str) -> str:
     )
 
 
+def applications_coordinator_name() -> str:
+    """The appointed Applications Coordinator's name, for the {applications_
+    coordinator} token. Joins multiple holders; falls back to a generic title
+    when the role is unfilled."""
+    from core.models import StaffRole
+
+    role = StaffRole.objects.filter(
+        key=StaffRole.APPLICATIONS_COORDINATOR
+    ).prefetch_related("holders").first()
+    if role:
+        names = [
+            h.get_full_name() or h.email
+            for h in role.holders.all()
+            if h.is_active
+        ]
+        if names:
+            return ", ".join(names)
+    return "the LSP Applications Coordinator"
+
+
 def render_review_request(user) -> tuple[str, str]:
     """The (subject, body) of the review-request email for ``user``."""
     template = ReminderTemplate.get(ReminderTemplate.Key.REVIEW_REQUEST)
     context = {
         "name": user.get_full_name() or user.email,
         "update_url": update_url(),
+        "applications_coordinator": applications_coordinator_name(),
     }
     return (
         services.render_template(template.subject, context),

@@ -95,10 +95,10 @@
         {% if a.status == "yes" %}<span class="text-success font-medium">Yes</span>
         {% elif a.status == "no" %}<span class="text-base-content/50">No</span>
         {% else %}<span class="text-base-content/40">Unknown</span>{% endif %}
-        {% if a.note %}<span class="text-base-content/50">— {{ a.note }}</span>{% endif %}
       </dd>
       {% endfor %}
     </dl>
+    {% if availability_note %}<p class="text-sm text-base-content/60 italic">{{ availability_note }}</p>{% endif %}
     <a href="{% url 'directory_availability' %}" class="link link-primary text-sm">See all analysts ↗</a>
   </section>
   {% endif %}

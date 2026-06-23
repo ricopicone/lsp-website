@@ -132,12 +132,6 @@ class AvailabilitySpan(models.Model):
         help_text="The day this status ended. Null means it is the current "
         "status (the open span).",
     )
-    note = models.CharField(
-        max_length=200,
-        blank=True,
-        help_text="Function-specific qualifier, verbatim from the sheet where "
-        "given (e.g. 'Interviews OK Sept 2026', 'Except Oct-Dec 2026').",
-    )
     source = models.CharField(
         max_length=12,
         choices=Source.choices,
@@ -176,6 +170,39 @@ class AvailabilitySpan(models.Model):
         return self.end_date is None
 
 
+class AvailabilityNote(models.Model):
+    """A free-text note about an analyst's availability — the sheet's per-row
+    "Notes" column, woven in as a historized, per-analyst record.
+
+    Append-only: each edit writes a new row, so the note's history is preserved
+    (the current note is the most recent row). Maintained by the Applications
+    Coordinator (and the yearly import); shown read-only to members. Use
+    ``services.set_note`` rather than creating rows by hand.
+    """
+
+    profile = models.ForeignKey(
+        "accounts.Profile",
+        on_delete=models.CASCADE,
+        related_name="availability_notes",
+    )
+    text = models.CharField(max_length=300, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Who wrote this note (null for an import).",
+    )
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.profile_id}: {self.text[:40]}"
+
+
 class AvailabilitySettings(models.Model):
     """Singleton: the Applications Coordinator's workflow knobs.
 
@@ -193,8 +220,16 @@ class AvailabilitySettings(models.Model):
         choices=Mode.choices,
         default=Mode.REVIEW,
         verbose_name="Availability reminders",
-        help_text="Automatic sends the periodic reminder on its own; review "
-        "first leaves it for you to send from the console.",
+        help_text="Automatic: once at the start of each academic year (Sept 1) "
+        "every analyst is emailed a review request. Review first: nothing is "
+        "sent on its own — use the button on the Availability tab.",
+    )
+    last_auto_reminder_ay = models.CharField(
+        max_length=9,
+        blank=True,
+        default="",
+        help_text="The academic-year label the automatic reminder last fired "
+        "for (e.g. '2026-2027'), so it sends at most once per year.",
     )
 
     class Meta:

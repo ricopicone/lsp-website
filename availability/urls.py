@@ -14,6 +14,7 @@ _ADMIN = "admin-tools/availability"
 
 urlpatterns = [
     path(f"{_ADMIN}/", views.grid, name="grid"),
+    path(f"{_ADMIN}/overview/", views.overview, name="overview"),
     path(f"{_ADMIN}/settings/", views.settings_view, name="settings"),
     path(f"{_ADMIN}/reminders/send/", views.send_reminders, name="send_reminders"),
     path(f"{_ADMIN}/message/", views.template_edit, name="templates"),

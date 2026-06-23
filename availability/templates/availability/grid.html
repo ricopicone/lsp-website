@@ -11,9 +11,9 @@
       academic-year coverage.
     </p>
     <form method="post" action="{% url 'availability:send_reminders' %}"
-          onsubmit="return confirm('Email every analyst a request to review their availability?');">
+          onsubmit="return confirm('Email every analyst now with a request to review their availability?');">
       {% csrf_token %}
-      <button class="btn btn-outline btn-sm">Send review reminders</button>
+      <button class="btn btn-outline btn-sm" title="Sends immediately to every analyst — no review step.">Email all analysts now</button>
     </form>
   </div>
 
@@ -26,6 +26,7 @@
           <tr>
             <th class="sticky left-0 bg-base-100">Analyst</th>
             {% for fn in functions %}<th class="text-center">{{ fn.column_label }}</th>{% endfor %}
+            <th>Notes</th>
           </tr>
         </thead>
         <tbody>
@@ -43,9 +44,12 @@
                 <option value="{{ value }}" {% if value == cell.status %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
               </select>
-              {% if cell.note %}<span class="block text-xs text-base-content/50 mt-0.5" title="{{ cell.note }}">{{ cell.note|truncatechars:18 }}</span>{% endif %}
             </td>
             {% endfor %}
+            <td>
+              <input type="text" name="note_{{ row.profile.pk }}" value="{{ row.note }}" maxlength="300"
+                     class="input input-bordered input-xs w-48" placeholder="—">
+            </td>
           </tr>
           {% endfor %}
         </tbody>
