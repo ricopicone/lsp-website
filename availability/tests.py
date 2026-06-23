@@ -317,6 +317,8 @@ def test_send_reminders_notifies_and_emails(
     ).exists()
     assert len(mail.outbox) == 1
     assert analyst.user.email in mail.outbox[0].to
+    # Replies reach the Applications Coordinator's mailbox.
+    assert mail.outbox[0].reply_to == ["applications@lacanschool.org"]
 
 
 def test_reminder_email_substitutes_coordinator_token(

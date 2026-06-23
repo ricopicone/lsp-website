@@ -222,6 +222,9 @@ SUPPORT_EMAIL = env("DJANGO_SUPPORT_EMAIL", default="website@lacanschool.org")
 # referral-flow mail (acknowledgments, distributions, follow-ups) carries it
 # as Reply-To so any reply reaches the coordinator.
 REFERRALS_EMAIL = env("DJANGO_REFERRALS_EMAIL", default="referrals@lacanschool.org")
+# The Applications Coordinator's mailbox: analyst-availability reminder mail
+# carries it as Reply-To so a reply reaches the coordinator (task #272).
+APPLICATIONS_EMAIL = env("DJANGO_APPLICATIONS_EMAIL", default="applications@lacanschool.org")
 
 # All mail flows through a persona-safe wrapper that never delivers to persona
 # test accounts (their addresses aren't real mailboxes). Each environment sets

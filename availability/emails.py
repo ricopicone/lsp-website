@@ -91,7 +91,7 @@ def send_review_request(user, subject: str, body: str) -> None:
         body=body,
         from_email=school_from(_FROM_NAME),
         to=[user.email],
-        reply_to=[settings.SUPPORT_EMAIL],
+        reply_to=[settings.APPLICATIONS_EMAIL],
     )
     msg.attach_alternative(_html_alternative(body), "text/html")
     msg.send(fail_silently=False)
