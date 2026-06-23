@@ -578,6 +578,23 @@ class Event(models.Model):
         now = now or timezone.now()
         return self.sessions.filter(start_at__gte=now).order_by("start_at").first()
 
+    def resequence_sessions(self):
+        """Renumber this event's sessions so ``sequence`` matches chronological
+        order (1-based by ``start_at``). The page already displays sessions by
+        date, so the stored number is purely a label — keep it in sync with the
+        date order it's read as. Uses ``bulk_update`` (no save signals fired),
+        so it's safe to call from the Session post_save/post_delete signals.
+        Returns the list of rows whose number changed."""
+        sessions = list(self.sessions.order_by("start_at", "id"))
+        changed = []
+        for i, s in enumerate(sessions, start=1):
+            if s.sequence != i:
+                s.sequence = i
+                changed.append(s)
+        if changed:
+            Session.objects.bulk_update(changed, ["sequence"])
+        return changed
+
     #: Event types organized by the Programming Committee (not their own group).
     PC_OWNED_TYPES = frozenset({
         "special_event", "day_of_assembly", "working_day", "scholarly_seminar",
