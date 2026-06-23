@@ -4,6 +4,7 @@ from django.contrib import admin
 from .models import (
     ArchivedProgram,
     Event,
+    EventChangeRequest,
     EventMemberSpeaker,
     EventProposal,
     PriceTier,
@@ -31,6 +32,16 @@ class ProposalReadingInline(admin.TabularInline):
 class ProposalSpeakerInline(admin.TabularInline):
     model = ProposalSpeaker
     extra = 0
+
+
+@admin.register(EventChangeRequest)
+class EventChangeRequestAdmin(admin.ModelAdmin):
+    list_display = ("event", "proposed_by", "status", "created_at",
+                    "reviewed_by", "reviewed_at")
+    list_filter = ("status",)
+    search_fields = ("event__title", "proposed_by__email")
+    autocomplete_fields = ("event", "proposed_by", "reviewed_by")
+    readonly_fields = ("created_at", "applied_at")
 
 
 @admin.register(EventProposal)

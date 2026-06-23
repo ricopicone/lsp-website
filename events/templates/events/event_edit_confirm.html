@@ -1,0 +1,67 @@
+{% extends "core/base.html" %}
+{% block title %}Review change — {{ event.title }} — LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">How substantial is this change?</h1>
+    <p class="text-sm text-base-content/70">
+      “{{ event.title }}” was approved by the Programming Committee. Tell us
+      whether this edit is minor enough to adopt now, or substantial enough to
+      send back for review.
+    </p>
+  </header>
+
+  <div class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-2">
+    <p class="text-sm font-medium text-base-content">You changed:</p>
+    <ul class="list-disc pl-5 text-sm text-base-content/80">
+      {% for label in changed_labels %}<li>{{ label }}</li>{% endfor %}
+    </ul>
+    {% if description_changed %}
+    <p class="text-sm {% if description_ratio_pct >= 20 %}text-warning{% else %}text-base-content/60{% endif %}">
+      About <strong>{{ description_ratio_pct }}%</strong> of the description changed.
+      {% if description_ratio_pct >= 20 %}
+      That looks substantial — please consider sending it to the committee.
+      {% else %}
+      That's a small change.
+      {% endif %}
+    </p>
+    {% endif %}
+  </div>
+
+  <form method="post" action="{% url 'events:edit' event.slug %}" class="space-y-4">
+    {% csrf_token %}
+    {# Carry every submitted value forward so the choice re-binds the full form. #}
+    {% for field in form %}
+      {% if field.name == "record_video" %}
+        {% if field.value %}<input type="hidden" name="record_video" value="on">{% endif %}
+      {% else %}
+        <textarea name="{{ field.name }}" hidden>{{ field.value|default_if_none:"" }}</textarea>
+      {% endif %}
+    {% endfor %}
+
+    <div class="flex flex-col gap-3">
+      <button type="submit" name="decision" value="minor" class="btn btn-primary">
+        It's a minor change — adopt now
+      </button>
+      <button type="submit" name="decision" value="review" class="btn btn-outline">
+        It's substantial — send to the Programming Committee
+      </button>
+      {% if is_reviewer %}
+      <button type="submit" name="decision" value="admin" class="btn btn-ghost">
+        Apply as an administrative change (staff/committee)
+      </button>
+      <p class="text-xs text-base-content/55">
+        The administrative option applies your change immediately and records it
+        for the audit trail — use it when acting in your staff or committee role.
+      </p>
+      {% endif %}
+    </div>
+
+    <p class="text-sm">
+      <a href="{% url 'events:edit' event.slug %}" class="link link-hover text-base-content/70">← Keep editing</a>
+    </p>
+  </form>
+
+</div>
+{% endblock %}

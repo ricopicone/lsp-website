@@ -10,8 +10,27 @@
     </p>
   </header>
 
+  {% if event.requires_change_review %}
+  <div class="rounded-lg border border-base-300/60 bg-base-200/40 p-3 text-sm text-base-content/70">
+    This event has been approved by the Programming Committee. Small edits to the
+    title, description, readings, or fee note can be adopted right away; a
+    substantial change can be sent to the committee for review — you'll choose
+    when you save.
+  </div>
+  {% endif %}
+
   <form method="post" class="space-y-6">
     {% csrf_token %}
+    <div class="form-control space-y-1">
+      <label for="id_title" class="label-text">
+        <h2 class="font-serif text-lg text-base-content">Title</h2>
+      </label>
+      {{ form.title }}
+      {% if form.title.errors %}
+      <p class="text-xs text-error">{{ form.title.errors|join:", " }}</p>
+      {% endif %}
+    </div>
+
     <div class="form-control space-y-1">
       <label for="id_description" class="label-text">
         <h2 class="font-serif text-lg text-base-content">Description</h2>

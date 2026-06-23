@@ -43,3 +43,14 @@ def is_program_committee(user) -> bool:
         user=user,
         workgroup__committee__slug="programming-committee",
     ).exists()
+
+
+def is_change_reviewer(user) -> bool:
+    """True if ``user`` reviews faculty content changes (#295) — i.e. is on the
+    Programming Committee or holds a staff designation. Reviewers get the extra
+    "administrative change" option in the certify-or-submit dialog and may
+    decide the committee queue.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return user.is_staff or _is_lsp_staff(user) or is_program_committee(user)

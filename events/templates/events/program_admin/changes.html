@@ -1,0 +1,92 @@
+{% extends "events/program_admin/base.html" %}
+{% block tab_content %}
+<div class="space-y-8">
+  <p class="text-sm text-base-content/60">
+    Content changes to approved events. Faculty self-certified and staff
+    administrative changes are already live (listed below for the record); the
+    items under <em>Pending</em> are held until you approve them.
+  </p>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Pending review</h2>
+    {% if pending %}
+    <ul class="space-y-3">
+      {% for c in pending %}
+      <li class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-4">
+        <div class="space-y-1">
+          <p class="font-medium text-base-content">
+            <a href="{% url 'events:detail' c.event.slug %}" class="link link-hover">{{ c.event.title }}</a>
+            <span class="text-xs font-normal text-base-content/55">
+              · submitted {{ c.created_at|date:"M j, Y" }}
+              by {{ c.proposed_by.get_full_name|default:c.proposed_by.email }}</span>
+          </p>
+        </div>
+        {% for label, old, new in c.field_changes %}
+        <div class="space-y-1 text-sm">
+          <p class="font-medium text-base-content/80">{{ label }}</p>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <div class="rounded-lg border border-base-300/50 bg-base-200/40 p-2">
+              <p class="text-xs uppercase tracking-wide text-base-content/45">Current</p>
+              <p class="whitespace-pre-line text-base-content/70">{{ old|default:"—" }}</p>
+            </div>
+            <div class="rounded-lg border border-primary/30 bg-primary/5 p-2">
+              <p class="text-xs uppercase tracking-wide text-base-content/45">Proposed</p>
+              <p class="whitespace-pre-line text-base-content/80">{{ new|default:"—" }}</p>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+        {% if c.description_change_ratio %}
+        <p class="text-xs text-base-content/55">
+          ~{% widthratio c.description_change_ratio 1 100 %}% of the description changed.
+        </p>
+        {% endif %}
+        <div class="flex flex-wrap items-end gap-2">
+          <form method="post" action="{% url 'change_request_decide' c.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="decision" value="approve">
+            <button type="submit" class="btn btn-primary btn-sm">Approve &amp; apply</button>
+          </form>
+          <form method="post" action="{% url 'change_request_decide' c.pk %}" class="flex items-end gap-2">
+            {% csrf_token %}
+            <input type="hidden" name="decision" value="decline">
+            <input type="text" name="note" placeholder="Reason (optional)"
+                   class="input input-bordered input-sm w-56">
+            <button type="submit" class="btn btn-outline btn-sm">Decline</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-base-content/55">Nothing waiting for review.</p>
+    {% endif %}
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">History</h2>
+    {% if decided %}
+    <table class="table table-sm">
+      <thead>
+        <tr><th>Event</th><th>Fields</th><th>By</th><th>When</th><th>Outcome</th></tr>
+      </thead>
+      <tbody>
+        {% for c in decided %}
+        <tr>
+          <td><a href="{% url 'events:detail' c.event.slug %}" class="link link-hover">{{ c.event.title }}</a></td>
+          <td class="text-xs text-base-content/70">
+            {% for label, old, new in c.field_changes %}{{ label }}{% if not forloop.last %}, {% endif %}{% endfor %}
+          </td>
+          <td class="text-xs">{{ c.proposed_by.get_full_name|default:c.proposed_by.email }}</td>
+          <td class="text-xs">{{ c.created_at|date:"M j, Y" }}</td>
+          <td><span class="badge badge-outline badge-sm">{{ c.get_status_display }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-sm text-base-content/55">No change history yet.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

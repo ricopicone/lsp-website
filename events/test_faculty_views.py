@@ -127,7 +127,7 @@ def test_edit_post_updates_description(client, event, faculty_member):
     client.force_login(faculty_member)
     response = client.post(
         reverse("events:edit", args=[event.slug]),
-        {"description": "Updated body"},
+        {"title": event.title, "description": "Updated body"},
     )
     assert response.status_code == 302
     event.refresh_from_db()

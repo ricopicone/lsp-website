@@ -395,6 +395,23 @@ class Event(models.Model):
         """True for reading groups / cartels — the "Other Offerings" bucket."""
         return self.event_type in {self.Type.READING_GROUP, self.Type.CARTEL}
 
+    #: Event types whose approved instances route content edits through review.
+    REVIEW_LOOP_TYPES = (Type.SEMINAR, Type.READING_GROUP, Type.SPECIAL_EVENT)
+
+    def requires_change_review(self) -> bool:
+        """Whether faculty edits to this event's content should offer the
+        certify-or-submit dialog (task #295).
+
+        Scope: published events of a proposable type that were minted from an
+        approved Programming-Committee proposal. Drafts and staff-created
+        events (no originating proposal) edit freely as before.
+        """
+        if not self.published or self.event_type not in self.REVIEW_LOOP_TYPES:
+            return False
+        return self.from_proposal.filter(
+            status=EventProposal.Status.APPROVED
+        ).exists()
+
     @property
     def is_public_now(self) -> bool:
         """Whether this event is publicly visible right now.
@@ -1291,3 +1308,120 @@ class ArchivedProgram(models.Model):
     @property
     def display_label(self) -> str:
         return self.label or self.academic_year
+
+
+class EventChangeRequest(models.Model):
+    """A faculty edit to an approved event's reviewable content (task #295).
+
+    Every content edit that passes through the certify-or-submit dialog leaves
+    one of these as an audit record. Three terminal states are reached without
+    the committee (the change is applied immediately): a faculty member
+    self-certifying a minor change, and a PC/staff reviewer adopting a change
+    either as minor or explicitly as an administrative override. The fourth path
+    holds the proposed values for committee review and applies them only on
+    approval — the live event is untouched until then.
+    """
+
+    class Status(models.TextChoices):
+        # Applied immediately on submit:
+        SELF_CERTIFIED = "self_certified", _("Self-certified minor")
+        ADMINISTRATIVE = "administrative", _("Administrative change")
+        # Routed to the Programming Committee:
+        PENDING = "pending", _("Pending committee review")
+        APPROVED = "approved", _("Approved")
+        DECLINED = "declined", _("Declined")
+        WITHDRAWN = "withdrawn", _("Withdrawn")
+
+    #: Statuses whose proposed values are (or will be) live on the event.
+    APPLIED_STATUSES = (Status.SELF_CERTIFIED, Status.ADMINISTRATIVE, Status.APPROVED)
+
+    event = models.ForeignKey(
+        Event, on_delete=models.CASCADE, related_name="change_requests",
+    )
+    proposed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="event_change_requests",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING,
+    )
+
+    #: Which reviewable fields this request changes (subset of REVIEWABLE_FIELDS).
+    changed_fields = models.JSONField(default=list)
+    #: Advisory description-change fraction at submission time (0.0–1.0).
+    description_change_ratio = models.FloatField(default=0.0)
+
+    # Proposed (new) values for the reviewable fields.
+    proposed_title = models.CharField(max_length=200, blank=True)
+    proposed_description = models.TextField(blank=True)
+    proposed_readings = models.TextField(blank=True)
+    proposed_fee_note = models.TextField(blank=True)
+
+    # Snapshot of the live values when the request was created (for the diff).
+    original_title = models.CharField(max_length=200, blank=True)
+    original_description = models.TextField(blank=True)
+    original_readings = models.TextField(blank=True)
+    original_fee_note = models.TextField(blank=True)
+
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="event_changes_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"Change to {self.event.title} ({self.get_status_display()})"
+
+    @property
+    def is_applied(self) -> bool:
+        return self.status in self.APPLIED_STATUSES
+
+    def field_changes(self):
+        """List of ``(label, old, new)`` tuples for the changed fields, for the
+        review queue + dialog diff display."""
+        from .review import FIELD_LABELS
+        out = []
+        for f in self.changed_fields:
+            out.append((
+                FIELD_LABELS.get(f, f),
+                getattr(self, f"original_{f}"),
+                getattr(self, f"proposed_{f}"),
+            ))
+        return out
+
+    def apply(self):
+        """Copy the proposed values onto the live event."""
+        from django.utils import timezone
+        for f in self.changed_fields:
+            setattr(self.event, f, getattr(self, f"proposed_{f}"))
+        if self.changed_fields:
+            self.event.save(update_fields=list(self.changed_fields))
+        self.applied_at = timezone.now()
+
+    def approve(self, reviewer):
+        """PC approves a pending change — apply it to the event."""
+        from django.utils import timezone
+        if self.status != self.Status.PENDING:
+            return
+        self.apply()
+        self.status = self.Status.APPROVED
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.save()
+
+    def decline(self, reviewer, note: str = ""):
+        """PC declines a pending change — the live event is left untouched."""
+        from django.utils import timezone
+        if self.status != self.Status.PENDING:
+            return
+        self.status = self.Status.DECLINED
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.review_note = note
+        self.save()
