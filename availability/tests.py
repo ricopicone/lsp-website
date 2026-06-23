@@ -4,9 +4,11 @@ Applications Coordinator console (Phase 2)."""
 from __future__ import annotations
 
 import datetime as _dt
+from io import StringIO
 
 import pytest
 from django.core import mail
+from django.core.management import CommandError, call_command
 from django.db import IntegrityError
 from django.urls import reverse
 
@@ -308,3 +310,112 @@ def test_template_edit_save(client, coordinator):
     assert resp.status_code == 302
     tmpl = ReminderTemplate.get(ReminderTemplate.Key.REVIEW_REQUEST)
     assert tmpl.subject == "Reminder"
+
+
+# ---- Phase 5: the import command -----------------------------------------
+
+
+def _make_analyst(first, last):
+    user = User.objects.create_user(
+        email=f"{first}.{last}@example.com".lower(), password="pw",
+        first_name=first, last_name=last,
+    )
+    user.profile.role = Profile.Role.ANALYST
+    user.profile.save()
+    return user.profile
+
+
+def _write_csv(tmp_path, body):
+    path = tmp_path / "sheet.csv"
+    path.write_text(body, encoding="utf-8")
+    return str(path)
+
+
+_HEADER = "Analyst,Application Interviews,Advisor,Control analysis,Personal analysis,Notes\n"
+
+
+def test_import_creates_spans(tmp_path):
+    rogers = _make_analyst("Annie", "Rogers")
+    csv_path = _write_csv(tmp_path, _HEADER + "Annie Rogers,Y,Y,N,N,\n")
+
+    call_command("import_analyst_availability", csv_path, stdout=StringIO())
+
+    interviews = AnalystFunction.objects.get(slug="application-interviews")
+    control = AnalystFunction.objects.get(slug="control-analysis")
+    assert services.current_status(rogers, interviews) == Status.YES
+    assert services.current_status(rogers, control) == Status.NO
+    span = AvailabilitySpan.objects.get(
+        profile=rogers, function=interviews, end_date__isnull=True
+    )
+    assert span.source == AvailabilitySpan.Source.IMPORT
+
+
+def test_import_note_keyword_attaches_to_function(tmp_path):
+    davidson = _make_analyst("Ben", "Davidson")
+    csv_path = _write_csv(
+        tmp_path, _HEADER + "Ben Davidson,N,N,Y,Y,Interviews OK Sept 2026\n"
+    )
+    call_command("import_analyst_availability", csv_path, stdout=StringIO())
+
+    interviews = AnalystFunction.objects.get(slug="application-interviews")
+    span = AvailabilitySpan.objects.get(profile=davidson, function=interviews)
+    assert span.status == Status.NO
+    assert span.note == "Interviews OK Sept 2026"
+
+
+def test_import_reports_unassigned_note(tmp_path):
+    _make_analyst("Stephanie", "Swales")
+    csv_path = _write_csv(
+        tmp_path, _HEADER + "Stephanie Swales,Y,Y,Y,Y,Except Oct-Dec 2026\n"
+    )
+    out = StringIO()
+    call_command("import_analyst_availability", csv_path, stdout=out)
+    assert "not tied to a single function" in out.getvalue()
+    assert "Except Oct-Dec 2026" in out.getvalue()
+    # The ambiguous note is not auto-attached to any span.
+    assert not AvailabilitySpan.objects.exclude(note="").exists()
+
+
+def test_import_reports_unmatched_analyst(tmp_path):
+    csv_path = _write_csv(tmp_path, _HEADER + "Nobody Here,Y,Y,Y,Y,\n")
+    out = StringIO()
+    call_command("import_analyst_availability", csv_path, stdout=out)
+    assert "not matched" in out.getvalue()
+    assert "Nobody Here" in out.getvalue()
+    assert AvailabilitySpan.objects.count() == 0
+
+
+def test_import_dry_run_writes_nothing(tmp_path):
+    _make_analyst("Annie", "Rogers")
+    csv_path = _write_csv(tmp_path, _HEADER + "Annie Rogers,Y,Y,N,N,\n")
+    out = StringIO()
+    call_command("import_analyst_availability", csv_path, "--dry-run", stdout=out)
+    assert "Dry run" in out.getvalue()
+    assert AvailabilitySpan.objects.count() == 0
+
+
+def test_import_is_idempotent(tmp_path):
+    _make_analyst("Annie", "Rogers")
+    csv_path = _write_csv(tmp_path, _HEADER + "Annie Rogers,Y,Y,N,N,\n")
+    call_command("import_analyst_availability", csv_path, stdout=StringIO())
+    count = AvailabilitySpan.objects.count()
+    call_command("import_analyst_availability", csv_path, stdout=StringIO())
+    assert AvailabilitySpan.objects.count() == count  # no churn on re-run
+
+
+def test_import_start_date_sets_span_start(tmp_path):
+    rogers = _make_analyst("Annie", "Rogers")
+    csv_path = _write_csv(tmp_path, _HEADER + "Annie Rogers,Y,N,N,N,\n")
+    call_command(
+        "import_analyst_availability", csv_path, "--start", "2026-05-20",
+        stdout=StringIO(),
+    )
+    interviews = AnalystFunction.objects.get(slug="application-interviews")
+    span = AvailabilitySpan.objects.get(profile=rogers, function=interviews)
+    assert span.start_date == _dt.date(2026, 5, 20)
+
+
+def test_import_rejects_unknown_column(tmp_path):
+    csv_path = _write_csv(tmp_path, "Analyst,Bogus Column\nAnnie Rogers,Y\n")
+    with pytest.raises(CommandError):
+        call_command("import_analyst_availability", csv_path, stdout=StringIO())
