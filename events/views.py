@@ -287,22 +287,118 @@ def event_detail(request, slug: str):
 
 @login_required
 def event_edit(request, slug: str):
-    """Faculty-facing edit form for the event description (PROG-7)."""
+    """Faculty-facing edit form for the event description (PROG-7).
+
+    Approved events (published + minted from a PC proposal) route reviewable
+    content changes through a certify-or-submit dialog (#295): non-reviewable
+    fields apply immediately, but a change to the title / description / readings
+    / fee note prompts the editor to either certify it as minor (adopted now) or
+    submit it to the Programming Committee queue. Reviewers (PC/staff) get a
+    third "administrative change" option, recorded for the audit trail.
+    """
+    from .permissions import is_change_reviewer
+    from .review import REVIEWABLE_FIELDS, change_ratio
+
     event = get_object_or_404(Event, slug=slug)
     if not can_edit_event(request.user, event):
         return HttpResponseForbidden(
             "You don't have permission to edit this event."
         )
 
-    if request.method == "POST":
-        form = EventDescriptionForm(request.POST, instance=event)
-        if form.is_valid():
-            form.save()
-            return redirect("events:detail", slug=event.slug)
-    else:
+    if request.method != "POST":
         form = EventDescriptionForm(instance=event)
+        return render(request, "events/event_edit.html", {"event": event, "form": form})
 
-    return render(request, "events/event_edit.html", {"event": event, "form": form})
+    # Snapshot the live reviewable values *before* binding — ModelForm validation
+    # mutates ``event`` in place (construct_instance), so reading them afterwards
+    # would compare the new value against itself.
+    original = {f: (getattr(event, f) or "") for f in REVIEWABLE_FIELDS}
+
+    form = EventDescriptionForm(request.POST, instance=event)
+    if not form.is_valid():
+        return render(request, "events/event_edit.html", {"event": event, "form": form})
+
+    cd = form.cleaned_data
+    changed = [f for f in REVIEWABLE_FIELDS if (cd[f] or "") != original[f]]
+
+    # Events that don't carry the review expectation, or edits that touch no
+    # reviewable field, save straight through as before.
+    if not changed or not event.requires_change_review():
+        form.save()
+        messages.success(request, "Changes saved.")
+        return redirect("events:detail", slug=event.slug)
+
+    decision = request.POST.get("decision")
+    if not decision:
+        # First submission of a reviewable change → show the dialog. Carry the
+        # submitted values forward as hidden inputs so the choice POST re-binds.
+        desc_ratio = change_ratio(original["description"], cd["description"]) \
+            if "description" in changed else 0.0
+        return render(request, "events/event_edit_confirm.html", {
+            "event": event,
+            "form": form,
+            "changed_labels": [_field_label(f) for f in changed],
+            "description_ratio_pct": round(desc_ratio * 100),
+            "description_changed": "description" in changed,
+            "is_reviewer": is_change_reviewer(request.user),
+        })
+
+    # The editor made a choice. Apply non-reviewable changes immediately either
+    # way, then route the reviewable ones per the decision.
+    from . import notifications as event_notifications
+    from .models import EventChangeRequest
+
+    nonreviewable = [
+        f for f in form.changed_data if f not in REVIEWABLE_FIELDS
+    ]
+    if nonreviewable:
+        for f in nonreviewable:
+            setattr(event, f, cd[f])
+        event.save(update_fields=nonreviewable)
+
+    reviewer = is_change_reviewer(request.user)
+    desc_ratio = change_ratio(original["description"], cd["description"]) \
+        if "description" in changed else 0.0
+
+    def _make_request(status):
+        return EventChangeRequest(
+            event=event, proposed_by=request.user, status=status,
+            changed_fields=changed, description_change_ratio=desc_ratio,
+            **{f"proposed_{f}": cd[f] for f in changed},
+            **{f"original_{f}": original[f] for f in changed},
+        )
+
+    if decision == "review":
+        cr = _make_request(EventChangeRequest.Status.PENDING)
+        cr.save()
+        event_notifications.notify_change_submitted(cr)
+        messages.success(
+            request,
+            "Submitted to the Programming Committee — the event stays as it is "
+            "until they review your change.",
+        )
+        return redirect("events:detail", slug=event.slug)
+
+    if decision == "admin" and reviewer:
+        cr = _make_request(EventChangeRequest.Status.ADMINISTRATIVE)
+        cr.apply()                 # writes the proposed values onto the event
+        cr.reviewed_by = request.user
+        cr.reviewed_at = timezone.now()
+        cr.save()
+        messages.success(request, "Administrative change applied and logged.")
+        return redirect("events:detail", slug=event.slug)
+
+    # Default / "minor": faculty self-certifies; the change is adopted now.
+    cr = _make_request(EventChangeRequest.Status.SELF_CERTIFIED)
+    cr.apply()
+    cr.save()
+    messages.success(request, "Change adopted.")
+    return redirect("events:detail", slug=event.slug)
+
+
+def _field_label(field: str) -> str:
+    from .review import FIELD_LABELS
+    return FIELD_LABELS.get(field, field)
 
 
 @login_required
@@ -410,6 +506,7 @@ def event_generate_code(request, slug: str):
 PC_ADMIN_TABS = [
     ("programs",  "Programs"),
     ("proposals", "Proposals"),
+    ("changes",   "Changes"),
     ("help",      "Help"),
 ]
 
@@ -736,3 +833,45 @@ def proposal_decide(request, pk: int):
         proposal.decline(request.user, note=request.POST.get("note", ""))
         messages.success(request, "Proposal declined.")
     return redirect("program_admin_proposals")
+
+
+@login_required
+def program_admin_changes(request):
+    """PC admin: review queue for faculty content changes to approved events
+    (#295), plus a history of self-certified / administrative / decided ones."""
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    from .models import EventChangeRequest
+
+    requests = list(
+        EventChangeRequest.objects
+        .select_related("event", "proposed_by", "reviewed_by")
+    )
+    pending = [c for c in requests if c.status == EventChangeRequest.Status.PENDING]
+    decided = [c for c in requests if c.status != EventChangeRequest.Status.PENDING]
+    return _pc_admin_render(request, "changes", "events/program_admin/changes.html", {
+        "pending": pending,
+        "decided": decided,
+    })
+
+
+@login_required
+@require_POST
+def change_request_decide(request, pk: int):
+    """PC approves (applies) or declines a pending faculty content change."""
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    from . import notifications as event_notifications
+    from .models import EventChangeRequest
+
+    cr = get_object_or_404(EventChangeRequest, pk=pk)
+    if cr.status != EventChangeRequest.Status.PENDING:
+        return redirect("program_admin_changes")
+    if request.POST.get("decision") == "approve":
+        cr.approve(request.user)
+        messages.success(request, f"Approved — “{cr.event.title}” updated.")
+    else:
+        cr.decline(request.user, note=request.POST.get("note", ""))
+        messages.success(request, "Change declined.")
+    event_notifications.notify_change_decided(cr)
+    return redirect("program_admin_changes")

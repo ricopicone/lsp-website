@@ -318,6 +318,26 @@ Done (see `git log` for specifics):
   Kill switch `DJANGO_DEVAPI_ENABLED=false`. Built to grow into a broader admin
   surface (health/deploy, member lookups, treasurer/referral read models). See
   `mcp/README.md` + the `devapi-mcp-server` memory.
+- **Faculty editing review loop** (task #295). Editing the *content* fields
+  (title, description, readings, fee note) of an **approved** event — published
+  *and* minted from an approved PC proposal, of a proposable type
+  (seminar/reading group/special event) — now routes through a
+  certify-or-submit dialog (`events/<slug>/edit/` → `event_edit_confirm.html`).
+  Non-reviewable fields (schedule_note, contact, record_video) still apply
+  immediately, and events not from a proposal edit freely as before
+  (`Event.requires_change_review()`). Faculty get two options — *minor* (adopted
+  now) or *substantial* (held in the PC queue); PC/staff reviewers
+  (`events.permissions.is_change_reviewer`) get a third *administrative change*
+  option that applies immediately with an audit record. The ~20%
+  description-change heuristic (`events/review.py:change_ratio`) is **advisory
+  only** — it recommends the review path but never forces it (do-not-over-
+  automate). Every dialogged change leaves an `events.EventChangeRequest` audit
+  row (status SELF_CERTIFIED / ADMINISTRATIVE / PENDING / APPROVED / DECLINED);
+  the live event is untouched while a change is PENDING. PC review queue at the
+  new **Changes** tab of the program admin (`program_admin_changes` +
+  `change_request_decide`); notifications via the new
+  `EVENT_CHANGE_REVIEW` category (PC on submit, proposer on decision). `title`
+  is now editable on the faculty edit form.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
