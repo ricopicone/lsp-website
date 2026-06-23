@@ -8,7 +8,12 @@ auditable view and a manual escape hatch (do-not-over-automate).
 
 from django.contrib import admin
 
-from .models import AnalystFunction, AvailabilitySpan
+from .models import (
+    AnalystFunction,
+    AvailabilitySettings,
+    AvailabilitySpan,
+    ReminderTemplate,
+)
 
 
 @admin.register(AnalystFunction)
@@ -40,3 +45,13 @@ class AvailabilitySpanAdmin(admin.ModelAdmin):
     autocomplete_fields = ("profile", "function", "created_by")
     readonly_fields = ("created_at",)
     date_hierarchy = "start_date"
+
+
+@admin.register(AvailabilitySettings)
+class AvailabilitySettingsAdmin(admin.ModelAdmin):
+    list_display = ("__str__", "reminder_mode")
+
+
+@admin.register(ReminderTemplate)
+class ReminderTemplateAdmin(admin.ModelAdmin):
+    list_display = ("__str__", "subject", "updated_at")

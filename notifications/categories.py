@@ -69,6 +69,7 @@ class Category(models.TextChoices):
     # --- Account ---------------------------------------------------------
     ACCOUNT_ADVISOR = "account_advisor", _("Advisor assignments")
     ACCOUNT_SECURITY = "account_security", _("Account & security")
+    AVAILABILITY_REVIEW = "availability_review", _("Availability review requests")
 
 
 class EmailDelivery(models.TextChoices):
@@ -238,6 +239,14 @@ CATEGORY_META: dict[str, CategoryMeta] = {
         SECTION_ACCOUNT, _("Account & security"),
         _("Sign-in links, email changes, password resets. Always emailed."),
         default_in_app=False, in_app_capable=False, email_locked=True,
+    ),
+    # Applications Coordinator's periodic ask that an analyst review which LSP
+    # functions they're available for. Email defaults on (a prompt seen only in
+    # the bell is little use), but it's not locked — analysts can turn it off.
+    _C.AVAILABILITY_REVIEW: _M(
+        SECTION_ACCOUNT, _("Availability review requests"),
+        _("For Analysts of the School: an occasional request to confirm which "
+          "LSP functions you're available for."),
     ),
 }
 

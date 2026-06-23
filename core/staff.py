@@ -34,6 +34,7 @@ PANEL_ROLES = (
     StaffRole.ADMIN_ASSISTANT,
     StaffRole.WEB_DEVELOPER,
     StaffRole.REFERRAL_COORDINATOR,
+    StaffRole.APPLICATIONS_COORDINATOR,
 )
 
 
@@ -163,6 +164,15 @@ def _panels_for(user) -> list[dict]:
                 status__in=ReferralRequest.OPEN_STATUSES
             ).count(),
             "count_label": "open",
+        })
+    # Applications Coordinator — deliberately NOT opened to generic is_staff:
+    # the availability table is members-internal data.
+    if user.is_superuser or has_staff_role(user, StaffRole.APPLICATIONS_COORDINATOR):
+        panels.append({
+            "title": "Applications Coordinator Admin",
+            "blurb": "Analyst availability: who's open for application "
+                     "interviews, advising, control, and personal analysis.",
+            "url": reverse("availability:grid"),
         })
     if user.is_superuser or has_staff_role(
         user, StaffRole.WEB_COORDINATOR, StaffRole.WEB_DEVELOPER

@@ -1,16 +1,26 @@
-"""Tests for the analyst-availability data model and services (Phase 1)."""
+"""Tests for analyst availability: data model + services (Phase 1) and the
+Applications Coordinator console (Phase 2)."""
 
 from __future__ import annotations
 
 import datetime as _dt
 
 import pytest
+from django.core import mail
 from django.db import IntegrityError
+from django.urls import reverse
 
 from accounts.models import Profile, User
+from core.models import StaffRole
+from notifications.models import Notification
 
 from . import services
-from .models import AnalystFunction, AvailabilitySpan
+from .models import (
+    AnalystFunction,
+    AvailabilitySettings,
+    AvailabilitySpan,
+    ReminderTemplate,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -189,3 +199,112 @@ def test_candidate_is_not_eligible():
     user.profile.save()
     assert services.is_eligible(user.profile) is False
     assert user.profile not in services.eligible_profiles()
+
+
+# ---- Phase 2: the coordinator console ------------------------------------
+
+
+@pytest.fixture
+def coordinator(client):
+    user = User.objects.create_user(
+        email="cecile@example.com", password="pw",
+        first_name="Cecile", last_name="Gouffrant",
+    )
+    role, _ = StaffRole.objects.get_or_create(
+        key=StaffRole.APPLICATIONS_COORDINATOR,
+        defaults={"name": "Applications Coordinator"},
+    )
+    role.holders.add(user)
+    client.force_login(user)
+    return user
+
+
+def test_console_blocks_non_coordinator(client):
+    user = User.objects.create_user(email="nobody@example.com", password="pw")
+    client.force_login(user)
+    resp = client.get(reverse("availability:grid"))
+    assert resp.status_code == 403
+
+
+def test_grid_lists_analysts_only(client, coordinator, analyst):
+    # a non-analyst who should NOT appear
+    other = User.objects.create_user(email="cand@example.com", password="pw")
+    other.profile.role = Profile.Role.CANDIDATE
+    other.profile.save()
+
+    resp = client.get(reverse("availability:grid"))
+    assert resp.status_code == 200
+    assert b"Anna Analyst" in resp.content
+    assert b"cand@example.com" not in resp.content
+
+
+def test_grid_save_records_changes(client, coordinator, analyst, interviews):
+    advisor = AnalystFunction.objects.get(slug="advisor")
+    resp = client.post(reverse("availability:grid"), {
+        f"cell_{analyst.pk}_{interviews.pk}": Status.YES,
+        f"cell_{analyst.pk}_{advisor.pk}": Status.NO,
+    })
+    assert resp.status_code == 302
+    assert services.current_status(analyst, interviews) == Status.YES
+    assert services.current_status(analyst, advisor) == Status.NO
+    span = AvailabilitySpan.objects.get(
+        profile=analyst, function=interviews, end_date__isnull=True
+    )
+    assert span.source == AvailabilitySpan.Source.COORDINATOR
+    assert span.created_by == coordinator
+
+
+def test_grid_save_is_noop_when_unchanged(client, coordinator, analyst, interviews):
+    services.set_availability(analyst, interviews, Status.YES)
+    before = AvailabilitySpan.objects.count()
+    client.post(reverse("availability:grid"), {
+        f"cell_{analyst.pk}_{interviews.pk}": Status.YES,
+    })
+    assert AvailabilitySpan.objects.count() == before
+
+
+def test_analyst_page_and_cell_save(client, coordinator, analyst, interviews):
+    url = reverse("availability:analyst", args=[analyst.pk])
+    assert client.get(url).status_code == 200
+    resp = client.post(url, {
+        "function": interviews.pk, "status": Status.YES,
+        "note": "Interviews OK Sept 2026",
+    })
+    assert resp.status_code == 302
+    span = AvailabilitySpan.objects.get(
+        profile=analyst, function=interviews, end_date__isnull=True
+    )
+    assert span.status == Status.YES
+    assert span.note == "Interviews OK Sept 2026"
+
+
+def test_send_reminders_notifies_and_emails(
+    client, coordinator, analyst, django_capture_on_commit_callbacks
+):
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = client.post(reverse("availability:send_reminders"))
+    assert resp.status_code == 302
+    assert Notification.objects.filter(
+        recipient=analyst.user, category="availability_review"
+    ).exists()
+    assert len(mail.outbox) == 1
+    assert analyst.user.email in mail.outbox[0].to
+
+
+def test_settings_save(client, coordinator):
+    assert client.get(reverse("availability:settings")).status_code == 200
+    resp = client.post(reverse("availability:settings"), {
+        "reminder_mode": AvailabilitySettings.Mode.AUTO,
+    })
+    assert resp.status_code == 302
+    assert AvailabilitySettings.load().reminder_mode == AvailabilitySettings.Mode.AUTO
+
+
+def test_template_edit_save(client, coordinator):
+    assert client.get(reverse("availability:templates")).status_code == 200
+    resp = client.post(reverse("availability:templates"), {
+        "subject": "Reminder", "body": "Hi {name}, update at {update_url}.",
+    })
+    assert resp.status_code == 302
+    tmpl = ReminderTemplate.get(ReminderTemplate.Key.REVIEW_REQUEST)
+    assert tmpl.subject == "Reminder"

@@ -174,3 +174,71 @@ class AvailabilitySpan(models.Model):
     def is_open(self) -> bool:
         """Whether this span is the current state (no end date)."""
         return self.end_date is None
+
+
+class AvailabilitySettings(models.Model):
+    """Singleton: the Applications Coordinator's workflow knobs.
+
+    Mirrors ``referrals.ReferralSettings``. Today it governs the reminder the
+    coordinator sends analysts asking them to keep their availability current
+    (do-not-over-automate: ``reminder_mode`` defaults to review-first).
+    """
+
+    class Mode(models.TextChoices):
+        AUTO = "auto", _("Automatic")
+        REVIEW = "review", _("Review first")
+
+    reminder_mode = models.CharField(
+        max_length=10,
+        choices=Mode.choices,
+        default=Mode.REVIEW,
+        verbose_name="Availability reminders",
+        help_text="Automatic sends the periodic reminder on its own; review "
+        "first leaves it for you to send from the console.",
+    )
+
+    class Meta:
+        verbose_name = "Availability settings"
+        verbose_name_plural = "Availability settings"
+
+    def __str__(self) -> str:
+        return "Availability settings"
+
+    @classmethod
+    def load(cls) -> AvailabilitySettings:
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class ReminderTemplate(models.Model):
+    """The editable message asking an analyst to review their availability.
+
+    Same shape as ``referrals.MessageTemplate``: a ``{placeholder}`` body the
+    coordinator can reword, restorable from the seed if deleted. One row today
+    (keyed for future expansion).
+    """
+
+    class Key(models.TextChoices):
+        REVIEW_REQUEST = "review_request", _("Please review your availability")
+
+    key = models.CharField(max_length=30, choices=Key.choices, unique=True)
+    subject = models.CharField(max_length=200)
+    body = models.TextField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("key",)
+
+    def __str__(self) -> str:
+        return self.get_key_display()
+
+    @classmethod
+    def get(cls, key: str) -> ReminderTemplate:
+        """Fetch a template; restore it from the seed if it was deleted."""
+        obj = cls.objects.filter(key=key).first()
+        if obj is None:
+            from .seed_templates import SEED_TEMPLATES
+
+            subject, body = SEED_TEMPLATES[key]
+            obj = cls.objects.create(key=key, subject=subject, body=body)
+        return obj

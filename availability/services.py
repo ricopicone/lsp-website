@@ -10,13 +10,38 @@ calculation (:func:`coverage_fraction`) round it out.
 from __future__ import annotations
 
 import datetime as _dt
+import re
 
 from django.db import transaction
 from django.utils import timezone
 
-from events.models import academic_year_date_range
+from events.models import academic_year_date_range, academic_year_of
 
 from .models import AnalystFunction, AvailabilitySpan
+
+_TOKEN = re.compile(r"\{(\w+)\}")
+
+
+def render_template(text: str, context: dict) -> str:
+    """Substitute ``{token}`` placeholders for keys present in ``context``.
+
+    Unknown tokens (and any other braces) are left untouched, so a hand-edited
+    reminder template can never crash a send. Mirrors the referrals helper.
+    """
+    return _TOKEN.sub(
+        lambda m: str(context[m.group(1)]) if m.group(1) in context else m.group(0),
+        text,
+    )
+
+
+def current_and_upcoming_ay(today: _dt.date | None = None) -> tuple[str, str]:
+    """The current academic-year label and the next one (e.g. ('2025-2026',
+    '2026-2027')) — the two windows the coverage report shows."""
+    today = today or timezone.localdate()
+    current = academic_year_of(today)
+    start_year = int(current.partition("-")[0])
+    upcoming = f"{start_year + 1}-{start_year + 2}"
+    return current, upcoming
 
 Status = AvailabilitySpan.Status
 

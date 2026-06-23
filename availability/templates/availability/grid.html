@@ -1,0 +1,66 @@
+{% extends "availability/base.html" %}
+{% block tab_content %}
+<div class="space-y-5">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <p class="text-base-content/70 text-sm max-w-2xl">
+      Which Analysts of the School are available for each LSP function. Set a
+      cell to <span class="font-medium">Yes</span>, <span class="font-medium">No</span>,
+      or <span class="font-medium">Unknown</span> and save. Each change is kept
+      with its date and your name — open an analyst for the full history and
+      academic-year coverage.
+    </p>
+    <form method="post" action="{% url 'availability:send_reminders' %}"
+          onsubmit="return confirm('Email every analyst a request to review their availability?');">
+      {% csrf_token %}
+      <button class="btn btn-outline btn-sm">Send review reminders</button>
+    </form>
+  </div>
+
+  {% if rows %}
+  <form method="post">
+    {% csrf_token %}
+    <div class="overflow-x-auto rounded-xl border border-base-300/60 bg-base-100">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th class="sticky left-0 bg-base-100">Analyst</th>
+            {% for fn in functions %}<th class="text-center">{{ fn.column_label }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr class="hover">
+            <td class="sticky left-0 bg-base-100 whitespace-nowrap">
+              <a href="{% url 'availability:analyst' row.profile.pk %}" class="link font-medium">
+                {{ row.profile.display_full_name }}
+              </a>
+            </td>
+            {% for cell in row.cells %}
+            <td class="text-center">
+              <select name="{{ cell.field }}" class="select select-bordered select-xs">
+                {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if value == cell.status %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% if cell.note %}<span class="block text-xs text-base-content/50 mt-0.5" title="{{ cell.note }}">{{ cell.note|truncatechars:18 }}</span>{% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="pt-4">
+      <button class="btn btn-primary btn-sm">Save changes</button>
+    </div>
+  </form>
+  {% else %}
+  <p class="text-base-content/60 text-sm">
+    No Analysts of the School yet. Members with the Analyst role appear here
+    automatically.
+  </p>
+  {% endif %}
+
+</div>
+{% endblock %}
