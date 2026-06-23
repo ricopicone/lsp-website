@@ -130,6 +130,21 @@ def note_history(profile) -> list:
     return list(profile.availability_notes.select_related("created_by"))
 
 
+def interview_status_map(user_ids) -> dict[int, str]:
+    """``{user_id: status}`` for the **Application Interviews** function, over the
+    given users — the bridge the admissions flow uses to staff interviewers by
+    availability. Users without an open span are simply absent (treat as
+    Unknown). Empty if the function isn't configured."""
+    fn = AnalystFunction.objects.filter(slug="application-interviews").first()
+    if fn is None:
+        return {}
+    return dict(
+        AvailabilitySpan.objects.filter(
+            function=fn, end_date__isnull=True, profile__user_id__in=list(user_ids)
+        ).values_list("profile__user_id", "status")
+    )
+
+
 def current_status(profile, function: AnalystFunction) -> str:
     """``profile``'s current status for ``function`` (UNKNOWN if never set)."""
     span = (

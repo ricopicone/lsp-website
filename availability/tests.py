@@ -592,3 +592,48 @@ def test_profile_editor_shows_availability_section_for_analyst(client, analyst):
     resp = client.get(reverse("profile_edit"))
     assert resp.status_code == 200
     assert b'id="availability"' in resp.content
+
+
+# ---- Phase (admissions facilitation): interviewer-staffing bridge --------
+
+
+def test_interview_status_map(analyst, interviews):
+    services.set_availability(analyst, interviews, Status.YES)
+    assert services.interview_status_map([analyst.user_id]) == {analyst.user_id: "yes"}
+
+
+def test_assign_form_orders_available_first_and_labels(interviews):
+    from admissions.forms import AssignInterviewerForm
+
+    a_yes = _make_analyst("Ava", "Available")
+    a_no = _make_analyst("Ned", "Nope")
+    services.set_availability(a_yes, interviews, Status.YES)
+    services.set_availability(a_no, interviews, Status.NO)
+
+    form = AssignInterviewerForm(application=None)
+    pool = list(form.fields["interviewer"].queryset)
+    assert pool.index(a_yes.user) < pool.index(a_no.user)  # available first
+    label = form.fields["interviewer"].label_from_instance(a_yes.user)
+    assert "available for interviews" in label
+
+
+def test_is_applications_coordinator_role(interviews):
+    from committees.models import Committee
+    from workgroups.models import WorkgroupMembership
+    from workgroups.permissions import is_applications_coordinator
+
+    profile = _make_analyst("Cee", "Coord")
+    assert is_applications_coordinator(profile.user) is False  # analyst, not coordinator
+    wg = Committee.objects.get(slug="meeting-of-analysts").workgroup
+    wg.add_member(profile.user, role=WorkgroupMembership.Role.APPLICATIONS_COORDINATOR)
+    assert is_applications_coordinator(profile.user) is True
+
+
+def test_is_applications_coordinator_superuser_and_anon():
+    from django.contrib.auth.models import AnonymousUser
+
+    from workgroups.permissions import is_applications_coordinator
+
+    su = User.objects.create_superuser(email="su@example.com", password="pw")
+    assert is_applications_coordinator(su) is True
+    assert is_applications_coordinator(AnonymousUser()) is False

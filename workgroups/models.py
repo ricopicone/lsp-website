@@ -798,6 +798,8 @@ class WorkgroupMembership(models.Model):
         REFERRAL_COORDINATOR = "referral_coordinator", _("Referral Coordinator")
         WEB_COORDINATOR = "web_coordinator", _("Web Coordinator")
         ADMIN_ASSISTANT = "admin_assistant", _("Admin Assistant")
+        # Facilitates admissions for the Meeting of Analysts (task #272).
+        APPLICATIONS_COORDINATOR = "applications_coordinator", _("Applications Coordinator")
 
     #: Roles that moderate a workgroup's channel (Stage 2) and manage it.
     #: Faculty lead their seminar's workspace; organizers lead a reading group.
