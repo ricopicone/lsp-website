@@ -109,15 +109,31 @@ def _formation_label(application: Application) -> str:
     return label
 
 
+def _guidelines_url(application: Application) -> str:
+    """The track's Formation Guidelines document (advisor/advisee
+    responsibilities) — Scholar for the scholar track, else Analyst. Falls back
+    to the documents index if the document isn't found."""
+    from documents.models import Document
+
+    label = "Scholar" if application.track == Application.Track.SCHOLAR else "Analyst"
+    doc = Document.objects.filter(
+        title__icontains=f"{label} Formation Guidelines"
+    ).first()
+    return _absolute("documents:detail", doc.slug) if doc else _absolute("documents:index")
+
+
 def _applicant_context(application: Application) -> dict:
     from availability.emails import applications_coordinator_name
     return {
         "name": application.applicant.get_full_name() or application.applicant.email,
         "track": application.get_track_display(),
         "formation": _formation_label(application),
-        "availability_url": _absolute("directory_availability"),
+        # Pre-sorted to analysts available to advise.
+        "availability_url": _absolute("directory_availability") + "?only=advisor",
+        "guidelines_url": _guidelines_url(application),
         "documents_url": _absolute("documents:index"),
         "profile_url": _absolute("profile_edit"),
+        "mylsp_url": _absolute("admissions:formation"),
         "status_url": _absolute("admissions:status"),
         "applications_coordinator": applications_coordinator_name(),
     }

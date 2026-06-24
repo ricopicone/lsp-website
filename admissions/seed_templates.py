@@ -6,7 +6,8 @@ template can never crash a send.
 
 Tokens:
 - acknowledgment / decision_*: ``{name}``, ``{track}``, ``{formation}``, ``{status_url}``,
-  ``{availability_url}``, ``{documents_url}``, ``{profile_url}``, ``{note}`` (decisions),
+  ``{guidelines_url}``, ``{availability_url}`` (pre-sorted to advisors),
+  ``{documents_url}``, ``{profile_url}``, ``{mylsp_url}``, ``{note}`` (decisions),
   ``{applications_coordinator}``
 - invitation: ``{interviewer}``, ``{applicant}``, ``{formation}``, ``{agree_url}``,
   ``{applications_coordinator}``
@@ -96,19 +97,25 @@ applications@lacanschool.org""",
 
 It is my great pleasure to inform you that your application to the Lacanian School of Psychoanalysis, {formation}, has been accepted. You are now a Precandidate at LSP: Congratulations!
 
-The first thing for you to do now is to choose an advisor among the Analysts of the School. The members-only documents area has a document explaining the responsibilities of advisor and advisee, and you can see each analyst's current availability — including who is available to advise — here:
+The first thing for you to do now is to choose an advisor among the Analysts of the School. The Formation Guidelines explain the responsibilities of advisor and advisee:
+
+{guidelines_url}
+
+You can see which analysts are currently available to advise here:
 
 {availability_url}
 
 Note that it is up to you to contact the analyst you have selected and ask them if they can be your advisor.
 
-In the members-only documents area you will also find the latest Guidelines for the formation of analysts, a checklist of what is needed before you present your Passage, and the two founding texts of the school used in the creation of one's Palimpsest:
+In the members-only documents area you will also find a checklist of what is needed before you present your Passage, and the two founding texts of the school used in the creation of one's Palimpsest:
 
 {documents_url}
 
-Please also take a few minutes to build your LSP member profile — add your bio, photo, and contact details:
+Please also take a few minutes to build your LSP member profile — add your bio, photo, and contact details — and explore your member home, My LSP:
 
 {profile_url}
+
+{mylsp_url}
 
 Any questions about your formation should be directed to your advisor; feel free to contact me with anything else.
 

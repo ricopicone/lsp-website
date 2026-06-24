@@ -167,8 +167,8 @@ _TOKENS = {
         "{interviewer}, {applicant}, {url}, {applications_coordinator}"
     ),
     MessageTemplate.Key.DECISION_ACCEPT: (
-        "{name}, {formation}, {note}, {availability_url}, {documents_url}, "
-        "{profile_url}, {applications_coordinator}"
+        "{name}, {formation}, {note}, {guidelines_url}, {availability_url}, "
+        "{documents_url}, {profile_url}, {mylsp_url}, {applications_coordinator}"
     ),
     MessageTemplate.Key.DECISION_REJECT: (
         "{name}, {track}, {note}, {applications_coordinator}"

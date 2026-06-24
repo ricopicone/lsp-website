@@ -139,14 +139,21 @@ def test_coordinator_send_acknowledgment(
 
 def test_decision_accept_letter_uses_template_links(application):
     from admissions.emails import send_application_decision
+    from documents.models import Document
 
+    Document.objects.create(
+        title="Analyst Formation Guidelines", slug="analyst-formation-guidelines",
+        category=Document.Category.FORMATION,
+    )
     application.status = Application.Status.ACCEPTED
     application.save(update_fields=["status"])
     send_application_decision(application)
     body = mail.outbox[0].body
     assert "Congratulations" in body
-    assert "/directory/availability/" in body  # the live availability table
+    assert "/directory/availability/?only=advisor" in body  # advisors, pre-sorted
+    assert "/documents/analyst-formation-guidelines/" in body  # responsibilities doc
     assert "/accounts/profile/" in body  # the profile-build invite
+    assert "/formation/" in body  # My LSP
     assert mail.outbox[0].reply_to == ["applications@lacanschool.org"]
 
 
