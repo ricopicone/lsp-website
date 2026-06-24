@@ -88,3 +88,78 @@ def test_panel_appears_for_coordinator(client, coordinator):
     resp = client.get(reverse("admin_tools"))
     assert resp.status_code == 200
     assert b"Applications Coordinator Admin" in resp.content
+
+
+# ---- Phase 3: editable applicant comms -----------------------------------
+
+
+def test_acknowledgment_auto_sends_on_submit(application, django_capture_on_commit_callbacks):
+    from admissions.models import AdmissionsSettings
+    from admissions.services import acknowledge_on_submit
+
+    assert AdmissionsSettings.load().acknowledgment_mode == AdmissionsSettings.Mode.AUTO
+    with django_capture_on_commit_callbacks(execute=True):
+        acknowledge_on_submit(application)
+    assert len(mail.outbox) == 1
+    application.refresh_from_db()
+    assert application.acknowledged_at is not None
+
+
+def test_acknowledgment_review_mode_holds(application, django_capture_on_commit_callbacks):
+    from admissions.models import AdmissionsSettings
+    from admissions.services import acknowledge_on_submit
+
+    cfg = AdmissionsSettings.load()
+    cfg.acknowledgment_mode = AdmissionsSettings.Mode.REVIEW
+    cfg.save()
+    with django_capture_on_commit_callbacks(execute=True):
+        acknowledge_on_submit(application)
+    assert mail.outbox == []
+    application.refresh_from_db()
+    assert application.acknowledged_at is None
+
+
+def test_coordinator_send_acknowledgment(
+    client, coordinator, application, django_capture_on_commit_callbacks
+):
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = client.post(
+            reverse("admissions:coordinator_acknowledge", args=[application.pk])
+        )
+    assert resp.status_code == 302
+    assert len(mail.outbox) == 1
+    assert mail.outbox[0].reply_to == ["applications@lacanschool.org"]
+    application.refresh_from_db()
+    assert application.acknowledged_at is not None
+
+
+def test_decision_accept_letter_uses_template_links(application):
+    from admissions.emails import send_application_decision
+
+    application.status = Application.Status.ACCEPTED
+    application.save(update_fields=["status"])
+    send_application_decision(application)
+    body = mail.outbox[0].body
+    assert "Congratulations" in body
+    assert "/directory/availability/" in body  # the live availability table
+    assert "/accounts/profile/" in body  # the profile-build invite
+    assert mail.outbox[0].reply_to == ["applications@lacanschool.org"]
+
+
+def test_admissions_settings_save(client, coordinator):
+    from admissions.models import AdmissionsSettings
+
+    resp = client.post(reverse("admissions:coordinator_settings"), {
+        "acknowledgment_mode": AdmissionsSettings.Mode.REVIEW,
+    })
+    assert resp.status_code == 302
+    assert AdmissionsSettings.load().acknowledgment_mode == AdmissionsSettings.Mode.REVIEW
+
+
+def test_decision_template_editable(client, coordinator):
+    url = reverse("admissions:coordinator_message_edit",
+                  args=[MessageTemplate.Key.DECISION_ACCEPT])
+    assert client.get(url).status_code == 200
+    resp = client.post(url, {"subject": "Welcome!", "body": "Dear {name}, welcome."})
+    assert resp.status_code == 302
+    assert MessageTemplate.get(MessageTemplate.Key.DECISION_ACCEPT).subject == "Welcome!"

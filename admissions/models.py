@@ -90,6 +90,11 @@ class Application(models.Model):
         max_length=14, choices=Status.choices, default=Status.SUBMITTED, db_index=True,
     )
     submitted_at = models.DateTimeField(default=timezone.now)
+    acknowledged_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the applicant acknowledgment was sent (auto on submit, "
+        "or by the coordinator in review-first mode).",
+    )
     decided_at = models.DateTimeField(null=True, blank=True)
     decided_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
@@ -290,7 +295,10 @@ class MessageTemplate(models.Model):
     """
 
     class Key(models.TextChoices):
+        ACKNOWLEDGMENT = "acknowledgment", _("Applicant acknowledgment (on submit)")
         INTERVIEWER_NUDGE = "interviewer_nudge", _("Interviewer report reminder")
+        DECISION_ACCEPT = "decision_accept", _("Decision — accepted")
+        DECISION_REJECT = "decision_reject", _("Decision — not accepted")
 
     key = models.CharField(max_length=40, choices=Key.choices, unique=True)
     subject = models.CharField(max_length=200)
@@ -312,4 +320,34 @@ class MessageTemplate(models.Model):
 
             subject, body = SEED_TEMPLATES[key]
             obj = cls.objects.create(key=key, subject=subject, body=body)
+        return obj
+
+
+class AdmissionsSettings(models.Model):
+    """Singleton: the Applications Coordinator's workflow knobs."""
+
+    class Mode(models.TextChoices):
+        AUTO = "auto", _("Automatic")
+        REVIEW = "review", _("Review first")
+
+    acknowledgment_mode = models.CharField(
+        max_length=10,
+        choices=Mode.choices,
+        default=Mode.AUTO,
+        verbose_name="Applicant acknowledgment",
+        help_text="Automatic emails the acknowledgment as soon as an application "
+        "is submitted; review first holds it for you to send (and personalize) "
+        "from the console.",
+    )
+
+    class Meta:
+        verbose_name = "Admissions settings"
+        verbose_name_plural = "Admissions settings"
+
+    def __str__(self) -> str:
+        return "Admissions settings"
+
+    @classmethod
+    def load(cls) -> AdmissionsSettings:
+        obj, _created = cls.objects.get_or_create(pk=1)
         return obj

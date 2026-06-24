@@ -26,6 +26,7 @@
       <thead>
         <tr>
           <th>Applicant</th><th>Track</th><th>Status</th>
+          <th class="text-center">Ack.</th>
           <th class="text-center">Interviews</th><th class="text-center">Reports</th>
           <th>Submitted</th><th></th>
         </tr>
@@ -40,6 +41,16 @@
           </td>
           <td>{{ row.application.get_track_display }}</td>
           <td><span class="badge badge-outline badge-sm">{{ row.application.get_status_display }}</span></td>
+          <td class="text-center">
+            {% if row.acknowledged %}<span class="text-success" title="Acknowledged">✓</span>
+            {% else %}
+            <form method="post" action="{% url 'admissions:coordinator_acknowledge' row.application.pk %}"
+                  onsubmit="return confirm('Send the acknowledgment to {{ row.application.applicant.get_full_name|default:row.application.applicant.email }}?');">
+              {% csrf_token %}
+              <button class="btn btn-ghost btn-xs" title="Send the applicant acknowledgment">Send</button>
+            </form>
+            {% endif %}
+          </td>
           <td class="text-center">{{ row.assigned }} / 2</td>
           <td class="text-center">{{ row.reports_in }} / {{ row.assigned }}</td>
           <td class="whitespace-nowrap">{{ row.application.submitted_at|date:"M j, Y" }}</td>

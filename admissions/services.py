@@ -33,6 +33,22 @@ def render_template(text: str, context: dict) -> str:
     )
 
 
+def acknowledge(application: Application) -> None:
+    """Send the applicant acknowledgment (bell + email) and stamp it."""
+    notify_admissions.application_submitted(application)
+    application.acknowledged_at = timezone.now()
+    application.save(update_fields=["acknowledged_at"])
+
+
+def acknowledge_on_submit(application: Application) -> None:
+    """On submit, acknowledge automatically unless the coordinator set the
+    acknowledgment to review-first (then they send it from the console)."""
+    from .models import AdmissionsSettings
+
+    if AdmissionsSettings.load().acknowledgment_mode == AdmissionsSettings.Mode.AUTO:
+        acknowledge(application)
+
+
 @transaction.atomic
 def accept_application(application: Application, *, by, effective_ay=None, note=""):
     """Accept an application: admit the applicant as the track's Precandidate

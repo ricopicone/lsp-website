@@ -53,6 +53,10 @@ urlpatterns = [
     # --- Applications Coordinator console ---
     path(f"{_APPS}/", coordinator.dashboard, name="coordinator_dashboard"),
     path(f"{_APPS}/<int:pk>/nudge/", coordinator.nudge, name="coordinator_nudge"),
+    path(f"{_APPS}/<int:pk>/acknowledge/", coordinator.send_acknowledgment,
+         name="coordinator_acknowledge"),
+    path(f"{_APPS}/settings/", coordinator.settings_view,
+         name="coordinator_settings"),
     path(f"{_APPS}/messages/", coordinator.messages_list,
          name="coordinator_messages"),
     path(f"{_APPS}/messages/<str:key>/", coordinator.message_edit,

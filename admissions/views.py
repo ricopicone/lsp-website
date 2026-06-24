@@ -19,7 +19,6 @@ from django.views.decorators.http import require_POST
 from accounts.membership import current_academic_year_start
 from accounts.models import Profile
 
-from . import notifications as notify_admissions
 from .advancement import (
     can_open_advancement,
     decide_advancement,
@@ -102,7 +101,8 @@ def apply(request, track):
             profile.role = Profile.Role.PROSPECTIVE_APPLICANT
             profile.save(update_fields=["role"])
         try:
-            notify_admissions.application_submitted(application)
+            from . import services
+            services.acknowledge_on_submit(application)
         except Exception:
             import logging
             logging.getLogger(__name__).exception("application-submitted email failed")

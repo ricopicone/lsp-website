@@ -17,8 +17,8 @@ from django.views.decorators.http import require_POST
 
 from . import notifications as notify_admissions
 from . import services
-from .forms import MessageTemplateForm
-from .models import Application, MessageTemplate
+from .forms import AdmissionsSettingsForm, MessageTemplateForm
+from .models import AdmissionsSettings, Application, MessageTemplate
 from .permissions import coordinator_required
 
 #: (key, label) for the console tabs, in display order. Availability is the
@@ -27,6 +27,7 @@ TABS = [
     ("applications", "Applications"),
     ("availability", "Analyst availability"),
     ("messages", "Messages"),
+    ("settings", "Settings"),
 ]
 
 
@@ -35,6 +36,7 @@ def _tab_links() -> list[tuple[str, str, str]]:
         "applications": reverse("admissions:coordinator_dashboard"),
         "availability": reverse("availability:grid"),
         "messages": reverse("admissions:coordinator_messages"),
+        "settings": reverse("admissions:coordinator_settings"),
     }
     return [(key, label, name_to_url[key]) for key, label in TABS]
 
@@ -71,6 +73,7 @@ def dashboard(request):
             "assigned": len(interviews),
             "reports_in": len(interviews) - len(pending),
             "pending": pending,
+            "acknowledged": app.acknowledged_at is not None,
         })
 
     return _render(request, "applications", "admissions/coordinator/dashboard.html", {
@@ -119,11 +122,46 @@ def nudge(request, pk):
 
 
 @coordinator_required
+@require_POST
+def send_acknowledgment(request, pk):
+    """Send the applicant acknowledgment by hand (review-first mode, or to
+    re-send). Idempotent enough — stamps acknowledged_at."""
+    application = get_object_or_404(Application, pk=pk)
+    services.acknowledge(application)
+    messages.success(request, "Acknowledgment sent to the applicant.")
+    return redirect("admissions:coordinator_dashboard")
+
+
+@coordinator_required
+def settings_view(request):
+    config = AdmissionsSettings.load()
+    form = AdmissionsSettingsForm(request.POST or None, instance=config)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Admissions settings saved.")
+        return redirect("admissions:coordinator_settings")
+    return _render(request, "settings", "admissions/coordinator/settings.html", {
+        "form": form,
+    })
+
+
+@coordinator_required
 def messages_list(request):
     items = [MessageTemplate.get(key) for key in MessageTemplate.Key.values]
     return _render(request, "messages", "admissions/coordinator/messages.html", {
         "templates": items,
     })
+
+
+#: The tokens each message supports, for the editor's hint.
+_TOKENS = {
+    MessageTemplate.Key.ACKNOWLEDGMENT: "{name}, {track}, {formation}",
+    MessageTemplate.Key.INTERVIEWER_NUDGE: "{interviewer}, {applicant}, {url}",
+    MessageTemplate.Key.DECISION_ACCEPT: (
+        "{name}, {formation}, {note}, {availability_url}, {documents_url}, {profile_url}"
+    ),
+    MessageTemplate.Key.DECISION_REJECT: "{name}, {track}, {note}",
+}
 
 
 @coordinator_required
@@ -138,5 +176,5 @@ def message_edit(request, key):
         messages.success(request, "Message saved.")
         return redirect("admissions:coordinator_messages")
     return _render(request, "messages", "admissions/coordinator/message_edit.html", {
-        "template": template, "form": form,
+        "template": template, "form": form, "tokens": _TOKENS.get(key, ""),
     })

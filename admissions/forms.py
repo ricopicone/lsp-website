@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from accounts.models import Profile
 
 from .models import (
+    AdmissionsSettings,
     Advancement,
     Application,
     ApplicationInterview,
@@ -174,6 +175,13 @@ class AdvancementForm(forms.ModelForm):
             "request to the Meeting of the Analysts. You may leave this blank."
         )
         self.fields["statement"].required = False
+
+
+class AdmissionsSettingsForm(forms.ModelForm):
+    class Meta:
+        model = AdmissionsSettings
+        fields = ("acknowledgment_mode",)
+        widgets = {"acknowledgment_mode": forms.Select(attrs={"class": _SELECT})}
 
 
 class MessageTemplateForm(forms.ModelForm):
