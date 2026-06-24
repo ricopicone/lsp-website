@@ -43,9 +43,11 @@ def coordinator_required(view):
     return wrapper
 
 
-#: (key, label) for the console tabs, in display order.
+#: (key, label) for the console tabs, in display order. "Applications" links to
+#: the coordinator's admissions console — the same role's other surface.
 TABS = [
-    ("grid", "Availability"),
+    ("applications", "Applications"),
+    ("grid", "Analyst availability"),
     ("overview", "Overview"),
     ("settings", "Settings"),
     ("templates", "Reminder message"),
@@ -54,6 +56,7 @@ TABS = [
 
 def _tab_links() -> list[tuple[str, str, str]]:
     name_to_url = {
+        "applications": reverse("admissions:coordinator_dashboard"),
         "grid": reverse("availability:grid"),
         "overview": reverse("availability:overview"),
         "settings": reverse("availability:settings"),

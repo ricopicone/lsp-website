@@ -7,7 +7,12 @@ from django.contrib.auth import get_user_model
 
 from accounts.models import Profile
 
-from .models import Advancement, Application, ApplicationInterview
+from .models import (
+    Advancement,
+    Application,
+    ApplicationInterview,
+    MessageTemplate,
+)
 
 User = get_user_model()
 
@@ -169,6 +174,18 @@ class AdvancementForm(forms.ModelForm):
             "request to the Meeting of the Analysts. You may leave this blank."
         )
         self.fields["statement"].required = False
+
+
+class MessageTemplateForm(forms.ModelForm):
+    """Edit one of the coordinator's outgoing messages."""
+
+    class Meta:
+        model = MessageTemplate
+        fields = ("subject", "body")
+        widgets = {
+            "subject": forms.TextInput(attrs={"class": _INPUT}),
+            "body": forms.Textarea(attrs={"class": _TEXTAREA, "rows": 12}),
+        }
 
 
 class RecommendationForm(forms.ModelForm):

@@ -274,3 +274,42 @@ class Advancement(models.Model):
         track; the palimpsest is the same word on both. Keyed off ``from_role``
         (snapshotted when the demande opened) so it's stable after advancement."""
         return step_label_for(self.kind, self.from_role)
+
+
+# ---------------------------------------------------------------------------
+# Applications Coordinator — editable outgoing messages
+# ---------------------------------------------------------------------------
+
+class MessageTemplate(models.Model):
+    """An editable message the Applications Coordinator sends while facilitating
+    admissions for the Meeting of Analysts.
+
+    Same shape as ``referrals.MessageTemplate``: a ``{placeholder}`` body the
+    coordinator can reword, restorable from the seed if deleted. Today: the
+    nudge to an interviewer whose report is still outstanding.
+    """
+
+    class Key(models.TextChoices):
+        INTERVIEWER_NUDGE = "interviewer_nudge", _("Interviewer report reminder")
+
+    key = models.CharField(max_length=40, choices=Key.choices, unique=True)
+    subject = models.CharField(max_length=200)
+    body = models.TextField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("key",)
+
+    def __str__(self) -> str:
+        return self.get_key_display()
+
+    @classmethod
+    def get(cls, key: str) -> MessageTemplate:
+        """Fetch a template; restore it from the seed if it was deleted."""
+        obj = cls.objects.filter(key=key).first()
+        if obj is None:
+            from .seed_templates import SEED_TEMPLATES
+
+            subject, body = SEED_TEMPLATES[key]
+            obj = cls.objects.create(key=key, subject=subject, body=body)
+        return obj

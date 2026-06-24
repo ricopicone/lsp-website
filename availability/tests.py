@@ -13,7 +13,6 @@ from django.db import IntegrityError
 from django.urls import reverse
 
 from accounts.models import Profile, User
-from core.models import StaffRole
 from notifications.models import Notification
 
 from . import services
@@ -213,15 +212,16 @@ def test_candidate_is_not_eligible():
 
 @pytest.fixture
 def coordinator(client):
+    from committees.models import Committee
+    from workgroups.models import WorkgroupMembership
+
     user = User.objects.create_user(
         email="cecile@example.com", password="pw",
         first_name="Cecile", last_name="Gouffrant",
     )
-    role, _ = StaffRole.objects.get_or_create(
-        key=StaffRole.APPLICATIONS_COORDINATOR,
-        defaults={"name": "Applications Coordinator"},
-    )
-    role.holders.add(user)
+    # The Applications Coordinator is an officer of the Meeting of Analysts.
+    wg = Committee.objects.get(slug="meeting-of-analysts").workgroup
+    wg.add_member(user, role=WorkgroupMembership.Role.APPLICATIONS_COORDINATOR)
     client.force_login(user)
     return user
 

@@ -1,0 +1,65 @@
+{% extends "admissions/coordinator/base.html" %}
+{% block tab_content %}
+<div class="space-y-5">
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <p class="text-sm text-base-content/70">
+      Applications from intake to decision. {{ open_count }} open. Assign
+      interviewers and decide on the Meeting's review page; remind interviewers
+      whose reports are still out from here.
+    </p>
+    <form method="get">
+      <select name="status" class="select select-bordered select-sm" onchange="this.form.submit()">
+        <option value="open" {% if status_filter == "open" %}selected{% endif %}>Open</option>
+        <option value="all" {% if status_filter == "all" %}selected{% endif %}>All</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <noscript><button class="btn btn-sm">Filter</button></noscript>
+    </form>
+  </div>
+
+  {% if rows %}
+  <div class="overflow-x-auto rounded-xl border border-base-300/60 bg-base-100">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Applicant</th><th>Track</th><th>Status</th>
+          <th class="text-center">Interviews</th><th class="text-center">Reports</th>
+          <th>Submitted</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr class="hover">
+          <td>
+            <a href="{% url 'admissions:review_detail' row.application.pk %}" class="link font-medium">
+              {{ row.application.applicant.get_full_name|default:row.application.applicant.email }}
+            </a>
+          </td>
+          <td>{{ row.application.get_track_display }}</td>
+          <td><span class="badge badge-outline badge-sm">{{ row.application.get_status_display }}</span></td>
+          <td class="text-center">{{ row.assigned }} / 2</td>
+          <td class="text-center">{{ row.reports_in }} / {{ row.assigned }}</td>
+          <td class="whitespace-nowrap">{{ row.application.submitted_at|date:"M j, Y" }}</td>
+          <td class="text-right">
+            {% if row.pending %}
+            <form method="post" action="{% url 'admissions:coordinator_nudge' row.application.pk %}"
+                  onsubmit="return confirm('Email the {{ row.pending|length }} interviewer(s) still owing a report?');">
+              {% csrf_token %}
+              <button class="btn btn-ghost btn-xs" title="Remind interviewers whose reports are outstanding">Nudge ({{ row.pending|length }})</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-base-content/60 text-sm">No applications match this filter.</p>
+  {% endif %}
+
+</div>
+{% endblock %}

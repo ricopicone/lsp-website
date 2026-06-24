@@ -52,21 +52,34 @@ def _html_alternative(body: str) -> str:
 
 def applications_coordinator_name() -> str:
     """The appointed Applications Coordinator's name, for the {applications_
-    coordinator} token. Joins multiple holders; falls back to a generic title
-    when the role is unfilled."""
-    from core.models import StaffRole
+    coordinator} token. Reads the holders of the Applications Coordinator role
+    on the Meeting of Analysts workgroup; falls back to a generic title when
+    the role is unfilled."""
+    from committees.models import Committee
+    from workgroups.models import WorkgroupMembership
 
-    role = StaffRole.objects.filter(
-        key=StaffRole.APPLICATIONS_COORDINATOR
-    ).prefetch_related("holders").first()
-    if role:
+    committee = (
+        Committee.objects.filter(slug="meeting-of-analysts")
+        .only("workgroup_id")
+        .first()
+    )
+    names = []
+    if committee and committee.workgroup_id:
+        memberships = (
+            WorkgroupMembership.objects.serving()
+            .filter(
+                workgroup_id=committee.workgroup_id,
+                role=WorkgroupMembership.Role.APPLICATIONS_COORDINATOR,
+            )
+            .select_related("user")
+        )
         names = [
-            h.get_full_name() or h.email
-            for h in role.holders.all()
-            if h.is_active
+            m.user.get_full_name() or m.user.email
+            for m in memberships
+            if m.user.is_active
         ]
-        if names:
-            return ", ".join(names)
+    if names:
+        return ", ".join(names)
     return "the LSP Applications Coordinator"
 
 

@@ -72,7 +72,9 @@ class StaffRole(models.Model):
     ADMIN_ASSISTANT = "admin_assistant"
     WEB_DEVELOPER = "web_developer"
     REFERRAL_COORDINATOR = "referral_coordinator"
-    APPLICATIONS_COORDINATOR = "applications_coordinator"
+    # NB: the Applications Coordinator is a role on the Meeting of Analysts
+    # workgroup (workgroups.WorkgroupMembership.Role), not a StaffRole — see
+    # workgroups.permissions.is_applications_coordinator.
 
     key = models.SlugField(
         max_length=50,

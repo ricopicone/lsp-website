@@ -7,6 +7,8 @@ membership change.
 
 from __future__ import annotations
 
+import re
+
 from django.db import transaction
 from django.utils import timezone
 
@@ -15,6 +17,20 @@ from accounts.models import Profile
 
 from . import notifications as notify_admissions
 from .models import Application
+
+_TOKEN = re.compile(r"\{(\w+)\}")
+
+
+def render_template(text: str, context: dict) -> str:
+    """Substitute ``{token}`` placeholders for keys present in ``context``.
+
+    Unknown tokens (and any other braces) are left untouched, so a hand-edited
+    coordinator message can never crash a send. Mirrors the referrals helper.
+    """
+    return _TOKEN.sub(
+        lambda m: str(context[m.group(1)]) if m.group(1) in context else m.group(0),
+        text,
+    )
 
 
 @transaction.atomic

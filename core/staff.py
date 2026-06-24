@@ -34,7 +34,6 @@ PANEL_ROLES = (
     StaffRole.ADMIN_ASSISTANT,
     StaffRole.WEB_DEVELOPER,
     StaffRole.REFERRAL_COORDINATOR,
-    StaffRole.APPLICATIONS_COORDINATOR,
 )
 
 
@@ -62,6 +61,11 @@ def _can_cartel_coordinator(user) -> bool:
     return user.is_superuser or user.is_staff or is_cartel_coordinator(user)
 
 
+def _can_applications_coordinator(user) -> bool:
+    from workgroups.permissions import is_applications_coordinator
+    return is_applications_coordinator(user)
+
+
 def can_access_admin_tools(user) -> bool:
     """Entry gate to /admin-tools/: staff-role holders, Board members, and
     Program Committee members (plus Django staff / superusers). Members of
@@ -77,6 +81,7 @@ def can_access_admin_tools(user) -> bool:
         _can_board(user)
         or _can_program_committee(user)
         or _can_meeting_of_analysts(user)
+        or _can_applications_coordinator(user)
     )
 
 
@@ -165,14 +170,20 @@ def _panels_for(user) -> list[dict]:
             ).count(),
             "count_label": "open",
         })
-    # Applications Coordinator — deliberately NOT opened to generic is_staff:
-    # the availability table is members-internal data.
-    if user.is_superuser or has_staff_role(user, StaffRole.APPLICATIONS_COORDINATOR):
+    # Applications Coordinator — an officer of the Meeting of Analysts who
+    # facilitates admissions; deliberately NOT generic is_staff.
+    if _can_applications_coordinator(user):
+        from admissions.models import Application
         panels.append({
             "title": "Applications Coordinator Admin",
-            "blurb": "Analyst availability: who's open for application "
-                     "interviews, advising, control, and personal analysis.",
-            "url": reverse("availability:grid"),
+            "blurb": "Facilitate admissions for the Meeting of Analysts: triage "
+                     "applications, staff interviewers, chase reports. Plus the "
+                     "analyst-availability table.",
+            "url": reverse("admissions:coordinator_dashboard"),
+            "count": Application.objects.filter(
+                status__in=Application.OPEN_STATUSES
+            ).count(),
+            "count_label": "open",
         })
     if user.is_superuser or has_staff_role(
         user, StaffRole.WEB_COORDINATOR, StaffRole.WEB_DEVELOPER

@@ -1,20 +1,15 @@
 """Who may run the analyst-availability console.
 
-Gated to the Applications Coordinator staff role (plus superusers) —
-deliberately *not* generic ``is_staff``, mirroring the Referral Coordinator.
-The availability data is members-internal and the coordinator is a specific
-appointed person (the Applications Coordinator).
+Gated to the Applications Coordinator — an officer role on the Meeting of
+Analysts workgroup (plus superusers). The same role facilitates admissions,
+so availability and admissions are one coordinator's workspace. Deliberately
+*not* generic ``is_staff``: the data is members-internal.
 """
 
 from __future__ import annotations
 
-from core.access import has_staff_role
-from core.models import StaffRole
+from workgroups.permissions import is_applications_coordinator
 
 
 def can_manage_availability(user) -> bool:
-    if not getattr(user, "is_authenticated", False):
-        return False
-    return user.is_superuser or has_staff_role(
-        user, StaffRole.APPLICATIONS_COORDINATOR
-    )
+    return is_applications_coordinator(user)

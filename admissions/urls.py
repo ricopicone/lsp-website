@@ -1,8 +1,11 @@
 from django.urls import path
 
-from . import views
+from . import coordinator, views
 
 app_name = "admissions"
+
+# The Applications Coordinator's facilitation console.
+_APPS = "admin-tools/applications"
 
 # The formation pipeline is decided by the Meeting of the Analysts, so the
 # review surfaces live under /admin-tools/meeting-of-analysts/.
@@ -46,4 +49,12 @@ urlpatterns = [
          name="advancement_detail"),
     path(f"{_MOA}/advancements/<int:pk>/decide/", views.advancement_decide,
          name="advancement_decide"),
+
+    # --- Applications Coordinator console ---
+    path(f"{_APPS}/", coordinator.dashboard, name="coordinator_dashboard"),
+    path(f"{_APPS}/<int:pk>/nudge/", coordinator.nudge, name="coordinator_nudge"),
+    path(f"{_APPS}/messages/", coordinator.messages_list,
+         name="coordinator_messages"),
+    path(f"{_APPS}/messages/<str:key>/", coordinator.message_edit,
+         name="coordinator_message_edit"),
 ]

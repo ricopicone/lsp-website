@@ -39,6 +39,20 @@ def application_decision(application) -> None:
     )
 
 
+# --- Interviewer (Applications Coordinator nudge) ---------------------------
+
+def interviewer_nudge(interview, subject: str, body: str) -> None:
+    """Remind an interviewer that their report is awaited (bell + email)."""
+    notify(
+        interview.interviewer, Category.ADMISSIONS_APPLICATION,
+        title="Your interview report is awaited",
+        body="The Meeting of the Analysts is waiting on your interview report.",
+        url=reverse("admissions:review_detail", args=[interview.application_id]),
+        target=interview.application, dedupe=True,
+        email_fn=lambda: emails.send_interviewer_nudge(interview, subject, body),
+    )
+
+
 # --- Member / advisor (advancement demande) ---------------------------------
 
 def advancement_opened(advancement) -> None:
