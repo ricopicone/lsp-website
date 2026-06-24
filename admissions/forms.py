@@ -180,8 +180,11 @@ class AdvancementForm(forms.ModelForm):
 class AdmissionsSettingsForm(forms.ModelForm):
     class Meta:
         model = AdmissionsSettings
-        fields = ("acknowledgment_mode",)
-        widgets = {"acknowledgment_mode": forms.Select(attrs={"class": _SELECT})}
+        fields = ("acknowledgment_mode", "invitation_mode")
+        widgets = {
+            "acknowledgment_mode": forms.Select(attrs={"class": _SELECT}),
+            "invitation_mode": forms.Select(attrs={"class": _SELECT}),
+        }
 
 
 class MessageTemplateForm(forms.ModelForm):

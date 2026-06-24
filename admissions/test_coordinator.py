@@ -77,11 +77,11 @@ def test_nudge_emails_pending_interviewers(
 
 def test_message_edit_saves(client, coordinator):
     url = reverse("admissions:coordinator_message_edit",
-                  args=[MessageTemplate.Key.INTERVIEWER_NUDGE])
+                  args=[MessageTemplate.Key.INVITATION])
     assert client.get(url).status_code == 200
-    resp = client.post(url, {"subject": "Reminder", "body": "Hi {interviewer}, see {url}."})
+    resp = client.post(url, {"subject": "Invite", "body": "Hi {interviewer}, see {agree_url}."})
     assert resp.status_code == 302
-    assert MessageTemplate.get(MessageTemplate.Key.INTERVIEWER_NUDGE).subject == "Reminder"
+    assert MessageTemplate.get(MessageTemplate.Key.INVITATION).subject == "Invite"
 
 
 def test_panel_appears_for_coordinator(client, coordinator):
@@ -155,9 +155,11 @@ def test_admissions_settings_save(client, coordinator):
 
     resp = client.post(reverse("admissions:coordinator_settings"), {
         "acknowledgment_mode": AdmissionsSettings.Mode.REVIEW,
+        "invitation_mode": AdmissionsSettings.Mode.AUTO,
     })
     assert resp.status_code == 302
     assert AdmissionsSettings.load().acknowledgment_mode == AdmissionsSettings.Mode.REVIEW
+    assert AdmissionsSettings.load().invitation_mode == AdmissionsSettings.Mode.AUTO
 
 
 def test_decision_template_editable(client, coordinator):

@@ -200,6 +200,22 @@ def _panels_for(user) -> list[dict]:
             "count_label": "open",
         })
 
+    # Every active Analyst gets their interview workspace (agree to interview
+    # applicants; submit reports).
+    from admissions.permissions import is_analyst
+    if is_analyst(user):
+        from admissions.models import ApplicationInterview
+        panels.append({
+            "title": "Analyst — Interviews",
+            "blurb": "Applicants who need an interviewer, and the interviews "
+                     "you've agreed to — set up a time and submit your report.",
+            "url": reverse("admissions:analyst_dashboard"),
+            "count": ApplicationInterview.objects.filter(
+                interviewer=user, completed_at__isnull=True,
+            ).count(),
+            "count_label": "to report",
+        })
+
     if user.is_staff:
         panels.append({
             "title": "Django admin",

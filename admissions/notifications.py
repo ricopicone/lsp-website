@@ -39,18 +39,28 @@ def application_decision(application) -> None:
     )
 
 
-# --- Interviewer (Applications Coordinator nudge) ---------------------------
+# --- Interviewer staffing (invite → connect → remind) -----------------------
 
-def interviewer_nudge(interview, subject: str, body: str) -> None:
-    """Remind an interviewer that their report is awaited (bell + email)."""
+def interview_invitation(application, user) -> None:
+    """Invite an available analyst to interview this applicant (bell + email)."""
     notify(
-        interview.interviewer, Category.ADMISSIONS_APPLICATION,
-        title="Your interview report is awaited",
-        body="The Meeting of the Analysts is waiting on your interview report.",
-        url=reverse("admissions:review_detail", args=[interview.application_id]),
-        target=interview.application, dedupe=True,
-        email_fn=lambda: emails.send_interviewer_nudge(interview, subject, body),
+        user, Category.ADMISSIONS_APPLICATION,
+        title="Can you interview an LSP applicant?",
+        body="An applicant needs interviewers — let us know if you can take one.",
+        url=reverse("admissions:analyst_interview", args=[application.pk]),
+        target=application, dedupe=True,
+        email_fn=lambda: emails.send_interview_invitation(user, application),
     )
+
+
+def interview_introduction(interview) -> None:
+    """Connect applicant + interviewer so they arrange a time (email to both)."""
+    emails.send_interview_introduction(interview)
+
+
+def interview_reminder(interview) -> None:
+    """Weekly nudge to the interviewer to set up / report (email to analyst)."""
+    emails.send_interview_reminder(interview)
 
 
 # --- Member / advisor (advancement demande) ---------------------------------

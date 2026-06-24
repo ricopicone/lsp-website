@@ -20,22 +20,79 @@ def _applications_from() -> str:
 def _send(*, subject, body, to, reply_to=None, from_email=None):
     from core.email import school_from
 
+    rt = reply_to or settings.SUPPORT_EMAIL
     EmailMessage(
         subject=subject, body=body,
         from_email=from_email or school_from("LSP Admissions"), to=to,
-        reply_to=[reply_to or settings.SUPPORT_EMAIL],
+        reply_to=[rt] if isinstance(rt, str) else list(rt),
     ).send(fail_silently=False)
 
 
-def send_interviewer_nudge(interview, subject: str, body: str) -> None:
-    """The Applications Coordinator's reminder to an interviewer whose report is
-    still outstanding. From and Reply-To are the coordinator's mailbox."""
-    _send(
-        subject=subject, body=body,
-        to=[interview.interviewer.email],
-        reply_to=settings.APPLICATIONS_EMAIL,
-        from_email=_applications_from(),
-    )
+def _render(key, ctx):
+    from .models import MessageTemplate
+    from .services import render_template
+
+    t = MessageTemplate.get(key)
+    return render_template(t.subject, ctx), render_template(t.body, ctx)
+
+
+def _coordinator_name():
+    from availability.emails import applications_coordinator_name
+    return applications_coordinator_name()
+
+
+def send_interview_invitation(user, application: Application) -> None:
+    """Invite an available analyst to interview an applicant (To the analyst)."""
+    from .models import MessageTemplate
+
+    ctx = {
+        "interviewer": user.get_full_name() or user.email,
+        "applicant": application.applicant.get_full_name() or application.applicant.email,
+        "formation": _formation_label(application),
+        "agree_url": _absolute("admissions:analyst_interview", application.pk),
+        "applications_coordinator": _coordinator_name(),
+    }
+    subject, body = _render(MessageTemplate.Key.INVITATION, ctx)
+    _send(subject=subject, body=body, to=[user.email],
+          reply_to=settings.APPLICATIONS_EMAIL, from_email=_applications_from())
+
+
+def send_interview_introduction(interview) -> None:
+    """Connect the applicant and the interviewer (To both; reply-all reaches
+    both so they can arrange a time)."""
+    from .models import MessageTemplate
+
+    app = interview.application
+    analyst = interview.interviewer
+    ctx = {
+        "applicant": app.applicant.get_full_name() or app.applicant.email,
+        "interviewer": analyst.get_full_name() or analyst.email,
+        "applicant_email": app.applicant.email,
+        "interviewer_email": analyst.email,
+        "applications_coordinator": _coordinator_name(),
+    }
+    subject, body = _render(MessageTemplate.Key.INTRODUCTION, ctx)
+    _send(subject=subject, body=body,
+          to=[app.applicant.email, analyst.email],
+          reply_to=[app.applicant.email, analyst.email],
+          from_email=_applications_from())
+
+
+def send_interview_reminder(interview) -> None:
+    """Weekly reminder to the interviewer to set up and report (To analyst)."""
+    from .models import MessageTemplate
+
+    app = interview.application
+    analyst = interview.interviewer
+    ctx = {
+        "interviewer": analyst.get_full_name() or analyst.email,
+        "applicant": app.applicant.get_full_name() or app.applicant.email,
+        "url": _absolute("admissions:analyst_interview", app.pk),
+        "applications_coordinator": _coordinator_name(),
+    }
+    subject, body = _render(MessageTemplate.Key.INTERVIEW_REMINDER, ctx)
+    _send(subject=subject, body=body, to=[analyst.email],
+          reply_to=settings.APPLICATIONS_EMAIL, from_email=_applications_from())
 
 
 def _absolute(name, *args) -> str:

@@ -1,0 +1,65 @@
+{% extends "core/base.html" %}
+{% block title %}Interview — {{ application.applicant.get_full_name }} — LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+  <nav class="text-sm">
+    <a href="{% url 'admissions:analyst_dashboard' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Interviews</a>
+  </nav>
+
+  <header class="space-y-1">
+    <h1 class="font-serif text-2xl text-base-content">{{ application.applicant.get_full_name|default:application.applicant.email }}</h1>
+    <p class="text-sm text-base-content/60">{{ application.get_track_display }}{% if application.background %} · {{ application.get_background_display }}{% endif %}</p>
+  </header>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'info' %}alert-info{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  {% if mine %}
+    {% if mine.is_complete %}
+    <div class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-2">
+      <p class="text-success font-medium">Your report has been recorded.</p>
+      <p class="text-sm text-base-content/70 whitespace-pre-line">{{ mine.report }}</p>
+    </div>
+    {% else %}
+    <div class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
+      <p class="text-sm text-base-content/70">
+        You agreed to interview this applicant — you've been connected by email to
+        arrange a time. After the interview, record your report below.
+      </p>
+      <form method="post" action="{% url 'admissions:analyst_report' application.pk %}" class="space-y-3">
+        {% csrf_token %}
+        {% for field in report_form %}
+        <label class="block space-y-1">
+          <span class="text-sm font-medium text-base-content">{{ field.label }}</span>
+          {{ field }}
+          {% for error in field.errors %}<span class="block text-xs text-error">{{ error }}</span>{% endfor %}
+        </label>
+        {% endfor %}
+        <button class="btn btn-primary">Submit report</button>
+      </form>
+    </div>
+    {% endif %}
+  {% elif slots_remaining > 0 and eligible %}
+    <div class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
+      <p class="text-sm text-base-content/70">
+        This applicant still needs {{ slots_remaining }} interviewer{{ slots_remaining|pluralize }}.
+        If you can conduct one of the two admission interviews, agree below — you'll
+        be connected with the applicant by email to arrange a time.
+      </p>
+      <form method="post" action="{% url 'admissions:analyst_agree' application.pk %}">
+        {% csrf_token %}
+        <button class="btn btn-primary">I can interview this applicant</button>
+      </form>
+    </div>
+  {% else %}
+    <div class="rounded-xl border border-base-300/60 bg-base-100 p-5">
+      <p class="text-sm text-base-content/70">
+        Thank you — the interviews for this applicant are already covered.
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

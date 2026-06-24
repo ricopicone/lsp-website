@@ -1,0 +1,57 @@
+{% extends "core/base.html" %}
+{% block title %}Analyst — Interviews — LSP{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-8">
+
+  <header class="flex flex-wrap items-center justify-between gap-3">
+    <h1 class="font-serif text-3xl text-base-content">Interviews</h1>
+    <a href="{% url 'admin_tools' %}" class="btn btn-ghost btn-sm">← Admin Tools</a>
+  </header>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Requests</h2>
+    <p class="text-sm text-base-content/70">Applicants who still need an interviewer. Agree to one if you can.</p>
+    {% if requests %}
+    <ul class="divide-y divide-base-300/60 rounded-xl border border-base-300/60 bg-base-100">
+      {% for app in requests %}
+      <li class="flex items-center justify-between gap-3 p-4">
+        <div>
+          <div class="font-medium text-base-content">{{ app.applicant.get_full_name|default:app.applicant.email }}</div>
+          <div class="text-xs text-base-content/50">{{ app.get_track_display }}</div>
+        </div>
+        <a href="{% url 'admissions:analyst_interview' app.pk %}" class="btn btn-primary btn-sm">View &amp; agree</a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-base-content/60 text-sm">No open interview requests right now.</p>
+    {% endif %}
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">My interviews</h2>
+    {% if mine %}
+    <ul class="divide-y divide-base-300/60 rounded-xl border border-base-300/60 bg-base-100">
+      {% for iv in mine %}
+      <li class="flex items-center justify-between gap-3 p-4">
+        <div>
+          <div class="font-medium text-base-content">{{ iv.application.applicant.get_full_name|default:iv.application.applicant.email }}</div>
+          <div class="text-xs text-base-content/50">
+            {% if iv.is_complete %}Report submitted {{ iv.completed_at|date:"M j, Y" }}{% else %}Awaiting your report{% endif %}
+          </div>
+        </div>
+        {% if iv.is_complete %}
+        <span class="badge badge-success badge-sm">Done</span>
+        {% else %}
+        <a href="{% url 'admissions:analyst_interview' iv.application.pk %}" class="btn btn-outline btn-sm">Set up / report</a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-base-content/60 text-sm">You're not interviewing anyone right now.</p>
+    {% endif %}
+  </section>
+
+</div>
+{% endblock %}

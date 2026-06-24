@@ -9,7 +9,6 @@ assignment and the accept/reject decision stay on the Meeting's review surface
 
 from __future__ import annotations
 
-from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -45,10 +44,6 @@ def _render(request, tab_key, template, ctx):
     return render(request, template, {**ctx, "tab_key": tab_key, "tabs": _tab_links()})
 
 
-def _absolute(path: str) -> str:
-    return settings.SITE_BASE_URL.rstrip("/") + path
-
-
 @coordinator_required
 def dashboard(request):
     status = request.GET.get("status", "open")
@@ -74,6 +69,8 @@ def dashboard(request):
             "reports_in": len(interviews) - len(pending),
             "pending": pending,
             "acknowledged": app.acknowledged_at is not None,
+            "invited": app.interviewers_invited_at is not None,
+            "slots_remaining": max(0, Application.INTERVIEWS_NEEDED - len(interviews)),
         })
 
     return _render(request, "applications", "admissions/coordinator/dashboard.html", {
@@ -88,30 +85,31 @@ def dashboard(request):
 
 @coordinator_required
 @require_POST
+def invite(request, pk):
+    """Send the call for interviewers to available analysts."""
+    application = get_object_or_404(Application, pk=pk)
+    n = services.invite_interviewers(application)
+    messages.success(
+        request,
+        f"Invited {n} analyst{'s' if n != 1 else ''} to interview "
+        f"{application.applicant.get_full_name() or application.applicant.email}.",
+    )
+    return redirect("admissions:coordinator_dashboard")
+
+
+@coordinator_required
+@require_POST
 def nudge(request, pk):
-    """Remind every interviewer on this application whose report is outstanding."""
+    """Remind every interviewer on this application whose report is outstanding
+    (the same weekly reminder, sent by hand)."""
     application = get_object_or_404(
         Application.objects.prefetch_related("interviews__interviewer"), pk=pk
     )
-    template = MessageTemplate.get(MessageTemplate.Key.INTERVIEWER_NUDGE)
-    url = _absolute(reverse("admissions:review_detail", args=[application.pk]))
-    applicant = application.applicant.get_full_name() or application.applicant.email
-
     sent = 0
     for interview in application.interviews.all():
         if interview.is_complete:
             continue
-        ctx = {
-            "interviewer": interview.interviewer.get_full_name()
-            or interview.interviewer.email,
-            "applicant": applicant,
-            "url": url,
-        }
-        notify_admissions.interviewer_nudge(
-            interview,
-            services.render_template(template.subject, ctx),
-            services.render_template(template.body, ctx),
-        )
+        notify_admissions.interview_reminder(interview)
         sent += 1
 
     if sent:
@@ -158,7 +156,16 @@ _TOKENS = {
     MessageTemplate.Key.ACKNOWLEDGMENT: (
         "{name}, {track}, {formation}, {status_url}, {applications_coordinator}"
     ),
-    MessageTemplate.Key.INTERVIEWER_NUDGE: "{interviewer}, {applicant}, {url}",
+    MessageTemplate.Key.INVITATION: (
+        "{interviewer}, {applicant}, {formation}, {agree_url}, {applications_coordinator}"
+    ),
+    MessageTemplate.Key.INTRODUCTION: (
+        "{applicant}, {interviewer}, {applicant_email}, {interviewer_email}, "
+        "{applications_coordinator}"
+    ),
+    MessageTemplate.Key.INTERVIEW_REMINDER: (
+        "{interviewer}, {applicant}, {url}, {applications_coordinator}"
+    ),
     MessageTemplate.Key.DECISION_ACCEPT: (
         "{name}, {formation}, {note}, {availability_url}, {documents_url}, "
         "{profile_url}, {applications_coordinator}"

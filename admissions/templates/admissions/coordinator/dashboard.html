@@ -54,9 +54,16 @@
           <td class="text-center">{{ row.assigned }} / 2</td>
           <td class="text-center">{{ row.reports_in }} / {{ row.assigned }}</td>
           <td class="whitespace-nowrap">{{ row.application.submitted_at|date:"M j, Y" }}</td>
-          <td class="text-right">
+          <td class="text-right whitespace-nowrap">
+            {% if row.application.is_open and row.slots_remaining %}
+            <form method="post" action="{% url 'admissions:coordinator_invite' row.application.pk %}" class="inline"
+                  onsubmit="return confirm('Email available analysts inviting them to interview this applicant?');">
+              {% csrf_token %}
+              <button class="btn btn-ghost btn-xs" title="Send the call for interviewers to available analysts">{% if row.invited %}Re-invite{% else %}Invite{% endif %}</button>
+            </form>
+            {% endif %}
             {% if row.pending %}
-            <form method="post" action="{% url 'admissions:coordinator_nudge' row.application.pk %}"
+            <form method="post" action="{% url 'admissions:coordinator_nudge' row.application.pk %}" class="inline"
                   onsubmit="return confirm('Email the {{ row.pending|length }} interviewer(s) still owing a report?');">
               {% csrf_token %}
               <button class="btn btn-ghost btn-xs" title="Remind interviewers whose reports are outstanding">Nudge ({{ row.pending|length }})</button>

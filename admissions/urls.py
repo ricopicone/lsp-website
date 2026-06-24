@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import coordinator, views
+from . import analyst, coordinator, views
 
 app_name = "admissions"
 
@@ -52,7 +52,17 @@ urlpatterns = [
 
     # --- Applications Coordinator console ---
     path(f"{_APPS}/", coordinator.dashboard, name="coordinator_dashboard"),
+    path(f"{_APPS}/<int:pk>/invite/", coordinator.invite, name="coordinator_invite"),
     path(f"{_APPS}/<int:pk>/nudge/", coordinator.nudge, name="coordinator_nudge"),
+
+    # --- Analyst page (interview requests + my interviews) ---
+    path("admin-tools/analyst/", analyst.dashboard, name="analyst_dashboard"),
+    path("admin-tools/analyst/interview/<int:pk>/", analyst.interview,
+         name="analyst_interview"),
+    path("admin-tools/analyst/interview/<int:pk>/agree/", analyst.agree,
+         name="analyst_agree"),
+    path("admin-tools/analyst/interview/<int:pk>/report/", analyst.report,
+         name="analyst_report"),
     path(f"{_APPS}/<int:pk>/acknowledge/", coordinator.send_acknowledgment,
          name="coordinator_acknowledge"),
     path(f"{_APPS}/settings/", coordinator.settings_view,

@@ -5,8 +5,15 @@
 template can never crash a send.
 
 Tokens:
-- acknowledgment / decision_*: ``{name}``, ``{track}``, ``{note}`` (decisions only)
-- interviewer_nudge: ``{interviewer}``, ``{applicant}``, ``{url}``
+- acknowledgment / decision_*: ``{name}``, ``{track}``, ``{formation}``, ``{status_url}``,
+  ``{availability_url}``, ``{documents_url}``, ``{profile_url}``, ``{note}`` (decisions),
+  ``{applications_coordinator}``
+- invitation: ``{interviewer}``, ``{applicant}``, ``{formation}``, ``{agree_url}``,
+  ``{applications_coordinator}``
+- introduction: ``{applicant}``, ``{interviewer}``, ``{applicant_email}``,
+  ``{interviewer_email}``, ``{applications_coordinator}``
+- interview_reminder: ``{interviewer}``, ``{applicant}``, ``{url}``,
+  ``{applications_coordinator}``
 """
 
 from __future__ import annotations
@@ -32,19 +39,56 @@ Feel free to contact me should you have any questions.
 LSP Applications Coordinator
 applications@lacanschool.org""",
     ),
-    "interviewer_nudge": (
-        "LSP: your interview report for {applicant} is awaited",
+    "invitation": (
+        "Can you interview an LSP applicant?",
         """Dear {interviewer},
 
-Thank you for agreeing to interview {applicant} for admission to the Lacanian School of Psychoanalysis. The Meeting of the Analysts is waiting on your interview report before it can decide.
+A new applicant to the Lacanian School of Psychoanalysis, {formation}, needs two Analysts of the School to interview them. Our records show you may be available for application interviews.
 
-When you've had the interview, please record your report here:
+If you are willing to conduct one of the interviews, please let us know here:
 
-{url}
+{agree_url}
+
+That page will confirm whether an interviewer is still needed and tell you a little more. The first two analysts to agree are connected with the applicant to arrange a time — so there's no obligation if the slots are already filled.
 
 With thanks,
 
-The LSP Applications Coordinator""",
+{applications_coordinator}
+LSP Applications Coordinator
+applications@lacanschool.org""",
+    ),
+    "introduction": (
+        "LSP interview — {applicant} and {interviewer}",
+        """Dear {applicant} and {interviewer},
+
+Thank you both. {interviewer} has kindly agreed to conduct one of {applicant}'s admission interviews for the Lacanian School of Psychoanalysis.
+
+Please reply to this email to arrange a time to meet. Your contact addresses:
+
+- Applicant: {applicant} <{applicant_email}>
+- Interviewer: {interviewer} <{interviewer_email}>
+
+After the interview, the interviewer submits a short report from their Analyst page; once both interviews are reported, the Meeting of the Analysts decides.
+
+Warm regards,
+
+{applications_coordinator}
+LSP Applications Coordinator
+applications@lacanschool.org""",
+    ),
+    "interview_reminder": (
+        "Reminder: your LSP interview with {applicant}",
+        """Dear {interviewer},
+
+This is a friendly reminder about the admission interview you agreed to conduct for {applicant}. If you haven't yet, please arrange a time to meet — and once you've had the interview, record your report here:
+
+{url}
+
+The Meeting of the Analysts can't decide until both interview reports are in. Thank you for your help.
+
+{applications_coordinator}
+LSP Applications Coordinator
+applications@lacanschool.org""",
     ),
     "decision_accept": (
         "Welcome to LSP — your application has been accepted",

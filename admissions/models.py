@@ -62,6 +62,9 @@ class Application(models.Model):
 
     OPEN_STATUSES = (Status.SUBMITTED, Status.INTERVIEWING)
 
+    #: How many Analysts of the School interview each applicant.
+    INTERVIEWS_NEEDED = 2
+
     applicant = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="application",
     )
@@ -94,6 +97,10 @@ class Application(models.Model):
         null=True, blank=True,
         help_text="When the applicant acknowledgment was sent (auto on submit, "
         "or by the coordinator in review-first mode).",
+    )
+    interviewers_invited_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the call for interviewers went out to available analysts.",
     )
     decided_at = models.DateTimeField(null=True, blank=True)
     decided_by = models.ForeignKey(
@@ -136,6 +143,14 @@ class ApplicationInterview(models.Model):
         null=True, blank=True, help_text="Date the interview took place; blank = pending.",
     )
     report = models.TextField(blank=True, help_text="The interviewer's report / recommendation.")
+    agreed_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the analyst agreed to interview (or was assigned).",
+    )
+    last_reminded_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Last weekly reminder to set up / report the interview.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -296,7 +311,9 @@ class MessageTemplate(models.Model):
 
     class Key(models.TextChoices):
         ACKNOWLEDGMENT = "acknowledgment", _("Applicant acknowledgment (on submit)")
-        INTERVIEWER_NUDGE = "interviewer_nudge", _("Interviewer report reminder")
+        INVITATION = "invitation", _("Call for interviewers (to analysts)")
+        INTRODUCTION = "introduction", _("Introduction (applicant ↔ interviewer)")
+        INTERVIEW_REMINDER = "interview_reminder", _("Interview reminder (to interviewer)")
         DECISION_ACCEPT = "decision_accept", _("Decision — accepted")
         DECISION_REJECT = "decision_reject", _("Decision — not accepted")
 
@@ -338,6 +355,15 @@ class AdmissionsSettings(models.Model):
         help_text="Automatic emails the acknowledgment as soon as an application "
         "is submitted; review first holds it for you to send (and personalize) "
         "from the console.",
+    )
+    invitation_mode = models.CharField(
+        max_length=10,
+        choices=Mode.choices,
+        default=Mode.REVIEW,
+        verbose_name="Call for interviewers",
+        help_text="Automatic emails available analysts to invite them to "
+        "interview as soon as an application arrives; review first waits for "
+        "you to press Invite on the application.",
     )
 
     class Meta:

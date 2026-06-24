@@ -103,6 +103,7 @@ def apply(request, track):
         try:
             from . import services
             services.acknowledge_on_submit(application)
+            services.invite_on_submit(application)
         except Exception:
             import logging
             logging.getLogger(__name__).exception("application-submitted email failed")
@@ -204,13 +205,15 @@ def review_assign(request, pk):
     application = get_object_or_404(Application, pk=pk)
     form = AssignInterviewerForm(request.POST, application=application)
     if form.is_valid():
-        ApplicationInterview.objects.get_or_create(
-            application=application, interviewer=form.cleaned_data["interviewer"],
+        # Same path as an analyst agreeing: records the interview and emails the
+        # introduction connecting applicant + interviewer.
+        from . import services
+        _iv, created = services.add_interviewer(
+            application, form.cleaned_data["interviewer"], by=request.user,
         )
-        if application.status == Application.Status.SUBMITTED:
-            application.status = Application.Status.INTERVIEWING
-            application.save(update_fields=["status"])
-        messages.success(request, "Interviewer added.")
+        messages.success(
+            request, "Interviewer added." if created else "Already an interviewer.",
+        )
     else:
         messages.error(request, "Couldn't add that interviewer.")
     return redirect("admissions:review_detail", pk=pk)
