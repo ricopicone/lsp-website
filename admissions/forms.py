@@ -148,6 +148,22 @@ class InterviewReportForm(forms.ModelForm):
                                              "placeholder": "Report / recommendation"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # A report only counts as submitted when it has text; the interview date
+        # defaults to today so submitting a report always marks it complete.
+        self.fields["report"].required = True
+        self.fields["completed_at"].required = False
+        self.fields["completed_at"].label = "Interview date"
+        self.fields["completed_at"].help_text = "Leave blank for today."
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("completed_at"):
+            from django.utils import timezone
+            cleaned["completed_at"] = timezone.localdate()
+        return cleaned
+
 
 # --- Advancement (palimpsest / passage) ---
 

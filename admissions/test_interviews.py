@@ -197,3 +197,29 @@ def test_reminder_command_emails_incomplete_only(application):
     call_command("send_interview_reminders")
     assert len(mail.outbox) == 1  # only the incomplete one
     assert a1.email in mail.outbox[0].to
+
+
+def test_report_without_date_completes_today(client, application):
+    analyst = _analyst("yes@x.test", status="yes")
+    services.add_interviewer(application, analyst)
+    client.force_login(analyst)
+    # Submit a report but leave the date blank — should still complete (today).
+    resp = client.post(reverse("admissions:analyst_report", args=[application.pk]), {
+        "report": "Strong candidate.",
+    })
+    assert resp.status_code == 302
+    iv = application.interviews.get(interviewer=analyst)
+    assert iv.is_complete
+    assert iv.completed_at is not None
+
+
+def test_empty_report_is_rejected(client, application):
+    analyst = _analyst("yes@x.test", status="yes")
+    services.add_interviewer(application, analyst)
+    client.force_login(analyst)
+    resp = client.post(reverse("admissions:analyst_report", args=[application.pk]), {
+        "report": "",
+    })
+    assert resp.status_code == 200  # re-rendered with errors, not saved
+    iv = application.interviews.get(interviewer=analyst)
+    assert not iv.is_complete
