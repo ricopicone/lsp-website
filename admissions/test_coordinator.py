@@ -101,6 +101,10 @@ def test_acknowledgment_auto_sends_on_submit(application, django_capture_on_comm
     with django_capture_on_commit_callbacks(execute=True):
         acknowledge_on_submit(application)
     assert len(mail.outbox) == 1
+    msg = mail.outbox[0]
+    assert "/apply/status/" in msg.body  # check-your-status link
+    assert "LSP Applications Coordinator" in msg.body  # consistent signature
+    assert "applications@lacanschool.org" in msg.from_email  # from the admissions mailbox
     application.refresh_from_db()
     assert application.acknowledged_at is not None
 

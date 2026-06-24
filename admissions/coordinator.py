@@ -155,12 +155,17 @@ def messages_list(request):
 
 #: The tokens each message supports, for the editor's hint.
 _TOKENS = {
-    MessageTemplate.Key.ACKNOWLEDGMENT: "{name}, {track}, {formation}",
+    MessageTemplate.Key.ACKNOWLEDGMENT: (
+        "{name}, {track}, {formation}, {status_url}, {applications_coordinator}"
+    ),
     MessageTemplate.Key.INTERVIEWER_NUDGE: "{interviewer}, {applicant}, {url}",
     MessageTemplate.Key.DECISION_ACCEPT: (
-        "{name}, {formation}, {note}, {availability_url}, {documents_url}, {profile_url}"
+        "{name}, {formation}, {note}, {availability_url}, {documents_url}, "
+        "{profile_url}, {applications_coordinator}"
     ),
-    MessageTemplate.Key.DECISION_REJECT: "{name}, {track}, {note}",
+    MessageTemplate.Key.DECISION_REJECT: (
+        "{name}, {track}, {note}, {applications_coordinator}"
+    ),
 }
 
 

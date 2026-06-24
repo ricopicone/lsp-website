@@ -2,29 +2,39 @@
 
 from __future__ import annotations
 
+from email.utils import formataddr
+
 from django.conf import settings
 from django.core.mail import EmailMessage
 
 from .models import Advancement, Application
 
 
-def _send(*, subject, body, to, reply_to=None):
+def _applications_from() -> str:
+    """From the Applications Coordinator's real mailbox (so From == Reply-To),
+    not the generic no-reply. The lacanschool.org domain is verified in SES, so
+    any @lacanschool.org sender is allowed."""
+    return formataddr(("LSP Admissions", settings.APPLICATIONS_EMAIL))
+
+
+def _send(*, subject, body, to, reply_to=None, from_email=None):
     from core.email import school_from
 
     EmailMessage(
         subject=subject, body=body,
-        from_email=school_from("LSP Admissions"), to=to,
+        from_email=from_email or school_from("LSP Admissions"), to=to,
         reply_to=[reply_to or settings.SUPPORT_EMAIL],
     ).send(fail_silently=False)
 
 
 def send_interviewer_nudge(interview, subject: str, body: str) -> None:
     """The Applications Coordinator's reminder to an interviewer whose report is
-    still outstanding. Replies reach the coordinator's mailbox."""
+    still outstanding. From and Reply-To are the coordinator's mailbox."""
     _send(
         subject=subject, body=body,
         to=[interview.interviewer.email],
         reply_to=settings.APPLICATIONS_EMAIL,
+        from_email=_applications_from(),
     )
 
 
@@ -51,6 +61,7 @@ def _applicant_context(application: Application) -> dict:
         "availability_url": _absolute("directory_availability"),
         "documents_url": _absolute("documents:index"),
         "profile_url": _absolute("profile_edit"),
+        "status_url": _absolute("admissions:status"),
         "applications_coordinator": applications_coordinator_name(),
     }
 
@@ -66,6 +77,7 @@ def send_application_submitted(application: Application) -> None:
         body=render_template(t.body, ctx),
         to=[application.applicant.email],
         reply_to=settings.APPLICATIONS_EMAIL,
+        from_email=_applications_from(),
     )
 
 
@@ -86,6 +98,7 @@ def send_application_decision(application: Application) -> None:
         body=render_template(t.body, ctx),
         to=[application.applicant.email],
         reply_to=settings.APPLICATIONS_EMAIL,
+        from_email=_applications_from(),
     )
 
 

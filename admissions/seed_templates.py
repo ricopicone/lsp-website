@@ -22,9 +22,15 @@ Thank you for applying to the {track} at the Lacanian School of Psychoanalysis. 
 
 Next, you'll be put in contact with two Analysts of the School to schedule two interviews. Your application is then reviewed at the monthly Meeting of the Analysts, after which we'll be in touch about the decision.
 
-You can check your application status any time from your account.
+You can check the status of your application any time here:
 
-— The Lacanian School of Psychoanalysis""",
+{status_url}
+
+Feel free to contact me should you have any questions.
+
+{applications_coordinator}
+LSP Applications Coordinator
+applications@lacanschool.org""",
     ),
     "interviewer_nudge": (
         "LSP: your interview report for {applicant} is awaited",
@@ -74,6 +80,10 @@ applications@lacanschool.org""",
 
 Thank you for your interest in the Lacanian School of Psychoanalysis and for the time you gave to the application process. After review at the Meeting of the Analysts, we are not able to offer you admission at this time.
 
-{note}— The Lacanian School of Psychoanalysis""",
+{note}With my best wishes,
+
+{applications_coordinator}
+LSP Applications Coordinator
+applications@lacanschool.org""",
     ),
 }
