@@ -5,7 +5,13 @@
 
   <header class="flex flex-wrap items-center justify-between gap-3">
     <h1 class="font-serif text-3xl text-base-content">Interviews</h1>
-    <a href="{% url 'admin_tools' %}" class="btn btn-ghost btn-sm">← Admin Tools</a>
+    <div class="flex items-center gap-2">
+      {% if walkthroughs_enabled %}
+      <a href="{% url 'set_walkthrough' %}?id=analyst_interviews&next={% url 'admissions:analyst_dashboard' %}"
+         class="btn btn-ghost btn-sm">✦ Guided walkthrough</a>
+      {% endif %}
+      <a href="{% url 'admin_tools' %}" class="btn btn-ghost btn-sm">← Admin Tools</a>
+    </div>
   </header>
 
   <section class="space-y-3">

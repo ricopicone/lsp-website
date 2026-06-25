@@ -192,6 +192,26 @@ def _tuition_decision_url(request):
     return f"{url}#decision" if url else None
 
 
+def _ac_dashboard_url(request):
+    return _rev("admissions:coordinator_dashboard")
+
+
+def _ac_messages_url(request):
+    return _rev("admissions:coordinator_messages")
+
+
+def _ac_settings_url(request):
+    return _rev("admissions:coordinator_settings")
+
+
+def _ac_review_url(request):
+    return _rev("admissions:review_queue")
+
+
+def _analyst_dashboard_url(request):
+    return _rev("admissions:analyst_dashboard")
+
+
 # --- The walkthroughs ------------------------------------------------------
 # One per guide. There's no always-on default: the floating card appears only
 # once a member starts a walkthrough from a guide (see core.views.set_walkthrough)
@@ -294,6 +314,54 @@ def _tuition_dues_walkthrough() -> Checklist:
     ])
 
 
+def _applications_coordinator_walkthrough() -> Checklist:
+    return Checklist("applications_coordinator", "Run the admissions workflow", [
+        ChecklistTask(id="ac_open", label="Open the Applications console",
+                      detail="Your admissions home — every application and its progress.",
+                      resolve_url=_ac_dashboard_url, manual=True),
+        ChecklistTask(id="ac_ack", label="Acknowledge a new applicant",
+                      detail="Send the acknowledgment from the Ack. column "
+                             "(or make it automatic in Settings).",
+                      resolve_url=_ac_dashboard_url, manual=True),
+        ChecklistTask(id="ac_invite", label="Invite interviewers",
+                      detail="Press Invite to email available analysts. In a "
+                             "sandbox, every email comes to you.",
+                      resolve_url=_ac_dashboard_url, manual=True),
+        ChecklistTask(id="ac_connect", label="Watch the introductions",
+                      detail="When an analyst agrees, the applicant and "
+                             "interviewer are connected by email to set a time.",
+                      manual=True),
+        ChecklistTask(id="ac_decide", label="Record the decision",
+                      detail="Open an applicant to assign interviewers and decide "
+                             "accept/reject on the Meeting's review page.",
+                      resolve_url=_ac_review_url, manual=True),
+        ChecklistTask(id="ac_messages", label="Tailor the messages",
+                      detail="Edit the wording of any outgoing email.",
+                      resolve_url=_ac_messages_url, manual=True),
+        ChecklistTask(id="ac_settings", label="Choose auto vs review",
+                      detail="Set whether acknowledgment and invitations send on "
+                             "their own or wait for you.",
+                      resolve_url=_ac_settings_url, manual=True),
+    ])
+
+
+def _analyst_interviews_walkthrough() -> Checklist:
+    return Checklist("analyst_interviews", "Conduct an interview", [
+        ChecklistTask(id="ai_open", label="Open your interviews",
+                      detail="Requests you can take, and interviews you've agreed to.",
+                      resolve_url=_analyst_dashboard_url, manual=True),
+        ChecklistTask(id="ai_agree", label="Agree to a request",
+                      detail="Open a request; if a slot is open and you can "
+                             "interview, agree — you'll be connected with the "
+                             "applicant by email.",
+                      resolve_url=_analyst_dashboard_url, manual=True),
+        ChecklistTask(id="ai_report", label="Submit your report",
+                      detail="After the interview, record your report (the date "
+                             "defaults to today).",
+                      resolve_url=_analyst_dashboard_url, manual=True),
+    ])
+
+
 # Registry: walkthrough id -> factory (so URLs/checks resolve at request time).
 CHECKLISTS: dict[str, Callable[[], Checklist]] = {
     "profile": _profile_walkthrough,
@@ -302,6 +370,8 @@ CHECKLISTS: dict[str, Callable[[], Checklist]] = {
     "cartels": _cartels_walkthrough,
     "my_formation": _formation_walkthrough,
     "tuition_dues": _tuition_dues_walkthrough,
+    "applications_coordinator": _applications_coordinator_walkthrough,
+    "analyst_interviews": _analyst_interviews_walkthrough,
 }
 
 

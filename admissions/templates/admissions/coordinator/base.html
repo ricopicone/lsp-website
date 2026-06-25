@@ -6,7 +6,13 @@
   <header class="space-y-2">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="font-serif text-3xl text-base-content">Applications Coordinator Admin</h1>
-      <a href="{% url 'admin_tools' %}" class="btn btn-ghost btn-sm">← Admin Tools</a>
+      <div class="flex items-center gap-2">
+        {% if walkthroughs_enabled %}
+        <a href="{% url 'set_walkthrough' %}?id=applications_coordinator&next={% url 'admissions:coordinator_dashboard' %}"
+           class="btn btn-ghost btn-sm">✦ Guided walkthrough</a>
+        {% endif %}
+        <a href="{% url 'admin_tools' %}" class="btn btn-ghost btn-sm">← Admin Tools</a>
+      </div>
     </div>
     <p class="text-sm text-base-content/60 max-w-2xl">
       Facilitating admissions for the Meeting of Analysts. You shepherd

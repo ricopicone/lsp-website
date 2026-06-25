@@ -11,6 +11,8 @@ from core.checklists import CHECKLISTS, get_checklist
 def test_registry_has_a_walkthrough_per_guide():
     assert set(CHECKLISTS) == {
         "profile", "seminars", "parletre", "cartels", "my_formation", "tuition_dues",
+        # Admin walkthroughs — started from the console, not a guide page.
+        "applications_coordinator", "analyst_interviews",
     }
     # No always-on default walkthrough.
     assert "getting_started" not in CHECKLISTS
@@ -51,3 +53,14 @@ def test_manual_task_never_done_serverside(rf):
     assert d["manual"] is True
     assert d["done"] is False
     assert d["show_hint"] is False      # manual steps never pulse
+
+
+def test_admin_walkthroughs_registered_and_resolve():
+    from core.checklists import CHECKLISTS, get_checklist
+
+    for wid in ("applications_coordinator", "analyst_interviews"):
+        assert wid in CHECKLISTS
+        cl = get_checklist(wid)
+        assert cl and cl.tasks
+        for task in cl.tasks:
+            task.resolve_url(None)  # resolver runs without error
