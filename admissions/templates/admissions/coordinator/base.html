@@ -8,7 +8,7 @@
       <h1 class="font-serif text-3xl text-base-content">Applications Coordinator Admin</h1>
       <div class="flex items-center gap-2">
         {% if walkthroughs_enabled %}
-        <a href="{% url 'set_walkthrough' %}?id=applications_coordinator&next={% url 'admissions:coordinator_dashboard' %}"
+        <a href="{% url 'core:set_walkthrough' %}?id=applications_coordinator&next={% url 'admissions:coordinator_dashboard' %}"
            class="btn btn-ghost btn-sm">✦ Guided walkthrough</a>
         {% endif %}
         <a href="{% url 'admin_tools' %}" class="btn btn-ghost btn-sm">← Admin Tools</a>

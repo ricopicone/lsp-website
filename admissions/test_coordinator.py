@@ -6,6 +6,7 @@ import datetime
 
 import pytest
 from django.core import mail
+from django.test import override_settings
 from django.urls import reverse
 
 from accounts.models import Profile, User
@@ -176,3 +177,11 @@ def test_decision_template_editable(client, coordinator):
     resp = client.post(url, {"subject": "Welcome!", "body": "Dear {name}, welcome."})
     assert resp.status_code == 302
     assert MessageTemplate.get(MessageTemplate.Key.DECISION_ACCEPT).subject == "Welcome!"
+
+
+@override_settings(PREVIEW_TOUR_ENABLED=True, PREVIEW_TOUR_PUBLIC=True)
+def test_consoles_render_with_walkthrough_link(client, coordinator):
+    # With the tour enabled the "✦ Guided walkthrough" link renders — guards the
+    # set_walkthrough reverse (namespaced core:set_walkthrough).
+    assert client.get(reverse("admissions:coordinator_dashboard")).status_code == 200
+    assert client.get(reverse("admissions:analyst_dashboard")).status_code == 200
