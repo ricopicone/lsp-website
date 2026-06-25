@@ -55,16 +55,20 @@ def acknowledge_on_submit(application: Application) -> None:
 def eligible_interviewers(application: Application) -> list:
     """Active Analysts of the School who may be INVITED to interview — those
     Yes or Unknown for Application Interviews (i.e. not explicitly No), minus
-    the applicant and disposable personas."""
+    the applicant.
+
+    A training-sandbox application (the applicant is a persona) invites only the
+    persona analysts, keeping the whole exercise within the sandbox cast; a real
+    application excludes personas. So the invite never crosses the boundary."""
     from availability.services import interview_status_map
 
     from .forms import analyst_pool
 
-    pool = (
-        analyst_pool()
-        .exclude(pk=application.applicant_id)
-        .exclude(profile__is_persona=True)
-    )
+    pool = analyst_pool().exclude(pk=application.applicant_id)
+    if application.applicant.profile.is_persona:
+        pool = pool.filter(profile__is_persona=True)
+    else:
+        pool = pool.exclude(profile__is_persona=True)
     status = interview_status_map(pool.values_list("pk", flat=True))
     return [u for u in pool if status.get(u.pk, "unknown") != "no"]
 

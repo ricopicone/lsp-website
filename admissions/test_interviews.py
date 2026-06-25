@@ -223,3 +223,41 @@ def test_empty_report_is_rejected(client, application):
     assert resp.status_code == 200  # re-rendered with errors, not saved
     iv = application.interviews.get(interviewer=analyst)
     assert not iv.is_complete
+
+
+# ---- sandbox (task #272) --------------------------------------------------
+
+
+def test_sandbox_application_invites_only_personas(application):
+    real = _analyst("real@x.test", status="yes")
+    persona = _analyst("p@x.test", status="yes")
+    persona.profile.is_persona = True
+    persona.profile.save()
+    # Make this a sandbox application (persona applicant).
+    application.applicant.profile.is_persona = True
+    application.applicant.profile.save()
+    pool = services.eligible_interviewers(application)
+    assert persona in pool
+    assert real not in pool
+
+
+def test_seed_sandbox_creates_cast_and_sample_apps():
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    owner = User.objects.create_user(email="coach@x.test", password="x")
+    call_command("seed_sandbox", "--owner", "coach@x.test", stdout=StringIO())
+
+    cast = Profile.objects.filter(persona_owner=owner, is_persona=True)
+    assert cast.count() == 5  # 3 analysts + 2 applicants
+    apps = Application.objects.filter(applicant__profile__persona_owner=owner)
+    assert apps.count() == 2
+    interviewing = apps.get(status=Application.Status.INTERVIEWING)
+    assert interviewing.interviews.count() == 2
+    assert all(iv.is_complete for iv in interviewing.interviews.all())
+
+    # Re-running with --reset keeps it idempotent (same counts, no duplicates).
+    call_command("seed_sandbox", "--owner", "coach@x.test", "--reset", stdout=StringIO())
+    assert Profile.objects.filter(persona_owner=owner, is_persona=True).count() == 5
+    assert Application.objects.filter(applicant__profile__persona_owner=owner).count() == 2

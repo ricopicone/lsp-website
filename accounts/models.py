@@ -338,6 +338,19 @@ class Profile(models.Model):
             "real member is read-only. Seeded by `manage.py seed_personas`."
         ),
     )
+    persona_owner = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="owned_personas",
+        help_text=(
+            "For a training-sandbox persona: the trainee who owns it. Mail "
+            "addressed to this persona is redirected to the owner (tagged "
+            "[SANDBOX]) instead of dropped, so they see the whole workflow. "
+            "Set by `manage.py seed_sandbox`."
+        ),
+    )
 
     def __str__(self):
         return f"{self.user.email} ({self.get_role_display()})"
