@@ -273,7 +273,13 @@ def impersonate_start(request, user_id: int):
     ImpersonationLog.objects.create(
         impersonator=real, target=target, read_only=read_only
     )
-    return redirect("/")
+    from django.utils.http import url_has_allowed_host_and_scheme
+    nxt = request.GET.get("next") or "/"
+    if not url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        nxt = "/"
+    return redirect(nxt)
 
 
 @require_POST

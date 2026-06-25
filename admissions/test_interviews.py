@@ -261,3 +261,34 @@ def test_seed_sandbox_creates_cast_and_sample_apps():
     call_command("seed_sandbox", "--owner", "coach@x.test", "--reset", stdout=StringIO())
     assert Profile.objects.filter(persona_owner=owner, is_persona=True).count() == 5
     assert Application.objects.filter(applicant__profile__persona_owner=owner).count() == 2
+
+
+def test_full_application_shows_covered(client, application):
+    application.status = Application.Status.INTERVIEWING
+    application.save(update_fields=["status"])
+    services.add_interviewer(application, _analyst("a1@x.test", status="yes"))
+    services.add_interviewer(application, _analyst("a2@x.test", status="yes"))
+    viewer = _analyst("v@x.test", status="yes")
+    client.force_login(viewer)
+    html = client.get(
+        reverse("admissions:analyst_interview", args=[application.pk])
+    ).content.decode()
+    assert "already covered" in html
+
+
+def test_sandbox_interview_offers_act_as_to_superuser(client, application):
+    application.applicant.profile.is_persona = True
+    application.applicant.profile.save()
+    application.status = Application.Status.INTERVIEWING
+    application.save(update_fields=["status"])
+    p = _analyst("pa@x.test", status="yes")
+    p.profile.is_persona = True
+    p.profile.save()
+    su = User.objects.create_superuser(email="su-act@x.test", password="x")
+    client.force_login(su)
+    html = client.get(
+        reverse("admissions:analyst_interview", args=[application.pk])
+    ).content.decode()
+    assert "Act as" in html  # impersonation shortcut offered
+    assert "already covered" not in html  # not the misleading message
+    assert f"/impersonate/{p.pk}/" in html

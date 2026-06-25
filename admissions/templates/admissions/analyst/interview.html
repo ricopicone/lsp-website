@@ -48,7 +48,7 @@
       </form>
     </div>
     {% endif %}
-  {% elif slots_remaining > 0 and eligible %}
+  {% elif eligible and slots_remaining > 0 %}
     <div class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
       <p class="text-sm text-base-content/70">
         This applicant still needs {{ slots_remaining }} interviewer{{ slots_remaining|pluralize }}.
@@ -60,11 +60,30 @@
         <button class="btn btn-primary">I can interview this applicant</button>
       </form>
     </div>
-  {% else %}
+  {% elif slots_remaining <= 0 %}
     <div class="rounded-xl border border-base-300/60 bg-base-100 p-5">
       <p class="text-sm text-base-content/70">
         Thank you — the interviews for this applicant are already covered.
       </p>
+    </div>
+  {% else %}
+    {% comment %}Viewer isn't an invited analyst (e.g. opened the link as the coordinator); in the sandbox, offer to step in as a persona analyst.{% endcomment %}
+    <div class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-3">
+      <p class="text-sm text-base-content/70">
+        This invitation is for the analysts we contacted. To respond, you'd be
+        signed in as that analyst.
+      </p>
+      {% if sandbox_actors %}
+      <div class="space-y-2">
+        <p class="text-sm font-medium text-base-content">🧪 Sandbox — act as an invited analyst:</p>
+        <div class="flex flex-wrap gap-2">
+          {% for actor in sandbox_actors %}
+          <a href="{{ actor.url }}" class="btn btn-outline btn-sm">Act as {{ actor.name }}</a>
+          {% endfor %}
+        </div>
+        <p class="text-xs text-base-content/50">You'll be returned here as that analyst to agree. Use the impersonation banner to switch back.</p>
+      </div>
+      {% endif %}
     </div>
   {% endif %}
 

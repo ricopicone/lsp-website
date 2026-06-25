@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from . import services
@@ -67,13 +68,33 @@ def interview(request, pk):
     report_form = (
         InterviewReportForm(instance=mine) if mine and not mine.is_complete else None
     )
+    is_sandbox = application.applicant.profile.is_persona
+
+    # Sandbox helper: a superuser trialing the flow agrees by impersonating the
+    # persona analysts (the email's link lands them here as themselves, not the
+    # persona). Offer one-click "act as" links that return to this page.
+    sandbox_actors = []
+    if is_sandbox and request.user.is_superuser:
+        from urllib.parse import urlencode
+        here = reverse("admissions:analyst_interview", args=[application.pk])
+        agreed_ids = set(application.interviews.values_list("interviewer_id", flat=True))
+        for analyst in services.eligible_interviewers(application):
+            if analyst.pk in agreed_ids:
+                continue
+            impersonate = reverse("core:impersonate_start", args=[analyst.pk])
+            sandbox_actors.append({
+                "name": analyst.get_full_name() or analyst.email,
+                "url": f"{impersonate}?{urlencode({'next': here})}",
+            })
+
     return render(request, "admissions/analyst/interview.html", {
         "application": application,
         "mine": mine,
         "slots_remaining": services.slots_remaining(application),
         "eligible": request.user in services.eligible_interviewers(application),
         "report_form": report_form,
-        "is_sandbox": application.applicant.profile.is_persona,
+        "is_sandbox": is_sandbox,
+        "sandbox_actors": sandbox_actors,
     })
 
 
