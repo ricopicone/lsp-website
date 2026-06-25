@@ -190,11 +190,16 @@ def review_detail(request, pk):
     report_forms = [
         (iv, InterviewReportForm(instance=iv, prefix=f"iv{iv.pk}")) for iv in interviews
     ]
+    from . import services
+    from .permissions import can_coordinate_applications
     return render(request, "admissions/review_detail.html", {
         "application": application,
         "assign_form": AssignInterviewerForm(application=application),
         "report_forms": report_forms,
         "default_ay": current_academic_year_start(),
+        "can_invite": can_coordinate_applications(request.user),
+        "invited": application.interviewers_invited_at is not None,
+        "slots_remaining": services.slots_remaining(application),
     })
 
 

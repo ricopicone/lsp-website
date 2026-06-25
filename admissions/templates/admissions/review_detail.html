@@ -37,6 +37,21 @@
       <span class="text-xs text-base-content/50">Two interviews, one per Analyst.</span>
     </div>
 
+    {% if can_invite and application.is_open and slots_remaining %}
+    {# Primary path: invite available analysts to volunteer. #}
+    <div class="rounded-lg border border-primary/30 bg-primary/5 p-3 flex flex-wrap items-center justify-between gap-3">
+      <p class="text-sm text-base-content/80">
+        Invite available analysts to interview this applicant — the first two to
+        agree are connected with them by email.
+      </p>
+      <form method="post" action="{% url 'admissions:coordinator_invite' application.pk %}"
+            onsubmit="return confirm('Email available analysts inviting them to interview this applicant?');">
+        {% csrf_token %}
+        <button class="btn btn-primary btn-sm">{% if invited %}Re-invite interviewers{% else %}Invite interviewers{% endif %}</button>
+      </form>
+    </div>
+    {% endif %}
+
     {% for iv, rform in report_forms %}
     <div class="rounded-lg border border-base-300/70 p-3 space-y-2">
       <div class="flex items-center justify-between gap-2">
@@ -77,9 +92,9 @@
     <form method="post" action="{% url 'admissions:review_assign' application.pk %}" class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
       {% csrf_token %}
       <div class="flex-1 min-w-0 space-y-1">
-        <label class="block text-xs text-base-content/60">{{ assign_form.interviewer.label }}</label>
+        <label class="block text-xs text-base-content/60">Or add a specific interviewer directly</label>
         {{ assign_form.interviewer }}
-        <p class="text-xs text-base-content/50">Ordered by the Applications Coordinator's availability table — analysts available for Application Interviews come first.</p>
+        <p class="text-xs text-base-content/50">Override — assigns and connects this analyst without waiting for them to volunteer. Ordered by availability (available for Application Interviews first).</p>
       </div>
       <button class="btn btn-sm">Add</button>
     </form>

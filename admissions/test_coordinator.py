@@ -185,3 +185,15 @@ def test_consoles_render_with_walkthrough_link(client, coordinator):
     # set_walkthrough reverse (namespaced core:set_walkthrough).
     assert client.get(reverse("admissions:coordinator_dashboard")).status_code == 200
     assert client.get(reverse("admissions:analyst_dashboard")).status_code == 200
+
+
+def test_review_detail_shows_invite_for_coordinator(client, coordinator, application):
+    # The applicant detail view offers Invite (primary) + the manual override.
+    application.status = Application.Status.SUBMITTED
+    application.save(update_fields=["status"])
+    html = client.get(
+        reverse("admissions:review_detail", args=[application.pk])
+    ).content.decode()
+    assert f"/admin-tools/applications/{application.pk}/invite/" in html
+    assert "Invite interviewers" in html
+    assert "Or add a specific interviewer" in html  # the override
