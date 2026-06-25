@@ -48,7 +48,7 @@ def _render(request, tab_key, template, ctx):
 def dashboard(request):
     status = request.GET.get("status", "open")
     qs = (
-        Application.objects.select_related("applicant")
+        Application.objects.select_related("applicant__profile")
         .prefetch_related("interviews__interviewer")
         .order_by("status", "-submitted_at")
     )
@@ -71,6 +71,7 @@ def dashboard(request):
             "acknowledged": app.acknowledged_at is not None,
             "invited": app.interviewers_invited_at is not None,
             "slots_remaining": max(0, Application.INTERVIEWS_NEEDED - len(interviews)),
+            "is_sandbox": app.applicant.profile.is_persona,
         })
 
     return _render(request, "applications", "admissions/coordinator/dashboard.html", {

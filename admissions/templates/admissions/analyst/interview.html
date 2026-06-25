@@ -16,6 +16,13 @@
   <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'info' %}alert-info{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
   {% endfor %}{% endif %}
 
+  {% if is_sandbox %}
+  <div class="alert alert-warning py-2 text-sm">
+    🧪 <span><strong>Sandbox.</strong> A training applicant — any email here is
+    redirected to you, tagged <code>[SANDBOX]</code>.</span>
+  </div>
+  {% endif %}
+
   {% if mine %}
     {% if mine.is_complete %}
     <div class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-2">

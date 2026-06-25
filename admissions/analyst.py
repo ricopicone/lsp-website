@@ -73,6 +73,7 @@ def interview(request, pk):
         "slots_remaining": services.slots_remaining(application),
         "eligible": request.user in services.eligible_interviewers(application),
         "report_form": report_form,
+        "is_sandbox": application.applicant.profile.is_persona,
     })
 
 

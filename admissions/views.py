@@ -200,6 +200,7 @@ def review_detail(request, pk):
         "can_invite": can_coordinate_applications(request.user),
         "invited": application.interviewers_invited_at is not None,
         "slots_remaining": services.slots_remaining(application),
+        "is_sandbox": application.applicant.profile.is_persona,
     })
 
 

@@ -197,3 +197,16 @@ def test_review_detail_shows_invite_for_coordinator(client, coordinator, applica
     assert f"/admin-tools/applications/{application.pk}/invite/" in html
     assert "Invite interviewers" in html
     assert "Or add a specific interviewer" in html  # the override
+
+
+def test_sandbox_application_shows_indicator(client, coordinator, application):
+    application.applicant.profile.is_persona = True
+    application.applicant.profile.save()
+    # Dashboard badge.
+    dash = client.get(reverse("admissions:coordinator_dashboard")).content.decode()
+    assert "Sandbox" in dash
+    # Detail-view banner.
+    detail = client.get(
+        reverse("admissions:review_detail", args=[application.pk])
+    ).content.decode()
+    assert "Sandbox application" in detail

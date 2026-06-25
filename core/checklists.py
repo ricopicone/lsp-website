@@ -324,8 +324,10 @@ def _applications_coordinator_walkthrough() -> Checklist:
                              "(or make it automatic in Settings).",
                       resolve_url=_ac_dashboard_url, manual=True),
         ChecklistTask(id="ac_invite", label="Invite interviewers",
-                      detail="Press Invite to email available analysts. In a "
-                             "sandbox, every email comes to you.",
+                      detail="Open an applicant (the Review → link), then press "
+                             "'Invite interviewers' to email available analysts. "
+                             "On a sandbox applicant (marked 🧪) every email is "
+                             "redirected to you.",
                       resolve_url=_ac_dashboard_url, manual=True),
         ChecklistTask(id="ac_connect", label="Watch the introductions",
                       detail="When an analyst agrees, the applicant and "
