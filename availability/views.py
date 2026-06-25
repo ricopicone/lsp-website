@@ -25,8 +25,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from . import notifications, services
-from .forms import AvailabilitySettingsForm, ReminderTemplateForm
-from .models import AnalystFunction, AvailabilitySettings, AvailabilitySpan, ReminderTemplate
+from .forms import ReminderTemplateForm
+from .models import AnalystFunction, AvailabilitySpan, ReminderTemplate
 from .permissions import can_manage_availability
 
 Status = AvailabilitySpan.Status
@@ -43,30 +43,10 @@ def coordinator_required(view):
     return wrapper
 
 
-#: (key, label) for the console tabs, in display order. "Applications" links to
-#: the coordinator's admissions console — the same role's other surface.
-TABS = [
-    ("applications", "Applications"),
-    ("grid", "Analyst availability"),
-    ("overview", "Overview"),
-    ("settings", "Settings"),
-    ("templates", "Reminder message"),
-]
-
-
-def _tab_links() -> list[tuple[str, str, str]]:
-    name_to_url = {
-        "applications": reverse("admissions:coordinator_dashboard"),
-        "grid": reverse("availability:grid"),
-        "overview": reverse("availability:overview"),
-        "settings": reverse("availability:settings"),
-        "templates": reverse("availability:templates"),
-    }
-    return [(key, label, name_to_url[key]) for key, label in TABS]
-
-
 def _render(request, tab_key: str, template: str, ctx: dict):
-    return render(request, template, {**ctx, "tab_key": tab_key, "tabs": _tab_links()})
+    # Shared workspace tab bar (same on the admissions + availability consoles).
+    from admissions.coordinator import workspace_tabs
+    return render(request, template, {**ctx, "tab_key": tab_key, "tabs": workspace_tabs()})
 
 
 def _console_profiles():
@@ -113,7 +93,7 @@ def grid(request):
             })
         rows.append({"profile": profile, "cells": cells, "note": notes[profile.pk]})
 
-    return _render(request, "grid", "availability/grid.html", {
+    return _render(request, "availability", "availability/grid.html", {
         "functions": functions,
         "rows": rows,
         "status_choices": Status.choices,
@@ -199,7 +179,7 @@ def analyst(request, pk):
             ),
         })
 
-    return _render(request, "grid", "availability/analyst.html", {
+    return _render(request, "availability", "availability/analyst.html", {
         "profile": profile,
         "fn_rows": fn_rows,
         "status_choices": Status.choices,
@@ -238,13 +218,9 @@ def _save_analyst_note(request, profile):
 
 @coordinator_required
 def settings_view(request):
-    config = AvailabilitySettings.load()
-    form = AvailabilitySettingsForm(request.POST or None, instance=config)
-    if request.method == "POST" and form.is_valid():
-        form.save()
-        messages.success(request, "Availability settings saved.")
-        return redirect("availability:settings")
-    return _render(request, "settings", "availability/settings.html", {"form": form})
+    # Settings now live on the unified workspace Settings page (the availability
+    # reminder cadence is edited there alongside admissions settings).
+    return redirect("admissions:coordinator_settings")
 
 
 @coordinator_required
@@ -255,7 +231,7 @@ def template_edit(request):
         form.save()
         messages.success(request, "Reminder message saved.")
         return redirect("availability:templates")
-    return _render(request, "templates", "availability/templates.html", {
+    return _render(request, "reminder", "availability/templates.html", {
         "template": template, "form": form,
     })
 

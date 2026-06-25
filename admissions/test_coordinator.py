@@ -160,14 +160,18 @@ def test_decision_accept_letter_uses_template_links(application):
 
 def test_admissions_settings_save(client, coordinator):
     from admissions.models import AdmissionsSettings
+    from availability.models import AvailabilitySettings
 
     resp = client.post(reverse("admissions:coordinator_settings"), {
-        "acknowledgment_mode": AdmissionsSettings.Mode.REVIEW,
-        "invitation_mode": AdmissionsSettings.Mode.AUTO,
+        "adm-acknowledgment_mode": AdmissionsSettings.Mode.REVIEW,
+        "adm-invitation_mode": AdmissionsSettings.Mode.AUTO,
+        "avl-reminder_mode": AvailabilitySettings.Mode.AUTO,
     })
     assert resp.status_code == 302
     assert AdmissionsSettings.load().acknowledgment_mode == AdmissionsSettings.Mode.REVIEW
     assert AdmissionsSettings.load().invitation_mode == AdmissionsSettings.Mode.AUTO
+    # The availability reminder cadence is saved from the same page.
+    assert AvailabilitySettings.load().reminder_mode == AvailabilitySettings.Mode.AUTO
 
 
 def test_decision_template_editable(client, coordinator):

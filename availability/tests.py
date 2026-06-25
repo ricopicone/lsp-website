@@ -359,13 +359,12 @@ def test_auto_reminder_command_respects_mode_and_runs_once(
     assert len(mail.outbox) == 1
 
 
-def test_settings_save(client, coordinator):
-    assert client.get(reverse("availability:settings")).status_code == 200
-    resp = client.post(reverse("availability:settings"), {
-        "reminder_mode": AvailabilitySettings.Mode.AUTO,
-    })
+def test_settings_redirects_to_unified(client, coordinator):
+    # The availability Settings tab is gone; the reminder cadence now lives on
+    # the unified workspace Settings page.
+    resp = client.get(reverse("availability:settings"))
     assert resp.status_code == 302
-    assert AvailabilitySettings.load().reminder_mode == AvailabilitySettings.Mode.AUTO
+    assert resp["Location"] == reverse("admissions:coordinator_settings")
 
 
 def test_template_edit_save(client, coordinator):

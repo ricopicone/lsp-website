@@ -2,12 +2,20 @@
 {% block tab_content %}
 <div class="max-w-2xl space-y-6">
   <p class="text-sm text-base-content/70">
-    How the applicant acknowledgment is sent. You can always send it by hand
-    from the Applications tab regardless of this setting.
+    How automatic messages are sent. You can always send any of them by hand
+    regardless of these settings.
   </p>
   <form method="post" class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-5">
     {% csrf_token %}
     {% for field in form %}
+    <label class="block space-y-1">
+      <span class="text-sm font-medium text-base-content">{{ field.label }}</span>
+      {% if field.help_text %}<span class="block text-xs text-base-content/60">{{ field.help_text }}</span>{% endif %}
+      {{ field }}
+      {% for error in field.errors %}<span class="block text-xs text-error">{{ error }}</span>{% endfor %}
+    </label>
+    {% endfor %}
+    {% for field in avail_form %}
     <label class="block space-y-1">
       <span class="text-sm font-medium text-base-content">{{ field.label }}</span>
       {% if field.help_text %}<span class="block text-xs text-base-content/60">{{ field.help_text }}</span>{% endif %}

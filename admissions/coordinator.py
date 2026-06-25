@@ -22,26 +22,26 @@ from .permissions import coordinator_required
 
 #: (key, label) for the console tabs, in display order. Availability is the
 #: coordinator's other surface (the analyst-availability table) — same role.
-TABS = [
-    ("applications", "Applications"),
-    ("availability", "Analyst availability"),
-    ("messages", "Messages"),
-    ("settings", "Settings"),
+#: The one workspace tab bar, shared by BOTH the admissions and availability
+#: consoles so it's identical wherever you are. (key, label, url-name).
+_WORKSPACE_TABS = [
+    ("applications", "Applications", "admissions:coordinator_dashboard"),
+    ("availability", "Analyst availability", "availability:grid"),
+    ("overview", "Overview", "availability:overview"),
+    ("messages", "Messages", "admissions:coordinator_messages"),
+    ("reminder", "Reminder message", "availability:templates"),
+    ("settings", "Settings", "admissions:coordinator_settings"),
 ]
 
 
-def _tab_links() -> list[tuple[str, str, str]]:
-    name_to_url = {
-        "applications": reverse("admissions:coordinator_dashboard"),
-        "availability": reverse("availability:grid"),
-        "messages": reverse("admissions:coordinator_messages"),
-        "settings": reverse("admissions:coordinator_settings"),
-    }
-    return [(key, label, name_to_url[key]) for key, label in TABS]
+def workspace_tabs() -> list[tuple[str, str, str]]:
+    """(key, label, url) for the coordinator workspace tab bar — the single
+    source used by both consoles."""
+    return [(key, label, reverse(name)) for key, label, name in _WORKSPACE_TABS]
 
 
 def _render(request, tab_key, template, ctx):
-    return render(request, template, {**ctx, "tab_key": tab_key, "tabs": _tab_links()})
+    return render(request, template, {**ctx, "tab_key": tab_key, "tabs": workspace_tabs()})
 
 
 @coordinator_required
@@ -133,14 +133,25 @@ def send_acknowledgment(request, pk):
 
 @coordinator_required
 def settings_view(request):
-    config = AdmissionsSettings.load()
-    form = AdmissionsSettingsForm(request.POST or None, instance=config)
-    if request.method == "POST" and form.is_valid():
+    """One Settings page for the whole workspace — admissions (acknowledgment,
+    invitations) and the availability reminder cadence."""
+    from availability.forms import AvailabilitySettingsForm
+    from availability.models import AvailabilitySettings
+
+    form = AdmissionsSettingsForm(
+        request.POST or None, instance=AdmissionsSettings.load(), prefix="adm",
+    )
+    avail_form = AvailabilitySettingsForm(
+        request.POST or None, instance=AvailabilitySettings.load(), prefix="avl",
+    )
+    if request.method == "POST" and form.is_valid() and avail_form.is_valid():
         form.save()
-        messages.success(request, "Admissions settings saved.")
+        avail_form.save()
+        messages.success(request, "Settings saved.")
         return redirect("admissions:coordinator_settings")
     return _render(request, "settings", "admissions/coordinator/settings.html", {
         "form": form,
+        "avail_form": avail_form,
     })
 
 
