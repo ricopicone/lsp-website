@@ -103,6 +103,14 @@ class AssignInterviewerForm(forms.Form):
         if application is not None:
             already = application.interviews.values_list("interviewer_id", flat=True)
             qs = qs.exclude(pk__in=already)
+            # Sandbox containment: a sandbox application (persona applicant) may
+            # only ever involve persona analysts, so the manual-assign override
+            # can't pull a real analyst into a training run and email them. A
+            # real application excludes personas.
+            if application.applicant.profile.is_persona:
+                qs = qs.filter(profile__is_persona=True)
+            else:
+                qs = qs.exclude(profile__is_persona=True)
         self._apply_availability(qs)
 
     def _apply_availability(self, qs):

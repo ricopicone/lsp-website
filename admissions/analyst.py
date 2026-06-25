@@ -111,6 +111,8 @@ def agree(request, pk):
         )
     elif outcome == "already":
         messages.info(request, "You're already set to interview this applicant.")
+    elif outcome == "ineligible":
+        messages.info(request, "This invitation isn't open to you.")
     else:  # full
         messages.info(
             request,

@@ -105,7 +105,14 @@ def invite_on_submit(application: Application) -> None:
 def add_interviewer(application: Application, analyst, *, by=None):
     """Record ``analyst`` as an interviewer (idempotent) and send the
     introduction connecting them with the applicant. Returns (interview,
-    created)."""
+    created).
+
+    Sandbox containment (defense in depth): a sandbox application only ever
+    involves persona analysts, so a mismatch (sandbox app + real analyst, or
+    vice versa) is refused — this guards against a real analyst being emailed
+    in a training run even if a request bypassed the form."""
+    if application.applicant.profile.is_persona != analyst.profile.is_persona:
+        raise ValueError("Interviewer/applicant sandbox mismatch — refused.")
     interview, created = ApplicationInterview.objects.get_or_create(
         application=application, interviewer=analyst,
         defaults={"agreed_at": timezone.now()},
@@ -126,7 +133,10 @@ def agree_to_interview(application: Application, analyst):
         return existing, "already"
     if slots_remaining(application) <= 0:
         return None, "full"
-    interview, _ = add_interviewer(application, analyst)
+    try:
+        interview, _ = add_interviewer(application, analyst)
+    except ValueError:  # sandbox mismatch — not an eligible interviewer here
+        return None, "ineligible"
     return interview, "agreed"
 
 

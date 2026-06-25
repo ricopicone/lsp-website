@@ -214,12 +214,16 @@ def review_assign(request, pk):
         # Same path as an analyst agreeing: records the interview and emails the
         # introduction connecting applicant + interviewer.
         from . import services
-        _iv, created = services.add_interviewer(
-            application, form.cleaned_data["interviewer"], by=request.user,
-        )
-        messages.success(
-            request, "Interviewer added." if created else "Already an interviewer.",
-        )
+        try:
+            _iv, created = services.add_interviewer(
+                application, form.cleaned_data["interviewer"], by=request.user,
+            )
+        except ValueError:  # sandbox containment guard
+            messages.error(request, "That interviewer can't be assigned here.")
+        else:
+            messages.success(
+                request, "Interviewer added." if created else "Already an interviewer.",
+            )
     else:
         messages.error(request, "Couldn't add that interviewer.")
     return redirect("admissions:review_detail", pk=pk)

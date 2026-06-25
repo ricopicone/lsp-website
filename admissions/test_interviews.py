@@ -292,3 +292,33 @@ def test_sandbox_interview_offers_act_as_to_superuser(client, application):
     assert "Act as" in html  # impersonation shortcut offered
     assert "already covered" not in html  # not the misleading message
     assert f"/impersonate/{p.pk}/" in html
+
+
+# ---- sandbox containment of the manual-assign override --------------------
+
+
+def test_sandbox_assign_form_excludes_real_analysts(application):
+    from admissions.forms import AssignInterviewerForm
+
+    application.applicant.profile.is_persona = True
+    application.applicant.profile.save()
+    real = _analyst("real-leak@x.test", status="yes")
+    persona = _analyst("persona-ok@x.test", status="yes")
+    persona.profile.is_persona = True
+    persona.profile.save()
+    pool = list(AssignInterviewerForm(application=application).fields["interviewer"].queryset)
+    assert persona in pool
+    assert real not in pool  # a real analyst can't be picked for a sandbox app
+
+
+def test_add_interviewer_refuses_sandbox_mismatch(application):
+    # Defense in depth: even bypassing the form, a real analyst can't be added
+    # to a sandbox application (which would email them for real).
+    application.applicant.profile.is_persona = True
+    application.applicant.profile.save()
+    real = _analyst("real2@x.test", status="yes")
+    import pytest as _pytest
+    with _pytest.raises(ValueError):
+        services.add_interviewer(application, real)
+    assert not application.interviews.exists()
+    assert mail.outbox == []  # no leak
