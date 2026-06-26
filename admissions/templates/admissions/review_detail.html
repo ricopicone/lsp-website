@@ -2,7 +2,7 @@
 {% block title %}Application — {{ application.applicant.get_full_name|default:application.applicant.email }}{% endblock %}
 {% block content %}
 <div class="space-y-6 max-w-3xl">
-  <nav class="text-sm"><a href="{% url 'admissions:review_queue' %}" class="link link-hover text-base-content/60">← Applications</a></nav>
+  <nav class="text-sm"><a href="{{ back_url }}" class="link link-hover text-base-content/60">← {{ back_label }}</a></nav>
 
   {% if messages %}{% for m in messages %}
   <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
@@ -13,7 +13,7 @@
     <span>🧪 <strong>Sandbox application.</strong> This is a training applicant —
     every email this triggers is redirected to you, tagged <code>[SANDBOX]</code>.
     No real member is contacted.</span>
-    {% if can_invite and application.is_open %}
+    {% if can_act and application.is_open %}
     <form method="post" action="{% url 'admissions:coordinator_simulate' application.pk %}">
       {% csrf_token %}
       <button class="btn btn-sm" title="Fast-forward: the sandbox analysts agree and file reports, so you can reach the decision without impersonating each one.">Simulate analyst responses</button>
@@ -51,7 +51,7 @@
       <span class="text-xs text-base-content/50">Two interviews, one per Analyst.</span>
     </div>
 
-    {% if can_invite and application.is_open and slots_remaining %}
+    {% if can_act and application.is_open and slots_remaining %}
     {# Primary path: invite available analysts to volunteer. #}
     <div class="rounded-lg border border-primary/30 bg-primary/5 p-3 flex flex-wrap items-center justify-between gap-3">
       <p class="text-sm text-base-content/80">
@@ -72,14 +72,14 @@
         <span class="text-sm font-medium">{{ iv.interviewer.get_full_name|default:iv.interviewer.email }}</span>
         <div class="flex items-center gap-2">
           {% if iv.is_complete %}<span class="badge badge-success badge-sm">reported</span>{% else %}<span class="badge badge-ghost badge-sm">pending</span>{% endif %}
-          {% if application.is_open %}
+          {% if can_act and application.is_open %}
           <form method="post" action="{% url 'admissions:review_remove_interview' iv.pk %}" onsubmit="return confirm('Remove this interviewer?');">
             {% csrf_token %}<button class="btn btn-ghost btn-xs text-error">Remove</button>
           </form>
           {% endif %}
         </div>
       </div>
-      {% if application.is_open %}
+      {% if can_act and application.is_open %}
       <form method="post" action="{% url 'admissions:review_report' iv.pk %}" class="space-y-2">
         {% csrf_token %}
         <div class="flex flex-wrap items-end gap-2">
@@ -95,14 +95,15 @@
         <button class="btn btn-ghost btn-xs">Save report</button>
       </form>
       {% else %}
-        {% if iv.report %}<p class="text-sm text-base-content/70 whitespace-pre-wrap">{{ iv.report }}</p>{% endif %}
+        {% if iv.report %}<p class="text-sm text-base-content/70 whitespace-pre-wrap">{{ iv.report }}</p>
+        {% elif not iv.is_complete %}<p class="text-xs text-base-content/50">Report pending.</p>{% endif %}
       {% endif %}
     </div>
     {% empty %}
     <p class="text-sm text-base-content/50">No interviewers assigned yet.</p>
     {% endfor %}
 
-    {% if application.is_open %}
+    {% if can_act and application.is_open %}
     <form method="post" action="{% url 'admissions:review_assign' application.pk %}" class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
       {% csrf_token %}
       <div class="flex-1 min-w-0 space-y-1">
@@ -116,9 +117,9 @@
   </section>
 
   {% comment %}Decision{% endcomment %}
-  {% if application.is_open %}
+  {% if can_act and application.is_open %}
   <section class="rounded-xl border border-base-300 p-5 space-y-4">
-    <h2 class="font-medium text-base-content">Decision <span class="text-xs font-normal text-base-content/50">(Meeting of the Analysts)</span></h2>
+    <h2 class="font-medium text-base-content">Decision <span class="text-xs font-normal text-base-content/50">(record the Meeting of the Analysts' decision)</span></h2>
     <form method="post" action="{% url 'admissions:review_decide' application.pk %}" class="space-y-3">
       {% csrf_token %}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -139,6 +140,10 @@
                 onclick="return confirm('Record this application as not accepted?');">Decline</button>
       </div>
     </form>
+  </section>
+  {% elif application.is_open %}
+  <section class="rounded-xl border border-base-300 p-5 text-sm text-base-content/70">
+    Awaiting the Meeting of the Analysts' decision.
   </section>
   {% else %}
   <section class="rounded-xl border border-base-300 p-5 text-sm space-y-1">

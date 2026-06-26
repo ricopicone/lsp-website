@@ -5,7 +5,7 @@
 {% block admin_intro %}The Analysts of the School oversee psychoanalytic training and transmission: they review admissions, conduct interviews, decide admissions, and consider demands for palimpsests and passages.{% endblock %}
 {% block admin_sections %}
   {% url 'admissions:review_queue' as applications_url %}
-  {% include "core/staff/admin/_section.html" with title="Applications" body="Review membership applications: assign the two interviewers, record their reports, and decide. Accepting admits the applicant as a Precandidate." link=applications_url link_label="Review applications" count=open_applications count_label="open" %}
+  {% include "core/staff/admin/_section.html" with title="Applications" body="Review membership applications and their interviews to date (read-only). The Applications Coordinator staffs interviewers and records the Meeting's decision." link=applications_url link_label="View applications" count=open_applications count_label="open" %}
 
   {% url 'admissions:advancement_queue' as advancements_url %}
   {% include "core/staff/admin/_section.html" with title="Palimpsests & passages" body="Decide formation-advancement demandes: the palimpsest (Precandidate → Candidate) and, later, the passage. The member's Advisor presents each demande with a recommendation." link=advancements_url link_label="Review demandes" count=open_advancements count_label="open" %}

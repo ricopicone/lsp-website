@@ -204,10 +204,6 @@ def _ac_settings_url(request):
     return _rev("admissions:coordinator_settings")
 
 
-def _ac_review_url(request):
-    return _rev("admissions:review_queue")
-
-
 def _analyst_dashboard_url(request):
     return _rev("admissions:analyst_dashboard")
 
@@ -337,9 +333,9 @@ def _applications_coordinator_walkthrough() -> Checklist:
                              "this — no impersonation needed.",
                       manual=True),
         ChecklistTask(id="ac_decide", label="Record the decision",
-                      detail="Open an applicant to assign interviewers and decide "
-                             "accept/reject on the Meeting's review page.",
-                      resolve_url=_ac_review_url, manual=True),
+                      detail="Open the applicant from your console and record the "
+                             "Meeting's accept/reject decision.",
+                      resolve_url=_ac_dashboard_url, manual=True),
         ChecklistTask(id="ac_messages", label="Tailor the messages",
                       detail="Edit the wording of any outgoing email.",
                       resolve_url=_ac_messages_url, manual=True),

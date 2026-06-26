@@ -44,7 +44,7 @@
         {% for row in rows %}
         <tr class="hover">
           <td>
-            <a href="{% url 'admissions:review_detail' row.application.pk %}" class="link font-medium">
+            <a href="{% url 'admissions:coordinator_application_detail' row.application.pk %}" class="link font-medium">
               {{ row.application.applicant.get_full_name|default:row.application.applicant.email }}
             </a>
             {% if row.is_sandbox %}<span class="badge badge-warning badge-sm ml-1" title="Sandbox — emails are redirected to you, not real members">🧪 Sandbox</span>{% endif %}

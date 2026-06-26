@@ -191,16 +191,31 @@ def test_consoles_render_with_walkthrough_link(client, coordinator):
     assert client.get(reverse("admissions:analyst_dashboard")).status_code == 200
 
 
-def test_review_detail_shows_invite_for_coordinator(client, coordinator, application):
-    # The applicant detail view offers Invite (primary) + the manual override.
+def test_coordinator_detail_shows_full_admin(client, coordinator, application):
+    # The coordinator's own application page offers Invite (primary), the manual
+    # override, and the decision controls.
     application.status = Application.Status.SUBMITTED
     application.save(update_fields=["status"])
     html = client.get(
-        reverse("admissions:review_detail", args=[application.pk])
+        reverse("admissions:coordinator_application_detail", args=[application.pk])
     ).content.decode()
     assert f"/admin-tools/applications/{application.pk}/invite/" in html
     assert "Invite interviewers" in html
     assert "Or add a specific interviewer" in html  # the override
+    assert "Accept &amp; admit" in html  # decision controls present
+
+
+def test_meeting_detail_is_read_only(client, application):
+    # The Meeting's review_detail is read-only — no action forms.
+    from accounts.models import Profile
+    analyst = _user("moa-ro@x.test", role=Profile.Role.ANALYST)
+    client.force_login(analyst)
+    html = client.get(
+        reverse("admissions:review_detail", args=[application.pk])
+    ).content.decode()
+    assert "Invite interviewers" not in html
+    assert "Accept &amp; admit" not in html
+    assert "Or add a specific interviewer" not in html
 
 
 def test_sandbox_application_shows_indicator(client, coordinator, application):

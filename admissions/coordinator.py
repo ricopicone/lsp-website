@@ -17,7 +17,12 @@ from django.views.decorators.http import require_POST
 
 from . import notifications as notify_admissions
 from . import services
-from .forms import AdmissionsSettingsForm, MessageTemplateForm
+from .forms import (
+    AdmissionsSettingsForm,
+    AssignInterviewerForm,
+    InterviewReportForm,
+    MessageTemplateForm,
+)
 from .models import AdmissionsSettings, Application, MessageTemplate
 from .permissions import coordinator_required
 
@@ -98,6 +103,36 @@ def invite(request, pk):
         f"{application.applicant.get_full_name() or application.applicant.email}.",
     )
     return redirect("admissions:coordinator_dashboard")
+
+
+@coordinator_required
+def application_detail(request, pk):
+    """The Applications Coordinator's full admin view of one application —
+    acknowledge, invite, simulate, assign, record reports, and decide. The
+    Meeting of Analysts sees the read-only twin at review_detail."""
+    from accounts.membership import current_academic_year_start
+
+    application = get_object_or_404(
+        Application.objects.select_related("applicant__profile")
+        .prefetch_related("interviews__interviewer"),
+        pk=pk,
+    )
+    report_forms = [
+        (iv, InterviewReportForm(instance=iv, prefix=f"iv{iv.pk}"))
+        for iv in application.interviews.all()
+    ]
+    return render(request, "admissions/review_detail.html", {
+        "application": application,
+        "assign_form": AssignInterviewerForm(application=application),
+        "report_forms": report_forms,
+        "default_ay": current_academic_year_start(),
+        "can_act": True,
+        "invited": application.interviewers_invited_at is not None,
+        "slots_remaining": services.slots_remaining(application),
+        "is_sandbox": application.applicant.profile.is_persona,
+        "back_url": reverse("admissions:coordinator_dashboard"),
+        "back_label": "Applications",
+    })
 
 
 @coordinator_required

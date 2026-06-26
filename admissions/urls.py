@@ -54,6 +54,8 @@ urlpatterns = [
     path(f"{_APPS}/", coordinator.dashboard, name="coordinator_dashboard"),
     path(f"{_APPS}/reset-sandbox/", coordinator.reset_sandbox,
          name="coordinator_reset_sandbox"),
+    path(f"{_APPS}/<int:pk>/", coordinator.application_detail,
+         name="coordinator_application_detail"),
     path(f"{_APPS}/<int:pk>/invite/", coordinator.invite, name="coordinator_invite"),
     path(f"{_APPS}/<int:pk>/simulate/", coordinator.simulate,
          name="coordinator_simulate"),
