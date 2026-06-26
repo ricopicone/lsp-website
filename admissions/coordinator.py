@@ -37,6 +37,7 @@ _WORKSPACE_TABS = [
     ("messages", "Messages", "admissions:coordinator_messages"),
     ("reminder", "Reminder message", "availability:templates"),
     ("settings", "Settings", "admissions:coordinator_settings"),
+    ("help", "Help", "admissions:coordinator_help"),
 ]
 
 
@@ -103,6 +104,12 @@ def invite(request, pk):
         f"{application.applicant.get_full_name() or application.applicant.email}.",
     )
     return redirect("admissions:coordinator_dashboard")
+
+
+@coordinator_required
+def help_view(request):
+    """How-to documentation for the Applications Coordinator console."""
+    return _render(request, "help", "admissions/coordinator/help.html", {})
 
 
 @coordinator_required

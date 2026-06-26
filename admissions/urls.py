@@ -44,6 +44,7 @@ urlpatterns = [
 
     # --- Applications Coordinator console ---
     path(f"{_APPS}/", coordinator.dashboard, name="coordinator_dashboard"),
+    path(f"{_APPS}/help/", coordinator.help_view, name="coordinator_help"),
     path(f"{_APPS}/reset-sandbox/", coordinator.reset_sandbox,
          name="coordinator_reset_sandbox"),
     path(f"{_APPS}/<int:pk>/", coordinator.application_detail,

@@ -275,3 +275,14 @@ def test_dashboard_offers_create_sandbox_when_none(client, coordinator):
     html = client.get(reverse("admissions:coordinator_dashboard")).content.decode()
     assert "Create training sandbox" in html
     assert "Reset sandbox" not in html
+
+
+def test_help_page_renders_and_is_tabbed(client, coordinator):
+    resp = client.get(reverse("admissions:coordinator_help"))
+    assert resp.status_code == 200
+    html = resp.content.decode()
+    assert "training sandbox" in html.lower()
+    # Help appears in the shared workspace tab bar.
+    assert reverse("admissions:coordinator_help") in (
+        client.get(reverse("admissions:coordinator_dashboard")).content.decode()
+    )
