@@ -331,13 +331,14 @@ def _applications_coordinator_walkthrough() -> Checklist:
                              "In the sandbox, use “Simulate analyst "
                              "responses” on the application to fast-forward "
                              "this — no impersonation needed.",
-                      manual=True),
+                      resolve_url=_ac_dashboard_url, manual=True),
         ChecklistTask(id="ac_decide", label="Record the decision",
                       detail="Open the applicant from your console and record the "
                              "Meeting's accept/reject decision.",
                       resolve_url=_ac_dashboard_url, manual=True),
         ChecklistTask(id="ac_messages", label="Tailor the messages",
-                      detail="Edit the wording of any outgoing email.",
+                      detail="Edit the wording of any outgoing email — tokens like "
+                             "{name} are filled in automatically.",
                       resolve_url=_ac_messages_url, manual=True),
         ChecklistTask(id="ac_settings", label="Choose auto vs review",
                       detail="Set whether acknowledgment and invitations send on "

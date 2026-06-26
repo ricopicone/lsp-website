@@ -2,11 +2,25 @@
 {% block tab_content %}
 <div class="space-y-5">
 
+  {% if not has_sandbox %}
+  <div class="alert bg-base-200/60 border border-base-300/60 text-sm flex flex-wrap items-center justify-between gap-3">
+    <span>👋 <strong>New here?</strong> Create a training sandbox to try the whole
+      workflow safely — it adds practice applicants (🧪) and redirects every email
+      to you, so no real member is contacted. Then use <strong>✦ Guided
+      walkthrough</strong> (top right) to step through it.</span>
+    <form method="post" action="{% url 'admissions:coordinator_reset_sandbox' %}"
+          onsubmit="return confirm('Create a training sandbox? It adds practice applicants — no real member is emailed.');">
+      {% csrf_token %}
+      <button class="btn btn-primary btn-sm">Create training sandbox</button>
+    </form>
+  </div>
+  {% endif %}
+
   <div class="flex flex-wrap items-center justify-between gap-3">
     <p class="text-sm text-base-content/70">
-      Applications from intake to decision. {{ open_count }} open. Assign
-      interviewers and decide on the Meeting's review page; remind interviewers
-      whose reports are still out from here.
+      Applications from intake to decision. {{ open_count }} open. Open an
+      applicant to invite interviewers, record their reports, and record the
+      Meeting's decision; remind interviewers whose reports are still out from here.
     </p>
     <div class="flex items-center gap-2">
     {% if has_sandbox %}
@@ -35,7 +49,7 @@
       <thead>
         <tr>
           <th>Applicant</th><th>Track</th><th>Status</th>
-          <th class="text-center">Ack.</th>
+          <th class="text-center"><abbr title="Acknowledgment email sent to the applicant" class="no-underline">Ack.</abbr></th>
           <th class="text-center">Interviews</th><th class="text-center">Reports</th>
           <th>Submitted</th><th></th>
         </tr>

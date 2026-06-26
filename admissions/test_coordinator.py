@@ -267,3 +267,11 @@ def test_dashboard_shows_reset_when_sandbox_present(client, coordinator):
     call_command("seed_sandbox", owner=coordinator.email, reset=True, stdout=StringIO())
     html = client.get(reverse("admissions:coordinator_dashboard")).content.decode()
     assert "Reset sandbox" in html
+
+
+def test_dashboard_offers_create_sandbox_when_none(client, coordinator):
+    # A coordinator with no sandbox yet gets a self-service "Create" affordance
+    # (not the CLI), and the onboarding callout — not the Reset button.
+    html = client.get(reverse("admissions:coordinator_dashboard")).content.decode()
+    assert "Create training sandbox" in html
+    assert "Reset sandbox" not in html
