@@ -214,3 +214,38 @@ def test_sandbox_application_shows_indicator(client, coordinator, application):
         reverse("admissions:review_detail", args=[application.pk])
     ).content.decode()
     assert "Sandbox application" in detail
+
+
+def test_reset_sandbox_restores_starting_state(client, coordinator):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    # Give the coordinator a sandbox, then disturb it.
+    call_command("seed_sandbox", owner=coordinator.email, reset=True, stdout=StringIO())
+    app1 = Application.objects.get(
+        applicant__email__contains="applicant-one", applicant__profile__persona_owner=coordinator,
+    )
+    app1.status = Application.Status.ACCEPTED
+    app1.acknowledged_at = datetime.datetime(2026, 6, 1, tzinfo=datetime.timezone.utc)
+    app1.save()
+
+    resp = client.post(reverse("admissions:coordinator_reset_sandbox"))
+    assert resp.status_code == 302
+    # Reset recreates the cast, so re-fetch by email (the row is fresh).
+    fresh = Application.objects.get(
+        applicant__email__contains="applicant-one",
+        applicant__profile__persona_owner=coordinator,
+    )
+    assert fresh.status == Application.Status.SUBMITTED  # back to start
+    assert fresh.acknowledged_at is None
+
+
+def test_dashboard_shows_reset_when_sandbox_present(client, coordinator):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    call_command("seed_sandbox", owner=coordinator.email, reset=True, stdout=StringIO())
+    html = client.get(reverse("admissions:coordinator_dashboard")).content.decode()
+    assert "Reset sandbox" in html

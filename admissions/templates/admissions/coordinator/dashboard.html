@@ -8,6 +8,14 @@
       interviewers and decide on the Meeting's review page; remind interviewers
       whose reports are still out from here.
     </p>
+    <div class="flex items-center gap-2">
+    {% if has_sandbox %}
+    <form method="post" action="{% url 'admissions:coordinator_reset_sandbox' %}"
+          onsubmit="return confirm('Reset the sandbox applicants to their starting state?');">
+      {% csrf_token %}
+      <button class="btn btn-ghost btn-sm" title="Restore the 🧪 sandbox applicants to their original starting state">↻ Reset sandbox</button>
+    </form>
+    {% endif %}
     <form method="get">
       <select name="status" class="select select-bordered select-sm" onchange="this.form.submit()">
         <option value="open" {% if status_filter == "open" %}selected{% endif %}>Open</option>
@@ -18,6 +26,7 @@
       </select>
       <noscript><button class="btn btn-sm">Filter</button></noscript>
     </form>
+    </div>
   </div>
 
   {% if rows %}

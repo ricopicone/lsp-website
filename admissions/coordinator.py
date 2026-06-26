@@ -12,6 +12,7 @@ from __future__ import annotations
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from . import notifications as notify_admissions
@@ -81,6 +82,7 @@ def dashboard(request):
         "open_count": Application.objects.filter(
             status__in=Application.OPEN_STATUSES
         ).count(),
+        "has_sandbox": request.user.owned_personas.exists(),
     })
 
 
@@ -95,6 +97,25 @@ def invite(request, pk):
         f"Invited {n} analyst{'s' if n != 1 else ''} to interview "
         f"{application.applicant.get_full_name() or application.applicant.email}.",
     )
+    return redirect("admissions:coordinator_dashboard")
+
+
+@coordinator_required
+@require_POST
+def reset_sandbox(request):
+    """Reset (or create) this coordinator's training sandbox to its starting
+    state — Applicant One back to Submitted, Applicant Two interviewing with
+    reports in — so the walkthrough can be run again from scratch."""
+    import io
+
+    from django.core.management import call_command
+
+    call_command("seed_sandbox", owner=request.user.email, reset=True,
+                stdout=io.StringIO())
+    messages.success(request, "Sandbox reset to its starting state.")
+    nxt = request.POST.get("next")
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+        return redirect(nxt)
     return redirect("admissions:coordinator_dashboard")
 
 

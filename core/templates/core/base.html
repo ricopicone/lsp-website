@@ -398,6 +398,7 @@
     }
   </style>
   <div id="lsp-preview-tour" class="fixed bottom-4 right-4 z-50" data-walkthrough="{{ walkthrough_id }}"
+       data-sandbox-reset="{{ walkthrough_sandbox_reset_url }}"
        style="width: 20rem; max-width: calc(100vw - 2rem);">
     {# Collapsed pill #}
     <button type="button" id="lsp-tour-open"
@@ -560,7 +561,16 @@
       });
 
       var restartBtn = document.getElementById("lsp-tour-restart");
-      if (restartBtn) restartBtn.addEventListener("click", restart);
+      if (restartBtn) restartBtn.addEventListener("click", function () {
+        restart();  // forget the checkmarks
+        // If a sandbox belongs to this walkthrough, offer to reset its data too.
+        var resetUrl = root.getAttribute("data-sandbox-reset");
+        if (resetUrl && confirm("Also reset the sandbox applicants to their starting state?")) {
+          var token = document.querySelector("meta[name=csrf-token]")?.content || "";
+          fetch(resetUrl, { method: "POST", headers: { "X-CSRFToken": token } })
+            .then(function () { location.reload(); });
+        }
+      });
     })();
   </script>
   {% endif %}

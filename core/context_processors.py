@@ -122,12 +122,21 @@ def preview_tour(request):
     if checklist is None:
         return {"show_preview_tour": False, "walkthroughs_enabled": True}
 
+    # When a trainee is doing an admissions walkthrough and owns a training
+    # sandbox, the card's Restart also resets the sandbox data to its start.
+    sandbox_reset_url = ""
+    if checklist.id in ("applications_coordinator", "analyst_interviews"):
+        from django.urls import reverse
+        if user.owned_personas.exists():
+            sandbox_reset_url = reverse("admissions:coordinator_reset_sandbox")
+
     tasks = [t.resolved(user, request) for t in checklist.tasks]
     return {
         "show_preview_tour": True,
         "walkthroughs_enabled": True,
         "walkthrough_id": checklist.id,
         "walkthrough_title": checklist.title,
+        "walkthrough_sandbox_reset_url": sandbox_reset_url,
         "preview_tour_tasks": tasks,
         "preview_tour_tasks_by_id": {t["id"]: t for t in tasks},
         "preview_seminar_slug": getattr(settings, "PREVIEW_TOUR_SEMINAR_SLUG", ""),
