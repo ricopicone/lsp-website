@@ -143,8 +143,11 @@
   {% if manage_roster %}
   <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
     <div class="space-y-0.5">
-      <h3 class="font-medium text-base-content">Members</h3>
+      <h3 class="font-medium text-base-content">Members &amp; roles</h3>
       <p class="text-xs text-base-content/50">Add or remove members and set roles. A group must keep at least one lead.{% if workgroup.has_terms %} Set each member's term dates — leave the end blank while they're serving; setting it ends the term on that date.{% endif %}</p>
+      {% if workgroup.auto_member_role %}
+      <p class="text-xs text-base-content/50">Everyone eligible belongs to this group automatically, so the list below shows only people given a specific <strong>role</strong> (for example, the Applications Coordinator). Use the form at the bottom to appoint one — name the person and pick their role.</p>
+      {% endif %}
     </div>
     <ul class="divide-y divide-base-300/50">
       {% for m in stored_members %}
@@ -192,10 +195,18 @@
           class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
       {% csrf_token %}
       <div class="flex-1 space-y-1">
-        <label for="add-member" class="block text-xs text-base-content/60">Add member (email or “First Last”)</label>
+        <label for="add-member" class="block text-xs text-base-content/60">{% if workgroup.auto_member_role %}Appoint a role-holder{% else %}Add member{% endif %} (email or “First Last”)</label>
         <input id="add-member" name="member" type="text" class="input input-bordered input-sm w-full">
       </div>
-      <button class="btn btn-primary btn-sm">Add</button>
+      <div class="space-y-1">
+        <label for="add-role" class="block text-xs text-base-content/60">Role</label>
+        <select id="add-role" name="role" class="select select-bordered select-sm">
+          {% for value, label in role_choices %}
+          <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn btn-primary btn-sm">{% if workgroup.auto_member_role %}Appoint{% else %}Add{% endif %}</button>
     </form>
   </section>
 

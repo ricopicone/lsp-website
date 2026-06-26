@@ -639,15 +639,26 @@ def workgroup_unarchive(request, slug):
 @login_required
 @require_POST
 def roster_add(request, slug):
-    """Manager adds an LSP member to the stored roster."""
+    """Manager adds an LSP member to the stored roster — optionally with a role
+    (e.g. Applications Coordinator). On an auto-membership group (every Analyst
+    is already a member of the Meeting of Analysts) this is how you appoint a
+    role-holder: it stores a row carrying the role on top of the derived
+    membership."""
     wg = get_object_or_404(Workgroup, slug=slug)
     if not _can_manage_workgroup(wg, request.user):
         raise Http404
     from cartels.forms import _resolve_member
 
     user = _resolve_member(request.POST.get("member", ""))
+    role = request.POST.get("role", "")
+    if role not in WorkgroupMembership.Role.values:
+        role = None
     if user is not None:
-        wg.add_member(user)
+        m = wg.add_member(user, role=role)
+        # add_member leaves an existing row's role untouched — if a role was
+        # chosen for someone already on the roster, apply it.
+        if role and m.role != role:
+            wg.set_role(user, role)
         if user != request.user:
             notify_groups.member_added(wg, user)
     return redirect(f"{wg.get_absolute_url()}?tab=settings")

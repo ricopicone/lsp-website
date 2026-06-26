@@ -585,6 +585,24 @@ def test_roster_add_gated_to_manager(client):
     assert wg.is_member(newbie) is True
 
 
+def test_roster_add_appoints_a_role(client):
+    # The roster tool can appoint a member straight into a role (e.g. the
+    # Applications Coordinator) — the path used on the auto-membership Meeting of
+    # Analysts, where there's no plain member to promote.
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Appoint",
+             landing_visibility=Visibility.PUBLIC)
+    chair = _chair(wg)
+    coord = _user("coord@x.test", role=Profile.Role.ANALYST, first="Coo", last="Ord")
+    client.force_login(chair)
+    resp = client.post(reverse("workgroups:roster_add", args=[wg.slug]), {
+        "member": "coord@x.test",
+        "role": WorkgroupMembership.Role.APPLICATIONS_COORDINATOR,
+    })
+    assert resp.status_code == 302
+    m = wg.memberships.serving().get(user=coord)
+    assert m.role == WorkgroupMembership.Role.APPLICATIONS_COORDINATOR
+
+
 def test_archive_view_gated_and_settings_reachable_after_archive(client):
     wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Lifecycle",
              landing_visibility=Visibility.PUBLIC)
