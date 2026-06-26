@@ -743,6 +743,20 @@ class Workgroup(models.Model):
         m.save(update_fields=["role"])
         return True
 
+    def assignable_roles(self):
+        """(value, label) roles a manager may hand-assign in the roster UI.
+
+        Auto-membership groups (the Meeting of Analysts) only appoint named
+        officers — currently just the Applications Coordinator; everyone else is
+        a member automatically, so "Member" is never assigned by hand. Other
+        groups assign the leadership/officer roles that apply to them."""
+        R = WorkgroupMembership.Role
+        if self.auto_member_role:
+            roles = [R.APPLICATIONS_COORDINATOR]
+        else:
+            roles = [R.MEMBER, R.CHAIR, R.CO_CHAIR, R.SECRETARY, R.ORGANIZER, R.FACULTY]
+        return [(r.value, r.label) for r in roles]
+
     def set_member_term(self, user, *, start_date, end_date) -> bool:
         """Set an active member's term dates (committee terms; see ``has_terms``).
 

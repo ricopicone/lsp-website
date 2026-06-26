@@ -603,6 +603,25 @@ def test_roster_add_appoints_a_role(client):
     assert m.role == WorkgroupMembership.Role.APPLICATIONS_COORDINATOR
 
 
+def test_assignable_roles_auto_membership_is_coordinator_only():
+    wg = Committee.objects.get(slug="meeting-of-analysts").workgroup
+    assert [v for v, _ in wg.assignable_roles()] == [
+        WorkgroupMembership.Role.APPLICATIONS_COORDINATOR
+    ]
+
+
+def test_meeting_settings_shows_appoint_ui(client):
+    wg = Committee.objects.get(slug="meeting-of-analysts").workgroup
+    su = _user("moa-su@x.test", role=Profile.Role.ANALYST)
+    su.is_superuser = True
+    su.save(update_fields=["is_superuser"])
+    client.force_login(su)
+    html = client.get(f"{wg.get_absolute_url()}?tab=settings").content.decode()
+    assert "Role-holders" in html
+    assert "Applications Coordinator" in html
+    assert "Choose a member" in html  # member dropdown, not free text
+
+
 def test_archive_view_gated_and_settings_reachable_after_archive(client):
     wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Lifecycle",
              landing_visibility=Visibility.PUBLIC)

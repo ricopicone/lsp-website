@@ -502,7 +502,15 @@ def workgroup_detail(request, slug):
         if can_manage and _attached(wg, "cartel") is None:
             context["manage_roster"] = True
             context["stored_members"] = list(wg.active_members())
-            context["role_choices"] = WorkgroupMembership.Role.choices
+            context["role_choices"] = wg.assignable_roles()
+            # Auto-membership groups appoint role-holders from their existing
+            # (derived) members, so offer a member picker rather than free text.
+            if wg.auto_member_role:
+                people = [p.user for p in wg.participants()]
+                people.sort(key=lambda u: (
+                    (u.last_name or "").lower(), (u.first_name or "").lower(), u.email
+                ))
+                context["appointable_people"] = people
         # Committee managers can edit the charter (Phase D).
         committee = _attached(wg, "committee")
         if committee is not None and can_manage:
