@@ -31,17 +31,9 @@ urlpatterns = [
     path("formation/advise/<int:pk>/present/", views.advise_present,
          name="advise_present"),
 
-    # --- Application review (Meeting of the Analysts) ---
+    # --- Applications: read-only review (Meeting of the Analysts) ---
     path(f"{_MOA}/applications/", views.review_queue, name="review_queue"),
     path(f"{_MOA}/applications/<int:pk>/", views.review_detail, name="review_detail"),
-    path(f"{_MOA}/applications/<int:pk>/assign/", views.review_assign,
-         name="review_assign"),
-    path(f"{_MOA}/applications/<int:pk>/decide/", views.review_decide,
-         name="review_decide"),
-    path(f"{_MOA}/applications/interview/<int:interview_pk>/report/",
-         views.review_report, name="review_report"),
-    path(f"{_MOA}/applications/interview/<int:interview_pk>/remove/",
-         views.review_remove_interview, name="review_remove_interview"),
 
     # --- Advancement review (Meeting of the Analysts) ---
     path(f"{_MOA}/advancements/", views.advancement_queue, name="advancement_queue"),
@@ -56,6 +48,13 @@ urlpatterns = [
          name="coordinator_reset_sandbox"),
     path(f"{_APPS}/<int:pk>/", coordinator.application_detail,
          name="coordinator_application_detail"),
+    # The coordinator's per-application actions (the Meeting's view is read-only).
+    path(f"{_APPS}/<int:pk>/assign/", views.review_assign, name="review_assign"),
+    path(f"{_APPS}/<int:pk>/decide/", views.review_decide, name="review_decide"),
+    path(f"{_APPS}/interview/<int:interview_pk>/report/", views.review_report,
+         name="review_report"),
+    path(f"{_APPS}/interview/<int:interview_pk>/remove/",
+         views.review_remove_interview, name="review_remove_interview"),
     path(f"{_APPS}/<int:pk>/invite/", coordinator.invite, name="coordinator_invite"),
     path(f"{_APPS}/<int:pk>/simulate/", coordinator.simulate,
          name="coordinator_simulate"),
