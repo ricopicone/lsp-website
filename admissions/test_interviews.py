@@ -322,3 +322,47 @@ def test_add_interviewer_refuses_sandbox_mismatch(application):
         services.add_interviewer(application, real)
     assert not application.interviews.exists()
     assert mail.outbox == []  # no leak
+
+
+# ---- sandbox "simulate analyst responses" shortcut ------------------------
+
+
+def test_simulate_fills_and_reports_for_sandbox(application):
+    application.applicant.profile.is_persona = True
+    application.applicant.profile.save()
+    application.status = Application.Status.INTERVIEWING
+    application.save(update_fields=["status"])
+    # Two persona analysts available to be drawn in.
+    for i in range(2):
+        a = _analyst(f"sim{i}@x.test", status="yes")
+        a.profile.is_persona = True
+        a.profile.save()
+
+    n = services.simulate_interviews(application)
+    assert n == 2
+    ivs = list(application.interviews.all())
+    assert len(ivs) == 2
+    assert all(iv.is_complete for iv in ivs)  # decision-ready
+    # Introductions were generated (to the personas → redirected by the backend).
+    assert len(mail.outbox) >= 2
+
+
+def test_simulate_refused_for_real_application(application):
+    import pytest as _pytest
+    with _pytest.raises(ValueError):
+        services.simulate_interviews(application)  # applicant is real
+
+
+def test_simulate_button_via_view(client, application):
+    application.applicant.profile.is_persona = True
+    application.applicant.profile.save()
+    application.status = Application.Status.INTERVIEWING
+    application.save(update_fields=["status"])
+    a = _analyst("simv@x.test", status="yes")
+    a.profile.is_persona = True
+    a.profile.save()
+    su = User.objects.create_superuser(email="su-sim@x.test", password="x")
+    client.force_login(su)
+    resp = client.post(reverse("admissions:coordinator_simulate", args=[application.pk]))
+    assert resp.status_code == 302
+    assert application.interviews.filter(interviewer=a).exists()

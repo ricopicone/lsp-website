@@ -331,7 +331,10 @@ def _applications_coordinator_walkthrough() -> Checklist:
                       resolve_url=_ac_dashboard_url, manual=True),
         ChecklistTask(id="ac_connect", label="Watch the introductions",
                       detail="When an analyst agrees, the applicant and "
-                             "interviewer are connected by email to set a time.",
+                             "interviewer are connected by email to set a time. "
+                             "In the sandbox, use “Simulate analyst "
+                             "responses” on the application to fast-forward "
+                             "this — no impersonation needed.",
                       manual=True),
         ChecklistTask(id="ac_decide", label="Record the decision",
                       detail="Open an applicant to assign interviewers and decide "

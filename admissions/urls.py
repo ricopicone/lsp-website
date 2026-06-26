@@ -53,6 +53,8 @@ urlpatterns = [
     # --- Applications Coordinator console ---
     path(f"{_APPS}/", coordinator.dashboard, name="coordinator_dashboard"),
     path(f"{_APPS}/<int:pk>/invite/", coordinator.invite, name="coordinator_invite"),
+    path(f"{_APPS}/<int:pk>/simulate/", coordinator.simulate,
+         name="coordinator_simulate"),
     path(f"{_APPS}/<int:pk>/nudge/", coordinator.nudge, name="coordinator_nudge"),
 
     # --- Analyst page (interview requests + my interviews) ---

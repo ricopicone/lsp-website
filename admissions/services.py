@@ -140,6 +140,30 @@ def agree_to_interview(application: Application, analyst):
     return interview, "agreed"
 
 
+def simulate_interviews(application: Application) -> int:
+    """Sandbox shortcut: fast-forward the interview stage without impersonating
+    each analyst. Persona analysts agree to fill the open slots (sending the
+    introductions to the trainee), then their reports are filed, leaving the
+    application decision-ready. Only valid for a sandbox application. Returns
+    the number of interviews now complete."""
+    if not application.applicant.profile.is_persona:
+        raise ValueError("Simulation is only for sandbox applications.")
+
+    on_it = set(application.interviews.values_list("interviewer_id", flat=True))
+    pool = [u for u in eligible_interviewers(application) if u.pk not in on_it]
+    while slots_remaining(application) > 0 and pool:
+        add_interviewer(application, pool.pop(0))  # intro email → the trainee
+
+    for interview in application.interviews.all():
+        if not interview.is_complete:
+            interview.completed_at = timezone.localdate()
+            interview.report = (
+                "Sandbox — simulated interview report. A thoughtful candidate."
+            )
+            interview.save(update_fields=["completed_at", "report"])
+    return application.interviews.count()
+
+
 @transaction.atomic
 def accept_application(application: Application, *, by, effective_ay=None, note=""):
     """Accept an application: admit the applicant as the track's Precandidate

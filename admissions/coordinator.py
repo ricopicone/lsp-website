@@ -100,6 +100,25 @@ def invite(request, pk):
 
 @coordinator_required
 @require_POST
+def simulate(request, pk):
+    """Sandbox-only: fast-forward the interview stage (analysts agree + report)
+    so the coordinator can reach the decision without impersonating each one."""
+    application = get_object_or_404(Application, pk=pk)
+    try:
+        n = services.simulate_interviews(application)
+    except ValueError:
+        messages.error(request, "Simulation is only available for sandbox applications.")
+    else:
+        messages.success(
+            request,
+            f"Simulated {n} interview{'s' if n != 1 else ''} — agreed and reported. "
+            "The introductions came to your inbox; the application is ready to decide.",
+        )
+    return redirect("admissions:review_detail", pk=pk)
+
+
+@coordinator_required
+@require_POST
 def nudge(request, pk):
     """Remind every interviewer on this application whose report is outstanding
     (the same weekly reminder, sent by hand)."""
