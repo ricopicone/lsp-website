@@ -115,8 +115,16 @@ def reset_sandbox(request):
     messages.success(request, "Sandbox reset to its starting state.")
     nxt = request.POST.get("next")
     if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
-        return redirect(nxt)
-    return redirect("admissions:coordinator_dashboard")
+        response = redirect(nxt)
+    else:
+        response = redirect("admissions:coordinator_dashboard")
+    # Also clear the active walkthrough's remembered checkmarks, so "reset" means
+    # the same thing from the console button and the card's Restart: a full start
+    # over (data + steps), no manual refresh.
+    wid = request.COOKIES.get("lsp_walkthrough")
+    if wid:
+        response.set_cookie("lsp_wt_fresh", wid, samesite="Lax")
+    return response
 
 
 @coordinator_required

@@ -562,13 +562,16 @@
 
       var restartBtn = document.getElementById("lsp-tour-restart");
       if (restartBtn) restartBtn.addEventListener("click", function () {
-        restart();  // forget the checkmarks
-        // If a sandbox belongs to this walkthrough, offer to reset its data too.
         var resetUrl = root.getAttribute("data-sandbox-reset");
-        if (resetUrl && confirm("Also reset the sandbox applicants to their starting state?")) {
+        if (resetUrl) {
+          // Same as the console's "Reset sandbox": the server resets the data
+          // and flags the checkmarks to clear; the reload lands fresh.
+          if (!confirm("Start over? This resets the walkthrough and the sandbox applicants to their starting state.")) return;
           var token = document.querySelector("meta[name=csrf-token]")?.content || "";
           fetch(resetUrl, { method: "POST", headers: { "X-CSRFToken": token } })
             .then(function () { location.reload(); });
+        } else {
+          restart();  // no sandbox attached — just forget the checkmarks
         }
       });
     })();

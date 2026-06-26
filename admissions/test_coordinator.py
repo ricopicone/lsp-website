@@ -230,8 +230,11 @@ def test_reset_sandbox_restores_starting_state(client, coordinator):
     app1.acknowledged_at = datetime.datetime(2026, 6, 1, tzinfo=datetime.timezone.utc)
     app1.save()
 
+    # With a walkthrough active, the reset also flags its checkmarks to clear.
+    client.cookies["lsp_walkthrough"] = "applications_coordinator"
     resp = client.post(reverse("admissions:coordinator_reset_sandbox"))
     assert resp.status_code == 302
+    assert resp.cookies["lsp_wt_fresh"].value == "applications_coordinator"
     # Reset recreates the cast, so re-fetch by email (the row is fresh).
     fresh = Application.objects.get(
         applicant__email__contains="applicant-one",

@@ -11,9 +11,9 @@
     <div class="flex items-center gap-2">
     {% if has_sandbox %}
     <form method="post" action="{% url 'admissions:coordinator_reset_sandbox' %}"
-          onsubmit="return confirm('Reset the sandbox applicants to their starting state?');">
+          onsubmit="return confirm('Start over? This resets the walkthrough and the sandbox applicants to their starting state.');">
       {% csrf_token %}
-      <button class="btn btn-ghost btn-sm" title="Restore the 🧪 sandbox applicants to their original starting state">↻ Reset sandbox</button>
+      <button class="btn btn-ghost btn-sm" title="Restore the 🧪 sandbox applicants to their original starting state (and reset the walkthrough)">↻ Reset sandbox</button>
     </form>
     {% endif %}
     <form method="get">
