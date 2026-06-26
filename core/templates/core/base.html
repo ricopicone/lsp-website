@@ -414,6 +414,7 @@
             <p class="text-xs text-base-content/60">Tick each step as you go.</p>
           </div>
           <div class="flex items-center gap-1">
+            <button type="button" id="lsp-tour-restart" class="btn btn-ghost btn-xs btn-square" aria-label="Restart" title="Start over">↻</button>
             <button type="button" id="lsp-tour-min" class="btn btn-ghost btn-xs btn-square" aria-label="Minimize" title="Minimize">–</button>
             <button type="button" id="lsp-tour-close" class="btn btn-ghost btn-xs btn-square" aria-label="Dismiss" title="Dismiss">✕</button>
           </div>
@@ -525,7 +526,25 @@
         if (label) label.classList.toggle("line-through", done),
                    label.classList.toggle("text-base-content/50", done);
       }
-      root.querySelectorAll("li[data-wt-manual]").forEach(function (li) {
+      var manualItems = root.querySelectorAll("li[data-wt-manual]");
+
+      // Reset: forget every manual tick for this walkthrough and repaint blank.
+      function restart() {
+        manualItems.forEach(function (li) {
+          var tid = li.getAttribute("data-wt-task");
+          try { localStorage.removeItem(key(tid)); } catch (e) {}
+          paint(li, false);
+        });
+      }
+
+      // Starting from "Guided walkthrough" sets a one-shot cookie so a (re)start
+      // begins fresh. Honor it once, then delete it.
+      if (("; " + document.cookie).indexOf("; lsp_wt_fresh=" + wid) !== -1) {
+        restart();
+        document.cookie = "lsp_wt_fresh=; max-age=0; path=/; samesite=lax";
+      }
+
+      manualItems.forEach(function (li) {
         var tid = li.getAttribute("data-wt-task");
         var done = false;
         try { done = localStorage.getItem(key(tid)) === "done"; } catch (e) {}
@@ -539,6 +558,9 @@
         // The step's link scrolls to the relevant section; it does NOT tick the
         // step — the member ticks it with the circle once they've done it.
       });
+
+      var restartBtn = document.getElementById("lsp-tour-restart");
+      if (restartBtn) restartBtn.addEventListener("click", restart);
     })();
   </script>
   {% endif %}

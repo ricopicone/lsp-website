@@ -150,6 +150,9 @@ def set_walkthrough(request):
         # Session cookie (no max_age): the walkthrough follows the member across
         # pages but ends with the browser session, so it never lingers.
         response.set_cookie("lsp_walkthrough", wid, samesite="Lax")
+        # One-shot signal so the card clears its remembered ticks on (re)start —
+        # clicking "Guided walkthrough" begins fresh. The card deletes it.
+        response.set_cookie("lsp_wt_fresh", wid, samesite="Lax")
     else:
         response.delete_cookie("lsp_walkthrough")
     return response
