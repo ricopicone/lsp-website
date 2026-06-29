@@ -603,11 +603,36 @@ def test_roster_add_appoints_a_role(client):
     assert m.role == WorkgroupMembership.Role.APPLICATIONS_COORDINATOR
 
 
-def test_assignable_roles_auto_membership_is_coordinator_only():
+def test_assignable_roles_for_meeting_of_analysts():
     wg = Committee.objects.get(slug="meeting-of-analysts").workgroup
+    R = WorkgroupMembership.Role
+    # The Meeting is governed by President/VP and facilitated by the coordinator;
+    # "Member" is automatic, so it's never offered.
     assert [v for v, _ in wg.assignable_roles()] == [
-        WorkgroupMembership.Role.APPLICATIONS_COORDINATOR
+        R.PRESIDENT, R.VICE_PRESIDENT, R.APPLICATIONS_COORDINATOR
     ]
+
+
+def test_roster_add_sets_a_custom_title():
+    # A Vice-President styled "Co-President": same role, custom display title.
+    wg = Committee.objects.get(slug="meeting-of-analysts").workgroup
+    vp = _user("vp@x.test", role=Profile.Role.ANALYST, first="Vee", last="Pee")
+    su = _user("appoint-su@x.test", role=Profile.Role.ANALYST)
+    su.is_superuser = True
+    su.save(update_fields=["is_superuser"])
+    from django.test import Client
+    c = Client()
+    c.force_login(su)
+    resp = c.post(reverse("workgroups:roster_add", args=[wg.slug]), {
+        "member": "vp@x.test",
+        "role": WorkgroupMembership.Role.VICE_PRESIDENT,
+        "title": "Co-President",
+    })
+    assert resp.status_code == 302
+    m = wg.memberships.serving().get(user=vp)
+    assert m.role == WorkgroupMembership.Role.VICE_PRESIDENT
+    assert m.title == "Co-President"
+    assert m.display_title == "Co-President"  # the alias shows on the site
 
 
 def test_meeting_settings_shows_appoint_ui(client):

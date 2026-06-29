@@ -42,7 +42,7 @@
         <div class="min-w-0 flex-1">
           <p class="truncate font-medium text-base-content">{% if m.user.get_full_name %}{{ m.user.get_full_name }}{% elif is_member %}{{ m.user.email }}{% else %}LSP member{% endif %}</p>
           {% if m.role != "member" %}
-          <p class="text-xs uppercase tracking-wider text-primary/80">{{ m.get_role_display }}</p>
+          <p class="text-xs uppercase tracking-wider text-primary/80">{{ m.display_title }}</p>
           {% endif %}
         </div>
       </li>

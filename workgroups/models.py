@@ -91,6 +91,13 @@ class Participant:
         except ValueError:
             return self.role.replace("_", " ").title()
 
+    @property
+    def display_title(self) -> str:
+        """The label shown for this person — a stored custom title (e.g.
+        “Co-President”) wins; otherwise the role's default name."""
+        title = getattr(self.membership, "title", "")
+        return title or self.get_role_display()
+
 
 class Workgroup(models.Model):
     """The collaborative layer shared by every kind of LSP group."""
@@ -747,12 +754,20 @@ class Workgroup(models.Model):
         """(value, label) roles a manager may hand-assign in the roster UI.
 
         Auto-membership groups (the Meeting of Analysts) only appoint named
-        officers — currently just the Applications Coordinator; everyone else is
-        a member automatically, so "Member" is never assigned by hand. Other
-        groups assign the leadership/officer roles that apply to them."""
+        officers — the President and Vice-President who govern it, plus the
+        Applications Coordinator; everyone else is a member automatically, so
+        "Member" is never assigned by hand. Committees add the school officers
+        too; other groups assign the leadership roles that apply to them."""
         R = WorkgroupMembership.Role
+        try:
+            is_committee = self.committee is not None
+        except ObjectDoesNotExist:
+            is_committee = False
         if self.auto_member_role:
-            roles = [R.APPLICATIONS_COORDINATOR]
+            roles = [R.PRESIDENT, R.VICE_PRESIDENT, R.APPLICATIONS_COORDINATOR]
+        elif is_committee:
+            roles = [R.MEMBER, R.PRESIDENT, R.VICE_PRESIDENT, R.CHAIR, R.CO_CHAIR,
+                     R.SECRETARY, R.TREASURER]
         else:
             roles = [R.MEMBER, R.CHAIR, R.CO_CHAIR, R.SECRETARY, R.ORGANIZER, R.FACULTY]
         return [(r.value, r.label) for r in roles]
@@ -808,6 +823,11 @@ class WorkgroupMembership(models.Model):
         PLUS_ONE = "plus_one", _("Plus-one")
         FACULTY = "faculty", _("Faculty")
         ORGANIZER = "organizer", _("Organizer")
+        # School officers who govern the Board AND the Meeting of Analysts. The
+        # Vice-President is sometimes styled "Co-President" — that's a display
+        # title (see ``WorkgroupMembership.title``), not a separate role.
+        PRESIDENT = "president", _("President")
+        VICE_PRESIDENT = "vice_president", _("Vice-President")
         # Carried for the Stage-4 committee fold-in:
         REFERRAL_COORDINATOR = "referral_coordinator", _("Referral Coordinator")
         WEB_COORDINATOR = "web_coordinator", _("Web Coordinator")
@@ -817,10 +837,14 @@ class WorkgroupMembership(models.Model):
 
     #: Roles that moderate a workgroup's channel (Stage 2) and manage it.
     #: Faculty lead their seminar's workspace; organizers lead a reading group.
-    #: The cartel plus-one is a guest, NOT a leader — a cartel is run
-    #: collectively by its members (cartel actions gate on membership, not on a
-    #: lead role), so PLUS_ONE is deliberately absent here.
-    LEAD_ROLES = (Role.CHAIR, Role.CO_CHAIR, Role.FACULTY, Role.ORGANIZER)
+    #: The President/Vice-President govern the standing bodies. The cartel
+    #: plus-one is a guest, NOT a leader — a cartel is run collectively by its
+    #: members (cartel actions gate on membership, not on a lead role), so
+    #: PLUS_ONE is deliberately absent here.
+    LEAD_ROLES = (
+        Role.CHAIR, Role.CO_CHAIR, Role.FACULTY, Role.ORGANIZER,
+        Role.PRESIDENT, Role.VICE_PRESIDENT,
+    )
 
     workgroup = models.ForeignKey(
         Workgroup,
@@ -836,6 +860,15 @@ class WorkgroupMembership(models.Model):
         max_length=24,
         choices=Role.choices,
         default=Role.MEMBER,
+    )
+    title = models.CharField(
+        max_length=60,
+        blank=True,
+        help_text=(
+            "Optional display title that overrides the role's default name — "
+            "e.g. a Vice-President styled “Co-President”. The role stays the "
+            "same; only the label shown on the site changes."
+        ),
     )
     start_date = models.DateField()
     end_date = models.DateField(
@@ -861,6 +894,12 @@ class WorkgroupMembership(models.Model):
     @property
     def is_active(self) -> bool:
         return self.end_date is None
+
+    @property
+    def display_title(self) -> str:
+        """The label to show for this role-holder — the custom ``title`` if set
+        (e.g. “Co-President”), otherwise the role's default name."""
+        return self.title or self.get_role_display()
 
 
 class WorkgroupProposal(models.Model):
