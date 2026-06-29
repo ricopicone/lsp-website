@@ -661,17 +661,12 @@ def roster_add(request, slug):
     role = request.POST.get("role", "")
     if role not in WorkgroupMembership.Role.values:
         role = None
-    title = (request.POST.get("title") or "").strip()
     if user is not None:
         m = wg.add_member(user, role=role)
         # add_member leaves an existing row's role untouched — if a role was
         # chosen for someone already on the roster, apply it.
         if role and m.role != role:
             wg.set_role(user, role)
-        # Optional display title (e.g. a Vice-President styled "Co-President").
-        if title != m.title:
-            m.title = title
-            m.save(update_fields=["title"])
         if user != request.user:
             notify_groups.member_added(wg, user)
     return redirect(f"{wg.get_absolute_url()}?tab=settings")

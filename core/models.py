@@ -72,6 +72,13 @@ class StaffRole(models.Model):
     ADMIN_ASSISTANT = "admin_assistant"
     WEB_DEVELOPER = "web_developer"
     REFERRAL_COORDINATOR = "referral_coordinator"
+    # School officers — one appointment governs the Board AND the Meeting of
+    # Analysts (and the school at large). The Vice-President is sometimes styled
+    # "Co-President": that's just this role's editable display ``name`` (the
+    # ``key`` stays "vice_president"), so the title can vary on the site while
+    # the system still knows it's the same role.
+    PRESIDENT = "president"
+    VICE_PRESIDENT = "vice_president"
     # NB: the Applications Coordinator is a role on the Meeting of Analysts
     # workgroup (workgroups.WorkgroupMembership.Role), not a StaffRole — see
     # workgroups.permissions.is_applications_coordinator.

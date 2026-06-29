@@ -3,6 +3,7 @@
 {% block admin_kicker %}Governance · Meeting of the Analysts{% endblock %}
 {% block admin_heading %}Meeting of Analysts Admin{% endblock %}
 {% block admin_intro %}The Analysts of the School oversee psychoanalytic training and transmission: they review admissions, conduct interviews, decide admissions, and consider demands for palimpsests and passages.{% endblock %}
+{% block admin_after_header %}{% include "core/staff/admin/_officers.html" %}{% endblock %}
 {% block admin_sections %}
   {% url 'admissions:review_queue' as applications_url %}
   {% include "core/staff/admin/_section.html" with title="Applications" body="Review membership applications and their interviews to date (read-only). The Applications Coordinator staffs interviewers and records the Meeting's decision." link=applications_url link_label="View applications" count=open_applications count_label="open" %}

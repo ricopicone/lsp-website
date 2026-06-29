@@ -153,7 +153,7 @@
       <li class="flex flex-wrap items-center gap-2 py-2">
         <span class="min-w-0 w-full break-words text-sm text-base-content sm:w-auto sm:flex-1">
           {{ m.user.get_full_name|default:m.user.email }}
-          <span class="badge badge-ghost badge-sm ml-1">{{ m.display_title }}</span>
+          <span class="badge badge-ghost badge-sm ml-1">{{ m.get_role_display }}</span>
         </span>
         <form method="post" action="{% url 'workgroups:roster_remove' workgroup.slug %}"
               onsubmit="return confirm('Remove this role-holder?');">
@@ -186,14 +186,8 @@
           {% endfor %}
         </select>
       </div>
-      <div class="space-y-1">
-        <label for="add-title" class="block text-xs text-base-content/60">Title (optional)</label>
-        <input id="add-title" name="title" type="text" placeholder="e.g. Co-President"
-               class="input input-bordered input-sm w-44">
-      </div>
       <button class="btn btn-primary btn-sm">Appoint</button>
     </form>
-    <p class="text-xs text-base-content/45">A title overrides the role's name on the site (for example, a Vice-President who prefers “Co-President”) — it's the same role either way.</p>
 
     {% else %}
     <div class="space-y-0.5">

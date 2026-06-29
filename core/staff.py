@@ -272,6 +272,19 @@ def doc(request, slug):
 # ---- Per-body / per-role admin landing pages --------------------------------
 
 
+def school_officers():
+    """The President + Vice-President roles with their current holders, for
+    display on the bodies they govern (the Board and the Meeting of Analysts).
+    One appointment (Board → Appointments) surfaces on both."""
+    roles = (
+        StaffRole.objects
+        .filter(key__in=[StaffRole.PRESIDENT, StaffRole.VICE_PRESIDENT])
+        .prefetch_related("holders")
+        .order_by("key")  # "president" sorts before "vice_president"
+    )
+    return [{"name": r.name, "holders": list(r.holders.all())} for r in roles]
+
+
 @login_required
 def board_admin(request):
     """Board's admin landing. Gated to Board members (+ staff/superuser).
@@ -292,6 +305,7 @@ def board_admin(request):
     )
     return render(request, "core/staff/admin/board.html", {
         "workspace_url": workspace_url,
+        "officers": school_officers(),
     })
 
 
@@ -528,6 +542,7 @@ def meeting_of_analysts_admin(request):
         "open_advancements": Advancement.objects.filter(
             status__in=Advancement.OPEN_STATUSES
         ).count(),
+        "officers": school_officers(),
     })
 
 

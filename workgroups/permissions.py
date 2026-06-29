@@ -25,6 +25,11 @@ def can_manage_workgroup(user, workgroup) -> bool:
 
     if has_staff_role(user, StaffRole.LSP_STAFF):
         return True
+    # The President / Vice-President are school officers who govern the standing
+    # bodies — one appointment carries authority across them (and the school).
+    if (has_staff_role(user, StaffRole.PRESIDENT)
+            or has_staff_role(user, StaffRole.VICE_PRESIDENT)):
+        return True
     from events.permissions import is_program_committee
 
     if is_program_committee(user):
