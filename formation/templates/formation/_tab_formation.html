@@ -182,4 +182,52 @@
       <a href="{% url 'formation:control_add' %}" class="btn btn-primary btn-sm">Add a control analysis</a>
     </section>
 
+    {# ---- External activities (self-reported, no approval) ---- #}
+    <section id="external" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
+      <h2 class="font-serif text-xl text-base-content">External activities</h2>
+      <p class="text-sm text-base-content/70">
+        A self-reported log of courses I've taken or taught, presentations, and
+        publications related to my formation, outside the School. There's no
+        approval step here.
+      </p>
+
+      {% if external_entries %}
+      {% regroup external_entries by get_kind_display as external_groups %}
+      <div class="space-y-4">
+        {% for group in external_groups %}
+        <div class="space-y-2">
+          <h3 class="text-sm font-semibold text-base-content/70">{{ group.grouper }}</h3>
+          <ul class="space-y-3">
+            {% for e in group.list %}
+            <li class="rounded-lg border border-base-300 p-4 flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <p class="font-medium text-base-content">{{ e.title }}</p>
+                <p class="text-sm text-base-content/60">
+                  {% if e.venue %}{{ e.venue }} · {% endif %}{{ e.start_date|date:"M j, Y" }}
+                  {% if e.end_date %} – {{ e.end_date|date:"M j, Y" }}{% endif %}
+                  {% if e.url %} · <a href="{{ e.url }}" class="link link-primary" target="_blank" rel="noopener">Link</a>{% endif %}
+                </p>
+                {% if e.notes %}<p class="text-sm text-base-content/60 mt-1">{{ e.notes }}</p>{% endif %}
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <a href="{% url 'formation:external_edit' e.pk %}" class="btn btn-ghost btn-xs">Edit</a>
+                <form method="post" action="{% url 'formation:external_delete' e.pk %}"
+                      onsubmit="return confirm('Remove this external activity entry?');">
+                  {% csrf_token %}
+                  <button class="btn btn-ghost btn-xs text-error">Delete</button>
+                </form>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/60">No external activities logged yet.</p>
+      {% endif %}
+
+      <a href="{% url 'formation:external_add' %}" class="btn btn-primary btn-sm">Add an external activity</a>
+    </section>
+
   </div>

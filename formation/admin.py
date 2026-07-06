@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Advancement, ControlAnalysis, FormationSettings
+from .models import Advancement, ControlAnalysis, ExternalActivity, FormationSettings
 
 
 @admin.register(Advancement)
@@ -22,3 +22,10 @@ admin.site.register(FormationSettings)
 class ControlAnalysisAdmin(admin.ModelAdmin):
     list_display = ("member", "supervisor_name", "modality", "start_date", "end_date")
     search_fields = ("member__email", "supervisor_name")
+
+
+@admin.register(ExternalActivity)
+class ExternalActivityAdmin(admin.ModelAdmin):
+    list_display = ("member", "kind", "title", "venue", "start_date", "end_date")
+    list_filter = ("kind",)
+    search_fields = ("member__email", "title", "venue")

@@ -16,6 +16,9 @@ urlpatterns = [
     path("formation/control/add/", views.control_add, name="control_add"),
     path("formation/control/<int:pk>/edit/", views.control_edit, name="control_edit"),
     path("formation/control/<int:pk>/delete/", views.control_delete, name="control_delete"),
+    path("formation/external/add/", views.external_add, name="external_add"),
+    path("formation/external/<int:pk>/edit/", views.external_edit, name="external_edit"),
+    path("formation/external/<int:pk>/delete/", views.external_delete, name="external_delete"),
 
     # --- Advancement: advisor side ---
     path("formation/advise/", views.advise_queue, name="advise_queue"),

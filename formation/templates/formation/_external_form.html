@@ -1,0 +1,89 @@
+{% extends "core/base.html" %}
+{% block title %}{% if mode == "add" %}Add external activity{% else %}Edit external activity{% endif %} — LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-8">
+
+  <nav class="text-sm">
+    <a href="{% url 'formation:formation' %}?tab=formation#external" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← My formation</a>
+  </nav>
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">
+      {% if mode == "add" %}Add an external activity{% else %}Edit external activity{% endif %}
+    </h1>
+    <p class="text-sm text-base-content/70">
+      A self-reported record of a course you've taken or taught, a presentation, or a
+      publication related to your formation, outside the School. There's no approval
+      step here.
+    </p>
+  </header>
+
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="rounded-md border border-error/40 bg-error/5 p-3 text-sm text-error">
+      {{ form.non_field_errors }}
+    </div>
+    {% endif %}
+
+    <div class="space-y-1">
+      <label for="{{ form.kind.id_for_label }}" class="block text-sm font-medium">Kind</label>
+      {{ form.kind }}
+      {% if form.kind.errors %}<p class="text-error text-xs mt-1">{{ form.kind.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ form.title.id_for_label }}" class="block text-sm font-medium">Title</label>
+      {{ form.title }}
+      {% if form.title.errors %}<p class="text-error text-xs mt-1">{{ form.title.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ form.venue.id_for_label }}" class="block text-sm font-medium">
+        Venue <span class="text-base-content/50 font-normal">(optional)</span>
+      </label>
+      {{ form.venue }}
+      {% if form.venue.errors %}<p class="text-error text-xs mt-1">{{ form.venue.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="space-y-1">
+        <label for="{{ form.start_date.id_for_label }}" class="block text-sm font-medium">Start date</label>
+        {{ form.start_date }}
+        {% if form.start_date.errors %}<p class="text-error text-xs mt-1">{{ form.start_date.errors|join:", " }}</p>{% endif %}
+      </div>
+      <div class="space-y-1">
+        <label for="{{ form.end_date.id_for_label }}" class="block text-sm font-medium">
+          End date <span class="text-base-content/50 font-normal">(optional)</span>
+        </label>
+        {{ form.end_date }}
+        <p class="text-xs text-base-content/60">{{ form.end_date.help_text }}</p>
+        {% if form.end_date.errors %}<p class="text-error text-xs mt-1">{{ form.end_date.errors|join:", " }}</p>{% endif %}
+      </div>
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ form.url.id_for_label }}" class="block text-sm font-medium">
+        Link <span class="text-base-content/50 font-normal">(optional)</span>
+      </label>
+      {{ form.url }}
+      {% if form.url.errors %}<p class="text-error text-xs mt-1">{{ form.url.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ form.notes.id_for_label }}" class="block text-sm font-medium">
+        Notes <span class="text-base-content/50 font-normal">(optional)</span>
+      </label>
+      {{ form.notes }}
+      {% if form.notes.errors %}<p class="text-error text-xs mt-1">{{ form.notes.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="flex items-center justify-between border-t border-base-300/60 pt-5">
+      <a href="{% url 'formation:formation' %}?tab=formation#external" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">
+        {% if mode == "add" %}Add entry{% else %}Save changes{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

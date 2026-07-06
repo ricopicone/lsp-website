@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from django import forms
 
-from .models import Advancement, ControlAnalysis
+from .models import Advancement, ControlAnalysis, ExternalActivity
 
 _INPUT = "input input-bordered w-full"
 _TEXTAREA = "textarea textarea-bordered w-full"
@@ -84,4 +84,33 @@ class ControlAnalysisForm(forms.ModelForm):
         self.fields["end_date"].label = "End date"
         self.fields["end_date"].help_text = "Leave blank if this is ongoing."
         self.fields["end_date"].required = False
+        self.fields["notes"].required = False
+
+
+class ExternalActivityForm(forms.ModelForm):
+    """A member's self-reported related activity outside LSP (course taken or
+    taught, presentation, publication), no approval, just a personal record."""
+
+    class Meta:
+        model = ExternalActivity
+        fields = ("kind", "title", "venue", "start_date", "end_date", "url", "notes")
+        widgets = {
+            "kind": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "title": forms.TextInput(attrs={"class": _INPUT}),
+            "venue": forms.TextInput(attrs={"class": _INPUT}),
+            "start_date": forms.DateInput(attrs={"type": "date", "class": _INPUT}),
+            "end_date": forms.DateInput(attrs={"type": "date", "class": _INPUT}),
+            "url": forms.URLInput(attrs={"class": _INPUT}),
+            "notes": forms.Textarea(attrs={"rows": 3, "class": _TEXTAREA}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["venue"].label = "Venue"
+        self.fields["venue"].required = False
+        self.fields["end_date"].label = "End date"
+        self.fields["end_date"].help_text = "Leave blank if this is a single date or ongoing."
+        self.fields["end_date"].required = False
+        self.fields["url"].label = "Link"
+        self.fields["url"].required = False
         self.fields["notes"].required = False

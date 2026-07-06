@@ -29,8 +29,13 @@ from .advancement import (
     step_label_for_member,
     withdraw_advancement,
 )
-from .forms import AdvancementForm, ControlAnalysisForm, RecommendationForm
-from .models import Advancement, ControlAnalysis, FormationSettings
+from .forms import (
+    AdvancementForm,
+    ControlAnalysisForm,
+    ExternalActivityForm,
+    RecommendationForm,
+)
+from .models import Advancement, ControlAnalysis, ExternalActivity, FormationSettings
 from .tabs import available_tabs
 
 # ==========================================================================
@@ -88,6 +93,8 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
         "control_entries": ControlAnalysis.objects.filter(member=user),
         "control_years": ControlAnalysis.years_for(user),
         "control_target": FormationSettings.load().control_years_target,
+        "external_entries": ExternalActivity.objects.filter(member=user)
+        .order_by("kind", "-start_date"),
     }
 
     # The page tab bar shows Tuition/Dues on obligation OR payment history; the
@@ -564,6 +571,50 @@ def control_delete(request, pk):
     obj = get_object_or_404(ControlAnalysis, pk=pk, member=request.user)
     obj.delete()
     messages.success(request, "Control analysis removed.")
+    return redirect(_formation_url("formation"))
+
+
+@login_required
+def external_add(request):
+    """Add an external-activity entry, a self-reported record, no approval
+    required."""
+    if request.method == "POST":
+        form = ExternalActivityForm(request.POST)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.member = request.user
+            obj.save()
+            messages.success(request, "External activity added.")
+            return redirect(_formation_url("formation"))
+    else:
+        form = ExternalActivityForm()
+    return render(request, "formation/_external_form.html", {"form": form, "mode": "add"})
+
+
+@login_required
+def external_edit(request, pk):
+    """Edit one of the member's own external-activity entries. A non-owner
+    gets a 404 (no signal that the entry exists at all)."""
+    obj = get_object_or_404(ExternalActivity, pk=pk, member=request.user)
+    if request.method == "POST":
+        form = ExternalActivityForm(request.POST, instance=obj)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "External activity updated.")
+            return redirect(_formation_url("formation"))
+    else:
+        form = ExternalActivityForm(instance=obj)
+    return render(request, "formation/_external_form.html",
+                  {"form": form, "mode": "edit", "entry": obj})
+
+
+@login_required
+@require_POST
+def external_delete(request, pk):
+    """Delete one of the member's own external-activity entries."""
+    obj = get_object_or_404(ExternalActivity, pk=pk, member=request.user)
+    obj.delete()
+    messages.success(request, "External activity removed.")
     return redirect(_formation_url("formation"))
 
 

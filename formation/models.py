@@ -207,3 +207,29 @@ class ControlAnalysis(models.Model):
     @classmethod
     def years_for(cls, user) -> float:
         return round(sum(c.duration_years for c in cls.objects.filter(member=user)), 2)
+
+
+class ExternalActivity(models.Model):
+    """A member's self-reported related activity outside LSP (e.g. taking or
+    teaching a course on Lacan). Self-reported, no approval."""
+
+    class Kind(models.TextChoices):
+        COURSE_TAKEN = "course_taken", "Course taken"
+        COURSE_TAUGHT = "course_taught", "Course taught"
+        PRESENTATION = "presentation", "Presentation"
+        PUBLICATION = "publication", "Publication"
+        OTHER = "other", "Other"
+
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                               related_name="external_activities")
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    title = models.CharField(max_length=300)
+    venue = models.CharField(max_length=200, blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    url = models.URLField(blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-start_date",)
