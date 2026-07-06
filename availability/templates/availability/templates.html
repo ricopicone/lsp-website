@@ -1,0 +1,23 @@
+{% extends "availability/base.html" %}
+{% block tab_content %}
+<div class="max-w-2xl space-y-6">
+  <p class="text-base-content/70 text-sm">
+    The message analysts receive when you ask them to review their
+    availability. Tokens <code class="text-xs">{name}</code> and
+    <code class="text-xs">{update_url}</code> are filled in for each recipient;
+    any other text is sent as written.
+  </p>
+
+  <form method="post" class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-5">
+    {% csrf_token %}
+    {% for field in form %}
+    <label class="block space-y-1">
+      <span class="text-sm font-medium text-base-content">{{ field.label }}</span>
+      {{ field }}
+      {% for error in field.errors %}<span class="block text-xs text-error">{{ error }}</span>{% endfor %}
+    </label>
+    {% endfor %}
+    <button class="btn btn-primary">Save message</button>
+  </form>
+</div>
+{% endblock %}

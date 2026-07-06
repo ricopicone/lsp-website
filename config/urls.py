@@ -43,6 +43,8 @@ urlpatterns = [
     path("guides/", _content_views.guides_index_view, name="guides_index"),
     path("guides/<slug:slug>/", _content_views.guide_detail, name="guide_detail"),
     path("directory/", _account_views.directory, name="directory"),
+    path("directory/availability/", _account_views.directory_availability,
+         name="directory_availability"),
     path("directory/<slug:slug>/", _account_views.directory_detail, name="directory_detail"),
     path("find-an-analyst/", _account_views.find_an_analyst, name="find_an_analyst"),
     path("find-an-analyst/pins.json", _account_views.find_an_analyst_pins,
@@ -60,6 +62,10 @@ urlpatterns = [
          name="program_admin_proposals"),
     path("program-admin/proposals/<int:pk>/decide/",
          _event_views.proposal_decide, name="proposal_decide"),
+    path("program-admin/changes/", _event_views.program_admin_changes,
+         name="program_admin_changes"),
+    path("program-admin/changes/<int:pk>/decide/",
+         _event_views.change_request_decide, name="change_request_decide"),
     path("propose/", _event_views.propose_event, name="propose_event"),
     path("propose/mine/", _event_views.my_proposals, name="my_proposals"),
     path("propose/<int:pk>/edit/", _event_views.proposal_edit,
@@ -124,6 +130,8 @@ urlpatterns = [
     # Referral Coordinator surface (admin-tools/referrals/) + the clinician
     # respond page (referrals/<reference>/respond/).
     path("", include("referrals.urls")),
+    # Applications Coordinator surface (admin-tools/availability/).
+    path("", include("availability.urls")),
     path("working-groups/", include("workinggroups.urls")),
     path("committees/", include("committees.urls")),
     path("", include("admissions.urls")),

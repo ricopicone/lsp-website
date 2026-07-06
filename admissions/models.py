@@ -1,19 +1,17 @@
-"""The formation pipeline — applications to join, and advancement within.
+"""Applications to join a formation track (the intake side).
 
-Mirrors the LSP Analyst- and Scholar-formation guidelines. Section I (apply to
+Mirrors the LSP Analyst- and Scholar-formation guidelines, Section I (apply to
 join): an applicant submits a letter of intent + CV, has two interviews with
 Analysts of the School, and the Meeting of the Analysts decides — acceptance
-admits them as a Precandidate. The later steps (palimpsest: Precandidate →
-Candidate; passage: Candidate → Analyst/Scholar) are :class:`Advancement`
-demandes, recommended by the member's Advisor and decided by the same Meeting
-of the Analysts. Every role change routes through
-``accounts.membership.record_membership_change``.
+admits them as a Precandidate. The later, ongoing-formation steps (palimpsest:
+Precandidate → Candidate; passage: Candidate → Analyst/Scholar) are advancement
+demandes and live in the ``formation`` app.
 
-The whole pipeline — admissions *and* advancement — belongs to the **Meeting of
-the Analysts** (per ``content/pages/about.md``: "they review admissions
-materials … and make admission decisions … this meeting considers demands for
-palimpsests and passages"), so the review surfaces are gated by
-``workgroups.permissions.is_meeting_of_analysts``.
+Admissions belongs to the **Meeting of the Analysts** (per
+``content/pages/about.md``: "they review admissions materials … and make
+admission decisions"), so the review surfaces are gated by
+``workgroups.permissions.is_meeting_of_analysts``. This module also carries the
+Applications Coordinator's editable message templates and workflow settings.
 """
 
 from __future__ import annotations
@@ -52,6 +50,9 @@ class Application(models.Model):
 
     OPEN_STATUSES = (Status.SUBMITTED, Status.INTERVIEWING)
 
+    #: How many Analysts of the School interview each applicant.
+    INTERVIEWS_NEEDED = 2
+
     applicant = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="application",
     )
@@ -80,6 +81,15 @@ class Application(models.Model):
         max_length=14, choices=Status.choices, default=Status.SUBMITTED, db_index=True,
     )
     submitted_at = models.DateTimeField(default=timezone.now)
+    acknowledged_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the applicant acknowledgment was sent (auto on submit, "
+        "or by the coordinator in review-first mode).",
+    )
+    interviewers_invited_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the call for interviewers went out to available analysts.",
+    )
     decided_at = models.DateTimeField(null=True, blank=True)
     decided_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
@@ -121,6 +131,14 @@ class ApplicationInterview(models.Model):
         null=True, blank=True, help_text="Date the interview took place; blank = pending.",
     )
     report = models.TextField(blank=True, help_text="The interviewer's report / recommendation.")
+    agreed_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the analyst agreed to interview (or was assigned).",
+    )
+    last_reminded_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Last weekly reminder to set up / report the interview.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -139,3 +157,86 @@ class ApplicationInterview(models.Model):
     @property
     def is_complete(self) -> bool:
         return self.completed_at is not None and bool(self.report.strip())
+
+
+# ---------------------------------------------------------------------------
+# Applications Coordinator — editable outgoing messages
+# ---------------------------------------------------------------------------
+
+class MessageTemplate(models.Model):
+    """An editable message the Applications Coordinator sends while facilitating
+    admissions for the Meeting of Analysts.
+
+    Same shape as ``referrals.MessageTemplate``: a ``{placeholder}`` body the
+    coordinator can reword, restorable from the seed if deleted. Today: the
+    nudge to an interviewer whose report is still outstanding.
+    """
+
+    class Key(models.TextChoices):
+        ACKNOWLEDGMENT = "acknowledgment", _("Applicant acknowledgment (on submit)")
+        INVITATION = "invitation", _("Call for interviewers (to analysts)")
+        INTRODUCTION = "introduction", _("Introduction (applicant ↔ interviewer)")
+        INTERVIEW_REMINDER = "interview_reminder", _("Interview reminder (to interviewer)")
+        DECISION_ACCEPT = "decision_accept", _("Decision — accepted")
+        DECISION_REJECT = "decision_reject", _("Decision — not accepted")
+
+    key = models.CharField(max_length=40, choices=Key.choices, unique=True)
+    subject = models.CharField(max_length=200)
+    body = models.TextField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("key",)
+
+    def __str__(self) -> str:
+        return self.get_key_display()
+
+    @classmethod
+    def get(cls, key: str) -> MessageTemplate:
+        """Fetch a template; restore it from the seed if it was deleted."""
+        obj = cls.objects.filter(key=key).first()
+        if obj is None:
+            from .seed_templates import SEED_TEMPLATES
+
+            subject, body = SEED_TEMPLATES[key]
+            obj = cls.objects.create(key=key, subject=subject, body=body)
+        return obj
+
+
+class AdmissionsSettings(models.Model):
+    """Singleton: the Applications Coordinator's workflow knobs."""
+
+    class Mode(models.TextChoices):
+        AUTO = "auto", _("Automatic")
+        REVIEW = "review", _("Review first")
+
+    acknowledgment_mode = models.CharField(
+        max_length=10,
+        choices=Mode.choices,
+        default=Mode.AUTO,
+        verbose_name="Applicant acknowledgment",
+        help_text="Automatic emails the acknowledgment as soon as an application "
+        "is submitted; review first holds it for you to send (and personalize) "
+        "from the console.",
+    )
+    invitation_mode = models.CharField(
+        max_length=10,
+        choices=Mode.choices,
+        default=Mode.REVIEW,
+        verbose_name="Call for interviewers",
+        help_text="Automatic emails available analysts to invite them to "
+        "interview as soon as an application arrives; review first waits for "
+        "you to press Invite on the application.",
+    )
+
+    class Meta:
+        verbose_name = "Admissions settings"
+        verbose_name_plural = "Admissions settings"
+
+    def __str__(self) -> str:
+        return "Admissions settings"
+
+    @classmethod
+    def load(cls) -> AdmissionsSettings:
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj

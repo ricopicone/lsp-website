@@ -61,6 +61,11 @@ def _can_cartel_coordinator(user) -> bool:
     return user.is_superuser or user.is_staff or is_cartel_coordinator(user)
 
 
+def _can_applications_coordinator(user) -> bool:
+    from workgroups.permissions import is_applications_coordinator
+    return is_applications_coordinator(user)
+
+
 def can_access_admin_tools(user) -> bool:
     """Entry gate to /admin-tools/: staff-role holders, Board members, and
     Program Committee members (plus Django staff / superusers). Members of
@@ -76,6 +81,7 @@ def can_access_admin_tools(user) -> bool:
         _can_board(user)
         or _can_program_committee(user)
         or _can_meeting_of_analysts(user)
+        or _can_applications_coordinator(user)
     )
 
 
@@ -165,6 +171,21 @@ def _panels_for(user) -> list[dict]:
             ).count(),
             "count_label": "open",
         })
+    # Applications Coordinator — an officer of the Meeting of Analysts who
+    # facilitates admissions; deliberately NOT generic is_staff.
+    if _can_applications_coordinator(user):
+        from admissions.models import Application
+        panels.append({
+            "title": "Applications Coordinator Admin",
+            "blurb": "Facilitate admissions for the Meeting of Analysts: triage "
+                     "applications, staff interviewers, chase reports. Plus the "
+                     "analyst-availability table.",
+            "url": reverse("admissions:coordinator_dashboard"),
+            "count": Application.objects.filter(
+                status__in=Application.OPEN_STATUSES
+            ).count(),
+            "count_label": "open",
+        })
     if user.is_superuser or has_staff_role(
         user, StaffRole.WEB_COORDINATOR, StaffRole.WEB_DEVELOPER
     ):
@@ -178,6 +199,22 @@ def _panels_for(user) -> list[dict]:
                 status__in=Suggestion.ACTIONABLE_STATUSES
             ).count(),
             "count_label": "open",
+        })
+
+    # Every active Analyst gets their interview workspace (agree to interview
+    # applicants; submit reports).
+    from admissions.permissions import is_analyst
+    if is_analyst(user):
+        from admissions.models import ApplicationInterview
+        panels.append({
+            "title": "Analyst — Interviews",
+            "blurb": "Applicants who need an interviewer, and the interviews "
+                     "you've agreed to — set up a time and submit your report.",
+            "url": reverse("admissions:analyst_dashboard"),
+            "count": ApplicationInterview.objects.filter(
+                interviewer=user, completed_at__isnull=True,
+            ).count(),
+            "count_label": "to report",
         })
 
     if user.is_staff:
@@ -236,6 +273,19 @@ def doc(request, slug):
 # ---- Per-body / per-role admin landing pages --------------------------------
 
 
+def school_officers():
+    """The President + Vice-President roles with their current holders, for
+    display on the bodies they govern (the Board and the Meeting of Analysts).
+    One appointment (Board → Appointments) surfaces on both."""
+    roles = (
+        StaffRole.objects
+        .filter(key__in=[StaffRole.PRESIDENT, StaffRole.VICE_PRESIDENT])
+        .prefetch_related("holders")
+        .order_by("key")  # "president" sorts before "vice_president"
+    )
+    return [{"name": r.name, "holders": list(r.holders.all())} for r in roles]
+
+
 @login_required
 def board_admin(request):
     """Board's admin landing. Gated to Board members (+ staff/superuser).
@@ -256,6 +306,7 @@ def board_admin(request):
     )
     return render(request, "core/staff/admin/board.html", {
         "workspace_url": workspace_url,
+        "officers": school_officers(),
     })
 
 
@@ -494,6 +545,7 @@ def meeting_of_analysts_admin(request):
         "open_advancements": Advancement.objects.filter(
             status__in=Advancement.OPEN_STATUSES
         ).count(),
+        "officers": school_officers(),
     })
 
 

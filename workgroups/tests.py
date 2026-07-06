@@ -585,6 +585,58 @@ def test_roster_add_gated_to_manager(client):
     assert wg.is_member(newbie) is True
 
 
+def test_roster_add_appoints_a_role(client):
+    # The roster tool can appoint a member straight into a role (e.g. the
+    # Applications Coordinator) — the path used on the auto-membership Meeting of
+    # Analysts, where there's no plain member to promote.
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Appoint",
+             landing_visibility=Visibility.PUBLIC)
+    chair = _chair(wg)
+    coord = _user("coord@x.test", role=Profile.Role.ANALYST, first="Coo", last="Ord")
+    client.force_login(chair)
+    resp = client.post(reverse("workgroups:roster_add", args=[wg.slug]), {
+        "member": "coord@x.test",
+        "role": WorkgroupMembership.Role.APPLICATIONS_COORDINATOR,
+    })
+    assert resp.status_code == 302
+    m = wg.memberships.serving().get(user=coord)
+    assert m.role == WorkgroupMembership.Role.APPLICATIONS_COORDINATOR
+
+
+def test_assignable_roles_auto_membership_is_coordinator_only():
+    # President/Vice-President are school-wide StaffRoles, not per-group roles —
+    # the Meeting's only hand-assigned role is the Applications Coordinator.
+    wg = Committee.objects.get(slug="meeting-of-analysts").workgroup
+    assert [v for v, _ in wg.assignable_roles()] == [
+        WorkgroupMembership.Role.APPLICATIONS_COORDINATOR
+    ]
+
+
+@pytest.mark.parametrize("key", ["president", "vice_president"])
+def test_school_officer_governs_standing_bodies(key):
+    # One StaffRole appointment confers management of the Board and the Meeting
+    # of Analysts both — the school-wide propagation.
+    from core.models import StaffRole
+    from workgroups.permissions import can_manage_workgroup
+    meeting = Committee.objects.get(slug="meeting-of-analysts").workgroup
+    officer = _user(f"{key}@x.test", role=Profile.Role.ANALYST)
+    assert can_manage_workgroup(officer, meeting) is False
+    StaffRole.objects.get(key=key).holders.add(officer)
+    assert can_manage_workgroup(officer, meeting) is True
+
+
+def test_meeting_settings_shows_appoint_ui(client):
+    wg = Committee.objects.get(slug="meeting-of-analysts").workgroup
+    su = _user("moa-su@x.test", role=Profile.Role.ANALYST)
+    su.is_superuser = True
+    su.save(update_fields=["is_superuser"])
+    client.force_login(su)
+    html = client.get(f"{wg.get_absolute_url()}?tab=settings").content.decode()
+    assert "Role-holders" in html
+    assert "Applications Coordinator" in html
+    assert "Choose a member" in html  # member dropdown, not free text
+
+
 def test_archive_view_gated_and_settings_reachable_after_archive(client):
     wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, name="WG Lifecycle",
              landing_visibility=Visibility.PUBLIC)

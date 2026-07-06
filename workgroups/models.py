@@ -743,6 +743,22 @@ class Workgroup(models.Model):
         m.save(update_fields=["role"])
         return True
 
+    def assignable_roles(self):
+        """(value, label) roles a manager may hand-assign in the roster UI.
+
+        Auto-membership groups (the Meeting of Analysts) only appoint named
+        officers — currently just the Applications Coordinator; everyone else is
+        a member automatically, so "Member" is never assigned by hand. (The
+        President / Vice-President are school-wide StaffRoles, not appointed
+        per-group.) Other groups assign the leadership roles that apply to
+        them."""
+        R = WorkgroupMembership.Role
+        if self.auto_member_role:
+            roles = [R.APPLICATIONS_COORDINATOR]
+        else:
+            roles = [R.MEMBER, R.CHAIR, R.CO_CHAIR, R.SECRETARY, R.ORGANIZER, R.FACULTY]
+        return [(r.value, r.label) for r in roles]
+
     def set_member_term(self, user, *, start_date, end_date) -> bool:
         """Set an active member's term dates (committee terms; see ``has_terms``).
 
@@ -798,6 +814,11 @@ class WorkgroupMembership(models.Model):
         REFERRAL_COORDINATOR = "referral_coordinator", _("Referral Coordinator")
         WEB_COORDINATOR = "web_coordinator", _("Web Coordinator")
         ADMIN_ASSISTANT = "admin_assistant", _("Admin Assistant")
+        # Facilitates admissions for the Meeting of Analysts (task #272).
+        APPLICATIONS_COORDINATOR = "applications_coordinator", _("Applications Coordinator")
+        # NB: President / Vice-President are NOT workgroup roles — they're
+        # school-wide StaffRoles (one appointment governs the Board and the
+        # Meeting of Analysts both). See core.models.StaffRole.
 
     #: Roles that moderate a workgroup's channel (Stage 2) and manage it.
     #: Faculty lead their seminar's workspace; organizers lead a reading group.

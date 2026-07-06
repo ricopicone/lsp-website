@@ -1,0 +1,84 @@
+{% extends "core/base.html" %}
+{% block title %}Analyst availability — Directory{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <nav class="text-sm">
+    <a href="{% url 'directory' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Directory</a>
+  </nav>
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Analyst availability</h1>
+    <p class="text-base-content/70 text-sm max-w-2xl">
+      Which Analysts of the School are available this year for application
+      interviews, advising, control analysis, and personal analysis. Click a
+      column to sort by it; filter to a single function below. Members only.
+    </p>
+  </header>
+
+  {# Filter chips — linkable (?only=<slug>) #}
+  <div class="flex flex-wrap items-center gap-2 text-sm">
+    <span class="text-base-content/50">Available for:</span>
+    {% for fn in functions %}
+    <a href="?only={{ fn.slug }}"
+       class="badge {% if only and only.slug == fn.slug %}badge-primary{% else %}badge-outline{% endif %} badge-sm">
+      {{ fn.column_label }}
+    </a>
+    {% endfor %}
+    {% if only %}
+    <a href="{% url 'directory_availability' %}" class="link text-base-content/60">clear</a>
+    {% endif %}
+  </div>
+
+  {% if rows %}
+  <div class="overflow-x-auto rounded-xl border border-base-300/60 bg-base-100">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Analyst</th>
+          {% for fn in functions %}
+          <th class="text-center">
+            <a href="?sort={{ fn.slug }}{% if only %}&only={{ only.slug }}{% endif %}"
+               class="inline-flex items-center gap-1 hover:text-primary {% if sort and sort.slug == fn.slug %}text-primary{% endif %}">
+              {{ fn.column_label }}
+              {% if sort and sort.slug == fn.slug %}<span aria-hidden="true">↓</span>{% endif %}
+            </a>
+          </th>
+          {% endfor %}
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr class="hover">
+          <td class="whitespace-nowrap">
+            {% if row.linkable %}
+            <a href="{% url 'directory_detail' row.slug %}" class="link font-medium">{{ row.profile.display_full_name }}</a>
+            {% else %}
+            <span class="font-medium">{{ row.profile.display_full_name }}</span>
+            {% endif %}
+          </td>
+          {% for cell in row.cells %}
+          <td class="text-center">
+            {% if cell.status == "yes" %}<span class="text-success font-semibold">✓</span>
+            {% elif cell.status == "no" %}<span class="text-base-content/30">—</span>
+            {% else %}<span class="text-base-content/30">·</span>{% endif %}
+          </td>
+          {% endfor %}
+          <td class="text-sm text-base-content/70">{{ row.note }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-xs text-base-content/50">
+    {{ total }} analyst{{ total|pluralize }}.
+    <span class="ml-2"><span class="text-success">✓</span> available · <span class="text-base-content/40">—</span> not available · <span class="text-base-content/40">·</span> unknown</span>
+  </p>
+  {% else %}
+  <p class="text-base-content/60 text-sm">No analysts match this filter.</p>
+  {% endif %}
+
+</div>
+{% endblock %}

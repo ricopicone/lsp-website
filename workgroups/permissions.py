@@ -25,6 +25,11 @@ def can_manage_workgroup(user, workgroup) -> bool:
 
     if has_staff_role(user, StaffRole.LSP_STAFF):
         return True
+    # The President / Vice-President are school officers who govern the standing
+    # bodies — one appointment carries authority across them (and the school).
+    if (has_staff_role(user, StaffRole.PRESIDENT)
+            or has_staff_role(user, StaffRole.VICE_PRESIDENT)):
+        return True
     from events.permissions import is_program_committee
 
     if is_program_committee(user):
@@ -85,4 +90,41 @@ def is_meeting_of_analysts(user) -> bool:
     )
     return bool(
         committee and committee.workgroup_id and committee.workgroup.is_member(user)
+    )
+
+
+def _meeting_of_analysts_workgroup_id():
+    """The Meeting of Analysts' backing workgroup id, or None."""
+    from committees.models import Committee
+
+    committee = (
+        Committee.objects.filter(slug="meeting-of-analysts")
+        .only("workgroup_id")
+        .first()
+    )
+    return committee.workgroup_id if committee else None
+
+
+def is_applications_coordinator(user) -> bool:
+    """True if ``user`` holds the Applications Coordinator role on the Meeting of
+    Analysts workgroup — the officer who facilitates admissions (intake,
+    staffing interviewers, chasing reports) for the Meeting, which keeps the
+    decision. Superusers included."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser:
+        return True
+    from .models import WorkgroupMembership
+
+    wg_id = _meeting_of_analysts_workgroup_id()
+    if wg_id is None:
+        return False
+    return (
+        WorkgroupMembership.objects.serving()
+        .filter(
+            workgroup_id=wg_id,
+            user=user,
+            role=WorkgroupMembership.Role.APPLICATIONS_COORDINATOR,
+        )
+        .exists()
     )

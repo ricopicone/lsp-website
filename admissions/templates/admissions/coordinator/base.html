@@ -1,0 +1,34 @@
+{% extends "core/base.html" %}
+{% block title %}Applications Coordinator Admin — LSP{% endblock %}
+{% block content %}
+<div class="space-y-6">
+
+  <header class="space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="font-serif text-3xl text-base-content">Applications Coordinator Admin</h1>
+      <div class="flex items-center gap-2">
+        {% if walkthroughs_enabled %}
+        <a href="{% url 'core:set_walkthrough' %}?id=applications_coordinator&next={% url 'admissions:coordinator_dashboard' %}"
+           class="btn btn-ghost btn-sm">✦ Guided walkthrough</a>
+        {% endif %}
+        <a href="{% url 'admin_tools' %}" class="btn btn-ghost btn-sm">← Admin Tools</a>
+      </div>
+    </div>
+    <p class="text-sm text-base-content/60 max-w-2xl">
+      Facilitating admissions for the Meeting of Analysts. You shepherd
+      applications; the Meeting decides.
+    </p>
+  </header>
+
+  {% include "core/_admin_tab_nav.html" %}
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% elif m.tags == 'info' %}alert-info{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <div class="pt-2">
+    {% block tab_content %}{% endblock %}
+  </div>
+
+</div>
+{% endblock %}

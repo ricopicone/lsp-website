@@ -13,6 +13,7 @@ Section cards use the markup in _section.html.
     <h1 class="font-serif text-3xl text-base-content tracking-tight">{% block admin_heading %}{% endblock %}</h1>
     <p class="text-base-content/70 max-w-2xl">{% block admin_intro %}{% endblock %}</p>
   </header>
+  {% block admin_after_header %}{% endblock %}
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     {% block admin_sections %}{% endblock %}
   </div>

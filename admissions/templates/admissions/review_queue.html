@@ -25,7 +25,7 @@
           </td>
           <td>{{ a.interviews.all|length }}</td>
           <td class="whitespace-nowrap text-base-content/70">{{ a.submitted_at|date:"M j, Y" }}</td>
-          <td><a href="{% url 'admissions:review_detail' a.pk %}" class="btn btn-ghost btn-xs">Review →</a></td>
+          <td><a href="{% url 'admissions:review_detail' a.pk %}" class="btn btn-ghost btn-xs">View →</a></td>
         </tr>
         {% endfor %}
       </tbody>

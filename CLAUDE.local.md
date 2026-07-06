@@ -1,12 +1,11 @@
-# Resuming task #345
+# Resuming task #272
 
-**Task:** Meeting Action Items
+**Task:** Upload document to Members Only section of LSP website
 
 ## Description
-From email: Meeting Action Items
-(from LSP Website)
+LSP Applications (applications@lacanschool.org) asked on 2026-06-09 to upload the attached document to the Members Only section of the website. Retrieve the attachment from the email and publish it.
 
-- Rico's own outgoing meeting-action-item summary; the concrete items are captured in the shared Google Doc and tracked elsewhere in the thread.
+I'm worried that this request is going to get lost because the old members only has already been extracted for the new site. It looks like this table of analyst availability for different functions should be worked into each analyst's profile. So we need to set up the model and we need to import the data. I think this info should be gated to all members logged in. And in the directory we should be able to sort by the columns in the table (e.g., if they are available for Application Interviews) and this sortability should be linkable.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -14,16 +13,16 @@ _Durable, shared context for this project. Read a full entry with `get_project_m
 ### launch-checklist (status)
 Things deliberately gated OFF until launch is intended (set in the host `.env` / systemd on the EC2 box):
 
-- **Re-enable member-facing cron timers** — `lsp-dues-cron`, `lsp-registration-reminders`, `lsp-parletre-digests` (disabled 2026-06-01 so reminders don't email real members early; purge timer stays on). **Add** at launch: a daily `send_notification_digests` timer; a daily `process_referrals` timer; a frequent (~5 min) `send_meeting_reminders` timer; a daily `send_availability_reminders` timer (task #272 — yearly analyst-availability review, self-guards once/AY, only fires when AvailabilitySettings.reminder_mode=Automatic); and **NEW (task #272): a weekly `send_interview_reminders` timer** — reminds admission interviewers with outstanding reports (only those agreed-but-not-reported, >7 days since last reminder; to the analyst only). Member-facing → keep off until launch.
-- **Admin 2FA enforcement** — `DJANGO_TWO_FACTOR_ENFORCED=true`.
+- **Re-enable member-facing cron timers** — `lsp-dues-cron`, `lsp-registration-reminders`, `lsp-parletre-digests` (disabled 2026-06-01 so reminders don't email real members early; purge timer stays on). **Add** a daily `send_notification_digests` timer at launch, **and** a daily `process_referrals` timer (referral auto-followups when that step is set to automatic + retention redaction; safe anytime but member-facing in auto mode), **and** a frequent (~every 5 min) `send_meeting_reminders` timer (NEW — pre-meeting reminder emails ~15 min before workgroup meetings, with a personal magic link; member-facing so keep off until launch). DJANGO_DAILY_ENABLED is now true in prod (video enabled 2026-06-14), so the meeting-reminder feature is otherwise ready; per-group toggle `Workgroup.meeting_reminders` defaults ON, members can opt out via /notifications/settings/ (GROUP_MEETING_REMINDER category).
+- **Admin 2FA enforcement** — `DJANGO_TWO_FACTOR_ENFORCED=true` (flows built, enforcement off so testers aren't blocked).
 - **Public login-email change** — `DJANGO_EMAIL_CHANGE_PUBLIC=true` (currently allowlisted to rico).
-- **SES send rate** — `DJANGO_EMAIL_MAX_SEND_RATE=14`.
+- **SES send rate** — `DJANGO_EMAIL_MAX_SEND_RATE=14` (SES out of sandbox; default 1/s paces batches unnecessarily).
 - **Stripe live cutover** — rico's test account → LSP's (Garrett's) live account; roll the import key, `STRIPE_LIVE_ONLY` guard already in prod.
-- **Feature flags** — `DJANGO_SUGGESTIONS_ENABLED`, `SURVEY_ENABLED`. (`DJANGO_DAILY_ENABLED`/video is ON in prod.)
+- **Feature flags** — `DJANGO_SUGGESTIONS_ENABLED`, `SURVEY_ENABLED`. (`DJANGO_DAILY_ENABLED`/video is now ON in prod.)
 
 Data tasks before opening registration: reconcile backfilled tuition enrollments, flip `is_faculty` for seminar instructors, un-mask 19 Google-Group members, set the real Zoom link on the Masochism event.
 
-Note: referral workflow + analyst-availability feature + admissions-coordinator workflow are all LIVE now — only their member-facing timers (above) wait for launch. Admissions interviewer-invitation defaults to review-first (coordinator clicks Invite); set AdmissionsSettings.invitation_mode=Automatic to auto-invite on submit.
+Note: the referral workflow itself is LIVE now (Diana appointed 2026-06-12) — only its daily timer waits for launch.
 
 ### do-not-over-automate (decision)
 The school **explicitly asked that automation not remove human discretion** (architecture §4.1, "space for the singular"). Faculty use sliding-scale and "none turned away for lack of funds" pricing; tuition-paying members are exempt from seminar fees; some faculty bill per class.
@@ -53,10 +52,6 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
-- **admissions-interface-ownership** (architecture) — Applications Coordinator owns the application admin (full per-applicant page); Meeting of Analysts is read-only; coordinator records the Meeting's accept/reject decision
-- **admin-training-sandbox** (architecture) — Per-trainee persona sandbox (email redirected to the trainee) + guided in-app walkthroughs for training admins on the workflows without emailing real members (task #272)
-- **applications-coordinator-admissions** (architecture) — Applications Coordinator is a Meeting-of-Analysts workgroup role that facilitates admissions (console at /admin-tools/applications/); SHIPPED + LIVE (task #272)
-- **analyst-availability-feature** (architecture) — Task #272 SHIPPED + LIVE: analyst-availability woven into the directory (new `availability` app); all phases + review refinements deployed; 2026-2027 data + per-analyst notes imported on prod
 - **event-change-review-loop** (architecture) — Approved-event content edits (title/desc/readings/fee) route through a certify-or-submit dialog; EventChangeRequest is the audit row; PC queue on the program-admin Changes tab. SHIPPED to main 2026-06-22.
 - **program-archive-and-content-migration** (status) — Task #259: program archive (member-gated past-year PDFs) + old-Wix content migration mostly complete; map in docs/content-migration-map.md
 - **directory-badge-colors** (convention) — Directory profile badges: Faculty=accent, board-appointee StaffRole=secondary (LSP Staff excluded; deduped vs committee officer), committee=primary
@@ -83,7 +78,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=345`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=272`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

@@ -35,3 +35,27 @@ def application_decision(application) -> None:
         url=reverse("admissions:status"), target=application,
         email_fn=lambda: emails.send_application_decision(application),
     )
+
+
+# --- Interviewer staffing (invite → connect → remind) -----------------------
+
+def interview_invitation(application, user) -> None:
+    """Invite an available analyst to interview this applicant (bell + email)."""
+    notify(
+        user, Category.ADMISSIONS_APPLICATION,
+        title="Can you interview an LSP applicant?",
+        body="An applicant needs interviewers — let us know if you can take one.",
+        url=reverse("admissions:analyst_interview", args=[application.pk]),
+        target=application, dedupe=True,
+        email_fn=lambda: emails.send_interview_invitation(user, application),
+    )
+
+
+def interview_introduction(interview) -> None:
+    """Connect applicant + interviewer so they arrange a time (email to both)."""
+    emails.send_interview_introduction(interview)
+
+
+def interview_reminder(interview) -> None:
+    """Weekly nudge to the interviewer to set up / report (email to analyst)."""
+    emails.send_interview_reminder(interview)

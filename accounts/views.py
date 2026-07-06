@@ -176,9 +176,115 @@ def directory_detail(request, slug: str):
                     "section_label": dict(DIRECTORY_SECTIONS)[profile.role],
                     "works": works,
                     "vis": profile.visible_fields(request.user),
+                    # Members-only: which LSP functions this analyst is open for.
+                    "availability": _availability_rows(profile, request.user),
+                    "availability_note": _availability_note(profile, request.user),
                 },
             )
     raise Http404("Member not found")
+
+
+def _availability_rows(profile, user):
+    """For an authenticated member viewing an analyst, the analyst's status for
+    each active LSP function (Yes / No / Unknown), with any note. Returns None
+    for anonymous viewers or non-analysts — the data is members-only and only
+    applies to Analysts of the School (see availability.services)."""
+    if not getattr(user, "is_authenticated", False):
+        return None
+    from availability import services
+    from availability.models import AnalystFunction, AvailabilitySpan
+    if not services.is_eligible(profile):
+        return None
+    spans = {
+        s.function_id: s
+        for s in profile.availability_spans.filter(end_date__isnull=True)
+    }
+    rows = []
+    for fn in AnalystFunction.objects.filter(is_active=True):
+        span = spans.get(fn.pk)
+        rows.append({
+            "function": fn,
+            "status": span.status if span else AvailabilitySpan.Status.UNKNOWN,
+        })
+    return rows
+
+
+def _availability_note(profile, user):
+    """The analyst's current availability note for an authenticated viewer
+    (members-only); None otherwise."""
+    if not getattr(user, "is_authenticated", False):
+        return None
+    from availability import services
+    if not services.is_eligible(profile):
+        return None
+    return services.current_note(profile)
+
+
+@login_required
+def directory_availability(request):
+    """Members-only table of which Analysts of the School are available for each
+    LSP function. Lists every analyst (new ones appear automatically); sortable
+    and filterable by column, with the sort/filter state in the URL
+    (?sort=<slug>, ?only=<slug>) so any view is linkable."""
+    from availability import services
+    from availability.models import AnalystFunction, AvailabilityNote, AvailabilitySpan
+
+    Status = AvailabilitySpan.Status
+    functions = list(AnalystFunction.objects.filter(is_active=True))
+    fn_by_slug = {f.slug: f for f in functions}
+
+    profiles = list(
+        services.eligible_profiles()
+        .filter(is_persona=False, user__is_active=True)
+        .select_related("user")
+        .order_by("user__last_name", "user__first_name")
+    )
+    spans = AvailabilitySpan.objects.filter(
+        profile__in=profiles, function__in=functions, end_date__isnull=True
+    )
+    smap = {(s.profile_id, s.function_id): s for s in spans}
+    # Current note per analyst (latest row), in one pass.
+    notes = {}
+    for n in AvailabilityNote.objects.filter(profile__in=profiles).order_by("created_at"):
+        notes[n.profile_id] = n.text  # later rows overwrite → ends on the latest
+
+    rows = []
+    for p in profiles:
+        by_fn = {}
+        for f in functions:
+            span = smap.get((p.pk, f.pk))
+            by_fn[f.pk] = {
+                "function": f,
+                "status": span.status if span else Status.UNKNOWN,
+            }
+        rows.append({
+            "profile": p,
+            "slug": p.directory_slug,
+            "linkable": p.is_listed,  # only public profiles have a detail page
+            "note": notes.get(p.pk, ""),
+            "by_fn": by_fn,
+            "cells": [by_fn[f.pk] for f in functions],
+        })
+
+    only_fn = fn_by_slug.get(request.GET.get("only") or "")
+    if only_fn:
+        rows = [r for r in rows if r["by_fn"][only_fn.pk]["status"] == Status.YES]
+
+    sort_fn = fn_by_slug.get(request.GET.get("sort") or "")
+    if sort_fn:
+        rows.sort(key=lambda r: (
+            0 if r["by_fn"][sort_fn.pk]["status"] == Status.YES else 1,
+            r["profile"].user.last_name.lower(),
+            r["profile"].user.first_name.lower(),
+        ))
+
+    return render(request, "accounts/directory_availability.html", {
+        "functions": functions,
+        "rows": rows,
+        "only": only_fn,
+        "sort": sort_fn,
+        "total": len(rows),
+    })
 
 
 def find_an_analyst(request):
@@ -351,6 +457,7 @@ def _profile_edit_context(request, *, uform=None, pform=None, image_error=None):
         Profile.Role.CANDIDATE,
         Profile.Role.PRE_CANDIDATE,
     }
+    availability_rows = _availability_rows(profile, user)
     return {
         "uform":         uform,
         "pform":         pform,
@@ -360,6 +467,8 @@ def _profile_edit_context(request, *, uform=None, pform=None, image_error=None):
         "show_listing":  profile.is_in_directory or profile.is_faculty,
         "show_practice": show_practice,
         "show_billing":  profile.is_faculty,
+        "show_availability": availability_rows is not None,
+        "availability_rows": availability_rows or [],
         "can_change_email": can_change_email(user),
     }
 

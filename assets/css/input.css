@@ -421,6 +421,20 @@
 .animate-breathe { animation: lsp-breathe 2.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .animate-breathe { animation: none; } }
 
+/* Badges: grow to fit a long label instead of clipping it. DaisyUI gives
+   .badge a fixed `height: var(--size)`, so a multi-word status like
+   "Submitted — awaiting review" wraps but spills past the rounded border.
+   Switching to auto height with `min-height: var(--size)` leaves short,
+   single-line badges identical while letting long ones wrap cleanly inside
+   the pill. App-wide; unlayered so it beats DaisyUI's layered rule. */
+.badge {
+  height: auto;
+  min-height: var(--size);
+  padding-block: 0.15rem;
+  white-space: normal;
+  text-align: center;
+}
+
 /* --- lsp-prose: Markdown body content styling -----------------------------
    Used by the content app's rendered HTML so we don't need
    @tailwindcss/typography for a small set of pages. */

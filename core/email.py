@@ -34,19 +34,29 @@ INNER_SETTING = "PERSONA_SAFE_INNER_EMAIL_BACKEND"
 DEFAULT_INNER = "django.core.mail.backends.console.EmailBackend"
 
 
-def _persona_addresses() -> set[str]:
+def _persona_owner_map() -> dict[str, str | None]:
+    """``{persona_email_lower: owner_email_or_None}`` for every persona.
+
+    A persona with an owner (a training-sandbox persona) has its mail
+    *redirected* to the owner; an ownerless persona has its mail *dropped*.
+    """
     from accounts.models import Profile
 
     return {
-        e.lower()
-        for e in Profile.objects.filter(is_persona=True).values_list(
-            "user__email", flat=True
+        email.lower(): (owner or None)
+        for email, owner in Profile.objects.filter(is_persona=True).values_list(
+            "user__email", "persona_owner__email"
         )
-        if e
+        if email
     }
 
 
 class PersonaSafeEmailBackend(BaseEmailBackend):
+    """Never delivers to persona addresses. Ownerless personas are dropped;
+    sandbox personas (with an owner) are redirected to their owner, tagged
+    ``[SANDBOX → <original recipients>]`` so a trainee sees exactly what each
+    party in the workflow receives — without any of it reaching real members."""
+
     def __init__(self, fail_silently: bool = False, **kwargs):
         super().__init__(fail_silently=fail_silently)
         self._inner = get_connection(
@@ -57,14 +67,33 @@ class PersonaSafeEmailBackend(BaseEmailBackend):
     def send_messages(self, email_messages):
         if not email_messages:
             return 0
-        personas = _persona_addresses()
-        if not personas:
+        pmap = _persona_owner_map()
+        if not pmap:
             return self._inner.send_messages(email_messages)
+
         kept = []
         for m in email_messages:
-            m.to = [a for a in m.to if a.lower() not in personas]
-            m.cc = [a for a in m.cc if a.lower() not in personas]
-            m.bcc = [a for a in m.bcc if a.lower() not in personas]
+            redirected: set[str] = set()
+            persona_targets: list[str] = []
+
+            def _filter(addrs):
+                real = []
+                for a in addrs:
+                    if a.lower() not in pmap:
+                        real.append(a)  # a real recipient — keep
+                        continue
+                    persona_targets.append(a)
+                    owner = pmap[a.lower()]
+                    if owner:
+                        redirected.add(owner)  # sandbox persona → owner
+                    # ownerless persona → dropped
+                return real
+
+            m.to, m.cc, m.bcc = _filter(m.to), _filter(m.cc), _filter(m.bcc)
+            if redirected:
+                m.to = list(m.to) + [o for o in redirected if o not in m.to]
+                tag = ", ".join(sorted(set(persona_targets)))
+                m.subject = f"[SANDBOX → {tag}] {m.subject}"
             if m.to or m.cc or m.bcc:
                 kept.append(m)
         return self._inner.send_messages(kept) if kept else 0

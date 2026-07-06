@@ -1,0 +1,65 @@
+{% extends "availability/base.html" %}
+{% load static %}
+
+{% block extra_head %}
+<script src="{% static 'vendor/chart-4.4.4.umd.min.js' %}"></script>
+{% endblock %}
+
+{% block tab_content %}
+<div class="space-y-8">
+
+  {# Current coverage — how many analysts are available in each area now. #}
+  <section class="space-y-4">
+    <h2 class="font-serif text-xl text-base-content">Current coverage</h2>
+    <p class="text-sm text-base-content/70">How many Analysts of the School are available (Yes) for each function right now.</p>
+    <div class="space-y-3 max-w-xl">
+      {% for c in coverage %}
+      <div>
+        <div class="flex justify-between text-sm mb-1">
+          <span class="text-base-content">{{ c.function.name }}</span>
+          <span class="text-base-content/60">{{ c.yes }} of {{ c.total }} · {{ c.pct }}%</span>
+        </div>
+        <progress class="progress progress-primary w-full" value="{{ c.pct }}" max="100"></progress>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# Historical coverage — monthly count of available analysts per function. #}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Coverage over time</h2>
+    <p class="text-sm text-base-content/70">Analysts available (Yes) for each function, by month.</p>
+    <div class="rounded-xl border border-base-300/60 bg-base-100 p-4">
+      <canvas id="coverage-chart" height="120"></canvas>
+    </div>
+  </section>
+
+</div>
+
+{{ series|json_script:"coverage-series" }}
+<script>
+  (function () {
+    var el = document.getElementById("coverage-series");
+    if (!el || typeof Chart === "undefined") return;
+    var series = JSON.parse(el.textContent);
+    var palette = ["#2563eb", "#16a34a", "#d97706", "#9333ea", "#dc2626", "#0891b2"];
+    var datasets = series.datasets.map(function (d, i) {
+      var color = palette[i % palette.length];
+      return {
+        label: d.label, data: d.data,
+        borderColor: color, backgroundColor: color,
+        tension: 0.3, fill: false,
+      };
+    });
+    new Chart(document.getElementById("coverage-chart"), {
+      type: "line",
+      data: { labels: series.labels, datasets: datasets },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+        plugins: { legend: { position: "bottom" } },
+      },
+    });
+  })();
+</script>
+{% endblock %}

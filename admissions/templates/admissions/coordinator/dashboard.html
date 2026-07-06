@@ -1,0 +1,107 @@
+{% extends "admissions/coordinator/base.html" %}
+{% block tab_content %}
+<div class="space-y-5">
+
+  {% if not has_sandbox %}
+  <div class="alert bg-base-200/60 border border-base-300/60 text-sm flex flex-wrap items-center justify-between gap-3">
+    <span>👋 <strong>New here?</strong> Create a training sandbox to try the whole
+      workflow safely — it adds practice applicants (🧪) and redirects every email
+      to you, so no real member is contacted. Then use <strong>✦ Guided
+      walkthrough</strong> (top right) to step through it.</span>
+    <form method="post" action="{% url 'admissions:coordinator_reset_sandbox' %}"
+          onsubmit="return confirm('Create a training sandbox? It adds practice applicants — no real member is emailed.');">
+      {% csrf_token %}
+      <button class="btn btn-primary btn-sm">Create training sandbox</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <p class="text-sm text-base-content/70">
+      Applications from intake to decision. {{ open_count }} open. Open an
+      applicant to invite interviewers, record their reports, and record the
+      Meeting's decision; remind interviewers whose reports are still out from here.
+    </p>
+    <div class="flex items-center gap-2">
+    {% if has_sandbox %}
+    <form method="post" action="{% url 'admissions:coordinator_reset_sandbox' %}"
+          onsubmit="return confirm('Start over? This resets the walkthrough and the sandbox applicants to their starting state.');">
+      {% csrf_token %}
+      <button class="btn btn-ghost btn-sm" title="Restore the 🧪 sandbox applicants to their original starting state (and reset the walkthrough)">↻ Reset sandbox</button>
+    </form>
+    {% endif %}
+    <form method="get">
+      <select name="status" class="select select-bordered select-sm" onchange="this.form.submit()">
+        <option value="open" {% if status_filter == "open" %}selected{% endif %}>Open</option>
+        <option value="all" {% if status_filter == "all" %}selected{% endif %}>All</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <noscript><button class="btn btn-sm">Filter</button></noscript>
+    </form>
+    </div>
+  </div>
+
+  {% if rows %}
+  <div class="overflow-x-auto rounded-xl border border-base-300/60 bg-base-100">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Applicant</th><th>Track</th><th>Status</th>
+          <th class="text-center"><abbr title="Acknowledgment email sent to the applicant" class="no-underline">Ack.</abbr></th>
+          <th class="text-center">Interviews</th><th class="text-center">Reports</th>
+          <th>Submitted</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr class="hover">
+          <td>
+            <a href="{% url 'admissions:coordinator_application_detail' row.application.pk %}" class="link font-medium">
+              {{ row.application.applicant.get_full_name|default:row.application.applicant.email }}
+            </a>
+            {% if row.is_sandbox %}<span class="badge badge-warning badge-sm ml-1" title="Sandbox — emails are redirected to you, not real members">🧪 Sandbox</span>{% endif %}
+          </td>
+          <td>{{ row.application.get_track_display }}</td>
+          <td><span class="badge badge-outline badge-sm">{{ row.application.get_status_display }}</span></td>
+          <td class="text-center">
+            {% if row.acknowledged %}<span class="text-success" title="Acknowledged">✓</span>
+            {% else %}
+            <form method="post" action="{% url 'admissions:coordinator_acknowledge' row.application.pk %}"
+                  onsubmit="return confirm('Send the acknowledgment to {{ row.application.applicant.get_full_name|default:row.application.applicant.email }}?');">
+              {% csrf_token %}
+              <button class="btn btn-ghost btn-xs" title="Send the applicant acknowledgment">Send</button>
+            </form>
+            {% endif %}
+          </td>
+          <td class="text-center">{{ row.assigned }} / 2</td>
+          <td class="text-center">{{ row.reports_in }} / {{ row.assigned }}</td>
+          <td class="whitespace-nowrap">{{ row.application.submitted_at|date:"M j, Y" }}</td>
+          <td class="text-right whitespace-nowrap">
+            {% if row.application.is_open and row.slots_remaining %}
+            <form method="post" action="{% url 'admissions:coordinator_invite' row.application.pk %}" class="inline"
+                  onsubmit="return confirm('Email available analysts inviting them to interview this applicant?');">
+              {% csrf_token %}
+              <button class="btn btn-ghost btn-xs" title="Send the call for interviewers to available analysts">{% if row.invited %}Re-invite{% else %}Invite{% endif %}</button>
+            </form>
+            {% endif %}
+            {% if row.pending %}
+            <form method="post" action="{% url 'admissions:coordinator_nudge' row.application.pk %}" class="inline"
+                  onsubmit="return confirm('Email the {{ row.pending|length }} interviewer(s) still owing a report?');">
+              {% csrf_token %}
+              <button class="btn btn-ghost btn-xs" title="Remind interviewers whose reports are outstanding">Nudge ({{ row.pending|length }})</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-base-content/60 text-sm">No applications match this filter.</p>
+  {% endif %}
+
+</div>
+{% endblock %}

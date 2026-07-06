@@ -1,0 +1,20 @@
+{% extends "admissions/coordinator/base.html" %}
+{% block tab_content %}
+<div class="max-w-2xl space-y-4">
+  <p class="text-sm text-base-content/70">
+    The messages you send while facilitating admissions. Edit the wording; the
+    tokens in braces are filled in for each recipient.
+  </p>
+  <ul class="divide-y divide-base-300/60 rounded-xl border border-base-300/60 bg-base-100">
+    {% for t in templates %}
+    <li class="flex items-center justify-between gap-3 p-4">
+      <div>
+        <div class="font-medium text-base-content">{{ t.get_key_display }}</div>
+        <div class="text-xs text-base-content/50">{{ t.subject }}</div>
+      </div>
+      <a href="{% url 'admissions:coordinator_message_edit' t.key %}" class="btn btn-ghost btn-sm">Edit</a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

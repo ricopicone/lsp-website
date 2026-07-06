@@ -76,3 +76,16 @@ def test_unknown_walkthrough_cookie_shows_nothing(rf, settings):
     u = get_user_model().objects.create_user(email="d@example.com", password="x")
     ctx = preview_tour(_req(rf, u, cookie="bogus"))
     assert ctx["show_preview_tour"] is False
+
+
+@pytest.mark.django_db
+def test_starting_a_walkthrough_signals_a_fresh_start(client):
+    from django.urls import reverse
+    resp = client.get(
+        reverse("core:set_walkthrough") + "?id=applications_coordinator&next=/"
+    )
+    assert resp.status_code == 302
+    # Sets the active-walkthrough cookie + a one-shot "fresh" signal the card
+    # uses to clear remembered ticks (so re-clicking restarts).
+    assert resp.cookies["lsp_walkthrough"].value == "applications_coordinator"
+    assert resp.cookies["lsp_wt_fresh"].value == "applications_coordinator"

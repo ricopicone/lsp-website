@@ -784,3 +784,47 @@ def test_edit_committee(db, client):
     })
     c.refresh_from_db()
     assert c.description == "Updated desc" and c.public is True
+
+
+# ---- Persona-safe email backend: drop vs sandbox-redirect (task #272) ------
+
+import pytest as _pytest  # noqa: E402
+from django.core import mail as _mail  # noqa: E402
+from django.core.mail import EmailMessage  # noqa: E402
+from django.test import override_settings  # noqa: E402
+
+from accounts.models import User as _User  # noqa: E402
+
+
+@_pytest.mark.django_db
+@override_settings(
+    PERSONA_SAFE_INNER_EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
+)
+def test_persona_safe_backend_redirects_owned_drops_orphan_keeps_real():
+    from core.email import PersonaSafeEmailBackend
+
+    owner = _User.objects.create_user(email="owner@x.test", password="x")
+    owned = _User.objects.create_user(email="s-owned@lacanschool.invalid", password="x")
+    owned.profile.is_persona = True
+    owned.profile.persona_owner = owner
+    owned.profile.save()
+    orphan = _User.objects.create_user(email="s-orphan@lacanschool.invalid", password="x")
+    orphan.profile.is_persona = True
+    orphan.profile.save()
+
+    _mail.outbox.clear()
+    PersonaSafeEmailBackend().send_messages([
+        EmailMessage("Owned", "b", "f@x.test", ["s-owned@lacanschool.invalid"]),
+        EmailMessage("Orphan", "b", "f@x.test", ["s-orphan@lacanschool.invalid"]),
+        EmailMessage("Real", "b", "f@x.test", ["real@x.test"]),
+    ])
+
+    subjects = [m.subject for m in _mail.outbox]
+    # owned persona → redirected to owner, tagged
+    owned_msg = next(m for m in _mail.outbox if "owner@x.test" in m.to)
+    assert owned_msg.subject.startswith("[SANDBOX → s-owned@lacanschool.invalid]")
+    # orphan persona → dropped entirely
+    assert all("s-orphan@lacanschool.invalid" not in m.to for m in _mail.outbox)
+    assert not any(s.startswith("[SANDBOX") and "Orphan" in s for s in subjects)
+    # real recipient → kept untouched
+    assert any(m.to == ["real@x.test"] and m.subject == "Real" for m in _mail.outbox)

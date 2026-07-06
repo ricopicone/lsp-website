@@ -1,0 +1,14 @@
+{% comment %}School officers (President / Vice-President) shown on the bodies they govern. Pass `officers` from school_officers().{% endcomment %}
+{% if officers %}
+<div class="rounded-xl border border-base-300/60 bg-base-100 p-4">
+  <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45 mb-2">School officers</p>
+  <ul class="flex flex-wrap gap-x-8 gap-y-1 text-sm">
+    {% for o in officers %}
+    <li><span class="text-base-content/60">{{ o.name }}:</span>
+      {% for h in o.holders %}{{ h.get_full_name|default:h.email }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-base-content/40">unfilled</span>{% endfor %}
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="text-xs text-base-content/40 mt-2">Appointed once in Board → Appointments; governs the Board and the Meeting of Analysts both.</p>
+</div>
+{% endif %}

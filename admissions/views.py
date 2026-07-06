@@ -17,13 +17,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from accounts.membership import current_academic_year_start
 from accounts.models import Profile
 
-from . import notifications as notify_admissions
 from .forms import (
     ApplicationForm,
     AssignInterviewerForm,
@@ -95,7 +95,9 @@ def apply(request, track):
             profile.role = Profile.Role.PROSPECTIVE_APPLICANT
             profile.save(update_fields=["role"])
         try:
-            notify_admissions.application_submitted(application)
+            from . import services
+            services.acknowledge_on_submit(application)
+            services.invite_on_submit(application)
         except Exception:
             import logging
             logging.getLogger(__name__).exception("application-submitted email failed")
@@ -156,8 +158,17 @@ def _require_review(request):
         raise PermissionDenied
 
 
+def _require_coordinator(request):
+    """Acting on an application (assign, report, decide) is the Applications
+    Coordinator's job; the Meeting of Analysts gets a read-only view."""
+    from .permissions import can_coordinate_applications
+    if not can_coordinate_applications(request.user):
+        raise PermissionDenied
+
+
 @login_required
 def review_queue(request):
+    """The Meeting of Analysts' read-only list of applications."""
     _require_review(request)
     applications = list(
         Application.objects.select_related("applicant", "applicant__profile")
@@ -172,47 +183,57 @@ def review_queue(request):
 
 @login_required
 def review_detail(request, pk):
+    """The Meeting of Analysts' read-only view of one application. The actual
+    admin (assign, report, decide) is the Applications Coordinator's, on
+    ``coordinator_application_detail``."""
     _require_review(request)
     application = get_object_or_404(
         Application.objects.select_related("applicant", "applicant__profile")
         .prefetch_related("interviews__interviewer"),
         pk=pk,
     )
-    interviews = list(application.interviews.all())
-    report_forms = [
-        (iv, InterviewReportForm(instance=iv, prefix=f"iv{iv.pk}")) for iv in interviews
-    ]
+    from . import services
     return render(request, "admissions/review_detail.html", {
         "application": application,
-        "assign_form": AssignInterviewerForm(application=application),
-        "report_forms": report_forms,
-        "default_ay": current_academic_year_start(),
+        "report_forms": [(iv, None) for iv in application.interviews.all()],
+        "can_act": False,
+        "invited": application.interviewers_invited_at is not None,
+        "slots_remaining": services.slots_remaining(application),
+        "is_sandbox": application.applicant.profile.is_persona,
+        "back_url": reverse("admissions:review_queue"),
+        "back_label": "Applications",
     })
 
 
 @login_required
 @require_POST
 def review_assign(request, pk):
-    _require_review(request)
+    _require_coordinator(request)
     application = get_object_or_404(Application, pk=pk)
     form = AssignInterviewerForm(request.POST, application=application)
     if form.is_valid():
-        ApplicationInterview.objects.get_or_create(
-            application=application, interviewer=form.cleaned_data["interviewer"],
-        )
-        if application.status == Application.Status.SUBMITTED:
-            application.status = Application.Status.INTERVIEWING
-            application.save(update_fields=["status"])
-        messages.success(request, "Interviewer added.")
+        # Same path as an analyst agreeing: records the interview and emails the
+        # introduction connecting applicant + interviewer.
+        from . import services
+        try:
+            _iv, created = services.add_interviewer(
+                application, form.cleaned_data["interviewer"], by=request.user,
+            )
+        except ValueError:  # sandbox containment guard
+            messages.error(request, "That interviewer can't be assigned here.")
+        else:
+            messages.success(
+                request, "Interviewer added." if created else "Already an interviewer.",
+            )
     else:
         messages.error(request, "Couldn't add that interviewer.")
-    return redirect("admissions:review_detail", pk=pk)
+    return redirect("admissions:coordinator_application_detail", pk=pk)
 
 
 @login_required
 @require_POST
 def review_report(request, interview_pk):
-    _require_review(request)
+    _require_coordinator(request)
     interview = get_object_or_404(ApplicationInterview, pk=interview_pk)
     form = InterviewReportForm(request.POST, instance=interview, prefix=f"iv{interview.pk}")
     if form.is_valid():
@@ -220,28 +241,28 @@ def review_report(request, interview_pk):
         messages.success(request, "Interview report saved.")
     else:
         messages.error(request, "Couldn't save the report — check the date.")
-    return redirect("admissions:review_detail", pk=interview.application_id)
+    return redirect("admissions:coordinator_application_detail", pk=interview.application_id)
 
 
 @login_required
 @require_POST
 def review_remove_interview(request, interview_pk):
-    _require_review(request)
+    _require_coordinator(request)
     interview = get_object_or_404(ApplicationInterview, pk=interview_pk)
     app_id = interview.application_id
     interview.delete()
     messages.success(request, "Interviewer removed.")
-    return redirect("admissions:review_detail", pk=app_id)
+    return redirect("admissions:coordinator_application_detail", pk=app_id)
 
 
 @login_required
 @require_POST
 def review_decide(request, pk):
-    _require_review(request)
+    _require_coordinator(request)
     application = get_object_or_404(Application, pk=pk)
     if not application.is_open:
         messages.error(request, "This application has already been decided.")
-        return redirect("admissions:review_detail", pk=pk)
+        return redirect("admissions:coordinator_application_detail", pk=pk)
     decision = request.POST.get("decision")
     note = (request.POST.get("note") or "").strip()
     if decision == "accept":
@@ -256,4 +277,4 @@ def review_decide(request, pk):
         messages.success(request, "Recorded as not accepted; the applicant has been notified.")
     else:
         messages.error(request, "Choose accept or decline.")
-    return redirect("admissions:review_detail", pk=pk)
+    return redirect("admissions:coordinator_application_detail", pk=pk)

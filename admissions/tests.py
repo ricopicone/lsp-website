@@ -34,6 +34,17 @@ def _analyst(email="analyst@x.test"):
     return _user(email, role=Profile.Role.ANALYST)
 
 
+def _coordinator(email="coord@x.test"):
+    """An Applications Coordinator — the workgroup role that owns the
+    application admin (assign / report / decide)."""
+    from committees.models import Committee
+    from workgroups.models import WorkgroupMembership
+    u = _user(email, role=Profile.Role.ANALYST)
+    wg = Committee.objects.get(slug="meeting-of-analysts").workgroup
+    wg.add_member(u, role=WorkgroupMembership.Role.APPLICATIONS_COORDINATOR)
+    return u
+
+
 def _cv():
     return SimpleUploadedFile("cv.pdf", b"%PDF-1.4 fake", content_type="application/pdf")
 
@@ -129,14 +140,14 @@ def test_analyst_can_reach_review_queue(client):
     assert client.get(reverse("admissions:review_queue")).status_code == 200
 
 
-def test_reviewer_can_assign_and_report(client):
-    reviewer = _analyst("reviewer@x.test")
+def test_coordinator_can_assign_and_report(client):
+    coordinator = _coordinator("coord-assign@x.test")
     analyst = _analyst()
     applicant = _user("a@x.test")
     app = Application.objects.create(
         applicant=applicant, track=Application.Track.ANALYST, letter_of_intent="x",
     )
-    client.force_login(reviewer)
+    client.force_login(coordinator)
     client.post(reverse("admissions:review_assign", args=[app.pk]), {"interviewer": analyst.pk})
     app.refresh_from_db()
     assert app.status == Application.Status.INTERVIEWING
@@ -190,12 +201,12 @@ def test_reject_sets_status():
 
 
 def test_decide_via_view_with_on_commit_email(client, django_capture_on_commit_callbacks):
-    reviewer = _analyst("rev2@x.test")
+    coordinator = _coordinator("coord-decide@x.test")
     applicant = _user("v@x.test")
     app = Application.objects.create(
         applicant=applicant, track=Application.Track.ANALYST, letter_of_intent="x",
     )
-    client.force_login(reviewer)
+    client.force_login(coordinator)
     with django_capture_on_commit_callbacks(execute=True):
         resp = client.post(reverse("admissions:review_decide", args=[app.pk]), {
             "decision": "accept", "effective_ay": "2026", "note": "Welcome",
@@ -204,6 +215,24 @@ def test_decide_via_view_with_on_commit_email(client, django_capture_on_commit_c
     app.refresh_from_db()
     assert app.status == Application.Status.ACCEPTED
     assert any("welcome" in m.subject.lower() for m in mail.outbox)
+
+
+def test_meeting_member_view_is_read_only(client):
+    """A Meeting of Analysts member sees applications but cannot act — assign and
+    decide are the Applications Coordinator's."""
+    analyst = _analyst("ro@x.test")
+    applicant = _user("ro-app@x.test")
+    app = Application.objects.create(
+        applicant=applicant, track=Application.Track.ANALYST, letter_of_intent="x",
+    )
+    client.force_login(analyst)
+    assert client.get(reverse("admissions:review_detail", args=[app.pk])).status_code == 200
+    assert client.post(
+        reverse("admissions:review_assign", args=[app.pk]), {"interviewer": analyst.pk}
+    ).status_code == 403
+    assert client.post(
+        reverse("admissions:review_decide", args=[app.pk]), {"decision": "accept"}
+    ).status_code == 403
 
 
 # ---- CV privacy --------------------------------------------------------

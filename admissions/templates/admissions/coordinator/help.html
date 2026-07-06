@@ -1,0 +1,138 @@
+{% extends "admissions/coordinator/base.html" %}
+{% block tab_content %}
+<div class="max-w-3xl space-y-8 leading-relaxed">
+
+  <section class="space-y-2">
+    <p class="text-sm text-base-content/70">
+      This console helps you carry an application from arrival to decision. You
+      shepherd each application — acknowledge it, line up the two interviewers,
+      keep things moving, and record the outcome. The <strong>Meeting of the
+      Analysts</strong> makes the actual admission decision; you record it here.
+    </p>
+    <p class="text-sm text-base-content/70">
+      New to it? Open the <strong>Applications</strong> tab and press
+      <strong>✦ Guided walkthrough</strong> (top right) for a step-by-step tour,
+      and <strong>Create training sandbox</strong> to practice safely — see
+      <a href="#sandbox" class="link link-primary">Practice safely</a> below.
+    </p>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">The journey of an application</h2>
+    <ol class="list-decimal pl-5 text-sm text-base-content/80 space-y-1.5">
+      <li><strong>Submitted.</strong> Someone applies. They receive an
+        acknowledgment (automatically, or you send it — see Settings).</li>
+      <li><strong>Interviewing.</strong> You invite available Analysts; the first
+        two to agree are each connected with the applicant by email to arrange a
+        time. They conduct the interview and file a short report.</li>
+      <li><strong>Decided.</strong> The Meeting decides; you record Accept (which
+        admits the applicant as a Precandidate) or Decline. The applicant is
+        emailed either way.</li>
+    </ol>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">The dashboard</h2>
+    <p class="text-sm text-base-content/80">
+      The <strong>Applications</strong> tab lists every application. Use the
+      dropdown to switch between <em>Open</em> and <em>All</em>. Each row shows:
+    </p>
+    <ul class="list-disc pl-5 text-sm text-base-content/80 space-y-1.5">
+      <li><strong>Ack.</strong> — whether the acknowledgment has gone out. A ✓
+        means sent; otherwise a <em>Send</em> button lets you send it now.</li>
+      <li><strong>Interviews</strong> — how many of the two interviewer seats are
+        filled (e.g. <em>1 / 2</em>).</li>
+      <li><strong>Reports</strong> — how many of those interviewers have filed
+        their report.</li>
+      <li>Row actions — <strong>Invite</strong> / <strong>Re-invite</strong> the
+        analysts, or <strong>Nudge</strong> any interviewer whose report is still
+        outstanding.</li>
+    </ul>
+    <p class="text-sm text-base-content/80">
+      Click an applicant's <strong>name</strong> to open their page, where all
+      the controls live.
+    </p>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">An applicant's page</h2>
+    <ul class="list-disc pl-5 text-sm text-base-content/80 space-y-1.5">
+      <li><strong>Invite interviewers.</strong> Emails every available Analyst
+        (those marked available or unknown for Application Interviews, drawn from
+        the Analyst availability table) inviting them to interview. The first two
+        to agree are automatically connected with the applicant — no assigning by
+        hand needed.</li>
+      <li><strong>Or add a specific interviewer.</strong> An override: pick an
+        Analyst and connect them directly without waiting for a volunteer. The
+        list is ordered availability-first.</li>
+      <li><strong>Reports.</strong> Once an interview happens, record the date and
+        a short report for each interviewer.</li>
+      <li><strong>Decision.</strong> When the Meeting has decided, enter the
+        effective academic year (for an accept) and any note, then press
+        <strong>Accept &amp; admit</strong> or <strong>Decline</strong>. The
+        applicant is emailed automatically.</li>
+    </ul>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Automatic vs. by hand (Settings)</h2>
+    <p class="text-sm text-base-content/80">
+      On the <strong>Settings</strong> tab you choose, for the acknowledgment and
+      for interviewer invitations, whether they go out <strong>automatically</strong>
+      on submit or <strong>wait for you</strong> to send them. Either way you can
+      always send by hand from the dashboard. (The availability-reminder cadence
+      there is shared with the Analyst Availability console.)
+    </p>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Wording of the emails (Messages)</h2>
+    <p class="text-sm text-base-content/80">
+      The <strong>Messages</strong> tab lets you edit the subject and body of every
+      email this console sends — the acknowledgment, the invitation, the
+      introduction, the reminder, and the accept/decline letters. Placeholders
+      like <code>{name}</code> are filled in automatically; the list of available
+      placeholders is shown on each message.
+    </p>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Analyst availability</h2>
+    <p class="text-sm text-base-content/80">
+      The <strong>Analyst availability</strong> tab is the table of which Analysts
+      are available for each function (including Application Interviews) — this is
+      what the invitations draw on. <strong>Overview</strong> shows coverage at a
+      glance, and <strong>Reminder message</strong> is the note that asks Analysts
+      to keep their availability current.
+    </p>
+  </section>
+
+  <section id="sandbox" class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Practice safely — the training sandbox</h2>
+    <p class="text-sm text-base-content/80">
+      To learn the workflow without contacting anyone, press
+      <strong>Create training sandbox</strong> on the Applications tab. It adds a
+      few practice applicants and Analysts, all marked
+      <span class="badge badge-warning badge-sm">🧪 Sandbox</span>. While you work
+      a sandbox applicant, <strong>every email is redirected to you</strong>
+      (tagged <code>[SANDBOX]</code>) — no real member is ever contacted.
+    </p>
+    <ul class="list-disc pl-5 text-sm text-base-content/80 space-y-1.5">
+      <li>On a sandbox applicant's page, <strong>Simulate analyst responses</strong>
+        fast-forwards the interview stage — the practice Analysts agree and file
+        reports — so you can reach the decision without any back-and-forth.</li>
+      <li><strong>↻ Reset sandbox</strong> returns the practice applicants to their
+        starting state (and clears the walkthrough) whenever you want a fresh run.</li>
+    </ul>
+  </section>
+
+  <section class="space-y-2 border-t border-base-300/60 pt-5">
+    <h2 class="font-serif text-xl text-base-content">Stuck?</h2>
+    <p class="text-sm text-base-content/80">
+      Email <a href="mailto:website@lacanschool.org" class="link link-primary">website@lacanschool.org</a>
+      and we'll help. Nothing you do in the sandbox can affect real members.
+    </p>
+  </section>
+
+</div>
+{% endblock %}

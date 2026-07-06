@@ -15,6 +15,7 @@ from .models import (
 
 class ProfileInline(admin.StackedInline):
     model = Profile
+    fk_name = "user"  # Profile also has persona_owner → must disambiguate.
     can_delete = False
     fields = (
         "role",

@@ -1,0 +1,86 @@
+{% extends "availability/base.html" %}
+{% block tab_content %}
+<div class="max-w-3xl space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h2 class="font-serif text-2xl text-base-content">{{ profile.display_full_name }}</h2>
+    <a href="{% url 'availability:grid' %}" class="btn btn-ghost btn-sm">← All analysts</a>
+  </div>
+
+  <p class="text-base-content/70 text-sm">
+    Set each function below; the change is recorded with today's date and your
+    name. Coverage is the share of the academic year held at <em>Yes</em> —
+    current ({{ current_ay }}) and upcoming ({{ upcoming_ay }}).
+  </p>
+
+  {# Per-analyst note (the sheet's Notes column) + its history. #}
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-3">
+    <h3 class="font-medium text-base-content">Note</h3>
+    <form method="post" class="flex flex-wrap items-end gap-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="note">
+      <label class="space-y-1 grow min-w-64">
+        <input type="text" name="note" value="{{ current_note }}" maxlength="300"
+               class="input input-bordered input-sm w-full"
+               placeholder="e.g. Except Oct–Dec 2026">
+      </label>
+      <button class="btn btn-primary btn-sm">Save note</button>
+    </form>
+    {% if note_history %}
+    <details class="text-sm">
+      <summary class="cursor-pointer text-base-content/60">Note history ({{ note_history|length }})</summary>
+      <ul class="mt-2 space-y-1 border-l border-base-300/60 pl-3">
+        {% for n in note_history %}
+        <li class="text-base-content/70">
+          {% if n.text %}“{{ n.text }}”{% else %}<span class="italic text-base-content/40">(cleared)</span>{% endif %}
+          <span class="text-base-content/50">· {{ n.created_at|date:"M j, Y" }}{% if n.created_by %} by {{ n.created_by.get_full_name|default:n.created_by.email }}{% endif %}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </section>
+
+  {% for fr in fn_rows %}
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-3">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h3 class="font-medium text-base-content">{{ fr.function.name }}</h3>
+      <div class="text-xs text-base-content/60">
+        Coverage: {{ current_ay }} {{ fr.coverage_current }}%<span class="mx-1">·</span>{{ upcoming_ay }} {{ fr.coverage_upcoming }}%
+      </div>
+    </div>
+
+    <form method="post" class="flex flex-wrap items-end gap-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="status">
+      <input type="hidden" name="function" value="{{ fr.function.pk }}">
+      <label class="space-y-1">
+        <span class="block text-xs font-medium text-base-content/60">Status</span>
+        <select name="status" class="select select-bordered select-sm">
+          {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if value == fr.status %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="btn btn-primary btn-sm">Save</button>
+    </form>
+
+    {% if fr.history %}
+    <details class="text-sm">
+      <summary class="cursor-pointer text-base-content/60">History ({{ fr.history|length }})</summary>
+      <ul class="mt-2 space-y-1 border-l border-base-300/60 pl-3">
+        {% for span in fr.history %}
+        <li class="text-base-content/70">
+          <span class="font-medium text-base-content">{{ span.get_status_display }}</span>
+          — {{ span.start_date|date:"M j, Y" }}{% if span.end_date %} to {{ span.end_date|date:"M j, Y" }}{% else %} (current){% endif %}
+          <span class="text-base-content/50">· {{ span.get_source_display }}{% if span.created_by %} by {{ span.created_by.get_full_name|default:span.created_by.email }}{% endif %}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+</div>
+{% endblock %}

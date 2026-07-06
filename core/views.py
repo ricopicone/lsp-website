@@ -150,6 +150,9 @@ def set_walkthrough(request):
         # Session cookie (no max_age): the walkthrough follows the member across
         # pages but ends with the browser session, so it never lingers.
         response.set_cookie("lsp_walkthrough", wid, samesite="Lax")
+        # One-shot signal so the card clears its remembered ticks on (re)start —
+        # clicking "Guided walkthrough" begins fresh. The card deletes it.
+        response.set_cookie("lsp_wt_fresh", wid, samesite="Lax")
     else:
         response.delete_cookie("lsp_walkthrough")
     return response
@@ -273,7 +276,13 @@ def impersonate_start(request, user_id: int):
     ImpersonationLog.objects.create(
         impersonator=real, target=target, read_only=read_only
     )
-    return redirect("/")
+    from django.utils.http import url_has_allowed_host_and_scheme
+    nxt = request.GET.get("next") or "/"
+    if not url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        nxt = "/"
+    return redirect(nxt)
 
 
 @require_POST

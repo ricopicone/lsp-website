@@ -58,6 +58,7 @@ class Category(models.TextChoices):
     GROUP_MEETING_REMINDER = "group_meeting_reminder", _("Meeting starting soon")
     GROUP_DECISION = "group_decision", _("Group decisions & minutes")
     GROUP_RECORDING = "group_recording", _("Meeting recordings ready")
+    EVENT_CHANGE_REVIEW = "event_change_review", _("Event content change reviews")
 
     # --- Referrals ---------------------------------------------------------
     REFERRAL_REQUEST = "referral_request", _("Referral requests")
@@ -69,6 +70,7 @@ class Category(models.TextChoices):
     # --- Account ---------------------------------------------------------
     ACCOUNT_ADVISOR = "account_advisor", _("Advisor assignments")
     ACCOUNT_SECURITY = "account_security", _("Account & security")
+    AVAILABILITY_REVIEW = "availability_review", _("Availability review requests")
 
 
 class EmailDelivery(models.TextChoices):
@@ -212,6 +214,11 @@ CATEGORY_META: dict[str, CategoryMeta] = {
         _("When a meeting recording becomes available."),
         default_email=_E.OFF,
     ),
+    _C.EVENT_CHANGE_REVIEW: _M(
+        SECTION_GROUPS, _("Event content change reviews"),
+        _("When a faculty content change is submitted for committee review, "
+          "and when the committee decides on yours."),
+    ),
     # Referrals — distribution to the referral list. Email defaults on (a
     # clinician who never checks the bell would otherwise miss requests).
     _C.REFERRAL_REQUEST: _M(
@@ -238,6 +245,14 @@ CATEGORY_META: dict[str, CategoryMeta] = {
         SECTION_ACCOUNT, _("Account & security"),
         _("Sign-in links, email changes, password resets. Always emailed."),
         default_in_app=False, in_app_capable=False, email_locked=True,
+    ),
+    # Applications Coordinator's periodic ask that an analyst review which LSP
+    # functions they're available for. Email defaults on (a prompt seen only in
+    # the bell is little use), but it's not locked — analysts can turn it off.
+    _C.AVAILABILITY_REVIEW: _M(
+        SECTION_ACCOUNT, _("Availability review requests"),
+        _("For Analysts of the School: an occasional request to confirm which "
+          "LSP functions you're available for."),
     ),
 }
 
