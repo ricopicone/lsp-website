@@ -23,7 +23,7 @@ A non-exhaustive set of organizations and journals in the wider Lacanian field:
 - [Lacanian Compass](https://www.lacaniancompass.com)
 - [Lacan in Ireland](https://www.lacaninireland.com)
 - [Lacan Online](https://www.lacanonline.com)
-- [APPI — Association for Psychoanalysis and Psychotherapy in Ireland](https://www.appi.ie) (publisher of the journal *Lacunae*)
+- [APPI, Association for Psychoanalysis and Psychotherapy in Ireland](https://www.appi.ie) (publisher of the journal *Lacunae*)
 
 To suggest an addition or correction, write to
 [website@lacanschool.org](mailto:website@lacanschool.org).

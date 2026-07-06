@@ -44,7 +44,7 @@
 
 {% comment %}Classic site-theme only: the front-page Twombly over the school
 name (the old front door). Modern keeps the bespoke text hero below.{% endcomment %}
-{% block page_hero %}{% if site_theme == "wix" %}{% include "core/_page_hero.html" with kicker="A worldwide school · based in San Francisco" title="Lacanian School of Psychoanalysis" subtitle="A community for the practice, transmission, and study of psychoanalysis—Freud's discovery as read, and reopened, by Jacques Lacan." %}{% endif %}{% endblock %}
+{% block page_hero %}{% if site_theme == "wix" %}{% include "core/_page_hero.html" with kicker="A worldwide school · based in San Francisco" title="Lacanian School of Psychoanalysis" subtitle="A community for the practice, transmission, and study of psychoanalysis, Freud's discovery as read, and reopened, by Jacques Lacan." %}{% endif %}{% endblock %}
 
 {% block content %}
 {% comment %}
@@ -71,7 +71,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
     </h1>
     <p class="lsp-reveal text-lg sm:text-xl text-base-content/75 leading-relaxed max-w-2xl" style="--d:1">
       A community for the practice, transmission, and study of
-      psychoanalysis—Freud's discovery as it was read, and reopened, by Jacques
+      psychoanalysis, Freud's discovery as it was read, and reopened, by Jacques
       Lacan. We form analysts, transmit psychoanalysis through seminars and
       special events open to the public, and sustain the clinical practice of
       psychoanalysis.
@@ -92,7 +92,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
       <span>
         Your <strong>{{ dues_period_unpaid.name }}</strong> dues
         (${{ dues_amount_owed }}, due {{ dues_period_unpaid.due_date|date:"M j, Y" }})
-        haven't been paid yet—<a href="{% url 'dues' %}" class="link">pay now</a>.
+        haven't been paid yet, <a href="{% url 'dues' %}" class="link">pay now</a>.
       </span>
     </div>
   </div>
@@ -102,7 +102,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
   <section class="mt-12 sm:mt-16 max-w-3xl space-y-4">
     <p class="text-base sm:text-lg text-base-content/80 leading-relaxed">
       Founded in 1990, the Lacanian School of Psychoanalysis offers a transmission
-      of psychoanalysis through a <em>savoir</em> of the unconscious—built
+      of psychoanalysis through a <em>savoir</em> of the unconscious, built
       gradually in personal analysis and control analyses, alongside an immersion
       in theory through seminars, events, reading groups, and cartels. These
       direct experiences of the unconscious inform ethical practices of analysis
@@ -115,7 +115,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
       <a href="{% url 'find_an_analyst' %}" class="text-primary underline decoration-1 underline-offset-2 hover:decoration-2">find a clinician</a>
       with whom to undertake or complete a personal analysis. Unless otherwise
       noted, the School's seminars and events are open to the general public, with
-      no enrollment required. Begun locally, the School is now international—part
+      no enrollment required. Begun locally, the School is now international, part
       of a broader worldwide movement for education, research, and treatment in
       both the Freudian and Lacanian fields.
     </p>
@@ -144,7 +144,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
         <span class="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-base-content/45"><span class="text-primary/70">02</span> · Wanting to study</span>
         <h3 class="font-serif text-xl text-base-content mt-2 tracking-tight">Attend the seminars</h3>
         <p class="text-sm text-base-content/65 leading-relaxed mt-2 flex-1">
-          Year-long teaching seminars, reading groups, and special events—many
+          Year-long teaching seminars, reading groups, and special events, many
           open to anyone, no prior background assumed.
         </p>
         <span class="text-sm text-primary mt-4 inline-flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
@@ -211,7 +211,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
       <p class="text-base sm:text-lg text-base-content/70 leading-relaxed mt-6 max-w-2xl">
         Following Lacan's founding gesture, the School belongs to those who
         study within it. Its committees, cartels, and seminars are carried by
-        the members themselves—candidates, analysts, and scholars who share the
+        the members themselves, candidates, analysts, and scholars who share the
         work of its direction.
       </p>
     </div>
@@ -223,11 +223,11 @@ sections (alerts, "Coming up") never leave an orphaned gap.
       <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">What we do</h2>
       <p class="text-base-content/75 leading-relaxed">
         Teaching is at the center. Faculty lead <strong>seminars</strong> that
-        read Freud and Lacan closely; members gather in <strong>cartels</strong>—small
+        read Freud and Lacan closely; members gather in <strong>cartels</strong>, small
         groups formed around a shared question.
       </p>
       <p class="text-base-content/75 leading-relaxed">
-        Formation follows two tracks—Analyst and Scholar—each with its own path
+        Formation follows two tracks, Analyst and Scholar, each with its own path
         through candidacy.
         {% if directory_count %}Home to {{ directory_count }} analyst{{ directory_count|pluralize }}, candidate{{ directory_count|pluralize }}, and scholar{{ directory_count|pluralize }}, t{% else %}T{% endif %}he School welcomes
         clinicians, candidates in formation, and scholars from neighboring
@@ -255,7 +255,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
       <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">The School at a glance</h2>
       <p class="text-base-content/70 leading-relaxed mt-4 max-w-2xl">
         From the one-by-one of analysis to the bodies that carry its common
-        life—a single map of the School's parts and how they fit together, each
+        life, a single map of the School's parts and how they fit together, each
         opening onto what it is and where to go.
       </p>
       {% with chip="font-mono text-[0.7rem] uppercase tracking-[0.12em] text-base-content/55 px-2.5 py-1 rounded-full border border-base-300" %}
