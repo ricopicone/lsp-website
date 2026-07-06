@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Advancement
+from .models import Advancement, ControlAnalysis, FormationSettings
 
 
 @admin.register(Advancement)
@@ -13,3 +13,12 @@ class AdvancementAdmin(admin.ModelAdmin):
     )
     autocomplete_fields = ("member", "advisor", "decided_by")
     readonly_fields = ("created_at", "updated_at", "from_role")
+
+
+admin.site.register(FormationSettings)
+
+
+@admin.register(ControlAnalysis)
+class ControlAnalysisAdmin(admin.ModelAdmin):
+    list_display = ("member", "supervisor_name", "modality", "start_date", "end_date")
+    search_fields = ("member__email", "supervisor_name")

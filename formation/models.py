@@ -13,6 +13,8 @@ change routes through ``accounts.membership.record_membership_change``.
 
 from __future__ import annotations
 
+import datetime as dt
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -155,3 +157,53 @@ class Advancement(models.Model):
         track; the palimpsest is the same word on both. Keyed off ``from_role``
         (snapshotted when the demande opened) so it's stable after advancement."""
         return step_label_for(self.kind, self.from_role)
+
+
+class FormationSettings(models.Model):
+    """Singleton of tunable formation parameters (admin-editable so requirement
+    targets don't live in code)."""
+    control_years_target = models.PositiveSmallIntegerField(
+        default=6,
+        help_text="Target years of control analysis shown on the progress meter.",
+    )
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class ControlAnalysis(models.Model):
+    """A member's self-reported control (supervisory) analysis. No approval:
+    a personal formation record, readable by the member's advisor + staff."""
+
+    class Modality(models.TextChoices):
+        IN_PERSON = "in_person", "In person"
+        REMOTE = "remote", "Remote"
+        HYBRID = "hybrid", "Hybrid"
+
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                               related_name="control_analyses")
+    supervisor_name = models.CharField(max_length=200)
+    modality = models.CharField(max_length=12, choices=Modality.choices, default=Modality.REMOTE)
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True, help_text="Leave blank if ongoing.")
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-start_date",)
+
+    @property
+    def duration_years(self) -> float:
+        end = self.end_date or dt.date.today()
+        return max(0.0, (end - self.start_date).days / 365.25)
+
+    @classmethod
+    def years_for(cls, user) -> float:
+        return round(sum(c.duration_years for c in cls.objects.filter(member=user)), 2)
