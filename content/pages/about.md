@@ -3,30 +3,6 @@ title: About the Lacanian School of Psychoanalysis
 summary: Founded in 1990, the Lacanian School transmits Freudian and Lacanian psychoanalytic theory, offers formation to clinicians, and provides clinical supervision.
 ---
 
-Founded in 1990, the Lacanian School of Psychoanalysis (LSP) offers a
-transmission of psychoanalysis through a *savoir* of the unconscious, built
-gradually in personal analysis and control analyses. These direct experiences
-of the unconscious, alongside an immersion in theory through seminars, events,
-reading groups, and cartels, inform ethical practices of analysis and
-scholarship.
-
-Through LSP you may study Lacanian or Freudian theory, pursue psychoanalytic
-formation, obtain clinical supervision from a Lacanian perspective, and find a
-clinician with whom to undertake or complete a personal analysis. Unless
-specifically noted, LSP seminars and events are open to the general public, with
-no commitment to or enrollment in the School.
-
-The School's purpose is to transmit psychoanalytic ethics and theory in the
-historical context of both the Freudian and Lacanian fields. Begun locally, the
-School is now international in its reach—part of a broader worldwide
-psychoanalytic movement to conduct education, research, and treatment for the
-benefit of local and global communities.
-
-Applications for formation at LSP are currently open; see the
-[Formation](/about/formation/) page for detailed information. If you are looking
-for a referral to begin a personal analysis with a clinician affiliated with
-LSP, please use the survey on the [Find an Analyst](/find-an-analyst/) page.
-
 ## Mission Statement
 
 Founded in 1990, the Lacanian School of Psychoanalysis was created within
@@ -36,19 +12,6 @@ been created to transmit Freudian and Lacanian psychoanalytic theory,
 offer a formation process to prelicensed and licensed clinicians, and
 provide clinical supervision of psychoanalysis from a Lacanian perspective,
 also known as control analysis.
-
-## Bylaws & Legal Status
-
-Since 2019, the Lacanian School has been incorporated as a 501(c)(3)
-entity, organized and operated exclusively for charitable purposes. These
-Bylaws must comply with California law but are subject to change by the
-Board to better reflect the needs, purpose, and functioning of the
-School.
-
-<p class="lsp-doc-link"><a href="/static/documents/lsp-bylaws.pdf">
-  <span class="lsp-doc-badge">PDF</span>
-  The most recent version of LSP's Bylaws
-</a></p>
 
 ## Board of Directors
 
@@ -143,6 +106,19 @@ also serves that function regarding unconscious processes at play in any
 working group in the School. The President and Vice President work
 together to create and sustain a savoir of the unconscious, welcoming
 and sustaining the Other of speech in every aspect of the School.
+
+## Bylaws & Legal Status
+
+Since 2019, the Lacanian School has been incorporated as a 501(c)(3)
+entity, organized and operated exclusively for charitable purposes. These
+Bylaws must comply with California law but are subject to change by the
+Board to better reflect the needs, purpose, and functioning of the
+School.
+
+<p class="lsp-doc-link"><a href="/static/documents/lsp-bylaws.pdf">
+  <span class="lsp-doc-badge">PDF</span>
+  The most recent version of LSP's Bylaws
+</a></p>
 
 ## Ethical Complaints Process
 

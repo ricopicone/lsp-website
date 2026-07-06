@@ -28,6 +28,30 @@ def test_about_page_renders_with_committee_roster(client):
 
 
 @pytest.mark.django_db
+def test_board_roster_styles_chair_as_president(client):
+    """Task #368: on the About page the Board's chair/co-chair read President /
+    Vice President, without disturbing the shared role enum other groups use."""
+    from workgroups.models import WorkgroupMembership
+
+    board = Committee.objects.get(slug="board")
+    board.public = True
+    board.save(update_fields=["public"])
+    pres = User.objects.create_user(
+        email="pres@example.com", first_name="Prez", last_name="Ident"
+    )
+    veep = User.objects.create_user(
+        email="veep@example.com", first_name="Vee", last_name="Pea"
+    )
+    board.add_member(pres, role=WorkgroupMembership.Role.CHAIR, start_date=date(2026, 1, 1))
+    board.add_member(veep, role=WorkgroupMembership.Role.CO_CHAIR, start_date=date(2026, 1, 1))
+
+    body = client.get("/about/").content.decode()
+    assert "President" in body and "Vice President" in body
+    # The generic enum labels must not leak onto the Board card.
+    assert "—Chair" not in body and "—Co-chair" not in body
+
+
+@pytest.mark.django_db
 def test_the_school_page_renders_all_entries(client):
     """The graphical index must render every concept in the taxonomy, and the
     graphic and the entry list are driven by the same source — so a present

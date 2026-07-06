@@ -9,8 +9,8 @@ they're in the public directory.
     Current {{ committee.name }}
   </div>
   <ul class="text-sm space-y-1.5">
-    {% for m in committee.active_members %}
-    <li>{% if m.user.profile.is_in_directory %}<a href="{% url 'directory_detail' m.user.profile.directory_slug %}" class="link link-hover text-base-content">{{ m.user.first_name }} {{ m.user.last_name }}</a>{% else %}<span class="text-base-content">{{ m.user.first_name }} {{ m.user.last_name }}</span>{% endif %}{% if m.role != "member" %}<span class="text-xs text-base-content/60">—{{ m.get_role_display }}</span>{% endif %}</li>
+    {% for m in members %}
+    <li>{% if m.user.profile.is_in_directory %}<a href="{% url 'directory_detail' m.user.profile.directory_slug %}" class="link link-hover text-base-content">{{ m.user.first_name }} {{ m.user.last_name }}</a>{% else %}<span class="text-base-content">{{ m.user.first_name }} {{ m.user.last_name }}</span>{% endif %}{% if m.display_role %}<span class="text-xs text-base-content/60">—{{ m.display_role }}</span>{% endif %}</li>
     {% endfor %}
   </ul>
 </aside>
