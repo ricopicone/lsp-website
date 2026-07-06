@@ -656,6 +656,65 @@ def advise_present(request, pk):
     return redirect("formation:advise_queue")
 
 
+# ---- Advisor View: read-only advisee record + private notes ---------------
+
+@login_required
+def advisees(request):
+    """The advisor's current advisees, each linking to their read-only record."""
+    from .permissions import current_advisees
+
+    rows = current_advisees(request.user)
+    return render(request, "formation/advisees.html", {"advisorships": rows})
+
+
+@login_required
+def advisee_detail(request, pk):
+    """An advisee's read-only formation record plus an advisor-only notes panel.
+    Gated to the advisee's current advisor (and staff); everyone else is denied.
+    The advisee never sees this page's notes, they only appear here."""
+    from accounts.models import User
+
+    from .models import AdvisorNote
+    from .permissions import can_view_advisee
+
+    advisee = get_object_or_404(User.objects.select_related("profile"), pk=pk)
+    if not can_view_advisee(request.user, advisee):
+        raise PermissionDenied
+    ctx = {
+        "advisee": advisee,
+        "advancements": Advancement.objects.filter(member=advisee)
+        .select_related("advisor").order_by("-requested_at"),
+        "control_entries": ControlAnalysis.objects.filter(member=advisee),
+        "control_years": ControlAnalysis.years_for(advisee),
+        "control_target": FormationSettings.load().control_years_target,
+        "external_entries": ExternalActivity.objects.filter(member=advisee)
+        .order_by("kind", "-start_date"),
+        "notes": AdvisorNote.objects.filter(advisee=advisee).select_related("author"),
+    }
+    return render(request, "formation/advisee_detail.html", ctx)
+
+
+@login_required
+@require_POST
+def advisee_note_add(request, pk):
+    """Record a private advisor note about an advisee."""
+    from django.urls import reverse
+
+    from accounts.models import User
+
+    from .models import AdvisorNote
+    from .permissions import can_view_advisee
+
+    advisee = get_object_or_404(User, pk=pk)
+    if not can_view_advisee(request.user, advisee):
+        raise PermissionDenied
+    body = (request.POST.get("body") or "").strip()
+    if body:
+        AdvisorNote.objects.create(advisee=advisee, author=request.user, body=body)
+        messages.success(request, "Note added.")
+    return redirect(reverse("formation:advisee_detail", args=[advisee.pk]))
+
+
 # ---- Meeting of the Analysts review side ----------------------------------
 
 @login_required

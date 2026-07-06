@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import Advancement, ControlAnalysis, ExternalActivity, FormationSettings
+from .models import (
+    Advancement,
+    AdvisorNote,
+    ControlAnalysis,
+    ExternalActivity,
+    FormationSettings,
+)
 
 
 @admin.register(Advancement)
@@ -29,3 +35,11 @@ class ExternalActivityAdmin(admin.ModelAdmin):
     list_display = ("member", "kind", "title", "venue", "start_date", "end_date")
     list_filter = ("kind",)
     search_fields = ("member__email", "title", "venue")
+
+
+@admin.register(AdvisorNote)
+class AdvisorNoteAdmin(admin.ModelAdmin):
+    list_display = ("advisee", "author", "created_at")
+    search_fields = ("advisee__email", "author__email", "body")
+    autocomplete_fields = ("advisee", "author")
+    readonly_fields = ("created_at",)

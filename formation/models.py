@@ -233,3 +233,26 @@ class ExternalActivity(models.Model):
 
     class Meta:
         ordering = ("-start_date",)
+
+
+class AdvisorNote(models.Model):
+    """A private note an advisor keeps on an advisee. Visible to the advisee's
+    advisor(s) and staff, never to the advisee. Rendered only on the advisor's
+    advisee-detail page, never on the member's own Formation hub."""
+
+    advisee = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="advisor_notes_about",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="advisor_notes_written",
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"Note on {self.advisee} by {self.author}"

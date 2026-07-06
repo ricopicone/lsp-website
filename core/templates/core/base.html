@@ -256,6 +256,9 @@
             {% endfor %}
 
             {% if user.profile.role == 'analyst' or user.profile.role == 'scholar' %}
+              {% if user.advisees.exists %}
+              <li><a href="{% url 'formation:advisees' %}">Your Advisees</a></li>
+              {% endif %}
               {% if user.advancements_advised.exists %}
               <li><a href="{% url 'formation:advise_queue' %}">Demandes You Advise</a></li>
               {% endif %}

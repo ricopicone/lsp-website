@@ -25,6 +25,12 @@ urlpatterns = [
     path("formation/advise/<int:pk>/present/", views.advise_present,
          name="advise_present"),
 
+    # --- Advisor View: read-only advisee record + private notes ---
+    path("formation/advisees/", views.advisees, name="advisees"),
+    path("formation/advisees/<int:pk>/", views.advisee_detail, name="advisee_detail"),
+    path("formation/advisees/<int:pk>/note/", views.advisee_note_add,
+         name="advisee_note_add"),
+
     # --- Advancement review (Meeting of the Analysts) ---
     path(f"{_MOA}/advancements/", views.advancement_queue, name="advancement_queue"),
     path(f"{_MOA}/advancements/<int:pk>/", views.advancement_detail,

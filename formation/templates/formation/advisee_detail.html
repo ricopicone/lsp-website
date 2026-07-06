@@ -1,0 +1,118 @@
+{% extends "core/base.html" %}
+{% block title %}{{ advisee.get_full_name|default:advisee.email }} — Advisee record — LSP{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <header class="space-y-1">
+    <p class="text-sm"><a href="{% url 'formation:advisees' %}" class="link link-primary">← Your advisees</a></p>
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">{{ advisee.get_full_name|default:advisee.email }}</h1>
+    <p class="text-base-content/70">{{ advisee.profile.get_role_display }}. This is a read-only view of their formation record.</p>
+  </header>
+
+  {# ---- Advisor-only notes (never shown to the advisee) ---- #}
+  <section class="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-4">
+    <div class="space-y-1">
+      <h2 class="font-serif text-xl text-base-content">Advisor notes</h2>
+      <p class="text-sm text-base-content/70">Private to you and the School's staff. {{ advisee.get_full_name|default:advisee.email }} never sees these.</p>
+    </div>
+
+    {% if notes %}
+    <ul class="space-y-3">
+      {% for n in notes %}
+      <li class="rounded-lg border border-base-300 bg-base-100 p-4">
+        <p class="text-sm text-base-content whitespace-pre-wrap">{{ n.body }}</p>
+        <p class="text-xs text-base-content/50 mt-2">{{ n.author.get_full_name|default:n.author.email }}, {{ n.created_at|date:"M j, Y" }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-base-content/60">No notes yet.</p>
+    {% endif %}
+
+    <form method="post" action="{% url 'formation:advisee_note_add' advisee.pk %}" class="space-y-2">
+      {% csrf_token %}
+      <textarea name="body" rows="3" class="textarea textarea-bordered w-full" placeholder="Add a private note" required></textarea>
+      <button class="btn btn-primary btn-sm">Add note</button>
+    </form>
+  </section>
+
+  {# ---- Advancement demandes ---- #}
+  <section class="rounded-xl border border-base-300 p-5 space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Advancement</h2>
+    {% for a in advancements %}
+    <div class="rounded-lg border border-base-300 p-4 space-y-1">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="font-medium text-base-content">{{ a.get_kind_display }}</span>
+        <span class="badge badge-sm
+          {% if a.status == 'approved' %}badge-success
+          {% elif a.status == 'declined' or a.status == 'withdrawn' %}badge-ghost
+          {% elif a.status == 'presented' %}badge-info
+          {% else %}badge-warning{% endif %}">{{ a.get_status_display }}</span>
+      </div>
+      <p class="text-sm text-base-content/60">Requested {{ a.requested_at|date:"M j, Y" }}{% if a.presented_at %}, presented {{ a.presented_at|date:"M j, Y" }}{% endif %}{% if a.decided_at %}, decided {{ a.decided_at|date:"M j, Y" }}{% endif %}</p>
+    </div>
+    {% empty %}
+    <p class="text-sm text-base-content/60">No advancement demandes on file.</p>
+    {% endfor %}
+  </section>
+
+  {# ---- Control analysis ---- #}
+  <section class="rounded-xl border border-base-300 p-5 space-y-4">
+    <h2 class="font-serif text-xl text-base-content">Control analysis</h2>
+    <div class="space-y-1">
+      <progress class="progress progress-primary w-full" value="{{ control_years }}" max="{{ control_target }}"></progress>
+      <p class="text-sm text-base-content/70">{{ control_years }} of {{ control_target }} years of control analysis, or four years of ongoing dialogue with an analyst.</p>
+    </div>
+    {% if control_entries %}
+    <ul class="space-y-3">
+      {% for c in control_entries %}
+      <li class="rounded-lg border border-base-300 p-4">
+        <p class="font-medium text-base-content">{{ c.supervisor_name }}</p>
+        <p class="text-sm text-base-content/60">
+          {{ c.get_modality_display }} · {{ c.start_date|date:"M j, Y" }}
+          {% if c.end_date %} – {{ c.end_date|date:"M j, Y" }}{% else %} – ongoing{% endif %}
+          · {{ c.duration_years|floatformat:1 }} years
+        </p>
+        {% if c.notes %}<p class="text-sm text-base-content/60 mt-1">{{ c.notes }}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-base-content/60">No control analysis entries.</p>
+    {% endif %}
+  </section>
+
+  {# ---- External activities ---- #}
+  <section class="rounded-xl border border-base-300 p-5 space-y-4">
+    <h2 class="font-serif text-xl text-base-content">External activities</h2>
+    {% if external_entries %}
+    {% regroup external_entries by get_kind_display as external_groups %}
+    <div class="space-y-4">
+      {% for group in external_groups %}
+      <div class="space-y-2">
+        <h3 class="text-sm font-semibold text-base-content/70">{{ group.grouper }}</h3>
+        <ul class="space-y-3">
+          {% for e in group.list %}
+          <li class="rounded-lg border border-base-300 p-4">
+            <p class="font-medium text-base-content">{{ e.title }}</p>
+            <p class="text-sm text-base-content/60">
+              {% if e.venue %}{{ e.venue }} · {% endif %}{{ e.start_date|date:"M j, Y" }}
+              {% if e.end_date %} – {{ e.end_date|date:"M j, Y" }}{% endif %}
+              {% if e.url %} · <a href="{{ e.url }}" class="link link-primary" target="_blank" rel="noopener">Link</a>{% endif %}
+            </p>
+            {% if e.notes %}<p class="text-sm text-base-content/60 mt-1">{{ e.notes }}</p>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-base-content/60">No external activities logged.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

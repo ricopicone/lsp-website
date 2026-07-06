@@ -1,0 +1,32 @@
+{% extends "core/base.html" %}
+{% block title %}Your advisees — LSP{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Your advisees</h1>
+    <p class="text-base-content/70">
+      The members you currently advise. Open one to see their formation record,
+      read-only, and keep your own private notes.
+    </p>
+  </header>
+
+  {% for a in advisorships %}
+  <a href="{% url 'formation:advisee_detail' a.advisee.pk %}"
+     class="block rounded-xl border border-base-300 p-5 hover:border-primary/50 transition-colors">
+    <div class="flex items-baseline justify-between gap-2 flex-wrap">
+      <div>
+        <h2 class="font-medium text-base-content">{{ a.advisee.get_full_name|default:a.advisee.email }}</h2>
+        <p class="text-sm text-base-content/60">{{ a.advisee.profile.get_role_display }}</p>
+      </div>
+      <span class="text-sm text-primary">View record</span>
+    </div>
+  </a>
+  {% empty %}
+  <p class="text-sm text-base-content/60">You aren't advising anyone right now.</p>
+  {% endfor %}
+</div>
+{% endblock %}
