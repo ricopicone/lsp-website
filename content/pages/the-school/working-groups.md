@@ -3,7 +3,7 @@ title: Working Groups
 author:
 ---
 
-A working group takes up a defined task on behalf of the School itself—its
+A working group takes up a defined task on behalf of the School itself, its
 functioning and common life rather than the work of formation. Where seminars
 and cartels are where formation happens, a working group serves the School as an
 institution: an inquiry, a publication, an event, worked at until the task is

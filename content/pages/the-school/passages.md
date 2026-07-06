@@ -3,7 +3,7 @@ title: Passages
 author:
 ---
 
-A passage is the advancement of a Candidate Analyst to Analyst of the School—the
+A passage is the advancement of a Candidate Analyst to Analyst of the School, the
 analyst-track counterpart to the Scholar's [Traversée](#traversees). It follows
 the palimpsest, which marked the earlier step from Precandidate to Candidate.
 
