@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from django import forms
 
-from .models import Advancement
+from .models import Advancement, ControlAnalysis
 
 _INPUT = "input input-bordered w-full"
 _TEXTAREA = "textarea textarea-bordered w-full"
@@ -62,3 +62,26 @@ class RecommendationForm(forms.ModelForm):
             "Leave blank to use today's date."
         )
         self.fields["presented_at"].required = False
+
+
+class ControlAnalysisForm(forms.ModelForm):
+    """A member's self-reported control (supervisory) analysis entry — no
+    approval, just a personal record toward the control-years target."""
+
+    class Meta:
+        model = ControlAnalysis
+        fields = ("supervisor_name", "modality", "start_date", "end_date", "notes")
+        widgets = {
+            "start_date": forms.DateInput(attrs={"type": "date", "class": _INPUT}),
+            "end_date": forms.DateInput(attrs={"type": "date", "class": _INPUT}),
+            "supervisor_name": forms.TextInput(attrs={"class": _INPUT}),
+            "modality": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "notes": forms.Textarea(attrs={"rows": 3, "class": _TEXTAREA}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["end_date"].label = "End date"
+        self.fields["end_date"].help_text = "Leave blank if this is ongoing."
+        self.fields["end_date"].required = False
+        self.fields["notes"].required = False

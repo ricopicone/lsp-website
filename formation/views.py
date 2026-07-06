@@ -29,8 +29,8 @@ from .advancement import (
     step_label_for_member,
     withdraw_advancement,
 )
-from .forms import AdvancementForm, RecommendationForm
-from .models import Advancement
+from .forms import AdvancementForm, ControlAnalysisForm, RecommendationForm
+from .models import Advancement, ControlAnalysis, FormationSettings
 from .tabs import available_tabs
 
 # ==========================================================================
@@ -85,6 +85,9 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
         "formation_steps": _formation_steps(user),
         "demande_form": demande_form if demande_form is not None else AdvancementForm(),
         "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
+        "control_entries": ControlAnalysis.objects.filter(member=user),
+        "control_years": ControlAnalysis.years_for(user),
+        "control_target": FormationSettings.load().control_years_target,
     }
 
     # The page tab bar shows Tuition/Dues on obligation OR payment history; the
@@ -518,6 +521,50 @@ def palimpsest_download(request, pk):
     response = FileResponse(adv.palimpsest.open("rb"))
     response["Content-Disposition"] = f'attachment; filename="{name}"'
     return response
+
+
+@login_required
+def control_add(request):
+    """Add a control (supervisory) analysis entry — a self-reported record, no
+    approval required."""
+    if request.method == "POST":
+        form = ControlAnalysisForm(request.POST)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.member = request.user
+            obj.save()
+            messages.success(request, "Control analysis added.")
+            return redirect(_formation_url("formation"))
+    else:
+        form = ControlAnalysisForm()
+    return render(request, "formation/_control_form.html", {"form": form, "mode": "add"})
+
+
+@login_required
+def control_edit(request, pk):
+    """Edit one of the member's own control-analysis entries. A non-owner gets
+    a 404 (no signal that the entry exists at all)."""
+    obj = get_object_or_404(ControlAnalysis, pk=pk, member=request.user)
+    if request.method == "POST":
+        form = ControlAnalysisForm(request.POST, instance=obj)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Control analysis updated.")
+            return redirect(_formation_url("formation"))
+    else:
+        form = ControlAnalysisForm(instance=obj)
+    return render(request, "formation/_control_form.html",
+                  {"form": form, "mode": "edit", "entry": obj})
+
+
+@login_required
+@require_POST
+def control_delete(request, pk):
+    """Delete one of the member's own control-analysis entries."""
+    obj = get_object_or_404(ControlAnalysis, pk=pk, member=request.user)
+    obj.delete()
+    messages.success(request, "Control analysis removed.")
+    return redirect(_formation_url("formation"))
 
 
 # ---- Advisor side ---------------------------------------------------------

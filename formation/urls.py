@@ -13,6 +13,9 @@ urlpatterns = [
          name="advancement_withdraw"),
     path("formation/<int:pk>/palimpsest/", views.palimpsest_download,
          name="palimpsest_download"),
+    path("formation/control/add/", views.control_add, name="control_add"),
+    path("formation/control/<int:pk>/edit/", views.control_edit, name="control_edit"),
+    path("formation/control/<int:pk>/delete/", views.control_delete, name="control_delete"),
 
     # --- Advancement: advisor side ---
     path("formation/advise/", views.advise_queue, name="advise_queue"),
