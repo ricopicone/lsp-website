@@ -16,6 +16,28 @@
     </div>
   </header>
 
+  {% if show_cartel_intro %}
+  <section class="rounded-lg border border-base-300 bg-base-200/40 p-5 sm:p-6 space-y-4">
+    <div class="max-w-2xl space-y-3">
+      <p class="text-base-content/80 leading-relaxed">
+        A cartel is a small working group, usually four members and a
+        "plus-one," formed around a shared question and dissolved when its work
+        is done. Each member pursues their own line of inquiry; the plus-one
+        attends to the group's dynamic rather than its content. Cartels are one
+        of the School's core forms of study, and members may form or join one
+        throughout the year.
+      </p>
+    </div>
+    {% if cartel_coordinators %}
+    <p class="text-sm text-base-content/70 border-t border-base-300/60 pt-3">
+      Questions about forming or joining a cartel? Contact the Cartel
+      Coordinator,
+      {% for c in cartel_coordinators %}{% if not forloop.first %}{% if forloop.last %} and {% else %}, {% endif %}{% endif %}{% if c.profile.public_email %}<a href="mailto:{{ c.profile.public_email }}" class="link link-primary">{{ c.first_name }} {{ c.last_name }}</a>{% elif c.profile.is_in_directory %}<a href="{% url 'directory_detail' c.profile.directory_slug %}" class="link link-primary">{{ c.first_name }} {{ c.last_name }}</a>{% else %}{{ c.first_name }} {{ c.last_name }}{% endif %}{% endfor %}.
+    </p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {% if my_cartels %}
   <section class="space-y-3">
     <h2 class="font-serif text-xl">My cartels</h2>

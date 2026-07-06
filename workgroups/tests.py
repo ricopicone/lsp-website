@@ -6,7 +6,7 @@ import datetime
 
 import pytest
 from django.core.exceptions import ValidationError
-from django.test import override_settings
+from django.test import Client, override_settings
 from django.urls import reverse
 
 from accounts.models import Profile, User
@@ -1865,3 +1865,22 @@ def test_my_groups_page_renders_and_requires_login(client):
     assert b"My Visible Cartel" in groups                 # the group
     events = client.get(reverse("admissions:formation") + "?tab=events").content
     assert b"Annual Day of Assembly" in events            # the standalone event
+
+
+def test_cartels_page_shows_intro_and_coordinator():
+    """Tasks #373/#374: the Cartels home carries an intro description and the
+    Cartel Coordinator's contact."""
+    from core.models import StaffRole
+
+    coord = _user("coord@x.test", first="Casey", last="Coordinator")
+    coord.profile.public_email = "casey@example.com"
+    coord.profile.save()
+    role, _ = StaffRole.objects.get_or_create(
+        key=StaffRole.CARTEL_COORDINATOR, defaults={"name": "Cartel Coordinator"}
+    )
+    role.holders.add(coord)
+
+    body = Client().get(reverse("workgroups:kind_cartels")).content.decode()
+    assert "A cartel is a small working group" in body
+    assert "Coordinator" in body
+    assert "Casey" in body and "mailto:casey@example.com" in body

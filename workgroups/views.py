@@ -108,9 +108,17 @@ def workgroup_kind_list(request, kind):
     if kind == Workgroup.Kind.CARTEL:
         from accounts.permissions import is_lsp_member
         from cartels.permissions import is_cartel_coordinator
+        from core.models import StaffRole
 
         context["can_propose_cartel"] = is_lsp_member(request.user)
         context["is_cartel_coordinator"] = is_cartel_coordinator(request.user)
+        # Intro + Cartel Coordinator contact on the Cartels home (task #373/#374).
+        context["show_cartel_intro"] = True
+        role = StaffRole.objects.filter(key=StaffRole.CARTEL_COORDINATOR).first()
+        context["cartel_coordinators"] = (
+            list(role.holders.select_related("profile").order_by("first_name"))
+            if role else []
+        )
         if request.user.is_authenticated:
             mine_ids = set(
                 WorkgroupMembership.objects
