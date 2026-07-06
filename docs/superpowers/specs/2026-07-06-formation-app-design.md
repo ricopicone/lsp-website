@@ -50,16 +50,14 @@ review: **control-analysis tracking**, **external related activities**, and an
 - Its templates (`apply*.html`, `review_*.html`, `status.html`) and admissions
   emails/notifications/services.
 
-### Open decision (flag for spec review): the "My LSP" hub
+### Decided: the "My LSP" hub moves whole
 `formation()` is really the member's personal hub — its tabs are Formation,
 Tuition, Dues, Groups, Events, Works, Proposals, Profile, Suggestions — so it is
 broader than formation, though formation is its spine and `/formation/` is its
-URL. **Recommendation:** move the whole hub into `formation` (its identity is
-`/formation/`; it already composes the other tabs from `payments`, `workgroups`,
-etc. via imports, and that composition is unchanged by the move). The alternative
-— leaving the hub in `admissions` and having it include a Formation tab rendered
-from `formation` — creates a cross-app template dependency for little gain.
-Confirm the recommendation during spec review.
+URL. **Decision (Rico, spec review): move the entire hub into `formation`.** It
+already composes the other tabs from `payments`, `workgroups`, etc. via imports,
+and that composition is unchanged by the move; `/formation/` and the `formation`
+url-name are its identity.
 
 ## Migration strategy (no data loss)
 
