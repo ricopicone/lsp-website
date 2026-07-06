@@ -12,8 +12,8 @@ from django.utils import timezone
 
 from accounts.advisor import set_advisor
 from accounts.models import Profile, Source, User
-from admissions.advancement import step_label_for_member
-from admissions.models import Advancement, step_label_for
+from formation.advancement import step_label_for_member
+from formation.models import Advancement, step_label_for
 from payments.models import TuitionEnrollment, TuitionPeriod
 
 pytestmark = pytest.mark.django_db
@@ -76,7 +76,7 @@ def test_demande_opens_with_blank_statement(client, django_capture_on_commit_cal
     set_advisor(member, advisor, by=member)
     client.force_login(member)
     with django_capture_on_commit_callbacks(execute=True):
-        resp = client.post(reverse("admissions:advancement"), {"statement": ""})
+        resp = client.post(reverse("formation:advancement"), {"statement": ""})
     assert resp.status_code == 302
     assert Advancement.objects.filter(member=member, status="requested").exists()
 
@@ -86,7 +86,7 @@ def test_demande_opens_with_blank_statement(client, django_capture_on_commit_cal
 def test_formation_page_shows_tabs_for_candidate(client):
     member = _user("c@x.test", role=Profile.Role.CANDIDATE)
     client.force_login(member)
-    body = client.get(reverse("admissions:formation")).content
+    body = client.get(reverse("formation:formation")).content
     assert b"My LSP" in body
     # A candidate owes tuition + dues, so those tabs appear alongside the
     # always-on ones. Tabs are real, shareable ?tab= links.
@@ -111,7 +111,7 @@ def test_groups_tab_lists_current_and_past(client):
         start_date=date(2020, 1, 1), end_date=date(2021, 1, 1),
     )
     client.force_login(member)
-    body = client.get(reverse("admissions:formation") + "?tab=groups").content
+    body = client.get(reverse("formation:formation") + "?tab=groups").content
     assert b"Desire Cartel" in body
     assert b"Old WG" in body
     # New groups tab: Current / Past sections (from workgroups.membership).
@@ -176,7 +176,7 @@ def test_my_payments_shows_event_for_registration(client):
         amount=Decimal("50.00"), status=Payment.Status.SUCCEEDED,
     )
     client.force_login(member)
-    body = client.get(reverse("admissions:formation") + "?tab=tuition").content.decode()
+    body = client.get(reverse("formation:formation") + "?tab=tuition").content.decode()
     assert "Working with Masochism" in body
     assert reverse("events:detail", args=[event.slug]) in body
 
@@ -191,7 +191,7 @@ def test_trace_offers_add_work_button_via_works_flow(client):
         status=Advancement.Status.APPROVED,
     )
     client.force_login(member)
-    body = client.get(reverse("admissions:formation")).content.decode()
+    body = client.get(reverse("formation:formation")).content.decode()
     assert "Palimpsest" in body
     # No Work yet → a button into the Works flow, pre-picking the kind.
     assert "Add my Palimpsest" in body
@@ -210,7 +210,7 @@ def test_candidate_without_advancement_record_sees_palimpsest(client):
     )
     assert not Advancement.objects.filter(member=member).exists()
     client.force_login(member)
-    body = client.get(reverse("admissions:formation")).content.decode()
+    body = client.get(reverse("formation:formation")).content.decode()
     assert "Palimpsest" in body
     assert "Completed in AY 2022" in body
     assert f"{reverse('works:add')}?kind=palimpsest" in body
@@ -227,7 +227,7 @@ def test_palimpsest_work_appears_in_step(client):
     )
     work.authors.add(member)
     client.force_login(member)
-    body = client.get(reverse("admissions:formation")).content.decode()
+    body = client.get(reverse("formation:formation")).content.decode()
     assert "My Palimpsest Text" in body
     assert work.get_absolute_url() in body
 
@@ -235,14 +235,14 @@ def test_palimpsest_work_appears_in_step(client):
 def test_analyst_sees_both_completed_steps(client):
     member = _user("an-done@x.test", role=Profile.Role.ANALYST)
     client.force_login(member)
-    body = client.get(reverse("admissions:formation")).content
+    body = client.get(reverse("formation:formation")).content
     assert b"Palimpsest" in body and b"Passage" in body
 
 
 def test_scholar_step_uses_traversee_work_kind(client):
     member = _user("sch-done@x.test", role=Profile.Role.SCHOLAR)
     client.force_login(member)
-    body = client.get(reverse("admissions:formation")).content.decode()
+    body = client.get(reverse("formation:formation")).content.decode()
     assert "Traversée" in body
     assert "Palimpsest" in body
     # The scholar's passage step links to a Traversée Work, not a Passage one.
@@ -260,7 +260,7 @@ def test_add_work_view_preselects_kind_from_query(client):
 # ---- tuition four-year progress -------------------------------------------
 
 def test_tuition_progress_counts_paid_and_projects_to_four_years(current_period):
-    from admissions.views import _tuition_progress
+    from formation.views import _tuition_progress
     from payments.models import Payment, TuitionInstallment
 
     member = _user("prog@x.test", role=Profile.Role.CANDIDATE)
@@ -292,7 +292,7 @@ def test_tuition_progress_counts_paid_and_projects_to_four_years(current_period)
 def test_tuition_progress_counts_payments_without_installments(current_period):
     """The bug fix: a SUCCEEDED tuition payment with no TuitionInstallment
     (ledger/Stripe import, reconcile, offline) still counts toward progress."""
-    from admissions.views import _tuition_progress
+    from formation.views import _tuition_progress
     from payments.models import Payment
 
     member = _user("noinst@x.test", role=Profile.Role.CANDIDATE)
@@ -312,7 +312,7 @@ def test_tuition_progress_counts_payments_without_installments(current_period):
 
 
 def test_skipping_year_is_not_one_of_the_four(current_period):
-    from admissions.views import _tuition_progress
+    from formation.views import _tuition_progress
 
     member = _user("skip@x.test", role=Profile.Role.CANDIDATE)
     TuitionEnrollment.objects.create(
@@ -329,7 +329,7 @@ def test_dues_section_offers_payment_when_unpaid(client, current_period):
     member = _user("dues@x.test", role=Profile.Role.CANDIDATE)
     client.force_login(member)
     # Dues now have their own tab (split from Tuition).
-    body = client.get(reverse("admissions:formation") + "?tab=dues").content
+    body = client.get(reverse("formation:formation") + "?tab=dues").content
     assert b"Membership dues" in body
     # An obligated, unpaid member is offered a pay action.
     assert b"dues" in body.lower()

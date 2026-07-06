@@ -9,7 +9,7 @@ from django.test import RequestFactory
 from django.urls import reverse
 
 from accounts.models import Profile, User
-from admissions.tabs import available_tabs
+from formation.tabs import available_tabs
 
 pytestmark = pytest.mark.django_db
 
@@ -76,21 +76,21 @@ def test_avatar_menu_shows_my_lsp(client):
 
 def test_works_tab_renders(client):
     client.force_login(_user("w@x.test", role=Profile.Role.ANALYST))
-    body = client.get(reverse("admissions:formation") + "?tab=works").content
+    body = client.get(reverse("formation:formation") + "?tab=works").content
     assert b"Add a work" in body
 
 
 def test_unavailable_tab_falls_back_to_formation(client):
     """A non-member hand-typing ?tab=proposals gets the Formation tab, not a leak."""
     client.force_login(_user("ext2@x.test", role=Profile.Role.EXTERNAL))
-    resp = client.get(reverse("admissions:formation") + "?tab=proposals")
+    resp = client.get(reverse("formation:formation") + "?tab=proposals")
     assert resp.status_code == 200
     assert b"My Advisor" in resp.content
 
 
 def test_profile_tab_embeds_editor(client):
     client.force_login(_user("p@x.test", role=Profile.Role.ANALYST))
-    body = client.get(reverse("admissions:formation") + "?tab=profile").content
+    body = client.get(reverse("formation:formation") + "?tab=profile").content
     assert b'id="profile-form"' in body          # the editor form
     assert b'id="cropper-modal"' in body         # the headshot cropper
     assert b'name="next"' in body                # posts back to the tab
@@ -102,7 +102,7 @@ def test_profile_tab_embeds_editor(client):
 def test_profile_saved_redirect_honors_next():
     from accounts.views import _profile_saved_redirect
 
-    next_url = reverse("admissions:formation") + "?tab=profile"
+    next_url = reverse("formation:formation") + "?tab=profile"
     req = RequestFactory().post("/accounts/profile/", {"next": next_url})
     url = _profile_saved_redirect(req)
     assert url.startswith(next_url) and "saved=1" in url

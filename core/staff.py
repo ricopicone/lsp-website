@@ -98,7 +98,8 @@ def _panels_for(user) -> list[dict]:
             "url": reverse("program_admin_programs"),
         })
     if _can_meeting_of_analysts(user):
-        from admissions.models import Advancement, Application
+        from admissions.models import Application
+        from formation.models import Advancement
         open_count = (
             Application.objects.filter(status__in=Application.OPEN_STATUSES).count()
             + Advancement.objects.filter(
@@ -423,8 +424,9 @@ def board_governance(request):
     from django.db.models import Count
 
     from accounts.models import Profile
-    from admissions.models import Advancement, Application
+    from admissions.models import Application
     from committees.models import Committee
+    from formation.models import Advancement
 
     member_qs = Profile.objects.filter(
         role__in=Profile.DIRECTORY_ROLES, is_persona=False, user__is_active=True,
@@ -483,7 +485,8 @@ def meeting_of_analysts_admin(request):
     """
     if not _can_meeting_of_analysts(request.user):
         raise PermissionDenied
-    from admissions.models import Advancement, Application
+    from admissions.models import Application
+    from formation.models import Advancement
     return render(request, "core/staff/admin/meeting_of_analysts.html", {
         "open_applications": Application.objects.filter(
             status__in=Application.OPEN_STATUSES

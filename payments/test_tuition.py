@@ -142,7 +142,7 @@ def test_tuition_view_renders_for_in_training_student(client, current_period):
     """The tuition surface lives on the Formation hub's Tuition tab now."""
     u = _mk_candidate()
     client.force_login(u)
-    resp = client.get(reverse("admissions:formation") + "?tab=tuition")
+    resp = client.get(reverse("formation:formation") + "?tab=tuition")
     assert resp.status_code == 200
     # The Tuition tab shows the four-year progress + the annual decision form.
     # (Dues moved to its own tab.)
@@ -158,7 +158,7 @@ def test_tuition_endpoint_redirects_to_formation_hub(client, current_period):
     client.force_login(u)
     resp = client.get(reverse("tuition"))
     assert resp.status_code == 302
-    assert reverse("admissions:formation") in resp.url
+    assert reverse("formation:formation") in resp.url
 
 
 @pytest.mark.django_db
@@ -173,7 +173,7 @@ def test_tuition_tab_explains_when_role_not_in_training(client, current_period):
         status=Payment.Status.SUCCEEDED,
     )
     client.force_login(u)
-    resp = client.get(reverse("admissions:formation") + "?tab=tuition")
+    resp = client.get(reverse("formation:formation") + "?tab=tuition")
     assert resp.status_code == 200
     assert b"not in a tuition-paying role" in resp.content
 

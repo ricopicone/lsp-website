@@ -107,7 +107,7 @@ def mine(request):
     """Legacy ``/suggestions/mine/`` — now the My LSP hub's Suggestions tab."""
     from django.urls import reverse
 
-    return redirect(reverse("admissions:formation") + "?tab=suggestions")
+    return redirect(reverse("formation:formation") + "?tab=suggestions")
 
 
 @login_required

@@ -23,11 +23,6 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-# ``Advancement`` (and its ``step_label_for`` helper) moved to the ``formation``
-# app. Re-exported here for backward compatibility while the rest of the
-# formation domain (views/forms/emails/tests) is extracted in later phases.
-from formation.models import Advancement, step_label_for  # noqa: F401
-
 from .storage import cv_storage
 
 

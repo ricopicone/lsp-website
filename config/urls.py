@@ -37,7 +37,7 @@ urlpatterns = [
     path("about/", _content_views.about, name="about"),
     path("the-school/", _content_views.the_school, name="the_school"),
     # Public "Formation" content page. Lives under /about/ so it doesn't shadow
-    # the member-facing formation hub at /formation/ (admissions.urls).
+    # the member-facing formation hub at /formation/ (formation.urls).
     path("about/formation/", _content_views.page, {"slug": "formation"}, name="formation"),
     path("resources/", _content_views.page, {"slug": "resources"}, name="resources"),
     path("guides/", _content_views.guides_index_view, name="guides_index"),
@@ -127,6 +127,7 @@ urlpatterns = [
     path("working-groups/", include("workinggroups.urls")),
     path("committees/", include("committees.urls")),
     path("", include("admissions.urls")),
+    path("", include("formation.urls")),
     path("dues/", _payment_views.dues_pay, name="dues"),
     path("donate/", _payment_views.donate, name="donate"),
     path("tuition/", _payment_views.tuition_decision, name="tuition"),

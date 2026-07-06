@@ -105,7 +105,7 @@ def test_advisor_select_redirects_to_formation_hub(client):
     client.force_login(member)
     resp = client.get(reverse("advisor_select"))
     assert resp.status_code == 302
-    assert reverse("admissions:formation") in resp.url
+    assert reverse("formation:formation") in resp.url
 
 
 def test_non_in_training_sees_notice(client):
@@ -113,6 +113,6 @@ def test_non_in_training_sees_notice(client):
     formation — not an Advisor picker."""
     member = _u("v2@x.test", role=Profile.Role.ANALYST)
     client.force_login(member)
-    resp = client.get(reverse("admissions:formation"))
+    resp = client.get(reverse("formation:formation"))
     assert resp.status_code == 200
     assert b"chosen by members in formation" in resp.content

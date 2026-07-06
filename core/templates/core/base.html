@@ -250,14 +250,14 @@
             <li><hr class="border-base-300/60 my-1"></li>
 
             {# My LSP — the member hub; each tab is an indented deep link (my_lsp_tabs, the same list the hub page uses). #}
-            <li><a href="{% url 'admissions:formation' %}" class="font-medium">My LSP</a></li>
+            <li><a href="{% url 'formation:formation' %}" class="font-medium">My LSP</a></li>
             {% for key, label in my_lsp_tabs %}
-            <li><a href="{% url 'admissions:formation' %}?tab={{ key }}" class="pl-6 text-sm">{{ label }}</a></li>
+            <li><a href="{% url 'formation:formation' %}?tab={{ key }}" class="pl-6 text-sm">{{ label }}</a></li>
             {% endfor %}
 
             {% if user.profile.role == 'analyst' or user.profile.role == 'scholar' %}
               {% if user.advancements_advised.exists %}
-              <li><a href="{% url 'admissions:advise_queue' %}">Demandes You Advise</a></li>
+              <li><a href="{% url 'formation:advise_queue' %}">Demandes You Advise</a></li>
               {% endif %}
             {% endif %}
             {% if user.application %}

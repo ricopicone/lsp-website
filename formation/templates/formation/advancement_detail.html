@@ -2,7 +2,7 @@
 {% block title %}Demande — {{ adv.member.get_full_name|default:adv.member.email }}{% endblock %}
 {% block content %}
 <div class="space-y-6 max-w-3xl">
-  <nav class="text-sm"><a href="{% url 'admissions:advancement_queue' %}" class="link link-hover text-base-content/60">← Palimpsests &amp; passages</a></nav>
+  <nav class="text-sm"><a href="{% url 'formation:advancement_queue' %}" class="link link-hover text-base-content/60">← Palimpsests &amp; passages</a></nav>
 
   {% if messages %}{% for m in messages %}
   <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
@@ -24,7 +24,7 @@
       <div class="rounded-lg bg-base-200/40 p-3 text-sm whitespace-pre-wrap">{{ adv.statement }}</div>
     </div>
     {% if adv.palimpsest %}
-    <p class="text-sm"><span class="text-base-content/60">Written palimpsest:</span> <a href="{% url 'admissions:palimpsest_download' adv.pk %}" class="link link-primary">Download</a></p>
+    <p class="text-sm"><span class="text-base-content/60">Written palimpsest:</span> <a href="{% url 'formation:palimpsest_download' adv.pk %}" class="link link-primary">Download</a></p>
     {% endif %}
   </section>
 
@@ -46,7 +46,7 @@
   {% if adv.is_open %}
   <section class="rounded-xl border border-base-300 p-5 space-y-4">
     <h2 class="font-medium text-base-content">Decision <span class="text-xs font-normal text-base-content/50">(Meeting of the Analysts)</span></h2>
-    <form method="post" action="{% url 'admissions:advancement_decide' adv.pk %}" class="space-y-3">
+    <form method="post" action="{% url 'formation:advancement_decide' adv.pk %}" class="space-y-3">
       {% csrf_token %}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div class="space-y-1">

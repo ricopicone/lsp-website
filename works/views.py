@@ -263,4 +263,4 @@ def my_works(request):
     """Legacy ``/works/mine/`` — now the My LSP hub's Works tab."""
     from django.urls import reverse
 
-    return redirect(reverse("admissions:formation") + "?tab=works")
+    return redirect(reverse("formation:formation") + "?tab=works")

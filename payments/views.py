@@ -1315,7 +1315,7 @@ def _tuition_tab_url(**params) -> str:
     from django.urls import reverse
 
     query = {"tab": "tuition", **{k: v for k, v in params.items() if v}}
-    return reverse("admissions:formation") + "?" + urlencode(query)
+    return reverse("formation:formation") + "?" + urlencode(query)
 
 
 @login_required

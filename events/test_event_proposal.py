@@ -374,7 +374,7 @@ def test_save_allows_incomplete_then_manage_lists_it(client):
     p = EventProposal.objects.get(title="Draft Seminar")
     assert p.status == EventProposal.Status.SAVED and p.start_date is None
     # It shows on the My LSP hub's Proposals tab (the old /propose/mine/ redirects there).
-    page = client.get(reverse("admissions:formation") + "?tab=proposals")
+    page = client.get(reverse("formation:formation") + "?tab=proposals")
     assert page.status_code == 200 and b"Draft Seminar" in page.content
 
 

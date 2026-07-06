@@ -135,7 +135,7 @@ def test_mine_shows_only_own(client, settings):
     Suggestion.objects.create(submitted_by=b, title="B's", body="y")
     client.force_login(a)
     # /suggestions/mine/ now redirects into the My LSP hub's Suggestions tab.
-    resp = client.get(reverse("admissions:formation") + "?tab=suggestions")
+    resp = client.get(reverse("formation:formation") + "?tab=suggestions")
     assert b"A&#x27;s" in resp.content or b"A's" in resp.content
     assert b"B's" not in resp.content and b"B&#x27;s" not in resp.content
 

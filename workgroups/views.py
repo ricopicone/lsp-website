@@ -76,7 +76,7 @@ def workgroup_list(request):
 def my_groups_view(request):
     """Legacy ``/groups/mine/`` — the member's groups + events now live on the
     My LSP hub's Groups / Events tabs. Kept as a redirect so old links resolve."""
-    return redirect(reverse("admissions:formation") + "?tab=groups")
+    return redirect(reverse("formation:formation") + "?tab=groups")
 
 
 def _group_by_academic_year(groups):

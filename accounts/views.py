@@ -537,14 +537,14 @@ def set_timezone_from_browser(request):
 @login_required
 def advisor_select(request):
     """Self-service Advisor choice. The Advisor form lives on the Formation hub
-    (``admissions:formation``); this endpoint handles its POST and otherwise
+    (``formation:formation``); this endpoint handles its POST and otherwise
     redirects there — there's no standalone Advisor page anymore."""
     from django.contrib import messages
 
     from .advisor import set_advisor
     from .forms import AdvisorSelectForm
 
-    formation_url = reverse("admissions:formation") + "?tab=formation"
+    formation_url = reverse("formation:formation") + "?tab=formation"
     profile = request.user.profile
     if request.method == "POST" and profile.needs_advisor:
         form = AdvisorSelectForm(request.POST, advisee=request.user)

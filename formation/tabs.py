@@ -1,5 +1,5 @@
 """The My LSP hub's tab list — the single source of truth shared by the hub
-view (``admissions.views.formation``) and the avatar-menu context processor, so
+view (``formation.views.formation``) and the avatar-menu context processor, so
 the menu and the in-page tab bar agree on which tabs a member has.
 
 Kept deliberately cheap: it runs on every page via the context processor, so it

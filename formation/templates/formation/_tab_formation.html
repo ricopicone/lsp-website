@@ -50,7 +50,7 @@
       {# Open a new demande #}
       {% if can_open %}
       {% if advisor %}
-      <form method="post" action="{% url 'admissions:advancement' %}" class="space-y-3 rounded-lg border border-base-300 bg-base-200/40 p-4">
+      <form method="post" action="{% url 'formation:advancement' %}" class="space-y-3 rounded-lg border border-base-300 bg-base-200/40 p-4">
         {% csrf_token %}
         <p class="text-sm text-base-content/70">
           Request to present my <strong>{{ step_label }}</strong> at the next Days of
@@ -120,7 +120,7 @@
           </div>
 
           {% if a and a.is_open %}
-          <form method="post" action="{% url 'admissions:advancement_withdraw' a.pk %}"
+          <form method="post" action="{% url 'formation:advancement_withdraw' a.pk %}"
                 onsubmit="return confirm('Withdraw this demande?');">
             {% csrf_token %}
             <button class="btn btn-ghost btn-xs text-error">Withdraw demande</button>

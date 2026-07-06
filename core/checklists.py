@@ -170,25 +170,25 @@ def _pe_public_url(request):
 
 
 def _formation_url(request):
-    return _rev("admissions:formation")
+    return _rev("formation:formation")
 
 
 def _formation_advisor_url(request):
-    url = _rev("admissions:formation")
+    url = _rev("formation:formation")
     return f"{url}#advisor" if url else None
 
 
 def _formation_steps_url(request):
-    url = _rev("admissions:formation")
+    url = _rev("formation:formation")
     return f"{url}#steps" if url else None
 
 
 def _tuition_tab_url(request):
-    return _rev("admissions:formation", query="tab=tuition")
+    return _rev("formation:formation", query="tab=tuition")
 
 
 def _tuition_decision_url(request):
-    url = _rev("admissions:formation", query="tab=tuition")
+    url = _rev("formation:formation", query="tab=tuition")
     return f"{url}#decision" if url else None
 
 

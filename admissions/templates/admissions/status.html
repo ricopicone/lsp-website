@@ -43,7 +43,7 @@
     <div class="rounded-lg bg-success/10 border border-success/30 p-3 text-sm space-y-2">
       <p class="font-medium text-base-content">Welcome — you've been admitted as a Precandidate.</p>
       <p class="text-base-content/70">Your next step is to choose an Advisor.</p>
-      <a href="{% url 'admissions:formation' %}?tab=formation" class="btn btn-primary btn-sm">Choose your Advisor</a>
+      <a href="{% url 'formation:formation' %}?tab=formation" class="btn btn-primary btn-sm">Choose your Advisor</a>
     </div>
     {% elif s == 'rejected' %}
     <p class="text-sm text-base-content/70">After review, we're not able to offer admission at this time. Thank you for applying.</p>

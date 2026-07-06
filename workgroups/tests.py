@@ -854,7 +854,7 @@ def test_my_groups_page_shows_calendar_subscribe(client):
     )
     client.force_login(u)
     # The calendar-subscribe box now lives on the My LSP hub's Events tab.
-    resp = client.get(reverse("admissions:formation") + "?tab=events")
+    resp = client.get(reverse("formation:formation") + "?tab=events")
     assert b"My Calendar" in resp.content
     assert b"webcal://" in resp.content                   # Apple Calendar link
     assert b"calendar.google.com" in resp.content         # Google Calendar option
@@ -1861,9 +1861,9 @@ def test_my_groups_page_renders_and_requires_login(client):
     # The legacy /groups/mine/ now redirects into the My LSP hub's Groups tab.
     r = client.get(legacy)
     assert r.status_code == 302 and "tab=groups" in r.url
-    groups = client.get(reverse("admissions:formation") + "?tab=groups").content
+    groups = client.get(reverse("formation:formation") + "?tab=groups").content
     assert b"My Visible Cartel" in groups                 # the group
-    events = client.get(reverse("admissions:formation") + "?tab=events").content
+    events = client.get(reverse("formation:formation") + "?tab=events").content
     assert b"Annual Day of Assembly" in events            # the standalone event
 
 

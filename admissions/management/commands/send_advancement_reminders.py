@@ -16,8 +16,8 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from admissions import notifications as notify_admissions
-from admissions.models import Advancement
+from formation import notifications as notify_formation
+from formation.models import Advancement
 
 
 class Command(BaseCommand):
@@ -51,7 +51,7 @@ class Command(BaseCommand):
                 self.stdout.write(f"[dry-run] would remind {who} re {member}")
                 continue
             try:
-                notify_admissions.advancement_reminder(adv)
+                notify_formation.advancement_reminder(adv)
             except Exception:
                 self.stderr.write(f"failed to remind {who} re {member}")
                 continue

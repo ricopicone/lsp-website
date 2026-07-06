@@ -114,7 +114,7 @@ TEMPLATES = [
                 "core.context_processors.page_artwork",
                 "notifications.context_processors.bell",
                 "suggestions.context_processors.widget",
-                "admissions.context_processors.my_lsp_tabs",
+                "formation.context_processors.my_lsp_tabs",
             ],
         },
     },

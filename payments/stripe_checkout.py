@@ -180,6 +180,6 @@ def create_tuition_session(payment: Payment) -> stripe.checkout.Session:
         payment=payment,
         product_name=f"LSP tuition — {period_name}",
         product_description=description,
-        success_path=reverse("admissions:formation") + "?tab=tuition&stripe=success",
-        cancel_path=reverse("admissions:formation") + "?tab=tuition&stripe=cancelled",
+        success_path=reverse("formation:formation") + "?tab=tuition&stripe=success",
+        cancel_path=reverse("formation:formation") + "?tab=tuition&stripe=cancelled",
     )

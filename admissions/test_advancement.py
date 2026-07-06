@@ -12,14 +12,14 @@ from django.utils import timezone
 
 from accounts.advisor import set_advisor
 from accounts.models import MembershipTenure, Profile, User
-from admissions.advancement import (
+from formation.advancement import (
     can_open_advancement,
     decide_advancement,
     kind_for,
     open_advancement,
     present_advancement,
 )
-from admissions.models import Advancement
+from formation.models import Advancement
 
 pytestmark = pytest.mark.django_db
 
@@ -117,11 +117,11 @@ def test_decline_leaves_role(django_capture_on_commit_callbacks):
 def test_member_must_choose_advisor_first(client):
     member = _precandidate()  # no advisor
     client.force_login(member)
-    resp = client.post(reverse("admissions:advancement"), {"statement": "ready"})
+    resp = client.post(reverse("formation:advancement"), {"statement": "ready"})
     assert resp.status_code == 302
     # Bounced back to the Formation hub (where the Advisor picker lives) — no
     # demande opened until an Advisor is chosen.
-    assert reverse("admissions:formation") in resp.url
+    assert reverse("formation:formation") in resp.url
     assert not Advancement.objects.filter(member=member).exists()
 
 
@@ -130,7 +130,7 @@ def test_member_opens_demande_via_view(client, django_capture_on_commit_callback
     member = _precandidate(advisor=advisor)
     client.force_login(member)
     with django_capture_on_commit_callbacks(execute=True):
-        resp = client.post(reverse("admissions:advancement"), {"statement": "I am ready."})
+        resp = client.post(reverse("formation:advancement"), {"statement": "I am ready."})
     assert resp.status_code == 302
     assert Advancement.objects.filter(member=member, status="requested").exists()
 
@@ -140,7 +140,7 @@ def test_advisor_presents_via_view(client):
     member = _precandidate(advisor=advisor)
     adv = open_advancement(member, statement="ready")
     client.force_login(advisor)
-    resp = client.post(reverse("admissions:advise_present", args=[adv.pk]), {
+    resp = client.post(reverse("formation:advise_present", args=[adv.pk]), {
         f"a{adv.pk}-recommendation": "I recommend them.",
         f"a{adv.pk}-presented_at": "",
     })
@@ -155,9 +155,9 @@ def test_advancement_review_gated(client):
     open_advancement(member, statement="ready")
     # Non-analyst can't reach the Meeting's review surface.
     client.force_login(_user("nobody@x.test", role=Profile.Role.MEMBER))
-    assert client.get(reverse("admissions:advancement_queue")).status_code == 403
+    assert client.get(reverse("formation:advancement_queue")).status_code == 403
     client.force_login(_analyst("rev@x.test"))
-    assert client.get(reverse("admissions:advancement_queue")).status_code == 200
+    assert client.get(reverse("formation:advancement_queue")).status_code == 200
 
 
 def test_decide_via_view_approves(client, django_capture_on_commit_callbacks):
@@ -167,7 +167,7 @@ def test_decide_via_view_approves(client, django_capture_on_commit_callbacks):
     present_advancement(adv, recommendation="yes", by=advisor)
     client.force_login(_analyst("rev2@x.test"))
     with django_capture_on_commit_callbacks(execute=True):
-        resp = client.post(reverse("admissions:advancement_decide", args=[adv.pk]), {
+        resp = client.post(reverse("formation:advancement_decide", args=[adv.pk]), {
             "decision": "approve", "effective_ay": "2026",
         })
     assert resp.status_code == 302

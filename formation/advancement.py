@@ -20,7 +20,7 @@ from accounts.advisor import current_advisor
 from accounts.membership import current_academic_year_start, record_membership_change
 from accounts.models import Profile
 
-from . import notifications as notify_admissions
+from . import notifications as notify_formation
 from .models import Advancement
 
 
@@ -71,7 +71,7 @@ def open_advancement(member, *, statement, palimpsest=None):
         status=Advancement.Status.REQUESTED,
         requested_at=timezone.now(),
     )
-    notify_admissions.advancement_opened(advancement)
+    notify_formation.advancement_opened(advancement)
     return advancement
 
 
@@ -84,7 +84,7 @@ def present_advancement(advancement, *, recommendation, presented_on=None, by=No
     if advancement.status == Advancement.Status.REQUESTED:
         advancement.status = Advancement.Status.PRESENTED
     advancement.save(update_fields=["recommendation", "presented_at", "status", "updated_at"])
-    notify_admissions.advancement_presented(advancement)
+    notify_formation.advancement_presented(advancement)
     return advancement
 
 
@@ -118,7 +118,7 @@ def decide_advancement(advancement, *, approve, by, effective_ay=None, note=""):
     advancement.save(
         update_fields=["status", "decided_at", "decided_by", "decision_note", "updated_at"]
     )
-    notify_admissions.advancement_decision(advancement)
+    notify_formation.advancement_decision(advancement)
     return advancement
 
 

@@ -659,7 +659,7 @@ def my_proposals(request):
     """Legacy ``/propose/mine/`` — now the My LSP hub's Proposals tab."""
     from django.urls import reverse
 
-    return redirect(reverse("admissions:formation") + "?tab=proposals")
+    return redirect(reverse("formation:formation") + "?tab=proposals")
 
 
 @login_required

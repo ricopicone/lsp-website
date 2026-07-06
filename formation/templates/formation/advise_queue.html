@@ -30,11 +30,11 @@
       <div class="rounded-lg bg-base-200/40 p-3 text-sm whitespace-pre-wrap">{{ a.statement }}</div>
     </div>
     {% if a.palimpsest %}
-    <p class="text-sm"><span class="text-base-content/60">Palimpsest:</span> <a href="{% url 'admissions:palimpsest_download' a.pk %}" class="link link-primary">Download</a></p>
+    <p class="text-sm"><span class="text-base-content/60">Palimpsest:</span> <a href="{% url 'formation:palimpsest_download' a.pk %}" class="link link-primary">Download</a></p>
     {% endif %}
 
     {% if a.is_open %}
-    <form method="post" action="{% url 'admissions:advise_present' a.pk %}" class="space-y-3 border-t border-base-300/50 pt-3">
+    <form method="post" action="{% url 'formation:advise_present' a.pk %}" class="space-y-3 border-t border-base-300/50 pt-3">
       {% csrf_token %}
       <div class="space-y-1">
         <label class="block text-sm text-base-content/70">Your recommendation to the Meeting</label>
