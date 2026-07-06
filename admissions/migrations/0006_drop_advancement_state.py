@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
     """
 
     dependencies = [
-        ("admissions", "0002_advancement"),
+        ("admissions", "0005_admissionssettings_invitation_mode_and_more"),
         ("formation", "0001_initial"),
     ]
 
