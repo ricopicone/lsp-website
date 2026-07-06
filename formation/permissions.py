@@ -25,6 +25,8 @@ def current_advisees(advisor):
 def can_view_advisee(viewer, advisee) -> bool:
     if not getattr(viewer, "is_authenticated", False):
         return False
+    if viewer.pk == advisee.pk:
+        return False
     if viewer.is_staff:
         return True
     return current_advisor(advisee) == viewer

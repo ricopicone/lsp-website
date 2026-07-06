@@ -46,3 +46,17 @@ def test_advisee_cannot_see_notes_about_self(client):
     # The advisee's own Formation hub must never contain advisor notes.
     body = client.get("/formation/", SERVER_NAME="localhost").content.decode()
     assert "SECRET-NOTE" not in body
+
+
+@pytest.mark.django_db
+def test_staff_advisee_cannot_view_own_advisee_detail(client):
+    advisor = User.objects.create_user(email="adv-staff@x.test")
+    advisee = _advisee_of(advisor)
+    advisee.is_staff = True
+    advisee.save()
+    AdvisorNote.objects.create(advisee=advisee, author=advisor, body="SECRET-STAFF-NOTE")
+    client.force_login(advisee)
+    resp = client.get(
+        reverse("formation:advisee_detail", args=[advisee.pk]), SERVER_NAME="localhost"
+    )
+    assert resp.status_code in (403, 404)
