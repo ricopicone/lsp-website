@@ -38,16 +38,22 @@ def aphorism(request):
 
 SITE_THEMES = ("modern", "wix")
 SITE_THEME_COOKIE = "lsp-site-theme"
+# Default skin for visitors with no cookie set. The Board's website review
+# (task #349) chose the Classic look — the ``wix`` artwork/serif/silk skin from
+# task #259 — as the site's default; ``modern`` remains available via the footer
+# switch.
+DEFAULT_SITE_THEME = "wix"
 
 
 def site_theme(request):
-    """The active site-theme skin: ``modern`` (default) or ``wix`` (the opt-in
-    artwork/serif/all-caps look from task #259). Read from a cookie set by
-    ``core:set_site_theme``; rendered onto ``<html data-site-theme>`` and used by
-    the hero partial to decide between an artwork band and a plain header."""
-    value = request.COOKIES.get(SITE_THEME_COOKIE, "modern")
+    """The active site-theme skin: ``wix`` (Classic — the artwork/serif/all-caps
+    look from task #259, now the default) or ``modern`` (the opt-out plain skin).
+    Read from a cookie set by ``core:set_site_theme``; rendered onto
+    ``<html data-site-theme>`` and used by the hero partial to decide between an
+    artwork band and a plain header."""
+    value = request.COOKIES.get(SITE_THEME_COOKIE, DEFAULT_SITE_THEME)
     if value not in SITE_THEMES:
-        value = "modern"
+        value = DEFAULT_SITE_THEME
     return {"site_theme": value}
 
 

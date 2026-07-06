@@ -15,7 +15,7 @@ from django.utils.dateparse import parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from core.context_processors import SITE_THEME_COOKIE, SITE_THEMES
+from core.context_processors import DEFAULT_SITE_THEME, SITE_THEME_COOKIE, SITE_THEMES
 from events.models import Event, Session
 
 
@@ -25,7 +25,7 @@ def set_site_theme(request, theme):
     shareable link (e.g. ``/site-theme/wix/?next=/about/``) so the Board can
     preview either look. See core.context_processors.site_theme."""
     if theme not in SITE_THEMES:
-        theme = "modern"
+        theme = DEFAULT_SITE_THEME
     nxt = request.GET.get("next") or request.META.get("HTTP_REFERER") or "/"
     if not url_has_allowed_host_and_scheme(
         nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
