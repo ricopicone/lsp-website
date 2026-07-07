@@ -71,7 +71,15 @@
                width="243" height="243"
                class="size-full object-contain p-1 transition-transform duration-200 group-hover:scale-105">
         </span>
-        <span class="hidden sm:inline">Lacanian School of Psychoanalysis</span>
+        {% comment %}
+          Wordmark: locked to a fixed two-line wrap so it never spills to three lines
+          as the viewport narrows (task #386). Only shown from lg where there's room for
+          two lines alongside the nav; below lg the crest stands alone.
+        {% endcomment %}
+        <span class="hidden lg:flex flex-col leading-[1.12] whitespace-nowrap">
+          <span>Lacanian School of</span>
+          <span>Psychoanalysis</span>
+        </span>
       </a>
 
       {# Center: grouped page links (hidden on mobile; mobile uses the hamburger) #}
