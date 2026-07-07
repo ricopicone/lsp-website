@@ -63,3 +63,14 @@ def test_index_has_dues_tuition_donate_links(client):
     assert reverse("dues") in body
     assert reverse("donate") in body
     assert "/formation/?tab=tuition" in body
+
+
+@pytest.mark.django_db
+def test_avatar_menu_shows_payments_site_wide(client):
+    """The account/avatar menu links to Payments on every page (checked on the
+    landing page, not the Payments page itself, so it verifies the global menu)."""
+    u = User.objects.create_user(email="menu@x.test", password="x")
+    client.force_login(u)
+    body = client.get("/", SERVER_NAME="localhost").content.decode()
+    assert reverse("payments:index") in body
+    assert "Payments" in body
