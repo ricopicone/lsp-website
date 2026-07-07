@@ -6,7 +6,8 @@
 {% block content %}
 <div class="space-y-8">
   <header class="flex flex-wrap items-center justify-between gap-4">
-    <p class="text-sm">
+    <p class="text-sm flex flex-wrap gap-x-4">
+      {% if is_learning_kind %}<a href="{% url 'learning' %}" class="link link-hover text-base-content/60">← Learning</a>{% endif %}
       <a href="{% url 'workgroups:list' %}" class="link link-hover text-base-content/60">← Groups</a>
     </p>
     <div class="flex flex-wrap gap-2 shrink-0">

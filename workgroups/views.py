@@ -137,6 +137,9 @@ def workgroup_kind_list(request, kind):
         "kind_label_plural": f"{label}s",
         "groups": groups,
         "grouped_groups": _group_by_academic_year(groups),
+        # Learning kinds (seminars/cartels/reading groups) are reached from the
+        # Learning nav tab, so they also get a "← Learning" back link (#385).
+        "is_learning_kind": kind in LEARNING_KINDS,
     }
     # Cartels get formation entry points + a "My cartels" section here
     # (the unified Cartels home).

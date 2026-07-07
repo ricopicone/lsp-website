@@ -367,21 +367,8 @@
       <div class="text-xs text-base-content/60 flex flex-wrap gap-x-6 gap-y-2 items-center justify-between pt-4 border-t border-base-300/40">
         <span>© {% now "Y" %} Lacanian School of Psychoanalysis</span>
         <div class="flex items-center gap-4">
-          {% comment %}Site-theme switch (task #259): Classic (the default,
-          artwork/serif look) vs Modern (the plain skin). Current is bold, the
-          other a link that sets the cookie and returns here.{% endcomment %}
-          <span class="inline-flex items-center gap-1.5" title="Page style">
-            <span class="text-base-content/45">Style:</span>
-            {% if site_theme == "wix" %}
-            <a href="{% url 'core:set_site_theme' 'modern' %}?next={{ request.path|urlencode }}" class="hover:text-primary">Modern</a>
-            <span class="text-base-content/30">·</span>
-            <span class="font-medium text-base-content/80">Classic</span>
-            {% else %}
-            <span class="font-medium text-base-content/80">Modern</span>
-            <span class="text-base-content/30">·</span>
-            <a href="{% url 'core:set_site_theme' 'wix' %}?next={{ request.path|urlencode }}" class="hover:text-primary">Classic</a>
-            {% endif %}
-          </span>
+          {% comment %}Site-theme switch removed; the site is Classic for now
+          (the set_site_theme route stays for a future re-introduction).{% endcomment %}
           {% if show_suggestion_widget %}<a href="{% url 'suggestions:suggest' %}" class="hover:text-primary">Suggest a change</a>{% endif %}
           <a href="mailto:website@lacanschool.org" class="hover:text-primary">website@lacanschool.org</a>
         </div>

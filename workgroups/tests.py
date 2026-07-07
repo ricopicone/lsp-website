@@ -1950,3 +1950,13 @@ def test_cartels_page_shows_intro_and_coordinator():
     assert "A cartel is a small working group" in body
     assert "Coordinator" in body
     assert "Casey" in body and "mailto:casey@example.com" in body
+
+
+def test_learning_kinds_get_a_learning_back_link(client):
+    """Seminars/Cartels/Reading Groups are reached from the Learning nav tab, so
+    they show a '← Learning' back link alongside '← Groups'; Committees and
+    Working Groups (under Persons) show only '← Groups'. (task #385)"""
+    sem = client.get("/groups/seminars/").content.decode()
+    assert "← Learning" in sem and "← Groups" in sem
+    com = client.get("/groups/committees/").content.decode()
+    assert "← Learning" not in com and "← Groups" in com
