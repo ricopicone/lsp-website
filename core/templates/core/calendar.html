@@ -36,6 +36,12 @@
     font-family: Georgia, "Iowan Old Style", serif;
     font-weight: 500;
   }
+  /* Payment deadlines (#355) read distinctly from sessions. */
+  .fc-event.lsp-cal-deadline {
+    --fc-event-bg-color: var(--color-warning);
+    --fc-event-border-color: var(--color-warning);
+    --fc-event-text-color: var(--color-warning-content);
+  }
 </style>
 {% endblock %}
 

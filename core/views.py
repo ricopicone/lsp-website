@@ -206,7 +206,43 @@ def calendar_events_json(request):
         }
         for s in qs
     ]
+    # Payment deadlines (dues + tuition decision) — members only (#355).
+    if request.user.is_authenticated:
+        payload.extend(_payment_deadline_events(start, end))
     return JsonResponse(payload, safe=False)
+
+
+def _payment_deadline_events(start, end):
+    """All-day dues/tuition deadline events for the member calendar (#355).
+
+    School-wide deadlines (same for everyone): each ``DuesPeriod.due_date`` and
+    ``TuitionPeriod.decision_due_date`` in the requested window. Each links to the
+    member Payments hub. Gated to signed-in members by the caller.
+    """
+    from payments.models import DuesPeriod, TuitionPeriod
+
+    specs = [
+        (DuesPeriod, "due_date", "Membership dues due", "lsp-cal-deadline"),
+        (TuitionPeriod, "decision_due_date", "Tuition decision due", "lsp-cal-deadline"),
+    ]
+    events = []
+    for model, field, title, css in specs:
+        qs = model.objects.all()
+        if start:
+            qs = qs.filter(**{f"{field}__gte": start.date()})
+        if end:
+            qs = qs.filter(**{f"{field}__lte": end.date()})
+        for period in qs:
+            deadline = getattr(period, field)
+            events.append({
+                "id": f"{field}-{period.pk}",
+                "title": title,
+                "start": deadline.isoformat(),
+                "allDay": True,
+                "url": reverse("payments:index"),
+                "className": css,
+            })
+    return events
 
 
 def _parse(value: str) -> datetime | None:

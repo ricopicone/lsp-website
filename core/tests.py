@@ -134,6 +134,61 @@ def test_events_json_accepts_bare_dates(client, event_with_sessions):
     assert len(response.json()) == 1
 
 
+# ---- Payment deadlines on the calendar (#355) --------------------------
+
+
+@pytest.fixture
+def payment_periods(db):
+    from payments.models import DuesPeriod, TuitionPeriod
+
+    DuesPeriod.objects.create(
+        name="AY 2026-2027 dues", start_date=date(2026, 9, 1),
+        due_date=date(2026, 9, 30), end_date=date(2027, 8, 31),
+        dues_amount_pre_candidate=50, dues_amount_candidate=100,
+        dues_amount_analyst=150,
+    )
+    TuitionPeriod.objects.create(
+        name="AY 2026-2027 tuition", start_date=date(2026, 9, 1),
+        decision_due_date=date(2026, 9, 15), end_date=date(2027, 8, 31),
+        tuition_amount=2500,
+    )
+
+
+def test_calendar_shows_payment_deadlines_to_members(client, regular_user, payment_periods):
+    client.force_login(regular_user)
+    resp = client.get(
+        reverse("core:calendar_events"),
+        {"start": "2026-09-01", "end": "2026-10-01"},
+    )
+    events = {e["title"]: e for e in resp.json()}
+    assert "Membership dues due" in events
+    assert "Tuition decision due" in events
+    dues = events["Membership dues due"]
+    assert dues["allDay"] is True
+    assert dues["start"].startswith("2026-09-30")
+    assert dues["url"] == reverse("payments:index")
+
+
+def test_calendar_hides_payment_deadlines_from_anonymous(client, payment_periods):
+    resp = client.get(
+        reverse("core:calendar_events"),
+        {"start": "2026-09-01", "end": "2026-10-01"},
+    )
+    titles = [e["title"] for e in resp.json()]
+    assert "Membership dues due" not in titles
+    assert "Tuition decision due" not in titles
+
+
+def test_calendar_payment_deadlines_respect_window(client, regular_user, payment_periods):
+    client.force_login(regular_user)
+    resp = client.get(
+        reverse("core:calendar_events"),
+        {"start": "2026-11-01", "end": "2026-11-30"},
+    )
+    titles = [e["title"] for e in resp.json()]
+    assert "Membership dues due" not in titles  # Sept deadline, outside Nov window
+
+
 # ---- Landing page ------------------------------------------------------
 
 
