@@ -1,0 +1,85 @@
+{% extends "core/base.html" %}
+{% block title %}Payments — LSP{% endblock %}
+
+{% block page_hero %}{% include "core/_page_hero.html" with title="Payments" %}{% endblock %}
+
+{% block content %}
+<div class="space-y-10">
+
+  {# ===================== What's due ===================== #}
+  <section class="space-y-3">
+    {% if dues_obligated or owes_tuition %}
+    <h2 class="font-serif text-xl text-base-content">What's due</h2>
+    <ul class="space-y-2">
+      {% if dues_obligated %}
+      <li class="flex items-center justify-between gap-4 rounded-lg border border-base-300 bg-base-200/40 px-4 py-3">
+        <span class="text-base-content">Membership dues for this period</span>
+        <a href="{% url 'dues' %}" class="btn btn-primary btn-sm">Pay dues</a>
+      </li>
+      {% endif %}
+      {% if owes_tuition %}
+      <li class="flex items-center justify-between gap-4 rounded-lg border border-base-300 bg-base-200/40 px-4 py-3">
+        <span class="text-base-content">Tuition for this academic year</span>
+        <a href="{% url 'formation:formation' %}?tab=tuition" class="btn btn-primary btn-sm">Manage tuition</a>
+      </li>
+      {% endif %}
+    </ul>
+    {% else %}
+    <p class="text-base-content/70">You're all paid up. Nothing is due right now.</p>
+    {% endif %}
+  </section>
+
+  {# ===================== Where to go ===================== #}
+  <section class="space-y-4">
+    <h2 class="font-serif text-xl text-base-content">Payment activities</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <a href="{% url 'dues' %}" class="block rounded-lg border border-base-300 bg-base-100 p-4 hover:border-primary transition-colors">
+        <div class="font-medium text-base-content">Dues</div>
+        <p class="text-sm text-base-content/70 mt-1">Pay your annual membership dues.</p>
+      </a>
+      <a href="{% url 'formation:formation' %}?tab=tuition" class="block rounded-lg border border-base-300 bg-base-100 p-4 hover:border-primary transition-colors">
+        <div class="font-medium text-base-content">Tuition</div>
+        <p class="text-sm text-base-content/70 mt-1">Your tuition decision, plan, and payments.</p>
+      </a>
+      <a href="{% url 'donate' %}" class="block rounded-lg border border-base-300 bg-base-100 p-4 hover:border-primary transition-colors">
+        <div class="font-medium text-base-content">Donate</div>
+        <p class="text-sm text-base-content/70 mt-1">Make a gift to support the School.</p>
+      </a>
+    </div>
+  </section>
+
+  {# ===================== History + receipts ===================== #}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Your payment history</h2>
+    {% if payments %}
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Date</th><th>Type</th><th>Amount</th><th>Status</th><th>Receipt</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in payments %}
+          <tr>
+            <td class="whitespace-nowrap text-base-content/80">{{ p.created_at|date:"M j, Y" }}</td>
+            <td class="text-base-content/80">{{ p.get_payment_type_display }}</td>
+            <td class="whitespace-nowrap text-base-content">${{ p.amount }}</td>
+            <td class="text-base-content/70">{{ p.get_status_display }}</td>
+            <td>
+              {% if p.receipt %}
+              <a href="{% url 'payments:receipt' p.pk %}" class="link link-primary">{{ p.receipt.receipt_number }}</a>
+              {% else %}<span class="text-base-content/40">—</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-base-content/70">No payments yet.</p>
+    {% endif %}
+  </section>
+
+</div>
+{% endblock %}

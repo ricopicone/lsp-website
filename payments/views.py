@@ -14,7 +14,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -1298,6 +1298,28 @@ def receipt_download(request, payment_id: int):
     resp = HttpResponse(body, content_type="text/plain; charset=utf-8")
     resp["Content-Disposition"] = f'attachment; filename="{receipt.receipt_number}.txt"'
     return resp
+
+
+@login_required
+def payments_index(request):
+    """The member's central Payments page: what's due, links out to dues / tuition
+    / donate, and their own payment history with downloadable receipts. Composes
+    existing surfaces, does not reimplement them."""
+    from payments.dues import is_dues_obligated
+
+    user = request.user
+    profile = user.profile
+    payments = (
+        Payment.objects.filter(Q(user=user) | Q(email__iexact=user.email))
+        .select_related("receipt")
+        .order_by("-created_at")
+    )
+    return render(request, "payments/index.html", {
+        "payments": payments,
+        "dues_obligated": is_dues_obligated(user),
+        "owes_tuition": profile.owes_tuition,
+        "tuition_enrollment": profile.current_tuition_enrollment(),
+    })
 
 
 def _handle_charge_refunded(charge: dict) -> None:
