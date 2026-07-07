@@ -1,9 +1,9 @@
 ---
 title: Formation
-summary: Becoming a Lacanian analyst, or undertaking scholarly formation, at the Lacanian School of Psychoanalysis.
+summary: Becoming a Lacanian analyst—or undertaking scholarly formation—at the Lacanian School of Psychoanalysis.
 ---
 
-Becoming a Lacanian analyst, or undertaking scholarly formation, at the Lacanian
+Becoming a Lacanian analyst—or undertaking scholarly formation—at the Lacanian
 School of Psychoanalysis is a matter for careful consideration.
 
 Formation at the School is, before anything else, grounded in your experience of
@@ -14,7 +14,7 @@ your desire.
 
 ## Two tracks
 
-**Analyst Formation** is for those with a clinical background, holding or pursuing
+**Analyst Formation** is for those with a clinical background—holding or pursuing
 an advanced degree in psychology, psychiatry, counseling, or social work, and
 licensed or eligible to practice psychoanalysis under the law of their state or
 country. It is also open to academics with a terminal degree who are eligible to
@@ -30,7 +30,7 @@ in Freudian and Lacanian psychoanalysis.
 
 Formation is a substantial commitment of time, work, and resources. Tuition is
 **$2,500 annually for four years**. Beyond tuition, candidates carry the cost of
-their own personal analysis and of control (supervisory) work, a **minimum of**
+their own personal analysis and of control (supervisory) work—a **minimum of**
 four years of weekly meetings with one analyst, and an additional two years with a
 second analyst. For those without a prior clinical degree, control involves
 another two years with a third analyst. The School takes financial hardship into
@@ -65,7 +65,7 @@ The formal guidelines and the texts that found this work are kept in the
 
 - Analyst Formation Guidelines
 - Scholar Formation Guidelines
-- Scholar Formation, Founding Text
+- Scholar Formation — Founding Text
 - the School's founding papers
 
 ## Equity
