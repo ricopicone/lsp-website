@@ -15,8 +15,9 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
 from django.db.models import Count, Sum
-from django.http import HttpResponse, HttpResponseBadRequest
+from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -1276,6 +1277,27 @@ def payment_thanks(request, payment_id: int):
         pk=payment_id,
     )
     return render(request, "payments/thanks.html", {"payment": payment})
+
+
+@login_required
+def receipt_download(request, payment_id: int):
+    """Serve the member's own receipt as a downloadable text file. 404 unless the
+    requester owns the payment (or is staff) and a Receipt exists. Reuses the same
+    template the receipt email renders, so the download matches what was emailed."""
+    payment = get_object_or_404(Payment, pk=payment_id)
+    if not (payment.user_id == request.user.id or request.user.is_staff):
+        raise Http404
+    receipt = getattr(payment, "receipt", None)
+    if receipt is None:
+        raise Http404
+    body = render_to_string("payments/email/receipt.txt", {
+        "payment": payment,
+        "receipt": receipt,
+        "support_email": settings.SUPPORT_EMAIL,
+    })
+    resp = HttpResponse(body, content_type="text/plain; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{receipt.receipt_number}.txt"'
+    return resp
 
 
 def _handle_charge_refunded(charge: dict) -> None:
