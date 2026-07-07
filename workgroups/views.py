@@ -39,7 +39,7 @@ KIND_META = [
     (Workgroup.Kind.SEMINAR, "seminars", "Seminars",
      "Year-long teaching seminars led by faculty."),
     (Workgroup.Kind.CARTEL, "cartels", "Cartels",
-     "Small groups — several members and a “plus-one” — formed around a "
+     "Small groups, several members and a “plus-one”, formed around a "
      "shared question."),
     (Workgroup.Kind.COMMITTEE, "committees", "Committees",
      "Standing committees that carry the work of the school."),
@@ -49,9 +49,19 @@ KIND_META = [
      "Groups reading a shared text or body of work together."),
 ]
 
+#: Kinds shown on the Learning overview (``/groups/``). Committees and Working
+#: Groups moved under the Persons nav tab, so they're reached there rather than
+#: on this page (tasks #371/#372/#385).
+LEARNING_KINDS = {
+    Workgroup.Kind.SEMINAR,
+    Workgroup.Kind.CARTEL,
+    Workgroup.Kind.READING_GROUP,
+}
+
 
 def workgroup_list(request):
-    """The Groups overview: one card per kind (always all of them)."""
+    """The Learning overview: one card per learning kind (seminars, cartels,
+    reading groups). Committees and Working Groups live under Persons."""
     visible = [
         g for g in Workgroup.objects.all()
         if g.landing_visible_to(request.user)
@@ -68,6 +78,7 @@ def workgroup_list(request):
             "count": counts.get(kind, 0),
         }
         for kind, name, label, blurb in KIND_META
+        if kind in LEARNING_KINDS
     ]
     return render(request, "workgroups/list.html", {"kinds": kinds})
 
