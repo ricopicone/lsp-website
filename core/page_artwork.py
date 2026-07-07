@@ -42,17 +42,17 @@ class Artwork:
 # works are likely under copyright; see the ``image-rights`` note (task #259).
 # This map is the one place to swap, recrop (``focal``), or clear any banner.
 PAGE_ARTWORK: dict[str, Artwork] = {
-    "core:landing": Artwork(
-        "img/artwork/front.jpg", artist="Cy Twombly", title="Untitled"
-    ),
-    "about": Artwork(
-        "img/artwork/about.jpg", artist="Paul Klee", title="White Framed Polyphonically"
-    ),
-    "the_school": Artwork("img/artwork/the-school.jpg", artist="Wassily Kandinsky"),
-    "program": Artwork("img/artwork/program.jpg"),
+    # Landing / About / The School / Works / Program now use artwork the School
+    # has permission for (Annie Rogers's own images + Liz Chalfin, per Annie's
+    # 2026-07-03 note); the earlier copyrighted fine-art placeholders were
+    # replaced. See task #349/#347 (image rights).
+    "core:landing": Artwork("img/artwork/front.jpg", artist="Annie Rogers"),
+    "about": Artwork("img/artwork/about.jpg", artist="Liz Chalfin", title="Book of Days"),
+    "the_school": Artwork("img/artwork/the-school.jpg", artist="Annie Rogers"),
+    "program": Artwork("img/artwork/program.jpg", artist="Liz Chalfin", title="Pit"),
     "events:list": Artwork("img/artwork/events.jpg"),
     "directory": Artwork("img/artwork/directory.jpg"),
-    "works:index": Artwork("img/artwork/works.jpg", artist="Louise Nevelson", title="Cascade VII"),
+    "works:index": Artwork("img/artwork/works.jpg", artist="Annie Rogers"),
     "documents:index": Artwork("img/artwork/documents.jpg"),
     "core:calendar": Artwork("img/artwork/calendar.jpg", artist="George Peabody Library"),
     "workgroups:list": Artwork("img/artwork/groups.jpg", artist="Bibliothèque Mazarine, Paris"),
