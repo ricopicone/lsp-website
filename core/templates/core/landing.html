@@ -249,27 +249,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
   </section>
 
   {# ===================== The School (graphical index) ===================== #}
-  <section class="mt-16 sm:mt-20 rounded-xl border border-base-300 bg-base-200/30 px-8 py-10 sm:px-12 sm:py-12">
-    <div class="max-w-3xl">
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45 mb-4">An orientation</p>
-      <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">The School at a glance</h2>
-      <p class="text-base-content/70 leading-relaxed mt-4 max-w-2xl">
-        From the one-by-one of analysis to the bodies that carry its common
-        life, a single map of the School's parts and how they fit together, each
-        opening onto what it is and where to go.
-      </p>
-      {% with chip="font-mono text-[0.7rem] uppercase tracking-[0.12em] text-base-content/55 px-2.5 py-1 rounded-full border border-base-300" %}
-      <div class="flex flex-wrap gap-2 mt-6">
-        <span class="{{ chip }}">One by One</span>
-        <span class="{{ chip }}">One on Ones</span>
-        <span class="{{ chip }}">Study Groups</span>
-        <span class="{{ chip }}">All School Functions</span>
-        <span class="{{ chip }}">School Bodies</span>
-      </div>
-      {% endwith %}
-      <a href="{% url 'the_school' %}" class="btn btn-primary btn-sm mt-7">Explore the School <span aria-hidden="true">→</span></a>
-    </div>
-  </section>
+  {% include "core/_school_at_a_glance.html" with section_class="mt-16 sm:mt-20" %}
 
   {# ===================== Site index ===================== #}
   <section class="space-y-8 mt-12 sm:mt-16 border-t border-base-300/60 pt-10 sm:pt-12">
