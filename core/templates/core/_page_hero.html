@@ -17,25 +17,20 @@
 {% endcomment %}
 {% if site_theme == "wix" %}
   {% if page_artwork and page_artwork.image %}
-  {% comment %}Per-line dark boxes that hug each line of the hero text (title and
-  subtitle get their own), via box-decoration-break so wrapped lines each get a
-  box sized to that line — no blank extension into the artwork. A soft box-shadow
-  feathers the edge. The band scrim is kept light so the artwork shows through.{% endcomment %}
+  {% comment %}Legibility: a soft dark glow on the hero text itself (layered
+  text-shadows), so the white type reads over any artwork with no box and no hard
+  edges. The band scrim is kept light so the artwork shows through.{% endcomment %}
   <style>
-    .lsp-hero-ink {
-      -webkit-box-decoration-break: clone; box-decoration-break: clone;
-      background: rgba(0,0,0,0.52);
-      padding: 0.08em 0.32em;
-      border-radius: 0.18em;
-      box-shadow: 0 0 0.5em 0.05em rgba(0,0,0,0.5);
-    }
+    .lsp-hero-ink { text-shadow:
+        0 0 0.16em rgba(0,0,0,0.99), 0 0 0.38em rgba(0,0,0,0.9),
+        0 0 0.8em rgba(0,0,0,0.72), 0 0 1.3em rgba(0,0,0,0.55); }
   </style>
   <section class="relative w-full overflow-hidden bg-neutral text-neutral-content">
     {# Artwork layer #}
     <div class="absolute inset-0 bg-cover bg-no-repeat"
          style="background-image:url('{% static page_artwork.image %}');background-position:{{ page_artwork.focal }};"
          aria-hidden="true"></div>
-    {# Light band scrim; the per-line boxes carry legibility so the artwork shows. #}
+    {# Light band scrim; the text glow carries legibility so the artwork shows. #}
     <div class="absolute inset-0" aria-hidden="true"
          style="background:linear-gradient(to top, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.12) 55%, rgba(0,0,0,0) 100%);"></div>
 
