@@ -2,6 +2,7 @@
 
 import pytest
 from django.test import override_settings
+from django.urls import reverse
 
 from accounts.models import Profile, User
 from parletre.models import Channel
@@ -58,3 +59,21 @@ def test_flags_on_restores_visibility():
     ch = _channel("dm-2", access=Channel.Access.PRIVATE)
     ch.members.add(m)
     assert channel_visible(ch, m) is True
+
+
+@pytest.mark.django_db
+@override_settings(PARLETRE_PRIVATE_CHATS_ENABLED=False)
+def test_create_private_chat_blocked_when_off(client):
+    m = _member("cc@x.test")
+    client.force_login(m)
+    resp = client.get(reverse("parletre:create_private_chat"), SERVER_NAME="localhost")
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+@override_settings(PARLETRE_PRIVATE_CHATS_ENABLED=False)
+def test_new_private_chat_button_hidden_when_off(client):
+    m = _member("bb@x.test")
+    client.force_login(m)
+    body = client.get(reverse("parletre:index"), SERVER_NAME="localhost").content.decode()
+    assert reverse("parletre:create_private_chat") not in body

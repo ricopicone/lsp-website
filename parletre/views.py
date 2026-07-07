@@ -228,6 +228,7 @@ def index(request):
             "my_spaces": my_spaces,
             "online_now": presence.online_global(),
             "any_channels": bool(general) or bool(my_spaces),
+            "private_chats_enabled": settings.PARLETRE_PRIVATE_CHATS_ENABLED,
         },
     )
 
@@ -774,6 +775,8 @@ def create_private_chat(request):
     members they pick. They become its moderator (so they can manage it)."""
     if not is_member(request.user):
         return render(request, "parletre/not_a_member.html", status=403)
+    if not settings.PARLETRE_PRIVATE_CHATS_ENABLED:  # reversible #360 hide
+        return HttpResponseForbidden("Private chats are currently disabled.")
 
     if request.method == "POST":
         form = NewPrivateChatForm(request.POST, creator=request.user)
