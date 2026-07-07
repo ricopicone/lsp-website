@@ -465,13 +465,15 @@ def test_personas_have_membership_but_are_hidden_from_roster():
     assert persona not in [p.user for p in wg.participants()]   # hidden from roster
 
 
-def test_groups_overview_shows_a_card_per_kind(client):
-    """The /groups/ overview lists the kinds, not individual groups."""
+def test_learning_overview_shows_a_card_per_learning_kind(client):
+    """The /groups/ (Learning) overview cards cover the learning kinds only.
+    Committees and Working Groups moved under the Persons nav tab, so they no
+    longer get a card here (they appear only in the site nav)."""
     resp = client.get("/groups/")
     assert resp.status_code == 200
-    for label in (b"Seminars", b"Cartels", b"Committees",
-                  b"Working Groups", b"Reading Groups"):
-        assert label in resp.content
+    assert b"Learning" in resp.content
+    card_labels = {k["label"] for k in resp.context["kinds"]}
+    assert card_labels == {"Seminars", "Cartels", "Reading Groups"}
 
 
 def test_kind_list_shows_visible_groups_of_that_kind(client):
