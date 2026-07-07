@@ -49,7 +49,7 @@ PAGE_ARTWORK: dict[str, Artwork] = {
     # #349/#347 (image rights).
     "core:landing": Artwork(
         "img/artwork/front.jpg", artist="Wassily Kandinsky",
-        title="Several Circles (1926)"),
+        title="Small Worlds VII (1922)", focal="center"),
     "learning": Artwork(
         "img/artwork/learning.jpg", artist="Wassily Kandinsky",
         title="Strings of Characters (1931)"),
