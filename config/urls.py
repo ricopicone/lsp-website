@@ -27,6 +27,7 @@ from core import views as _core_views
 from events import views as _event_views
 from payments import views as _payment_views
 from suggestions import views as _suggestion_views
+from workgroups import views as _workgroups_views
 
 urlpatterns = [
     # Readiness probe for the blue-green deploy flip (ops/deploy/). Mounted first
@@ -36,6 +37,9 @@ urlpatterns = [
     path("accounts/", include("accounts.urls")),
     path("about/", _content_views.about, name="about"),
     path("the-school/", _content_views.the_school, name="the_school"),
+    # The Learning overview (nav tab) — scoped to learning kinds; the full
+    # all-kinds overview stays at /groups/ (workgroups:list). Task #360 note.
+    path("learning/", _workgroups_views.learning_list, name="learning"),
     # Public "Formation" content page. Lives under /about/ so it doesn't shadow
     # the member-facing formation hub at /formation/ (formation.urls).
     path("about/formation/", _content_views.page, {"slug": "formation"}, name="formation"),

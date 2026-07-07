@@ -466,14 +466,26 @@ def test_personas_have_membership_but_are_hidden_from_roster():
 
 
 def test_learning_overview_shows_a_card_per_learning_kind(client):
-    """The /groups/ (Learning) overview cards cover the learning kinds only.
-    Committees and Working Groups moved under the Persons nav tab, so they no
-    longer get a card here (they appear only in the site nav)."""
-    resp = client.get("/groups/")
+    """The /learning/ overview (the nav Learning tab) covers the learning kinds
+    only. Committees and Working Groups moved under the Persons nav tab, so they
+    no longer get a card here."""
+    resp = client.get("/learning/")
     assert resp.status_code == 200
     assert b"Learning" in resp.content
     card_labels = {k["label"] for k in resp.context["kinds"]}
     assert card_labels == {"Seminars", "Cartels", "Reading Groups"}
+
+
+def test_groups_overview_shows_all_kinds(client):
+    """The /groups/ overview stays the full all-kinds directory (linked as
+    'All groups' from the landing/footer); it was not scoped to learning."""
+    resp = client.get("/groups/")
+    assert resp.status_code == 200
+    assert b"Groups" in resp.content
+    card_labels = {k["label"] for k in resp.context["kinds"]}
+    assert card_labels == {
+        "Seminars", "Cartels", "Reading Groups", "Committees", "Working Groups",
+    }
 
 
 def test_kind_list_shows_visible_groups_of_that_kind(client):

@@ -59,9 +59,9 @@ LEARNING_KINDS = {
 }
 
 
-def workgroup_list(request):
-    """The Learning overview: one card per learning kind (seminars, cartels,
-    reading groups). Committees and Working Groups live under Persons."""
+def _overview_cards(request, kinds_filter=None):
+    """One card per group kind (all of KIND_META, or just ``kinds_filter``),
+    with a live count of the groups visible to this user."""
     visible = [
         g for g in Workgroup.objects.all()
         if g.landing_visible_to(request.user)
@@ -69,8 +69,7 @@ def workgroup_list(request):
     counts: dict[str, int] = {}
     for g in visible:
         counts[g.kind] = counts.get(g.kind, 0) + 1
-
-    kinds = [
+    return [
         {
             "label": label,
             "blurb": blurb,
@@ -78,9 +77,34 @@ def workgroup_list(request):
             "count": counts.get(kind, 0),
         }
         for kind, name, label, blurb in KIND_META
-        if kind in LEARNING_KINDS
+        if kinds_filter is None or kind in kinds_filter
     ]
-    return render(request, "workgroups/list.html", {"kinds": kinds})
+
+
+def workgroup_list(request):
+    """The Groups overview at ``/groups/``: a card for every kind (all five).
+    Kept as the full directory of group kinds (the "All groups" link from the
+    landing / footer); the nav's Learning tab points at ``learning_list``."""
+    return render(request, "workgroups/list.html", {
+        "kinds": _overview_cards(request),
+        "overview_title": "Groups",
+        "overview_subtitle": "Every kind of group in the School, seminars, "
+        "cartels, reading groups, committees, and working groups. Each kind has "
+        "its own home, browse one to see what's active.",
+    })
+
+
+def learning_list(request):
+    """The Learning overview at ``/learning/`` (the nav Learning tab): the
+    learning kinds only, seminars, cartels, and reading groups. Committees and
+    Working Groups live under the Persons tab."""
+    return render(request, "workgroups/list.html", {
+        "kinds": _overview_cards(request, LEARNING_KINDS),
+        "overview_title": "Learning",
+        "overview_subtitle": "Seminars, cartels, and reading groups, the settings "
+        "where the school studies together. Each kind has its own home, browse "
+        "one to see what's active.",
+    })
 
 
 @login_required
