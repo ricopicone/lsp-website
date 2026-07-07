@@ -1,0 +1,26 @@
+{% comment %}
+  "The School at a glance" orientation box — a compact card that points at the
+  full /the-school/ map. Shown on the home page and at the top of /about/.
+  Pass `section_class` to add outer margins/spacing for the surrounding context.
+{% endcomment %}
+<section class="{{ section_class }} rounded-xl border border-base-300 bg-base-200/30 px-8 py-10 sm:px-12 sm:py-12">
+  <div class="max-w-3xl">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45 mb-4">An orientation</p>
+    <h2 class="font-serif text-2xl sm:text-3xl text-base-content tracking-tight">The School at a glance</h2>
+    <p class="text-base-content/70 leading-relaxed mt-4 max-w-2xl">
+      From the one-by-one of analysis to the bodies that carry its common
+      life, a single map of the School's parts and how they fit together, each
+      opening onto what it is and where to go.
+    </p>
+    {% with chip="font-mono text-[0.7rem] uppercase tracking-[0.12em] text-base-content/55 px-2.5 py-1 rounded-full border border-base-300" %}
+    <div class="flex flex-wrap gap-2 mt-6">
+      <span class="{{ chip }}">One by One</span>
+      <span class="{{ chip }}">One on Ones</span>
+      <span class="{{ chip }}">Study Groups</span>
+      <span class="{{ chip }}">All School Functions</span>
+      <span class="{{ chip }}">School Bodies</span>
+    </div>
+    {% endwith %}
+    <a href="{% url 'the_school' %}" class="btn btn-primary btn-sm mt-7">Explore the School <span aria-hidden="true">→</span></a>
+  </div>
+</section>

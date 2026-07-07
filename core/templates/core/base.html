@@ -68,7 +68,6 @@
       <nav class="hidden sm:flex items-center gap-0.5 text-sm">
         {% with cur=request.path %}
           <a href="{% url 'about' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/about/' in cur %}text-primary font-medium{% endif %}">About</a>
-          <a href="{% url 'the_school' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/the-school/' in cur %}text-primary font-medium{% endif %}">The School</a>
           <a href="{% url 'formation' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/about/formation/' in cur %}text-primary font-medium{% endif %}">Formation</a>
           <a href="{% url 'guides_index' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/guides/' in cur %}text-primary font-medium{% endif %}">Guides</a>
 
@@ -153,7 +152,6 @@
           <ul tabindex="0" style="max-height:80vh"
               class="dropdown-content menu menu-sm mt-2 z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-60 overflow-y-auto flex-nowrap">
             <li><a href="{% url 'about' %}">About</a></li>
-            <li><a href="{% url 'the_school' %}">The School</a></li>
             <li><a href="{% url 'formation' %}">Formation</a></li>
             <li><a href="{% url 'guides_index' %}">Guides</a></li>
 
