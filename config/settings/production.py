@@ -89,3 +89,9 @@ EMAIL_PORT = env.int("DJANGO_EMAIL_PORT", default=587)
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = env("DJANGO_EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("DJANGO_EMAIL_HOST_PASSWORD", default="")
+
+# --- Suggestion box retired (task #353) ---------------------------------
+# The Board's website review decided to drop the "Suggest a change" box. Force
+# it off in production regardless of any DJANGO_SUGGESTIONS_ENABLED value in the
+# host .env. Reversible: delete this line (and the box returns to env control).
+SUGGESTIONS_ENABLED = False
