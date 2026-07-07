@@ -49,16 +49,17 @@ PAGE_ARTWORK: dict[str, Artwork] = {
     "core:landing": Artwork("img/artwork/front.jpg", artist="Annie Rogers"),
     "about": Artwork("img/artwork/about.jpg", artist="Liz Chalfin", title="Book of Days"),
     "the_school": Artwork("img/artwork/the-school.jpg", artist="Annie Rogers"),
+    "formation": Artwork("img/artwork/formation.jpg", artist="Annie Rogers"),
     "program": Artwork("img/artwork/program.jpg", artist="Liz Chalfin", title="Pit"),
     "events:list": Artwork("img/artwork/events.jpg"),
-    "directory": Artwork("img/artwork/directory.jpg"),
+    "directory": Artwork("img/artwork/directory.jpg", artist="Scott McDaniel"),
     "works:index": Artwork("img/artwork/works.jpg", artist="Annie Rogers"),
     "documents:index": Artwork("img/artwork/documents.jpg"),
     "core:calendar": Artwork("img/artwork/calendar.jpg", artist="George Peabody Library"),
-    "workgroups:list": Artwork("img/artwork/groups.jpg", artist="Bibliothèque Mazarine, Paris"),
-    "guides_index": Artwork("img/artwork/guides.jpg", artist="Beinecke Library, Yale"),
+    "workgroups:list": Artwork("img/artwork/groups.jpg", artist="Erika Radich", title="Escape"),
+    "guides_index": Artwork("img/artwork/guides.jpg", artist="Joyce Silverstone", title="Leaf"),
     "parletre:index": Artwork(
-        "img/artwork/parletre.jpg", artist="Bibliothèque Sainte-Geneviève, Paris"
+        "img/artwork/parletre.jpg", artist="Erika Radich", title="Understanding"
     ),
 }
 
