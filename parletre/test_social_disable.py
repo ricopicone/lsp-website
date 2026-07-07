@@ -36,9 +36,11 @@ def test_member_cannot_see_schoolwide_social_when_off():
 
 @pytest.mark.django_db
 @override_settings(PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED=False, PARLETRE_PRIVATE_CHATS_ENABLED=False)
-def test_staff_still_sees_schoolwide_social_when_off():
+def test_staff_also_cannot_see_schoolwide_social_when_off():
+    # No front-end staff exemption: hidden means hidden for everyone (staff
+    # manage/restore via Django admin or the flag).
     staff = _member("s@x.test", is_staff=True)
-    assert channel_visible(_channel("lounge"), staff) is True
+    assert channel_visible(_channel("lounge"), staff) is False
 
 
 @pytest.mark.django_db

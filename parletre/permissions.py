@@ -146,15 +146,14 @@ def channel_visible(channel, user) -> bool:
     """Whether ``user`` may see and read ``channel``."""
     if not can_enter_parletre(user):
         return False
-    # Reversible #360 hides (default off). Private chats vanish for everyone
-    # (incl. their creators — this sits above the moderator/membership checks
-    # below); school-wide social channels vanish for regular members, staff
-    # retained. Flip DJANGO_PARLETRE_*_ENABLED to restore.
+    # Reversible #360 hides (default off): private chats and the school-wide
+    # social channels vanish from the Parlêtre front-end for EVERYONE, staff
+    # included (staff manage/restore via Django admin, or flip the env var).
+    # These sit above the moderator/membership checks below so no one is exempt.
     if channel.access == channel.Access.PRIVATE and not settings.PARLETRE_PRIVATE_CHATS_ENABLED:
         return False
     if _is_schoolwide_social(channel) and not settings.PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED:
-        if not channel_can_moderate(channel, user):
-            return False
+        return False
     # Archived channels linger for moderators/staff only.
     if channel.archived and not channel_can_moderate(channel, user):
         return False

@@ -12,10 +12,10 @@ in the project as tasks #383 (school-wide) and #384 (private chats).
 
 | Feature | Flag (host `.env`) | What it hides | Re-enable |
 |---|---|---|---|
-| School-wide chats — **The Lounge**, **Welcome** | `DJANGO_PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED` | Hidden from members (staff still see them) | Set the flag to `true`, restart |
-| School-wide forum — **The Commons** | `DJANGO_PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED` | Hidden from members (staff still see them) | Set the flag to `true`, restart |
-| School-wide video — **The Gaze** | `DJANGO_PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED` | Hidden from members (staff still see them) | Set the flag to `true`, restart |
-| Disappearing chats — **Purloined Letters** | `DJANGO_PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED` | Hidden from members (staff still see it) | Set the flag to `true`, restart |
+| School-wide chats — **The Lounge**, **Welcome** | `DJANGO_PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED` | Hidden from everyone (staff manage via Django admin) | Set the flag to `true`, restart |
+| School-wide forum — **The Commons** | `DJANGO_PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED` | Hidden from everyone (staff manage via Django admin) | Set the flag to `true`, restart |
+| School-wide video — **The Gaze** | `DJANGO_PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED` | Hidden from everyone (staff manage via Django admin) | Set the flag to `true`, restart |
+| Disappearing chats — **Purloined Letters** | `DJANGO_PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED` | Hidden from everyone (staff manage via Django admin) | Set the flag to `true`, restart |
 | **Private chats** (all existing + creating new) | `DJANGO_PARLETRE_PRIVATE_CHATS_ENABLED` | Hidden from everyone, incl. their creators; the "New private chat" button and its page are disabled (this also removes the disappearing-message option, which lived in that form) | Set the flag to `true`, restart |
 
 Both flags default **off** in production and **on** in dev/test, so developers
