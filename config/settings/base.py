@@ -275,6 +275,16 @@ PARLETRE_REPLY_SECRET = env("PARLETRE_REPLY_SECRET", default=SECRET_KEY)
 # follow-up. Set to the receiving topic's ARN to reject other senders.
 PARLETRE_SNS_TOPIC_ARN = env("PARLETRE_SNS_TOPIC_ARN", default="")
 
+# Reversibly hide Parlêtre's school-wide social channels + private chats (task
+# #360). Both default off; flip the env var to true (host .env) to restore the
+# spaces intact. See docs/parletre-disabled-features.md.
+PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED = env.bool(
+    "DJANGO_PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED", default=False
+)
+PARLETRE_PRIVATE_CHATS_ENABLED = env.bool(
+    "DJANGO_PARLETRE_PRIVATE_CHATS_ENABLED", default=False
+)
+
 # --- Stripe -------------------------------------------------------------
 # Test-mode keys for development; production keys swapped via env in
 # production.py. STRIPE_WEBHOOK_SECRET is the signing secret for the

@@ -35,8 +35,19 @@ Every channel, of every access mode, still sits behind
 
 from __future__ import annotations
 
+from django.conf import settings
+
 from accounts.permissions import is_lsp_member as _is_lsp_member
 from workgroups.models import Workgroup, WorkgroupMembership
+
+
+def _is_schoolwide_social(channel) -> bool:
+    """The school-wide social channels retired in task #360: any disappearing
+    channel (Purloined Letters), or any OPEN channel other than Announcements.
+    Excludes LSP Staff (access=lsp_staff), workgroup channels, and Announcements."""
+    if channel.message_ttl_seconds:
+        return True
+    return channel.access == channel.Access.OPEN and channel.slug != "announcements"
 
 
 def _authenticated(user) -> bool:
@@ -135,6 +146,15 @@ def channel_visible(channel, user) -> bool:
     """Whether ``user`` may see and read ``channel``."""
     if not can_enter_parletre(user):
         return False
+    # Reversible #360 hides (default off). Private chats vanish for everyone
+    # (incl. their creators — this sits above the moderator/membership checks
+    # below); school-wide social channels vanish for regular members, staff
+    # retained. Flip DJANGO_PARLETRE_*_ENABLED to restore.
+    if channel.access == channel.Access.PRIVATE and not settings.PARLETRE_PRIVATE_CHATS_ENABLED:
+        return False
+    if _is_schoolwide_social(channel) and not settings.PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED:
+        if not channel_can_moderate(channel, user):
+            return False
     # Archived channels linger for moderators/staff only.
     if channel.archived and not channel_can_moderate(channel, user):
         return False
