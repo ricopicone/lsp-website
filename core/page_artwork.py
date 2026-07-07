@@ -49,6 +49,9 @@ PAGE_ARTWORK: dict[str, Artwork] = {
     # #349/#347 (image rights).
     "core:landing": Artwork(
         "img/artwork/front.jpg", artist="Wassily Kandinsky",
+        title="Several Circles (1926)"),
+    "learning": Artwork(
+        "img/artwork/learning.jpg", artist="Wassily Kandinsky",
         title="Strings of Characters (1931)"),
     "about": Artwork("img/artwork/about.jpg", artist="Liz Chalfin", title="Book of Days"),
     "the_school": Artwork(
@@ -59,16 +62,21 @@ PAGE_ARTWORK: dict[str, Artwork] = {
         title="La Flèche (1943)"),
     "program": Artwork(
         "img/artwork/program.jpg", artist="Piet Mondrian", title="Composition A (1920)"),
-    "events:list": Artwork("img/artwork/events.jpg"),
+    "events:list": Artwork(
+        "img/artwork/events.jpg", artist="Piet Mondrian", title="Composition (1921)"),
     "directory": Artwork(
         "img/artwork/directory.jpg", artist="Henri Matisse",
         title="Woman with a Hat (1905)"),
     "works:index": Artwork("img/artwork/works.jpg", artist="Annie Rogers"),
-    "documents:index": Artwork("img/artwork/documents.jpg"),
-    "core:calendar": Artwork("img/artwork/calendar.jpg", artist="George Peabody Library"),
+    "documents:index": Artwork(
+        "img/artwork/documents.jpg", artist="Wassily Kandinsky",
+        title="Dull Gray (1930)"),
+    "core:calendar": Artwork(
+        "img/artwork/calendar.jpg", artist="Wassily Kandinsky",
+        title="Yellow-Red-Blue (1925)"),
     "workgroups:list": Artwork(
         "img/artwork/groups.jpg", artist="Wassily Kandinsky",
-        title="Several Circles (1926)"),
+        title="Inner Alliance (1929)"),
     "guides_index": Artwork("img/artwork/guides.jpg", artist="Joyce Silverstone", title="Leaf"),
     "parletre:index": Artwork(
         "img/artwork/parletre.jpg", artist="Piet Mondrian",
