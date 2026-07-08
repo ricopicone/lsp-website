@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.utils import timezone
 
 from workgroups.models import (
     Workgroup,
@@ -227,18 +228,27 @@ class Cartel(models.Model):
     # ---- CART-4 workflow (delegates to the generic proposal) ----
 
     @transaction.atomic
-    def approve(self, coordinator):
-        """Program Committee approves → publish as Open (CART-4 steps 2–3)."""
-        self.workgroup.proposal.approve(coordinator)
+    def approve(self, reviewer):
+        """The Programming Committee registers the cartel (task #392 step 5)."""
+        self.registration_status = self.RegistrationStatus.REGISTERED
+        self.save(update_fields=["registration_status"])
+        proposal = self.workgroup.proposal
+        proposal.reviewed_by = reviewer
+        proposal.reviewed_at = timezone.now()
+        proposal.review_note = ""
+        proposal.save(update_fields=["reviewed_by", "reviewed_at", "review_note"])
 
     @transaction.atomic
-    def decline(self, coordinator, note=""):
-        self.workgroup.proposal.decline(coordinator, note)
-
-    @transaction.atomic
-    def resubmit(self):
-        """A declined proposal is re-submitted (after edits) for fresh review."""
-        self.workgroup.proposal.resubmit()
+    def decline(self, reviewer, note=""):
+        """The PC returns the cartel for revision — it keeps forming and may be
+        resubmitted."""
+        self.registration_status = self.RegistrationStatus.FORMING
+        self.save(update_fields=["registration_status"])
+        proposal = self.workgroup.proposal
+        proposal.reviewed_by = reviewer
+        proposal.reviewed_at = timezone.now()
+        proposal.review_note = note
+        proposal.save(update_fields=["reviewed_by", "reviewed_at", "review_note"])
 
     def set_closed(self, value: bool):
         self.closed = bool(value)

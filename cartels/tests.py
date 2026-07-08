@@ -66,22 +66,27 @@ def test_is_cartel_coordinator_designation():
     assert is_cartel_coordinator(_coordinator()) is True
 
 
-def test_approve_publishes_open_and_records_reviewer():
-    gen = _member("gen@x.test")
-    coord = _coordinator()
-    cartel = Cartel.objects.propose(generator=gen, name="C")
+def test_approve_marks_registered_and_records_reviewer():
+    from workgroups.models import WorkgroupProposal
+    cartel = _forming_cartel_ready("appr@x.test")
+    cartel.submit_for_registration(by=cartel.generator)
+    coord = _pc_member()
     cartel.approve(coord)
-    assert cartel.status == Cartel.Status.OPEN
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
     assert cartel.reviewed_by == coord and cartel.reviewed_at is not None
-    assert cartel.workgroup.landing_visibility == Visibility.MEMBERS   # now solicitable
-    assert cartel.workgroup.landing_visible_to(_member("anymember@x.test")) is True
+    assert cartel.proposal.status == WorkgroupProposal.Status.OPEN   # stays live
 
 
-def test_decline_records_reason():
-    cartel = Cartel.objects.propose(generator=_member("g@x.test"), name="C")
-    cartel.decline(_coordinator(), note="Too close to an existing cartel.")
-    assert cartel.status == Cartel.Status.DECLINED
-    assert "existing cartel" in cartel.review_note
+def test_decline_returns_to_forming_with_note():
+    cartel = _forming_cartel_ready("dec@x.test")
+    cartel.submit_for_registration(by=cartel.generator)
+    cartel.decline(_pc_member(), note="Please tighten the theme.")
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+    assert cartel.review_note == "Please tighten the theme."
+    # a re-submit clears the note
+    cartel.submit_for_registration(by=cartel.generator)
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+    assert cartel.review_note == ""
 
 
 # ---- joining -----------------------------------------------------------
