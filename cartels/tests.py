@@ -911,3 +911,31 @@ def test_submit_succeeds_when_gate_passes_questions_optional():
     assert check["questions_done"] == 0   # no questions entered, still submittable
     cartel.submit_for_registration(by=cartel.generator)
     assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+
+
+# ---- program-year listing + viewer_state key off registration_status (task #392) ----
+
+
+def test_forming_cartel_not_listed_on_program_year():
+    from events.models import current_academic_year
+    year = current_academic_year()
+    forming = _forming_cartel_ready("prog@x.test")
+    forming.workgroup.start_date = None  # falls back to created date -> current AY
+    forming.workgroup.save(update_fields=["start_date"])
+    assert forming not in Cartel.objects.in_academic_year(year)
+    # restore a valid window so the gate (duration_ok) passes for submission
+    forming.workgroup.start_date = _dt.date(2026, 9, 1)
+    forming.workgroup.save(update_fields=["start_date"])
+    forming.submit_for_registration(by=forming.generator)
+    forming.approve(_pc_member())
+    assert forming in Cartel.objects.in_academic_year(year)
+
+
+def test_viewer_state_exposes_question_and_checklist():
+    from cartels.models import CartelQuestion
+    cartel = _forming_cartel_ready("vs@x.test")
+    gen = cartel.generator
+    CartelQuestion.objects.create(cartel=cartel, member=gen, text="my angle")
+    state = cartel.viewer_state(gen)
+    assert state["my_question"] == "my angle"
+    assert state["registration"]["can_submit"] is True

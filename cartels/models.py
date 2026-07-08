@@ -79,9 +79,8 @@ class CartelManager(models.Manager):
         ay_start, ay_end = academic_year_date_range(year)
         out = [
             c for c in self.filter(
-                workgroup__proposal__status__in=(
-                    WorkgroupProposal.Status.OPEN, WorkgroupProposal.Status.ARCHIVED,
-                )
+                models.Q(registration_status=self.model.RegistrationStatus.REGISTERED)
+                | models.Q(workgroup__proposal__status=WorkgroupProposal.Status.ARCHIVED)
             ).select_related("workgroup", "workgroup__proposal")
             if c._window_overlaps(ay_start, ay_end)
         ]
@@ -213,6 +212,12 @@ class Cartel(models.Model):
         state["is_generator"] = (
             bool(authed) and self.generator_id is not None and self.generator_id == user.id
         )
+        state["registration"] = self.registration_checklist()
+        if authed:
+            q = self.member_questions.filter(member=user).first()
+            state["my_question"] = q.text if q else ""
+        else:
+            state["my_question"] = ""
         return state
 
     # ---- Membership ----
