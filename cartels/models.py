@@ -39,24 +39,27 @@ class CartelManager(models.Manager):
 
     @transaction.atomic
     def propose(self, *, generator, name, guiding_question="", description="", invitees=()):
-        """A member proposes a cartel (CART-4 step 1).
+        """A member starts a cartel forming (task #392 step 1).
 
-        Creates a PROPOSED cartel (landing private until approved); the
-        Generator is its first member; any seeded ``invitees`` become
-        WorkgroupInvitations sent on approval.
+        The cartel is live among the school immediately (members-visible landing,
+        private contents); the generator is its first member; seeded ``invitees``
+        become WorkgroupInvitations. PC registration happens later, on submit.
         """
         wg = build_workgroup(
             Workgroup.Kind.CARTEL,
             name=name,
             description=description,
-            landing_visibility="private",   # hidden until the PC approves
+            landing_visibility="members",   # visible to the school while forming
             content_visibility="private",
         )
         WorkgroupProposal.objects.create(
             workgroup=wg, proposed_by=generator,
-            status=WorkgroupProposal.Status.PROPOSED,
+            status=WorkgroupProposal.Status.OPEN,
         )
-        cartel = self.create(workgroup=wg, guiding_question=guiding_question)
+        cartel = self.create(
+            workgroup=wg, guiding_question=guiding_question,
+            registration_status=self.model.RegistrationStatus.FORMING,
+        )
         cartel.add_member(generator)
         for user in invitees:
             WorkgroupInvitation.objects.get_or_create(

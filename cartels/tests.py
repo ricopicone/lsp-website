@@ -38,19 +38,22 @@ def _pc_member(email="pc@x.test"):
 
 # ---- propose ----------------------------------------------------------
 
-def test_propose_creates_proposed_cartel_with_generator_as_member():
+def test_propose_creates_forming_cartel_visible_to_school():
+    from workgroups.models import Visibility, WorkgroupProposal
     gen = _member("gen@x.test")
     invitee = _member("inv@x.test")
     cartel = Cartel.objects.propose(
         generator=gen, name="Speech and Writing",
         guiding_question="What is a letter?", invitees=[invitee],
     )
-    assert cartel.status == Cartel.Status.PROPOSED
-    assert cartel.workgroup.landing_visibility == Visibility.PRIVATE   # hidden pre-approval
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+    assert cartel.proposal.status == WorkgroupProposal.Status.OPEN
+    assert cartel.workgroup.landing_visibility == Visibility.MEMBERS
+    assert cartel.workgroup.content_visibility == Visibility.PRIVATE
     assert cartel.is_member(gen) is True
     assert cartel.invitations.filter(invited_user=invitee).exists()
-    # not visible to the school yet
-    assert cartel.workgroup.landing_visible_to(_member("outsider@x.test")) is False
+    # visible to the school from the start (open call)
+    assert cartel.workgroup.landing_visible_to(_member("outsider@x.test")) is True
 
 
 # ---- coordinator review ------------------------------------------------
