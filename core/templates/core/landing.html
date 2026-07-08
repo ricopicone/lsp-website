@@ -44,7 +44,7 @@
 
 {% comment %}Classic site-theme only: the front-page Twombly over the school
 name (the old front door). Modern keeps the bespoke text hero below.{% endcomment %}
-{% block page_hero %}{% if site_theme == "wix" %}{% include "core/_page_hero.html" with kicker="A worldwide school · based in San Francisco" title="Lacanian School" title_line2="of Psychoanalysis" subtitle="A community for the practice, transmission, and study of psychoanalysis, Freud's discovery as read, and reopened, by Jacques Lacan." %}{% endif %}{% endblock %}
+{% block page_hero %}{% if site_theme == "wix" %}{% include "core/_page_hero.html" with kicker="A worldwide school <span style='font-size:1.6em;line-height:0;vertical-align:-0.05em;'>·</span> based in San Francisco" title="Lacanian School" title_line2="of Psychoanalysis" subtitle="A community for the practice, transmission, and study of psychoanalysis, Freud's discovery as read, and reopened, by Jacques Lacan." %}{% endif %}{% endblock %}
 
 {% block content %}
 {% comment %}

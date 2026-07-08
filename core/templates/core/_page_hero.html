@@ -23,8 +23,8 @@
   <style>
     .lsp-hero-ink { text-shadow:
         0 0 0.08em rgba(0,0,0,1), 0 0 0.18em rgba(0,0,0,1),
-        0 0 0.42em rgba(0,0,0,0.98), 0 0 0.85em rgba(0,0,0,0.85),
-        0 0 1.4em rgba(0,0,0,0.68); }
+        0 0 0.32em rgba(0,0,0,1), 0 0 0.55em rgba(0,0,0,0.98),
+        0 0 0.9em rgba(0,0,0,0.92), 0 0 1.5em rgba(0,0,0,0.82); }
   </style>
   <section class="relative w-full overflow-hidden bg-neutral text-neutral-content">
     {# Artwork layer, cropped to the page's focal point. #}
@@ -37,7 +37,7 @@
 
     <div class="relative mx-auto max-w-5xl px-4 sm:px-6 h-48 sm:h-64 flex flex-col justify-end pb-7 items-start">
       {% if kicker %}
-      <p class="mb-2.5"><span class="lsp-hero-ink font-mono text-xs uppercase tracking-[0.2em] text-white/85">{{ kicker }}</span></p>
+      <p class="mb-2.5"><span class="lsp-hero-ink font-sans font-semibold text-xs uppercase tracking-[0.18em] text-white">{{ kicker|safe }}</span></p>
       {% endif %}
       <h1 class="font-display text-3xl sm:text-5xl tracking-tight leading-[1.1]"><span class="lsp-hero-ink text-white">{{ title }}{% if title_line2 %}<br>{{ title_line2 }}{% endif %}</span></h1>
       {% if subtitle %}
