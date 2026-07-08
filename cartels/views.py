@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -20,7 +21,7 @@ from events.permissions import is_program_committee
 
 from . import notifications as notify_cartels
 from .forms import CartelProposalForm
-from .models import Cartel, CartelJoinRequest, ExternalPlusOne
+from .models import Cartel, CartelJoinRequest, CartelQuestion, ExternalPlusOne
 from .permissions import is_cartel_coordinator
 
 
@@ -71,11 +72,15 @@ def propose(request):
 @require_POST
 def submit(request, slug):
     """Any cartelisand submits the cartel to the PC for registration."""
-    from django.core.exceptions import ValidationError
-
     cartel = get_object_or_404(Cartel, workgroup__slug=slug)
     if not cartel.is_member(request.user):
         raise Http404
+    if cartel.registration_status != Cartel.RegistrationStatus.FORMING:
+        messages.info(
+            request,
+            "This cartel has already been submitted or registered.",
+        )
+        return redirect(cartel.get_absolute_url())
     try:
         cartel.submit_for_registration(by=request.user)
     except ValidationError:
@@ -98,8 +103,6 @@ def submit(request, slug):
 @require_POST
 def set_question(request, slug):
     """A cartelisand records or updates their own question."""
-    from .models import CartelQuestion
-
     cartel = get_object_or_404(Cartel, workgroup__slug=slug)
     if not cartel.is_member(request.user):
         raise Http404

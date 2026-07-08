@@ -361,6 +361,8 @@ class Cartel(models.Model):
     def submit_for_registration(self, by):
         """Any cartelisand submits the cartel to the PC for registration once
         the required gate passes (questions stay optional)."""
+        if self.registration_status != self.RegistrationStatus.FORMING:
+            raise ValidationError("Only a forming cartel can be submitted for registration.")
         if not self.registration_checklist()["can_submit"]:
             raise ValidationError("The cartel is not ready to submit for registration.")
         self.registration_status = self.RegistrationStatus.SUBMITTED

@@ -992,6 +992,51 @@ def test_review_queue_lists_submitted(client):
     assert cartel in list(resp.context["submitted"])
 
 
+def test_submit_rejected_for_non_member(client):
+    cartel = _forming_cartel_ready("nonmember@x.test")
+    stranger = _member("stranger-nonmember@x.test")
+    client.force_login(stranger)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 404
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+
+
+def test_submit_twice_does_not_resubmit_registered(client):
+    cartel = _forming_cartel_ready("resubmit@x.test")
+    gen = cartel.generator
+    client.force_login(gen)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+    cartel.approve(_pc_member())
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+    # posting submit again as a member must not flip it back to SUBMITTED
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+
+
+def test_submit_with_incomplete_checklist_shows_message(client):
+    gen = _member("incomplete@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Incomplete")
+    cartel.add_member(_member("m2-incomplete@x.test"))
+    cartel.add_member(_member("m3-incomplete@x.test"))
+    wg = cartel.workgroup
+    wg.start_date = _dt.date(2026, 9, 1)
+    wg.end_date = _dt.date(2027, 9, 1)
+    wg.save(update_fields=["start_date", "end_date"])
+    # no plus-one set -> checklist incomplete
+    client.force_login(gen)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+
+
 # ---- data migration mapping (task #392 / task 6) ----
 
 
