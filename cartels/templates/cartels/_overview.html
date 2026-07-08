@@ -4,16 +4,16 @@ is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment
 <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-base-content/60">
   {% if cartel.workgroup.is_archived %}<span class="badge badge-ghost">Archived</span>
   {% elif cartel.registration_status == "forming" and not cartel.closed %}<span class="badge badge-primary">Forming · Join!</span>
-  {% elif cartel.registration_status == "forming" and cartel.closed %}<span class="badge badge-ghost">Forming · Closed</span>
+  {% elif cartel.registration_status == "forming" and cartel.closed %}<span class="badge badge-ghost">Invitation only</span>
   {% elif cartel.registration_status == "submitted" %}<span class="badge badge-outline">Under PC review</span>
   {% elif cartel.registration_status == "registered" and not cartel.closed %}<span class="badge badge-primary">Registered · Open</span>
   {% elif cartel.registration_status == "registered" %}<span class="badge badge-ghost">Registered · Closed</span>{% endif %}
 </div>
 
-{% if cartel.guiding_question %}
+{% if cartel.theme %}
 <section class="space-y-1">
-  <h2 class="text-xs uppercase tracking-wider text-base-content/60">Guiding question</h2>
-  <p class="text-lg text-base-content/90">{{ cartel.guiding_question }}</p>
+  <h2 class="text-xs uppercase tracking-wider text-base-content/60">Theme</h2>
+  <p class="text-lg text-base-content/90">{{ cartel.theme }}</p>
 </section>
 {% endif %}
 

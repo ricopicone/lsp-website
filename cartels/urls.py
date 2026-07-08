@@ -7,6 +7,7 @@ app_name = "cartels"
 urlpatterns = [
     path("", views.index, name="index"),
     path("propose/", views.propose, name="propose"),
+    path("member-search/", views.member_search, name="member_search"),
     path("review/", views.review_queue, name="review_queue"),
     path("review/<int:pk>/decide/", views.review_decide, name="review_decide"),
     path("review/<int:pk>/feedback/", views.coordinator_feedback, name="coordinator_feedback"),

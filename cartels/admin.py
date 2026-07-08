@@ -10,7 +10,7 @@ from .models import Cartel
 class CartelAdmin(admin.ModelAdmin):
     list_display = ("__str__", "registration_status", "proposal_status", "closed", "created_at")
     list_filter = ("registration_status", "closed")
-    search_fields = ("workgroup__name", "workgroup__slug", "guiding_question")
+    search_fields = ("workgroup__name", "workgroup__slug", "theme")
     autocomplete_fields = ("workgroup",)
     actions = ("approve_selected",)
 

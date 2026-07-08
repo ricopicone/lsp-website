@@ -8,9 +8,11 @@ gating uses the Workgroup roster; coordinator gating uses
 from __future__ import annotations
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.http import Http404
+from django.db.models import Q
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -20,13 +22,45 @@ from accounts.permissions import is_lsp_member
 from events.permissions import is_program_committee
 
 from . import notifications as notify_cartels
-from .forms import CartelProposalForm
+from .forms import CartelProposalForm, CartelStartForm
 from .models import Cartel, CartelJoinRequest, CartelQuestion, ExternalPlusOne
 from .permissions import is_cartel_coordinator
 
 
 def _abs(request, obj):
     return request.build_absolute_uri(obj.get_absolute_url())
+
+
+def _selected_invitees(form):
+    """The invitee Users to preload as picker chips: from a bound form's
+    submitted PKs (so an invalid POST keeps the chosen list), else empty."""
+    if not form.is_bound:
+        return []
+    ids = form.data.getlist("invitees")
+    return list(get_user_model().objects.filter(pk__in=ids)) if ids else []
+
+
+@login_required
+def member_search(request):
+    """Directory-member autocomplete for the invitee picker. Returns id + name."""
+    if not is_lsp_member(request.user):
+        raise Http404
+    q = (request.GET.get("q") or "").strip()
+    if not q:
+        return JsonResponse({"results": []})
+    from accounts.models import Profile
+
+    User = get_user_model()
+    qs = User.objects.filter(
+        profile__role__in=Profile.DIRECTORY_ROLES
+    ).exclude(pk=request.user.pk)
+    for term in q.split()[:3]:
+        qs = qs.filter(Q(first_name__icontains=term) | Q(last_name__icontains=term))
+    results = [
+        {"id": u.pk, "name": u.get_full_name() or u.email}
+        for u in qs.order_by("first_name", "last_name")[:8]
+    ]
+    return JsonResponse({"results": results})
 
 
 def index(request):
@@ -45,14 +79,15 @@ def propose(request):
     if not is_lsp_member(request.user):
         raise Http404
     if request.method == "POST":
-        form = CartelProposalForm(request.POST)
+        form = CartelStartForm(request.POST)
         if form.is_valid():
             cartel = Cartel.objects.propose(
                 generator=request.user,
                 name=form.cleaned_data["name"],
-                guiding_question=form.cleaned_data["guiding_question"],
+                theme=form.cleaned_data["theme"],
                 description=form.cleaned_data["description"],
                 invitees=form.cleaned_data["invitees"],
+                closed=form.cleaned_data["closed"],
             )
             notify_cartels.forming_started(cartel, _abs(request, cartel))
             for inv in cartel.invitations.all():
@@ -64,8 +99,10 @@ def propose(request):
             )
             return redirect(cartel.get_absolute_url())
     else:
-        form = CartelProposalForm()
-    return render(request, "cartels/propose.html", {"form": form})
+        form = CartelStartForm()
+    return render(request, "cartels/propose.html", {
+        "form": form, "selected_invitees": _selected_invitees(form),
+    })
 
 
 @login_required
@@ -192,7 +229,7 @@ def apply(request, slug):
 
 @login_required
 def edit(request, slug):
-    """Edit a cartel's details (name, guiding question, overview, invitees).
+    """Edit a cartel's details (name, theme, overview, invitees).
 
     A cartel is run collectively from the moment it starts forming, so any
     active member may edit its details — there's no separate proposal/review
@@ -207,21 +244,28 @@ def edit(request, slug):
             wg.name = form.cleaned_data["name"]
             wg.description = form.cleaned_data["description"]
             wg.save(update_fields=["name", "description"])
-            cartel.guiding_question = form.cleaned_data["guiding_question"]
-            cartel.save(update_fields=["guiding_question"])
+            cartel.theme = form.cleaned_data["theme"]
+            cartel.save(update_fields=["theme"])
             for user in form.cleaned_data["invitees"]:
                 cartel.invitations.get_or_create(
                     invited_user=user, defaults={"created_by": request.user}
                 )
             messages.success(request, "Cartel details updated.")
             return redirect(f"{cartel.get_absolute_url()}?tab=settings")
+        selected = _selected_invitees(form)
     else:
         form = CartelProposalForm(initial={
             "name": cartel.workgroup.name,
-            "guiding_question": cartel.guiding_question,
+            "theme": cartel.theme,
             "description": cartel.workgroup.description,
         })
-    return render(request, "cartels/edit.html", {"cartel": cartel, "form": form})
+        selected = [
+            inv.invited_user for inv in
+            cartel.invitations.filter(accepted_at__isnull=True).select_related("invited_user")
+        ]
+    return render(request, "cartels/edit.html", {
+        "cartel": cartel, "form": form, "selected_invitees": selected,
+    })
 
 
 @login_required

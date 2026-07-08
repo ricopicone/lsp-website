@@ -20,8 +20,8 @@
         · {{ cartel.created_at|date:"M j, Y" }}
       </p>
     </div>
-    {% if cartel.guiding_question %}
-    <p class="text-base-content/80"><span class="text-base-content/50">Guiding question:</span> {{ cartel.guiding_question }}</p>
+    {% if cartel.theme %}
+    <p class="text-base-content/80"><span class="text-base-content/50">Theme:</span> {{ cartel.theme }}</p>
     {% endif %}
     {% if cartel.workgroup.description %}<p class="text-sm text-base-content/70">{{ cartel.workgroup.description }}</p>{% endif %}
     {% if cartel.invitations.all %}
