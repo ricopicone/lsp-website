@@ -647,8 +647,13 @@
           .catch(function () {});
       }
 
-      // DaisyUI dropdowns open on focus — fetch fresh contents each time.
-      dropdown.addEventListener("focusin", loadPanel);
+      // DaisyUI dropdowns open on focus — fetch fresh contents each time the
+      // trigger is focused. Bind to the button, NOT the dropdown: focusin
+      // bubbles, so listening on the dropdown re-fires (and reloads the panel)
+      // when a notification link inside is focused on click, swapping the
+      // anchor out mid-click and killing navigation.
+      var trigger = dropdown.querySelector("button");
+      if (trigger) trigger.addEventListener("focusin", loadPanel);
 
       // Delegated clicks inside the panel.
       panel.addEventListener("click", function (e) {
