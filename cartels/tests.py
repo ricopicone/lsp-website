@@ -209,6 +209,39 @@ def test_submit_notifies_pc(client, mailoutbox):
     assert any("pcnotify@x.test" in m.to for m in mailoutbox)
 
 
+def test_submit_bell_not_swallowed_by_unread_forming_bell(
+    client, django_capture_on_commit_callbacks
+):
+    """Regression: forming_started and submitted both raise an in-app bell row
+    with the same (recipient, category, target) — an unread 'forming' row must
+    not dedupe away the later 'submitted' row, or the coordinator never sees
+    that the cartel reached the PC."""
+    from cartels import notifications as notify_cartels
+    from notifications.models import Notification
+
+    coord = _coordinator("dedupe-coord@x.test")
+    cartel = _forming_cartel_ready("dedupe@x.test")
+
+    # Simulate the coordinator having an unread "forming" bell row already
+    # (as they would from the propose view calling forming_started).
+    notify_cartels.forming_started(cartel, "https://example.test/cartel/")
+    assert Notification.objects.filter(
+        recipient=coord, title__icontains="forming", read_at__isnull=True
+    ).exists()
+
+    client.force_login(cartel.generator)
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+
+    submitted_bell = Notification.objects.filter(
+        recipient=coord, title__icontains="submitted for registration",
+    )
+    assert submitted_bell.exists(), (
+        "coordinator should get a distinct 'submitted' bell row even with an "
+        "unread 'forming' row still open on the same cartel"
+    )
+
+
 def test_propose_does_not_notify_pc(client, mailoutbox):
     _pc_member("pcquiet@x.test")
     _coordinator("coordnotify@x.test")
@@ -968,6 +1001,30 @@ def test_submit_blocked_when_duration_out_of_range():
     assert cartel.registration_checklist()["duration"] is False
     with pytest.raises(_ValidationError):
         cartel.submit_for_registration(by=cartel.generator)
+
+
+def test_duration_ok_boundaries():
+    """duration_ok() is inclusive at both ends: 365 <= days <= 731."""
+    cartel = _forming_cartel_ready("durbounds@x.test")
+    wg = cartel.workgroup
+    start = _dt.date(2026, 9, 1)
+    wg.start_date = start
+
+    wg.end_date = start + _dt.timedelta(days=364)
+    wg.save(update_fields=["start_date", "end_date"])
+    assert cartel.duration_ok() is False
+
+    wg.end_date = start + _dt.timedelta(days=365)
+    wg.save(update_fields=["end_date"])
+    assert cartel.duration_ok() is True
+
+    wg.end_date = start + _dt.timedelta(days=731)
+    wg.save(update_fields=["end_date"])
+    assert cartel.duration_ok() is True
+
+    wg.end_date = start + _dt.timedelta(days=732)
+    wg.save(update_fields=["end_date"])
+    assert cartel.duration_ok() is False
 
 
 def test_submit_succeeds_when_gate_passes_questions_optional():

@@ -205,7 +205,10 @@ class Cartel(models.Model):
     def viewer_state(self, user) -> dict:
         """Cartel-specific context for the (generic) detail page — composes the
         shared :meth:`Workgroup.governance_state` and layers the cartel's
-        ``closed`` gate and ``is_generator`` flag on top."""
+        ``closed`` gate and ``is_generator`` flag on top. Also adds
+        ``registration`` (the :meth:`registration_checklist` dict) and
+        ``my_question`` (the viewer's own cartel question text, or ``""`` if
+        they have none or are anonymous)."""
         state = self.workgroup.governance_state(user)
         state["can_apply"] = state["can_apply"] and not self.closed
         authed = getattr(user, "is_authenticated", False)
