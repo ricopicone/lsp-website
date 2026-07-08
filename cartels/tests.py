@@ -199,6 +199,53 @@ def test_pc_approves_but_coordinator_cannot(client):
     assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
 
 
+# ---- notifications -------------------------------------------------------
+
+def test_submit_notifies_pc(client, mailoutbox):
+    _pc_member("pcnotify@x.test")
+    cartel = _forming_cartel_ready("notif@x.test")
+    client.force_login(cartel.generator)
+    client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert any("pcnotify@x.test" in m.to for m in mailoutbox)
+
+
+def test_propose_does_not_notify_pc(client, mailoutbox):
+    _pc_member("pcquiet@x.test")
+    _coordinator("coordnotify@x.test")
+    gen = _member("proposer@x.test")
+    client.force_login(gen)
+    client.post("/cartels/propose/", {"name": "N", "guiding_question": "Q?"})
+    # PC not emailed at propose; coordinator is
+    assert not any("pcquiet@x.test" in m.to for m in mailoutbox)
+    assert any("coordnotify@x.test" in m.to for m in mailoutbox)
+
+
+def test_decline_notifies_generator_with_revision_wording_not_approved(
+    client, mailoutbox, django_capture_on_commit_callbacks
+):
+    """Regression: generator_decision/notify_generator_of_decision must key off
+    registration_status == REGISTERED, not the (always-OPEN post-propose)
+    proposal status — otherwise a PC decline gets mislabeled as an approval."""
+    cartel = _forming_cartel_ready("declinewording@x.test")
+    cartel.submit_for_registration(by=cartel.generator)
+    client.force_login(_pc_member("pcdecline@x.test"))
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = client.post(
+            f"/cartels/review/{cartel.pk}/decide/",
+            {"decision": "decline", "note": "Please tighten the theme."},
+        )
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+
+    generator_mail = [m for m in mailoutbox if cartel.generator.email in m.to]
+    assert generator_mail, "generator should have been emailed"
+    combined = " ".join(m.subject + " " + m.body for m in generator_mail)
+    assert "returned for revision" in combined
+    assert "approved" not in combined.lower()
+    assert "registered" not in combined.lower()
+
+
 def test_coordinator_feedback_is_advisory(client):
     gen = _member("gen@x.test")
     cartel = Cartel.objects.propose(generator=gen, name="C")
