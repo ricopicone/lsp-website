@@ -424,6 +424,14 @@ LOGGING = {
     },
 }
 
+# --- Find-an-Analyst map --------------------------------------------------
+# When a member's location changes through an interactive edit (Django admin
+# or the self-service profile editor), re-geocode it synchronously in the
+# request so the map pin updates immediately. Off by default (dev/CI stay
+# offline and bulk imports rely on the `geocode_profiles` batch command);
+# production overrides it to True. One best-effort Nominatim call per edit.
+PROFILE_GEOCODE_ON_SAVE = env.bool("DJANGO_PROFILE_GEOCODE_ON_SAVE", default=False)
+
 # --- Defaults -----------------------------------------------------------
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

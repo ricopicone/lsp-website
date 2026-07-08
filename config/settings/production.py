@@ -95,3 +95,9 @@ EMAIL_HOST_PASSWORD = env("DJANGO_EMAIL_HOST_PASSWORD", default="")
 # it off in production regardless of any DJANGO_SUGGESTIONS_ENABLED value in the
 # host .env. Reversible: delete this line (and the box returns to env control).
 SUGGESTIONS_ENABLED = False
+
+# --- Find-an-Analyst map (task #391) ------------------------------------
+# Re-geocode a member's location in-request when it changes via the admin or
+# the self-service editor, so the map pin updates immediately. The host .env
+# may override via DJANGO_PROFILE_GEOCODE_ON_SAVE.
+PROFILE_GEOCODE_ON_SAVE = env.bool("DJANGO_PROFILE_GEOCODE_ON_SAVE", default=True)
