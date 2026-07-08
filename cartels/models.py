@@ -14,6 +14,7 @@ See ../LSP-Website-Cartels-Design.md and docs/design-group-governance.md.
 
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 
 from workgroups.models import (
@@ -298,6 +299,63 @@ class Cartel(models.Model):
 
     def decline_request(self, join_request, decided_by):
         self.workgroup.decline_request(join_request, decided_by)
+
+    # ---- Registration (submit-to-PC) gate ----
+
+    #: Cartel size bounds (cartelisands; the plus-one is extra).
+    MIN_CARTELISANDS = 3
+    MAX_CARTELISANDS = 5
+
+    def cartelisand_count(self) -> int:
+        """Active members excluding whoever holds the plus-one role."""
+        return self.workgroup.memberships.serving().exclude(
+            role=WorkgroupMembership.Role.PLUS_ONE
+        ).count()
+
+    def has_plus_one(self) -> bool:
+        internal = self.workgroup.memberships.serving().filter(
+            role=WorkgroupMembership.Role.PLUS_ONE
+        ).exists()
+        return internal or self.external_plus_ones.exists()
+
+    def duration_ok(self) -> bool:
+        start, end = self.workgroup.start_date, self.workgroup.end_date
+        if not (start and end):
+            return False
+        days = (end - start).days
+        return 365 <= days <= 731
+
+    def registration_checklist(self) -> dict:
+        count = self.cartelisand_count()
+        plus_one = self.has_plus_one()
+        duration = self.duration_ok()
+        in_range = self.MIN_CARTELISANDS <= count <= self.MAX_CARTELISANDS
+        total = count
+        done = self.member_questions.exclude(text="").count()
+        return {
+            "plus_one": plus_one,
+            "duration": duration,
+            "count": in_range,
+            "count_value": count,
+            "questions_done": done,
+            "questions_total": total,
+            "can_submit": bool(plus_one and duration and in_range),
+        }
+
+    @transaction.atomic
+    def submit_for_registration(self, by):
+        """Any cartelisand submits the cartel to the PC for registration once
+        the required gate passes (questions stay optional)."""
+        if not self.registration_checklist()["can_submit"]:
+            raise ValidationError("The cartel is not ready to submit for registration.")
+        self.registration_status = self.RegistrationStatus.SUBMITTED
+        self.save(update_fields=["registration_status"])
+        proposal = self.workgroup.proposal
+        if proposal.review_note or proposal.reviewed_by_id:
+            proposal.review_note = ""
+            proposal.reviewed_by = None
+            proposal.reviewed_at = None
+            proposal.save(update_fields=["review_note", "reviewed_by", "reviewed_at"])
 
 
 class ExternalPlusOne(models.Model):

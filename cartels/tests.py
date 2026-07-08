@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import datetime as _dt
+
 import pytest
+from django.core.exceptions import ValidationError as _ValidationError
 
 from accounts.models import Profile, User
 from cartels.models import Cartel, CartelJoinRequest
@@ -837,3 +840,69 @@ def test_cartel_question_unique_per_member():
     from django.db import IntegrityError
     with _pytest.raises(IntegrityError):
         CartelQuestion.objects.create(cartel=cartel, member=u, text="dup")
+
+
+# ---- submit-to-PC gate (task #392 step 3) -----------------------------
+
+
+def _forming_cartel_ready(gen_email="g@x.test", n_members=3):
+    """A forming cartel with n cartelisands + an internal plus-one + a valid
+    1-year window (ready to submit)."""
+    gen = _member(gen_email)
+    # name includes gen_email so calling this helper more than once per test
+    # (different gen_email each time) doesn't collide on Workgroup.slug.
+    cartel = Cartel.objects.propose(generator=gen, name=f"Ready ({gen_email})")
+    for i in range(1, n_members):
+        cartel.add_member(_member(f"m{i}-{gen_email}"))
+    plus = _member(f"plus-{gen_email}")
+    cartel.set_internal_plus_one(plus)
+    wg = cartel.workgroup
+    wg.start_date = _dt.date(2026, 9, 1)
+    wg.end_date = _dt.date(2027, 9, 1)   # 365 days
+    wg.save(update_fields=["start_date", "end_date"])
+    return cartel
+
+
+def test_cartelisand_count_excludes_plus_one():
+    cartel = _forming_cartel_ready(n_members=3)
+    assert cartel.cartelisand_count() == 3   # plus-one not counted
+
+
+def test_submit_blocked_without_plus_one():
+    gen = _member("g@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.add_member(_member("m2@x.test"))
+    cartel.add_member(_member("m3@x.test"))
+    wg = cartel.workgroup
+    wg.start_date = _dt.date(2026, 9, 1)
+    wg.end_date = _dt.date(2027, 9, 1)
+    wg.save(update_fields=["start_date", "end_date"])
+    assert cartel.registration_checklist()["plus_one"] is False
+    with pytest.raises(_ValidationError):
+        cartel.submit_for_registration(by=gen)
+
+
+def test_submit_blocked_when_too_few_or_too_many():
+    small = _forming_cartel_ready("small@x.test", n_members=2)   # 2 cartelisands
+    assert small.registration_checklist()["count"] is False
+    big = _forming_cartel_ready("big@x.test", n_members=6)       # 6 cartelisands
+    assert big.registration_checklist()["count"] is False
+
+
+def test_submit_blocked_when_duration_out_of_range():
+    cartel = _forming_cartel_ready("dur@x.test")
+    wg = cartel.workgroup
+    wg.end_date = _dt.date(2029, 9, 1)   # ~3 years, too long
+    wg.save(update_fields=["end_date"])
+    assert cartel.registration_checklist()["duration"] is False
+    with pytest.raises(_ValidationError):
+        cartel.submit_for_registration(by=cartel.generator)
+
+
+def test_submit_succeeds_when_gate_passes_questions_optional():
+    cartel = _forming_cartel_ready("ok@x.test")
+    check = cartel.registration_checklist()
+    assert check["can_submit"] is True
+    assert check["questions_done"] == 0   # no questions entered, still submittable
+    cartel.submit_for_registration(by=cartel.generator)
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
