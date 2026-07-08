@@ -288,7 +288,7 @@ def test_propose_form_renders(client):
     client.force_login(_member("gen@x.test"))
     resp = client.get("/cartels/propose/")
     assert resp.status_code == 200
-    assert b"Propose a cartel" in resp.content
+    assert b"Start a cartel" in resp.content
 
 
 def test_cartel_ui_composed_into_unified_groups_detail(client):
@@ -1065,6 +1065,20 @@ def test_submit_twice_does_not_resubmit_registered(client):
     assert resp.status_code == 302
     cartel.refresh_from_db()
     assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+
+
+def test_overview_shows_submit_button_when_ready(client):
+    cartel = _forming_cartel_ready("ov@x.test")
+    client.force_login(cartel.generator)
+    resp = client.get(cartel.get_absolute_url())
+    assert b"Submit for registration" in resp.content
+
+
+def test_overview_shows_forming_badge(client):
+    cartel = _forming_cartel_ready("ovb@x.test")
+    client.force_login(cartel.generator)
+    resp = client.get(cartel.get_absolute_url())
+    assert b"Forming" in resp.content
 
 
 def test_submit_with_incomplete_checklist_shows_message(client):
