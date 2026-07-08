@@ -270,6 +270,59 @@ def edit(request, slug):
 
 @login_required
 @require_POST
+def invite(request, slug):
+    """Any active cartelisand invites more members from the workspace. Creates
+    a WorkgroupInvitation per selected directory member (skipping existing
+    members / already-invited) and notifies each new invitee."""
+    cartel = get_object_or_404(Cartel, workgroup__slug=slug)
+    if not cartel.is_member(request.user) or cartel.workgroup.is_archived:
+        raise Http404
+    from accounts.models import Profile
+
+    User = get_user_model()
+    users = User.objects.filter(
+        pk__in=request.POST.getlist("invitees"),
+        profile__role__in=Profile.DIRECTORY_ROLES,
+    )
+    sent = 0
+    for user in users:
+        if cartel.is_member(user):
+            continue
+        inv, created = cartel.invitations.get_or_create(
+            invited_user=user, defaults={"created_by": request.user}
+        )
+        if created:
+            notify_cartels.invitee(cartel, user, _abs(request, cartel))
+            sent += 1
+    if sent:
+        messages.success(
+            request, f"Sent {sent} invitation{'' if sent == 1 else 's'}."
+        )
+    else:
+        messages.info(
+            request, "No new invitations to send (already members or invited)."
+        )
+    return redirect(cartel.get_absolute_url())
+
+
+@login_required
+@require_POST
+def cancel_invitation(request, slug, pk):
+    """Withdraw a pending (not-yet-accepted) invitation."""
+    cartel = get_object_or_404(Cartel, workgroup__slug=slug)
+    if not cartel.is_member(request.user):
+        raise Http404
+    inv = get_object_or_404(
+        cartel.invitations.filter(accepted_at__isnull=True), pk=pk
+    )
+    who = inv.invited_user.get_full_name() or inv.invited_user.email
+    inv.delete()
+    messages.success(request, f"Invitation to {who} withdrawn.")
+    return redirect(cartel.get_absolute_url())
+
+
+@login_required
+@require_POST
 def manage(request, slug):
     """A member closes/reopens the cartel to new members, archives it, or
     reactivates (exhumes) an archived one.

@@ -206,9 +206,10 @@ class Cartel(models.Model):
         """Cartel-specific context for the (generic) detail page — composes the
         shared :meth:`Workgroup.governance_state` and layers the cartel's
         ``closed`` gate and ``is_generator`` flag on top. Also adds
-        ``registration`` (the :meth:`registration_checklist` dict) and
+        ``registration`` (the :meth:`registration_checklist` dict),
         ``my_question`` (the viewer's own cartel question text, or ``""`` if
-        they have none or are anonymous)."""
+        they have none or are anonymous), and ``pending_invitations`` (the
+        not-yet-accepted invitations, for members to review/withdraw)."""
         state = self.workgroup.governance_state(user)
         state["can_apply"] = state["can_apply"] and not self.closed
         authed = getattr(user, "is_authenticated", False)
@@ -221,6 +222,10 @@ class Cartel(models.Model):
             state["my_question"] = q.text if q else ""
         else:
             state["my_question"] = ""
+        state["pending_invitations"] = (
+            list(self.invitations.filter(accepted_at__isnull=True).select_related("invited_user"))
+            if self.is_member(user) else []
+        )
         return state
 
     # ---- Membership ----

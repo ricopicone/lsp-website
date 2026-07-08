@@ -65,6 +65,41 @@ is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment
 </section>
 {% endif %}
 
+{% if is_member and not cartel.workgroup.is_archived %}
+<section class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-5">
+  <h3 class="font-medium">Invite members</h3>
+  <p class="text-xs text-base-content/50">Invite people directly to join the cartel. Invitees can join without applying, even when membership is invitation only.</p>
+
+  {% if pending_invitations %}
+  <div class="space-y-1">
+    <p class="text-xs text-base-content/60">Invited, not yet joined</p>
+    <ul class="flex flex-wrap gap-2">
+      {% for inv in pending_invitations %}
+      <li class="inline-flex items-center gap-1.5 rounded-md border border-base-300/50 bg-base-200/40 px-2.5 py-1 text-sm">
+        {{ inv.invited_user.get_full_name|default:inv.invited_user.email }}
+        <form method="post" action="{% url 'cartels:cancel_invitation' workgroup.slug inv.pk %}">
+          {% csrf_token %}
+          <button class="text-base-content/40 hover:text-error" aria-label="Withdraw invitation" title="Withdraw invitation">&times;</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <form method="post" action="{% url 'cartels:invite' workgroup.slug %}" class="space-y-2 border-t border-base-300/50 pt-3">
+    {% csrf_token %}
+    <label class="block text-xs text-base-content/60">Add members to invite</label>
+    <div class="people-picker" data-search-url="{% url 'cartels:member_search' %}" data-field="invitees">
+      <div class="parletre-people flex flex-wrap gap-2 mb-2" data-people-chips></div>
+      <input type="text" class="input input-bordered input-sm w-full" data-people-search
+             placeholder="Search members by name" autocomplete="off">
+    </div>
+    <button class="btn btn-primary btn-sm">Send invitations</button>
+  </form>
+</section>
+{% endif %}
+
 <section class="flex flex-wrap items-start gap-2">
   {% if has_invite %}
   <form method="post" action="{% url 'cartels:accept_invitation' workgroup.slug %}">

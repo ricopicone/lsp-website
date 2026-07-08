@@ -1342,3 +1342,88 @@ def test_start_form_renders_picker_and_theme(client):
     assert b"Theme" in resp.content
     assert b"Further description" in resp.content
     assert b"Invitation only" in resp.content
+
+
+# ---- workspace invite interface -------------------------------------------
+
+
+def test_member_invites_from_workspace(client):
+    gen = _member("g@x.test")
+    invitee = _member("inv@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T")
+    client.force_login(gen)
+    resp = client.post(
+        f"/cartels/{cartel.workgroup.slug}/invite/", {"invitees": [str(invitee.pk)]}
+    )
+    assert resp.status_code == 302
+    assert cartel.invitations.filter(invited_user=invitee, accepted_at__isnull=True).exists()
+
+
+def test_invite_notifies_invitee(client, django_capture_on_commit_callbacks, mailoutbox):
+    gen = _member("g@x.test")
+    invitee = _member("inv@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T")
+    client.force_login(gen)
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post(f"/cartels/{cartel.workgroup.slug}/invite/", {"invitees": [str(invitee.pk)]})
+    assert any(invitee.email in m.to for m in mailoutbox)
+
+
+def test_invite_skips_existing_member(client):
+    gen = _member("g@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T")
+    client.force_login(gen)
+    # inviting the generator (already a member) creates no invitation
+    client.post(f"/cartels/{cartel.workgroup.slug}/invite/", {"invitees": [str(gen.pk)]})
+    assert not cartel.invitations.filter(invited_user=gen).exists()
+
+
+def test_non_member_cannot_invite(client):
+    gen = _member("g@x.test")
+    invitee = _member("inv@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T")
+    stranger = _member("stranger@x.test")
+    client.force_login(stranger)
+    resp = client.post(
+        f"/cartels/{cartel.workgroup.slug}/invite/", {"invitees": [str(invitee.pk)]}
+    )
+    assert resp.status_code == 404
+    assert not cartel.invitations.filter(invited_user=invitee).exists()
+
+
+def test_invite_works_on_registered_invitation_only_cartel(client):
+    """The key gap: a member can still invite people after formation, including
+    on a registered, invitation-only (closed) cartel."""
+    cartel = _forming_cartel_ready("g@x.test")
+    cartel.set_closed(True)
+    cartel.submit_for_registration(by=cartel.generator)
+    cartel.approve(_pc_member())
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+    invitee = _member("late@x.test")
+    client.force_login(cartel.generator)
+    resp = client.post(
+        f"/cartels/{cartel.workgroup.slug}/invite/", {"invitees": [str(invitee.pk)]}
+    )
+    assert resp.status_code == 302
+    assert cartel.invitations.filter(invited_user=invitee).exists()
+
+
+def test_cancel_invitation_removes_pending(client):
+    gen = _member("g@x.test")
+    invitee = _member("inv@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T", invitees=[invitee])
+    inv = cartel.invitations.get(invited_user=invitee)
+    client.force_login(gen)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/invitations/{inv.pk}/cancel/")
+    assert resp.status_code == 302
+    assert not cartel.invitations.filter(pk=inv.pk).exists()
+
+
+def test_workspace_shows_invite_section_to_members(client):
+    gen = _member("g@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T")
+    client.force_login(gen)
+    resp = client.get(cartel.workgroup.get_absolute_url())
+    assert resp.status_code == 200
+    assert b"Invite members" in resp.content
+    assert b"people-picker" in resp.content

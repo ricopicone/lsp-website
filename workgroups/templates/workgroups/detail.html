@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}{{ workgroup.name }} — LSP{% endblock %}
 {% block extra_head %}{% if active_tab == "chat" %}<script defer src="{% static 'js/parletre-mentions.js' %}"></script>
-<script defer src="{% static 'js/parletre-chat.js' %}"></script>{% endif %}{% endblock %}
+<script defer src="{% static 'js/parletre-chat.js' %}"></script>{% endif %}{% if cartel and active_tab == "overview" %}<script defer src="{% static 'js/parletre-people-picker.js' %}"></script>{% endif %}{% endblock %}
 {% block content %}
 <div class="space-y-8">
 
