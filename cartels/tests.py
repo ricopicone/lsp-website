@@ -814,3 +814,23 @@ def test_proposed_cartel_hidden_from_other_members_on_kind_list(client):
     client.force_login(other)
     resp = client.get("/groups/cartels/")
     assert b"Secret Proposal" not in resp.content   # private until approved
+
+
+# ---- registration_status / CartelQuestion (task #392) ----------------
+
+
+def test_registration_status_defaults_to_forming():
+    cartel = Cartel.objects.create_with_workgroup(name="C")
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+
+
+def test_cartel_question_unique_per_member():
+    from cartels.models import CartelQuestion
+    cartel = Cartel.objects.create_with_workgroup(name="C")
+    u = _member("q@x.test")
+    CartelQuestion.objects.create(cartel=cartel, member=u, text="What is a letter?")
+    assert cartel.member_questions.get(member=u).text == "What is a letter?"
+    import pytest as _pytest
+    from django.db import IntegrityError
+    with _pytest.raises(IntegrityError):
+        CartelQuestion.objects.create(cartel=cartel, member=u, text="dup")

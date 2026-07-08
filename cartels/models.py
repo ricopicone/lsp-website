@@ -89,6 +89,11 @@ class Cartel(models.Model):
     #: status now lives on the workgroup's :class:`WorkgroupProposal`.
     Status = WorkgroupProposal.Status
 
+    class RegistrationStatus(models.TextChoices):
+        FORMING = "forming", "Forming — gathering members"
+        SUBMITTED = "submitted", "Submitted for PC registration"
+        REGISTERED = "registered", "Registered — approved by the PC"
+
     workgroup = models.OneToOneField(
         Workgroup,
         on_delete=models.CASCADE,
@@ -104,6 +109,12 @@ class Cartel(models.Model):
     )
     closed = models.BooleanField(
         default=False, help_text="Closed to new members (members may toggle)."
+    )
+    registration_status = models.CharField(
+        max_length=10,
+        choices=RegistrationStatus.choices,
+        default=RegistrationStatus.FORMING,
+        help_text="Where the cartel sits in the formation → PC-registration flow.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -301,6 +312,32 @@ class ExternalPlusOne(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} (plus-one, external) — {self.cartel}"
+
+
+class CartelQuestion(models.Model):
+    """A cartelisand's individual question — the unique angle each member takes
+    on the cartel's theme, managed by that member as the cartel evolves. Every
+    member of the cartel can read all questions; each edits only their own."""
+
+    cartel = models.ForeignKey(
+        Cartel, on_delete=models.CASCADE, related_name="member_questions"
+    )
+    member = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="cartel_questions"
+    )
+    text = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("cartel", "member"), name="cartels_one_question_per_member"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.member} — question in {self.cartel}"
 
 
 # The cartel's invitations and join-requests now live on the Workgroup layer.
