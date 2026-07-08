@@ -35,16 +35,33 @@ def _pc_users():
     )
 
 
-def proposal(cartel, url: str) -> None:
+def forming_started(cartel, url: str) -> None:
+    """A new cartel is forming — notify the Cartel Coordinator (advisory)."""
+    for user in _coordinator_users():
+        notify(
+            user, Category.CARTEL_PROPOSAL,
+            title=f"Cartel forming: {cartel.workgroup.name}",
+            url=url, target=cartel, email=False, dedupe=True,
+        )
+    emails.notify_forming_started(cartel, url)
+
+
+def submitted(cartel, url: str) -> None:
+    """A cartel was submitted for PC registration — notify the PC + Coordinator.
+
+    ``dedupe=False``: an unread earlier bell row on this cartel (e.g. "Cartel
+    forming" or coordinator feedback, both same category + target) must not
+    swallow this one — submission is a distinct, actionable event.
+    """
     recipients = {u.id: u for u in _coordinator_users()}
     recipients.update({u.id: u for u in _pc_users()})
     for user in recipients.values():
         notify(
             user, Category.CARTEL_PROPOSAL,
-            title=f"Cartel proposal: {cartel.workgroup.name}",
-            url=url, target=cartel, email=False, dedupe=True,
+            title=f"Cartel submitted for registration: {cartel.workgroup.name}",
+            url=url, target=cartel, email=False, dedupe=False,
         )
-    emails.notify_proposal(cartel, url)
+    emails.notify_submitted(cartel, url)
 
 
 def coordinator_feedback(cartel, url: str) -> None:
@@ -64,12 +81,12 @@ def generator_decision(cartel, url: str) -> None:
     if cartel.generator is None:
         emails.notify_generator_of_decision(cartel, url)
         return
-    approved = cartel.status == cartel.Status.OPEN
+    approved = cartel.registration_status == cartel.RegistrationStatus.REGISTERED
     notify(
         cartel.generator, Category.CARTEL_DECISION,
         title=(
-            f"Cartel approved: {cartel.workgroup.name}" if approved
-            else f"Cartel proposal declined: {cartel.workgroup.name}"
+            f"Cartel registered: {cartel.workgroup.name}" if approved
+            else f"Cartel returned for revision: {cartel.workgroup.name}"
         ),
         url=url, target=cartel,
         email_fn=lambda: emails.notify_generator_of_decision(cartel, url),
