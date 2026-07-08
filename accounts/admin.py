@@ -80,6 +80,15 @@ class ProfileAdmin(admin.ModelAdmin):
     list_filter = ("role", "is_faculty", "public")
     search_fields = ("user__email", "user__first_name", "user__last_name")
 
+    def save_model(self, request, obj, form, change):
+        # Profile.save() invalidates the geocode when ``location`` changes;
+        # re-resolve it here so an admin edit updates the map pin immediately
+        # instead of leaving a stale one (task #391).
+        super().save_model(request, obj, form, change)
+        from .geocoding import geocode_after_edit
+
+        geocode_after_edit(obj)
+
 
 @admin.register(EmailChangeRequest)
 class EmailChangeRequestAdmin(admin.ModelAdmin):

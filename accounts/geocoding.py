@@ -78,6 +78,53 @@ def geocode(location: str) -> GeocodeResult | None:
     )
 
 
+def geocode_profile(profile) -> bool:
+    """Best-effort: resolve a single ``profile.location`` into coords + pins
+    and save them. Returns ``True`` on any hit.
+
+    Swallows every error and a total miss — those just leave the coords null
+    for the batch :mod:`geocode_profiles` command to retry later. Saves with
+    ``update_fields`` limited to the coord columns so it never re-triggers the
+    location-change staling in :meth:`Profile.save`.
+    """
+    location = (profile.location or "").strip()
+    if not location:
+        return False
+    pins: list[dict] = []
+    try:
+        for piece in split_location(location):
+            result = geocode(piece)
+            if result is not None:
+                pins.append({"lat": result.lat, "lng": result.lng, "label": piece})
+    except Exception:  # noqa: BLE001 — geocoding must never break a save
+        return False
+    if not pins:
+        return False
+    profile.location_pins = pins
+    profile.location_lat = pins[0]["lat"]
+    profile.location_lng = pins[0]["lng"]
+    profile.save(update_fields=["location_pins", "location_lat", "location_lng"])
+    return True
+
+
+def geocode_after_edit(profile) -> None:
+    """Re-geocode after an *interactive* edit (admin, self-service editor).
+
+    A no-op unless the just-completed save staled the geocode
+    (``profile._geocode_stale``) and ``PROFILE_GEOCODE_ON_SAVE`` is enabled.
+    Bulk paths (imports) deliberately skip this and rely on the
+    ``geocode_profiles`` batch command instead, so they don't fire an
+    unthrottled Nominatim request per row.
+    """
+    from django.conf import settings
+
+    if not getattr(settings, "PROFILE_GEOCODE_ON_SAVE", False):
+        return
+    if not getattr(profile, "_geocode_stale", False):
+        return
+    geocode_profile(profile)
+
+
 def make_batch_geocoder(per_request_delay: float = 1.0):
     """A geopy RateLimiter-wrapped callable for batch geocoding.
 

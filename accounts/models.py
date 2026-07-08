@@ -507,10 +507,78 @@ class Profile(models.Model):
             or str(self.user.pk)
         )
 
+    # Geocode-staling snapshot fields (see save()); ``_UNSET`` means the
+    # instance wasn't loaded from the DB, so we read the old value on demand.
+    _GEOCODE_UNSET = object()
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        for f in ("location", "location_lat", "location_lng"):
+            if f in field_names:
+                setattr(instance, "_loaded_" + f, values[field_names.index(f)])
+        return instance
+
+    def _stale_geocode_snapshot(self):
+        """Return the ``(location, lat, lng)`` last read from the DB, falling
+        back to a query when this instance wasn't loaded from the DB (or had
+        those columns deferred)."""
+        loc = getattr(self, "_loaded_location", self._GEOCODE_UNSET)
+        lat = getattr(self, "_loaded_location_lat", self._GEOCODE_UNSET)
+        lng = getattr(self, "_loaded_location_lng", self._GEOCODE_UNSET)
+        if self._GEOCODE_UNSET in (loc, lat, lng):
+            if self.pk is None:
+                return None
+            row = (
+                type(self).objects.filter(pk=self.pk)
+                .values("location", "location_lat", "location_lng").first()
+            )
+            if row is None:
+                return None
+            return row["location"], row["location_lat"], row["location_lng"]
+        return loc, lat, lng
+
     def save(self, *args, **kwargs):
         if not self.is_faculty:
             self.default_billing_mode = None
+
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            update_fields = set(update_fields)
+
+        # Invalidate a stale geocode whenever ``location`` changes — at the
+        # model level so *every* save path (admin, imports, scripts) behaves
+        # like the self-service editor, not just it (task #391). Skip when the
+        # caller is also writing new coords in the same save (e.g. the
+        # geocode_profiles command, or object setup), so we don't clobber them.
+        # ``_geocode_stale`` signals interactive edit surfaces to re-geocode.
+        self._geocode_stale = False
+        location_being_saved = update_fields is None or "location" in update_fields
+        snapshot = self._stale_geocode_snapshot() if location_being_saved else None
+        if snapshot is not None:
+            old_location, old_lat, old_lng = snapshot
+            location_changed = old_location != self.location
+            coords_untouched = (
+                self.location_lat == old_lat and self.location_lng == old_lng
+            )
+            if location_changed and coords_untouched:
+                self.location_lat = None
+                self.location_lng = None
+                self.location_pins = []
+                self._geocode_stale = True
+                if update_fields is not None:
+                    update_fields |= {
+                        "location_lat", "location_lng", "location_pins"
+                    }
+                    kwargs["update_fields"] = update_fields
+
         super().save(*args, **kwargs)
+
+        # Refresh the snapshot so a later save on the same instance compares
+        # against what's now persisted.
+        self._loaded_location = self.location
+        self._loaded_location_lat = self.location_lat
+        self._loaded_location_lng = self.location_lng
 
 
 class EmailChangeRequest(models.Model):

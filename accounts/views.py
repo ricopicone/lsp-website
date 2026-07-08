@@ -31,6 +31,7 @@ from .forms import (
     TOTPCodeForm,
     UserNameForm,
 )
+from .geocoding import geocode_after_edit
 from .images import MAX_UPLOAD_BYTES, InvalidImage, render_headshot_square
 from .models import EmailChangeRequest, MagicLoginLink, Profile, TOTPDevice, User
 
@@ -517,6 +518,7 @@ def profile_edit(request):
                 )
             uform.save()
             prof.save()
+            geocode_after_edit(prof)
             return redirect(_profile_saved_redirect(request))
         return render(
             request, "accounts/profile_edit.html",
@@ -537,7 +539,8 @@ def profile_autosave(request):
     pform = ProfileEditForm(request.POST, instance=request.user.profile)
     if uform.is_valid() and pform.is_valid():
         uform.save()
-        pform.save()
+        prof = pform.save()
+        geocode_after_edit(prof)
         return JsonResponse({"ok": True})
     return JsonResponse({"ok": False})
 

@@ -348,13 +348,10 @@ class ProfileEditForm(forms.ModelForm):
                       or Profile.Visibility.PUBLIC)
                 for key in self._vis_keys
             }
-        # If the member edited their location, stale the geocode so the next
-        # `geocode_profiles` run (which only touches rows with no coords)
-        # re-resolves pins. See accounts/management/commands/geocode_profiles.py.
-        if "location" in self.changed_data:
-            profile.location_lat = None
-            profile.location_lng = None
-            profile.location_pins = []
+        # Geocode invalidation on a location change now lives in
+        # Profile.save() (task #391) so every save path behaves alike — the
+        # form no longer stales coords itself. Interactive re-geocoding is
+        # kicked off by the view via geocoding.geocode_after_edit().
         if commit:
             profile.save()
         return profile
