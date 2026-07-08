@@ -944,12 +944,85 @@ def test_viewer_state_exposes_question_and_checklist():
 # ---- data migration mapping (task #392 / task 6) ----
 
 
-def test_migration_maps_open_to_registered():
-    # simulate an old-style OPEN cartel (created_with_workgroup records OPEN)
-    from workgroups.models import WorkgroupProposal
-    cartel = Cartel.objects.create_with_workgroup(name="Legacy")
-    assert cartel.proposal.status == WorkgroupProposal.Status.OPEN
-    # apply the same mapping the data migration uses
-    cartel.registration_status = "registered"
+def _legacy_cartel(name, *, proposal_status):
+    """Build a pre-migration Cartel: real proposal status, wrong-on-purpose
+    registration_status sentinel so a no-op migration is caught."""
+    cartel = Cartel.objects.create_with_workgroup(name=name)
+    proposal = cartel.workgroup.proposal
+    proposal.status = proposal_status
+    proposal.save(update_fields=["status"])
+    cartel.registration_status = "unmapped"
     cartel.save(update_fields=["registration_status"])
+    return cartel
+
+
+def _run_migration_forward():
+    import importlib
+
+    from django.apps import apps as django_apps
+
+    mig = importlib.import_module("cartels.migrations.0009_map_registration_status")
+    mig.forward(django_apps, None)
+
+
+@pytest.mark.django_db
+def test_migration_maps_open_to_registered():
+    from workgroups.models import WorkgroupProposal
+
+    cartel = _legacy_cartel("Legacy Open", proposal_status=WorkgroupProposal.Status.OPEN)
+
+    _run_migration_forward()
+
+    cartel.refresh_from_db()
+    cartel.workgroup.proposal.refresh_from_db()
     assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+    assert cartel.workgroup.proposal.status == WorkgroupProposal.Status.OPEN
+
+
+@pytest.mark.django_db
+def test_migration_maps_proposed_to_submitted_and_reopens_proposal():
+    from workgroups.models import WorkgroupProposal
+
+    cartel = _legacy_cartel("Legacy Proposed", proposal_status=WorkgroupProposal.Status.PROPOSED)
+
+    _run_migration_forward()
+
+    cartel.refresh_from_db()
+    proposal = cartel.workgroup.proposal
+    proposal.refresh_from_db()
+    cartel.workgroup.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+    assert proposal.status == WorkgroupProposal.Status.OPEN
+    assert cartel.workgroup.landing_visibility == Visibility.MEMBERS
+
+
+@pytest.mark.django_db
+def test_migration_maps_declined_to_forming_and_reopens_proposal():
+    from workgroups.models import WorkgroupProposal
+
+    cartel = _legacy_cartel("Legacy Declined", proposal_status=WorkgroupProposal.Status.DECLINED)
+
+    _run_migration_forward()
+
+    cartel.refresh_from_db()
+    proposal = cartel.workgroup.proposal
+    proposal.refresh_from_db()
+    cartel.workgroup.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+    assert proposal.status == WorkgroupProposal.Status.OPEN
+    assert cartel.workgroup.landing_visibility == Visibility.MEMBERS
+
+
+@pytest.mark.django_db
+def test_migration_maps_archived_to_registered_and_leaves_proposal_archived():
+    from workgroups.models import WorkgroupProposal
+
+    cartel = _legacy_cartel("Legacy Archived", proposal_status=WorkgroupProposal.Status.ARCHIVED)
+
+    _run_migration_forward()
+
+    cartel.refresh_from_db()
+    proposal = cartel.workgroup.proposal
+    proposal.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+    assert proposal.status == WorkgroupProposal.Status.ARCHIVED
