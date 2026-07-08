@@ -257,7 +257,8 @@ def test_coordinator_feedback_is_advisory(client):
     assert resp.status_code == 302
     cartel.refresh_from_db()
     assert "Letter cartel" in cartel.coordinator_feedback
-    assert cartel.status == Cartel.Status.PROPOSED   # feedback does not gate
+    # feedback does not gate
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
     # a PC member can't leave coordinator feedback
     client.force_login(_pc_member())
     r = client.post(f"/cartels/review/{cartel.pk}/feedback/", {"feedback": "x"})
@@ -327,22 +328,37 @@ def test_legacy_cartel_urls_redirect_to_groups(client):
     assert client.get(f"/cartels/{slug}/", follow=True).status_code == 200
 
 
-def test_declined_cartel_can_be_edited_and_resubmitted(client):
-    """Improvement 1: a declined proposal, edited by the generator, re-enters
-    review (PROPOSED) and re-hides until re-approved."""
-    gen = _member("gen@x.test")
-    cartel = Cartel.objects.propose(generator=gen, name="C", guiding_question="Q1")
-    cartel.decline(_coordinator(), note="Sharpen the question.")
+def test_returned_cartel_can_be_revised_and_resubmitted(client):
+    """A submitted cartel the PC returns for revision goes back to FORMING
+    (not hidden — it stays members-visible); any member may revise its
+    details, and any member may resubmit it once ready again."""
+    cartel = _forming_cartel_ready("gen@x.test")
+    gen = cartel.generator
+    cartel.submit_for_registration(by=gen)
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+
+    cartel.decline(_pc_member(), note="Sharpen the question.")
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+    assert cartel.review_note == "Sharpen the question."
+    # still visible to the school (forming, not re-hidden)
+    assert cartel.workgroup.landing_visibility == Visibility.MEMBERS
+
     client.force_login(gen)
     resp = client.post(f"/cartels/{cartel.workgroup.slug}/edit/", {
-        "name": "C", "guiding_question": "A sharper question", "invitees": "",
+        "name": cartel.workgroup.name, "guiding_question": "A sharper question", "invitees": "",
     })
     assert resp.status_code == 302
     cartel.refresh_from_db()
-    assert cartel.status == Cartel.Status.PROPOSED
     assert cartel.guiding_question == "A sharper question"
-    assert cartel.workgroup.landing_visibility == Visibility.PRIVATE   # hidden again
-    # only the generator may edit
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+
+    # editing is collaborative among members, but not open to non-members
     client.force_login(_member("other@x.test"))
     assert client.get(f"/cartels/{cartel.workgroup.slug}/edit/").status_code == 404
 
@@ -473,7 +489,7 @@ def test_my_cartels_and_status_badge_on_kind_list(client):
     resp = client.get("/groups/cartels/")
     assert resp.status_code == 200
     assert b"My cartels" in resp.content
-    assert b"Open \xc2\xb7 Join!" in resp.content   # status badge ("Open · Join!")
+    assert b"Registered \xc2\xb7 Open" in resp.content   # status badge ("Registered · Open")
 
 
 def test_workspace_tabs_shown_to_member(client):
@@ -868,13 +884,13 @@ def test_nested_group_links_back_to_parent_workgroup(client):
     assert b"Working Group on Cartels" in resp.content
 
 
-def test_proposed_cartel_hidden_from_other_members_on_kind_list(client):
+def test_forming_cartel_visible_to_members_on_kind_list(client):
     gen = _member("gen@x.test")
-    Cartel.objects.propose(generator=gen, name="Secret Proposal")
+    Cartel.objects.propose(generator=gen, name="Open Formation")
     other = _member("other@x.test")
     client.force_login(other)
     resp = client.get("/groups/cartels/")
-    assert b"Secret Proposal" not in resp.content   # private until approved
+    assert b"Open Formation" in resp.content   # forming cartels are visible to the school
 
 
 # ---- registration_status / CartelQuestion (task #392) ----------------

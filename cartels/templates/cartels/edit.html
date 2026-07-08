@@ -4,12 +4,6 @@
 <div class="max-w-2xl space-y-6">
   <header class="space-y-2">
     <h1 class="font-serif text-3xl text-base-content">Edit cartel</h1>
-    {% if cartel.status == "declined" %}
-    <p class="text-base-content/70">
-      This proposal was declined{% if cartel.review_note %} — “{{ cartel.review_note }}”{% endif %}.
-      Edit and save to resubmit it for review.
-    </p>
-    {% endif %}
   </header>
 
   <form method="post" class="space-y-5">
@@ -25,9 +19,7 @@
     {% endfor %}
     <div class="flex items-center justify-between border-t border-base-300/60 pt-5">
       <a href="{{ cartel.get_absolute_url }}" class="btn btn-ghost">Cancel</a>
-      <button type="submit" class="btn btn-primary">
-        {% if cartel.status == "declined" %}Save &amp; resubmit{% else %}Save{% endif %}
-      </button>
+      <button type="submit" class="btn btn-primary">Save</button>
     </div>
   </form>
 </div>
