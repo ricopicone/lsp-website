@@ -47,6 +47,32 @@ def proposal(cartel, url: str) -> None:
     emails.notify_proposal(cartel, url)
 
 
+def forming_started(cartel, url: str) -> None:
+    """TASK 8 STUB (task #392): a cartel begins forming (propose view). For
+    now this only notifies the Cartel Coordinator, so they're aware a new
+    cartel is gathering members even though the PC has nothing to review yet
+    (that happens later, at submit). Task 8 owns the full member-facing
+    version of this notification (e.g. broadcasting the open call to the
+    school) — refine/replace this stub there."""
+    for user in _coordinator_users():
+        notify(
+            user, Category.CARTEL_PROPOSAL,
+            title=f"Cartel forming: {cartel.workgroup.name}",
+            url=url, target=cartel, email=False, dedupe=True,
+        )
+
+
+def submitted(cartel, url: str) -> None:
+    """TASK 8 STUB (task #392): a cartel is submitted to the PC for
+    registration. For now this delegates to the existing ``proposal()``
+    notification (Cartel Coordinator + Programming Committee, batched staff
+    email) — the same audience that used to be notified at propose-time.
+    Task 8 owns building a dedicated "submitted for registration" email/bell
+    copy distinct from the original proposal-review one; refine/replace this
+    stub there."""
+    proposal(cartel, url)
+
+
 def coordinator_feedback(cartel, url: str) -> None:
     recipients = {u.id: u for u in _pc_users()}
     if cartel.generator_id:

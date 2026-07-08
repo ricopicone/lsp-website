@@ -152,7 +152,10 @@ def test_propose_view_creates_cartel_and_redirects(client):
     })
     assert resp.status_code == 302
     cartel = Cartel.objects.get(workgroup__name="Speech and Writing")
-    assert cartel.status == Cartel.Status.PROPOSED
+    # A proposed cartel is forming (and already live/OPEN) from the start —
+    # PC review only happens later, at submit-for-registration.
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+    assert cartel.status == Cartel.Status.OPEN
     assert cartel.is_member(gen)
 
 
@@ -177,8 +180,8 @@ def test_review_queue_open_to_pc_and_coordinator_not_plain(client):
 
 
 def test_pc_approves_but_coordinator_cannot(client):
-    gen = _member("gen@x.test")
-    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel = _forming_cartel_ready("gen@x.test")
+    cartel.submit_for_registration(by=cartel.generator)
 
     # The Cartel Coordinator may NOT approve (advisory only).
     client.force_login(_coordinator())
@@ -186,14 +189,14 @@ def test_pc_approves_but_coordinator_cannot(client):
         f"/cartels/review/{cartel.pk}/decide/", {"decision": "approve"}
     ).status_code == 404
     cartel.refresh_from_db()
-    assert cartel.status == Cartel.Status.PROPOSED
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
 
-    # The Program Committee approves & publishes.
+    # The Program Committee approves & registers.
     client.force_login(_pc_member())
     resp = client.post(f"/cartels/review/{cartel.pk}/decide/", {"decision": "approve"})
     assert resp.status_code == 302
     cartel.refresh_from_db()
-    assert cartel.status == Cartel.Status.OPEN
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
 
 
 def test_coordinator_feedback_is_advisory(client):
@@ -939,6 +942,54 @@ def test_viewer_state_exposes_question_and_checklist():
     state = cartel.viewer_state(gen)
     assert state["my_question"] == "my angle"
     assert state["registration"]["can_submit"] is True
+
+
+# ---- submit + question views, opened join gates (task #392 / task 7) --
+
+
+def test_member_can_submit_via_view(client):
+    cartel = _forming_cartel_ready("view@x.test")
+    client.force_login(cartel.generator)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+
+
+def test_member_edits_own_question_only(client):
+    from cartels.models import CartelQuestion
+    cartel = _forming_cartel_ready("qview@x.test")
+    gen = cartel.generator
+    other = _member("other-qview@x.test")
+    cartel.add_member(other)
+    client.force_login(gen)
+    client.post(f"/cartels/{cartel.workgroup.slug}/question/", {"text": "gen angle"})
+    assert CartelQuestion.objects.get(cartel=cartel, member=gen).text == "gen angle"
+    # a non-member cannot post a question
+    stranger = _member("stranger-qview@x.test")
+    client.force_login(stranger)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/question/", {"text": "no"})
+    assert resp.status_code == 404
+    assert not CartelQuestion.objects.filter(cartel=cartel, member=stranger).exists()
+
+
+def test_apply_works_while_forming(client):
+    cartel = _forming_cartel_ready("apply@x.test")   # forming, not yet at PC
+    applicant = _member("applicant@x.test")
+    client.force_login(applicant)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/apply/", {"message": "hi"})
+    assert resp.status_code == 302
+    assert cartel.join_requests.filter(applicant=applicant).exists()
+
+
+def test_review_queue_lists_submitted(client):
+    cartel = _forming_cartel_ready("rq@x.test")
+    cartel.submit_for_registration(by=cartel.generator)
+    pc = _pc_member()
+    client.force_login(pc)
+    resp = client.get("/cartels/review/")
+    assert resp.status_code == 200
+    assert cartel in list(resp.context["submitted"])
 
 
 # ---- data migration mapping (task #392 / task 6) ----
