@@ -40,7 +40,7 @@ class CartelManager(models.Manager):
         return self.create(workgroup=wg)
 
     @transaction.atomic
-    def propose(self, *, generator, name, guiding_question="", description="", invitees=()):
+    def propose(self, *, generator, name, theme="", description="", invitees=(), closed=False):
         """A member starts a cartel forming (task #392 step 1).
 
         The cartel is live among the school immediately (members-visible landing,
@@ -59,7 +59,7 @@ class CartelManager(models.Manager):
             status=WorkgroupProposal.Status.OPEN,
         )
         cartel = self.create(
-            workgroup=wg, guiding_question=guiding_question,
+            workgroup=wg, theme=theme, closed=closed,
             registration_status=self.model.RegistrationStatus.FORMING,
         )
         cartel.add_member(generator)
@@ -103,8 +103,8 @@ class Cartel(models.Model):
         on_delete=models.CASCADE,
         related_name="cartel",
     )
-    guiding_question = models.TextField(
-        blank=True, help_text="The question the cartel forms around."
+    theme = models.TextField(
+        blank=True, help_text="The theme the cartel forms around."
     )
     coordinator_feedback = models.TextField(
         blank=True,

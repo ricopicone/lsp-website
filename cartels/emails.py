@@ -61,7 +61,7 @@ def notify_forming_started(cartel, url: str) -> None:
     body = (
         f"{who} started a cartel forming.\n\n"
         f"Name: {cartel.workgroup.name}\n"
-        f"Guiding question: {cartel.guiding_question or '(none)'}\n\n"
+        f"Theme: {cartel.theme or '(none)'}\n\n"
         f"You can offer feedback anytime: {url}\n"
     )
     _send(subject=f"[LSP] Cartel forming: {cartel.workgroup.name}",
@@ -74,7 +74,7 @@ def notify_submitted(cartel, url: str) -> None:
     body = (
         f"{who}'s cartel was submitted for registration.\n\n"
         f"Name: {cartel.workgroup.name}\n"
-        f"Guiding question: {cartel.guiding_question or '(none)'}\n\n"
+        f"Theme: {cartel.theme or '(none)'}\n\n"
         f"Review it: {url}\n"
     )
     _send(subject=f"[LSP] Cartel submitted for registration: {cartel.workgroup.name}",
@@ -117,7 +117,7 @@ def notify_invitee(cartel, invited_user, url: str) -> None:
         subject=f"[LSP] You're invited to the cartel '{cartel.workgroup.name}'",
         body=(
             f"You were invited to join the cartel '{cartel.workgroup.name}'.\n"
-            f"Guiding question: {cartel.guiding_question or '(none)'}\n\n"
+            f"Theme: {cartel.theme or '(none)'}\n\n"
             f"Accept the invitation: {url}\n"
         ),
         to=[invited_user.email],
