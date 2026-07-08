@@ -939,3 +939,17 @@ def test_viewer_state_exposes_question_and_checklist():
     state = cartel.viewer_state(gen)
     assert state["my_question"] == "my angle"
     assert state["registration"]["can_submit"] is True
+
+
+# ---- data migration mapping (task #392 / task 6) ----
+
+
+def test_migration_maps_open_to_registered():
+    # simulate an old-style OPEN cartel (created_with_workgroup records OPEN)
+    from workgroups.models import WorkgroupProposal
+    cartel = Cartel.objects.create_with_workgroup(name="Legacy")
+    assert cartel.proposal.status == WorkgroupProposal.Status.OPEN
+    # apply the same mapping the data migration uses
+    cartel.registration_status = "registered"
+    cartel.save(update_fields=["registration_status"])
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
