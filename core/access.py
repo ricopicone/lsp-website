@@ -17,6 +17,26 @@ from functools import wraps
 
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
+from django.http import Http404
+
+
+def gate_or_login(request):
+    """Denial for a visibility/membership-gated GET page.
+
+    Call after a failed visibility check on a page an anonymous visitor could
+    reach by link (an invite, a shared/deep URL). Bounces anonymous visitors
+    to login so they return here after signing in; hides the resource from a
+    signed-in non-member by raising ``Http404`` (don't reveal it exists).
+
+    Returns an ``HttpResponseRedirect`` for anonymous users — callers must
+    ``return`` it — and raises ``Http404`` otherwise::
+
+        if not obj.visible_to(request.user):
+            return gate_or_login(request)
+    """
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
+    raise Http404
 
 
 def has_staff_role(user, *keys: str) -> bool:

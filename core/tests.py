@@ -816,6 +816,29 @@ def test_appoint_and_remove_staff_role(db, client):
     assert not has_staff_role(target, StaffRole.TREASURER)
 
 
+def test_gate_or_login_redirects_anonymous(db):
+    from django.contrib.auth.models import AnonymousUser
+    from django.test import RequestFactory
+
+    from core.access import gate_or_login
+    req = RequestFactory().get("/groups/secret/")
+    req.user = AnonymousUser()
+    resp = gate_or_login(req)
+    assert resp.status_code == 302
+    assert resp.url == "/accounts/login/?next=/groups/secret/"
+
+
+def test_gate_or_login_404s_signed_in_non_member(db):
+    from django.http import Http404
+    from django.test import RequestFactory
+
+    from core.access import gate_or_login
+    req = RequestFactory().get("/groups/secret/")
+    req.user = User.objects.create_user(email="gate@example.com", password="x")
+    with pytest.raises(Http404):
+        gate_or_login(req)
+
+
 def test_create_committee_provisions_workgroup(db, client):
     from committees.models import Committee
     client.force_login(_board_member("cmt@example.com"))

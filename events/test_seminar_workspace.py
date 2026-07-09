@@ -309,10 +309,22 @@ def test_published_seminar_workspace_shows_faculty_not_roster(client):
 
 
 def test_draft_seminar_workspace_not_public(client):
-    """An unpublished seminar's Workspace is NOT public (no leak before launch)."""
+    """An unpublished seminar's Workspace is NOT public (no leak before launch).
+
+    Anonymous visitors are bounced to login; a signed-in non-member still gets
+    a 404 — the content itself never leaks before launch."""
     event = _seminar()              # published defaults False
     wg = event.ensure_workgroup()
-    assert client.get(wg.get_absolute_url()).status_code == 404
+    url = wg.get_absolute_url()
+    anon = client.get(url)
+    assert anon.status_code == 302
+    assert anon.url == f"/accounts/login/?next={url}"
+    # A signed-in non-member (not an LSP member, not on the roster) still 404s.
+    outsider = User.objects.create_user(email="outsider@x.test", password="x")
+    outsider.profile.role = Profile.Role.EXTERNAL
+    outsider.profile.save()
+    client.force_login(outsider)
+    assert client.get(url).status_code == 404
 
 
 def test_paid_student_can_be_assigned_a_task(client):

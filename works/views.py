@@ -15,25 +15,29 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from core.access import gate_or_login
+
 from .forms import WorkForm
 from .models import Work, WorkAuthor, WorkFile
 
 
+def _prefetched(qs):
+    """Add authors + files prefetches (in display order) to a Work queryset."""
+    return qs.prefetch_related(
+        Prefetch(
+            "authorships",
+            queryset=WorkAuthor.objects.select_related("user").order_by("display_order"),
+        ),
+        Prefetch(
+            "files",
+            queryset=WorkFile.objects.order_by("display_order"),
+        ),
+    )
+
+
 def _annotated_qs(user):
     """Listing queryset with authors + files prefetched in order."""
-    return (
-        Work.listing_for(user)
-        .prefetch_related(
-            Prefetch(
-                "authorships",
-                queryset=WorkAuthor.objects.select_related("user").order_by("display_order"),
-            ),
-            Prefetch(
-                "files",
-                queryset=WorkFile.objects.order_by("display_order"),
-            ),
-        )
-    )
+    return _prefetched(Work.listing_for(user))
 
 
 def index(request):
@@ -80,9 +84,12 @@ def index(request):
 
 
 def detail(request, slug):
-    work = get_object_or_404(_annotated_qs(request.user), slug=slug)
+    # Fetch unfiltered so a members-only work still resolves — then gate, so an
+    # anonymous visitor following a shared link is sent to login (and returned
+    # here after sign-in) rather than dead-ended at a 404.
+    work = get_object_or_404(_prefetched(Work.objects.all()), slug=slug)
     if not work.listing_visible_to(request.user):
-        raise Http404()
+        return gate_or_login(request)
     # Publication revisions — the "Published" snapshots of the source draft,
     # oldest → newest, so each carries a stable revision number.
     revisions = []
@@ -174,7 +181,9 @@ def video(request, slug):
     """Stream a work's video, gated by content visibility. Redirects to a
     presigned S3 URL in prod (range-capable), or streams the local file in dev."""
     work = get_object_or_404(Work, slug=slug)
-    if not work.content_visible_to(request.user) or not work.video:
+    if not work.content_visible_to(request.user):
+        return gate_or_login(request)
+    if not work.video:
         raise Http404()
     from core.storage import presigned_private_url
 
@@ -188,7 +197,7 @@ def video(request, slug):
 def download(request, slug, file_id):
     work = get_object_or_404(Work, slug=slug)
     if not work.content_visible_to(request.user):
-        raise Http404()
+        return gate_or_login(request)
     wf = get_object_or_404(WorkFile, pk=file_id, work=work)
     filename = wf.file.name.rsplit("/", 1)[-1]
     return FileResponse(wf.file.open("rb"), as_attachment=False, filename=filename)

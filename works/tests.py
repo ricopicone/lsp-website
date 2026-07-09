@@ -232,19 +232,38 @@ def test_download_public_pdf_works_anonymous(client):
 
 
 @pytest.mark.django_db
-def test_download_members_pdf_404s_anonymous(client):
+def test_download_members_pdf_redirects_anonymous_to_login(client):
     w = _make_work(
         slug="closed", content_vis=Work.Visibility.MEMBERS,
         files=[("", _fake_pdf())],
     )
     f = w.files.first()
-    resp = client.get(reverse("works:download", args=["closed", f.pk]))
+    url = reverse("works:download", args=["closed", f.pk])
+    resp = client.get(url)
+    assert resp.status_code == 302
+    assert resp.url == f"/accounts/login/?next={url}"
+
+
+@pytest.mark.django_db
+def test_download_members_pdf_404s_signed_in_non_member(client):
+    # A signed-in user who isn't an LSP member still can't reach members-only
+    # content — and gets a 404 (not a login bounce, not the file).
+    w = _make_work(
+        slug="closed2", content_vis=Work.Visibility.MEMBERS,
+        files=[("", _fake_pdf())],
+    )
+    f = w.files.first()
+    non_member = _make_user(email="nonmember@x.test", role=Profile.Role.EXTERNAL)
+    client.force_login(non_member)
+    resp = client.get(reverse("works:download", args=["closed2", f.pk]))
     assert resp.status_code == 404
 
 
 @pytest.mark.django_db
 def test_download_no_file_404s(client):
-    _make_work(slug="nopdf", files=None)
+    # Public content so the visibility gate passes and the missing-file path
+    # (not the auth redirect) is what's exercised.
+    _make_work(slug="nopdf", content_vis=Work.Visibility.PUBLIC, files=None)
     # Non-existent file id under this work — 404.
     resp = client.get(reverse("works:download", args=["nopdf", 9999]))
     assert resp.status_code == 404
@@ -252,21 +271,42 @@ def test_download_no_file_404s(client):
 
 @pytest.mark.django_db
 def test_download_cross_work_file_id_404s(client):
-    w1 = _make_work(slug="w1", files=[("", _fake_pdf())])
-    w2 = _make_work(slug="w2", files=[("", _fake_pdf())])
+    # Public content so the cross-work file check (not the auth redirect) is
+    # what 404s for an anonymous request.
+    w1 = _make_work(slug="w1", content_vis=Work.Visibility.PUBLIC, files=[("", _fake_pdf())])
+    w2 = _make_work(slug="w2", content_vis=Work.Visibility.PUBLIC, files=[("", _fake_pdf())])
     f_from_w2 = w2.files.first()
     # Try to download w2's file via w1's slug — should 404.
     resp = client.get(reverse("works:download", args=["w1", f_from_w2.pk]))
     assert resp.status_code == 404
-    # And via w1's own file — should 200 (when public).
-    w1.content_visibility = Work.Visibility.PUBLIC
-    w1.save()
+    # And via w1's own file — should 200.
     f_w1 = w1.files.first()
     resp = client.get(reverse("works:download", args=["w1", f_w1.pk]))
     assert resp.status_code == 200
 
 
 # ---- Detail page rendering ---------------------------------------------
+
+
+@pytest.mark.django_db
+def test_detail_members_only_redirects_anonymous_to_login(client):
+    # A shared link to a members-only work bounces anon to login, not a 404.
+    _make_work(slug="members-only", listing=Work.Visibility.MEMBERS)
+    url = reverse("works:detail", args=["members-only"])
+    resp = client.get(url)
+    assert resp.status_code == 302
+    assert resp.url == f"/accounts/login/?next={url}"
+
+
+@pytest.mark.django_db
+def test_video_members_only_redirects_anonymous_to_login(client):
+    w = _make_work(slug="vid", content_vis=Work.Visibility.MEMBERS)
+    w.video = _fake_pdf("v.mp4")  # any file; the visibility gate fires first
+    w.save()
+    url = reverse("works:video", args=["vid"])
+    resp = client.get(url)
+    assert resp.status_code == 302
+    assert resp.url == f"/accounts/login/?next={url}"
 
 
 @pytest.mark.django_db
