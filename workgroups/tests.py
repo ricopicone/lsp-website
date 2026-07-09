@@ -133,9 +133,20 @@ def test_slug_autopopulated_from_name():
 
 # ---- Workspace surface (views) ----------------------------------------
 
-def test_detail_404_when_landing_not_visible(client):
+def test_detail_redirects_anonymous_to_login_with_next(client):
+    # An anonymous visitor (e.g. an invitee following a link to a forming
+    # cartel) is bounced to login with ?next=, not shown a 404. After signing
+    # in they land back on the group page.
+    wg = _wg(landing_visibility=Visibility.MEMBERS, content_visibility=Visibility.PRIVATE)
+    resp = client.get(wg.get_absolute_url())
+    assert resp.status_code == 302
+    assert resp.url == f"/accounts/login/?next={wg.get_absolute_url()}"
+
+
+def test_detail_404_for_signed_in_non_member_when_not_visible(client):
+    # A signed-in user who still can't see the group must not learn it exists.
     wg = _wg(landing_visibility=Visibility.PRIVATE, content_visibility=Visibility.PRIVATE)
-    # anonymous user: a private-landing group must not even reveal it exists
+    client.force_login(_user("outsider@x.test"))
     resp = client.get(wg.get_absolute_url())
     assert resp.status_code == 404
 

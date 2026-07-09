@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import F
 from django.http import Http404
@@ -183,7 +184,12 @@ def workgroup_detail(request, slug):
     gated by visibility + membership. Tabs follow the capability toggles."""
     wg = get_object_or_404(Workgroup, slug=slug)
     if not wg.landing_visible_to(request.user):
-        raise Http404  # don't reveal that a hidden group exists
+        if not request.user.is_authenticated:
+            # An anonymous visitor (e.g. an invitee following a link to a
+            # forming cartel) is bounced to login and returned here after,
+            # rather than shown a bare 404.
+            return redirect_to_login(request.get_full_path())
+        raise Http404  # don't reveal a hidden group to a signed-in non-member
 
     can_view = wg.content_visible_to(request.user)
     is_member = wg.is_member(request.user)
