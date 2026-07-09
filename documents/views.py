@@ -13,6 +13,8 @@ from django.db.models import Prefetch
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, render
 
+from core.access import gate_or_login
+
 from .models import Document, DocumentAuthor
 
 
@@ -54,7 +56,8 @@ def index(request):
 def detail(request, slug):
     doc = get_object_or_404(_with_authors(Document.objects.all()), slug=slug)
     if not doc.listing_visible_to(request.user):
-        raise Http404()
+        # Anonymous → login (return here after sign-in); signed-in non-member → 404.
+        return gate_or_login(request)
     older = (
         doc.supersedes.all().order_by("-effective_date")
         if doc.is_current
@@ -74,7 +77,7 @@ def detail(request, slug):
 def download(request, slug):
     doc = get_object_or_404(Document, slug=slug)
     if not doc.content_visible_to(request.user):
-        raise Http404()
+        return gate_or_login(request)
     if not doc.file:
         raise Http404()
     filename = doc.file.name.rsplit("/", 1)[-1]

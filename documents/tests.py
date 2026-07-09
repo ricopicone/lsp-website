@@ -154,10 +154,12 @@ def test_index_shows_public_listing_with_members_pdf_to_anon(client):
 
 
 @pytest.mark.django_db
-def test_detail_404s_for_anonymous_on_members_only_listing(client):
+def test_detail_redirects_anonymous_to_login_on_members_only_listing(client):
     _doc(slug="secret", listing_visibility=Document.Visibility.MEMBERS)
-    resp = client.get(reverse("documents:detail", args=["secret"]))
-    assert resp.status_code == 404
+    url = reverse("documents:detail", args=["secret"])
+    resp = client.get(url)
+    assert resp.status_code == 302
+    assert resp.url == f"/accounts/login/?next={url}"
 
 
 @pytest.mark.django_db
@@ -204,10 +206,12 @@ def test_download_serves_file_for_public_pdf_anon(client):
 
 
 @pytest.mark.django_db
-def test_download_404s_for_anonymous_on_members_pdf(client):
+def test_download_redirects_anonymous_to_login_on_members_pdf(client):
     _doc(slug="founding", content_visibility=Document.Visibility.MEMBERS)
-    resp = client.get(reverse("documents:download", args=["founding"]))
-    assert resp.status_code == 404
+    url = reverse("documents:download", args=["founding"])
+    resp = client.get(url)
+    assert resp.status_code == 302
+    assert resp.url == f"/accounts/login/?next={url}"
 
 
 # ---- Authors -----------------------------------------------------------

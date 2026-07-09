@@ -19,6 +19,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from accounts.permissions import is_lsp_member
+from core.access import gate_or_login
 
 from .forms import EventDescriptionForm, PricingCodeForm
 from .models import (
@@ -221,7 +222,8 @@ def program_archive(request):
 def program_archive_download(request, pk: int):
     """Serve an archived program PDF — members only (for now)."""
     if not is_lsp_member(request.user):
-        raise Http404()
+        # Anonymous → login (return here after sign-in); signed-in non-member → 404.
+        return gate_or_login(request)
     archived = get_object_or_404(ArchivedProgram, pk=pk)
     if not archived.file:
         raise Http404()
