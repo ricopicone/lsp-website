@@ -28,6 +28,63 @@ def test_about_page_renders_with_committee_roster(client):
 
 
 @pytest.mark.django_db
+def test_about_page_omits_personas_from_board_roster(client):
+    """Regression (Diana, 2026-07): a training-sandbox "Persona Board Chair"
+    leaked onto the public Board of Directors card because the roster reads
+    ``active_members``, which used not to filter personas."""
+    from workgroups.models import WorkgroupMembership
+
+    board = Committee.objects.get(slug="board")
+    board.public = True
+    board.save(update_fields=["public"])
+    real = User.objects.create_user(
+        email="real-chair@example.com", first_name="Realberto", last_name="Chairman"
+    )
+    persona = User.objects.create_user(
+        email="persona+board-chair@example.com",
+        first_name="Persona", last_name="Board Chair",
+    )
+    persona.profile.is_persona = True
+    persona.profile.save(update_fields=["is_persona"])
+    board.add_member(real, role=WorkgroupMembership.Role.CHAIR, start_date=date(2026, 1, 1))
+    board.add_member(persona, role=WorkgroupMembership.Role.MEMBER, start_date=date(2026, 1, 1))
+
+    body = client.get("/about/").content.decode()
+    assert "Realberto" in body
+    assert "Persona Board Chair" not in body
+
+
+@pytest.mark.django_db
+def test_about_hero_band_grows_to_clear_sticky_nav(client):
+    """Regression (Diana, 2026-07): on mobile the long, uppercased About title +
+    summary overflowed the fixed-height artwork band and clipped under the
+    sticky nav. The band must use a growable ``min-h`` so tall wrapped text is
+    contained rather than clipped."""
+    body = client.get("/about/").content.decode()
+    assert "min-h-48 sm:min-h-64" in body
+    # The old fixed-height band (which clipped overflow under the nav) is gone.
+    assert "h-48 sm:h-64 flex" not in body
+
+
+@pytest.mark.django_db
+def test_formation_page_deduped_and_no_em_dashes(client):
+    """Regression (Diana, 2026-07): the "Becoming…" line appeared both as the
+    image overlay and the first paragraph, and the copy used em dashes. The
+    phrase should appear once and the prose should use commas (member-facing
+    copy convention)."""
+    body = client.get("/about/formation/").content.decode()
+    assert body.count("Becoming a Lacanian analyst") == 1
+    assert "The formation of analysts and scholars." in body  # distinct overlay
+    # Em dashes converted to commas in the flagged copy.
+    assert "Becoming a Lacanian analyst, or undertaking scholarly formation," in body
+    assert "clinical background, holding" in body
+    # None of the flagged clauses keep their em dash.
+    assert "analyst—or undertaking" not in body
+    assert "clinical background—holding" not in body
+    assert "supervisory) work—a" not in body
+
+
+@pytest.mark.django_db
 def test_board_roster_styles_chair_as_president(client):
     """Task #368: on the About page the Board's chair/co-chair read President /
     Vice President, without disturbing the shared role enum other groups use."""
