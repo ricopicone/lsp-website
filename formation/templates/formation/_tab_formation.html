@@ -4,6 +4,15 @@
     {# ---- Advisor ---- #}
     <section id="advisor" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">My Advisor</h2>
+      {% if needs_advisor %}
+      <p class="text-sm text-base-content/70">
+        My Advisor supports me through my formation and presents my demandes to
+        the Meeting of the Analysts. I can choose or change my Advisor here, and
+        they're notified when I do. The School encourages me to speak with a
+        prospective Advisor first, and, if I decide to change Advisors, to talk
+        through my reasons for the change.
+      </p>
+      {% endif %}
       {% if advisor %}
       <div>
         <p class="font-medium text-base-content">{{ advisor.get_full_name|default:advisor.email }}</p>
@@ -20,8 +29,7 @@
         {% if advisor_form.advisor.errors %}<p class="text-error text-xs">{{ advisor_form.advisor.errors|striptags }}</p>{% endif %}
         <p class="text-xs text-base-content/50">
           {% if advisor_form.advisor.field.queryset.exists %}
-            My Advisor supports me through my training and presents my demandes
-            to the Meeting of the Analysts. They'll be notified of my choice.
+            My Advisor will be notified of my choice.
           {% else %}
             No eligible advisors are listed yet. Please contact the School.
           {% endif %}
