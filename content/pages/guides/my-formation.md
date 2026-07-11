@@ -15,11 +15,12 @@ page. It has up to three tabs, each with its own link you can return to or share
 
 ## Your advisor
 
-If you're in training, you choose an **Advisor**—an Analyst (for the analyst
-track) or a Scholar or Analyst (for the scholar track). Your advisor supports you
-through your formation and **presents your demandes to the Meeting of the
-Analysts**. You can choose or change your advisor from the Formation tab; they're
-notified when you do.
+When you're accepted into LSP you enter as a **Pre-Candidate** and choose an
+**Advisor**. Your advisor supports you through your formation and **presents your
+demandes to the Meeting of the Analysts**. You can choose or change your advisor
+from the Formation tab; they're notified when you do. The School encourages you to
+speak with a prospective advisor first, and, if you decide to change advisors, to
+talk through your reasons for the change.
 
 ## The steps of formation
 
