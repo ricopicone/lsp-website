@@ -29,7 +29,7 @@
         {% if advisor_form.advisor.errors %}<p class="text-error text-xs">{{ advisor_form.advisor.errors|striptags }}</p>{% endif %}
         <p class="text-xs text-base-content/50">
           {% if advisor_form.advisor.field.queryset.exists %}
-            My Advisor will be notified of my choice.
+            Your Advisor will be notified of your choice.
           {% else %}
             No eligible advisors are listed yet. Please contact the School.
           {% endif %}
@@ -49,9 +49,9 @@
     <section id="steps" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">My formation steps</h2>
       <p class="text-sm text-base-content/70">
-        A demande is my request to present my Palimpsest or Passage / Traversée
-        to the entire School at the next Days of Assembly — sent to my Advisor in
-        lieu of an email. My Advisor presents it, with a recommendation, to the
+        A demande is your request to present your Palimpsest or Passage / Traversée
+        to the entire School at the next Days of Assembly — sent to your Advisor in
+        lieu of an email. Your Advisor presents it, with a recommendation, to the
         Meeting of the Analysts, who decide.
       </p>
 
@@ -61,9 +61,9 @@
       <form method="post" action="{% url 'formation:advancement' %}" class="space-y-3 rounded-lg border border-base-300 bg-base-200/40 p-4">
         {% csrf_token %}
         <p class="text-sm text-base-content/70">
-          Request to present my <strong>{{ step_label }}</strong> at the next Days of
+          Request to present your <strong>{{ step_label }}</strong> at the next Days of
           Assembly. {{ advisor.get_full_name|default:advisor.email }} will be asked
-          to present it on my behalf.
+          to present it on your behalf.
         </p>
         <div class="space-y-1">
           <label class="block text-sm text-base-content/70">{{ demande_form.statement.label }}</label>
@@ -75,7 +75,7 @@
       </form>
       {% else %}
       <div class="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm">
-        <p class="text-base-content/80">Choose my Advisor (above) before sending a demande — they present it to the Meeting on my behalf.</p>
+        <p class="text-base-content/80">Choose your Advisor (above) before sending a demande — they present it to the Meeting on your behalf.</p>
       </div>
       {% endif %}
       {% endif %}
@@ -150,7 +150,7 @@
     <section id="control" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">Control analysis</h2>
       <p class="text-sm text-base-content/70">
-        A self-reported log of my supervisory (control) analyses, in person or
+        A self-reported log of your supervisory (control) analyses, in person or
         remote, toward the years shown below. There's no approval step here.
       </p>
 
@@ -194,8 +194,8 @@
     <section id="external" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">External activities</h2>
       <p class="text-sm text-base-content/70">
-        A self-reported log of courses I've taken or taught, presentations, and
-        publications related to my formation, outside the School. There's no
+        A self-reported log of courses you've taken or taught, presentations, and
+        publications related to your formation, outside the School. There's no
         approval step here.
       </p>
 
