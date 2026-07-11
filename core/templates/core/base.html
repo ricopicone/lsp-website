@@ -153,6 +153,10 @@
             </ul>
           </div>
 
+          {% if user.is_authenticated %}
+          <a href="{% url 'payments:index' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/payments/' in cur or '/dues/' in cur or '/donate/' in cur %}text-primary font-medium{% endif %}">Payments</a>
+          {% endif %}
+
           {% if user|is_parletre_member %}
           <a href="{% url 'parletre:index' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/parletre/' in cur %}text-primary font-medium{% endif %}">Parlêtre</a>
           {% endif %}
@@ -198,6 +202,11 @@
             <li><a href="{% url 'works:index' %}">Works</a></li>
             <li><a href="{% url 'documents:index' %}">Documents</a></li>
             <li><a href="{% url 'resources' %}">Resources</a></li>
+
+            {% if user.is_authenticated %}
+            <li><hr class="border-base-300/60 my-1"></li>
+            <li><a href="{% url 'payments:index' %}">Payments</a></li>
+            {% endif %}
 
             {% if user|is_parletre_member %}
             <li><hr class="border-base-300/60 my-1"></li>
