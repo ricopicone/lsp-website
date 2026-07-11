@@ -105,6 +105,26 @@ def test_add_member_and_active_members_excludes_ended():
 
 
 @pytest.mark.django_db
+def test_active_members_excludes_personas():
+    """Training-sandbox personas keep their memberships for impersonation
+    fidelity but must never surface on a public roster (the About-page Board
+    card reads its roster from ``active_members``). Regression: a seeded
+    "Persona Board Chair" leaked onto the public Board of Directors list.
+    """
+    committee = Committee.objects.get(slug="board")
+    real = User.objects.create_user(email="real@example.com")
+    persona = User.objects.create_user(email="persona+board-chair@example.com")
+    persona.profile.is_persona = True
+    persona.profile.save(update_fields=["is_persona"])
+    committee.add_member(real, role=WorkgroupMembership.Role.CHAIR)
+    committee.add_member(persona, role=WorkgroupMembership.Role.MEMBER)
+
+    roster = [m.user for m in committee.active_members()]
+    assert real in roster
+    assert persona not in roster
+
+
+@pytest.mark.django_db
 def test_one_active_membership_per_user_committee():
     committee = Committee.objects.get(slug="programming-committee")
     user = User.objects.create_user(email="dup@example.com")

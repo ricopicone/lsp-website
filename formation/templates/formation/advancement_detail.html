@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}Demande — {{ adv.member.get_full_name|default:adv.member.email }}{% endblock %}
+{% block title %}Demande · {{ adv.member.get_full_name|default:adv.member.email }}{% endblock %}
 {% block content %}
 <div class="space-y-6 max-w-3xl">
   <nav class="text-sm"><a href="{% url 'formation:advancement_queue' %}" class="link link-hover text-base-content/60">← Palimpsests &amp; passages</a></nav>

@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}{{ advisee.get_full_name|default:advisee.email }} — Advisee record — LSP{% endblock %}
+{% block title %}{{ advisee.get_full_name|default:advisee.email }} · Advisee record · LSP{% endblock %}
 {% block content %}
 <div class="space-y-6 max-w-3xl">
   {% if messages %}{% for m in messages %}

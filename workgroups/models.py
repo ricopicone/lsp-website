@@ -282,10 +282,16 @@ class Workgroup(models.Model):
     def active_members(self):
         """Stored ``WorkgroupMembership`` rows (hand-managed roster). For the
         full roster including derived seminar registrants, use
-        :meth:`participants`."""
-        return self.memberships.serving().select_related(
-            "user", "user__profile"
-        )
+        :meth:`participants`.
+
+        Personas (training-sandbox accounts) are excluded: they keep their
+        memberships for impersonation fidelity but must never appear on a
+        roster — the same rule :meth:`participants` applies at the tail. Without
+        this, a seeded "Persona Board Chair" leaked onto the public Board card.
+        """
+        return self.memberships.serving().exclude(
+            user__profile__is_persona=True
+        ).select_related("user", "user__profile")
 
     @staticmethod
     def _user_role(user):

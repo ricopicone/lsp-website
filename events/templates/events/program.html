@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}Program {{ year }} — LSP{% endblock %}
+{% block title %}Program {{ year }} · LSP{% endblock %}
 
 {% block page_hero %}{% with ys=year|stringformat:"s" %}{% include "core/_page_hero.html" with title="Program "|add:ys subtitle="The Lacanian School's seminars and other offerings. Click any title for full details, dates, and registration." %}{% endwith %}{% endblock %}
 
