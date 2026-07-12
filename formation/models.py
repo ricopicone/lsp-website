@@ -162,9 +162,11 @@ class Advancement(models.Model):
 class FormationSettings(models.Model):
     """Singleton of tunable formation parameters (admin-editable so requirement
     targets don't live in code)."""
-    control_years_target = models.PositiveSmallIntegerField(
-        default=6,
-        help_text="Target years of control analysis shown on the progress meter.",
+    four_year_threshold = models.PositiveSmallIntegerField(
+        default=4, help_text="Years for the longer (4-year) control analysis.",
+    )
+    two_year_threshold = models.PositiveSmallIntegerField(
+        default=2, help_text="Years for each shorter (2-year) control analysis.",
     )
 
     def save(self, *args, **kwargs):

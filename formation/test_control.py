@@ -38,8 +38,60 @@ def test_total_years_sums_entries():
 
 
 @pytest.mark.django_db
-def test_settings_default_target_is_six():
-    assert FormationSettings.load().control_years_target == 6
+def test_settings_default_thresholds_are_four_and_two():
+    settings_ = FormationSettings.load()
+    assert settings_.four_year_threshold == 4
+    assert settings_.two_year_threshold == 2
+
+
+def test_control_progress_fills_slots_by_longest_per_tag(db):
+    import datetime as dt
+
+    from accounts.models import Profile, User
+    from formation.control import control_progress
+    from formation.models import ControlAnalysis
+
+    u = User.objects.create_user(email="p@example.com", password="x")
+    u.profile.role = Profile.Role.PRE_CANDIDATE  # academic -> 2 two-year slots
+    u.profile.clinical_background = False
+    u.profile.save()
+
+    today = dt.date.today()
+    # A 5-year four-year entry, and two two-year entries (3yr and 1yr).
+    ControlAnalysis.objects.create(
+        member=u, supervisor_name="Long", requirement="four_year",
+        start_date=today - dt.timedelta(days=int(365.25 * 5)),
+    )
+    ControlAnalysis.objects.create(
+        member=u, supervisor_name="Mid", requirement="two_year",
+        start_date=today - dt.timedelta(days=int(365.25 * 3)),
+    )
+    ControlAnalysis.objects.create(
+        member=u, supervisor_name="Short", requirement="two_year",
+        start_date=today - dt.timedelta(days=int(365.25 * 1)),
+    )
+
+    prog = control_progress(u)
+    assert prog["total_target"] == 8            # 4 + 2*2
+    assert prog["four_year"]["met"] is True
+    assert prog["four_year"]["entry"].supervisor_name == "Long"
+    assert len(prog["two_year"]) == 2
+    assert prog["two_year"][0]["entry"].supervisor_name == "Mid"  # longest first
+    assert prog["two_year"][0]["met"] is True                     # 3yr >= 2
+    assert prog["two_year"][1]["met"] is False                    # 1yr < 2
+
+
+def test_control_progress_clinical_has_one_two_year_slot(db):
+    from accounts.models import Profile, User
+    from formation.control import control_progress
+
+    u = User.objects.create_user(email="c@example.com", password="x")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.clinical_background = True
+    u.profile.save()
+    prog = control_progress(u)
+    assert prog["total_target"] == 6            # 4 + 2*1
+    assert len(prog["two_year"]) == 1
 
 
 @pytest.mark.django_db

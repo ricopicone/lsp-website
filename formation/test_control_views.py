@@ -84,6 +84,5 @@ def test_formation_tab_shows_control_context(client):
     resp = client.get(reverse("formation:formation"), SERVER_NAME="localhost")
     assert resp.status_code == 200
     assert "control_entries" in resp.context
-    assert "control_years" in resp.context
-    assert "control_target" in resp.context
-    assert resp.context["control_target"] == 6
+    assert "control_progress" in resp.context
+    assert resp.context["control_progress"]["total_target"] in (6, 8)

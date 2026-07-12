@@ -29,13 +29,14 @@ from .advancement import (
     step_label_for_member,
     withdraw_advancement,
 )
+from .control import control_progress
 from .forms import (
     AdvancementForm,
     ControlAnalysisForm,
     ExternalActivityForm,
     RecommendationForm,
 )
-from .models import Advancement, ControlAnalysis, ExternalActivity, FormationSettings
+from .models import Advancement, ControlAnalysis, ExternalActivity
 from .tabs import available_tabs
 
 # ==========================================================================
@@ -91,8 +92,7 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
         "demande_form": demande_form if demande_form is not None else AdvancementForm(),
         "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
         "control_entries": ControlAnalysis.objects.filter(member=user),
-        "control_years": ControlAnalysis.years_for(user),
-        "control_target": FormationSettings.load().control_years_target,
+        "control_progress": control_progress(user),
         "external_entries": ExternalActivity.objects.filter(member=user)
         .order_by("kind", "-start_date"),
     }
@@ -685,8 +685,7 @@ def advisee_detail(request, pk):
         "advancements": Advancement.objects.filter(member=advisee)
         .select_related("advisor").order_by("-requested_at"),
         "control_entries": ControlAnalysis.objects.filter(member=advisee),
-        "control_years": ControlAnalysis.years_for(advisee),
-        "control_target": FormationSettings.load().control_years_target,
+        "control_progress": control_progress(advisee),
         "external_entries": ExternalActivity.objects.filter(member=advisee)
         .order_by("kind", "-start_date"),
         "notes": AdvisorNote.objects.filter(advisee=advisee).select_related("author"),
