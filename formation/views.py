@@ -535,7 +535,7 @@ def control_add(request):
     """Add a control (supervisory) analysis entry — a self-reported record, no
     approval required."""
     if request.method == "POST":
-        form = ControlAnalysisForm(request.POST)
+        form = ControlAnalysisForm(request.POST, user=request.user)
         if form.is_valid():
             obj = form.save(commit=False)
             obj.member = request.user
@@ -543,7 +543,7 @@ def control_add(request):
             messages.success(request, "Control analysis added.")
             return redirect(_formation_url("formation"))
     else:
-        form = ControlAnalysisForm()
+        form = ControlAnalysisForm(user=request.user)
     return render(request, "formation/_control_form.html", {"form": form, "mode": "add"})
 
 
@@ -553,13 +553,13 @@ def control_edit(request, pk):
     a 404 (no signal that the entry exists at all)."""
     obj = get_object_or_404(ControlAnalysis, pk=pk, member=request.user)
     if request.method == "POST":
-        form = ControlAnalysisForm(request.POST, instance=obj)
+        form = ControlAnalysisForm(request.POST, instance=obj, user=request.user)
         if form.is_valid():
             form.save()
             messages.success(request, "Control analysis updated.")
             return redirect(_formation_url("formation"))
     else:
-        form = ControlAnalysisForm(instance=obj)
+        form = ControlAnalysisForm(instance=obj, user=request.user)
     return render(request, "formation/_control_form.html",
                   {"form": form, "mode": "edit", "entry": obj})
 

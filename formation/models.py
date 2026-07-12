@@ -195,7 +195,17 @@ class ControlAnalysis(models.Model):
 
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                related_name="control_analyses")
-    supervisor_name = models.CharField(max_length=200)
+    school_analyst = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="control_analyses_supervised",
+        help_text="An Analyst of the School, chosen from the directory.",
+    )
+    external_analyst = models.ForeignKey(
+        "formation.ExternalControlAnalyst", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="control_analyses",
+        help_text="An approved external control analyst.",
+    )
+    supervisor_name = models.CharField(max_length=200, blank=True)
     modality = models.CharField(max_length=12, choices=Modality.choices, default=Modality.REMOTE)
     requirement = models.CharField(
         max_length=10, choices=Requirement.choices, default=Requirement.FOUR_YEAR,

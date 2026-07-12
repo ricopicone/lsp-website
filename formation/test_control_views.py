@@ -86,3 +86,47 @@ def test_formation_tab_shows_control_context(client):
     assert "control_entries" in resp.context
     assert "control_progress" in resp.context
     assert resp.context["control_progress"]["total_target"] in (6, 8)
+
+
+def test_control_form_school_dropdown_lists_only_active_public_analysts(db):
+    from accounts.models import Profile, User
+    from formation.forms import ControlAnalysisForm
+
+    member = User.objects.create_user(email="mem@example.com", password="x")
+    analyst = User.objects.create_user(email="an@example.com", password="x")
+    analyst.profile.role = Profile.Role.ANALYST
+    analyst.profile.public = True
+    analyst.profile.save()
+    hidden = User.objects.create_user(email="hid@example.com", password="x")
+    hidden.profile.role = Profile.Role.ANALYST
+    hidden.profile.public = False
+    hidden.profile.save()
+
+    form = ControlAnalysisForm(user=member)
+    qs = form.fields["school_analyst"].queryset
+    assert analyst in qs and hidden not in qs and member not in qs
+
+
+def test_control_save_syncs_supervisor_name_from_school_analyst(client, db):
+    from django.urls import reverse
+
+    from accounts.models import Profile, User
+    from formation.models import ControlAnalysis
+
+    member = User.objects.create_user(email="mem2@example.com", password="x")
+    analyst = User.objects.create_user(
+        email="an2@example.com", password="x", first_name="Jane", last_name="Roe")
+    analyst.profile.role = Profile.Role.ANALYST
+    analyst.profile.public = True
+    analyst.profile.save()
+    client.force_login(member)
+
+    resp = client.post(reverse("formation:control_add"), {
+        "supervisor_name": "", "school_analyst": analyst.pk,
+        "requirement": "four_year", "modality": "remote",
+        "start_date": "2020-01-01",
+    })
+    assert resp.status_code == 302
+    ca = ControlAnalysis.objects.get(member=member)
+    assert ca.school_analyst_id == analyst.pk
+    assert ca.supervisor_name == "Jane Roe"
