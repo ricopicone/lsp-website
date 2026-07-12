@@ -2020,3 +2020,14 @@ def test_active_members_plus_one_last_faculty_is_everyone_else():
     order = [m.user.last_name for m in wg.active_members()]
     # Chair first; faculty sorts among everyone-else (Bell, Mensah); plus-one last.
     assert order == ["Roth", "Bell", "Mensah", "Zeta"]
+
+
+def test_participants_ordered_officers_then_alphabetical():
+    wg = _board()
+    Role = WorkgroupMembership.Role
+    _add(wg, "m2@x.test", Role.MEMBER, "Young")
+    _add(wg, "chair@x.test", Role.CHAIR, "Zimmer")
+    _add(wg, "m1@x.test", Role.MEMBER, "Adams")
+    _add(wg, "sec@x.test", Role.SECRETARY, "Baker")
+    order = [p.user.last_name for p in wg.participants()]
+    assert order == ["Zimmer", "Baker", "Adams", "Young"]

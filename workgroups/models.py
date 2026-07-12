@@ -414,10 +414,22 @@ class Workgroup(models.Model):
                     )
         # Personas are test accounts — keep them off every roster (they retain
         # their memberships for impersonation fidelity, just not shown here).
-        return [
+        roster = [
             p for p in seen.values()
             if not getattr(getattr(p.user, "profile", None), "is_persona", False)
         ]
+        # Leaders first by role precedence, then alphabetical by last/first name
+        # (task #417). Derived members (registrants) carry MEMBER, so they land
+        # in the everyone-else tier and interleave alphabetically here rather
+        # than being appended after the stored rows.
+        roster.sort(
+            key=lambda p: (
+                roster_rank(p.role),
+                (p.user.last_name or "").lower(),
+                (p.user.first_name or "").lower(),
+            )
+        )
+        return roster
 
     def current_term(self):
         """For a term-based offering (seminar / reading group), the active-or-
