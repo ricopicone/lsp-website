@@ -1,15 +1,13 @@
 {% extends "events/program_admin/base.html" %}
 {% block tab_content %}
 <div class="space-y-8">
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <p class="max-w-2xl text-sm text-base-content/60">
-      Event proposals from members. Approving a seminar or reading group mints it
-      into the proposed academic year's program (you still publish the program
-      separately); approving a special event mints the event — published when it
-      has a date, otherwise held until you set one.
-    </p>
-    <a href="{% url 'program_admin_special_event_new' %}" class="btn btn-primary btn-sm whitespace-nowrap">+ New special event</a>
-  </div>
+  <p class="max-w-2xl text-sm text-base-content/60">
+    Event proposals from members, whether a seminar, reading group, or special
+    event. Approving a seminar or reading group mints it into the proposed
+    academic year's program (you still publish the program separately);
+    approving a special event mints the event — published when it has a date,
+    otherwise held until you set one.
+  </p>
 
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">Pending</h2>
@@ -106,10 +104,13 @@
   {% endif %}
 
   <section class="space-y-3">
-    <h2 class="font-serif text-xl text-base-content">Special events</h2>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="font-serif text-xl text-base-content">Special events</h2>
+      <a href="{% url 'program_admin_special_event_new' %}" class="btn btn-primary btn-sm whitespace-nowrap">+ New special event</a>
+    </div>
     <p class="max-w-2xl text-sm text-base-content/60">
-      Standalone events the PC organizes (not part of any program). Create one
-      above, edit its content, and publish it when it's ready.
+      Standalone events the PC organizes (not part of any program). Create one,
+      edit its content, and publish it when it's ready.
     </p>
     {% if special_events %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
