@@ -811,9 +811,16 @@ def program_admin_proposals(request):
     )
     pending = [p for p in proposals if p.status == EventProposal.Status.PROPOSED]
     decided = [p for p in proposals if p.status != EventProposal.Status.PROPOSED]
+    # Standalone special events get their management home here — the PC creates,
+    # edits, and publishes them from this tab (they aren't part of any program).
+    special_events = list(
+        Event.objects.filter(event_type=Event.Type.SPECIAL_EVENT)
+        .order_by("-start_date", "title")
+    )
     return _pc_admin_render(request, "proposals", "events/program_admin/proposals.html", {
         "pending": pending,
         "decided": decided,
+        "special_events": special_events,
     })
 
 
@@ -834,6 +841,92 @@ def proposal_decide(request, pk: int):
     else:
         proposal.decline(request.user, note=request.POST.get("note", ""))
         messages.success(request, "Proposal declined.")
+    return redirect("program_admin_proposals")
+
+
+@login_required
+def program_admin_special_event_new(request):
+    """PC direct-create a special event.
+
+    Reuses the member proposal form + ``EventProposal.approve()`` pipeline so the
+    minting (price tier, first session, speakers, workgroup provenance) is never
+    duplicated. The auto-approve is a property of *this action*, not of the
+    proposer's PC membership — a PC member using the normal propose form still
+    goes through the review queue. The PC chooses to publish now or save a draft.
+    """
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    from django.db import transaction
+
+    from .forms import EventProposalForm, ProposalSpeakerFormSet
+
+    special = Event.Type.SPECIAL_EVENT
+
+    def _lock_to_special(form):
+        # Constrain the choices so only special events can be created here (both
+        # the template's type-adaptive display and POST validation honor this).
+        form.fields["event_type"].choices = [(special.value, special.label)]
+
+    if request.method == "POST":
+        publish = request.POST.get("action") == "publish"
+        form = EventProposalForm(request.POST)
+        _lock_to_special(form)
+        form.require_complete = True
+        speakers = ProposalSpeakerFormSet(request.POST, prefix="speakers")
+        if form.is_valid() and speakers.is_valid():
+            with transaction.atomic():
+                proposal = _save_proposal_form(
+                    request, form, speakers, None, is_submit=True,
+                )
+                event = proposal.approve(request.user)
+                has_real_date = bool(proposal.proposed_datetime) and not proposal.date_tbd
+                want_published = publish and has_real_date
+                if event.published != want_published:
+                    event.published = want_published
+                    event.save(update_fields=["published"])
+            if publish and not has_real_date:
+                messages.warning(
+                    request,
+                    f"“{event.title}” was created as a draft — it needs a date "
+                    "before it can be published.",
+                )
+            elif event.published:
+                messages.success(request, f"Created and published “{event.title}”.")
+            else:
+                messages.success(
+                    request,
+                    f"Saved “{event.title}” as a draft. Publish it from the "
+                    "Proposals tab when it's ready.",
+                )
+            return redirect("events:edit", slug=event.slug)
+    else:
+        form = EventProposalForm(initial={"event_type": special.value})
+        _lock_to_special(form)
+        speakers = ProposalSpeakerFormSet(prefix="speakers")
+    return render(request, "events/propose_event.html", {
+        "form": form, "speakers": speakers, "direct_create": True,
+    })
+
+
+@login_required
+@require_POST
+def program_admin_special_event_publish(request, slug: str):
+    """PC publishes / unpublishes a standalone special event (its live/draft
+    lever is ``Event.published``). Filtered to special events so a program event,
+    whose visibility cascades from its Program, can't be toggled here."""
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    event = get_object_or_404(
+        Event, slug=slug, event_type=Event.Type.SPECIAL_EVENT,
+    )
+    publish = request.POST.get("action") == "publish"
+    if event.published != publish:
+        event.published = publish
+        event.save(update_fields=["published"])
+    messages.success(
+        request,
+        f"{'Published' if publish else 'Unpublished'} “{event.title}”.",
+    )
     return redirect("program_admin_proposals")
 
 
