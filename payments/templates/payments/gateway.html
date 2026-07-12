@@ -1,0 +1,36 @@
+{% extends "core/base.html" %}
+{% block title %}Payments · LSP{% endblock %}
+
+{% block page_hero %}{% include "core/_page_hero.html" with title="Payments" %}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-8">
+
+  <p class="text-base-content/70">
+    Support the Lacanian School of Psychoanalysis, or sign in to manage your dues,
+    tuition, and payment history.
+  </p>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <a href="{% url 'login' %}?next={% url 'payments:index' %}"
+       class="block rounded-lg border border-base-300 bg-base-100 p-5 hover:border-primary transition-colors">
+      <div class="font-serif text-lg text-base-content">Sign in to manage your payments</div>
+      <p class="text-sm text-base-content/70 mt-1">
+        View what's due, pay dues or tuition, and see your receipts and history.
+      </p>
+      <span class="text-primary text-sm font-medium mt-3 inline-block">Sign in →</span>
+    </a>
+
+    <a href="{% url 'donate' %}"
+       class="block rounded-lg border border-base-300 bg-base-100 p-5 hover:border-primary transition-colors">
+      <div class="font-serif text-lg text-base-content">Donate to LSP</div>
+      <p class="text-sm text-base-content/70 mt-1">
+        Make a gift to support the School. No account is needed, though signing in
+        lets you track your donations.
+      </p>
+      <span class="text-primary text-sm font-medium mt-3 inline-block">Donate →</span>
+    </a>
+  </div>
+
+</div>
+{% endblock %}

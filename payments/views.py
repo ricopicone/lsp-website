@@ -1300,11 +1300,15 @@ def receipt_download(request, payment_id: int):
     return resp
 
 
-@login_required
 def payments_index(request):
-    """The member's central Payments page: what's due, links out to dues / tuition
-    / donate, and their own payment history with downloadable receipts. Composes
-    existing surfaces, does not reimplement them."""
+    """Central Payments page. Authenticated members see what's due, links out to
+    dues / tuition / donate, and their own payment history with downloadable
+    receipts. Anonymous visitors see a public gateway: sign in to manage payments,
+    or donate anonymously (task #414). Deliberately does NOT redirect anon users
+    to login. Composes existing surfaces, does not reimplement them."""
+    if not request.user.is_authenticated:
+        return render(request, "payments/gateway.html")
+
     from payments.dues import is_dues_obligated
 
     user = request.user
