@@ -202,6 +202,64 @@ def test_program_admin_event_edit_updates_existing(client, pc_member, program):
 
 
 @pytest.mark.django_db
+def test_program_admin_event_edit_exposes_structured_content_fields(
+    client, pc_member, program,
+):
+    """The PC admin event form must offer the same structured-content fields as
+    the faculty edit form — readings, schedule note, contact, fee note."""
+    e = Event.objects.create(
+        title="Seminar", slug="seminar-x",
+        event_type=Event.Type.SEMINAR,
+        start_date=date(2030, 9, 1), end_date=date(2031, 5, 1),
+        program=program,
+    )
+    client.force_login(pc_member)
+    url = reverse("program_admin_event_edit", args=[program.academic_year, e.slug])
+    get = client.get(url)
+    assert get.status_code == 200
+    for name in (b"readings", b"schedule_note", b"contact", b"fee_note"):
+        assert name in get.content
+
+
+@pytest.mark.django_db
+def test_program_admin_event_edit_saves_structured_content(
+    client, pc_member, program,
+):
+    e = Event.objects.create(
+        title="Seminar", slug="seminar-y",
+        event_type=Event.Type.SEMINAR,
+        start_date=date(2030, 9, 1), end_date=date(2031, 5, 1),
+        program=program,
+    )
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_event_edit", args=[program.academic_year, e.slug]),
+        {
+            "title": "Seminar",
+            "slug":  "seminar-y",
+            "event_type": "seminar",
+            "start_date": "2030-09-01",
+            "end_date":   "2031-05-01",
+            "format":     "online",
+            "status":     "draft",
+            "description": "body",
+            "readings":    "Lacan, *Écrits*.\nFreud, *The Interpretation of Dreams*.",
+            "schedule_note": "1st and 3rd Saturdays",
+            "contact":     "seminar@x.test",
+            "fee_note":    "$100 donation encouraged, none turned away",
+            "access_info": "",
+            "faculty":     [],
+        },
+    )
+    assert resp.status_code == 302
+    e.refresh_from_db()
+    assert "Écrits" in e.readings
+    assert e.schedule_note == "1st and 3rd Saturdays"
+    assert e.contact == "seminar@x.test"
+    assert "none turned away" in e.fee_note
+
+
+@pytest.mark.django_db
 def test_program_admin_help_renders(client, pc_member):
     """Help tab renders the PC admin guide markdown."""
     client.force_login(pc_member)

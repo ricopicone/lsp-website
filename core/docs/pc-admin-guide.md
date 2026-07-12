@@ -222,23 +222,6 @@ They edit it on the event's own edit page; substantial changes come to
 you under the **Changes** tab as **Pending review**. Compare the
 current and proposed text and click **Approve & apply** or **Decline**.
 
-### "I need to take a seminar down from the public site."
-
-The program's publish state is the main lever—when the program is
-public, all its events are visible; when it's draft, none are. Hiding
-a single event without un-publishing the whole program isn't a
-routine workflow. If this comes up often, ask the Web Coordinator to
-add a per-event hide control.
-
----
-
-## What's coming (roadmap)
-
-- **Batch clone** for setting up next year from last year's structure
-  ("two-week ordeal" → half-day). (Until then, the **Continue an
-  existing seminar** option on the event form carries a seminar's
-  workspace and past members forward term to term.)
-
 ---
 
 ## When to ask the Web Coordinator for help
