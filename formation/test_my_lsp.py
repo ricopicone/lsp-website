@@ -115,6 +115,75 @@ def test_profile_saved_redirect_fallback():
     assert _profile_saved_redirect(req) == reverse("profile_edit") + "?saved=1#saved"
 
 
+# ---- formation-doc link on the Formation tab -------------------------------
+
+def _formation_doc(slug, title):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from documents.models import Document
+
+    return Document.objects.create(
+        title=title,
+        slug=slug,
+        category=Document.Category.FORMATION,
+        summary="Guidelines.",
+        listing_visibility=Document.Visibility.MEMBERS,
+        content_visibility=Document.Visibility.MEMBERS,
+        file=SimpleUploadedFile("g.pdf", b"%PDF-1.4\n", content_type="application/pdf"),
+    )
+
+
+def _set_formation_docs(*, analyst=None, scholar=None):
+    from formation.models import FormationSettings
+
+    s = FormationSettings.load()
+    s.analyst_formation_doc = analyst
+    s.scholar_formation_doc = scholar
+    s.save()
+
+
+def test_in_training_analyst_sees_analyst_doc(client):
+    analyst_doc = _formation_doc("analyst-g", "Analyst Formation Guidelines")
+    scholar_doc = _formation_doc("scholar-g", "Scholar Formation Guidelines")
+    _set_formation_docs(analyst=analyst_doc, scholar=scholar_doc)
+    client.force_login(_user("pc@x.test", role=Profile.Role.PRE_CANDIDATE))
+    body = client.get(reverse("formation:formation")).content
+    assert analyst_doc.get_absolute_url().encode() in body
+    assert scholar_doc.get_absolute_url().encode() not in body
+
+
+def test_in_training_scholar_sees_scholar_doc(client):
+    analyst_doc = _formation_doc("analyst-g", "Analyst Formation Guidelines")
+    scholar_doc = _formation_doc("scholar-g", "Scholar Formation Guidelines")
+    _set_formation_docs(analyst=analyst_doc, scholar=scholar_doc)
+    client.force_login(_user("pcs@x.test", role=Profile.Role.PRE_CANDIDATE_SCHOLAR))
+    body = client.get(reverse("formation:formation")).content
+    assert scholar_doc.get_absolute_url().encode() in body
+    assert analyst_doc.get_absolute_url().encode() not in body
+
+
+def test_graduated_analyst_sees_no_doc(client):
+    analyst_doc = _formation_doc("analyst-g", "Analyst Formation Guidelines")
+    _set_formation_docs(analyst=analyst_doc)
+    client.force_login(_user("an2@x.test", role=Profile.Role.ANALYST))
+    resp = client.get(reverse("formation:formation"))
+    assert resp.context["formation_doc"] is None
+    assert analyst_doc.get_absolute_url().encode() not in resp.content
+
+
+def test_plain_member_sees_no_doc(client):
+    analyst_doc = _formation_doc("analyst-g", "Analyst Formation Guidelines")
+    _set_formation_docs(analyst=analyst_doc)
+    client.force_login(_user("m2@x.test", role=Profile.Role.MEMBER))
+    assert client.get(reverse("formation:formation")).context["formation_doc"] is None
+
+
+def test_link_absent_when_doc_unset(client):
+    _set_formation_docs(analyst=None, scholar=None)
+    client.force_login(_user("pc2@x.test", role=Profile.Role.PRE_CANDIDATE))
+    assert client.get(reverse("formation:formation")).context["formation_doc"] is None
+
+
 # ---- legacy redirects ------------------------------------------------------
 
 def test_legacy_list_pages_redirect(client):

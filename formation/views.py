@@ -64,6 +64,24 @@ def formation(request):
     return render(request, "formation/formation.html", _formation_context(request))
 
 
+def _formation_doc_for(user, formation_settings):
+    """The track-appropriate formation guidelines Document for an in-training
+    member, or None. In-training only (Precandidates/Candidates); respects the
+    document's listing visibility."""
+    profile = getattr(user, "profile", None)
+    if profile is None or profile.role not in Profile.IN_TRAINING_ROLES:
+        return None
+    if profile.role in Profile.ANALYST_TRACK_ROLES:
+        doc = formation_settings.analyst_formation_doc
+    elif profile.role in Profile.SCHOLAR_TRACK_ROLES:
+        doc = formation_settings.scholar_formation_doc
+    else:  # defensive: IN_TRAINING_ROLES is a subset of the two tracks
+        doc = None
+    if doc is not None and doc.listing_visible_to(user):
+        return doc
+    return None
+
+
 def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict:
     """Assemble the full context for the formation hub. Bound forms may be
     passed in so a failed POST can re-render with errors on the right tab."""
@@ -78,7 +96,10 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     if advisor_form is None and profile.needs_advisor:
         advisor_form = AdvisorSelectForm(advisee=user)
 
+    formation_settings = FormationSettings.load()
+
     ctx = {
+        "formation_doc": _formation_doc_for(user, formation_settings),
         "advisor": advisor,
         "needs_advisor": profile.needs_advisor,
         "advisor_form": advisor_form,
@@ -92,7 +113,7 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
         "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
         "control_entries": ControlAnalysis.objects.filter(member=user),
         "control_years": ControlAnalysis.years_for(user),
-        "control_target": FormationSettings.load().control_years_target,
+        "control_target": formation_settings.control_years_target,
         "external_entries": ExternalActivity.objects.filter(member=user)
         .order_by("kind", "-start_date"),
     }

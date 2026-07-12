@@ -166,6 +166,18 @@ class FormationSettings(models.Model):
         default=6,
         help_text="Target years of control analysis shown on the progress meter.",
     )
+    analyst_formation_doc = models.ForeignKey(
+        "documents.Document", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="+",
+        help_text="Formation guidelines linked at the top of the Formation tab "
+                  "for analyst-track members in training.",
+    )
+    scholar_formation_doc = models.ForeignKey(
+        "documents.Document", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="+",
+        help_text="Formation guidelines linked at the top of the Formation tab "
+                  "for scholar-track members in training.",
+    )
 
     def save(self, *args, **kwargs):
         self.pk = 1
