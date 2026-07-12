@@ -1,6 +1,19 @@
 {# Formation tab — Advisor + formation-step trace (Palimpsest/Passage/Traversée). #}
   <div class="space-y-6">
 
+    {# ---- Formation guidelines for the member's track (in-training only) ---- #}
+    {% if formation_doc %}
+    <a href="{{ formation_doc.get_absolute_url }}"
+       class="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5 hover:bg-primary/10 transition-colors scroll-mt-24">
+      <span class="min-w-0">
+        <span class="block font-serif text-lg text-base-content">{{ formation_doc.title }}</span>
+        <span class="block text-sm text-base-content/70">
+          {% if formation_doc.summary %}{{ formation_doc.summary }} {% endif %}Read the guidelines for your formation pathway. &rarr;
+        </span>
+      </span>
+    </a>
+    {% endif %}
+
     {# ---- Advisor ---- #}
     <section id="advisor" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">My Advisor</h2>

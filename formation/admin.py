@@ -21,7 +21,13 @@ class AdvancementAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at", "from_role")
 
 
-admin.site.register(FormationSettings)
+@admin.register(FormationSettings)
+class FormationSettingsAdmin(admin.ModelAdmin):
+    fields = (
+        "control_years_target",
+        "analyst_formation_doc",
+        "scholar_formation_doc",
+    )
 
 
 @admin.register(ControlAnalysis)
