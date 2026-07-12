@@ -11,6 +11,9 @@
   {% url 'formation:advancement_queue' as advancements_url %}
   {% include "core/staff/admin/_section.html" with title="Palimpsests & passages" body="Decide formation-advancement demandes: the palimpsest (Precandidate → Candidate) and, later, the passage. The member's Advisor presents each demande with a recommendation." link=advancements_url link_label="Review demandes" count=open_advancements count_label="open" %}
 
+  {% url 'formation:external_analyst_queue' as external_analysts_url %}
+  {% include "core/staff/admin/_section.html" with title="External control analysts" body="Authorize analysts outside the School for members' control analyses. Members request; the Meeting approves or declines." link=external_analysts_url link_label="Review requests" count=open_external_analysts count_label="open" %}
+
   {% url 'workgroups:detail' 'meeting-of-analysts' as meeting_workspace_url %}
   {% include "core/staff/admin/_section.html" with title="Meeting workspace" body="The Meeting's own roster, agenda, minutes, and decisions — its shared workspace. Every active Analyst is a member automatically." link=meeting_workspace_url link_label="Open the workspace" %}
 {% endblock %}

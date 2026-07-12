@@ -39,4 +39,12 @@ urlpatterns = [
          name="advancement_detail"),
     path(f"{_MOA}/advancements/<int:pk>/decide/", views.advancement_decide,
          name="advancement_decide"),
+
+    # --- External control analyst review (Meeting of the Analysts) ---
+    path(f"{_MOA}/external-analysts/", views.external_analyst_queue,
+         name="external_analyst_queue"),
+    path(f"{_MOA}/external-analysts/<int:pk>/", views.external_analyst_detail,
+         name="external_analyst_detail"),
+    path(f"{_MOA}/external-analysts/<int:pk>/decide/", views.external_analyst_decide,
+         name="external_analyst_decide"),
 ]

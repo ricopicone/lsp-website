@@ -42,3 +42,26 @@ def test_decide_external_approve_notifies_member(db):
     assert e.status == ExternalControlAnalyst.Status.APPROVED
     assert e.decided_by == reviewer
     assert Notification.objects.filter(recipient=u).exists()
+
+
+def test_non_reviewer_cannot_open_queue(client):
+    u = User.objects.create_user(email="plain@example.com", password="x")
+    client.force_login(u)
+    from django.urls import reverse
+    resp = client.get(reverse("formation:external_analyst_queue"))
+    assert resp.status_code == 403
+
+
+def test_reviewer_approves_from_detail(client):
+    from django.urls import reverse
+    member = User.objects.create_user(email="mm@example.com", password="x")
+    reviewer = User.objects.create_user(email="rr@example.com", password="x",
+                                        is_staff=True)
+    e = ExternalControlAnalyst.objects.create(
+        member=member, name="Dr Q", description="...")
+    client.force_login(reviewer)
+    resp = client.post(reverse("formation:external_analyst_decide", args=[e.pk]),
+                       {"decision": "approve", "note": "fine"})
+    assert resp.status_code == 302
+    e.refresh_from_db()
+    assert e.status == ExternalControlAnalyst.Status.APPROVED

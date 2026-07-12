@@ -791,3 +791,48 @@ def advancement_decide(request, pk):
     else:
         messages.error(request, "Choose approve or decline.")
     return redirect("formation:advancement_detail", pk=pk)
+
+
+# ---- External control analyst review (Meeting of the Analysts) -----------
+
+@login_required
+def external_analyst_queue(request):
+    _require_review(request)
+    requests_ = (ExternalControlAnalyst.objects
+                 .select_related("member", "member__profile", "decided_by")
+                 .order_by("status", "-requested_at"))
+    return render(request, "formation/external_analyst_queue.html", {
+        "requests": requests_,
+        "open_statuses": ExternalControlAnalyst.OPEN_STATUSES,
+    })
+
+
+@login_required
+def external_analyst_detail(request, pk):
+    _require_review(request)
+    obj = get_object_or_404(
+        ExternalControlAnalyst.objects.select_related("member", "member__profile"),
+        pk=pk)
+    return render(request, "formation/external_analyst_detail.html", {"obj": obj})
+
+
+@login_required
+@require_POST
+def external_analyst_decide(request, pk):
+    _require_review(request)
+    from .control import decide_external
+    obj = get_object_or_404(ExternalControlAnalyst, pk=pk)
+    if not obj.is_open:
+        messages.error(request, "This request has already been decided.")
+        return redirect("formation:external_analyst_detail", pk=pk)
+    decision = request.POST.get("decision")
+    note = (request.POST.get("note") or "").strip()
+    if decision == "approve":
+        decide_external(obj, approve=True, by=request.user, note=note)
+        messages.success(request, f"Approved {obj.name}; the member has been notified.")
+    elif decision == "decline":
+        decide_external(obj, approve=False, by=request.user, note=note)
+        messages.success(request, "Recorded as not approved; the member has been notified.")
+    else:
+        messages.error(request, "Choose approve or decline.")
+    return redirect("formation:external_analyst_detail", pk=pk)

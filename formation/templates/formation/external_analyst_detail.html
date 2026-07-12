@@ -1,0 +1,69 @@
+{% extends "core/base.html" %}
+{% block title %}External control analyst · {{ obj.name }}{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+  <nav class="text-sm"><a href="{% url 'formation:external_analyst_queue' %}" class="link link-hover text-base-content/60">← External control analysts</a></nav>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <header class="flex flex-wrap items-baseline justify-between gap-2">
+    <div>
+      <h1 class="font-serif text-2xl text-base-content tracking-tight">{{ obj.name }}</h1>
+      <p class="text-sm text-base-content/60">Requested by {{ obj.member.get_full_name|default:obj.member.email }} · {{ obj.member.profile.get_role_display }} · opened {{ obj.requested_at|date:"M j, Y" }}</p>
+    </div>
+    <span class="badge {% if obj.status == 'approved' %}badge-success{% elif obj.is_open %}badge-warning{% else %}badge-ghost{% endif %}">{{ obj.get_status_display }}</span>
+  </header>
+
+  {% comment %}The external analyst{% endcomment %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-3">
+    <h2 class="font-medium text-base-content">The analyst</h2>
+    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+      <div>
+        <dt class="text-base-content/60">Name</dt>
+        <dd>{{ obj.name }}</dd>
+      </div>
+      <div>
+        <dt class="text-base-content/60">Email</dt>
+        <dd>{{ obj.email|default:"—" }}</dd>
+      </div>
+      <div>
+        <dt class="text-base-content/60">Phone</dt>
+        <dd>{{ obj.phone|default:"—" }}</dd>
+      </div>
+    </dl>
+    <div>
+      <p class="text-base-content/60 text-sm mb-1">Member's description</p>
+      <div class="rounded-lg bg-base-200/40 p-3 text-sm whitespace-pre-wrap">{{ obj.description }}</div>
+    </div>
+  </section>
+
+  {% comment %}Decision{% endcomment %}
+  {% if obj.is_open %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-4">
+    <h2 class="font-medium text-base-content">Decision <span class="text-xs font-normal text-base-content/50">(Meeting of the Analysts)</span></h2>
+    <form method="post" action="{% url 'formation:external_analyst_decide' obj.pk %}" class="space-y-3">
+      {% csrf_token %}
+      <div class="space-y-1">
+        <label class="block text-xs text-base-content/60">Note (optional, included in the email)</label>
+        <textarea name="note" rows="2" class="textarea textarea-bordered w-full"></textarea>
+      </div>
+      <div class="flex gap-2">
+        <button name="decision" value="approve" class="btn btn-primary btn-sm"
+                onclick="return confirm('Approve this external control analyst?');">Approve</button>
+        <button name="decision" value="decline" class="btn btn-ghost btn-sm text-error"
+                onclick="return confirm('Record this request as not approved?');">Decline</button>
+      </div>
+    </form>
+  </section>
+  {% else %}
+  <section class="rounded-xl border border-base-300 p-5 text-sm space-y-1">
+    <p><span class="text-base-content/60">Decision:</span> <strong>{{ obj.get_status_display }}</strong>
+      {% if obj.decided_at %}on {{ obj.decided_at|date:"M j, Y" }}{% endif %}
+      {% if obj.decided_by %}by {{ obj.decided_by.get_full_name|default:obj.decided_by.email }}{% endif %}</p>
+    {% if obj.decision_note %}<p class="text-base-content/70">{{ obj.decision_note }}</p>{% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
