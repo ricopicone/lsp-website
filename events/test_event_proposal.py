@@ -105,6 +105,32 @@ def test_propose_creates_proposal(client):
     assert p.proposed_by == fac and p.status == EventProposal.Status.PROPOSED
 
 
+def test_proposed_datetime_uses_proposers_timezone(client):
+    """A special-event proposal reads the naive datetime in the proposer's own
+    timezone (not a hardcoded Pacific)."""
+    from zoneinfo import ZoneInfo
+
+    from django.utils import timezone
+    fac = _faculty()
+    fac.profile.timezone = "Europe/Berlin"
+    fac.profile.save()
+    client.force_login(fac)
+    resp = client.post("/propose/", {
+        **_MGMT,
+        "event_type": Event.Type.SPECIAL_EVENT,
+        "title": "Evening Talk",
+        "description": "An evening talk.",
+        "proposed_datetime": "2099-05-01T18:00",
+        "fee_type": "free",
+    })
+    assert resp.status_code == 302
+    p = EventProposal.objects.get(title="Evening Talk")
+    berlin = ZoneInfo("Europe/Berlin")
+    pacific = ZoneInfo("America/Los_Angeles")
+    assert timezone.localtime(p.proposed_datetime, berlin).strftime("%H:%M") == "18:00"
+    assert timezone.localtime(p.proposed_datetime, pacific).strftime("%H:%M") == "09:00"
+
+
 def test_approve_mints_new_standing_seminar(client):
     fac = _faculty()
     start, end = _future()

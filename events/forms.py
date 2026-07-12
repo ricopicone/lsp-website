@@ -155,7 +155,11 @@ class EventProposalForm(forms.ModelForm):
         self.fields["event_type"].label = "Type of event"
         # datetime-local needs the value in this exact format to prefill on edit.
         self.fields["proposed_datetime"].input_formats = ["%Y-%m-%dT%H:%M"]
-        self.fields["proposed_datetime"].label = "Proposed date & time (Pacific)"
+        self.fields["proposed_datetime"].label = "Proposed date & time"
+        from django.utils import timezone as _tz
+        self.fields["proposed_datetime"].help_text = (
+            f"In your timezone ({_tz.get_current_timezone()})."
+        )
 
         self.fields["description"].help_text = ""  # guidance shown above the field
 
@@ -227,11 +231,11 @@ class EventProposalForm(forms.ModelForm):
                     r.citation for r in existing
                 )
             if self.instance.proposed_datetime:
-                from zoneinfo import ZoneInfo
-
                 from django.utils import timezone
+                # Prefill in the editor's own timezone (localtime uses the
+                # request's active tz), matching how the input is interpreted.
                 self.initial["proposed_datetime"] = timezone.localtime(
-                    self.instance.proposed_datetime, ZoneInfo("America/Los_Angeles")
+                    self.instance.proposed_datetime
                 ).strftime("%Y-%m-%dT%H:%M")
             if not self.is_bound:
                 self.initial["schedule_choice"] = (
@@ -245,13 +249,13 @@ class EventProposalForm(forms.ModelForm):
                     )
 
     def clean_proposed_datetime(self):
-        """Interpret the naive datetime-local input as Pacific time."""
-        from zoneinfo import ZoneInfo
-
+        """Interpret the naive datetime-local input in the editor's own timezone
+        (the request's active tz = their Profile.timezone), like the rest of the
+        app. Django usually localizes this already; the guard is defensive."""
         from django.utils import timezone
         dt = self.cleaned_data.get("proposed_datetime")
         if dt and timezone.is_naive(dt):
-            dt = timezone.make_aware(dt, ZoneInfo("America/Los_Angeles"))
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
         return dt
 
     def clean(self):
@@ -476,93 +480,47 @@ class ProgramEventForm(forms.ModelForm):
 
 # --- Standalone-event schedule (session) editor -------------------------
 
-_PACIFIC = "America/Los_Angeles"
+_DT_ATTRS = {"type": "datetime-local", "class": "input input-bordered w-full"}
 
 
 class SessionScheduleForm(forms.ModelForm):
     """One session in the standalone-event schedule editor.
 
-    The model stores ``start_at`` / ``end_at`` datetimes; the editor presents a
-    date plus start/end *times* (interpreted as Pacific, like the proposal form
-    and the site's "PT" display), so those three split fields map onto the
-    model's datetimes.
+    Start and end are independent ``datetime-local`` inputs (not a shared date +
+    two times) — in the editor's own timezone, a session's start and end can
+    fall on different calendar dates, so each carries its own date. Django
+    localizes the naive input to the request's active timezone (the user's
+    ``Profile.timezone``), matching the workgroup meeting forms and the rest of
+    the app's per-user display.
     """
-
-    session_date = forms.DateField(
-        required=False, label="Date",
-        widget=forms.DateInput(attrs={"type": "date", "class": "input input-bordered w-full"}),
-    )
-    start_time = forms.TimeField(
-        required=False, label="Start",
-        widget=forms.TimeInput(
-            attrs={"type": "time", "class": "input input-bordered w-full"},
-            format="%H:%M",
-        ),
-    )
-    end_time = forms.TimeField(
-        required=False, label="End",
-        widget=forms.TimeInput(
-            attrs={"type": "time", "class": "input input-bordered w-full"},
-            format="%H:%M",
-        ),
-    )
 
     class Meta:
         model = Session
-        fields = ("location",)
+        fields = ("start_at", "end_at", "location")
         widgets = {
+            "start_at": forms.DateTimeInput(attrs=_DT_ATTRS, format="%Y-%m-%dT%H:%M"),
+            "end_at": forms.DateTimeInput(attrs=_DT_ATTRS, format="%Y-%m-%dT%H:%M"),
             "location": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        for f in ("start_at", "end_at"):
+            self.fields[f].input_formats = ["%Y-%m-%dT%H:%M"]
+            self.fields[f].required = False
         self.fields["location"].required = False
-        from zoneinfo import ZoneInfo
-
-        from django.utils import timezone
-        inst = self.instance
-        if inst and inst.pk and inst.start_at:
-            start = timezone.localtime(inst.start_at, ZoneInfo(_PACIFIC))
-            self.fields["session_date"].initial = start.date()
-            self.fields["start_time"].initial = start.time()
-            if inst.end_at:
-                end = timezone.localtime(inst.end_at, ZoneInfo(_PACIFIC))
-                self.fields["end_time"].initial = end.time()
-
-    def _row_is_blank(self, cd) -> bool:
-        return not any([
-            cd.get("session_date"), cd.get("start_time"),
-            cd.get("end_time"), cd.get("location"),
-        ])
 
     def clean(self):
         cd = super().clean()
-        if self._row_is_blank(cd):
+        start, end = cd.get("start_at"), cd.get("end_at")
+        # A blank extra row is dropped by the formset; a partial one is an error.
+        if not start and not end and not cd.get("location"):
             return cd
-        d, st, et = cd.get("session_date"), cd.get("start_time"), cd.get("end_time")
-        if not (d and st and et):
-            raise forms.ValidationError("Give a date, a start time, and an end time.")
-        if et <= st:
-            self.add_error("end_time", "End time must be after the start time.")
+        if not start or not end:
+            raise forms.ValidationError("Give both a start and an end date/time.")
+        if end <= start:
+            self.add_error("end_at", "The end must be after the start.")
         return cd
-
-    def save(self, commit=True):
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
-
-        from django.utils import timezone
-        inst = super().save(commit=False)
-        cd = self.cleaned_data
-        tz = ZoneInfo(_PACIFIC)
-        inst.start_at = timezone.make_aware(
-            datetime.combine(cd["session_date"], cd["start_time"]), tz,
-        )
-        inst.end_at = timezone.make_aware(
-            datetime.combine(cd["session_date"], cd["end_time"]), tz,
-        )
-        if commit:
-            inst.save()
-        return inst
 
 
 def _build_schedule_formset():
@@ -571,5 +529,5 @@ def _build_schedule_formset():
     )
 
 
-#: Session formset for the standalone-event schedule editor (date/start/end/location).
+#: Session formset for the standalone-event schedule editor (start/end datetimes + location).
 SessionScheduleFormSet = _build_schedule_formset()

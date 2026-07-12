@@ -1,5 +1,6 @@
 {% comment %}Schedule tab. Expects: workgroup, upcoming_meetings, past_meetings,
 meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
+{% load tz_filters %}
 <div class="max-w-2xl space-y-6">
   {% if calendar_feed_url %}
   <div class="flex items-center justify-between gap-2 text-sm">
@@ -19,6 +20,7 @@ meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
           <label class="form-control"><span class="label-text text-xs text-base-content/60">Starts</span>{{ meeting_form.starts_at }}</label>
           <label class="form-control"><span class="label-text text-xs text-base-content/60">Ends</span>{{ meeting_form.ends_at }}</label>
         </div>
+        <p class="text-xs text-base-content/50">Times in your timezone ({% user_tz_name %}).</p>
         {{ meeting_form.title }}{{ meeting_form.location }}{{ meeting_form.note }}
         <div class="flex justify-end"><button class="btn btn-primary btn-sm">Schedule</button></div>
       </form>
@@ -43,6 +45,7 @@ meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
           <label class="form-control"><span class="label-text text-xs text-base-content/60">Start</span>{{ series_form.start_time }}</label>
           <label class="form-control"><span class="label-text text-xs text-base-content/60">End</span>{{ series_form.end_time }}</label>
         </div>
+        <p class="text-xs text-base-content/50">Times in your timezone ({% user_tz_name %}).</p>
         {{ series_form.location }}{{ series_form.description }}
         {% if series_form.errors %}<p class="text-error text-xs">{{ series_form.non_field_errors|striptags }}{{ series_form.end_date.errors|striptags }}{{ series_form.end_time.errors|striptags }}{{ series_form.weekdays.errors|striptags }}</p>{% endif %}
         <div class="flex justify-end"><button class="btn btn-primary btn-sm">Create series</button></div>
