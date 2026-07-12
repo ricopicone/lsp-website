@@ -105,9 +105,21 @@
       </div>
 
       <div>
-        <label for="{{ form.faculty.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Faculty</label>
-        {{ form.faculty }}
-        <p class="text-xs text-base-content/50 mt-1">{{ form.faculty.help_text }} Hold ⌘/Ctrl to select more than one.</p>
+        <span class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Faculty</span>
+        {% if form.faculty.field.queryset %}
+        <div class="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-base-300 p-2">
+          {% for choice in form.faculty %}
+          <label class="flex items-center gap-2 cursor-pointer text-sm">
+            {{ choice.tag }} <span>{{ choice.choice_label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="rounded-lg border border-base-300 p-2 text-sm text-base-content/50">
+          No faculty available yet — set members' faculty status in the member admin first.
+        </p>
+        {% endif %}
+        <p class="text-xs text-base-content/50 mt-1">{{ form.faculty.help_text }}</p>
         {% if form.faculty.errors %}<p class="text-error text-xs mt-1">{{ form.faculty.errors|join:", " }}</p>{% endif %}
       </div>
 
