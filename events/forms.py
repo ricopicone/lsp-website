@@ -371,9 +371,7 @@ class ProgramEventForm(forms.ModelForm):
     #: via ``Event.set_faculty`` on save.
     faculty = forms.ModelMultipleChoiceField(
         queryset=None, required=False,
-        widget=forms.SelectMultiple(attrs={
-            "class": "select select-bordered w-full", "size": 6,
-        }),
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-sm"}),
         help_text="LSP-affiliated instructors (can edit the event and mint pricing codes).",
     )
 

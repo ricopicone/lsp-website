@@ -260,6 +260,32 @@ def test_program_admin_event_edit_saves_structured_content(
 
 
 @pytest.mark.django_db
+def test_program_admin_event_edit_saves_faculty_selection(client, pc_member, program):
+    """The faculty checkbox picker round-trips a selection onto the workgroup."""
+    fac = User.objects.create_user(
+        email="fac@x.test", password="x", first_name="Jane", last_name="Doe",
+    )
+    fac.profile.is_faculty = True
+    fac.profile.save()
+    e = Event.objects.create(
+        title="Sem", slug="sem-fac", event_type=Event.Type.SEMINAR,
+        start_date=date(2030, 9, 1), end_date=date(2031, 5, 1), program=program,
+    )
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_event_edit", args=[program.academic_year, e.slug]),
+        {
+            "title": "Sem", "slug": "sem-fac", "event_type": "seminar",
+            "start_date": "2030-09-01", "end_date": "2031-05-01",
+            "format": "online", "status": "draft", "description": "x",
+            "access_info": "", "faculty": [str(fac.pk)],
+        },
+    )
+    assert resp.status_code == 302
+    assert fac in list(Event.objects.get(pk=e.pk).faculty_members())
+
+
+@pytest.mark.django_db
 def test_program_admin_help_renders(client, pc_member):
     """Help tab renders the PC admin guide markdown."""
     client.force_login(pc_member)
