@@ -309,7 +309,9 @@ def event_edit(request, slug: str):
 
     if request.method != "POST":
         form = EventDescriptionForm(instance=event)
-        return render(request, "events/event_edit.html", {"event": event, "form": form})
+        return render(request, "events/event_edit.html", {
+            "event": event, "form": form, **_schedule_editor_context(event),
+        })
 
     # Snapshot the live reviewable values *before* binding — ModelForm validation
     # mutates ``event`` in place (construct_instance), so reading them afterwards
@@ -318,7 +320,9 @@ def event_edit(request, slug: str):
 
     form = EventDescriptionForm(request.POST, instance=event)
     if not form.is_valid():
-        return render(request, "events/event_edit.html", {"event": event, "form": form})
+        return render(request, "events/event_edit.html", {
+            "event": event, "form": form, **_schedule_editor_context(event),
+        })
 
     cd = form.cleaned_data
     changed = [f for f in REVIEWABLE_FIELDS if (cd[f] or "") != original[f]]
@@ -396,6 +400,71 @@ def event_edit(request, slug: str):
     cr.save()
     messages.success(request, "Change adopted.")
     return redirect("events:detail", slug=event.slug)
+
+
+def _schedule_editor_context(event, formset=None):
+    """Context for the standalone-event schedule editor on the edit page.
+
+    The editor is shown only for standalone one-off types (special events, Days
+    of Assembly, Working Days, Scholarly Seminars); annual-program events derive
+    their sessions from a recurring meeting series managed elsewhere.
+    """
+    from .forms import SessionScheduleFormSet
+
+    show = event.event_type in Event.PC_OWNED_TYPES
+    if not show:
+        return {"show_schedule_editor": False}
+    if formset is None:
+        formset = SessionScheduleFormSet(instance=event, prefix="sessions")
+    return {"show_schedule_editor": True, "schedule_formset": formset}
+
+
+def _resequence_and_sync_dates(event):
+    """Renumber an event's sessions by start time and pull the event's
+    start/end date onto the earliest/latest session."""
+    from zoneinfo import ZoneInfo
+
+    sessions = list(event.sessions.order_by("start_at"))
+    for i, s in enumerate(sessions, start=1):
+        if s.sequence != i:
+            s.sequence = i
+            s.save(update_fields=["sequence"])
+    if sessions:
+        tz = ZoneInfo("America/Los_Angeles")
+        event.start_date = timezone.localtime(sessions[0].start_at, tz).date()
+        event.end_date = timezone.localtime(sessions[-1].start_at, tz).date()
+        event.save(update_fields=["start_date", "end_date"])
+
+
+@login_required
+@require_POST
+def event_edit_schedule(request, slug: str):
+    """Faculty/PC/staff edit the sessions (date + start/end + location) of a
+    standalone one-off event. Isolated from the content edit form + review loop
+    (sessions are a different model). Applies immediately."""
+    from django.db import transaction
+
+    from .forms import SessionScheduleFormSet
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to edit this event.")
+    if event.event_type not in Event.PC_OWNED_TYPES:
+        raise Http404()
+
+    formset = SessionScheduleFormSet(request.POST, instance=event, prefix="sessions")
+    if formset.is_valid():
+        with transaction.atomic():
+            formset.save()
+            _resequence_and_sync_dates(event)
+        messages.success(request, "Schedule updated.")
+        return redirect("events:edit", slug=event.slug)
+
+    form = EventDescriptionForm(instance=event)
+    return render(request, "events/event_edit.html", {
+        "event": event, "form": form,
+        **_schedule_editor_context(event, formset=formset),
+    })
 
 
 def _field_label(field: str) -> str:

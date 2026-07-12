@@ -94,5 +94,120 @@
     <button type="submit" class="btn btn-primary">Save</button>
   </form>
 
+  {% if show_schedule_editor %}
+  <section class="space-y-4 border-t border-base-300/60 pt-6">
+    <div class="space-y-1">
+      <h2 class="font-serif text-lg text-base-content">Schedule</h2>
+      <p class="text-xs text-base-content/60">
+        The event's session date(s) and times (Pacific). Add or remove sessions,
+        then Save schedule. Setting a date on a not-yet-scheduled event lets it
+        be published.
+      </p>
+    </div>
+
+    <form method="post" action="{% url 'events:edit_schedule' event.slug %}" class="space-y-3">
+      {% csrf_token %}
+      {{ schedule_formset.management_form }}
+      {% if schedule_formset.non_form_errors %}
+      <div class="alert alert-error text-sm">{{ schedule_formset.non_form_errors|join:", " }}</div>
+      {% endif %}
+
+      <div id="session-cards" class="space-y-3">
+        {% for sform in schedule_formset %}
+        <div class="session-card rounded-lg border border-base-300/60 bg-base-100 p-3 space-y-3">
+          {% for hidden in sform.hidden_fields %}{{ hidden }}{% endfor %}
+          <div class="flex items-center justify-between">
+            <span class="text-xs uppercase tracking-wider text-base-content/60">Session {{ forloop.counter }}</span>
+            <button type="button" class="remove-session btn btn-ghost btn-xs text-error">Remove</button>
+          </div>
+          <div>
+            <label for="{{ sform.session_date.id_for_label }}" class="block text-xs text-base-content/60 mb-1">Date</label>
+            {{ sform.session_date }}
+            {% if sform.session_date.errors %}<p class="text-error text-xs mt-1">{{ sform.session_date.errors|join:", " }}</p>{% endif %}
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="{{ sform.start_time.id_for_label }}" class="block text-xs text-base-content/60 mb-1">Start</label>
+              {{ sform.start_time }}
+            </div>
+            <div>
+              <label for="{{ sform.end_time.id_for_label }}" class="block text-xs text-base-content/60 mb-1">End</label>
+              {{ sform.end_time }}
+              {% if sform.end_time.errors %}<p class="text-error text-xs mt-1">{{ sform.end_time.errors|join:", " }}</p>{% endif %}
+            </div>
+          </div>
+          <div>
+            <label for="{{ sform.location.id_for_label }}" class="block text-xs text-base-content/60 mb-1">Location <span class="text-base-content/40">(optional)</span></label>
+            {{ sform.location }}
+          </div>
+          {% if sform.non_field_errors %}<p class="text-error text-xs">{{ sform.non_field_errors|join:", " }}</p>{% endif %}
+          <label class="hidden">{{ sform.DELETE }}</label>
+        </div>
+        {% endfor %}
+      </div>
+
+      <template id="session-empty">
+        <div class="session-card rounded-lg border border-base-300/60 bg-base-100 p-3 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs uppercase tracking-wider text-base-content/60">New session</span>
+            <button type="button" class="remove-session btn btn-ghost btn-xs text-error">Remove</button>
+          </div>
+          <div>
+            <label class="block text-xs text-base-content/60 mb-1">Date</label>
+            {{ schedule_formset.empty_form.session_date }}
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-base-content/60 mb-1">Start</label>
+              {{ schedule_formset.empty_form.start_time }}
+            </div>
+            <div>
+              <label class="block text-xs text-base-content/60 mb-1">End</label>
+              {{ schedule_formset.empty_form.end_time }}
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-base-content/60 mb-1">Location <span class="text-base-content/40">(optional)</span></label>
+            {{ schedule_formset.empty_form.location }}
+          </div>
+          <label class="hidden">{{ schedule_formset.empty_form.DELETE }}</label>
+        </div>
+      </template>
+
+      <div class="flex items-center justify-between gap-2">
+        <button type="button" id="add-session" class="btn btn-ghost btn-sm">+ Add session</button>
+        <button type="submit" class="btn btn-primary btn-sm">Save schedule</button>
+      </div>
+    </form>
+  </section>
+
+  <script>
+  (function () {
+    var addBtn = document.getElementById("add-session");
+    var cards = document.getElementById("session-cards");
+    var tmpl = document.getElementById("session-empty");
+    var total = document.getElementById("id_sessions-TOTAL_FORMS");
+    if (addBtn && cards && tmpl && total) {
+      addBtn.addEventListener("click", function () {
+        var i = parseInt(total.value, 10);
+        var wrap = document.createElement("div");
+        wrap.innerHTML = tmpl.innerHTML.replace(/__prefix__/g, i);
+        cards.appendChild(wrap.firstElementChild);
+        total.value = i + 1;
+      });
+    }
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest(".remove-session") : null;
+      if (!btn) { return; }
+      var card = btn.closest(".session-card");
+      if (!card) { return; }
+      var del = card.querySelector("input[type=checkbox][name$='-DELETE']");
+      if (del) { del.checked = true; card.style.display = "none"; }
+      else { card.remove(); }
+    });
+  })();
+  </script>
+  {% endif %}
+
 </div>
 {% endblock %}
