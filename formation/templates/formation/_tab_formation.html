@@ -222,7 +222,7 @@
         <h3 class="text-sm font-medium">External control analyst requests</h3>
         <ul class="space-y-1 text-sm text-base-content/70">
           {% for r in external_requests %}
-          <li>{{ r.name }} — <span class="badge badge-sm">{{ r.get_status_display }}</span></li>
+          <li>{{ r.name }}, <span class="badge badge-sm">{{ r.get_status_display }}</span></li>
           {% endfor %}
         </ul>
       </div>

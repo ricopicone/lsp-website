@@ -81,6 +81,20 @@ def test_control_progress_fills_slots_by_longest_per_tag(db):
     assert prog["two_year"][1]["met"] is False                    # 1yr < 2
 
 
+def test_control_progress_total_years_is_float_with_no_entries(db):
+    from accounts.models import Profile, User
+    from formation.control import control_progress
+
+    u = User.objects.create_user(email="nc@example.com", password="x")
+    u.profile.role = Profile.Role.PRE_CANDIDATE
+    u.profile.clinical_background = True
+    u.profile.save()
+
+    prog = control_progress(u)
+    assert isinstance(prog["total_years"], float)
+    assert prog["total_years"] == 0.0
+
+
 def test_control_progress_clinical_has_one_two_year_slot(db):
     from accounts.models import Profile, User
     from formation.control import control_progress

@@ -40,7 +40,7 @@ def control_progress(user) -> dict:
         _slot(twos[i] if i < len(twos) else None, settings_.two_year_threshold)
         for i in range(n_two)
     ]
-    total_years = round(sum(c.duration_years for c in entries), 2)
+    total_years = round(sum((c.duration_years for c in entries), 0.0), 2)
     total_target = settings_.four_year_threshold + settings_.two_year_threshold * n_two
     return {
         "total_years": total_years,

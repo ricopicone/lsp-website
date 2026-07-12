@@ -14,6 +14,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db.models import Case, IntegerField, Value, When
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -816,7 +817,11 @@ def external_analyst_queue(request):
     _require_review(request)
     requests_ = (ExternalControlAnalyst.objects
                  .select_related("member", "member__profile", "decided_by")
-                 .order_by("status", "-requested_at"))
+                 .annotate(_open=Case(
+                     When(status=ExternalControlAnalyst.Status.REQUESTED, then=Value(0)),
+                     default=Value(1), output_field=IntegerField(),
+                 ))
+                 .order_by("_open", "-requested_at"))
     return render(request, "formation/external_analyst_queue.html", {
         "requests": requests_,
         "open_statuses": ExternalControlAnalyst.OPEN_STATUSES,

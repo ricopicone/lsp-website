@@ -52,6 +52,26 @@ def test_non_reviewer_cannot_open_queue(client):
     assert resp.status_code == 403
 
 
+def test_queue_lists_open_requests_first(client):
+    from django.urls import reverse
+
+    member = User.objects.create_user(email="qm@example.com", password="x")
+    reviewer = User.objects.create_user(email="qr@example.com", password="x",
+                                        is_staff=True)
+    approved = ExternalControlAnalyst.objects.create(
+        member=member, name="Dr Approved", description="...",
+        status=ExternalControlAnalyst.Status.APPROVED,
+    )
+    open_ = ExternalControlAnalyst.objects.create(
+        member=member, name="Dr Open", description="...",
+    )
+    client.force_login(reviewer)
+    resp = client.get(reverse("formation:external_analyst_queue"))
+    requests_ = list(resp.context["requests"])
+    assert requests_[0] == open_
+    assert approved in requests_[1:]
+
+
 def test_reviewer_approves_from_detail(client):
     from django.urls import reverse
     member = User.objects.create_user(email="mm@example.com", password="x")
