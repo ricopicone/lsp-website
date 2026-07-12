@@ -143,8 +143,8 @@ def send_external_analyst_decision(obj: ExternalControlAnalyst) -> None:
         body = (
             f"Dear {name},\n\n"
             f"The Meeting of the Analysts has approved {obj.name} as your "
-            "external control analyst, you may count this analysis toward "
-            "your formation.\n\n"
+            "external control analyst. You may now count this analysis "
+            "toward your formation.\n\n"
         )
     else:
         subject = "Your external control analyst request"

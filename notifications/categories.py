@@ -189,7 +189,7 @@ CATEGORY_META: dict[str, CategoryMeta] = {
     _C.EXTERNAL_CONTROL_ANALYST: _M(
         SECTION_ADMISSIONS, _("External control analyst"),
         _("Requests to authorize an analyst outside the School for control "
-          "analysis, and decisions on yours."),
+          "analysis, for you to review."),
     ),
     # Groups — in-app first; email optional (default off to avoid noise).
     _C.GROUP_MEMBERSHIP: _M(

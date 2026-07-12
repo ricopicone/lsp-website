@@ -107,6 +107,28 @@ def test_control_form_school_dropdown_lists_only_active_public_analysts(db):
     assert analyst in qs and hidden not in qs and member not in qs
 
 
+def test_control_form_school_dropdown_excludes_personas(db):
+    """Training-sandbox persona analysts must never appear as selectable
+    control-analysis supervisors (personas-off-public-rosters convention)."""
+    from accounts.models import Profile, User
+    from formation.forms import ControlAnalysisForm
+
+    member = User.objects.create_user(email="mem3@example.com", password="x")
+    analyst = User.objects.create_user(email="an3@example.com", password="x")
+    analyst.profile.role = Profile.Role.ANALYST
+    analyst.profile.public = True
+    analyst.profile.save()
+    persona = User.objects.create_user(email="persona3@example.com", password="x")
+    persona.profile.role = Profile.Role.ANALYST
+    persona.profile.public = True
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    form = ControlAnalysisForm(user=member)
+    qs = form.fields["school_analyst"].queryset
+    assert analyst in qs and persona not in qs
+
+
 def test_control_save_syncs_supervisor_name_from_school_analyst(client, db):
     from django.urls import reverse
 

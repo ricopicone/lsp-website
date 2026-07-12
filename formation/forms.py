@@ -109,6 +109,7 @@ class ControlAnalysisForm(forms.ModelForm):
                 profile__role=Profile.Role.ANALYST,
                 profile__public=True,
                 profile__standing=Profile.Standing.ACTIVE,
+                profile__is_persona=False,
                 is_active=True,
             ).order_by("last_name", "first_name")
         )
