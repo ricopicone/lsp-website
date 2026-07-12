@@ -1,52 +1,55 @@
 # Program Committee Admin Guide
 
-*A walk-through of the Program Committee admin: planning, editing, and
-publishing the LSP annual program (seminars, reading groups, cartels).*
+*A walk-through of the Program Committee admin: planning the LSP annual
+program (seminars, reading groups, cartels), reviewing member proposals,
+and handling faculty edits to published events.*
 
 ---
 
 ## What this admin is for
 
-The Program Committee owns the LSP **annual program** — the set of
+The Program Committee owns the LSP **annual program**—the set of
 seminars, reading groups, and cartels offered each academic year.
-This admin lets you:
+This admin gives you four tabs:
 
-- See every program (across academic years) at a glance.
-- Edit a program's events directly (title, faculty, dates, description,
-  etc.).
-- Control when each program becomes publicly visible (publish toggle
-  + scheduled publish date).
-- Create new events attached to a program.
+- **Programs**: see every program (across academic years), edit its
+  events, and control when it becomes public (publish toggle and
+  scheduled publish date).
+- **Proposals**: review event proposals submitted by members; approve
+  one to mint it into a program, or decline it with a note.
+- **Changes**: review faculty edits to the content of already-approved
+  events, and see the history of self-certified and administrative
+  changes.
+- **Help**: this guide.
 
-What this admin doesn't do (yet): solicit and review event proposals
-from faculty. That workflow is designed but deferred. For now, the PC
-writes the program directly using this admin.
+The Treasurer admin handles dues and tuition separately; this admin is
+only about the program.
 
 ---
 
 ## How to get there
 
 1. Log in at <https://app.lacanschool.org/> with your LSP account.
-2. Click your photo / initials in the top-right.
-3. Pick **Program Committee admin**.
+2. Click your photo / initials in the top-right and pick **Admin Tools**.
+3. On the Admin Tools page, choose **Program Committee Admin**.
 
-You'll see the dropdown link if you're a current member of the
-**Programming Committee** on the committees list (or if you're LSP
-staff with full admin access).
+You'll see the **Admin Tools** entry, and the Program Committee Admin
+panel on it, if you're a current member of the **Programming Committee**
+on the committees list (or LSP staff with full admin access).
 
 ---
 
 ## Programs tab (the index)
 
-Lists every program. Each row shows:
+Lists every academic year that has been set up. Each row shows:
 
-- **Academic year** (the program's label, e.g. "Program 2026-2027")
-- **Status** — **Public** (visible on `/program/`) or **Draft** (hidden
-  from anyone outside the PC + staff)
-- **Events** — count of seminars + reading groups + cartels in the
-  program
-- **Publish date** — if scheduled, the date it will flip to Public
-  automatically
+- **Academic year**: the program's label, e.g. "Program 2026-2027".
+- **Status**: **Public** (visible on `/program/`) or **Draft** (hidden
+  from anyone outside the PC and staff).
+- **Events**: count of seminars, reading groups, and cartels in the
+  program.
+- **Publish date**: if scheduled, the date it will flip to Public
+  automatically.
 
 An upcoming academic year is set up automatically about a year ahead,
 so you should always see at least the current year and the next year
@@ -63,18 +66,18 @@ Two sections:
 
 ### Publication
 
-- **Published now** checkbox — flip this to make the program (and all
+- **Published now** checkbox: flip this to make the program (and all
   its events) immediately visible on `/program/?year=…`.
-- **Schedule a publish date / time** — pick a future date/time when
+- **Schedule a publish date / time**: pick a future date/time when
   the program should automatically become public. Useful for
   announcing the new year on a specific date.
 
-Either being set is enough — once `publish_date` is in the past, the
+Either being set is enough—once `publish_date` is in the past, the
 program is treated as Public.
 
 > **Effect of publishing:** when the program is Public, all of its
 > events become visible on `/program/?year=…` and accessible via their
-> individual URLs. While Draft, only the PC + staff can preview the
+> individual URLs. While Draft, only the PC and staff can preview the
 > program at that URL.
 
 ### Events
@@ -95,28 +98,83 @@ add a new one attached to this program.
 
 ## Event edit / create form
 
-- **Title** + **Slug** — the slug is the URL fragment
+- **Title** and **Slug**: the slug is the URL fragment
   (`/events/<slug>/`). Keep it short and lowercase-hyphenated.
-- **Event type** — limited to the annual-program types: seminar,
+- **Event type**: limited to the annual-program types—seminar,
   reading group, cartel.
-- **Start / end date** — the academic-year range the event spans (used
+- **Start / end date**: the academic-year range the event spans (used
   by the program page and by the unified calendar).
-- **Format** — online / in person / hybrid.
-- **Status** — draft / open for registration / closed. This is
+- **Format**: online, in person, or hybrid.
+- **Status**: draft, open for registration, or closed. This is
   registration-status (whether people can sign up), separate from the
   program's public-visibility status.
-- **Description** — Markdown-friendly long-form text shown on the
+- **Description**: Markdown-friendly long-form text shown on the
   event page.
-- **Access info** — Zoom link, meeting code, address, etc. Hidden from
+- **Access info**: Zoom link, meeting code, address, etc. Hidden from
   the public; released to registrants only after they've paid.
-- **Faculty** — the LSP-affiliated instructors. Only users with
-  `is_faculty=True` show up in this picker.
+- **Faculty**: the LSP-affiliated instructors. Only users with
+  `is_faculty=True` show up in this picker. Faculty can edit the event
+  and mint pricing codes.
+- **Continue an existing seminar** (new seminars only): make this a new
+  yearly term of an existing seminar so its workspace, channel, and past
+  members carry over (they renew by registering for this term). Leave
+  blank for a brand-new seminar.
+- **Requires faculty approval**: if set, each registration must be
+  approved by the event's faculty before it's confirmed. Default off.
+- **Record video**: automatically record the event's online meeting.
+  Off by default; recordings are stored privately and shown per their
+  visibility setting.
 
-> The event is auto-attached to the program you're editing in — you
+> The event is auto-attached to the program you're editing in—you
 > don't have to set the program field.
 
 After saving, a "View event page" link takes you to the public-facing
-URL (which only the PC + staff can see while the program is Draft).
+URL (which only the PC and staff can see while the program is Draft).
+
+---
+
+## Proposals tab
+
+Any LSP member can submit an event proposal (a seminar, reading group,
+or special event) from their **My LSP → Proposals** area. Teaching a
+seminar confers faculty standing, granted automatically on approval.
+
+- **Pending**: proposals submitted for review. A proposal the member
+  only *saved* (a work-in-progress draft) never reaches this queue—it
+  shows up here once they submit it. Each card shows the proposer, type,
+  proposed date/time (or "TBD"), conveners, description, speakers, fee,
+  readings, and contact.
+- **Approve & mint**: turns the proposal into a real Event. A seminar
+  or reading group is minted into the *proposed* academic year's
+  program (you still publish that program separately); a special event
+  is minted and published once it has a date, otherwise held until you
+  set one.
+- **Decline**: sends it back with an optional reason. The proposer can
+  revise and resubmit.
+- **Decided**: a table of already-approved and declined proposals, with
+  a link to the minted event.
+
+---
+
+## Changes tab
+
+When faculty edit the *content* of an already-approved event (title,
+description, readings, fee note), the change routes through a
+certify-or-submit dialog rather than silently going live. This tab is
+where those land:
+
+- **Pending review**: substantial changes the faculty member asked the
+  PC to approve. The live event is untouched while a change is pending.
+  Each item shows a side-by-side **Current** vs **Proposed** diff per
+  field, and an advisory note of roughly what percentage of the
+  description changed. **Approve & apply** writes the change onto the
+  event; **Decline** rejects it with an optional reason.
+- **History**: minor changes the faculty self-certified and staff
+  administrative changes are already live—they're listed here for the
+  record, along with every decided item.
+
+Non-content fields (schedule note, contact, record-video) always apply
+immediately and don't appear here.
 
 ---
 
@@ -148,34 +206,38 @@ URL (which only the PC + staff can see while the program is Draft).
 2. Click **Edit** next to the seminar.
 3. Update the description and save.
 
+### "A member proposed an event—how do I add it?"
+
+1. Go to the **Proposals** tab.
+2. Read the proposal under **Pending**.
+3. Click **Approve & mint** to turn it into an Event (a seminar or
+   reading group lands in the proposed year's program; a special event
+   is minted directly), or **Decline** with a note to send it back.
+4. For a seminar or reading group, open the program and edit the minted
+   event if anything needs polishing, then publish the program.
+
+### "Faculty want to change a published seminar's description."
+
+They edit it on the event's own edit page; substantial changes come to
+you under the **Changes** tab as **Pending review**. Compare the
+current and proposed text and click **Approve & apply** or **Decline**.
+
 ### "I need to take a seminar down from the public site."
 
-The program's publish state is the main lever — when the program is
+The program's publish state is the main lever—when the program is
 public, all its events are visible; when it's draft, none are. Hiding
 a single event without un-publishing the whole program isn't a
 routine workflow. If this comes up often, ask the Web Coordinator to
 add a per-event hide control.
 
-### "Someone proposed an event I want to add — how does that work today?"
-
-Today: a faculty member sends you the details by email or in
-conversation, and you create the event in the program admin. A formal
-proposal workflow (faculty submits a form → PC reviews + votes →
-approve mints an Event) is in the roadmap below.
-
 ---
 
 ## What's coming (roadmap)
 
-- **Proposal workflow**: faculty submits a structured event proposal
-  via a form; PC reviews + comments; approve mints an Event. Replaces
-  the current ad-hoc proposal-by-email-then-PC-types-it-in flow.
-  Designed; build deferred until after this year's manual cycle.
 - **Batch clone** for setting up next year from last year's structure
-  ("two-week ordeal" → half-day).
-
-> Faculty can already edit descriptions on events they teach today —
-> they don't need to wait for the proposal workflow to land for that.
+  ("two-week ordeal" → half-day). (Until then, the **Continue an
+  existing seminar** option on the event form carries a seminar's
+  workspace and past members forward term to term.)
 
 ---
 
