@@ -5,6 +5,7 @@ from .models import (
     AdvisorNote,
     ControlAnalysis,
     ExternalActivity,
+    ExternalControlAnalyst,
     FormationSettings,
 )
 
@@ -43,3 +44,23 @@ class AdvisorNoteAdmin(admin.ModelAdmin):
     search_fields = ("advisee__email", "author__email", "body")
     autocomplete_fields = ("advisee", "author")
     readonly_fields = ("created_at",)
+
+
+@admin.register(ExternalControlAnalyst)
+class ExternalControlAnalystAdmin(admin.ModelAdmin):
+    list_display = ("name", "member", "status", "requested_at", "decided_at")
+    list_filter = ("status",)
+    search_fields = ("name", "member__email", "member__last_name")
+    actions = ("approve_selected", "decline_selected")
+
+    @admin.action(description="Approve selected external analysts")
+    def approve_selected(self, request, queryset):
+        from formation.control import decide_external
+        for obj in queryset.filter(status=ExternalControlAnalyst.Status.REQUESTED):
+            decide_external(obj, approve=True, by=request.user, note="Approved via admin.")
+
+    @admin.action(description="Decline selected external analysts")
+    def decline_selected(self, request, queryset):
+        from formation.control import decide_external
+        for obj in queryset.filter(status=ExternalControlAnalyst.Status.REQUESTED):
+            decide_external(obj, approve=False, by=request.user, note="Declined via admin.")

@@ -19,6 +19,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from phonenumber_field.modelfields import PhoneNumberField
 
 from admissions.storage import cv_storage
 
@@ -267,3 +268,49 @@ class AdvisorNote(models.Model):
 
     def __str__(self):
         return f"Note on {self.advisee} by {self.author}"
+
+
+class ExternalControlAnalyst(models.Model):
+    """A member's request to use an analyst outside the School for control
+    (supervisory) analysis. Authorized by the Meeting of the Analysts."""
+
+    class Status(models.TextChoices):
+        REQUESTED = "requested", "Requested — awaiting the Meeting of the Analysts"
+        APPROVED = "approved", "Approved"
+        DECLINED = "declined", "Not approved"
+
+    OPEN_STATUSES = (Status.REQUESTED,)
+
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="external_control_requests",
+    )
+    name = models.CharField(max_length=200)
+    email = models.EmailField(blank=True)
+    phone = PhoneNumberField(blank=True)
+    description = models.TextField(
+        help_text="Who this analyst is and why you're requesting them "
+                  "(qualifications, background).",
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.REQUESTED, db_index=True,
+    )
+    requested_at = models.DateTimeField(default=timezone.now)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="external_control_decisions",
+    )
+    decision_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-requested_at",)
+
+    def __str__(self):
+        return f"{self.name} (external, {self.get_status_display()})"
+
+    @property
+    def is_open(self) -> bool:
+        return self.status in self.OPEN_STATUSES
