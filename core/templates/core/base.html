@@ -172,7 +172,7 @@
                aria-label="Menu" title="Menu">
             <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
           </div>
-          <ul tabindex="0" style="max-height:80vh"
+          <ul tabindex="0" style="max-height: calc(100dvh - 5rem)"
               class="dropdown-content menu menu-sm mt-2 z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-60 overflow-y-auto flex-nowrap">
             <li><a href="{% url 'about' %}">About</a></li>
             <li><a href="{% url 'formation' %}">Formation</a></li>
@@ -262,8 +262,8 @@
               </span>
             {% endif %}
           </div>
-          <ul tabindex="0"
-              class="dropdown-content menu menu-sm mt-2 z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-60">
+          <ul tabindex="0" style="max-height: calc(100dvh - 5rem)"
+              class="dropdown-content menu menu-sm mt-2 z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-60 overflow-y-auto flex-nowrap">
             <li class="menu-title pt-1 pb-2 px-2">
               <div class="flex flex-col gap-0.5 leading-tight">
                 <span class="text-base-content text-sm font-medium normal-case">
