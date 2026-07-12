@@ -1971,3 +1971,52 @@ def test_learning_kinds_get_a_learning_back_link(client):
     assert "← Learning" in sem and "← Groups" in sem
     com = client.get("/groups/committees/").content.decode()
     assert "← Learning" not in com and "← Groups" in com
+
+
+# ---- Roster ordering (task #417) ---------------------------------------
+
+def _board():
+    return _wg(kind=Workgroup.Kind.COMMITTEE, name="Ordering Test Board 417")
+
+
+def _add(wg, email, role, last, first="A"):
+    u = _user(email, first=first, last=last)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=u, role=role, start_date=datetime.date(2026, 1, 1)
+    )
+    return u
+
+
+def test_active_members_orders_officers_then_alphabetical():
+    wg = _board()
+    Role = WorkgroupMembership.Role
+    # Added in deliberately scrambled order.
+    _add(wg, "m2@x.test", Role.MEMBER, "Young")
+    _add(wg, "treas@x.test", Role.TREASURER, "Nkosi")
+    _add(wg, "chair@x.test", Role.CHAIR, "Zimmer")
+    _add(wg, "m1@x.test", Role.MEMBER, "Adams")
+    _add(wg, "sec@x.test", Role.SECRETARY, "Baker")
+    _add(wg, "vice@x.test", Role.CO_CHAIR, "Owens")
+    order = [m.user.last_name for m in wg.active_members()]
+    assert order == ["Zimmer", "Owens", "Baker", "Nkosi", "Adams", "Young"]
+
+
+def test_active_members_same_role_alphabetical():
+    wg = _board()
+    Role = WorkgroupMembership.Role
+    _add(wg, "cc2@x.test", Role.CO_CHAIR, "Vance")
+    _add(wg, "cc1@x.test", Role.CO_CHAIR, "Ng")
+    order = [m.user.last_name for m in wg.active_members()]
+    assert order == ["Ng", "Vance"]
+
+
+def test_active_members_plus_one_last_faculty_is_everyone_else():
+    wg = _board()
+    Role = WorkgroupMembership.Role
+    _add(wg, "guest@x.test", Role.PLUS_ONE, "Zeta")
+    _add(wg, "fac@x.test", Role.FACULTY, "Mensah")
+    _add(wg, "chair@x.test", Role.CHAIR, "Roth")
+    _add(wg, "mem@x.test", Role.MEMBER, "Bell")
+    order = [m.user.last_name for m in wg.active_members()]
+    # Chair first; faculty sorts among everyone-else (Bell, Mensah); plus-one last.
+    assert order == ["Roth", "Bell", "Mensah", "Zeta"]
