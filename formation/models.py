@@ -186,10 +186,19 @@ class ControlAnalysis(models.Model):
         REMOTE = "remote", "Remote"
         HYBRID = "hybrid", "Hybrid"
 
+    class Requirement(models.TextChoices):
+        FOUR_YEAR = "four_year", "4-year"
+        TWO_YEAR = "two_year", "2-year"
+
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                related_name="control_analyses")
     supervisor_name = models.CharField(max_length=200)
     modality = models.CharField(max_length=12, choices=Modality.choices, default=Modality.REMOTE)
+    requirement = models.CharField(
+        max_length=10, choices=Requirement.choices, default=Requirement.FOUR_YEAR,
+        help_text="Which requirement this analysis is meant to satisfy. "
+                  "Freely changeable between 4-year and 2-year.",
+    )
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True, help_text="Leave blank if ongoing.")
     notes = models.TextField(blank=True)

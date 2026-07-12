@@ -164,7 +164,10 @@
         {% for c in control_entries %}
         <li class="rounded-lg border border-base-300 p-4 flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <p class="font-medium text-base-content">{{ c.supervisor_name }}</p>
+            <p class="font-medium text-base-content flex items-center gap-2 flex-wrap">
+              {{ c.supervisor_name }}
+              <span class="badge badge-outline badge-sm">{{ c.get_requirement_display }} control</span>
+            </p>
             <p class="text-sm text-base-content/60">
               {{ c.get_modality_display }} · {{ c.start_date|date:"M j, Y" }}
               {% if c.end_date %} – {{ c.end_date|date:"M j, Y" }}{% else %} – ongoing{% endif %}

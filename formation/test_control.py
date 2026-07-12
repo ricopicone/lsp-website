@@ -40,3 +40,18 @@ def test_total_years_sums_entries():
 @pytest.mark.django_db
 def test_settings_default_target_is_six():
     assert FormationSettings.load().control_years_target == 6
+
+
+@pytest.mark.django_db
+def test_control_requirement_tag_defaults_four_year():
+    u = User.objects.create_user(email="t@example.com", password="x")
+    ca = ControlAnalysis.objects.create(
+        member=u, supervisor_name="S", start_date=dt.date(2020, 1, 1),
+    )
+    assert ca.requirement == ControlAnalysis.Requirement.FOUR_YEAR
+
+    ca.requirement = ControlAnalysis.Requirement.TWO_YEAR
+    ca.save()
+
+    reloaded = ControlAnalysis.objects.get(pk=ca.pk)
+    assert reloaded.requirement == "two_year"

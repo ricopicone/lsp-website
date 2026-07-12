@@ -12,7 +12,7 @@ def test_member_adds_control_entry(client):
     u = User.objects.create_user(email="c@x.test", password="x")
     client.force_login(u)
     resp = client.post(reverse("formation:control_add"), {
-        "supervisor_name": "Dr A", "modality": "remote",
+        "supervisor_name": "Dr A", "modality": "remote", "requirement": "four_year",
         "start_date": "2021-01-01", "end_date": "", "notes": "",
     }, SERVER_NAME="localhost")
     assert resp.status_code in (302, 303)
@@ -41,7 +41,7 @@ def test_member_edits_own_entry(client):
         modality="remote", start_date=dt.date(2021, 1, 1))
     client.force_login(u)
     resp = client.post(reverse("formation:control_edit", args=[ca.pk]), {
-        "supervisor_name": "New", "modality": "in_person",
+        "supervisor_name": "New", "modality": "in_person", "requirement": "two_year",
         "start_date": "2021-01-01", "end_date": "", "notes": "",
     }, SERVER_NAME="localhost")
     assert resp.status_code in (302, 303)

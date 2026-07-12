@@ -38,6 +38,13 @@
       {% if form.modality.errors %}<p class="text-error text-xs mt-1">{{ form.modality.errors|join:", " }}</p>{% endif %}
     </div>
 
+    <div class="space-y-1">
+      <label for="{{ form.requirement.id_for_label }}" class="block text-sm font-medium">Counts toward</label>
+      {{ form.requirement }}
+      <p class="text-xs text-base-content/60">{{ form.requirement.help_text }}</p>
+      {% if form.requirement.errors %}<p class="text-error text-xs mt-1">{{ form.requirement.errors|join:", " }}</p>{% endif %}
+    </div>
+
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div class="space-y-1">
         <label for="{{ form.start_date.id_for_label }}" class="block text-sm font-medium">Start date</label>

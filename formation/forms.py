@@ -70,17 +70,24 @@ class ControlAnalysisForm(forms.ModelForm):
 
     class Meta:
         model = ControlAnalysis
-        fields = ("supervisor_name", "modality", "start_date", "end_date", "notes")
+        fields = ("supervisor_name", "requirement", "modality",
+                  "start_date", "end_date", "notes")
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date", "class": _INPUT}),
             "end_date": forms.DateInput(attrs={"type": "date", "class": _INPUT}),
             "supervisor_name": forms.TextInput(attrs={"class": _INPUT}),
+            "requirement": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "modality": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "notes": forms.Textarea(attrs={"rows": 3, "class": _TEXTAREA}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["requirement"].label = "Counts toward"
+        self.fields["requirement"].help_text = (
+            "Tag this as your 4-year control analysis or a 2-year one. "
+            "You can change it later."
+        )
         self.fields["end_date"].label = "End date"
         self.fields["end_date"].help_text = "Leave blank if this is ongoing."
         self.fields["end_date"].required = False
