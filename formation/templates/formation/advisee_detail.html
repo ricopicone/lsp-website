@@ -62,6 +62,16 @@
   {# ---- Control analysis ---- #}
   <section class="rounded-xl border border-base-300 p-5 space-y-4">
     <h2 class="font-serif text-xl text-base-content">Control analysis</h2>
+
+    <form method="post" action="{% url 'formation:advisee_set_background' advisee.pk %}" class="flex items-center gap-2 text-sm">
+      {% csrf_token %}
+      <label class="flex items-center gap-2">
+        <input type="checkbox" name="clinical_background" class="checkbox checkbox-sm" {% if advisee.profile.clinical_background %}checked{% endif %}>
+        Clinical background (2 control analyses; unchecked = academic, 3)
+      </label>
+      <button class="btn btn-ghost btn-xs">Save</button>
+    </form>
+
     <div class="space-y-1">
       <progress class="progress progress-primary w-full" value="{{ control_progress.total_years }}" max="{{ control_progress.total_target }}"></progress>
       <p class="text-sm text-base-content/70">{{ control_progress.total_years|floatformat:1 }} of {{ control_progress.total_target }} total years across control analyses.</p>

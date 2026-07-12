@@ -32,6 +32,8 @@ urlpatterns = [
     path("formation/advisees/<int:pk>/", views.advisee_detail, name="advisee_detail"),
     path("formation/advisees/<int:pk>/note/", views.advisee_note_add,
          name="advisee_note_add"),
+    path("formation/advisees/<int:pk>/background/", views.advisee_set_background,
+         name="advisee_set_background"),
 
     # --- Advancement review (Meeting of the Analysts) ---
     path(f"{_MOA}/advancements/", views.advancement_queue, name="advancement_queue"),

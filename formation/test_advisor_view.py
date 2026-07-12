@@ -60,3 +60,24 @@ def test_staff_advisee_cannot_view_own_advisee_detail(client):
         reverse("formation:advisee_detail", args=[advisee.pk]), SERVER_NAME="localhost"
     )
     assert resp.status_code in (403, 404)
+
+
+def test_advisor_sets_advisee_clinical_background(client, db):
+    from django.urls import reverse
+
+    from accounts.models import Advisorship, Profile, User
+
+    advisor = User.objects.create_user(email="adv@example.com", password="x")
+    advisor.profile.role = Profile.Role.ANALYST
+    advisor.profile.save()
+    advisee = User.objects.create_user(email="ave@example.com", password="x")
+    advisee.profile.role = Profile.Role.PRE_CANDIDATE
+    advisee.profile.save()
+    Advisorship.objects.create(advisor=advisor, advisee=advisee)
+    client.force_login(advisor)
+
+    resp = client.post(reverse("formation:advisee_set_background", args=[advisee.pk]),
+                       {"clinical_background": "on"})
+    assert resp.status_code == 302
+    advisee.profile.refresh_from_db()
+    assert advisee.profile.clinical_background is True

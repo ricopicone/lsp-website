@@ -738,6 +738,22 @@ def advisee_note_add(request, pk):
     return redirect(reverse("formation:advisee_detail", args=[advisee.pk]))
 
 
+@login_required
+@require_POST
+def advisee_set_background(request, pk):
+    """Advisor (or staff) sets an advisee's clinical/academic background."""
+    from accounts.models import User
+
+    from .permissions import can_view_advisee
+    advisee = get_object_or_404(User.objects.select_related("profile"), pk=pk)
+    if not can_view_advisee(request.user, advisee):
+        raise PermissionDenied
+    advisee.profile.clinical_background = bool(request.POST.get("clinical_background"))
+    advisee.profile.save(update_fields=["clinical_background"])
+    messages.success(request, "Background updated.")
+    return redirect("formation:advisee_detail", pk=advisee.pk)
+
+
 # ---- Meeting of the Analysts review side ----------------------------------
 
 @login_required
