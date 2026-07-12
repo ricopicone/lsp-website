@@ -35,3 +35,21 @@ def test_payments_index_authenticated_renders_member_page(client):
     assert resp.status_code == 200
     templates = {t.name for t in resp.templates}
     assert "payments/index.html" in templates
+
+
+@pytest.mark.django_db
+def test_donate_page_shows_signin_nudge_for_anonymous(client):
+    resp = client.get(reverse("donate"))
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "track your donations" in body
+    assert reverse("login") in body
+
+
+@pytest.mark.django_db
+def test_donate_page_hides_signin_nudge_for_members(client):
+    user = User.objects.create_user(email="m2@example.com", password="pw12345!")
+    client.force_login(user)
+    resp = client.get(reverse("donate"))
+    body = resp.content.decode()
+    assert "track your donations" not in body
