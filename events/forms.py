@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import Event, EventProposal, PricingCode, Program
+from .models import Event, EventProposal, PricingCode, Program, Session
 
 
 class EventDescriptionForm(forms.ModelForm):
@@ -472,3 +472,104 @@ class ProgramEventForm(forms.ModelForm):
             self.save_m2m()
             instance.set_faculty(self.cleaned_data.get("faculty", []))
         return instance
+
+
+# --- Standalone-event schedule (session) editor -------------------------
+
+_PACIFIC = "America/Los_Angeles"
+
+
+class SessionScheduleForm(forms.ModelForm):
+    """One session in the standalone-event schedule editor.
+
+    The model stores ``start_at`` / ``end_at`` datetimes; the editor presents a
+    date plus start/end *times* (interpreted as Pacific, like the proposal form
+    and the site's "PT" display), so those three split fields map onto the
+    model's datetimes.
+    """
+
+    session_date = forms.DateField(
+        required=False, label="Date",
+        widget=forms.DateInput(attrs={"type": "date", "class": "input input-bordered w-full"}),
+    )
+    start_time = forms.TimeField(
+        required=False, label="Start",
+        widget=forms.TimeInput(
+            attrs={"type": "time", "class": "input input-bordered w-full"},
+            format="%H:%M",
+        ),
+    )
+    end_time = forms.TimeField(
+        required=False, label="End",
+        widget=forms.TimeInput(
+            attrs={"type": "time", "class": "input input-bordered w-full"},
+            format="%H:%M",
+        ),
+    )
+
+    class Meta:
+        model = Session
+        fields = ("location",)
+        widgets = {
+            "location": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["location"].required = False
+        from zoneinfo import ZoneInfo
+
+        from django.utils import timezone
+        inst = self.instance
+        if inst and inst.pk and inst.start_at:
+            start = timezone.localtime(inst.start_at, ZoneInfo(_PACIFIC))
+            self.fields["session_date"].initial = start.date()
+            self.fields["start_time"].initial = start.time()
+            if inst.end_at:
+                end = timezone.localtime(inst.end_at, ZoneInfo(_PACIFIC))
+                self.fields["end_time"].initial = end.time()
+
+    def _row_is_blank(self, cd) -> bool:
+        return not any([
+            cd.get("session_date"), cd.get("start_time"),
+            cd.get("end_time"), cd.get("location"),
+        ])
+
+    def clean(self):
+        cd = super().clean()
+        if self._row_is_blank(cd):
+            return cd
+        d, st, et = cd.get("session_date"), cd.get("start_time"), cd.get("end_time")
+        if not (d and st and et):
+            raise forms.ValidationError("Give a date, a start time, and an end time.")
+        if et <= st:
+            self.add_error("end_time", "End time must be after the start time.")
+        return cd
+
+    def save(self, commit=True):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        from django.utils import timezone
+        inst = super().save(commit=False)
+        cd = self.cleaned_data
+        tz = ZoneInfo(_PACIFIC)
+        inst.start_at = timezone.make_aware(
+            datetime.combine(cd["session_date"], cd["start_time"]), tz,
+        )
+        inst.end_at = timezone.make_aware(
+            datetime.combine(cd["session_date"], cd["end_time"]), tz,
+        )
+        if commit:
+            inst.save()
+        return inst
+
+
+def _build_schedule_formset():
+    return forms.inlineformset_factory(
+        Event, Session, form=SessionScheduleForm, extra=1, can_delete=True,
+    )
+
+
+#: Session formset for the standalone-event schedule editor (date/start/end/location).
+SessionScheduleFormSet = _build_schedule_formset()
