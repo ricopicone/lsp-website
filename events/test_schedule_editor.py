@@ -74,18 +74,64 @@ def test_edit_session_datetime_updates_session_and_event(client, pc_member):
         {
             **_mgmt(1, 1),
             "sessions-0-id": str(s.pk),
-            "sessions-0-session_date": "2030-11-12",
-            "sessions-0-start_time": "19:00",
-            "sessions-0-end_time": "21:00",
+            "sessions-0-start_at": "2030-11-12T19:00",
+            "sessions-0-end_at": "2030-11-12T21:00",
             "sessions-0-location": "Zoom",
         },
     )
     assert resp.status_code == 302
     s.refresh_from_db()
+    # No user tz preference → interpreted in the project default (Pacific).
     assert timezone.localtime(s.start_at, PACIFIC).strftime("%Y-%m-%d %H:%M") == "2030-11-12 19:00"
     assert s.location == "Zoom"
     e.refresh_from_db()
     assert e.start_date == date(2030, 11, 12)
+
+
+@pytest.mark.django_db
+def test_input_uses_editors_own_timezone(client, pc_member):
+    """A non-Pacific editor's wall-clock input is read in their own timezone."""
+    pc_member.profile.timezone = "Europe/Berlin"
+    pc_member.profile.save()
+    e, s = _special_event()
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("events:edit_schedule", args=[e.slug]),
+        {
+            **_mgmt(1, 1),
+            "sessions-0-id": str(s.pk),
+            "sessions-0-start_at": "2030-11-12T18:00",
+            "sessions-0-end_at": "2030-11-12T20:00",
+            "sessions-0-location": "",
+        },
+    )
+    assert resp.status_code == 302
+    s.refresh_from_db()
+    # 18:00 Berlin, not 18:00 Pacific.
+    assert timezone.localtime(s.start_at, ZoneInfo("Europe/Berlin")).strftime("%H:%M") == "18:00"
+    assert timezone.localtime(s.start_at, PACIFIC).strftime("%H:%M") == "09:00"
+
+
+@pytest.mark.django_db
+def test_cross_date_session_is_allowed(client, pc_member):
+    """Start and end can fall on different calendar dates (late-night event)."""
+    e, s = _special_event()
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("events:edit_schedule", args=[e.slug]),
+        {
+            **_mgmt(1, 1),
+            "sessions-0-id": str(s.pk),
+            "sessions-0-start_at": "2030-11-05T23:00",
+            "sessions-0-end_at": "2030-11-06T01:00",
+            "sessions-0-location": "",
+        },
+    )
+    assert resp.status_code == 302
+    s.refresh_from_db()
+    assert timezone.localtime(s.end_at, PACIFIC).date() == date(2030, 11, 6)
+    e.refresh_from_db()
+    assert e.end_date == date(2030, 11, 6)  # end_date follows the latest end
 
 
 @pytest.mark.django_db
@@ -97,14 +143,12 @@ def test_add_session(client, pc_member):
         {
             **_mgmt(2, 1),
             "sessions-0-id": str(s.pk),
-            "sessions-0-session_date": "2030-11-05",
-            "sessions-0-start_time": "18:00",
-            "sessions-0-end_time": "20:00",
+            "sessions-0-start_at": "2030-11-05T18:00",
+            "sessions-0-end_at": "2030-11-05T20:00",
             "sessions-0-location": "",
             "sessions-1-id": "",
-            "sessions-1-session_date": "2030-11-19",
-            "sessions-1-start_time": "18:00",
-            "sessions-1-end_time": "20:00",
+            "sessions-1-start_at": "2030-11-19T18:00",
+            "sessions-1-end_at": "2030-11-19T20:00",
             "sessions-1-location": "",
         },
     )
@@ -129,14 +173,12 @@ def test_remove_session(client, pc_member):
         {
             **_mgmt(2, 2),
             "sessions-0-id": str(s.pk),
-            "sessions-0-session_date": "2030-11-05",
-            "sessions-0-start_time": "18:00",
-            "sessions-0-end_time": "20:00",
+            "sessions-0-start_at": "2030-11-05T18:00",
+            "sessions-0-end_at": "2030-11-05T20:00",
             "sessions-0-location": "",
             "sessions-1-id": str(s2.pk),
-            "sessions-1-session_date": "2030-11-12",
-            "sessions-1-start_time": "18:00",
-            "sessions-1-end_time": "20:00",
+            "sessions-1-start_at": "2030-11-12T18:00",
+            "sessions-1-end_at": "2030-11-12T20:00",
             "sessions-1-location": "",
             "sessions-1-DELETE": "on",
         },
@@ -148,7 +190,7 @@ def test_remove_session(client, pc_member):
 
 
 @pytest.mark.django_db
-def test_set_date_on_tbd_event_creates_first_session(client, pc_member):
+def test_set_schedule_on_tbd_event_creates_first_session(client, pc_member):
     e, _ = _special_event(with_session=False)
     assert e.sessions.count() == 0
     client.force_login(pc_member)
@@ -157,9 +199,8 @@ def test_set_date_on_tbd_event_creates_first_session(client, pc_member):
         {
             **_mgmt(1, 0),
             "sessions-0-id": "",
-            "sessions-0-session_date": "2030-12-01",
-            "sessions-0-start_time": "18:00",
-            "sessions-0-end_time": "20:00",
+            "sessions-0-start_at": "2030-12-01T18:00",
+            "sessions-0-end_at": "2030-12-01T20:00",
             "sessions-0-location": "",
         },
     )
@@ -178,16 +219,14 @@ def test_end_before_start_is_rejected(client, pc_member):
         {
             **_mgmt(1, 1),
             "sessions-0-id": str(s.pk),
-            "sessions-0-session_date": "2030-11-05",
-            "sessions-0-start_time": "20:00",
-            "sessions-0-end_time": "18:00",
+            "sessions-0-start_at": "2030-11-05T20:00",
+            "sessions-0-end_at": "2030-11-05T18:00",
             "sessions-0-location": "",
         },
     )
     assert resp.status_code == 200  # re-render with errors
     s.refresh_from_db()
-    # unchanged (still 18:00–20:00)
-    assert timezone.localtime(s.start_at, PACIFIC).hour == 18
+    assert timezone.localtime(s.start_at, PACIFIC).hour == 18  # unchanged
 
 
 @pytest.mark.django_db
@@ -196,8 +235,7 @@ def test_non_editor_forbidden(client):
     u = User.objects.create_user(email="nobody@x.test", password="x")
     client.force_login(u)
     resp = client.post(
-        reverse("events:edit_schedule", args=[e.slug]),
-        {**_mgmt(0, 0)},
+        reverse("events:edit_schedule", args=[e.slug]), {**_mgmt(0, 0)},
     )
     assert resp.status_code == 403
 
@@ -210,7 +248,6 @@ def test_non_standalone_type_404(client, pc_member):
     )
     client.force_login(pc_member)
     resp = client.post(
-        reverse("events:edit_schedule", args=[seminar.slug]),
-        {**_mgmt(0, 0)},
+        reverse("events:edit_schedule", args=[seminar.slug]), {**_mgmt(0, 0)},
     )
     assert resp.status_code == 404

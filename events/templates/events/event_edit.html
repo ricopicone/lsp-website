@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load tz_filters %}
 {% block title %}Edit · {{ event.title }} · LSP{% endblock %}
 {% block content %}
 <div class="max-w-2xl mx-auto space-y-6">
@@ -99,8 +100,9 @@
     <div class="space-y-1">
       <h2 class="font-serif text-lg text-base-content">Schedule</h2>
       <p class="text-xs text-base-content/60">
-        The event's session date(s) and times (Pacific). Add or remove sessions,
-        then Save schedule. Setting a date on a not-yet-scheduled event lets it
+        The event's session date(s) and times, in your timezone
+        (<span class="font-medium">{% user_tz_name %}</span>). Add or remove
+        sessions, then Save schedule. Scheduling a not-yet-dated event lets it
         be published.
       </p>
     </div>
@@ -120,20 +122,16 @@
             <span class="text-xs uppercase tracking-wider text-base-content/60">Session {{ forloop.counter }}</span>
             <button type="button" class="remove-session btn btn-ghost btn-xs text-error">Remove</button>
           </div>
-          <div>
-            <label for="{{ sform.session_date.id_for_label }}" class="block text-xs text-base-content/60 mb-1">Date</label>
-            {{ sform.session_date }}
-            {% if sform.session_date.errors %}<p class="text-error text-xs mt-1">{{ sform.session_date.errors|join:", " }}</p>{% endif %}
-          </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label for="{{ sform.start_time.id_for_label }}" class="block text-xs text-base-content/60 mb-1">Start</label>
-              {{ sform.start_time }}
+              <label for="{{ sform.start_at.id_for_label }}" class="block text-xs text-base-content/60 mb-1">Start</label>
+              {{ sform.start_at }}
+              {% if sform.start_at.errors %}<p class="text-error text-xs mt-1">{{ sform.start_at.errors|join:", " }}</p>{% endif %}
             </div>
             <div>
-              <label for="{{ sform.end_time.id_for_label }}" class="block text-xs text-base-content/60 mb-1">End</label>
-              {{ sform.end_time }}
-              {% if sform.end_time.errors %}<p class="text-error text-xs mt-1">{{ sform.end_time.errors|join:", " }}</p>{% endif %}
+              <label for="{{ sform.end_at.id_for_label }}" class="block text-xs text-base-content/60 mb-1">End</label>
+              {{ sform.end_at }}
+              {% if sform.end_at.errors %}<p class="text-error text-xs mt-1">{{ sform.end_at.errors|join:", " }}</p>{% endif %}
             </div>
           </div>
           <div>
@@ -152,18 +150,14 @@
             <span class="text-xs uppercase tracking-wider text-base-content/60">New session</span>
             <button type="button" class="remove-session btn btn-ghost btn-xs text-error">Remove</button>
           </div>
-          <div>
-            <label class="block text-xs text-base-content/60 mb-1">Date</label>
-            {{ schedule_formset.empty_form.session_date }}
-          </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block text-xs text-base-content/60 mb-1">Start</label>
-              {{ schedule_formset.empty_form.start_time }}
+              {{ schedule_formset.empty_form.start_at }}
             </div>
             <div>
               <label class="block text-xs text-base-content/60 mb-1">End</label>
-              {{ schedule_formset.empty_form.end_time }}
+              {{ schedule_formset.empty_form.end_at }}
             </div>
           </div>
           <div>

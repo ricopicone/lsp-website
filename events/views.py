@@ -421,7 +421,13 @@ def _schedule_editor_context(event, formset=None):
 
 def _resequence_and_sync_dates(event):
     """Renumber an event's sessions by start time and pull the event's
-    start/end date onto the earliest/latest session."""
+    start/end date onto the earliest start and latest end.
+
+    The coarse ``start_date`` / ``end_date`` labels are derived in a *fixed*
+    canonical timezone (the project TIME_ZONE, Pacific) rather than the editor's
+    own tz, so an event's calendar "day" doesn't shift depending on who edited
+    it. Session wall-clock times are still entered/shown in each user's tz.
+    """
     from zoneinfo import ZoneInfo
 
     sessions = list(event.sessions.order_by("start_at"))
@@ -432,7 +438,8 @@ def _resequence_and_sync_dates(event):
     if sessions:
         tz = ZoneInfo("America/Los_Angeles")
         event.start_date = timezone.localtime(sessions[0].start_at, tz).date()
-        event.end_date = timezone.localtime(sessions[-1].start_at, tz).date()
+        latest_end = max(s.end_at for s in sessions)
+        event.end_date = timezone.localtime(latest_end, tz).date()
         event.save(update_fields=["start_date", "end_date"])
 
 

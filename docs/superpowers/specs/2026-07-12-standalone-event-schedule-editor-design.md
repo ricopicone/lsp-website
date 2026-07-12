@@ -47,20 +47,22 @@ a small "+ Add" script + a `DELETE` checkbox per row).
 
 ### Form — `SessionScheduleForm` (ModelForm on `Session`)
 
-The stored model has `start_at` / `end_at` datetimes; the UI wants **date +
-start time + end time** (Pacific, matching the proposal form and the site's
-"PT" display). So the form carries three split fields that map onto the model:
+`start_at` and `end_at` are two independent `datetime-local` inputs (not a
+shared date + two times): once times are entered in the editor's **own
+timezone**, a session's start and end can fall on different calendar dates, so
+each carries its own date. This also makes the form identical to the proven
+`WorkgroupMeetingForm`.
 
-- `session_date` (DateField, `type=date`), `start_time` / `end_time`
-  (TimeField, `type=time`) — all `required=False` at field level.
-- `Meta.model = Session`, `Meta.fields = ("location",)`.
-- `__init__`: when editing an existing session, prefill the split fields from
-  `instance.start_at` / `end_at` converted to Pacific.
-- `clean()`: if the row is entirely blank, leave it (the formset drops it via
-  `has_changed`); otherwise require all of date + start + end, and require
-  `end_time > start_time`.
-- `save()`: combine `session_date` with the times into Pacific-aware
-  `start_at` / `end_at` (via `zoneinfo` + `timezone.make_aware`), then save.
+- `Meta.fields = ("start_at", "end_at", "location")`, `datetime-local` widgets,
+  `input_formats = ["%Y-%m-%dT%H:%M"]`, all `required=False` at field level.
+- Django localizes the naive input to the request's **active timezone** (the
+  user's `Profile.timezone`, via `TimezoneMiddleware`) — the same behavior as
+  every other datetime input in the app. No hardcoded Pacific.
+- `clean()`: a fully-blank extra row is dropped by the formset; a partial row
+  errors ("give both a start and an end"); `end_at <= start_at` errors.
+
+The edit page shows a "Times are in your timezone (`<tz>`)" note via the
+`user_tz_name` tag, so the input tz is never ambiguous.
 
 ### Formset — `SessionScheduleFormSet`
 
