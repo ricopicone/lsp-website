@@ -143,6 +143,14 @@ class Profile(models.Model):
         default=False,
         help_text="Faculty axis (USR-6). Orthogonal to role.",
     )
+    clinical_background = models.BooleanField(
+        default=False,
+        help_text="Clinical background requires two control analyses "
+                  "(one of at least 4 years, one of at least 2 years); "
+                  "academic requires three (one of at least 4 years, two of "
+                  "at least 2 years). Set at acceptance from the application; "
+                  "adjustable by an advisor or admin.",
+    )
     # LSP Staff and Cartel Coordinator are now unified onto ``core.StaffRole``
     # (keys ``lsp_staff`` / ``cartel_coordinator``); manage holders there or
     # check via ``core.access.has_staff_role``. ``is_faculty`` stays a Profile
@@ -498,6 +506,11 @@ class Profile(models.Model):
         """
         enr = self.current_tuition_enrollment(on_date)
         return bool(enr and enr.covers_seminars)
+
+    def control_requirement(self) -> dict:
+        """How many control analyses this member owes, by slot. Clinical
+        background: one 4-year + one 2-year. Academic: one 4-year + two 2-year."""
+        return {"four_year": 1, "two_year": 1 if self.clinical_background else 2}
 
     @property
     def directory_slug(self) -> str:

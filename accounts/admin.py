@@ -76,8 +76,8 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "role", "is_faculty")
-    list_filter = ("role", "is_faculty", "public")
+    list_display = ("user", "role", "is_faculty", "clinical_background")
+    list_filter = ("role", "is_faculty", "public", "clinical_background")
     search_fields = ("user__email", "user__first_name", "user__last_name")
 
     def save_model(self, request, obj, form, change):
