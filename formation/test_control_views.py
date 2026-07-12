@@ -12,7 +12,7 @@ def test_member_adds_control_entry(client):
     u = User.objects.create_user(email="c@x.test", password="x")
     client.force_login(u)
     resp = client.post(reverse("formation:control_add"), {
-        "supervisor_name": "Dr A", "modality": "remote",
+        "supervisor_name": "Dr A", "modality": "remote", "requirement": "four_year",
         "start_date": "2021-01-01", "end_date": "", "notes": "",
     }, SERVER_NAME="localhost")
     assert resp.status_code in (302, 303)
@@ -41,7 +41,7 @@ def test_member_edits_own_entry(client):
         modality="remote", start_date=dt.date(2021, 1, 1))
     client.force_login(u)
     resp = client.post(reverse("formation:control_edit", args=[ca.pk]), {
-        "supervisor_name": "New", "modality": "in_person",
+        "supervisor_name": "New", "modality": "in_person", "requirement": "two_year",
         "start_date": "2021-01-01", "end_date": "", "notes": "",
     }, SERVER_NAME="localhost")
     assert resp.status_code in (302, 303)
@@ -84,6 +84,71 @@ def test_formation_tab_shows_control_context(client):
     resp = client.get(reverse("formation:formation"), SERVER_NAME="localhost")
     assert resp.status_code == 200
     assert "control_entries" in resp.context
-    assert "control_years" in resp.context
-    assert "control_target" in resp.context
-    assert resp.context["control_target"] == 6
+    assert "control_progress" in resp.context
+    assert resp.context["control_progress"]["total_target"] in (6, 8)
+
+
+def test_control_form_school_dropdown_lists_only_active_public_analysts(db):
+    from accounts.models import Profile, User
+    from formation.forms import ControlAnalysisForm
+
+    member = User.objects.create_user(email="mem@example.com", password="x")
+    analyst = User.objects.create_user(email="an@example.com", password="x")
+    analyst.profile.role = Profile.Role.ANALYST
+    analyst.profile.public = True
+    analyst.profile.save()
+    hidden = User.objects.create_user(email="hid@example.com", password="x")
+    hidden.profile.role = Profile.Role.ANALYST
+    hidden.profile.public = False
+    hidden.profile.save()
+
+    form = ControlAnalysisForm(user=member)
+    qs = form.fields["school_analyst"].queryset
+    assert analyst in qs and hidden not in qs and member not in qs
+
+
+def test_control_form_school_dropdown_excludes_personas(db):
+    """Training-sandbox persona analysts must never appear as selectable
+    control-analysis supervisors (personas-off-public-rosters convention)."""
+    from accounts.models import Profile, User
+    from formation.forms import ControlAnalysisForm
+
+    member = User.objects.create_user(email="mem3@example.com", password="x")
+    analyst = User.objects.create_user(email="an3@example.com", password="x")
+    analyst.profile.role = Profile.Role.ANALYST
+    analyst.profile.public = True
+    analyst.profile.save()
+    persona = User.objects.create_user(email="persona3@example.com", password="x")
+    persona.profile.role = Profile.Role.ANALYST
+    persona.profile.public = True
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    form = ControlAnalysisForm(user=member)
+    qs = form.fields["school_analyst"].queryset
+    assert analyst in qs and persona not in qs
+
+
+def test_control_save_syncs_supervisor_name_from_school_analyst(client, db):
+    from django.urls import reverse
+
+    from accounts.models import Profile, User
+    from formation.models import ControlAnalysis
+
+    member = User.objects.create_user(email="mem2@example.com", password="x")
+    analyst = User.objects.create_user(
+        email="an2@example.com", password="x", first_name="Jane", last_name="Roe")
+    analyst.profile.role = Profile.Role.ANALYST
+    analyst.profile.public = True
+    analyst.profile.save()
+    client.force_login(member)
+
+    resp = client.post(reverse("formation:control_add"), {
+        "supervisor_name": "", "school_analyst": analyst.pk,
+        "requirement": "four_year", "modality": "remote",
+        "start_date": "2020-01-01",
+    })
+    assert resp.status_code == 302
+    ca = ControlAnalysis.objects.get(member=member)
+    assert ca.school_analyst_id == analyst.pk
+    assert ca.supervisor_name == "Jane Roe"

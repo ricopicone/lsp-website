@@ -537,7 +537,7 @@ def meeting_of_analysts_admin(request):
     if not _can_meeting_of_analysts(request.user):
         raise PermissionDenied
     from admissions.models import Application
-    from formation.models import Advancement
+    from formation.models import Advancement, ExternalControlAnalyst
     return render(request, "core/staff/admin/meeting_of_analysts.html", {
         "open_applications": Application.objects.filter(
             status__in=Application.OPEN_STATUSES
@@ -545,6 +545,8 @@ def meeting_of_analysts_admin(request):
         "open_advancements": Advancement.objects.filter(
             status__in=Advancement.OPEN_STATUSES
         ).count(),
+        "open_external_analysts": ExternalControlAnalyst.objects.filter(
+            status__in=ExternalControlAnalyst.OPEN_STATUSES).count(),
         "officers": school_officers(),
     })
 

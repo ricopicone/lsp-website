@@ -51,6 +51,7 @@ class Category(models.TextChoices):
     ADMISSIONS_APPLICATION = "admissions_application", _("Admissions applications")
     ADMISSIONS_DECISION = "admissions_decision", _("Admissions decisions")
     ADMISSIONS_ADVANCEMENT = "admissions_advancement", _("Advancement (demande)")
+    EXTERNAL_CONTROL_ANALYST = "external_control_analyst", _("External control analyst review")
 
     # --- Groups (workgroups / cartels / committees / seminars) ----------
     GROUP_MEMBERSHIP = "group_membership", _("Added to or removed from a group")
@@ -184,6 +185,11 @@ CATEGORY_META: dict[str, CategoryMeta] = {
     _C.ADMISSIONS_ADVANCEMENT: _M(
         SECTION_ADMISSIONS, _("Advancement (demande)"),
         _("Advancement demandes you advise or present."),
+    ),
+    _C.EXTERNAL_CONTROL_ANALYST: _M(
+        SECTION_ADMISSIONS, _("External control analyst"),
+        _("Requests to authorize an analyst outside the School for control "
+          "analysis, for you to review."),
     ),
     # Groups — in-app first; email optional (default off to avoid noise).
     _C.GROUP_MEMBERSHIP: _M(

@@ -19,6 +19,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from phonenumber_field.modelfields import PhoneNumberField
 
 from admissions.storage import cv_storage
 
@@ -162,9 +163,11 @@ class Advancement(models.Model):
 class FormationSettings(models.Model):
     """Singleton of tunable formation parameters (admin-editable so requirement
     targets don't live in code)."""
-    control_years_target = models.PositiveSmallIntegerField(
-        default=6,
-        help_text="Target years of control analysis shown on the progress meter.",
+    four_year_threshold = models.PositiveSmallIntegerField(
+        default=4, help_text="Years for the longer (4-year) control analysis.",
+    )
+    two_year_threshold = models.PositiveSmallIntegerField(
+        default=2, help_text="Years for each shorter (2-year) control analysis.",
     )
     analyst_formation_doc = models.ForeignKey(
         "documents.Document", null=True, blank=True, on_delete=models.SET_NULL,
@@ -198,10 +201,29 @@ class ControlAnalysis(models.Model):
         REMOTE = "remote", "Remote"
         HYBRID = "hybrid", "Hybrid"
 
+    class Requirement(models.TextChoices):
+        FOUR_YEAR = "four_year", "4-year"
+        TWO_YEAR = "two_year", "2-year"
+
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                related_name="control_analyses")
-    supervisor_name = models.CharField(max_length=200)
+    school_analyst = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="control_analyses_supervised",
+        help_text="An Analyst of the School, chosen from the directory.",
+    )
+    external_analyst = models.ForeignKey(
+        "formation.ExternalControlAnalyst", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="control_analyses",
+        help_text="An approved external control analyst.",
+    )
+    supervisor_name = models.CharField(max_length=200, blank=True)
     modality = models.CharField(max_length=12, choices=Modality.choices, default=Modality.REMOTE)
+    requirement = models.CharField(
+        max_length=10, choices=Requirement.choices, default=Requirement.FOUR_YEAR,
+        help_text="Which requirement this analysis is meant to satisfy. "
+                  "Freely changeable between 4-year and 2-year.",
+    )
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True, help_text="Leave blank if ongoing.")
     notes = models.TextField(blank=True)
@@ -268,3 +290,49 @@ class AdvisorNote(models.Model):
 
     def __str__(self):
         return f"Note on {self.advisee} by {self.author}"
+
+
+class ExternalControlAnalyst(models.Model):
+    """A member's request to use an analyst outside the School for control
+    (supervisory) analysis. Authorized by the Meeting of the Analysts."""
+
+    class Status(models.TextChoices):
+        REQUESTED = "requested", "Requested — awaiting the Meeting of the Analysts"
+        APPROVED = "approved", "Approved"
+        DECLINED = "declined", "Not approved"
+
+    OPEN_STATUSES = (Status.REQUESTED,)
+
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="external_control_requests",
+    )
+    name = models.CharField(max_length=200)
+    email = models.EmailField(blank=True)
+    phone = PhoneNumberField(blank=True)
+    description = models.TextField(
+        help_text="Who this analyst is and why you're requesting them "
+                  "(qualifications, background).",
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.REQUESTED, db_index=True,
+    )
+    requested_at = models.DateTimeField(default=timezone.now)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="external_control_decisions",
+    )
+    decision_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-requested_at",)
+
+    def __str__(self):
+        return f"{self.name} (external, {self.get_status_display()})"
+
+    @property
+    def is_open(self) -> bool:
+        return self.status in self.OPEN_STATUSES

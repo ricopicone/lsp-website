@@ -177,6 +177,11 @@ def accept_application(application: Application, *, by, effective_ay=None, note=
         notes=f"Admitted via application ({application.get_track_display()}). {note}".strip(),
         by=by,
     )
+    profile = application.applicant.profile
+    profile.clinical_background = (
+        application.background == Application.Background.CLINICAL
+    )
+    profile.save(update_fields=["clinical_background"])
     application.status = Application.Status.ACCEPTED
     application.decided_at = timezone.now()
     application.decided_by = by

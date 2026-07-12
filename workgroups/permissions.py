@@ -105,6 +105,34 @@ def _meeting_of_analysts_workgroup_id():
     return committee.workgroup_id if committee else None
 
 
+def meeting_of_analysts_members():
+    """Every user in the Meeting of the Analysts: all active Analysts
+    (role-derived) plus any hand-added roster members, deduped.
+
+    Personas (training-sandbox accounts) are excluded — the same rule
+    :meth:`Workgroup.active_members` applies, so a real fan-out (email/bell)
+    never reaches a trainee's persona."""
+    from django.db.models import Q
+
+    from accounts.models import Profile, User
+
+    analyst_ids = list(
+        User.objects.filter(
+            profile__role=Profile.Role.ANALYST, is_active=True,
+            profile__is_persona=False,
+        ).values_list("pk", flat=True)
+    )
+    roster_ids = []
+    wg_id = _meeting_of_analysts_workgroup_id()
+    if wg_id:
+        from .models import Workgroup
+
+        wg = Workgroup.objects.filter(pk=wg_id).first()
+        if wg:
+            roster_ids = [m.user_id for m in wg.active_members()]
+    return User.objects.filter(Q(pk__in=analyst_ids) | Q(pk__in=roster_ids)).distinct()
+
+
 def is_applications_coordinator(user) -> bool:
     """True if ``user`` holds the Applications Coordinator role on the Meeting of
     Analysts workgroup — the officer who facilitates admissions (intake,

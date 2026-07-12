@@ -8,15 +8,15 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.mail import EmailMessage
 
-from .models import Advancement
+from .models import Advancement, ExternalControlAnalyst
 
 
-def _send(*, subject, body, to):
+def _send(*, subject, body, to, from_name="LSP Admissions"):
     from core.email import school_from
 
     EmailMessage(
         subject=subject, body=body,
-        from_email=school_from("LSP Admissions"), to=to,
+        from_email=school_from(from_name), to=to,
         reply_to=[settings.SUPPORT_EMAIL],
     ).send(fail_silently=False)
 
@@ -111,3 +111,53 @@ def send_advancement_decision(advancement: Advancement) -> None:
         body += "— The Lacanian School of Psychoanalysis"
         subject = "Your formation demande"
     _send(subject=subject, body=body, to=[advancement.member.email])
+
+
+def send_external_analyst_requested(obj: ExternalControlAnalyst, recipient) -> None:
+    """Notify a Meeting-of-the-Analysts reviewer that a member requested
+    authorization for an external control analyst."""
+    member = obj.member
+    member_name = member.get_full_name() or member.email
+    _send(
+        subject=f"{member_name} requested an external control analyst",
+        body=(
+            f"Dear {recipient.get_full_name() or recipient.email},\n\n"
+            f"{member_name} has requested authorization to use {obj.name} — "
+            "an analyst outside the School — for control analysis.\n\n"
+            f"{obj.description}\n\n"
+            "Review this request from the Meeting of the Analysts admin.\n\n"
+            "— The Lacanian School of Psychoanalysis"
+        ),
+        to=[recipient.email],
+        from_name="LSP Meeting of the Analysts",
+    )
+
+
+def send_external_analyst_decision(obj: ExternalControlAnalyst) -> None:
+    """Let the member know the Meeting's decision on their external control
+    analyst request."""
+    member = obj.member
+    name = member.get_full_name() or member.email
+    if obj.status == ExternalControlAnalyst.Status.APPROVED:
+        subject = "Your external control analyst was approved"
+        body = (
+            f"Dear {name},\n\n"
+            f"The Meeting of the Analysts has approved {obj.name} as your "
+            "external control analyst. You may now count this analysis "
+            "toward your formation.\n\n"
+        )
+    else:
+        subject = "Your external control analyst request"
+        body = (
+            f"Dear {name},\n\n"
+            f"After consideration, the Meeting of the Analysts did not "
+            f"approve {obj.name} as an external control analyst at this "
+            "time.\n\n"
+        )
+    if obj.decision_note:
+        body += f"{obj.decision_note}\n\n"
+    body += "The Lacanian School of Psychoanalysis"
+    _send(
+        subject=subject, body=body, to=[member.email],
+        from_name="LSP Meeting of the Analysts",
+    )

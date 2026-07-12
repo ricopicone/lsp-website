@@ -62,10 +62,48 @@
   {# ---- Control analysis ---- #}
   <section class="rounded-xl border border-base-300 p-5 space-y-4">
     <h2 class="font-serif text-xl text-base-content">Control analysis</h2>
+
+    <form method="post" action="{% url 'formation:advisee_set_background' advisee.pk %}" class="flex items-center gap-2 text-sm">
+      {% csrf_token %}
+      <label class="flex items-center gap-2">
+        <input type="checkbox" name="clinical_background" class="checkbox checkbox-sm" {% if advisee.profile.clinical_background %}checked{% endif %}>
+        Clinical background (2 control analyses; unchecked = academic, 3)
+      </label>
+      <button class="btn btn-ghost btn-xs">Save</button>
+    </form>
+
     <div class="space-y-1">
-      <progress class="progress progress-primary w-full" value="{{ control_years }}" max="{{ control_target }}"></progress>
-      <p class="text-sm text-base-content/70">{{ control_years }} of {{ control_target }} years of control analysis, or four years of ongoing dialogue with an analyst.</p>
+      <progress class="progress progress-primary w-full" value="{{ control_progress.total_years }}" max="{{ control_progress.total_target }}"></progress>
+      <p class="text-sm text-base-content/70">{{ control_progress.total_years|floatformat:1 }} of {{ control_progress.total_target }} total years across control analyses.</p>
     </div>
+
+    <div class="space-y-3">
+      {# 4-year slot #}
+      <div class="space-y-1">
+        <div class="flex items-center justify-between text-sm">
+          <span class="font-medium">4-year control analysis</span>
+          {% if control_progress.four_year.met %}<span class="badge badge-success badge-sm">met</span>{% endif %}
+        </div>
+        <progress class="progress progress-secondary w-full" value="{{ control_progress.four_year.years }}" max="{{ control_progress.four_year.target }}"></progress>
+        <p class="text-xs text-base-content/60">
+          {% if control_progress.four_year.entry %}{{ control_progress.four_year.entry.supervisor_name }}, {{ control_progress.four_year.years|floatformat:1 }} of {{ control_progress.four_year.target }} years{% else %}Not yet started.{% endif %}
+        </p>
+      </div>
+      {# 2-year slots #}
+      {% for slot in control_progress.two_year %}
+      <div class="space-y-1">
+        <div class="flex items-center justify-between text-sm">
+          <span class="font-medium">2-year control analysis{% if control_progress.two_year|length > 1 %} #{{ forloop.counter }}{% endif %}</span>
+          {% if slot.met %}<span class="badge badge-success badge-sm">met</span>{% endif %}
+        </div>
+        <progress class="progress progress-secondary w-full" value="{{ slot.years }}" max="{{ slot.target }}"></progress>
+        <p class="text-xs text-base-content/60">
+          {% if slot.entry %}{{ slot.entry.supervisor_name }}, {{ slot.years|floatformat:1 }} of {{ slot.target }} years{% else %}Not yet started.{% endif %}
+        </p>
+      </div>
+      {% endfor %}
+    </div>
+
     {% if control_entries %}
     <ul class="space-y-3">
       {% for c in control_entries %}

@@ -637,6 +637,16 @@ def test_assignable_roles_auto_membership_is_coordinator_only():
     ]
 
 
+def test_meeting_of_analysts_members_includes_analysts_excludes_others():
+    from workgroups.permissions import meeting_of_analysts_members
+
+    analyst = _user("moa-members-analyst@x.test", role=Profile.Role.ANALYST)
+    other = _user("moa-members-other@x.test", role=Profile.Role.MEMBER)
+    members = meeting_of_analysts_members()
+    assert analyst in members
+    assert other not in members
+
+
 @pytest.mark.parametrize("key", ["president", "vice_president"])
 def test_school_officer_governs_standing_bodies(key):
     # One StaffRole appointment confers management of the Board and the Meeting

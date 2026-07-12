@@ -14,6 +14,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db.models import Case, IntegerField, Value, When
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -29,13 +30,21 @@ from .advancement import (
     step_label_for_member,
     withdraw_advancement,
 )
+from .control import control_progress
 from .forms import (
     AdvancementForm,
     ControlAnalysisForm,
     ExternalActivityForm,
+    ExternalControlAnalystForm,
     RecommendationForm,
 )
-from .models import Advancement, ControlAnalysis, ExternalActivity, FormationSettings
+from .models import (
+    Advancement,
+    ControlAnalysis,
+    ExternalActivity,
+    ExternalControlAnalyst,
+    FormationSettings,
+)
 from .tabs import available_tabs
 
 # ==========================================================================
@@ -112,10 +121,10 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
         "demande_form": demande_form if demande_form is not None else AdvancementForm(),
         "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
         "control_entries": ControlAnalysis.objects.filter(member=user),
-        "control_years": ControlAnalysis.years_for(user),
-        "control_target": formation_settings.control_years_target,
+        "control_progress": control_progress(user),
         "external_entries": ExternalActivity.objects.filter(member=user)
         .order_by("kind", "-start_date"),
+        "external_requests": ExternalControlAnalyst.objects.filter(member=user),
     }
 
     # The page tab bar shows Tuition/Dues on obligation OR payment history; the
@@ -556,7 +565,7 @@ def control_add(request):
     """Add a control (supervisory) analysis entry — a self-reported record, no
     approval required."""
     if request.method == "POST":
-        form = ControlAnalysisForm(request.POST)
+        form = ControlAnalysisForm(request.POST, user=request.user)
         if form.is_valid():
             obj = form.save(commit=False)
             obj.member = request.user
@@ -564,7 +573,7 @@ def control_add(request):
             messages.success(request, "Control analysis added.")
             return redirect(_formation_url("formation"))
     else:
-        form = ControlAnalysisForm()
+        form = ControlAnalysisForm(user=request.user)
     return render(request, "formation/_control_form.html", {"form": form, "mode": "add"})
 
 
@@ -574,13 +583,13 @@ def control_edit(request, pk):
     a 404 (no signal that the entry exists at all)."""
     obj = get_object_or_404(ControlAnalysis, pk=pk, member=request.user)
     if request.method == "POST":
-        form = ControlAnalysisForm(request.POST, instance=obj)
+        form = ControlAnalysisForm(request.POST, instance=obj, user=request.user)
         if form.is_valid():
             form.save()
             messages.success(request, "Control analysis updated.")
             return redirect(_formation_url("formation"))
     else:
-        form = ControlAnalysisForm(instance=obj)
+        form = ControlAnalysisForm(instance=obj, user=request.user)
     return render(request, "formation/_control_form.html",
                   {"form": form, "mode": "edit", "entry": obj})
 
@@ -637,6 +646,28 @@ def external_delete(request, pk):
     obj.delete()
     messages.success(request, "External activity removed.")
     return redirect(_formation_url("formation"))
+
+
+@login_required
+def external_analyst_request(request):
+    """A member requests authorization to use an external control analyst."""
+    from . import notifications as notify_formation
+
+    if request.method == "POST":
+        form = ExternalControlAnalystForm(request.POST)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.member = request.user
+            obj.save()
+            notify_formation.external_analyst_requested(obj)
+            messages.success(
+                request,
+                "Request sent to the Meeting of the Analysts, you'll be "
+                "notified when they decide.")
+            return redirect(_formation_url("formation") + "#control")
+    else:
+        form = ExternalControlAnalystForm()
+    return render(request, "formation/external_analyst_request.html", {"form": form})
 
 
 # ---- Advisor side ---------------------------------------------------------
@@ -706,8 +737,7 @@ def advisee_detail(request, pk):
         "advancements": Advancement.objects.filter(member=advisee)
         .select_related("advisor").order_by("-requested_at"),
         "control_entries": ControlAnalysis.objects.filter(member=advisee),
-        "control_years": ControlAnalysis.years_for(advisee),
-        "control_target": FormationSettings.load().control_years_target,
+        "control_progress": control_progress(advisee),
         "external_entries": ExternalActivity.objects.filter(member=advisee)
         .order_by("kind", "-start_date"),
         "notes": AdvisorNote.objects.filter(advisee=advisee).select_related("author"),
@@ -734,6 +764,22 @@ def advisee_note_add(request, pk):
         AdvisorNote.objects.create(advisee=advisee, author=request.user, body=body)
         messages.success(request, "Note added.")
     return redirect(reverse("formation:advisee_detail", args=[advisee.pk]))
+
+
+@login_required
+@require_POST
+def advisee_set_background(request, pk):
+    """Advisor (or staff) sets an advisee's clinical/academic background."""
+    from accounts.models import User
+
+    from .permissions import can_view_advisee
+    advisee = get_object_or_404(User.objects.select_related("profile"), pk=pk)
+    if not can_view_advisee(request.user, advisee):
+        raise PermissionDenied
+    advisee.profile.clinical_background = bool(request.POST.get("clinical_background"))
+    advisee.profile.save(update_fields=["clinical_background"])
+    messages.success(request, "Background updated.")
+    return redirect("formation:advisee_detail", pk=advisee.pk)
 
 
 # ---- Meeting of the Analysts review side ----------------------------------
@@ -789,3 +835,52 @@ def advancement_decide(request, pk):
     else:
         messages.error(request, "Choose approve or decline.")
     return redirect("formation:advancement_detail", pk=pk)
+
+
+# ---- External control analyst review (Meeting of the Analysts) -----------
+
+@login_required
+def external_analyst_queue(request):
+    _require_review(request)
+    requests_ = (ExternalControlAnalyst.objects
+                 .select_related("member", "member__profile", "decided_by")
+                 .annotate(_open=Case(
+                     When(status=ExternalControlAnalyst.Status.REQUESTED, then=Value(0)),
+                     default=Value(1), output_field=IntegerField(),
+                 ))
+                 .order_by("_open", "-requested_at"))
+    return render(request, "formation/external_analyst_queue.html", {
+        "requests": requests_,
+        "open_statuses": ExternalControlAnalyst.OPEN_STATUSES,
+    })
+
+
+@login_required
+def external_analyst_detail(request, pk):
+    _require_review(request)
+    obj = get_object_or_404(
+        ExternalControlAnalyst.objects.select_related("member", "member__profile"),
+        pk=pk)
+    return render(request, "formation/external_analyst_detail.html", {"obj": obj})
+
+
+@login_required
+@require_POST
+def external_analyst_decide(request, pk):
+    _require_review(request)
+    from .control import decide_external
+    obj = get_object_or_404(ExternalControlAnalyst, pk=pk)
+    if not obj.is_open:
+        messages.error(request, "This request has already been decided.")
+        return redirect("formation:external_analyst_detail", pk=pk)
+    decision = request.POST.get("decision")
+    note = (request.POST.get("note") or "").strip()
+    if decision == "approve":
+        decide_external(obj, approve=True, by=request.user, note=note)
+        messages.success(request, f"Approved {obj.name}; the member has been notified.")
+    elif decision == "decline":
+        decide_external(obj, approve=False, by=request.user, note=note)
+        messages.success(request, "Recorded as not approved; the member has been notified.")
+    else:
+        messages.error(request, "Choose approve or decline.")
+    return redirect("formation:external_analyst_detail", pk=pk)
