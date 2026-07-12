@@ -3,6 +3,8 @@ background-dependent requirement (one 4-year + one/two 2-year analyses)."""
 
 from __future__ import annotations
 
+from django.utils import timezone
+
 from .models import ControlAnalysis, FormationSettings
 
 
@@ -46,3 +48,19 @@ def control_progress(user) -> dict:
         "four_year": _slot(four[0] if four else None, settings_.four_year_threshold),
         "two_year": two_slots,
     }
+
+
+def decide_external(obj, *, approve, by, note=""):
+    """Approve or decline an external-control-analyst request and notify the
+    requesting member."""
+    from . import notifications as notify_formation
+    from .models import ExternalControlAnalyst
+
+    obj.status = (ExternalControlAnalyst.Status.APPROVED if approve
+                  else ExternalControlAnalyst.Status.DECLINED)
+    obj.decided_at = timezone.now()
+    obj.decided_by = by
+    obj.decision_note = note
+    obj.save(update_fields=["status", "decided_at", "decided_by", "decision_note"])
+    notify_formation.external_analyst_decision(obj)
+    return obj

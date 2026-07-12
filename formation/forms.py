@@ -148,6 +148,31 @@ class ControlAnalysisForm(forms.ModelForm):
         return cleaned
 
 
+class ExternalControlAnalystForm(forms.ModelForm):
+    """A member's request to authorize an analyst outside the School for
+    control (supervisory) analysis. Decided by the Meeting of the Analysts."""
+
+    class Meta:
+        model = ExternalControlAnalyst
+        fields = ("name", "email", "phone", "description")
+        widgets = {
+            "name": forms.TextInput(attrs={"class": _INPUT}),
+            "email": forms.EmailInput(attrs={"class": _INPUT}),
+            "phone": forms.TextInput(attrs={"class": _INPUT}),
+            "description": forms.Textarea(attrs={"rows": 4, "class": _TEXTAREA}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["email"].required = False
+        self.fields["phone"].required = False
+        self.fields["description"].label = "About this analyst"
+        self.fields["description"].help_text = (
+            "Who they are and why you're requesting them, including their "
+            "qualifications."
+        )
+
+
 class ExternalActivityForm(forms.ModelForm):
     """A member's self-reported related activity outside LSP (course taken or
     taught, presentation, publication), no approval, just a personal record."""

@@ -41,6 +41,10 @@
     </div>
     {% endif %}
 
+    <p class="text-sm text-base-content/70">
+      Analyst not on either list? <a href="{% url 'formation:external_analyst_request' %}" class="link link-primary">Request authorization for an external control analyst</a>.
+    </p>
+
     <div class="space-y-1">
       <label for="{{ form.supervisor_name.id_for_label }}" class="block text-sm font-medium">Or type a name</label>
       {{ form.supervisor_name }}

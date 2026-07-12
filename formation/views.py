@@ -34,9 +34,10 @@ from .forms import (
     AdvancementForm,
     ControlAnalysisForm,
     ExternalActivityForm,
+    ExternalControlAnalystForm,
     RecommendationForm,
 )
-from .models import Advancement, ControlAnalysis, ExternalActivity
+from .models import Advancement, ControlAnalysis, ExternalActivity, ExternalControlAnalyst
 from .tabs import available_tabs
 
 # ==========================================================================
@@ -95,6 +96,7 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
         "control_progress": control_progress(user),
         "external_entries": ExternalActivity.objects.filter(member=user)
         .order_by("kind", "-start_date"),
+        "external_requests": ExternalControlAnalyst.objects.filter(member=user),
     }
 
     # The page tab bar shows Tuition/Dues on obligation OR payment history; the
@@ -616,6 +618,28 @@ def external_delete(request, pk):
     obj.delete()
     messages.success(request, "External activity removed.")
     return redirect(_formation_url("formation"))
+
+
+@login_required
+def external_analyst_request(request):
+    """A member requests authorization to use an external control analyst."""
+    from . import notifications as notify_formation
+
+    if request.method == "POST":
+        form = ExternalControlAnalystForm(request.POST)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.member = request.user
+            obj.save()
+            notify_formation.external_analyst_requested(obj)
+            messages.success(
+                request,
+                "Request sent to the Meeting of the Analysts, you'll be "
+                "notified when they decide.")
+            return redirect(_formation_url("formation") + "#control")
+    else:
+        form = ExternalControlAnalystForm()
+    return render(request, "formation/external_analyst_request.html", {"form": form})
 
 
 # ---- Advisor side ---------------------------------------------------------

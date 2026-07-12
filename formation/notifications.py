@@ -62,3 +62,32 @@ def advancement_decision(advancement) -> None:
         url=reverse("formation:formation"), target=advancement,
         email_fn=lambda: emails.send_advancement_decision(advancement),
     )
+
+
+def external_analyst_requested(obj) -> None:
+    """Notify the Meeting of the Analysts that a member requested an external
+    control analyst.
+
+    Links to the Meeting's admin landing page for now — Task 7 adds a
+    dedicated review queue at ``formation:external_analyst_queue``; swap the
+    URL here once that lands."""
+    from workgroups.permissions import meeting_of_analysts_members
+
+    for reviewer in meeting_of_analysts_members():
+        notify(
+            reviewer, Category.EXTERNAL_CONTROL_ANALYST,
+            title=f"{_name(obj.member)} requested an external control analyst",
+            url=reverse("meeting_of_analysts_admin"), target=obj, dedupe=True,
+            email_fn=lambda r=reviewer: emails.send_external_analyst_requested(obj, r),
+        )
+
+
+def external_analyst_decision(obj) -> None:
+    approved = obj.status == obj.Status.APPROVED
+    notify(
+        obj.member, Category.ADMISSIONS_DECISION,
+        title=("Your external control analyst was approved" if approved
+               else "Your external control analyst request was not approved"),
+        url=reverse("formation:formation") + "?tab=formation#control", target=obj,
+        email_fn=lambda: emails.send_external_analyst_decision(obj),
+    )

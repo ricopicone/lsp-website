@@ -217,6 +217,17 @@
       <p class="text-sm text-base-content/60">No control analysis entries yet.</p>
       {% endif %}
 
+      {% if external_requests %}
+      <div class="space-y-2">
+        <h3 class="text-sm font-medium">External control analyst requests</h3>
+        <ul class="space-y-1 text-sm text-base-content/70">
+          {% for r in external_requests %}
+          <li>{{ r.name }} — <span class="badge badge-sm">{{ r.get_status_display }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
       <a href="{% url 'formation:control_add' %}" class="btn btn-primary btn-sm">Add a control analysis</a>
     </section>
 
