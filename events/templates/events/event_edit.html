@@ -14,7 +14,7 @@
   <div class="rounded-lg border border-base-300/60 bg-base-200/40 p-3 text-sm text-base-content/70">
     This event has been approved by the Programming Committee. Small edits to the
     title, description, readings, or fee note can be adopted right away; a
-    substantial change can be sent to the committee for review — you'll choose
+    substantial change can be sent to the committee for review—you'll choose
     when you save.
   </div>
   {% endif %}
@@ -47,7 +47,7 @@
         <h2 class="font-serif text-lg text-base-content">Readings</h2>
       </label>
       {{ form.readings }}
-      <p class="text-xs text-base-content/60">One citation per line — each renders as its own entry. Wrap book and journal titles in *asterisks* to italicize them. Notes ("Further readings will be added…") and sub-headings may be lines too.</p>
+      <p class="text-xs text-base-content/60">One citation per line—each renders as its own entry. Wrap book and journal titles in *asterisks* to italicize them. Notes ("Further readings will be added…") and sub-headings may be lines too.</p>
       {% if form.readings.errors %}
       <p class="text-xs text-error">{{ form.readings.errors|join:", " }}</p>
       {% endif %}

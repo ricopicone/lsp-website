@@ -21,36 +21,114 @@
     </p>
   </header>
 
-  <form method="post" class="space-y-5">
+  {% if form.non_field_errors %}
+  <div role="alert" class="alert alert-error text-sm">{{ form.non_field_errors|join:", " }}</div>
+  {% endif %}
+
+  <form method="post" class="space-y-8">
     {% csrf_token %}
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {% for field in form %}
-      {% if field.name != "description" and field.name != "access_info" %}
+    {% comment %}--- Basics ------------------------------------------------{% endcomment %}
+    <section class="space-y-4">
+      <h3 class="font-serif text-lg text-base-content border-b border-base-300 pb-1">Basics</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% for field in form %}
+        {% if field.name == "title" or field.name == "slug" or field.name == "event_type" or field.name == "format" or field.name == "start_date" or field.name == "end_date" or field.name == "status" %}
+        <div>
+          <label for="{{ field.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<p class="text-xs text-base-content/50 mt-1">{{ field.help_text }}</p>{% endif %}
+          {% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% if creating and form.continues_seminar %}
       <div>
-        <label for="{{ field.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
-          {{ field.label }}
-        </label>
-        {{ field }}
-        {% if field.help_text %}<p class="text-xs text-base-content/50 mt-1">{{ field.help_text }}</p>{% endif %}
-        {% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}
+        <label for="{{ form.continues_seminar.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">{{ form.continues_seminar.label }}</label>
+        {{ form.continues_seminar }}
+        <p class="text-xs text-base-content/50 mt-1">{{ form.continues_seminar.help_text }}</p>
+        {% if form.continues_seminar.errors %}<p class="text-error text-xs mt-1">{{ form.continues_seminar.errors|join:", " }}</p>{% endif %}
       </div>
       {% endif %}
-      {% endfor %}
-    </div>
+    </section>
 
-    {% for field in form %}
-    {% if field.name == "description" or field.name == "access_info" %}
-    <div>
-      <label for="{{ field.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">
-        {{ field.label }}
-      </label>
-      {{ field }}
-      {% if field.help_text %}<p class="text-xs text-base-content/50 mt-1">{{ field.help_text }}</p>{% endif %}
-      {% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}
-    </div>
-    {% endif %}
-    {% endfor %}
+    {% comment %}--- Content (public-facing copy) ---------------------------{% endcomment %}
+    <section class="space-y-4">
+      <h3 class="font-serif text-lg text-base-content border-b border-base-300 pb-1">Content</h3>
+
+      <div>
+        <label for="{{ form.description.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Description</label>
+        {{ form.description }}
+        <p class="text-xs text-base-content/50 mt-1">Plain text. Line breaks become paragraphs on the event page; wrap text in *asterisks* to italicize it.</p>
+        {% if form.description.errors %}<p class="text-error text-xs mt-1">{{ form.description.errors|join:", " }}</p>{% endif %}
+      </div>
+
+      <div>
+        <label for="{{ form.readings.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Readings</label>
+        {{ form.readings }}
+        <p class="text-xs text-base-content/50 mt-1">One citation per line—each renders as its own entry. Wrap book and journal titles in *asterisks* to italicize them. Notes ("Further readings will be added…") and sub-headings may be lines too.</p>
+        {% if form.readings.errors %}<p class="text-error text-xs mt-1">{{ form.readings.errors|join:", " }}</p>{% endif %}
+      </div>
+
+      <div>
+        <label for="{{ form.schedule_note.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Schedule</label>
+        {{ form.schedule_note }}
+        <p class="text-xs text-base-content/50 mt-1">Meeting cadence in plain words, e.g. "1st and 3rd Saturdays, 9–11:30am Pacific". Shown alongside the generated sessions table.</p>
+        {% if form.schedule_note.errors %}<p class="text-error text-xs mt-1">{{ form.schedule_note.errors|join:", " }}</p>{% endif %}
+      </div>
+
+      <div>
+        <label for="{{ form.fee_note.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Fee</label>
+        {{ form.fee_note }}
+        <p class="text-xs text-base-content/50 mt-1">The fee in plain words, e.g. "$100 donation encouraged, none turned away". Checkout uses the pricing tiers; this text is shown on the event page.</p>
+        {% if form.fee_note.errors %}<p class="text-error text-xs mt-1">{{ form.fee_note.errors|join:", " }}</p>{% endif %}
+      </div>
+
+      <div>
+        <label for="{{ form.contact.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Contact</label>
+        {{ form.contact }}
+        <p class="text-xs text-base-content/50 mt-1">Public contact for questions about the event (email/phone).</p>
+        {% if form.contact.errors %}<p class="text-error text-xs mt-1">{{ form.contact.errors|join:", " }}</p>{% endif %}
+      </div>
+    </section>
+
+    {% comment %}--- Access & options --------------------------------------{% endcomment %}
+    <section class="space-y-4">
+      <h3 class="font-serif text-lg text-base-content border-b border-base-300 pb-1">Access &amp; options</h3>
+
+      <div>
+        <label for="{{ form.access_info.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Access info</label>
+        {{ form.access_info }}
+        <p class="text-xs text-base-content/50 mt-1">Zoom link, meeting code, or address. Hidden from the public; released to registrants only after they've paid.</p>
+        {% if form.access_info.errors %}<p class="text-error text-xs mt-1">{{ form.access_info.errors|join:", " }}</p>{% endif %}
+      </div>
+
+      <div>
+        <label for="{{ form.faculty.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Faculty</label>
+        {{ form.faculty }}
+        <p class="text-xs text-base-content/50 mt-1">{{ form.faculty.help_text }} Hold ⌘/Ctrl to select more than one.</p>
+        {% if form.faculty.errors %}<p class="text-error text-xs mt-1">{{ form.faculty.errors|join:", " }}</p>{% endif %}
+      </div>
+
+      <div class="space-y-1">
+        <label class="flex items-center gap-2 cursor-pointer">
+          {{ form.requires_faculty_approval }}
+          <span class="text-sm">Require faculty approval for each registration</span>
+        </label>
+        <p class="text-xs text-base-content/50 pl-7">{{ form.requires_faculty_approval.help_text }}</p>
+        {% if form.requires_faculty_approval.errors %}<p class="text-error text-xs pl-7">{{ form.requires_faculty_approval.errors|join:", " }}</p>{% endif %}
+      </div>
+
+      <div class="space-y-1">
+        <label class="flex items-center gap-2 cursor-pointer">
+          {{ form.record_video }}
+          <span class="text-sm">Record this event's online meetings</span>
+        </label>
+        <p class="text-xs text-base-content/50 pl-7">{{ form.record_video.help_text }}</p>
+        {% if form.record_video.errors %}<p class="text-error text-xs pl-7">{{ form.record_video.errors|join:", " }}</p>{% endif %}
+      </div>
+    </section>
 
     <div class="flex items-center gap-3 pt-2">
       <button type="submit" class="btn btn-primary">

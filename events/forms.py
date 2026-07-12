@@ -371,6 +371,9 @@ class ProgramEventForm(forms.ModelForm):
     #: via ``Event.set_faculty`` on save.
     faculty = forms.ModelMultipleChoiceField(
         queryset=None, required=False,
+        widget=forms.SelectMultiple(attrs={
+            "class": "select select-bordered w-full", "size": 6,
+        }),
         help_text="LSP-affiliated instructors (can edit the event and mint pricing codes).",
     )
 
@@ -380,6 +383,7 @@ class ProgramEventForm(forms.ModelForm):
     continues_seminar = forms.ModelChoiceField(
         queryset=None, required=False,
         label="Continue an existing seminar",
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
         help_text=(
             "Optional. Make this a new yearly term of an existing seminar — its "
             "workspace, channel, and past members carry over (they renew by "
@@ -393,14 +397,40 @@ class ProgramEventForm(forms.ModelForm):
             "title", "slug", "event_type",
             "start_date", "end_date",
             "format", "status",
-            "description", "access_info",
+            "description", "readings", "schedule_note", "contact", "fee_note",
+            "access_info",
             "requires_faculty_approval", "record_video",
         )
         widgets = {
-            "start_date": forms.DateInput(attrs={"type": "date"}),
-            "end_date":   forms.DateInput(attrs={"type": "date"}),
-            "description": forms.Textarea(attrs={"rows": 8}),
-            "access_info": forms.Textarea(attrs={"rows": 2}),
+            "title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "slug": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "event_type": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "start_date": forms.DateInput(
+                attrs={"type": "date", "class": "input input-bordered w-full"},
+            ),
+            "end_date": forms.DateInput(
+                attrs={"type": "date", "class": "input input-bordered w-full"},
+            ),
+            "format": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "status": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "description": forms.Textarea(
+                attrs={"rows": 10, "class": "textarea textarea-bordered w-full"},
+            ),
+            "readings": forms.Textarea(
+                attrs={"rows": 8, "class": "textarea textarea-bordered w-full"},
+            ),
+            "schedule_note": forms.Textarea(
+                attrs={"rows": 2, "class": "textarea textarea-bordered w-full"},
+            ),
+            "contact": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "fee_note": forms.Textarea(
+                attrs={"rows": 2, "class": "textarea textarea-bordered w-full"},
+            ),
+            "access_info": forms.Textarea(
+                attrs={"rows": 3, "class": "textarea textarea-bordered w-full"},
+            ),
+            "requires_faculty_approval": forms.CheckboxInput(attrs={"class": "checkbox"}),
+            "record_video": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }
 
     def __init__(self, *args, program=None, **kwargs):
