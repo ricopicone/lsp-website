@@ -331,4 +331,10 @@ def impersonate_stop(request):
         (ImpersonationLog.objects
          .filter(impersonator=impersonator, ended_at__isnull=True)
          .order_by("-started_at").update(ended_at=timezone.now()))
-    return redirect("/")
+    from django.utils.http import url_has_allowed_host_and_scheme
+    nxt = request.POST.get("next") or request.GET.get("next") or "/"
+    if not url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        nxt = "/"
+    return redirect(nxt)

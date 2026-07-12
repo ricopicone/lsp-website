@@ -577,6 +577,40 @@ def test_superuser_impersonates_persona_and_exits(client):
 
 
 @pytest.mark.django_db
+def test_exit_impersonation_returns_to_current_page(client):
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    persona = User.objects.create_user(email="persona@x.test",
+                                       first_name="Test", last_name="Persona")
+    persona.profile.is_persona = True
+    persona.profile.role = Profile.Role.ANALYST
+    persona.profile.save()
+
+    client.force_login(su)
+    client.post(reverse("core:impersonate_start", args=[persona.id]))
+
+    # Exiting with a next= carries the user back to the page they were on.
+    resp = client.post(reverse("core:impersonate_stop"), {"next": "/directory/"})
+    assert resp.status_code == 302
+    assert resp.url == "/directory/"
+
+
+@pytest.mark.django_db
+def test_exit_impersonation_ignores_unsafe_next(client):
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    persona = User.objects.create_user(email="persona@x.test", first_name="P")
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    client.force_login(su)
+    client.post(reverse("core:impersonate_start", args=[persona.id]))
+
+    resp = client.post(reverse("core:impersonate_stop"),
+                       {"next": "https://evil.example/"})
+    assert resp.status_code == 302
+    assert resp.url == "/"
+
+
+@pytest.mark.django_db
 def test_non_superuser_cannot_impersonate(client):
     u = User.objects.create_user(email="u@x.test", password="x")
     other = User.objects.create_user(email="o@x.test")

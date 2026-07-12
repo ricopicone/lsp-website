@@ -48,6 +48,7 @@
       </span>
       <form method="post" action="{% url 'core:impersonate_stop' %}" style="display:contents">
         {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
         <button class="btn btn-xs">Exit</button>
       </form>
     </div>
