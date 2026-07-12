@@ -92,6 +92,14 @@ class Participant:
             return self.role.replace("_", " ").title()
 
 
+def roster_rank(role) -> int:
+    """Precedence rank for a roster role — lower sorts first. Officers are
+    ranked explicitly; everyone else (member, faculty, web_coordinator, any
+    future role) shares ROSTER_DEFAULT_RANK; plus-one guests sort last.
+    See WorkgroupMembership.ROLE_RANK."""
+    return WorkgroupMembership.ROLE_RANK.get(role, WorkgroupMembership.ROSTER_DEFAULT_RANK)
+
+
 class Workgroup(models.Model):
     """The collaborative layer shared by every kind of LSP group."""
 
@@ -288,10 +296,28 @@ class Workgroup(models.Model):
         memberships for impersonation fidelity but must never appear on a
         roster — the same rule :meth:`participants` applies at the tail. Without
         this, a seeded "Persona Board Chair" leaked onto the public Board card.
+
+        Ordered leaders-first by role precedence
+        (:attr:`WorkgroupMembership.ROLE_RANK`), then alphabetically by last
+        then first name (task #417).
         """
-        return self.memberships.serving().exclude(
-            user__profile__is_persona=True
-        ).select_related("user", "user__profile")
+        whens = [
+            models.When(role=role, then=models.Value(rank))
+            for role, rank in WorkgroupMembership.ROLE_RANK.items()
+        ]
+        return (
+            self.memberships.serving()
+            .exclude(user__profile__is_persona=True)
+            .select_related("user", "user__profile")
+            .annotate(
+                _role_rank=models.Case(
+                    *whens,
+                    default=models.Value(WorkgroupMembership.ROSTER_DEFAULT_RANK),
+                    output_field=models.IntegerField(),
+                )
+            )
+            .order_by("_role_rank", "user__last_name", "user__first_name")
+        )
 
     @staticmethod
     def _user_role(user):
@@ -388,10 +414,22 @@ class Workgroup(models.Model):
                     )
         # Personas are test accounts — keep them off every roster (they retain
         # their memberships for impersonation fidelity, just not shown here).
-        return [
+        roster = [
             p for p in seen.values()
             if not getattr(getattr(p.user, "profile", None), "is_persona", False)
         ]
+        # Leaders first by role precedence, then alphabetical by last/first name
+        # (task #417). Derived members (registrants) carry MEMBER, so they land
+        # in the everyone-else tier and interleave alphabetically here rather
+        # than being appended after the stored rows.
+        roster.sort(
+            key=lambda p: (
+                roster_rank(p.role),
+                (p.user.last_name or "").lower(),
+                (p.user.first_name or "").lower(),
+            )
+        )
+        return roster
 
     def current_term(self):
         """For a term-based offering (seminar / reading group), the active-or-
@@ -832,6 +870,25 @@ class WorkgroupMembership(models.Model):
     #: collectively by its members (cartel actions gate on membership, not on a
     #: lead role), so PLUS_ONE is deliberately absent here.
     LEAD_ROLES = (Role.CHAIR, Role.CO_CHAIR, Role.FACULTY, Role.ORGANIZER)
+
+    #: Roster precedence (task #417). Leaders first in this fixed order, then
+    #: everyone else at ROSTER_DEFAULT_RANK (alphabetical by last name), then
+    #: plus-one guests last. President / Vice-President are the chair / co_chair
+    #: rows relabeled for display (content.views.OFFICER_TITLES); rank the
+    #: stored roles. MEMBER / FACULTY / WEB_COORDINATOR are intentionally NOT
+    #: distinct officer positions — they take the default rank.
+    ROSTER_DEFAULT_RANK = 50
+    ROLE_RANK = {
+        Role.CHAIR: 1,
+        Role.CO_CHAIR: 2,
+        Role.SECRETARY: 3,
+        Role.TREASURER: 4,
+        Role.ORGANIZER: 5,
+        Role.REFERRAL_COORDINATOR: 6,
+        Role.APPLICATIONS_COORDINATOR: 7,
+        Role.ADMIN_ASSISTANT: 8,
+        Role.PLUS_ONE: 99,
+    }
 
     workgroup = models.ForeignKey(
         Workgroup,
