@@ -67,10 +67,9 @@ def test_member_detail_shows_real_paid_date_not_import_date(client, treasurer):
         SERVER_NAME="localhost",
     )
     body = resp.content.decode()
-    # The rendered date is the real payment date (2022-09-22), not the import
-    # date (today). user_datetime emits <time datetime="2022-09-22...">.
-    assert 'datetime="2022-09-22' in body
-    assert "Sep 22" in body
+    # The rendered date is the real payment date with year (Sep 22, 2022),
+    # not the import date (today).
+    assert "Sep 22, 2022" in body
 
 
 @pytest.mark.django_db
@@ -84,3 +83,36 @@ def test_payments_tab_orders_by_transaction_date(client, treasurer):
     body = resp.content.decode()
     # Most recent transaction (2024) should appear before older ones.
     assert body.index("2024") < body.index("2023") < body.index("2022")
+
+
+@pytest.mark.django_db
+def test_transactions_csv_filters_and_sorts_by_transaction_date(client, treasurer):
+    member = User.objects.create_user(email="dt-csv@x.test", password="x")
+    # Imported "today" (created_at ~ now) but really paid in 2024 / 2022. The
+    # paid_at date strings are unique markers for each row in the CSV body.
+    _imported(member, "2024-03-15 12:00")
+    _imported(member, "2022-06-01 12:00")
+    client.force_login(treasurer)
+
+    # since/until bound the REAL payment date, not the import date.
+    resp = client.get(
+        reverse("payments:transactions_csv") + "?since=2024-01-01&until=2024-12-31",
+        SERVER_NAME="localhost",
+    )
+    body = resp.content.decode()
+    assert "2024-03-15" in body        # the 2024 payment is included
+    assert "2022-06-01" not in body    # the 2022 payment is excluded
+
+    # Bounding the IMPORT year (2026) must NOT match these historical payments.
+    resp = client.get(
+        reverse("payments:transactions_csv") + "?since=2026-01-01",
+        SERVER_NAME="localhost",
+    )
+    body = resp.content.decode()
+    assert "2024-03-15" not in body
+    assert "2022-06-01" not in body
+
+    # Unfiltered export is ordered by transaction date (oldest first here).
+    resp = client.get(reverse("payments:transactions_csv"), SERVER_NAME="localhost")
+    body = resp.content.decode()
+    assert body.index("2022-06-01") < body.index("2024-03-15")

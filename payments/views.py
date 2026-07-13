@@ -1253,12 +1253,17 @@ def transactions_csv(request):
 
     Query params (all optional):
     - ``type``: comma-separated payment_type values to include
-    - ``since``: ``YYYY-MM-DD`` lower bound on ``created_at`` (inclusive)
-    - ``until``: ``YYYY-MM-DD`` upper bound on ``created_at`` (inclusive)
+    - ``since``: ``YYYY-MM-DD`` lower bound on the transaction date (inclusive)
+    - ``until``: ``YYYY-MM-DD`` upper bound on the transaction date (inclusive)
+
+    "Transaction date" is ``paid_at`` when set, else ``created_at`` — the real
+    payment date, not the row-insertion/import date. See
+    ``Payment.transaction_date``. (Task #437.)
     """
     qs = (
         Payment.objects.select_related("user", "registration__event", "receipt")
-        .order_by("created_at")
+        .annotate(_txn_date=Coalesce("paid_at", "created_at"))
+        .order_by("_txn_date")
     )
     types_raw = (request.GET.get("type") or "").strip()
     if types_raw:
@@ -1266,10 +1271,10 @@ def transactions_csv(request):
         qs = qs.filter(payment_type__in=types)
     since = _parse_date(request.GET.get("since"))
     if since is not None:
-        qs = qs.filter(created_at__date__gte=since)
+        qs = qs.filter(_txn_date__date__gte=since)
     until = _parse_date(request.GET.get("until"))
     if until is not None:
-        qs = qs.filter(created_at__date__lte=until)
+        qs = qs.filter(_txn_date__date__lte=until)
 
     filename_bits = ["transactions"]
     if types_raw:
