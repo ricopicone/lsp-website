@@ -839,6 +839,33 @@ def test_treasurer_payments_tab_filters_by_type(
 
 
 @pytest.mark.django_db
+def test_treasurer_payments_tab_paginates(client, staff_user, current_period):
+    """>50 payments paginate (page size 50); page 2 shows the rest and the
+    old "Capped at 100" message is gone (task #434)."""
+    from payments.models import Payment
+    u = _mk_candidate("bulk@x.test")
+    Payment.objects.bulk_create([
+        Payment(
+            payment_type=Payment.Type.DONATION, user=u, amount=Decimal("5"),
+            status=Payment.Status.SUCCEEDED,
+        )
+        for _ in range(60)
+    ])
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_payments"))
+    assert resp.status_code == 200
+    assert b"Capped at 100" not in resp.content
+    page1 = resp.context["page_obj"]
+    assert page1.paginator.count == 60
+    assert len(page1.object_list) == 50
+    assert page1.paginator.num_pages == 2
+    # Page 2 carries the remaining 10 and preserves the filter querystring.
+    resp2 = client.get(reverse("treasurer_payments") + "?type=donation&page=2")
+    assert len(resp2.context["page_obj"].object_list) == 10
+    assert resp2.context["filter_qs"] == "type=donation"
+
+
+@pytest.mark.django_db
 def test_treasurer_payment_apply_success_marks_paid(
     client, staff_user, current_period,
 ):

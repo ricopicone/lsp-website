@@ -35,8 +35,12 @@
   </form>
 
   <p class="text-xs text-base-content/60">
-    Showing {{ payments|length }} of {{ total_count }} matching payment{{ total_count|pluralize }}.
-    {% if total_count > 100 %}(Capped at 100 — use filters to narrow.){% endif %}
+    {% if total_count %}
+    Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of
+    {{ total_count }} matching payment{{ total_count|pluralize }}.
+    {% else %}
+    No matching payments.
+    {% endif %}
   </p>
 
   <div class="overflow-x-auto rounded-lg border border-base-300">
@@ -119,6 +123,24 @@
       </tbody>
     </table>
   </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+  <nav class="flex items-center justify-between gap-2" aria-label="Payments pages">
+    {% if page_obj.has_previous %}
+    <a class="btn btn-sm btn-ghost" href="?page={{ page_obj.previous_page_number }}{% if filter_qs %}&{{ filter_qs }}{% endif %}">← Previous</a>
+    {% else %}
+    <span class="btn btn-sm btn-ghost btn-disabled">← Previous</span>
+    {% endif %}
+    <span class="text-xs text-base-content/60">
+      Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </span>
+    {% if page_obj.has_next %}
+    <a class="btn btn-sm btn-ghost" href="?page={{ page_obj.next_page_number }}{% if filter_qs %}&{{ filter_qs }}{% endif %}">Next →</a>
+    {% else %}
+    <span class="btn btn-sm btn-ghost btn-disabled">Next →</span>
+    {% endif %}
+  </nav>
+  {% endif %}
 
 </div>
 {% endblock %}
