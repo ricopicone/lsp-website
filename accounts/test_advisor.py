@@ -77,10 +77,9 @@ def test_eligible_advisors_excludes_only_advisor_unavailable():
 
 
 def test_advisor_availability_split_groups_unknown():
+    from accounts.advisor import advisor_availability_split
     from availability.models import AnalystFunction, AvailabilitySpan
     from availability.services import set_availability
-
-    from accounts.advisor import advisor_availability_split
 
     advisor_fn = AnalystFunction.objects.get(slug="advisor")
     advisee = _u("ac3@x.test", role=Profile.Role.PRE_CANDIDATE)
@@ -94,10 +93,9 @@ def test_advisor_availability_split_groups_unknown():
 
 
 def test_advisor_select_form_renders_unknown_optgroup():
+    from accounts.forms import AdvisorSelectForm
     from availability.models import AnalystFunction, AvailabilitySpan
     from availability.services import set_availability
-
-    from accounts.forms import AdvisorSelectForm
 
     advisor_fn = AnalystFunction.objects.get(slug="advisor")
     advisee = _u("ac4@x.test", role=Profile.Role.PRE_CANDIDATE)
