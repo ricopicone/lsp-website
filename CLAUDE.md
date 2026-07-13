@@ -338,6 +338,22 @@ Done (see `git log` for specifics):
   `change_request_decide`); notifications via the new
   `EVENT_CHANGE_REVIEW` category (PC on submit, proposer on decision). `title`
   is now editable on the faculty edit form.
+- **Shared school officers — President / Vice President** (task #428). The
+  Board's Chair / Co-chair are the school's President / Vice President — a
+  display relabel (`workgroups.OFFICER_TITLES` / `role_label`, tasks #368/#428)
+  *and* now a synced governance record. The Board's Chair/Co-chair
+  `WorkgroupMembership`s are the **single source of truth**:
+  `committees.officers.sync_school_officers()` recomputes the President /
+  Vice-President `StaffRole` holders from the Board's serving roster, fired by a
+  `post_save`/`post_delete` signal on `WorkgroupMembership` **and** a new
+  `workgroups.roster_changed` signal (for the bulk-`.update()` `remove_member` /
+  `leave` paths that bypass model signals). The **Meeting of Analysts** roster
+  derives its President / Vice President leader chips from those synced roles
+  (`Workgroup.participants()`; `Participant.officer_title` override). Board →
+  Appointments no longer manages the two officer roles (set them in the Board's
+  Settings roster). One-time reconcile migration
+  (`committees.0010_reconcile_school_officers`). See the `board-officer-titles`
+  memory + `docs/superpowers/specs/2026-07-12-shared-school-officers-design.md`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
