@@ -80,7 +80,24 @@ class Document(models.Model):
             "change'. Leave blank when the document is settled."
         ),
     )
-    file = models.FileField(upload_to="documents/%Y/", storage=private_storage)
+    file = models.FileField(
+        upload_to="documents/%Y/",
+        storage=private_storage,
+        blank=True,
+        help_text=(
+            "The source PDF. Optional — leave blank for documents whose "
+            "content is authored inline as HTML (the body field below)."
+        ),
+    )
+    body = models.TextField(
+        blank=True,
+        help_text=(
+            "Inline document content (markdown), rendered on the detail page "
+            "in place of a PDF. Supports the {{ annual_tuition }} placeholder, "
+            "replaced with the current annual tuition figure. Use this for "
+            "documents we hold as text rather than a PDF."
+        ),
+    )
     listing_visibility = models.CharField(
         max_length=16,
         choices=Visibility.choices,
@@ -152,6 +169,10 @@ class Document(models.Model):
                     "Contents can't be public when the listing is members-only."
                 ),
             })
+        if not self.file and not self.body:
+            raise ValidationError(
+                _("A document needs either a PDF file or inline body content.")
+            )
 
     # ---- Display helpers ----
 
@@ -171,6 +192,14 @@ class Document(models.Model):
                 output_format="html5",
             )
         )
+
+    @property
+    def body_html(self) -> str:
+        """The inline body rendered to safe HTML, with site-wide tokens
+        (e.g. ``{{ annual_tuition }}``) substituted for the live figure."""
+        from .rendering import render_body
+
+        return render_body(self.body)
 
     def get_absolute_url(self) -> str:
         return reverse("documents:detail", args=[self.slug])

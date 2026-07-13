@@ -314,3 +314,156 @@ def test_index_card_shows_owning_group(client):
          owning_workgroup=pc.workgroup)
     body = client.get(reverse("documents:index")).content.decode()
     assert "A product of the Program Committee" in body
+
+
+# ---- Inline HTML body (PDF-free documents) -----------------------------
+
+
+def _html_doc(**kwargs) -> Document:
+    """A body-only Document — HTML content, no PDF file."""
+    defaults = dict(
+        title="HTML doc",
+        slug="html-doc",
+        category=Document.Category.REFERENCE,
+        summary="An HTML document",
+        listing_visibility=Document.Visibility.PUBLIC,
+        content_visibility=Document.Visibility.PUBLIC,
+        file="",
+        body="## Heading\n\nA paragraph.",
+    )
+    defaults.update(kwargs)
+    return Document.objects.create(**defaults)
+
+
+def _current_tuition_period(amount):
+    from payments.models import TuitionPeriod
+
+    return TuitionPeriod.objects.create(
+        name="AY 2026–2027",
+        slug="ay-2026-2027",
+        start_date=date(2026, 7, 1),
+        decision_due_date=date(2026, 9, 15),
+        end_date=date(2027, 6, 30),
+        tuition_amount=amount,
+    )
+
+
+@pytest.mark.django_db
+def test_body_html_renders_markdown():
+    d = _html_doc(body="## Tuition\n\nPay in **September**.")
+    html = d.body_html
+    assert "<h2" in html
+    assert "<strong>September</strong>" in html
+
+
+@pytest.mark.django_db
+def test_render_body_substitutes_annual_tuition_token():
+    import documents.rendering as rendering
+
+    _current_tuition_period(2500)
+    html = rendering.render_body(
+        "Pay a total of {{ annual_tuition }} for the year.",
+        on_date=date(2026, 10, 1),
+    )
+    assert "$2,500" in html
+    assert "{{ annual_tuition }}" not in html
+
+
+@pytest.mark.django_db
+def test_annual_tuition_reads_current_period():
+    import documents.rendering as rendering
+
+    _current_tuition_period(2500)
+    assert rendering.annual_tuition(on_date=date(2026, 10, 1)) == "$2,500"
+
+
+@pytest.mark.django_db
+def test_annual_tuition_falls_back_without_period():
+    import documents.rendering as rendering
+    from payments.models import TuitionPeriod
+
+    TuitionPeriod.objects.all().delete()
+    assert rendering.annual_tuition() == "the annual tuition amount"
+
+
+@pytest.mark.django_db
+def test_clean_allows_body_only_document():
+    d = Document(
+        title="Body only", slug="body-only",
+        category=Document.Category.REFERENCE,
+        listing_visibility=Document.Visibility.PUBLIC,
+        content_visibility=Document.Visibility.PUBLIC,
+        file="",
+        body="Some content.",
+    )
+    d.full_clean()  # should not raise
+
+
+@pytest.mark.django_db
+def test_clean_rejects_document_with_neither_file_nor_body():
+    d = Document(
+        title="Empty", slug="empty",
+        category=Document.Category.REFERENCE,
+        listing_visibility=Document.Visibility.PUBLIC,
+        content_visibility=Document.Visibility.PUBLIC,
+        file="",
+        body="",
+    )
+    with pytest.raises(ValidationError):
+        d.full_clean()
+
+
+@pytest.mark.django_db
+def test_detail_renders_body_inline_for_public_body_doc(client):
+    _html_doc(slug="tuition-assistance", title="Tuition Assistance",
+              body="## Assistance\n\nContact **the Treasurer**.")
+    body = client.get(reverse("documents:detail", args=["tuition-assistance"])).content.decode()
+    assert "Contact <strong>the Treasurer</strong>" in body
+    # No PDF, so no download button.
+    assert reverse("documents:download", args=["tuition-assistance"]) not in body
+    assert "Download PDF" not in body
+
+
+@pytest.mark.django_db
+def test_detail_body_gated_for_anon_when_members(client):
+    _html_doc(slug="members-body", title="Members Body",
+              listing_visibility=Document.Visibility.PUBLIC,
+              content_visibility=Document.Visibility.MEMBERS,
+              body="Secret **members-only** text here.")
+    body = client.get(reverse("documents:detail", args=["members-body"])).content.decode()
+    assert "Members Body" in body
+    assert "members-only" not in body
+    assert "Log in to read" in body
+
+
+@pytest.mark.django_db
+def test_index_card_shows_view_for_body_only_doc(client):
+    _html_doc(slug="tuition-assistance", title="Tuition Assistance")
+    body = client.get(reverse("documents:index")).content.decode()
+    detail_url = reverse("documents:detail", args=["tuition-assistance"])
+    # The primary card action is a "View" button linking to the detail page.
+    assert f'href="{detail_url}"' in body
+    assert "View" in body
+    # A body-only doc has no download link on its card.
+    assert reverse("documents:download", args=["tuition-assistance"]) not in body
+
+
+@pytest.mark.django_db
+def test_shipped_tuition_body_is_clean_and_current():
+    """The converted Tuition Assistance content carries no stale names/figures
+    and renders the live tuition figure via the {{ annual_tuition }} token."""
+    import importlib
+
+    from documents.rendering import render_body
+
+    mod = importlib.import_module(
+        "documents.migrations.0008_convert_tuition_assistance_to_html"
+    )
+    _current_tuition_period(2500)
+    html = render_body(mod.BODY, on_date=date(2026, 10, 1))
+    assert "Scalia" not in html
+    assert "Carlson de la Torre" not in html
+    assert "lacanschool.com" not in html
+    assert "$2,000" not in html
+    assert "$2,500" in html
+    assert "/tuition/" in html

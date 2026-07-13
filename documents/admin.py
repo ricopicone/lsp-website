@@ -17,7 +17,7 @@ class DocumentAdmin(admin.ModelAdmin):
         "content_visibility", "effective_date", "is_current_display", "display_order",
     )
     list_filter = ("category", "owning_workgroup", "listing_visibility", "content_visibility")
-    search_fields = ("title", "summary", "description", "notice")
+    search_fields = ("title", "summary", "description", "notice", "body")
     prepopulated_fields = {"slug": ("title",)}
     autocomplete_fields = ("superseded_by", "owning_workgroup")
     inlines = [DocumentAuthorInline]
@@ -27,7 +27,14 @@ class DocumentAdmin(admin.ModelAdmin):
             "fields": ("owning_workgroup",),
             "description": "The committee or working group that produced this document.",
         }),
-        ("File", {"fields": ("file",)}),
+        ("Content", {
+            "fields": ("file", "body"),
+            "description": (
+                "Provide a PDF file, or author the content inline as markdown "
+                "in the body (leave the file blank). The body supports the "
+                "{{ annual_tuition }} placeholder for the current tuition figure."
+            ),
+        }),
         ("Visibility & ordering", {
             "fields": ("listing_visibility", "content_visibility", "display_order"),
         }),
