@@ -866,6 +866,30 @@ def test_treasurer_payments_tab_paginates(client, staff_user, current_period):
 
 
 @pytest.mark.django_db
+def test_treasurer_payments_tab_flags_assumed_type(client, staff_user, current_period):
+    """Assumed (provisional) payment types get an asterisk + an explanatory
+    legend that isn't shown when nothing on the page is assumed (task #434)."""
+    from accounts.models import Source
+    from payments.models import Payment
+    u = _mk_candidate("assumed@x.test")
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("60"),
+        status=Payment.Status.SUCCEEDED, source=Source.ASSUMED,
+    )
+    client.force_login(staff_user)
+    resp = client.get(reverse("treasurer_payments"))
+    assert resp.context["has_assumed"] is True
+    assert b"Assumed type" in resp.content  # the legend
+    assert b"<sup" in resp.content          # the asterisk marker
+
+    # A confirmed (staff-sourced) payment shows no asterisk legend.
+    Payment.objects.update(source=Source.STAFF)
+    resp2 = client.get(reverse("treasurer_payments"))
+    assert resp2.context["has_assumed"] is False
+    assert b"Assumed type" not in resp2.content
+
+
+@pytest.mark.django_db
 def test_treasurer_payment_apply_success_marks_paid(
     client, staff_user, current_period,
 ):

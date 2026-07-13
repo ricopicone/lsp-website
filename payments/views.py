@@ -483,15 +483,22 @@ def treasurer_payments(request):
     if status:
         qs = qs.filter(status=status)
 
+    from accounts.models import Source
+
     page_obj = Paginator(qs, 50).get_page(request.GET.get("page"))
     # Preserve the active filters across page links.
     filter_qs = urlencode({k: v for k, v in (
         ("type", payment_type), ("status", status)) if v})
+    # Flag whether any row on this page is a provisional (assumed) type, so the
+    # asterisk legend only shows when there's an asterisk to explain.
+    has_assumed = any(p.source == Source.ASSUMED for p in page_obj)
 
     return _treasurer_render(request, "payments", "payments/treasurer/payments.html", {
         "payments":           page_obj,
         "page_obj":           page_obj,
         "filter_qs":          filter_qs,
+        "has_assumed":        has_assumed,
+        "assumed_source":     Source.ASSUMED,
         "type_choices":       Payment.Type.choices,
         "status_choices":     Payment.Status.choices,
         "selected_type":      payment_type,
