@@ -449,6 +449,37 @@ def test_index_card_shows_view_for_body_only_doc(client):
 
 
 @pytest.mark.django_db
+def test_detail_body_uses_lsp_prose(client):
+    """Inline bodies render in .lsp-prose (the project's real prose styling),
+    not bare .prose (which this project has no plugin for)."""
+    _html_doc(slug="hp", body="A paragraph.\n\nAnother paragraph.")
+    body = client.get(reverse("documents:detail", args=["hp"])).content.decode()
+    assert "lsp-prose" in body
+
+
+@pytest.mark.django_db
+def test_shipped_tuition_body_v2_is_clean_linked_and_covers_skipping():
+    """The reworked Tuition Assistance content: no stale names, live figure,
+    links to the My LSP Tuition page and the Treasurer, and the skip decision."""
+    import importlib
+
+    from documents.rendering import render_body
+
+    mod = importlib.import_module(
+        "documents.migrations.0009_reword_tuition_assistance"
+    )
+    _current_tuition_period(2500)
+    html = render_body(mod.BODY, on_date=date(2026, 10, 1))
+    assert "Scalia" not in html
+    assert "Carlson" not in html
+    assert "$2,000" not in html
+    assert "$2,500" in html
+    assert 'href="/formation/?tab=tuition"' in html
+    assert 'href="mailto:treasurer@lacanschool.org"' in html
+    assert "skip" in html.lower()
+
+
+@pytest.mark.django_db
 def test_shipped_tuition_body_is_clean_and_current():
     """The converted Tuition Assistance content carries no stale names/figures
     and renders the live tuition figure via the {{ annual_tuition }} token."""
