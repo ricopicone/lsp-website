@@ -57,8 +57,17 @@ def _validate_weekdays(codes: Iterable[str]) -> list:
     return out
 
 
-def _combine(d: date, t: time) -> datetime:
-    return timezone.make_aware(datetime.combine(d, t))
+def _combine(d: date, t: time, tz=None) -> datetime:
+    """Combine a date + naive time into an aware datetime.
+
+    ``tz`` pins the interpretation to an explicit timezone (recurring series
+    store their own tz so re-materialization is deterministic regardless of the
+    ambient request tz). When ``None``, the request's active timezone is used —
+    the historical behavior for one-shot callers (the management command, event
+    approval), which materialize once.
+    """
+    dt = datetime.combine(d, t)
+    return timezone.make_aware(dt, tz) if tz is not None else timezone.make_aware(dt)
 
 
 def generate_weekly(
@@ -69,10 +78,12 @@ def generate_weekly(
     start_time: time,
     end_time: time,
     interval: int = 1,
+    tz=None,
 ) -> list[SessionWindow]:
     """Every occurrence of ``weekdays`` between ``start_date`` and ``end_date``.
 
-    ``interval`` is the week step (1 = weekly, 2 = biweekly, …)."""
+    ``interval`` is the week step (1 = weekly, 2 = biweekly, …). ``tz`` pins the
+    wall-clock times to an explicit timezone (default: the active tz)."""
     _check_dates(start_date, end_date, start_time, end_time)
     rule = rrule.rrule(
         freq=rrule.WEEKLY,
@@ -83,8 +94,8 @@ def generate_weekly(
     )
     return [
         SessionWindow(
-            start_at=_combine(dt.date(), start_time),
-            end_at=_combine(dt.date(), end_time),
+            start_at=_combine(dt.date(), start_time, tz),
+            end_at=_combine(dt.date(), end_time, tz),
         )
         for dt in rule
     ]
@@ -98,6 +109,7 @@ def generate_monthly_ordinal(
     week_positions: Iterable[int],
     start_time: time,
     end_time: time,
+    tz=None,
 ) -> list[SessionWindow]:
     """Ordinal weekdays of each month — e.g. ``week_positions=[1, 3], weekdays=['SA']``
     yields the first and third Saturdays of every month in the range.
@@ -117,8 +129,8 @@ def generate_monthly_ordinal(
     )
     return [
         SessionWindow(
-            start_at=_combine(dt.date(), start_time),
-            end_at=_combine(dt.date(), end_time),
+            start_at=_combine(dt.date(), start_time, tz),
+            end_at=_combine(dt.date(), end_time, tz),
         )
         for dt in rule
     ]

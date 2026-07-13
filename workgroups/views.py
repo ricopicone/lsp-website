@@ -960,6 +960,10 @@ def series_add(request, slug):
         series.workgroup = wg
         series.weekdays = form.cleaned_data["weekdays"]
         series.created_by = request.user
+        # Pin the series to the author's timezone so its wall-clock times never
+        # shift if it's ever re-materialized under a different ambient tz.
+        from django.utils import timezone as _tz
+        series.timezone = str(_tz.get_current_timezone())
         series.save()
         series.generate()
         notify_groups.series_scheduled(series, actor=request.user)
