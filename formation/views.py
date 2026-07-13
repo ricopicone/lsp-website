@@ -314,10 +314,16 @@ def _formation_money_context(request) -> dict:
     dues_paid = user_paid_for_period(user, dues_period)
 
     # --- Payments (all) — one editable table (type + note + tuition AY) ---
+    # Order by the same date the table shows (paid_at, falling back to
+    # created_at), newest first — not by created_at alone, which diverges for
+    # backfilled/offline charges entered long after they were paid.
+    from django.db.models.functions import Coalesce
+
     payments = list(
         Payment.objects.filter(user=user)
         .select_related("registration__event", "dues_period", "tuition_period")
-        .order_by("-created_at", "-id")
+        .annotate(when=Coalesce("paid_at", "created_at"))
+        .order_by("-when", "-id")
     )
 
     # For tuition rows, pre-select the assigned AY, else the AY the payment date
