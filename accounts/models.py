@@ -759,6 +759,7 @@ class Source(models.TextChoices):
 
     VERIFIED = "verified", _("Verified against records")
     IMPORTED = "imported", _("Imported from treasurer ledger")
+    STRIPE = "stripe", _("Imported from Stripe")
     SELF_REPORTED = "self_reported", _("Member-reported (survey)")
     ASSUMED = "assumed", _("Assumed")
     STAFF = "staff", _("Entered by staff")
