@@ -2137,3 +2137,30 @@ def test_participants_ordered_officers_then_alphabetical():
     _add(wg, "sec@x.test", Role.SECRETARY, "Baker")
     order = [p.user.last_name for p in wg.participants()]
     assert order == ["Zimmer", "Baker", "Adams", "Young"]
+
+
+@pytest.mark.django_db
+def test_moa_roster_shows_president_and_vp_as_leaders(client):
+    """Task #428 follow-on: the Meeting of Analysts workspace roster surfaces
+    the synced President / Vice President as leaders, derived from the shared
+    appointment; a plain analyst stays a Member."""
+    from committees.models import Committee
+    from core.models import StaffRole
+
+    moa = Committee.objects.get(slug="meeting-of-analysts")
+    wg = moa.workgroup
+    wg.landing_visibility = Visibility.PUBLIC
+    wg.save(update_fields=["landing_visibility"])
+
+    pres = _user("pres@x.test", role=Profile.Role.ANALYST, first="Pat", last="Prez")
+    plain = _user("plain@x.test", role=Profile.Role.ANALYST, first="Ana", last="Lyst")
+    StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.add(pres)
+
+    roster = wg.participants()
+    by_email = {p.user.email: p for p in roster}
+    assert by_email["pres@x.test"].is_lead is True
+    assert by_email["pres@x.test"].role_label == "President"
+    assert by_email["plain@x.test"].is_lead is False
+
+    body = client.get(wg.get_absolute_url()).content.decode()
+    assert "President" in body

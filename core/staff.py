@@ -402,6 +402,15 @@ def board_appointments(request):
         action = request.POST.get("action")
         role = StaffRole.objects.filter(key=request.POST.get("role")).first()
         member = User.objects.filter(pk=request.POST.get("user")).first()
+        if role is not None and role.key in (
+            StaffRole.PRESIDENT, StaffRole.VICE_PRESIDENT
+        ):
+            messages.error(
+                request,
+                "President and Vice President are set in the Board's Settings "
+                "roster (Chair and Co-chair).",
+            )
+            return redirect("board_appointments")
         if role is None or member is None:
             messages.error(request, "Couldn't find that role or member.")
         elif action == "appoint":
@@ -419,7 +428,10 @@ def board_appointments(request):
         return redirect("board_appointments")
 
     roles = list(
-        StaffRole.objects.prefetch_related("holders").order_by("name")
+        StaffRole.objects
+        .exclude(key__in=[StaffRole.PRESIDENT, StaffRole.VICE_PRESIDENT])
+        .prefetch_related("holders")
+        .order_by("name")
     )
     appointable = list(
         User.objects.filter(is_active=True, profile__is_persona=False)

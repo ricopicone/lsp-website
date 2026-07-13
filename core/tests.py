@@ -974,3 +974,28 @@ def test_persona_safe_backend_redirects_owned_drops_orphan_keeps_real():
     assert not any(s.startswith("[SANDBOX") and "Orphan" in s for s in subjects)
     # real recipient → kept untouched
     assert any(m.to == ["real@x.test"] and m.subject == "Real" for m in _mail.outbox)
+
+
+@pytest.mark.django_db
+def test_appointments_omits_president_and_vice_president(client):
+    """Task #428 follow-on: President / Vice President are set via the Board
+    Settings roster, so Appointments no longer lists them, and posting those
+    keys is rejected."""
+    from core.models import StaffRole
+
+    boss = User.objects.create_user(email="boss@x.test", is_staff=True, is_superuser=True)
+    client.force_login(boss)
+
+    body = client.get(reverse("board_appointments")).content.decode()
+    assert "Treasurer" in body            # other roles still listed
+    # President / Vice President are no longer appointable options here
+    # (the note paragraph may mention them, so assert on the form values).
+    assert 'value="president"' not in body
+    assert 'value="vice_president"' not in body
+
+    target = User.objects.create_user(email="t@x.test")
+    resp = client.post(reverse("board_appointments"), {
+        "action": "appoint", "role": StaffRole.PRESIDENT, "user": target.pk,
+    })
+    assert resp.status_code in (200, 302)
+    assert target not in StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.all()
