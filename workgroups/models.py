@@ -19,7 +19,7 @@ from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models, transaction
 from django.db.models.signals import post_delete
-from django.dispatch import receiver
+from django.dispatch import Signal, receiver
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
@@ -33,6 +33,13 @@ from core.storage import private_storage
 #: request more from the web coordinator, who raises ``file_quota_bytes``).
 MAX_WORKGROUP_FILE_BYTES = 30 * 1024 * 1024        # 30 MB per file
 DEFAULT_WORKGROUP_FILE_QUOTA_BYTES = 200 * 1024 * 1024   # 200 MB per workgroup
+
+#: Sent after a roster mutation that end-dates rows via a bulk ``.update()``
+#: (``remove_member`` / ``leave``) — those bypass ``post_save``/``post_delete``,
+#: so this is how listeners (e.g. committees' school-officer sync) still learn
+#: the roster changed. Kwargs: ``workgroup`` (the mutated Workgroup). Creates and
+#: ``.save()``-based edits already fire the model signals, so they don't send it.
+roster_changed = Signal()
 
 #: Public titles some bodies give their stored leadership roles. The Board's
 #: Chair / Co-chair are the school's President / Vice President (tasks #368,
@@ -781,6 +788,7 @@ class Workgroup(models.Model):
         self.memberships.serving().filter(user=user).update(
             end_date=timezone.localdate()
         )
+        roster_changed.send(sender=Workgroup, workgroup=self)
         return True
 
     def add_member(self, user, *, role=None):
@@ -795,6 +803,8 @@ class Workgroup(models.Model):
         ended = self.memberships.serving().filter(user=user).update(
             end_date=timezone.localdate()
         )
+        if ended:
+            roster_changed.send(sender=Workgroup, workgroup=self)
         return bool(ended)
 
     def set_role(self, user, role) -> bool:
