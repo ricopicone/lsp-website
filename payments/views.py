@@ -14,12 +14,14 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.http import urlencode
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -480,15 +482,21 @@ def treasurer_payments(request):
         qs = qs.filter(payment_type=payment_type)
     if status:
         qs = qs.filter(status=status)
-    payments = list(qs[:100])  # cap the page; treasurer can filter to narrow
+
+    page_obj = Paginator(qs, 50).get_page(request.GET.get("page"))
+    # Preserve the active filters across page links.
+    filter_qs = urlencode({k: v for k, v in (
+        ("type", payment_type), ("status", status)) if v})
 
     return _treasurer_render(request, "payments", "payments/treasurer/payments.html", {
-        "payments":           payments,
+        "payments":           page_obj,
+        "page_obj":           page_obj,
+        "filter_qs":          filter_qs,
         "type_choices":       Payment.Type.choices,
         "status_choices":     Payment.Status.choices,
         "selected_type":      payment_type,
         "selected_status":    status,
-        "total_count":        qs.count(),
+        "total_count":        page_obj.paginator.count,
     })
 
 
