@@ -65,7 +65,7 @@
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Date</th><th>Type</th><th>Amount</th><th>Method</th><th>Status</th></tr>
+          <tr><th>Date</th><th>Type</th><th>Amount</th><th>Method</th><th>Status</th><th class="w-8"></th></tr>
         </thead>
         <tbody>
           {% for p in payments %}
@@ -80,6 +80,9 @@
             <td class="whitespace-nowrap">${{ p.amount }}</td>
             <td class="text-xs">{{ p.get_method_display }}</td>
             <td>{% status_badge p.status %}</td>
+            <td class="text-right">
+              {% include "payments/treasurer/_provenance_popover.html" with source=p.source source_label=p.get_source_display notes=p.notes member_note=p.member_note trigger="icon" %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
