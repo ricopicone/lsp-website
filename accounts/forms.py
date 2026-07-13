@@ -396,12 +396,29 @@ class AdvisorSelectForm(forms.Form):
     def __init__(self, *args, advisee=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.advisee = advisee
-        if advisee is not None:
-            from .advisor import eligible_advisors
-            self.fields["advisor"].queryset = eligible_advisors(advisee)
-        self.fields["advisor"].label_from_instance = lambda u: (
-            f"{u.get_full_name() or u.email} — {u.profile.get_role_display()}"
-        )
+        field = self.fields["advisor"]
+
+        def _label(u):
+            return f"{u.get_full_name() or u.email} — {u.profile.get_role_display()}"
+
+        field.label_from_instance = _label
+        if advisee is None:
+            return
+
+        from .advisor import advisor_availability_split, eligible_advisors
+
+        # The queryset backs validation (any eligible, i.e. not "No", advisor).
+        field.queryset = eligible_advisors(advisee)
+        # The rendered choices group unreported analysts into their own section,
+        # so those who declared they're available appear first.
+        available, unknown = advisor_availability_split(advisee)
+        choices = [("", "Select an advisor…")]
+        choices += [(u.pk, _label(u)) for u in available]
+        if unknown:
+            choices.append(
+                ("Unknown availability", [(u.pk, _label(u)) for u in unknown])
+            )
+        field.choices = choices
 
 
 class ReplyToPasswordResetForm(PasswordResetForm):

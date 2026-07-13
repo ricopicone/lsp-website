@@ -49,6 +49,70 @@ def test_eligible_advisors_pool():
     assert analyst in spool and scholar in spool
 
 
+def test_eligible_advisors_excludes_only_advisor_unavailable():
+    """Analysts who declared they're NOT available as an Advisor are hidden;
+    Yes and Unknown (never reported) both remain (see availability app)."""
+    from availability.models import AnalystFunction, AvailabilitySpan
+    from availability.services import set_availability
+
+    advisor_fn = AnalystFunction.objects.get(slug="advisor")
+    control_fn = AnalystFunction.objects.get(slug="control-analysis")
+
+    advisee = _u("ac2@x.test", role=Profile.Role.PRE_CANDIDATE)
+    says_yes = _u("yes@x.test", role=Profile.Role.ANALYST)
+    says_no = _u("no@x.test", role=Profile.Role.ANALYST)
+    unknown = _u("unk@x.test", role=Profile.Role.ANALYST)  # never reported
+    no_for_control = _u("noc@x.test", role=Profile.Role.ANALYST)
+
+    set_availability(says_yes.profile, advisor_fn, AvailabilitySpan.Status.YES)
+    set_availability(says_no.profile, advisor_fn, AvailabilitySpan.Status.NO)
+    # "No" for a *different* function must not hide them from the advisor pool.
+    set_availability(no_for_control.profile, control_fn, AvailabilitySpan.Status.NO)
+
+    pool = set(eligible_advisors(advisee))
+    assert says_yes in pool
+    assert unknown in pool  # unreported availability still eligible
+    assert no_for_control in pool
+    assert says_no not in pool  # explicit "not available as Advisor" → hidden
+
+
+def test_advisor_availability_split_groups_unknown():
+    from availability.models import AnalystFunction, AvailabilitySpan
+    from availability.services import set_availability
+
+    from accounts.advisor import advisor_availability_split
+
+    advisor_fn = AnalystFunction.objects.get(slug="advisor")
+    advisee = _u("ac3@x.test", role=Profile.Role.PRE_CANDIDATE)
+    says_yes = _u("y2@x.test", role=Profile.Role.ANALYST)
+    unknown = _u("u2@x.test", role=Profile.Role.ANALYST)
+    set_availability(says_yes.profile, advisor_fn, AvailabilitySpan.Status.YES)
+
+    available, unk = advisor_availability_split(advisee)
+    assert says_yes in available and says_yes not in unk
+    assert unknown in unk and unknown not in available
+
+
+def test_advisor_select_form_renders_unknown_optgroup():
+    from availability.models import AnalystFunction, AvailabilitySpan
+    from availability.services import set_availability
+
+    from accounts.forms import AdvisorSelectForm
+
+    advisor_fn = AnalystFunction.objects.get(slug="advisor")
+    advisee = _u("ac4@x.test", role=Profile.Role.PRE_CANDIDATE)
+    says_yes = _u("y3@x.test", role=Profile.Role.ANALYST)
+    _u("u3@x.test", role=Profile.Role.ANALYST)  # unknown
+    set_availability(says_yes.profile, advisor_fn, AvailabilitySpan.Status.YES)
+
+    html = str(AdvisorSelectForm(advisee=advisee)["advisor"])
+    assert "<optgroup" in html and "Unknown availability" in html
+    # A validating POST still resolves an unknown-availability analyst.
+    form = AdvisorSelectForm({"advisor": str(_u("u4@x.test", role=Profile.Role.ANALYST).pk)},
+                             advisee=advisee)
+    assert form.is_valid(), form.errors
+
+
 def test_set_advisor_records_and_supersedes():
     advisee = _u("adv@x.test", role=Profile.Role.PRE_CANDIDATE)
     a1 = _u("a1@x.test", role=Profile.Role.ANALYST)
