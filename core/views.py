@@ -269,6 +269,16 @@ def _real_superuser(request):
     return real if (real.is_authenticated and real.is_superuser) else None
 
 
+def _safe_next(request, raw):
+    """Return ``raw`` if it's a safe same-host path, else ``/``."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+    if raw and url_has_allowed_host_and_scheme(
+        raw, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return raw
+    return "/"
+
+
 def impersonate_picker(request):
     """Pick a persona (or search a real member) to view the site as."""
     if _real_superuser(request) is None:
@@ -276,6 +286,7 @@ def impersonate_picker(request):
     from accounts.models import Profile
 
     User = get_user_model()
+    nxt = _safe_next(request, request.GET.get("next"))
     personas = (
         User.objects.filter(profile__is_persona=True, is_active=True)
         .select_related("profile").order_by("first_name", "last_name", "email")
@@ -292,6 +303,7 @@ def impersonate_picker(request):
         )
     return render(request, "core/impersonate.html", {
         "personas": personas, "matches": matches, "q": q,
+        "next": nxt,
         "directory_roles": Profile.DIRECTORY_ROLES,
     })
 
@@ -312,12 +324,7 @@ def impersonate_start(request, user_id: int):
     ImpersonationLog.objects.create(
         impersonator=real, target=target, read_only=read_only
     )
-    from django.utils.http import url_has_allowed_host_and_scheme
-    nxt = request.GET.get("next") or "/"
-    if not url_has_allowed_host_and_scheme(
-        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
-        nxt = "/"
+    nxt = _safe_next(request, request.POST.get("next") or request.GET.get("next"))
     return redirect(nxt)
 
 
@@ -331,10 +338,5 @@ def impersonate_stop(request):
         (ImpersonationLog.objects
          .filter(impersonator=impersonator, ended_at__isnull=True)
          .order_by("-started_at").update(ended_at=timezone.now()))
-    from django.utils.http import url_has_allowed_host_and_scheme
-    nxt = request.POST.get("next") or request.GET.get("next") or "/"
-    if not url_has_allowed_host_and_scheme(
-        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
-        nxt = "/"
+    nxt = _safe_next(request, request.POST.get("next") or request.GET.get("next"))
     return redirect(nxt)

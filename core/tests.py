@@ -577,6 +577,40 @@ def test_superuser_impersonates_persona_and_exits(client):
 
 
 @pytest.mark.django_db
+def test_start_impersonation_returns_to_origin_page(client):
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    persona = User.objects.create_user(email="persona@x.test", first_name="P")
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    client.force_login(su)
+
+    # The picker carries the origin page into the start form's next field.
+    picker = client.get(reverse("core:impersonate_picker"), {"next": "/directory/"})
+    assert b'name="next" value="/directory/"' in picker.content
+
+    # Starting with that next lands on the origin page, not home.
+    resp = client.post(reverse("core:impersonate_start", args=[persona.id]),
+                       {"next": "/directory/"})
+    assert resp.status_code == 302
+    assert resp.url == "/directory/"
+
+
+@pytest.mark.django_db
+def test_start_impersonation_ignores_unsafe_next(client):
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    persona = User.objects.create_user(email="persona@x.test", first_name="P")
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    client.force_login(su)
+    resp = client.post(reverse("core:impersonate_start", args=[persona.id]),
+                       {"next": "https://evil.example/"})
+    assert resp.status_code == 302
+    assert resp.url == "/"
+
+
+@pytest.mark.django_db
 def test_exit_impersonation_returns_to_current_page(client):
     su = User.objects.create_superuser(email="su@x.test", password="x")
     persona = User.objects.create_user(email="persona@x.test",
