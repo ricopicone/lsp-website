@@ -121,6 +121,18 @@ def test_reconcile_lists_assumed_grouped(client):
     assert b"karen@x.test" in resp.content
 
 
+def test_reconcile_preselects_current_assumed_type(client):
+    """The reclassify dropdown defaults to the group's prevailing assumed
+    type, so confirming a correct guess is one click (task #434)."""
+    _treasurer(client)
+    u = _student("karen@x.test")
+    _tuition_payment(u, "60.00", datetime(2025, 10, 1, 12), source=Source.ASSUMED)
+    resp = client.get(reverse("treasurer_reconcile"))
+    ctx_group = resp.context["groups"][0]
+    assert ctx_group["current_type"] == Payment.Type.TUITION
+    assert b'value="tuition" selected' in resp.content
+
+
 def test_reconcile_retypes_selected_payments(client):
     _treasurer(client)
     u = _student("karen@x.test")

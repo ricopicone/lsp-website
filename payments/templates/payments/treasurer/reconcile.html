@@ -54,7 +54,7 @@
           <label class="block text-xs text-base-content/60">Reclassify selected as</label>
           <select name="payment_type" class="select select-bordered select-sm">
             {% for value, label in type_choices %}
-            <option value="{{ value }}">{{ label }}</option>
+            <option value="{{ value }}"{% if value == g.current_type %} selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </div>

@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+from collections import Counter
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -164,10 +165,17 @@ def treasurer_reconcile(request):
         g = groups.setdefault(key, {
             "key": key, "who": who, "matched": matched, "email": p.email or "",
             "payments": [], "total": Decimal("0"), "types": set(),
+            "type_counts": Counter(),
         })
         g["payments"].append(p)
         g["total"] += p.amount
         g["types"].add(p.get_payment_type_display())
+        g["type_counts"][p.payment_type] += 1
+    # Preselect the dropdown on the group's prevailing assumed type (the
+    # category it's already booked as) so confirming a correct guess is a
+    # single click. Most groups are unanimous; ties break on the first-seen.
+    for g in groups.values():
+        g["current_type"] = g["type_counts"].most_common(1)[0][0]
     group_list = sorted(groups.values(), key=lambda g: -g["total"])
 
     return _treasurer_render(request, "reconcile", "payments/treasurer/reconcile.html", {
