@@ -176,6 +176,45 @@ def test_detail_shows_roster_to_group_member(client):
     assert b"Vera" in resp.content
 
 
+@pytest.mark.django_db
+def test_detail_roster_renders_leader_role_chip(client):
+    """Regression (task #428): the detail Members section shows each leader's
+    role as a chip. The roster iterates ``Participant`` objects, so the label
+    must resolve on them — swapping to a bare ``role_label`` that Participant
+    lacked once blanked the role entirely."""
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, landing_visibility=Visibility.PUBLIC)
+    lead = _user("lead@x.test", role=Profile.Role.ANALYST, first="Cora", last="Chan")
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=lead, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    resp = client.get(wg.get_absolute_url())  # working-group roster is public
+    assert resp.status_code == 200
+    assert b"Cora" in resp.content
+    assert b"badge" in resp.content and b"Chair" in resp.content
+
+
+@pytest.mark.django_db
+def test_board_detail_roster_styles_chair_as_president(client):
+    """Task #428: on the Board's own workspace the Chair reads President /
+    the Co-chair Vice President — the same relabel as the About page and
+    directory, applied through the roster's Participant rows."""
+    from committees.models import Committee
+
+    board = Committee.objects.get(slug="board")
+    wg = board.workgroup
+    wg.landing_visibility = Visibility.PUBLIC
+    wg.save(update_fields=["landing_visibility"])
+    pres = _user("prez@x.test", role=Profile.Role.ANALYST, first="Prez", last="Ident")
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=pres, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    body = client.get(wg.get_absolute_url()).content.decode()
+    assert "President" in body
+    assert "Chair" not in body
+
+
 @pytest.mark.parametrize("kind,public,members_only", [
     (Workgroup.Kind.COMMITTEE, True, True),
     (Workgroup.Kind.WORKING_GROUP, True, True),

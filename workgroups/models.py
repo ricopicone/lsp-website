@@ -101,6 +101,16 @@ class Participant:
         except ValueError:
             return self.role.replace("_", " ").title()
 
+    @property
+    def role_label(self) -> str:
+        """Human role label with per-body officer titles applied (the Board's
+        Chair / Co-chair read President / Vice President — tasks #368, #428).
+        Stored participants defer to their membership's ``role_label``; derived
+        ones (seminar registrants, auto-members) carry no officer title."""
+        if self.membership is not None:
+            return self.membership.role_label
+        return self.get_role_display()
+
 
 def roster_rank(role) -> int:
     """Precedence rank for a roster role — lower sorts first. Officers are
