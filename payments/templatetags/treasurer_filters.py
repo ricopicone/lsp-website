@@ -1,5 +1,7 @@
 """Template filters used by the treasurer admin templates."""
 
+import re
+
 from django import template
 from django.utils.html import format_html
 
@@ -56,6 +58,61 @@ _STATUS_BADGE = {
     "committed":    ("warning", "Committed"),
     "skipping":     ("ghost",   "Skipping"),
 }
+
+
+_IMPORT_TAG_LABELS = {
+    "tz-import": "Treasurer ledger ref",
+    "stripe-import": "Stripe charge",
+}
+
+# A leading machine tag like ``[tz-import:tuition-24-25#1]`` optionally followed
+# by trailing free text (e.g. a ``(provisional — …)`` parenthetical).
+_TAG_RE = re.compile(r"^\[([a-z-]+):([^\]]+)\]\s*(.*)$")
+# A bracketed marker without a colon, e.g. ``[assume-skip dues-24-25]``.
+_BRACKET_RE = re.compile(r"^\[([^\]]+)\]\s*(.*)$")
+
+
+@register.filter
+def provenance_lines(notes):
+    """Turn a payment/enrollment ``notes`` string into readable display lines.
+
+    Import rows carry a leading machine tag plus ``|``-separated annotations,
+    e.g. ``[tz-import:tuition-24-25#1] | installment: 1st | method unrecorded in
+    ledger``. The tag becomes a readable reference line; annotations pass
+    through verbatim. Returns a list of non-empty strings (``[]`` for blank
+    input).
+    """
+    if not notes or not str(notes).strip():
+        return []
+    segments = [s.strip() for s in str(notes).split("|")]
+    segments = [s for s in segments if s]
+    if not segments:
+        return []
+
+    first = segments[0]
+    lines = []
+    tag = _TAG_RE.match(first)
+    if tag:
+        kind, ref, trailing = tag.group(1), tag.group(2), tag.group(3).strip()
+        label = _IMPORT_TAG_LABELS.get(
+            kind,
+            kind.replace("-import", "").replace("-", " ").title() + " ref",
+        )
+        line = f"{label} · {ref}"
+        if trailing:
+            line = f"{line} {trailing}"
+        lines.append(line)
+    else:
+        bracket = _BRACKET_RE.match(first)
+        if bracket:
+            lines.append(
+                f"{bracket.group(1).strip()} {bracket.group(2).strip()}".strip()
+            )
+        else:
+            lines.append(first)
+
+    lines.extend(segments[1:])
+    return lines
 
 
 @register.simple_tag
