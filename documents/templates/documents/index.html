@@ -48,6 +48,7 @@
             {% endif %}
           </div>
           <div class="flex items-center gap-3 pt-1">
+            {% if doc.file %}
             <a href="{% url 'documents:download' doc.slug %}"
                class="btn btn-sm btn-primary">
               Download PDF
@@ -55,6 +56,12 @@
             {% if doc.description %}
             <a href="{{ doc.get_absolute_url }}"
                class="text-sm text-base-content/60 hover:text-primary">Details →</a>
+            {% endif %}
+            {% else %}
+            <a href="{{ doc.get_absolute_url }}"
+               class="btn btn-sm btn-primary">
+              View
+            </a>
             {% endif %}
           </div>
         </div>
