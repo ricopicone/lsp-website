@@ -101,10 +101,26 @@ def _badge_staff_roles(user):
     overlapping positions (treasurer, web_coordinator, referral_coordinator,
     admin_assistant), so a key match is a position match.
 
+    The President / Vice-President StaffRoles are the exception where the
+    position keys differ: the Board's Chair / Co-chair membership *is* the
+    school President / Vice-President (shown relabeled on the committee badge —
+    tasks #368, #428), so map those to drop the redundant standalone badge too.
+
     Relies on the ``public_staff_roles`` / ``active_public_memberships``
     prefetches set by ``_directory_qs``.
     """
-    officer_keys = {m.role for m in getattr(user, "active_public_memberships", [])}
+    from core.models import StaffRole
+
+    # The Board's stored Chair / Co-chair are the President / Vice-President.
+    BOARD_OFFICER_STAFFROLE = {
+        "chair": StaffRole.PRESIDENT,
+        "co_chair": StaffRole.VICE_PRESIDENT,
+    }
+    officer_keys = set()
+    for m in getattr(user, "active_public_memberships", []):
+        officer_keys.add(m.role)
+        if m.workgroup.committee.slug == "board":
+            officer_keys.add(BOARD_OFFICER_STAFFROLE.get(m.role, m.role))
     return [
         role for role in getattr(user, "public_staff_roles", [])
         if role.key not in officer_keys

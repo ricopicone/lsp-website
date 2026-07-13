@@ -34,6 +34,16 @@ from core.storage import private_storage
 MAX_WORKGROUP_FILE_BYTES = 30 * 1024 * 1024        # 30 MB per file
 DEFAULT_WORKGROUP_FILE_QUOTA_BYTES = 200 * 1024 * 1024   # 200 MB per workgroup
 
+#: Public titles some bodies give their stored leadership roles. The Board's
+#: Chair / Co-chair are the school's President / Vice President (tasks #368,
+#: #428) — a display relabel only, so the shared ``WorkgroupMembership.Role``
+#: enum every group draws on stays untouched. Keyed by the attached committee's
+#: slug, then by stored role value. Consult it through ``Workgroup.officer_titles``
+#: / ``WorkgroupMembership.role_label`` so every surface reads the same.
+OFFICER_TITLES = {
+    "board": {"chair": "President", "co_chair": "Vice President"},
+}
+
 
 def serving_membership_q(prefix: str = "", on=None):
     """Q for a *currently-serving* membership: open-ended (``end_date`` null) or
@@ -308,7 +318,9 @@ class Workgroup(models.Model):
         return (
             self.memberships.serving()
             .exclude(user__profile__is_persona=True)
-            .select_related("user", "user__profile")
+            # ``workgroup__committee`` so ``role_label`` can resolve officer
+            # titles (Board Chair → President) without a per-member query.
+            .select_related("user", "user__profile", "workgroup__committee")
             .annotate(
                 _role_rank=models.Case(
                     *whens,
@@ -787,6 +799,16 @@ class Workgroup(models.Model):
         m.save(update_fields=["role"])
         return True
 
+    def officer_titles(self):
+        """This body's stored-role → public-title relabels, or ``{}`` if it has
+        none. The Board's Chair / Co-chair read President / Vice President
+        (see module ``OFFICER_TITLES``); every other group returns ``{}``."""
+        try:
+            slug = self.committee.slug
+        except ObjectDoesNotExist:
+            return {}
+        return OFFICER_TITLES.get(slug, {})
+
     def assignable_roles(self):
         """(value, label) roles a manager may hand-assign in the roster UI.
 
@@ -795,13 +817,15 @@ class Workgroup(models.Model):
         a member automatically, so "Member" is never assigned by hand. (The
         President / Vice-President are school-wide StaffRoles, not appointed
         per-group.) Other groups assign the leadership roles that apply to
-        them."""
+        them. Labels carry any per-body officer title (Board Chair reads
+        "President") so the picker matches the site."""
         R = WorkgroupMembership.Role
         if self.auto_member_role:
             roles = [R.APPLICATIONS_COORDINATOR]
         else:
             roles = [R.MEMBER, R.CHAIR, R.CO_CHAIR, R.SECRETARY, R.ORGANIZER, R.FACULTY]
-        return [(r.value, r.label) for r in roles]
+        titles = self.officer_titles()
+        return [(r.value, titles.get(r.value, r.label)) for r in roles]
 
     def set_member_term(self, user, *, start_date, end_date) -> bool:
         """Set an active member's term dates (committee terms; see ``has_terms``).
@@ -929,6 +953,14 @@ class WorkgroupMembership(models.Model):
     @property
     def is_active(self) -> bool:
         return self.end_date is None
+
+    @property
+    def role_label(self) -> str:
+        """Human label for this role, applying any per-body officer title — the
+        Board's Chair / Co-chair read President / Vice President (tasks #368,
+        #428). Mirrors ``get_role_display`` for every other group and role. Use
+        this, not ``get_role_display``, wherever a membership's role is shown."""
+        return self.workgroup.officer_titles().get(self.role) or self.get_role_display()
 
 
 class WorkgroupProposal(models.Model):
