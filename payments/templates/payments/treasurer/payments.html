@@ -70,7 +70,7 @@
             {% endif %}
           </td>
           <td>
-            {{ p.get_payment_type_display }}
+            {{ p.get_payment_type_display }}{% if p.source == assumed_source %}<sup class="text-warning font-semibold" title="Assumed type — provisional, pending reconciliation">*</sup>{% endif %}
             {% if p.registration %}
             <div class="text-xs text-base-content/60">{{ p.registration.event.title|truncatechars:32 }}</div>
             {% endif %}
@@ -123,6 +123,15 @@
       </tbody>
     </table>
   </div>
+
+  {% if has_assumed %}
+  <p class="text-xs text-base-content/60">
+    <sup class="text-warning font-semibold">*</sup>
+    Assumed type — provisionally categorized (mostly recurring charges booked
+    as tuition pending the member survey). Confirm these on the
+    <a href="{% url 'treasurer_reconcile' %}" class="link link-hover">Reconcile</a> tab.
+  </p>
+  {% endif %}
 
   {% if page_obj.paginator.num_pages > 1 %}
   <nav class="flex items-center justify-between gap-2" aria-label="Payments pages">
