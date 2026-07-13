@@ -2153,7 +2153,9 @@ def test_moa_roster_shows_president_and_vp_as_leaders(client):
     wg.save(update_fields=["landing_visibility"])
 
     pres = _user("pres@x.test", role=Profile.Role.ANALYST, first="Pat", last="Prez")
-    plain = _user("plain@x.test", role=Profile.Role.ANALYST, first="Ana", last="Lyst")
+    # Created for its side effect: a plain analyst joins the derived MoA roster
+    # (asserted below via by_email["plain@x.test"]).
+    _user("plain@x.test", role=Profile.Role.ANALYST, first="Ana", last="Lyst")
     StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.add(pres)
 
     roster = wg.participants()
