@@ -199,6 +199,20 @@ def test_user_datetime_includes_date_in_display():
         )
     assert "Thu, Oct 15" in out
     assert "8:00 PM EDT" in out
+    # The visible display omits the year by default (the hover title may
+    # still carry it), so the day-name/date text has no comma-year.
+    assert "Oct 15, 2026" not in out
+
+
+def test_user_datetime_shows_year_when_requested():
+    """Passing a truthy arg adds the year (treasurer ledger spans years)."""
+    with timezone.override(ZoneInfo("America/New_York")):
+        out = _render(
+            "{% load tz_filters %}{{ moment|user_datetime:True }}",
+            moment=MOMENT_UTC,
+        )
+    assert "Thu, Oct 15, 2026" in out
+    assert "8:00 PM EDT" in out
 
 
 def test_user_time_handles_none_gracefully():
