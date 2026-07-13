@@ -1157,6 +1157,14 @@ class MeetingSeries(models.Model):
     end_date = models.DateField(help_text="The series runs through this date.")
     start_time = models.TimeField()
     end_time = models.TimeField()
+    #: IANA timezone the wall-clock start/end times are anchored to, captured
+    #: from the author when the series is created. Pinning it here (rather than
+    #: relying on the request's ambient tz) keeps re-materialization
+    #: deterministic — regenerating never shifts existing occurrence times.
+    timezone = models.CharField(
+        max_length=64, default=settings.TIME_ZONE,
+        help_text="IANA timezone the meeting times are anchored to.",
+    )
     location = models.CharField(max_length=255, blank=True)
     online_url = models.URLField(blank=True)
     access_info = models.CharField(
@@ -1177,10 +1185,17 @@ class MeetingSeries(models.Model):
         return f"{self.title or 'Series'} ({self.get_frequency_display()})"
 
     def _windows(self):
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
         from events.scheduling import (
             generate_monthly_ordinal,
             generate_weekly,
         )
+
+        try:
+            tz = ZoneInfo(self.timezone) if self.timezone else None
+        except ZoneInfoNotFoundError:
+            tz = None  # fall back to the active tz rather than crash on bad data
 
         weekdays = [w.strip() for w in self.weekdays.split(",") if w.strip()]
         if self.frequency == self.Frequency.MONTHLY:
@@ -1188,12 +1203,13 @@ class MeetingSeries(models.Model):
             return generate_monthly_ordinal(
                 start_date=self.start_date, end_date=self.end_date,
                 weekdays=weekdays, week_positions=positions or [1],
-                start_time=self.start_time, end_time=self.end_time,
+                start_time=self.start_time, end_time=self.end_time, tz=tz,
             )
         interval = 2 if self.frequency == self.Frequency.BIWEEKLY else 1
         return generate_weekly(
             start_date=self.start_date, end_date=self.end_date, weekdays=weekdays,
             start_time=self.start_time, end_time=self.end_time, interval=interval,
+            tz=tz,
         )
 
     @transaction.atomic

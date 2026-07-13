@@ -802,6 +802,63 @@ def test_series_monthly_multiple_occurrences(client):
     assert WorkgroupMeeting.objects.filter(series=series).count() == 6
 
 
+def _add_weekly_series(client, wg):
+    client.post(reverse("workgroups:series_add", args=[wg.slug]), {
+        "title": "Weekly", "frequency": "weekly", "weekdays": ["TH"],
+        "week_positions": ["1"], "start_date": "2099-01-01", "end_date": "2099-01-31",
+        "start_time": "18:00", "end_time": "19:30", "location": "", "description": "",
+    })
+
+
+def test_series_pins_authors_timezone(client):
+    """Occurrences anchor to the author's own timezone, not the project default."""
+    from zoneinfo import ZoneInfo
+
+    from django.utils import timezone as _tz
+
+    from workgroups.models import MeetingSeries, WorkgroupMeeting
+    wg, lead = _scheduler_wg_and_lead()
+    lead.profile.timezone = "Europe/Berlin"
+    lead.profile.save()
+    client.force_login(lead)
+    _add_weekly_series(client, wg)
+    series = MeetingSeries.objects.get(workgroup=wg)
+    assert series.timezone == "Europe/Berlin"
+    m = WorkgroupMeeting.objects.filter(series=series).order_by("starts_at").first()
+    assert _tz.localtime(m.starts_at, ZoneInfo("Europe/Berlin")).strftime("%H:%M") == "18:00"
+    assert _tz.localtime(m.starts_at, ZoneInfo("America/Los_Angeles")).strftime("%H:%M") == "09:00"
+
+
+def test_series_regeneration_is_deterministic_across_tz(client):
+    """Re-materializing under a different ambient tz must not shift the times —
+    the series' own pinned timezone wins."""
+    from zoneinfo import ZoneInfo
+
+    from django.utils import timezone as _tz
+
+    from workgroups.models import MeetingSeries, WorkgroupMeeting
+    wg, lead = _scheduler_wg_and_lead()
+    lead.profile.timezone = "Europe/Berlin"
+    lead.profile.save()
+    client.force_login(lead)
+    _add_weekly_series(client, wg)
+    series = MeetingSeries.objects.get(workgroup=wg)
+    before = list(
+        WorkgroupMeeting.objects.filter(series=series)
+        .order_by("starts_at").values_list("starts_at", flat=True)
+    )
+    _tz.activate(ZoneInfo("America/Los_Angeles"))
+    try:
+        series.generate()
+    finally:
+        _tz.deactivate()
+    after = list(
+        WorkgroupMeeting.objects.filter(series=series)
+        .order_by("starts_at").values_list("starts_at", flat=True)
+    )
+    assert before == after and len(before) >= 4
+
+
 def test_meeting_cancel_reschedule_minutes(client):
     from workgroups.models import WorkgroupMeeting
 
