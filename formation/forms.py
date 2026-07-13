@@ -113,6 +113,10 @@ class ControlAnalysisForm(forms.ModelForm):
                 is_active=True,
             ).order_by("last_name", "first_name")
         )
+        # Show the analyst's name in the dropdown, not User.__str__ (the email).
+        self.fields["school_analyst"].label_from_instance = (
+            lambda u: u.get_full_name() or u.email
+        )
         if user is not None:
             self.fields["external_analyst"].queryset = (
                 ExternalControlAnalyst.objects.filter(

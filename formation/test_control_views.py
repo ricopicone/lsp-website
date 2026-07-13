@@ -129,6 +129,28 @@ def test_control_form_school_dropdown_excludes_personas(db):
     assert analyst in qs and persona not in qs
 
 
+def test_control_form_school_dropdown_labels_are_names_not_emails(db):
+    """The analyst dropdown shows names, not User.__str__ (the email)."""
+    from accounts.models import Profile, User
+    from formation.forms import ControlAnalysisForm
+
+    member = User.objects.create_user(email="mem4@example.com", password="x")
+    named = User.objects.create_user(
+        email="jane@example.com", password="x", first_name="Jane", last_name="Roe")
+    named.profile.role = Profile.Role.ANALYST
+    named.profile.public = True
+    named.profile.save()
+    nameless = User.objects.create_user(email="noname@example.com", password="x")
+    nameless.profile.role = Profile.Role.ANALYST
+    nameless.profile.public = True
+    nameless.profile.save()
+
+    label_for = ControlAnalysisForm(user=member).fields["school_analyst"].label_from_instance
+    assert label_for(named) == "Jane Roe"
+    # Falls back to the email only when there is no name.
+    assert label_for(nameless) == "noname@example.com"
+
+
 def test_control_save_syncs_supervisor_name_from_school_analyst(client, db):
     from django.urls import reverse
 
