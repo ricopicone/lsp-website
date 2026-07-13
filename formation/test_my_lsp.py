@@ -184,6 +184,53 @@ def test_link_absent_when_doc_unset(client):
     assert client.get(reverse("formation:formation")).context["formation_doc"] is None
 
 
+# ---- My Payments ordering --------------------------------------------------
+
+def test_my_payments_ordered_by_displayed_date():
+    """The table shows paid_at (falling back to created_at); the rows must be
+    ordered by that same date, newest first — not by created_at alone. A
+    backfilled offline payment is entered (created) after a newer Stripe
+    payment but paid earlier, so created_at and the displayed date diverge."""
+    from datetime import datetime
+    from datetime import timezone as tz
+
+    from django.utils import timezone
+
+    from formation.views import _formation_money_context
+    from payments.models import Payment
+
+    u = _user("pay@x.test", role=Profile.Role.ANALYST)
+
+    def _mk(amount, created_at, paid_at):
+        p = Payment.objects.create(
+            user=u,
+            payment_type=Payment.Type.DUES,
+            amount=amount,
+            status=Payment.Status.SUCCEEDED,
+            method=Payment.Method.OFFLINE,
+            paid_at=paid_at,
+        )
+        # created_at is auto_now_add — override it after the fact.
+        Payment.objects.filter(pk=p.pk).update(created_at=created_at)
+        return p
+
+    old_paid = datetime(2026, 1, 15, tzinfo=tz.utc)
+    new_paid = datetime(2026, 7, 1, tzinfo=tz.utc)
+    # The old charge was *entered* today (created_at newest) but paid in January.
+    backfill = _mk("50.00", created_at=timezone.now(), paid_at=old_paid)
+    # The recent charge was created earlier but paid in July.
+    recent = _mk("60.00", created_at=datetime(2026, 6, 20, tzinfo=tz.utc), paid_at=new_paid)
+
+    rf = RequestFactory()
+    request = rf.get("/my/?tab=dues")
+    request.user = u
+    ctx = _formation_money_context(request)
+
+    ids = [p.id for p in ctx["my_payments"]]
+    # Newest displayed date (July, the recent payment) must come first.
+    assert ids == [recent.id, backfill.id]
+
+
 # ---- legacy redirects ------------------------------------------------------
 
 def test_legacy_list_pages_redirect(client):
