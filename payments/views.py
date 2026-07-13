@@ -17,6 +17,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q, Sum
+from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -427,7 +428,9 @@ def treasurer_member_detail(request, user_id: int):
     payments = list(
         Payment.objects.filter(user=target)
         .select_related("registration__event")
-        .order_by("-created_at")
+        # Sort by the real transaction date (paid_at), not the import date
+        # (created_at). See Payment.transaction_date. (Task #437.)
+        .order_by(Coalesce("paid_at", "created_at").desc())
     )
     enrollments = list(
         TuitionEnrollment.objects.filter(user=target)
@@ -477,7 +480,7 @@ def treasurer_payments(request):
 
     qs = Payment.objects.select_related(
         "user", "registration__event", "tuition_period",
-    ).order_by("-created_at")
+    ).order_by(Coalesce("paid_at", "created_at").desc())  # transaction date, task #437
     if payment_type:
         qs = qs.filter(payment_type=payment_type)
     if status:
@@ -900,6 +903,7 @@ def _treasurer_tuition_context(selected_period=None) -> dict:
             "user": e.user, "status": e.status,
             "status_label": status_labels.get(e.status, e.status),
             "source": e.source, "source_label": e.get_source_display(),
+            "notes": e.notes,
             "paid": paid, "remaining": remaining,
         })
 
@@ -1256,12 +1260,17 @@ def transactions_csv(request):
 
     Query params (all optional):
     - ``type``: comma-separated payment_type values to include
-    - ``since``: ``YYYY-MM-DD`` lower bound on ``created_at`` (inclusive)
-    - ``until``: ``YYYY-MM-DD`` upper bound on ``created_at`` (inclusive)
+    - ``since``: ``YYYY-MM-DD`` lower bound on the transaction date (inclusive)
+    - ``until``: ``YYYY-MM-DD`` upper bound on the transaction date (inclusive)
+
+    "Transaction date" is ``paid_at`` when set, else ``created_at`` — the real
+    payment date, not the row-insertion/import date. See
+    ``Payment.transaction_date``. (Task #437.)
     """
     qs = (
         Payment.objects.select_related("user", "registration__event", "receipt")
-        .order_by("created_at")
+        .annotate(_txn_date=Coalesce("paid_at", "created_at"))
+        .order_by("_txn_date")
     )
     types_raw = (request.GET.get("type") or "").strip()
     if types_raw:
@@ -1269,10 +1278,10 @@ def transactions_csv(request):
         qs = qs.filter(payment_type__in=types)
     since = _parse_date(request.GET.get("since"))
     if since is not None:
-        qs = qs.filter(created_at__date__gte=since)
+        qs = qs.filter(_txn_date__date__gte=since)
     until = _parse_date(request.GET.get("until"))
     if until is not None:
-        qs = qs.filter(created_at__date__lte=until)
+        qs = qs.filter(_txn_date__date__lte=until)
 
     filename_bits = ["transactions"]
     if types_raw:
@@ -1373,7 +1382,7 @@ def payments_index(request):
     payments = (
         Payment.objects.filter(Q(user=user) | Q(email__iexact=user.email))
         .select_related("receipt")
-        .order_by("-created_at")
+        .order_by(Coalesce("paid_at", "created_at").desc())  # transaction date, task #437
     )
     return render(request, "payments/index.html", {
         "payments": payments,

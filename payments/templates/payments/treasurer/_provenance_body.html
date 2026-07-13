@@ -1,0 +1,11 @@
+{% comment %}
+Popover body: cleaned notes lines + optional member note.
+Params: notes (str), member_note (str, optional).
+{% endcomment %}
+{% load treasurer_filters %}
+{% for line in notes|provenance_lines %}
+<div class="text-xs text-base-content/70 leading-snug">{{ line }}</div>
+{% endfor %}
+{% if member_note %}
+<div class="text-xs text-info/80 italic leading-snug pt-1">Member note: “{{ member_note }}”</div>
+{% endif %}

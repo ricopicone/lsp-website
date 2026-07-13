@@ -253,6 +253,20 @@ class Payment(models.Model):
             self.save(update_fields=("status", "paid_at"))
 
     @property
+    def transaction_date(self):
+        """The date the payment actually happened, for display and sorting.
+
+        ``created_at`` is ``auto_now_add`` — the row-insertion time, which for
+        imported historical payments is the *import* date, not the payment
+        date. ``paid_at`` holds the real payment date (set by the Stripe
+        webhook / offline-apply, or by the ledger/Stripe imports). Fall back to
+        ``created_at`` only when a payment has no ``paid_at`` yet (pending /
+        failed). Ordering querysets should use
+        ``Coalesce("paid_at", "created_at")`` to match this. (Task #437.)
+        """
+        return self.paid_at or self.created_at
+
+    @property
     def recipient_email(self) -> str | None:
         """Where to deliver the receipt: the user's email, or the payment's own."""
         if self.user_id and self.user.email:

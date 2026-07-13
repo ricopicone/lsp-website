@@ -1,0 +1,44 @@
+{% comment %}
+Provenance hover popover. Params:
+  source        — provenance key (Payment/enrollment .source)
+  source_label  — display label (get_source_display / source_label)
+  notes         — raw notes string (optional)
+  member_note   — member's note (optional)
+  trigger       — "icon" (default) or "badge"
+
+trigger="icon": renders nothing unless there is notes/member_note.
+trigger="badge": always renders the source badge; adds the hover only when
+there is notes/member_note.
+
+The panel carries CSS :hover / :focus-within fallback classes AND
+data-prov-panel; provenance-hover.js promotes it to the native Popover API so
+it escapes the tables' overflow-x-auto clipping.
+{% endcomment %}
+{% if trigger == "badge" %}
+  {% if notes or member_note %}
+  <span class="group relative inline-flex items-center">
+    <span data-prov-trigger tabindex="0" role="button" aria-label="Payment source and notes" class="cursor-help">
+      {% include "payments/treasurer/_source_badge.html" with source=source label=source_label %}
+    </span>
+    <span data-prov-panel class="hidden group-hover:block group-focus-within:block absolute z-20 left-0 top-full mt-1 w-64 rounded-lg border border-base-300 bg-base-100 p-3 text-left shadow-lg space-y-1.5">
+      {% include "payments/treasurer/_provenance_body.html" with notes=notes member_note=member_note %}
+    </span>
+  </span>
+  {% else %}
+  {% include "payments/treasurer/_source_badge.html" with source=source label=source_label %}
+  {% endif %}
+{% else %}
+  {% if notes or member_note %}
+  <span class="group relative inline-flex items-center justify-end">
+    <span data-prov-trigger tabindex="0" role="button" aria-label="Payment source and notes" class="cursor-help text-base-content/40 hover:text-base-content/70">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" /><line x1="12" y1="16" x2="12" y2="11" /><line x1="12" y1="8" x2="12" y2="8" stroke-linecap="round" />
+      </svg>
+    </span>
+    <span data-prov-panel class="hidden group-hover:block group-focus-within:block absolute z-20 right-0 top-full mt-1 w-64 rounded-lg border border-base-300 bg-base-100 p-3 text-left shadow-lg space-y-1.5">
+      <div>{% include "payments/treasurer/_source_badge.html" with source=source label=source_label %}</div>
+      {% include "payments/treasurer/_provenance_body.html" with notes=notes member_note=member_note %}
+    </span>
+  </span>
+  {% endif %}
+{% endif %}

@@ -54,12 +54,13 @@
           <th>Method</th>
           <th>Status</th>
           <th>Actions</th>
+          <th class="w-8"></th>
         </tr>
       </thead>
       <tbody>
         {% for p in payments %}
         <tr>
-          <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.created_at|user_datetime }}</td>
+          <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.transaction_date|user_datetime:True }}</td>
           <td>
             {% if p.user %}
               <div>{{ p.user.first_name }} {{ p.user.last_name }}</div>
@@ -76,9 +77,6 @@
             {% endif %}
             {% if p.tuition_period_id %}
             <div class="text-xs text-base-content/60">→ {{ p.tuition_period.name }}</div>
-            {% endif %}
-            {% if p.member_note %}
-            <div class="text-xs text-info/80 italic" title="Member note">“{{ p.member_note|truncatechars:60 }}”</div>
             {% endif %}
           </td>
           <td class="whitespace-nowrap">${{ p.amount }}</td>
@@ -114,10 +112,13 @@
               {% endif %}
             </div>
           </td>
+          <td class="text-right">
+            {% include "payments/treasurer/_provenance_popover.html" with source=p.source source_label=p.get_source_display notes=p.notes member_note=p.member_note trigger="icon" %}
+          </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center text-base-content/60 py-6">No matching payments.</td>
+          <td colspan="8" class="text-center text-base-content/60 py-6">No matching payments.</td>
         </tr>
         {% endfor %}
       </tbody>
