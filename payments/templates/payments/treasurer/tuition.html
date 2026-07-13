@@ -152,7 +152,7 @@
           <tr>
             <td>{{ row.user.first_name }} {{ row.user.last_name }}</td>
             <td>{% status_badge row.status %}</td>
-            <td>{% include "payments/treasurer/_source_badge.html" with source=row.source label=row.source_label %}</td>
+            <td>{% include "payments/treasurer/_provenance_popover.html" with source=row.source source_label=row.source_label notes=row.notes trigger="badge" %}</td>
             <td class="text-right whitespace-nowrap">{{ row.paid|usd }}</td>
             <td class="text-right whitespace-nowrap {% if row.remaining %}text-warning{% endif %}">{{ row.remaining|usd }}</td>
           </tr>

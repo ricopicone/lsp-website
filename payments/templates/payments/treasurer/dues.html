@@ -130,7 +130,7 @@
             <td class="text-right whitespace-nowrap">{{ p.amount|usd }}</td>
             <td class="whitespace-nowrap">{{ p.paid_at|date:"M j, Y"|default:"—" }}</td>
             <td>{{ p.get_method_display }}</td>
-            <td>{% include "payments/treasurer/_source_badge.html" with source=p.source label=p.get_source_display %}</td>
+            <td>{% include "payments/treasurer/_provenance_popover.html" with source=p.source source_label=p.get_source_display notes=p.notes member_note=p.member_note trigger="badge" %}</td>
           </tr>
           {% endfor %}
         </tbody>

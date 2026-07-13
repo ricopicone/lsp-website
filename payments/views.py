@@ -893,6 +893,7 @@ def _treasurer_tuition_context(selected_period=None) -> dict:
             "user": e.user, "status": e.status,
             "status_label": status_labels.get(e.status, e.status),
             "source": e.source, "source_label": e.get_source_display(),
+            "notes": e.notes,
             "paid": paid, "remaining": remaining,
         })
 
