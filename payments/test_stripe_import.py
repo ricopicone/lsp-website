@@ -93,7 +93,7 @@ def test_create_matched_by_email():
     assert p.amount == Decimal("150.00")
     assert p.status == Payment.Status.SUCCEEDED
     assert p.method == Payment.Method.STRIPE
-    assert p.source == Source.IMPORTED
+    assert p.source == Source.STRIPE
     assert p.payment_type == Payment.Type.DUES
     assert p.user is not None
     assert p.paid_at == DAY

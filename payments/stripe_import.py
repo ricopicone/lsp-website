@@ -439,6 +439,26 @@ def _apply_type_filter(plans: list[ChargePlan], ctx: PlanContext) -> None:
 # Applying a plan
 # ---------------------------------------------------------------------------
 
+def reclassify_stripe_sources(Payment) -> tuple[int, int]:
+    """Correct provenance on rows imported from Stripe (notes ``[stripe-import:…]``)
+    that carry a misleading source. Idempotent.
+
+    - ``IMPORTED`` (whose label is "Imported from treasurer ledger") → ``STRIPE``
+      ("Imported from Stripe"), since these came from the Stripe API, not the
+      treasurer's spreadsheet.
+    - ``STAFF`` (the model default some provisional charges leaked to) →
+      ``ASSUMED``, so they read correctly *and* re-enter the Reconcile queue.
+
+    Treasurer-ledger rows (``[tz-import:…]``) and genuine staff entries are left
+    alone. ``Payment`` is passed in so this works from a data migration
+    (historical model) as well as from live code. Returns ``(n→stripe, n→assumed)``.
+    """
+    rows = Payment.objects.filter(notes__startswith="[stripe-import:")
+    n_stripe = rows.filter(source="imported").update(source="stripe")
+    n_assumed = rows.filter(source="staff").update(source="assumed")
+    return n_stripe, n_assumed
+
+
 def apply_plan(plans: list[ChargePlan]) -> dict:
     """Execute the create/reconcile actions. Caller wraps this in a transaction
     and only calls it on ``--commit``. Returns a counts dict."""
@@ -459,8 +479,10 @@ def apply_plan(plans: list[ChargePlan]) -> dict:
                 stripe_payment_intent_id=row.payment_intent,
                 stripe_checkout_session_id=row.checkout_session_id,
                 email=row.email,
-                # Provisional sweep guesses are ASSUMED; confident matches IMPORTED.
-                source=Source.ASSUMED if plan.provisional else Source.IMPORTED,
+                # Provisional sweep guesses are ASSUMED; confident charges are
+                # STRIPE ("Imported from Stripe" — NOT IMPORTED, which is the
+                # treasurer-ledger label).
+                source=Source.ASSUMED if plan.provisional else Source.STRIPE,
                 dues_period_id=plan.dues_period_id,
                 paid_at=row.created,
                 notes=_compose_note(row, plan),
