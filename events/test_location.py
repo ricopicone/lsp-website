@@ -137,6 +137,37 @@ def test_registered_sees_live_now_when_room_occupied(client, monkeypatch):
     assert b"Join the meeting room" in resp.content
 
 
+def test_not_yet_open_shows_no_register_link(client):
+    # Draft-status (registration not yet open) event, previewable by staff.
+    # The "Register for details" link would 404, so it must not be shown.
+    e = _event(slug="draft-talk")
+    e.status = Event.Status.DRAFT
+    e.save()
+    now = timezone.now()
+    _session(e, start=now + timedelta(days=2), end=now + timedelta(days=2, hours=1))
+    u = _member()
+    u.is_staff = True  # so the draft event page is viewable
+    u.save()
+    client.force_login(u)
+    resp = client.get(reverse("events:detail", args=[e.slug]))
+    assert resp.status_code == 200
+    assert b"Register for details" not in resp.content
+    assert b"once registration opens" in resp.content
+
+
+def test_closed_shows_no_register_link(client):
+    # Closed registration: no link (it 404s), closed wording instead.
+    e = _event(slug="closed-talk")
+    e.status = Event.Status.CLOSED
+    e.save()
+    now = timezone.now()
+    _session(e, start=now + timedelta(days=2), end=now + timedelta(days=2, hours=1))
+    resp = client.get(reverse("events:detail", args=[e.slug]))
+    assert resp.status_code == 200
+    assert b"Register for details" not in resp.content
+    assert b"Registration is closed" in resp.content
+
+
 def test_in_person_shows_venue_not_online(client):
     e = _event(slug="inperson", fmt=Event.Format.IN_PERSON)
     now = timezone.now()
