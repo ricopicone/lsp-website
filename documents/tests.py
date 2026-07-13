@@ -466,14 +466,20 @@ def test_shipped_tuition_body_v2_is_clean_linked_and_covers_skipping():
     from documents.rendering import render_body
 
     mod = importlib.import_module(
-        "documents.migrations.0009_reword_tuition_assistance"
+        "documents.migrations.0010_drop_yearend_reconciliation_sentence"
     )
     _current_tuition_period(2500)
     html = render_body(mod.BODY, on_date=date(2026, 10, 1))
     assert "Scalia" not in html
     assert "Carlson" not in html
+    # The year-end reconciliation sentence (and its dollar figure) was removed;
+    # the reminder/escalation follow-up stays.
+    assert "full annual amount" not in html
+    assert "$2,500" not in html
     assert "$2,000" not in html
-    assert "$2,500" in html
+    assert "raises the matter with the Board" in html
+    # "written" dropped from the student's own record-keeping phrasing.
+    assert "written" not in html.lower()
     assert 'href="/formation/?tab=tuition"' in html
     assert 'href="mailto:treasurer@lacanschool.org"' in html
     assert "skip" in html.lower()
