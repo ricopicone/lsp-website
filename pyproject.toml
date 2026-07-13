@@ -32,6 +32,7 @@ dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "pytest-django>=4.12.0",
+    "pytest-xdist>=3.6",
     "ruff>=0.15.14",
 ]
 # The local MCP server (mcp/lsp_mcp_server.py) — a thin stdio client for the
@@ -45,7 +46,7 @@ mcp = [
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings.development"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
-addopts = "--reuse-db"
+addopts = "--reuse-db -n auto"
 
 [tool.ruff]
 target-version = "py310"
