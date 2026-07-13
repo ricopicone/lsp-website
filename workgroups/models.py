@@ -101,6 +101,7 @@ class Participant:
     role: str
     is_lead: bool = False
     membership: object = None
+    officer_title: str | None = None
 
     def get_role_display(self) -> str:
         try:
@@ -112,8 +113,12 @@ class Participant:
     def role_label(self) -> str:
         """Human role label with per-body officer titles applied (the Board's
         Chair / Co-chair read President / Vice President — tasks #368, #428).
-        Stored participants defer to their membership's ``role_label``; derived
-        ones (seminar registrants, auto-members) carry no officer title."""
+        A derived officer row (no membership — e.g. the Meeting of Analysts'
+        President/VP) carries an explicit ``officer_title``; stored participants
+        defer to their membership's ``role_label``; other derived rows (seminar
+        registrants, auto-members) carry no officer title."""
+        if self.officer_title:
+            return self.officer_title
         if self.membership is not None:
             return self.membership.role_label
         return self.get_role_display()
@@ -427,6 +432,34 @@ class Workgroup(models.Model):
                     seen[u.pk] = Participant(
                         user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
                     )
+        # The Meeting of Analysts' leaders are the school officers (President /
+        # Vice-President), synced from the Board roster (task #428). Surface them
+        # as leads here — overwriting their plain auto-member row — reusing the
+        # Chair / Co-chair role values so they rank first, with an explicit
+        # officer title for display.
+        if self.auto_member_role:
+            try:
+                is_moa = self.committee.slug == "meeting-of-analysts"
+            except ObjectDoesNotExist:
+                is_moa = False
+            if is_moa:
+                from core.models import StaffRole
+
+                officer_rows = [
+                    (StaffRole.PRESIDENT, WorkgroupMembership.Role.CHAIR, "President"),
+                    (StaffRole.VICE_PRESIDENT, WorkgroupMembership.Role.CO_CHAIR,
+                     "Vice President"),
+                ]
+                for key, role_value, title in officer_rows:
+                    sr = StaffRole.objects.filter(key=key).first()
+                    if sr is None:
+                        continue
+                    for u in sr.holders.all():
+                        seen[u.pk] = Participant(
+                            user=u, role=role_value, is_lead=True,
+                            officer_title=title,
+                        )
+
         # The ACTIVE roster of a term-based offering = the current term's
         # paid/comped registrants (past-term-only attendees are archive-only,
         # not on the active roster). A committee's organized-event registrants
