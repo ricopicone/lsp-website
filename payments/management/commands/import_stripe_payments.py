@@ -104,9 +104,7 @@ class Command(BaseCommand):
             sess_params["created"] = created
         sessions_by_pi = {}
         for s in stripe.checkout.Session.list(api_key=key, **sess_params).auto_paging_iter():
-            pi = s.get("payment_intent")
-            if isinstance(pi, dict):
-                pi = pi.get("id")
+            pi = _session_payment_intent_id(s)
             if pi:
                 sessions_by_pi[pi] = s
         charge_params = {"limit": 100, "expand": ["data.customer"]}
@@ -356,6 +354,22 @@ class Command(BaseCommand):
                 )
             if len(attention) > 60:
                 self.stdout.write(f"  … and {len(attention) - 60} more")
+
+
+def _session_payment_intent_id(session) -> str:
+    """Return the ``payment_intent`` id from a Stripe ``checkout.Session``.
+
+    Tolerant of both plain dicts and stripe-python SDK objects. Note the SDK's
+    ``StripeObject`` (v15) does *not* expose a dict-style ``.get`` — accessing
+    ``.get`` raises ``AttributeError`` — so we read via ``getattr``. The
+    ``payment_intent`` may be a bare id string or, when expanded, an object
+    whose ``id`` we dig out. Missing → ``""``.
+    """
+    pi = session.get("payment_intent") if isinstance(session, dict) \
+        else getattr(session, "payment_intent", None)
+    if pi is not None and not isinstance(pi, str):
+        pi = pi.get("id") if isinstance(pi, dict) else getattr(pi, "id", None)
+    return pi or ""
 
 
 def _ts(date_str: str, *, end_of_day=False) -> int:
