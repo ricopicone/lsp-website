@@ -171,18 +171,29 @@ def treasurer_reconcile(request):
         g["total"] += p.amount
         g["types"].add(p.get_payment_type_display())
         g["type_counts"][p.payment_type] += 1
-    # Preselect the dropdown on the group's prevailing assumed type (the
-    # category it's already booked as) so confirming a correct guess is a
-    # single click. Most groups are unanimous; ties break on the first-seen.
     for g in groups.values():
+        # Preselect the dropdown on the group's prevailing assumed type (the
+        # category it's already booked as) so confirming a correct guess is a
+        # single click. Most groups are unanimous; ties break on first-seen.
         g["current_type"] = g["type_counts"].most_common(1)[0][0]
-    group_list = sorted(groups.values(), key=lambda g: -g["total"])
+        # Newest charge in the group — drives the ordering below.
+        g["latest"] = max((p.paid_at for p in g["payments"] if p.paid_at),
+                          default=None)
+    # Payers whose most recent assumed charge is newest float to the top —
+    # the list reads roughly chronologically despite the payer grouping.
+    group_list = sorted(
+        groups.values(),
+        key=lambda g: g["latest"].timestamp() if g["latest"] else 0.0,
+        reverse=True,
+    )
 
     return _treasurer_render(request, "reconcile", "payments/treasurer/reconcile.html", {
         "groups": group_list,
         "assumed_count": len(assumed),
         "assumed_total": sum((p.amount for p in assumed), Decimal("0")),
         "type_choices": Payment.Type.choices,
+        "member_options": _reconcile_member_options() if any(
+            not g["matched"] for g in group_list) else [],
     })
 
 
@@ -190,6 +201,32 @@ def _payer_name_from_notes(payment) -> str:
     import re
     m = re.search(r"unmatched payer:\s*([^)]+)\)", payment.notes or "")
     return m.group(1).strip() if m else ""
+
+
+def _reconcile_member_options() -> list[dict]:
+    """Members offered in the "Link to member" autocomplete, as
+    ``{"value": "Full Name (email)"}`` — the value carries both so typing
+    either a name or an address filters the datalist; the apply view parses
+    the email back out. Personas and inactive accounts are excluded."""
+    members = (
+        User.objects.filter(is_active=True)
+        .exclude(profile__is_persona=True)
+        .select_related("profile")
+        .order_by("first_name", "last_name", "email")
+    )
+    return [{"value": f"{m.profile.display_full_name} ({m.email})"} for m in members]
+
+
+def _resolve_assign_user(assign: str):
+    """Resolve the "Link to member" field to a User. Accepts a raw email, a
+    numeric id, or a ``Name (email)`` autocomplete value (email extracted)."""
+    import re
+    m = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", assign)
+    lookup = m.group(0) if m else assign
+    return (
+        User.objects.filter(email__iexact=lookup).first()
+        or (User.objects.filter(pk=lookup).first() if lookup.isdigit() else None)
+    )
 
 
 def _reconcile_apply(request):
@@ -213,10 +250,7 @@ def _reconcile_apply(request):
 
     assigned_user = None
     if assign:
-        assigned_user = (
-            User.objects.filter(email__iexact=assign).first()
-            or (User.objects.filter(pk=assign).first() if assign.isdigit() else None)
-        )
+        assigned_user = _resolve_assign_user(assign)
         if assigned_user is None:
             messages.error(request, f"No member found for '{assign}'.")
             return redirect("treasurer_reconcile")

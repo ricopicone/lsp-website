@@ -23,7 +23,7 @@
       <div>
         <h3 class="font-medium text-base-content">
           {{ g.who }}
-          {% if not g.matched %}<span class="badge badge-warning badge-sm">unmatched</span>{% endif %}
+          {% if not g.matched %}<span class="badge badge-warning badge-sm">unmatched payer</span>{% endif %}
         </h3>
         <p class="text-xs text-base-content/55">
           {{ g.payments|length }} charge{{ g.payments|length|pluralize }} ·
@@ -51,7 +51,7 @@
 
       <div class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
         <div class="space-y-1">
-          <label class="block text-xs text-base-content/60">Reclassify selected as</label>
+          <label class="block text-xs text-base-content/60">Confirm or reclassify selected as</label>
           <select name="payment_type" class="select select-bordered select-sm">
             {% for value, label in type_choices %}
             <option value="{{ value }}"{% if value == g.current_type %} selected{% endif %}>{{ label }}</option>
@@ -60,8 +60,9 @@
         </div>
         {% if not g.matched %}
         <div class="space-y-1">
-          <label class="block text-xs text-base-content/60">Link to member (email or id)</label>
-          <input name="assign_user" class="input input-bordered input-sm" placeholder="optional">
+          <label class="block text-xs text-base-content/60">Link to member</label>
+          <input name="assign_user" list="reconcile-members" autocomplete="off"
+                 class="input input-bordered input-sm" placeholder="start typing a name…">
         </div>
         {% endif %}
         <button class="btn btn-primary btn-sm">Reconcile selected</button>
@@ -74,6 +75,12 @@
   </div>
   {% endfor %}
 </div>
+
+{% if member_options %}
+<datalist id="reconcile-members">
+  {% for opt in member_options %}<option value="{{ opt.value }}"></option>{% endfor %}
+</datalist>
+{% endif %}
 
 <script>
   // Per-group "select all" toggles that group's charge checkboxes; the group
