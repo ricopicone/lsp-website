@@ -70,7 +70,7 @@
         <tbody>
           {% for p in payments %}
           <tr>
-            <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.created_at|user_datetime }}</td>
+            <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.transaction_date|user_datetime }}</td>
             <td>
               {{ p.get_payment_type_display }}
               {% if p.registration %}

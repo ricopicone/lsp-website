@@ -17,6 +17,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q, Sum
+from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -427,7 +428,9 @@ def treasurer_member_detail(request, user_id: int):
     payments = list(
         Payment.objects.filter(user=target)
         .select_related("registration__event")
-        .order_by("-created_at")
+        # Sort by the real transaction date (paid_at), not the import date
+        # (created_at). See Payment.transaction_date. (Task #437.)
+        .order_by(Coalesce("paid_at", "created_at").desc())
     )
     enrollments = list(
         TuitionEnrollment.objects.filter(user=target)
@@ -477,7 +480,7 @@ def treasurer_payments(request):
 
     qs = Payment.objects.select_related(
         "user", "registration__event", "tuition_period",
-    ).order_by("-created_at")
+    ).order_by(Coalesce("paid_at", "created_at").desc())  # transaction date, task #437
     if payment_type:
         qs = qs.filter(payment_type=payment_type)
     if status:
@@ -1367,7 +1370,7 @@ def payments_index(request):
     payments = (
         Payment.objects.filter(Q(user=user) | Q(email__iexact=user.email))
         .select_related("receipt")
-        .order_by("-created_at")
+        .order_by(Coalesce("paid_at", "created_at").desc())  # transaction date, task #437
     )
     return render(request, "payments/index.html", {
         "payments": payments,

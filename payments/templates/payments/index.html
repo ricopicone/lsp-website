@@ -62,7 +62,7 @@
         <tbody>
           {% for p in payments %}
           <tr>
-            <td class="whitespace-nowrap text-base-content/80">{{ p.created_at|date:"M j, Y" }}</td>
+            <td class="whitespace-nowrap text-base-content/80">{{ p.transaction_date|date:"M j, Y" }}</td>
             <td class="text-base-content/80">{{ p.get_payment_type_display }}</td>
             <td class="whitespace-nowrap text-base-content">${{ p.amount }}</td>
             <td class="text-base-content/70">{{ p.get_status_display }}</td>

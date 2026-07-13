@@ -60,7 +60,7 @@
       <tbody>
         {% for p in payments %}
         <tr>
-          <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.created_at|user_datetime }}</td>
+          <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.transaction_date|user_datetime }}</td>
           <td>
             {% if p.user %}
               <div>{{ p.user.first_name }} {{ p.user.last_name }}</div>
