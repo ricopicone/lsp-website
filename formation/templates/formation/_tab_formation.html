@@ -33,24 +33,26 @@
       </div>
       {% endif %}
       {% if needs_advisor %}
-      <form method="post" action="{% url 'advisor_select' %}" class="space-y-3">
-        {% csrf_token %}
-        <label class="block text-sm font-medium text-base-content">
+      <details {% if advisor_form.advisor.errors %}open{% endif %}>
+        <summary class="btn btn-primary btn-sm list-none [&::-webkit-details-marker]:hidden">
           {% if advisor %}Change my Advisor{% else %}Choose my Advisor{% endif %}
-        </label>
-        {{ advisor_form.advisor }}
-        {% if advisor_form.advisor.errors %}<p class="text-error text-xs">{{ advisor_form.advisor.errors|striptags }}</p>{% endif %}
-        <p class="text-xs text-base-content/50">
+        </summary>
+        <form method="post" action="{% url 'advisor_select' %}" class="space-y-3 mt-3">
+          {% csrf_token %}
+          {{ advisor_form.advisor }}
+          {% if advisor_form.advisor.errors %}<p class="text-error text-xs">{{ advisor_form.advisor.errors|striptags }}</p>{% endif %}
+          <p class="text-xs text-base-content/50">
+            {% if advisor_form.advisor.field.queryset.exists %}
+              Your Advisor will be notified of your choice.
+            {% else %}
+              No eligible advisors are listed yet. Please contact the School.
+            {% endif %}
+          </p>
           {% if advisor_form.advisor.field.queryset.exists %}
-            Your Advisor will be notified of your choice.
-          {% else %}
-            No eligible advisors are listed yet. Please contact the School.
+          <button class="btn btn-primary btn-sm">Save Advisor</button>
           {% endif %}
-        </p>
-        {% if advisor_form.advisor.field.queryset.exists %}
-        <button class="btn btn-primary btn-sm">Save Advisor</button>
-        {% endif %}
-      </form>
+        </form>
+      </details>
       {% elif not advisor %}
       <p class="text-sm text-base-content/60">
         Advisors are chosen by members in formation (Precandidates and Candidates).
@@ -71,21 +73,24 @@
       {# Open a new demande #}
       {% if can_open %}
       {% if advisor %}
-      <form method="post" action="{% url 'formation:advancement' %}" class="space-y-3 rounded-lg border border-base-300 bg-base-200/40 p-4">
-        {% csrf_token %}
-        <p class="text-sm text-base-content/70">
-          Request to present your <strong>{{ step_label }}</strong> at the next Days of
-          Assembly. {{ advisor.get_full_name|default:advisor.email }} will be asked
-          to present it on your behalf.
-        </p>
-        <div class="space-y-1">
-          <label class="block text-sm text-base-content/70">{{ demande_form.statement.label }}</label>
-          {{ demande_form.statement }}
-          <p class="text-xs text-base-content/50">{{ demande_form.statement.help_text }}</p>
-          {% if demande_form.statement.errors %}<p class="text-error text-xs">{{ demande_form.statement.errors|striptags }}</p>{% endif %}
-        </div>
-        <button class="btn btn-primary btn-sm">Demande my {{ step_label }}</button>
-      </form>
+      <details {% if demande_form.statement.errors %}open{% endif %}>
+        <summary class="btn btn-primary btn-sm list-none [&::-webkit-details-marker]:hidden">Demande my {{ step_label }}</summary>
+        <form method="post" action="{% url 'formation:advancement' %}" class="space-y-3 rounded-lg border border-base-300 bg-base-200/40 p-4 mt-3">
+          {% csrf_token %}
+          <p class="text-sm text-base-content/70">
+            Request to present your <strong>{{ step_label }}</strong> at the next Days of
+            Assembly. {{ advisor.get_full_name|default:advisor.email }} will be asked
+            to present it on your behalf.
+          </p>
+          <div class="space-y-1">
+            <label class="block text-sm text-base-content/70">{{ demande_form.statement.label }}</label>
+            {{ demande_form.statement }}
+            <p class="text-xs text-base-content/50">{{ demande_form.statement.help_text }}</p>
+            {% if demande_form.statement.errors %}<p class="text-error text-xs">{{ demande_form.statement.errors|striptags }}</p>{% endif %}
+          </div>
+          <button class="btn btn-primary btn-sm">Send my demande</button>
+        </form>
+      </details>
       {% else %}
       <div class="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm">
         <p class="text-base-content/80">Choose your Advisor (above) before sending a demande, so they can present it to the Meeting on your behalf.</p>
