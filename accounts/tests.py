@@ -185,6 +185,31 @@ def test_directory_dedups_staff_role_against_committee_officer(client):
     assert detail.count(b"Treasurer") == 1
 
 
+@pytest.mark.django_db
+def test_directory_styles_board_chair_as_president(client):
+    """Task #428: the Board's Chair / Co-chair read President / Vice President on
+    the directory too (not just the About page), and the redundant standalone
+    President / Vice-President StaffRole badge is dropped — one consistent title."""
+    from committees.models import Committee
+    from core.models import StaffRole
+
+    board, _ = Committee.objects.get_or_create(
+        slug="board", defaults={"name": "Board of Directors"}
+    )
+    board.public = True
+    board.save(update_fields=["public"])
+
+    pres = _mk_member("prez@x.test", "Prez", "Ident", Profile.Role.ANALYST)
+    board.add_member(pres, role="chair")
+    StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.add(pres)
+
+    detail = client.get("/directory/prez-ident/").content
+    assert b"President" in detail
+    # The generic enum label must not leak, and there's a single "President".
+    assert b"Chair" not in detail
+    assert detail.count(b"President") == 1
+
+
 def test_split_location_single():
     from accounts.geocoding import split_location
     assert split_location("Paris, France") == ["Paris, France"]

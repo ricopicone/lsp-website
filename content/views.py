@@ -16,25 +16,15 @@ from . import the_school as the_school_index
 
 ROSTER_PLACEHOLDER_RE = re.compile(r"<!--\s*ROSTER:([\w-]+)\s*-->")
 
-# Some bodies style their lead roles differently on the public page. The Board's
-# Chair / Co-chair are its President / Vice President (task #368); we relabel them
-# here rather than touch the shared WorkgroupMembership role enum that every group
-# (cartels, working groups, …) draws on.
-OFFICER_TITLES = {
-    "board": {"chair": "President", "co_chair": "Vice President"},
-}
-
 
 def _roster_members(committee):
-    """Active roster with a ``display_role`` on each membership, applying any
-    per-committee officer-title overrides (see ``OFFICER_TITLES``)."""
-    labels = OFFICER_TITLES.get(committee.slug, {})
+    """Active roster with a ``display_role`` on each membership. Plain members
+    show nothing; everyone else shows their ``role_label`` — which applies any
+    per-body officer title (the Board's Chair / Co-chair read President / Vice
+    President; see ``workgroups.models.OFFICER_TITLES``)."""
     members = list(committee.active_members())
     for m in members:
-        if m.role == "member":
-            m.display_role = ""
-        else:
-            m.display_role = labels.get(m.role) or m.get_role_display()
+        m.display_role = "" if m.role == "member" else m.role_label
     return members
 
 
