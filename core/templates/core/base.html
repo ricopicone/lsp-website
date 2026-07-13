@@ -320,7 +320,7 @@
             {% endif %}
 
             {% if not request.impersonator and user.is_superuser %}
-            <li><a href="{% url 'core:impersonate_picker' %}">View as…</a></li>
+            <li><a href="{% url 'core:impersonate_picker' %}?next={{ request.get_full_path|urlencode }}">View as…</a></li>
             {% endif %}
 
             <li><hr class="border-base-300/60 my-1"></li>
