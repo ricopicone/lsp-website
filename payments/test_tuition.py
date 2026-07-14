@@ -1096,7 +1096,7 @@ def test_treasurer_member_detail_shows_payments_and_enrollments(
     assert b"histo@x.test" in body
     assert b"Tuition" in body
     assert b"Payments" in body
-    assert b"Committed" in body  # enrollment status still shown per year
+    assert b"Owed" in body  # the tuition balance table renders
     assert b"$100" in body  # the dues amount
 
 
