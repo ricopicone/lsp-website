@@ -520,31 +520,30 @@ def treasurer_member_detail(request, user_id: int):
         {
             "target":         target,
             "payments":       payments,
-            "tuition_rows":   tuition["rows"],
-            "tuition_orphan": tuition["unattributed"],
+            "tuition":        tuition,
             "registrations":  registrations,
         },
     )
 
 
 def _member_tuition_summary(user) -> dict:
-    """Per-academic-year tuition picture for the treasurer member page.
+    """Per-academic-year tuition **balance** for the treasurer member page.
 
-    Attributes every succeeded tuition payment to a year — an explicit
-    installment or period link wins; otherwise the year whose window contains
-    the payment date — then reports **paid vs owed** per year and flags
-    over-payment and "marked paid in full but short." Payments that fall in no
-    period at all are returned separately. Reveals payments the old
-    installment-only view hid (e.g. a lump payment not wired to the plan).
-    (Task #435.)"""
-    periods = list(TuitionPeriod.objects.all())
-    period_by_id = {tp.id: tp for tp in periods}
+    A member owes tuition for each of their enrollment years (a SKIPPING year
+    owes $0). Payments are applied like an accounts-receivable ledger:
 
-    def period_for_date(d):
-        for tp in periods:
-            if tp.start_date <= d <= tp.end_date:
-                return tp
-        return None
+    - A payment **tied to a year** (via its installment or ``tuition_period``)
+      is applied there first — the payer/treasurer set that intent.
+    - Everything else is pooled and **applied to the oldest unpaid year first**,
+      so back tuition is cleared before newer years (any over-linked amount
+      spills into the same pool).
+    - Whatever is left over after every year is covered is a **credit** (paid
+      ahead).
+
+    Returns per-year rows (owed / paid / balance, newest first, each flagged if
+    it's marked paid-in-full yet still carries a balance) plus the totals and
+    credit. (Tasks #435, #437.)"""
+    period_by_id = {tp.id: tp for tp in TuitionPeriod.objects.all()}
 
     payments = (
         Payment.objects.filter(
@@ -553,46 +552,67 @@ def _member_tuition_summary(user) -> dict:
         )
         .select_related(
             "tuition_installment__enrollment__tuition_period", "tuition_period")
+        .order_by("paid_at")
     )
-    by_period = defaultdict(list)
-    unattributed = []
+    linked = defaultdict(lambda: Decimal("0"))   # period_id -> amount tied to it
+    pool_total = Decimal("0")                    # untied payments
     for p in payments:
         tp = None
         if p.tuition_installment_id and p.tuition_installment.enrollment_id:
             tp = p.tuition_installment.enrollment.tuition_period
         elif p.tuition_period_id:
             tp = p.tuition_period
-        elif p.paid_at:
-            tp = period_for_date(p.paid_at.date())
         if tp:
-            by_period[tp.id].append(p)
+            linked[tp.id] += p.amount
         else:
-            unattributed.append(p)
+            pool_total += p.amount
 
     enrollments = {
         e.tuition_period_id: e
         for e in TuitionEnrollment.objects.filter(user=user)
-        .select_related("tuition_period").prefetch_related("installments")
+        .select_related("tuition_period")
     }
 
-    rows = []
-    for pid in set(by_period) | set(enrollments):
+    # Owed years: every enrollment year, plus any year a payment was tied to.
+    owed_ids = set(enrollments) | set(linked)
+    ordered = sorted(owed_ids, key=lambda pid: period_by_id[pid].start_date)
+
+    rows = {}
+    pool = pool_total
+    for pid in ordered:
         tp = period_by_id[pid]
         enr = enrollments.get(pid)
-        pays = sorted(by_period.get(pid, []),
-                      key=lambda p: p.paid_at or p.created_at)
-        paid = sum((p.amount for p in pays), Decimal("0"))
-        owed = tp.tuition_amount or Decimal("0")
-        skipping = bool(enr and enr.status == TuitionEnrollment.Status.SKIPPING)
-        rows.append({
-            "period": tp, "enrollment": enr, "owed": owed, "paid": paid,
-            "payments": pays,
-            "overpaid": paid > owed and not skipping,
-            "short": bool(enr and enr.status == TuitionEnrollment.Status.PAID_IN_FULL
-                          and paid < owed),
-        })
-    rows.sort(key=lambda r: r["period"].start_date, reverse=True)
-    return {"rows": rows, "unattributed": unattributed}
+        owed = (Decimal("0") if (enr and enr.status == TuitionEnrollment.Status.SKIPPING)
+                else (tp.tuition_amount or Decimal("0")))
+        # Tied payments apply here first (capped at owed); any excess joins the pool.
+        applied = min(linked[pid], owed)
+        pool += linked[pid] - applied
+        rows[pid] = {"period": tp, "enrollment": enr, "owed": owed, "applied": applied}
+
+    # Waterfall the pool onto remaining balances, oldest year first.
+    for pid in ordered:
+        r = rows[pid]
+        take = min(r["owed"] - r["applied"], pool)
+        r["applied"] += take
+        pool -= take
+    credit = pool  # left over after every year is covered
+
+    for r in rows.values():
+        r["balance"] = r["owed"] - r["applied"]
+        r["flag"] = bool(
+            r["enrollment"]
+            and r["enrollment"].status == TuitionEnrollment.Status.PAID_IN_FULL
+            and r["balance"] > 0
+        )
+
+    ordered_desc = sorted(rows.values(), key=lambda r: r["period"].start_date, reverse=True)
+    return {
+        "rows": ordered_desc,
+        "total_owed": sum((r["owed"] for r in rows.values()), Decimal("0")),
+        "total_paid": sum((r["applied"] for r in rows.values()), Decimal("0")),
+        "total_balance": sum((r["balance"] for r in rows.values()), Decimal("0")),
+        "credit": credit,
+    }
 
 
 @login_required
