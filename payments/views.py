@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -509,12 +509,7 @@ def treasurer_member_detail(request, user_id: int):
         # (created_at). See Payment.transaction_date. (Task #437.)
         .order_by(Coalesce("paid_at", "created_at").desc())
     )
-    enrollments = list(
-        TuitionEnrollment.objects.filter(user=target)
-        .select_related("tuition_period")
-        .prefetch_related("installments")
-        .order_by("-tuition_period__start_date")
-    )
+    tuition = _member_tuition_summary(target)
     registrations = list(
         Registration.objects.filter(user=target)
         .select_related("event", "price_tier")
@@ -523,12 +518,81 @@ def treasurer_member_detail(request, user_id: int):
     return _treasurer_render(
         request, "members", "payments/treasurer/member_detail.html",
         {
-            "target":        target,
-            "payments":      payments,
-            "enrollments":   enrollments,
-            "registrations": registrations,
+            "target":         target,
+            "payments":       payments,
+            "tuition_rows":   tuition["rows"],
+            "tuition_orphan": tuition["unattributed"],
+            "registrations":  registrations,
         },
     )
+
+
+def _member_tuition_summary(user) -> dict:
+    """Per-academic-year tuition picture for the treasurer member page.
+
+    Attributes every succeeded tuition payment to a year — an explicit
+    installment or period link wins; otherwise the year whose window contains
+    the payment date — then reports **paid vs owed** per year and flags
+    over-payment and "marked paid in full but short." Payments that fall in no
+    period at all are returned separately. Reveals payments the old
+    installment-only view hid (e.g. a lump payment not wired to the plan).
+    (Task #435.)"""
+    periods = list(TuitionPeriod.objects.all())
+    period_by_id = {tp.id: tp for tp in periods}
+
+    def period_for_date(d):
+        for tp in periods:
+            if tp.start_date <= d <= tp.end_date:
+                return tp
+        return None
+
+    payments = (
+        Payment.objects.filter(
+            user=user, payment_type=Payment.Type.TUITION,
+            status=Payment.Status.SUCCEEDED,
+        )
+        .select_related(
+            "tuition_installment__enrollment__tuition_period", "tuition_period")
+    )
+    by_period = defaultdict(list)
+    unattributed = []
+    for p in payments:
+        tp = None
+        if p.tuition_installment_id and p.tuition_installment.enrollment_id:
+            tp = p.tuition_installment.enrollment.tuition_period
+        elif p.tuition_period_id:
+            tp = p.tuition_period
+        elif p.paid_at:
+            tp = period_for_date(p.paid_at.date())
+        if tp:
+            by_period[tp.id].append(p)
+        else:
+            unattributed.append(p)
+
+    enrollments = {
+        e.tuition_period_id: e
+        for e in TuitionEnrollment.objects.filter(user=user)
+        .select_related("tuition_period").prefetch_related("installments")
+    }
+
+    rows = []
+    for pid in set(by_period) | set(enrollments):
+        tp = period_by_id[pid]
+        enr = enrollments.get(pid)
+        pays = sorted(by_period.get(pid, []),
+                      key=lambda p: p.paid_at or p.created_at)
+        paid = sum((p.amount for p in pays), Decimal("0"))
+        owed = tp.tuition_amount or Decimal("0")
+        skipping = bool(enr and enr.status == TuitionEnrollment.Status.SKIPPING)
+        rows.append({
+            "period": tp, "enrollment": enr, "owed": owed, "paid": paid,
+            "payments": pays,
+            "overpaid": paid > owed and not skipping,
+            "short": bool(enr and enr.status == TuitionEnrollment.Status.PAID_IN_FULL
+                          and paid < owed),
+        })
+    rows.sort(key=lambda r: r["period"].start_date, reverse=True)
+    return {"rows": rows, "unattributed": unattributed}
 
 
 @login_required

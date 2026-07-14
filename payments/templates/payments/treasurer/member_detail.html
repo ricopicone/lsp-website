@@ -22,39 +22,45 @@
     </div>
   </header>
 
-  {% comment %}Tuition enrollments — most recent first.{% endcomment %}
+  {% comment %}Tuition — paid vs owed per academic year, most recent first.{% endcomment %}
   <section class="space-y-3">
-    <h3 class="font-serif text-lg text-base-content">Tuition enrollments</h3>
-    {% if enrollments %}
+    <h3 class="font-serif text-lg text-base-content">Tuition</h3>
+    {% if tuition_rows %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Academic year</th><th>Status</th><th>Installments</th><th>Recorded</th></tr>
+          <tr><th>Academic year</th><th>Status</th><th class="text-right">Owed</th><th class="text-right">Paid</th><th>Payments</th></tr>
         </thead>
         <tbody>
-          {% for e in enrollments %}
+          {% for r in tuition_rows %}
           <tr>
-            <td>{{ e.tuition_period.name }}</td>
-            <td>{% status_badge e.status %}</td>
-            <td class="text-xs text-base-content/70">
-              {% with insts=e.installments.all %}
-              {% if insts %}
-                {% for i in insts %}
-                  <span class="whitespace-nowrap">
-                    ${{ i.amount }} {% if i.paid %}<span class="text-success">paid</span>{% else %}<span class="text-warning">due {{ i.due_date|date:"M j" }}</span>{% endif %}
-                  </span>{% if not forloop.last %} · {% endif %}
-                {% endfor %}
-              {% else %}—{% endif %}
-              {% endwith %}
+            <td class="whitespace-nowrap">{{ r.period.name }}</td>
+            <td>{% if r.enrollment %}{% status_badge r.enrollment.status %}{% else %}<span class="text-base-content/40 text-xs">no decision</span>{% endif %}</td>
+            <td class="text-right whitespace-nowrap">{{ r.owed|usd }}</td>
+            <td class="text-right whitespace-nowrap {% if r.overpaid or r.short %}text-warning font-medium{% endif %}">
+              {{ r.paid|usd }}
+              {% if r.overpaid %}<span class="badge badge-warning badge-sm" title="Paid more than owed — review">over</span>{% endif %}
+              {% if r.short %}<span class="badge badge-warning badge-outline badge-sm" title="Marked paid in full but paid less than owed">short</span>{% endif %}
             </td>
-            <td class="text-xs text-base-content/60 whitespace-nowrap">{{ e.decided_at|date:"M j, Y" }}</td>
+            <td class="text-xs text-base-content/70">
+              {% for p in r.payments %}
+                <span class="whitespace-nowrap">{{ p.amount|usd }} · {{ p.transaction_date|date:"M j, Y" }}{% if not p.tuition_installment_id %}<span class="text-base-content/40" title="Attributed by payment date — not wired to an installment">*</span>{% endif %}</span>{% if not forloop.last %} · {% endif %}
+              {% empty %}<span class="text-base-content/40">no payments</span>{% endfor %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    <p class="text-xs text-base-content/50"><span class="text-base-content/40">*</span> attributed to the year by payment date (not linked to an installment plan).</p>
     {% else %}
-    <p class="text-sm text-base-content/60">No tuition enrollments on file.</p>
+    <p class="text-sm text-base-content/60">No tuition on file.</p>
+    {% endif %}
+    {% if tuition_orphan %}
+    <p class="text-xs text-warning">
+      {{ tuition_orphan|length }} tuition payment{{ tuition_orphan|length|pluralize }} fall outside every academic-year window:
+      {% for p in tuition_orphan %}{{ p.amount|usd }} ({{ p.transaction_date|date:"M j, Y" }}){% if not forloop.last %}, {% endif %}{% endfor %}.
+    </p>
     {% endif %}
   </section>
 
