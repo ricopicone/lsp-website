@@ -548,29 +548,43 @@ def _member_tuition_summary(user) -> dict:
     enrollments = list(
         TuitionEnrollment.objects.filter(user=user)
         .select_related("tuition_period")
-        .order_by("-tuition_period__start_date")
+        .order_by("-tuition_period__start_date")   # newest first, for display
     )
     total_paid = Payment.objects.filter(
         user=user, payment_type=Payment.Type.TUITION,
         status=Payment.Status.SUCCEEDED,
     ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
 
-    rows = []
+    # Coverage: sweep the running total across the paying years OLDEST first, so
+    # back tuition reads as covered before newer years. This is a display
+    # derivation from two numbers (total paid + the ordered rates) — NOT a
+    # per-payment allocation — so the money model stays cumulative.
     obligation = Decimal("0")
     paying_years = 0
     skipping = []
-    for e in enrollments:
-        rate = e.tuition_period.tuition_amount or Decimal("0")
-        is_skip = e.status == TuitionEnrollment.Status.SKIPPING
-        if is_skip:
+    coverage = {}
+    remaining = total_paid
+    for e in sorted(enrollments, key=lambda e: e.tuition_period.start_date):
+        if e.status == TuitionEnrollment.Status.SKIPPING:
             skipping.append(e.tuition_period)
-        else:
-            obligation += rate
-            paying_years += 1
-        rows.append({
-            "period": e.tuition_period, "enrollment": e,
-            "decision": e.status, "rate": rate, "skipping": is_skip,
-        })
+            coverage[e.id] = "skipping"
+            continue
+        rate = e.tuition_period.tuition_amount or Decimal("0")
+        obligation += rate
+        paying_years += 1
+        covered = min(rate, remaining)
+        remaining -= covered
+        coverage[e.id] = (
+            "paid" if rate and covered >= rate
+            else "partial" if covered > 0 else "unpaid"
+        )
+
+    rows = [{
+        "period": e.tuition_period, "enrollment": e,
+        "rate": e.tuition_period.tuition_amount or Decimal("0"),
+        "skipping": e.status == TuitionEnrollment.Status.SKIPPING,
+        "state": coverage[e.id],
+    } for e in enrollments]
 
     balance = obligation - total_paid
     return {

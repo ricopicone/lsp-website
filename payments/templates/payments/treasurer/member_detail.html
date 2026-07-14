@@ -60,14 +60,19 @@
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Academic year</th><th class="text-right">Rate</th><th>Decision</th></tr>
+          <tr><th>Academic year</th><th class="text-right">Rate</th><th>Status</th></tr>
         </thead>
         <tbody>
           {% for r in tuition.rows %}
           <tr class="{% if r.skipping %}text-base-content/50{% endif %}">
             <td class="whitespace-nowrap">{{ r.period.name }}</td>
             <td class="text-right whitespace-nowrap">{% if r.skipping %}—{% else %}{{ r.rate|usd }}{% endif %}</td>
-            <td>{% status_badge r.decision %}</td>
+            <td>
+              {% if r.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
+              {% elif r.state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
+              {% elif r.state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
+              {% else %}<span class="badge badge-ghost badge-sm">Skipping</span>{% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -77,7 +82,7 @@
     <p class="text-sm text-base-content/60">No tuition enrollments on file.{% if tuition.total_paid %} Paid {{ tuition.total_paid|usd }} in tuition.{% endif %}</p>
     {% endif %}
     <p class="text-xs text-base-content/50">
-      Tuition is a running balance — total paid against the obligation for the years being paid (skipped years are deferred, not counted). Individual payments are in Payments below; they aren't allocated to specific years.
+      Tuition is a running balance — total paid against the obligation for the years being paid (skipped years are deferred, not counted). Per-year status reflects coverage by the running total, oldest year first; individual payments (listed under Payments) aren't allocated to specific years.
     </p>
   </section>
 

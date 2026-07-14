@@ -95,10 +95,34 @@ def test_no_conflict_when_overpaid_without_skipping(member):
 
 
 @pytest.mark.django_db
-def test_rows_carry_decision_not_dollar_allocation(member):
+def test_rows_carry_coverage_state_not_dollar_allocation(member):
     _matt(member)
     s = _member_tuition_summary(member)
-    # Per-year rows expose the decision + rate; no per-year "paid"/"balance".
+    # Per-year rows expose a derived coverage state + rate; no per-year dollars.
     row = s["rows"][0]
-    assert "decision" in row and "rate" in row
+    assert "state" in row and "rate" in row
     assert "applied" not in row and "balance" not in row
+
+
+@pytest.mark.django_db
+def test_coverage_fills_oldest_year_first(member):
+    p22 = _period("AY 2022-2023", "a", date(2022, 9, 1), date(2023, 8, 31), Decimal("2000"))
+    p23 = _period("AY 2023-2024", "b", date(2023, 9, 1), date(2024, 8, 31), Decimal("2000"))
+    p24 = _period("AY 2024-2025", "c", date(2024, 9, 1), date(2025, 8, 31), Decimal("2000"))
+    for p in (p22, p23, p24):
+        _enroll(member, p, TuitionEnrollment.Status.COMMITTED)
+    _tuition(member, "5000", datetime(2025, 1, 1, 12, tzinfo=tz.utc))  # covers 2.5 years
+    s = _member_tuition_summary(member)
+    by_year = {r["period"].slug: r["state"] for r in s["rows"]}
+    assert by_year["a"] == "paid"      # oldest cleared first
+    assert by_year["b"] == "paid"
+    assert by_year["c"] == "partial"   # the remainder lands here
+
+
+@pytest.mark.django_db
+def test_matt_all_paying_years_show_covered(member):
+    _matt(member)
+    s = _member_tuition_summary(member)
+    states = {r["period"].slug: r["state"] for r in s["rows"]}
+    assert states["a"] == "paid" and states["b"] == "paid" and states["c"] == "paid"
+    assert states["d"] == "skipping"
