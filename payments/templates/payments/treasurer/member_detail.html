@@ -52,7 +52,7 @@
     <div class="alert alert-warning py-2 text-sm">
       <span>Paid {{ tuition.credit|usd }} beyond the obligation while a year is marked <strong>Skipping</strong>
       ({% for tp in tuition.skipping %}{{ tp.name }}, {{ tp.tuition_amount|usd }}{% if not forloop.last %}; {% endif %}{% endfor %}).
-      If a skipped year is actually being paid, set its decision below — the obligation and balance will update.</span>
+      This usually means a skipped year was actually paid — the student's tuition decision for that year needs correcting, after which the obligation and balance will reflect it.</span>
     </div>
     {% endif %}
 
