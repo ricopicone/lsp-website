@@ -140,6 +140,8 @@ def treasurer_reconcile(request):
     from accounts.models import Source
 
     if request.method == "POST":
+        if request.POST.get("form") == "no_payer":
+            return _no_payer_apply(request)
         return _reconcile_apply(request)
 
     assumed = list(
@@ -147,15 +149,41 @@ def treasurer_reconcile(request):
         .select_related("user")
         .order_by("-paid_at")
     )
+    group_list = _payer_groups(assumed)
+
+    # "No payer": confidently-typed Stripe charges linked to no member. Disjoint
+    # from the assumed queue above; Reconcile would otherwise never surface them.
+    no_payer = list(
+        Payment.objects.filter(source=Source.STRIPE, user__isnull=True)
+        .select_related("user")
+        .order_by("-paid_at")
+    )
+    no_payer_groups = _payer_groups(no_payer)
+
+    need_members = any(not g["matched"] for g in group_list) or bool(no_payer_groups)
+    return _treasurer_render(request, "reconcile", "payments/treasurer/reconcile.html", {
+        "groups": group_list,
+        "assumed_count": len(assumed),
+        "assumed_total": sum((p.amount for p in assumed), Decimal("0")),
+        "no_payer_groups": no_payer_groups,
+        "no_payer_count": len(no_payer),
+        "no_payer_total": sum((p.amount for p in no_payer), Decimal("0")),
+        "type_choices": Payment.Type.choices,
+        "member_options": _reconcile_member_options() if need_members else [],
+    })
+
+
+def _payer_groups(payments) -> list[dict]:
+    """Group payments by payer — member if linked, else email, else the payer
+    name parsed from the import note, else the charge alone — with a preselected
+    current type and newest-charge-first ordering. Shared by the Reconcile
+    (assumed) and No-payer (Stripe/unlinked) sections."""
     groups: dict = {}
-    for p in assumed:
+    for p in payments:
         if p.user_id:
             key, who, matched = f"user:{p.user_id}", (
                 p.user.get_full_name() or p.user.email), True
         else:
-            # Group unmatched payers by email, else by the payer name carried in
-            # the import note, else each on its own — so distinct people don't
-            # collapse into one "unknown" bucket (most Stripe charges lack email).
             name = _payer_name_from_notes(p)
             if p.email:
                 key = f"email:{p.email.lower()}"
@@ -167,6 +195,7 @@ def treasurer_reconcile(request):
             matched = False
         g = groups.setdefault(key, {
             "key": key, "who": who, "matched": matched, "email": p.email or "",
+            "payer_name": _payer_name_from_notes(p),
             "payments": [], "total": Decimal("0"), "types": set(),
             "type_counts": Counter(),
         })
@@ -175,29 +204,77 @@ def treasurer_reconcile(request):
         g["types"].add(p.get_payment_type_display())
         g["type_counts"][p.payment_type] += 1
     for g in groups.values():
-        # Preselect the dropdown on the group's prevailing assumed type (the
-        # category it's already booked as) so confirming a correct guess is a
-        # single click. Most groups are unanimous; ties break on first-seen.
         g["current_type"] = g["type_counts"].most_common(1)[0][0]
-        # Newest charge in the group — drives the ordering below.
         g["latest"] = max((p.paid_at for p in g["payments"] if p.paid_at),
                           default=None)
-    # Payers whose most recent assumed charge is newest float to the top —
-    # the list reads roughly chronologically despite the payer grouping.
-    group_list = sorted(
+    return sorted(
         groups.values(),
         key=lambda g: g["latest"].timestamp() if g["latest"] else 0.0,
         reverse=True,
     )
 
-    return _treasurer_render(request, "reconcile", "payments/treasurer/reconcile.html", {
-        "groups": group_list,
-        "assumed_count": len(assumed),
-        "assumed_total": sum((p.amount for p in assumed), Decimal("0")),
-        "type_choices": Payment.Type.choices,
-        "member_options": _reconcile_member_options() if any(
-            not g["matched"] for g in group_list) else [],
-    })
+
+def _set_payer_name(notes: str, name: str) -> str:
+    """Rewrite (or append) the ``(unmatched payer: …)`` note segment to ``name``."""
+    import re
+    notes = notes or ""
+    if re.search(r"\(unmatched payer:[^)]*\)", notes):
+        return re.sub(r"\(unmatched payer:[^)]*\)", f"(unmatched payer: {name})", notes)
+    return (notes + f" (unmatched payer: {name})").strip()
+
+
+def _no_payer_apply(request):
+    """Resolve a subset of the No-payer queue (``source=STRIPE`` + no member):
+    link to a member, keep as a named payer, or mark an anonymous donation.
+    Every resolution promotes ``source`` to ``VERIFIED`` (treasurer-reviewed),
+    which is what removes the charge from the queue. Constrained to the queue so
+    a stale/forged id can't touch a confirmed row."""
+    from accounts.models import Source
+
+    ids = request.POST.getlist("payment_ids")
+    action = request.POST.get("action") or "save"
+    if not ids:
+        messages.error(request, "Select at least one charge.")
+        return redirect("treasurer_reconcile")
+
+    qs = Payment.objects.filter(source=Source.STRIPE, user__isnull=True, pk__in=ids)
+    n = qs.count()
+    if not n:
+        messages.error(request, "Those charges were already resolved.")
+        return redirect("treasurer_reconcile")
+
+    if action == "anonymous":
+        qs.update(payment_type=Payment.Type.DONATION, source=Source.VERIFIED)
+        messages.success(request, f"Marked {n} charge(s) as anonymous donation(s).")
+        return redirect("treasurer_reconcile")
+
+    new_type = request.POST.get("payment_type")
+    if new_type not in Payment.Type.values:
+        messages.error(request, "Choose a valid category.")
+        return redirect("treasurer_reconcile")
+
+    assign = (request.POST.get("assign_user") or "").strip()
+    if assign:
+        user = _resolve_assign_user(assign)
+        if user is None:
+            messages.error(request, f"No member found for '{assign}'.")
+            return redirect("treasurer_reconcile")
+        qs.update(payment_type=new_type, user=user, source=Source.VERIFIED)
+        messages.success(request, f"Linked {n} charge(s) to {user.email} as {new_type}.")
+        return redirect("treasurer_reconcile")
+
+    # Named (or unchanged) non-member payer.
+    payer_name = (request.POST.get("payer_name") or "").strip()
+    rows = list(qs)
+    for p in rows:
+        p.payment_type = new_type
+        p.source = Source.VERIFIED
+        if payer_name:
+            p.notes = _set_payer_name(p.notes, payer_name)
+    Payment.objects.bulk_update(rows, ["payment_type", "source", "notes"])
+    who = f" for {payer_name}" if payer_name else ""
+    messages.success(request, f"Saved {n} charge(s){who} as {new_type}.")
+    return redirect("treasurer_reconcile")
 
 
 def _payer_name_from_notes(payment) -> str:
