@@ -1772,9 +1772,10 @@ def test_tuition_coverage_batched_standings_and_per_year():
         tuition_amount=Decimal("2000.00"))
     a = _mk_candidate("cova@example.com")
     b = _mk_candidate("covb@example.com")
+    committed = TuitionEnrollment.Status.COMMITTED
     for u in (a, b):
-        TuitionEnrollment.objects.create(user=u, tuition_period=p22, status=TuitionEnrollment.Status.COMMITTED)
-        TuitionEnrollment.objects.create(user=u, tuition_period=p23, status=TuitionEnrollment.Status.COMMITTED)
+        TuitionEnrollment.objects.create(user=u, tuition_period=p22, status=committed)
+        TuitionEnrollment.objects.create(user=u, tuition_period=p23, status=committed)
     # a pays $3000 (covers 22-23 fully + half of 23-24); b pays $2000 (22-23 only).
     Payment.objects.create(payment_type=Payment.Type.TUITION, user=a, amount=Decimal("3000"),
                            status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE)
