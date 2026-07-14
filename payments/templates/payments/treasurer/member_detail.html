@@ -35,9 +35,15 @@
           {% for r in tuition.rows %}
           <tr>
             <td class="whitespace-nowrap">
-              {{ r.period.name }}{% if r.flag %}<span class="text-warning font-semibold cursor-help" title="Marked paid in full, but a balance remains">*</span>{% endif %}
+              {{ r.period.name }}{% if r.flag %}<span class="text-warning font-semibold cursor-help" title="The enrollment is marked paid in full, but a balance remains">*</span>{% endif %}
             </td>
-            <td>{% if r.enrollment %}{% status_badge r.enrollment.status %}{% else %}<span class="text-base-content/40 text-xs">no decision</span>{% endif %}</td>
+            <td>
+              {% if r.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
+              {% elif r.state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
+              {% elif r.state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
+              {% elif r.state == "skipping" %}<span class="badge badge-ghost badge-sm">Skipping</span>
+              {% else %}<span class="text-base-content/40 text-xs">—</span>{% endif %}
+            </td>
             <td class="text-right whitespace-nowrap">{{ r.owed|usd }}</td>
             <td class="text-right whitespace-nowrap">{{ r.applied|usd }}</td>
             <td class="text-right whitespace-nowrap {% if r.balance %}text-warning font-medium{% endif %}">{{ r.balance|usd }}</td>
@@ -45,18 +51,26 @@
           {% endfor %}
         </tbody>
         <tfoot>
+          {% if tuition.credit %}
+          <tr class="text-success">
+            <td colspan="3">Credit — paid ahead</td>
+            <td class="text-right whitespace-nowrap">{{ tuition.credit|usd }}</td>
+            <td></td>
+          </tr>
+          {% endif %}
           <tr class="border-t-2 border-base-300 font-medium text-base-content">
             <td colspan="2">Total</td>
             <td class="text-right whitespace-nowrap">{{ tuition.total_owed|usd }}</td>
             <td class="text-right whitespace-nowrap">{{ tuition.total_paid|usd }}</td>
-            <td class="text-right whitespace-nowrap {% if tuition.total_balance %}text-warning{% endif %}">{{ tuition.total_balance|usd }}</td>
+            <td class="text-right whitespace-nowrap {% if tuition.net_balance > 0 %}text-warning{% elif tuition.net_balance < 0 %}text-success{% endif %}">
+              {% if tuition.net_balance < 0 %}({{ tuition.credit|usd }} credit){% else %}{{ tuition.net_balance|usd }}{% endif %}
+            </td>
           </tr>
         </tfoot>
       </table>
     </div>
     <div class="text-xs text-base-content/55 space-y-0.5">
-      {% if tuition.credit %}<p class="text-success">Credit: {{ tuition.credit|usd }} paid ahead (applies to future years).</p>{% endif %}
-      <p>Payments are applied to the oldest unpaid year first, except where a payment is tied to a specific year.</p>
+      <p>Status is derived from the balance. Payments are applied to the oldest unpaid year first, except where a payment is tied to a specific year; anything beyond what's owed becomes a credit on account (which can apply to seminars or a later year).</p>
       {% for r in tuition.rows %}{% if r.flag %}<p><span class="text-warning font-semibold">*</span> {{ r.period.name }} is marked paid in full but still shows a balance — reconcile.</p>{% endif %}{% endfor %}
     </div>
     {% else %}

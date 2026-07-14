@@ -62,8 +62,10 @@ def test_untied_payment_waterfalls_to_oldest_unpaid_first(member):
     assert _row(s, older)["balance"] == Decimal("0")
     assert _row(s, newer)["applied"] == Decimal("1000")   # remainder
     assert _row(s, newer)["balance"] == Decimal("1500")
+    assert _row(s, older)["state"] == "paid"
+    assert _row(s, newer)["state"] == "partial"
     assert s["total_owed"] == Decimal("4500")
-    assert s["total_balance"] == Decimal("1500")
+    assert s["net_balance"] == Decimal("1500")            # still owed
     assert s["credit"] == Decimal("0")
 
 
@@ -83,7 +85,7 @@ def test_tied_payment_stays_on_its_year(member):
     assert _row(s, newer)["applied"] == Decimal("2500")   # the tie held, not oldest-first
     assert _row(s, newer)["balance"] == Decimal("0")
     assert _row(s, older)["applied"] == Decimal("2000")
-    assert s["total_balance"] == Decimal("0")
+    assert s["net_balance"] == Decimal("0")
 
 
 @pytest.mark.django_db
@@ -96,8 +98,10 @@ def test_overpayment_becomes_credit(member):
     s = _member_tuition_summary(member)
     assert _row(s, ay)["applied"] == Decimal("2500")
     assert _row(s, ay)["balance"] == Decimal("0")
-    assert s["credit"] == Decimal("1500")     # paid ahead
-    assert s["total_balance"] == Decimal("0")
+    assert _row(s, ay)["state"] == "paid"
+    assert s["credit"] == Decimal("1500")          # paid ahead
+    assert s["net_balance"] == Decimal("-1500")    # negative = credit
+    assert s["total_paid"] == Decimal("4000")
 
 
 @pytest.mark.django_db

@@ -599,19 +599,36 @@ def _member_tuition_summary(user) -> dict:
 
     for r in rows.values():
         r["balance"] = r["owed"] - r["applied"]
+        enr = r["enrollment"]
+        # State derived from the *balance*, not the stored enrollment decision —
+        # so a year covered by payments reads "Paid", never a stale "Payment plan".
+        if r["owed"] == 0:
+            r["state"] = "skipping" if (
+                enr and enr.status == TuitionEnrollment.Status.SKIPPING) else "none"
+        elif r["balance"] <= 0:
+            r["state"] = "paid"
+        elif r["applied"] > 0:
+            r["state"] = "partial"
+        else:
+            r["state"] = "unpaid"
+        # Flag a stored decision that disagrees with reality (marked paid, still owing).
         r["flag"] = bool(
-            r["enrollment"]
-            and r["enrollment"].status == TuitionEnrollment.Status.PAID_IN_FULL
+            enr and enr.status == TuitionEnrollment.Status.PAID_IN_FULL
             and r["balance"] > 0
         )
 
     ordered_desc = sorted(rows.values(), key=lambda r: r["period"].start_date, reverse=True)
+    total_owed = sum((r["owed"] for r in rows.values()), Decimal("0"))
+    total_applied = sum((r["applied"] for r in rows.values()), Decimal("0"))
     return {
         "rows": ordered_desc,
-        "total_owed": sum((r["owed"] for r in rows.values()), Decimal("0")),
-        "total_paid": sum((r["applied"] for r in rows.values()), Decimal("0")),
-        "total_balance": sum((r["balance"] for r in rows.values()), Decimal("0")),
+        "total_owed": total_owed,
+        "total_applied": total_applied,
         "credit": credit,
+        # Total actually paid (applied to years + credit) and the signed net
+        # balance: positive = still owed, negative = paid ahead (a credit).
+        "total_paid": total_applied + credit,
+        "net_balance": total_owed - (total_applied + credit),
     }
 
 
