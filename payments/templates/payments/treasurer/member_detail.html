@@ -22,60 +22,63 @@
     </div>
   </header>
 
-  {% comment %}Tuition — running balance per academic year, most recent first.{% endcomment %}
+  {% comment %}Tuition — cumulative ledger: obligation-to-date vs total paid.{% endcomment %}
   <section class="space-y-3">
     <h3 class="font-serif text-lg text-base-content">Tuition</h3>
+
+    {% comment %}Headline: one running balance across all years being paid.{% endcomment %}
+    <div class="rounded-lg border border-base-300 p-4 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+      <div>
+        <div class="text-xs uppercase tracking-wide text-base-content/50">Paid of owed to date</div>
+        <div class="text-lg">
+          <span class="font-medium">{{ tuition.total_paid|usd }}</span>
+          <span class="text-base-content/50">of {{ tuition.obligation|usd }}</span>
+        </div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wide text-base-content/50">Balance</div>
+        <div class="text-lg font-semibold {% if tuition.owes %}text-warning{% elif tuition.credit %}text-success{% endif %}">
+          {% if tuition.owes %}{{ tuition.owes|usd }} owed
+          {% elif tuition.credit %}{{ tuition.credit|usd }} credit
+          {% else %}Paid up{% endif %}
+        </div>
+      </div>
+      <div class="text-xs text-base-content/50">
+        {{ tuition.paying_years }} year{{ tuition.paying_years|pluralize }} being paid{% if tuition.skipping %} · {{ tuition.skipping|length }} skipping{% endif %}
+      </div>
+    </div>
+
+    {% if tuition.conflict %}
+    <div class="alert alert-warning py-2 text-sm">
+      <span>Paid {{ tuition.credit|usd }} beyond the obligation while a year is marked <strong>Skipping</strong>
+      ({% for tp in tuition.skipping %}{{ tp.name }}, {{ tp.tuition_amount|usd }}{% if not forloop.last %}; {% endif %}{% endfor %}).
+      If a skipped year is actually being paid, set its decision below — the obligation and balance will update.</span>
+    </div>
+    {% endif %}
+
     {% if tuition.rows %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Academic year</th><th>Status</th><th class="text-right">Owed</th><th class="text-right">Paid</th><th class="text-right">Balance</th></tr>
+          <tr><th>Academic year</th><th class="text-right">Rate</th><th>Decision</th></tr>
         </thead>
         <tbody>
           {% for r in tuition.rows %}
-          <tr>
-            <td class="whitespace-nowrap">
-              {{ r.period.name }}{% if r.flag %}<span class="text-warning font-semibold cursor-help" title="The enrollment is marked paid in full, but a balance remains">*</span>{% endif %}
-            </td>
-            <td>
-              {% if r.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
-              {% elif r.state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
-              {% elif r.state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
-              {% elif r.state == "skipping" %}<span class="badge badge-ghost badge-sm">Skipping</span>
-              {% else %}<span class="text-base-content/40 text-xs">—</span>{% endif %}
-            </td>
-            <td class="text-right whitespace-nowrap">{{ r.owed|usd }}</td>
-            <td class="text-right whitespace-nowrap">{{ r.applied|usd }}</td>
-            <td class="text-right whitespace-nowrap {% if r.balance %}text-warning font-medium{% endif %}">{{ r.balance|usd }}</td>
+          <tr class="{% if r.skipping %}text-base-content/50{% endif %}">
+            <td class="whitespace-nowrap">{{ r.period.name }}</td>
+            <td class="text-right whitespace-nowrap">{% if r.skipping %}—{% else %}{{ r.rate|usd }}{% endif %}</td>
+            <td>{% status_badge r.decision %}</td>
           </tr>
           {% endfor %}
         </tbody>
-        <tfoot>
-          {% if tuition.credit %}
-          <tr class="text-success">
-            <td colspan="3">Credit — paid ahead</td>
-            <td class="text-right whitespace-nowrap">{{ tuition.credit|usd }}</td>
-            <td></td>
-          </tr>
-          {% endif %}
-          <tr class="border-t-2 border-base-300 font-medium text-base-content">
-            <td colspan="2">Total</td>
-            <td class="text-right whitespace-nowrap">{{ tuition.total_owed|usd }}</td>
-            <td class="text-right whitespace-nowrap">{{ tuition.total_paid|usd }}</td>
-            <td class="text-right whitespace-nowrap {% if tuition.net_balance > 0 %}text-warning{% elif tuition.net_balance < 0 %}text-success{% endif %}">
-              {% if tuition.net_balance < 0 %}({{ tuition.credit|usd }} credit){% else %}{{ tuition.net_balance|usd }}{% endif %}
-            </td>
-          </tr>
-        </tfoot>
       </table>
     </div>
-    <div class="text-xs text-base-content/55 space-y-0.5">
-      <p>Status is derived from the balance. Payments are applied to the oldest unpaid year first, except where a payment is tied to a specific year; anything beyond what's owed becomes a credit on account (which can apply to seminars or a later year).</p>
-      {% for r in tuition.rows %}{% if r.flag %}<p><span class="text-warning font-semibold">*</span> {{ r.period.name }} is marked paid in full but still shows a balance — reconcile.</p>{% endif %}{% endfor %}
-    </div>
     {% else %}
-    <p class="text-sm text-base-content/60">No tuition on file.{% if tuition.credit %} <span class="text-success">Credit: {{ tuition.credit|usd }}.</span>{% endif %}</p>
+    <p class="text-sm text-base-content/60">No tuition enrollments on file.{% if tuition.total_paid %} Paid {{ tuition.total_paid|usd }} in tuition.{% endif %}</p>
     {% endif %}
+    <p class="text-xs text-base-content/50">
+      Tuition is a running balance — total paid against the obligation for the years being paid (skipped years are deferred, not counted). Individual payments are in Payments below; they aren't allocated to specific years.
+    </p>
   </section>
 
   {% comment %}Payments — all categories, most recent first.{% endcomment %}

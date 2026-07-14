@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -527,108 +527,64 @@ def treasurer_member_detail(request, user_id: int):
 
 
 def _member_tuition_summary(user) -> dict:
-    """Per-academic-year tuition **balance** for the treasurer member page.
+    """Tuition as a **cumulative ledger**, not a per-payment-to-year allocation.
 
-    A member owes tuition for each of their enrollment years (a SKIPPING year
-    owes $0). Payments are applied like an accounts-receivable ledger:
+    Guessing which academic year an individual payment belongs to is unreliable
+    — prepayments land before the year starts, catch-up payments land after, and
+    a *skipping* year (owes $0) has no bucket for money genuinely meant for it.
+    So instead of allocating each dollar to a year:
 
-    - A payment **tied to a year** (via its installment or ``tuition_period``)
-      is applied there first — the payer/treasurer set that intent.
-    - Everything else is pooled and **applied to the oldest unpaid year first**,
-      so back tuition is cleared before newer years (any over-linked amount
-      spills into the same pool).
-    - Whatever is left over after every year is covered is a **credit** (paid
-      ahead).
+    - **Obligation-to-date** = the tuition rate summed over each year the member
+      is enrolled and *not* skipping (skipped years are deferred, not counted).
+    - **Total paid** = every succeeded tuition payment, as one sum.
+    - **Balance** = obligation − paid (positive = owes, negative = paid ahead).
 
-    Returns per-year rows (owed / paid / balance, newest first, each flagged if
-    it's marked paid-in-full yet still carries a balance) plus the totals and
-    credit. (Tasks #435, #437.)"""
-    period_by_id = {tp.id: tp for tp in TuitionPeriod.objects.all()}
-
-    payments = (
-        Payment.objects.filter(
-            user=user, payment_type=Payment.Type.TUITION,
-            status=Payment.Status.SUCCEEDED,
-        )
-        .select_related(
-            "tuition_installment__enrollment__tuition_period", "tuition_period")
-        .order_by("paid_at")
-    )
-    linked = defaultdict(lambda: Decimal("0"))   # period_id -> amount tied to it
-    pool_total = Decimal("0")                    # untied payments
-    for p in payments:
-        tp = None
-        if p.tuition_installment_id and p.tuition_installment.enrollment_id:
-            tp = p.tuition_installment.enrollment.tuition_period
-        elif p.tuition_period_id:
-            tp = p.tuition_period
-        if tp:
-            linked[tp.id] += p.amount
-        else:
-            pool_total += p.amount
-
-    enrollments = {
-        e.tuition_period_id: e
-        for e in TuitionEnrollment.objects.filter(user=user)
+    The per-year rows carry only the treasurer's *decision* and the rate — the
+    authoritative "which years" record — never a per-year dollar figure. A
+    ``conflict`` is flagged when the member has paid past their obligation while
+    a year is marked skipping (the classic "that skipped year was probably
+    actually paid" case). Individual payments are listed in the Payments
+    section, not here. (Tasks #435, #437.)"""
+    enrollments = list(
+        TuitionEnrollment.objects.filter(user=user)
         .select_related("tuition_period")
-    }
+        .order_by("-tuition_period__start_date")
+    )
+    total_paid = Payment.objects.filter(
+        user=user, payment_type=Payment.Type.TUITION,
+        status=Payment.Status.SUCCEEDED,
+    ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
 
-    # Owed years: every enrollment year, plus any year a payment was tied to.
-    owed_ids = set(enrollments) | set(linked)
-    ordered = sorted(owed_ids, key=lambda pid: period_by_id[pid].start_date)
-
-    rows = {}
-    pool = pool_total
-    for pid in ordered:
-        tp = period_by_id[pid]
-        enr = enrollments.get(pid)
-        owed = (Decimal("0") if (enr and enr.status == TuitionEnrollment.Status.SKIPPING)
-                else (tp.tuition_amount or Decimal("0")))
-        # Tied payments apply here first (capped at owed); any excess joins the pool.
-        applied = min(linked[pid], owed)
-        pool += linked[pid] - applied
-        rows[pid] = {"period": tp, "enrollment": enr, "owed": owed, "applied": applied}
-
-    # Waterfall the pool onto remaining balances, oldest year first.
-    for pid in ordered:
-        r = rows[pid]
-        take = min(r["owed"] - r["applied"], pool)
-        r["applied"] += take
-        pool -= take
-    credit = pool  # left over after every year is covered
-
-    for r in rows.values():
-        r["balance"] = r["owed"] - r["applied"]
-        enr = r["enrollment"]
-        # State derived from the *balance*, not the stored enrollment decision —
-        # so a year covered by payments reads "Paid", never a stale "Payment plan".
-        if r["owed"] == 0:
-            r["state"] = "skipping" if (
-                enr and enr.status == TuitionEnrollment.Status.SKIPPING) else "none"
-        elif r["balance"] <= 0:
-            r["state"] = "paid"
-        elif r["applied"] > 0:
-            r["state"] = "partial"
+    rows = []
+    obligation = Decimal("0")
+    paying_years = 0
+    skipping = []
+    for e in enrollments:
+        rate = e.tuition_period.tuition_amount or Decimal("0")
+        is_skip = e.status == TuitionEnrollment.Status.SKIPPING
+        if is_skip:
+            skipping.append(e.tuition_period)
         else:
-            r["state"] = "unpaid"
-        # Flag a stored decision that disagrees with reality (marked paid, still owing).
-        r["flag"] = bool(
-            enr and enr.status == TuitionEnrollment.Status.PAID_IN_FULL
-            and r["balance"] > 0
-        )
+            obligation += rate
+            paying_years += 1
+        rows.append({
+            "period": e.tuition_period, "enrollment": e,
+            "decision": e.status, "rate": rate, "skipping": is_skip,
+        })
 
-    ordered_desc = sorted(rows.values(), key=lambda r: r["period"].start_date, reverse=True)
-    total_owed = sum((r["owed"] for r in rows.values()), Decimal("0"))
-    total_applied = sum((r["applied"] for r in rows.values()), Decimal("0"))
+    balance = obligation - total_paid
     return {
-        "rows": ordered_desc,
-        "total_owed": total_owed,
-        "total_applied": total_applied,
-        "credit": credit,
-        # Total actually paid (applied to years + credit) and the signed net
-        # balance: positive = still owed, negative = paid ahead (a credit).
-        "total_paid": total_applied + credit,
-        "net_balance": total_owed - (total_applied + credit),
+        "rows": rows,                          # newest first; decision + rate only
+        "obligation": obligation,
+        "total_paid": total_paid,
+        "balance": balance,                    # >0 owes, <0 credit
+        "owes": max(balance, Decimal("0")),
+        "credit": max(-balance, Decimal("0")),
+        "paying_years": paying_years,
+        "skipping": skipping,
+        # Paid past the obligation while a year is deferred → likely a skipping
+        # year that's actually being paid (surfaces the exact decision to fix).
+        "conflict": balance < 0 and bool(skipping),
     }
 
 
