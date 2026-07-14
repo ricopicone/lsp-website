@@ -120,6 +120,23 @@ def test_coverage_fills_oldest_year_first(member):
 
 
 @pytest.mark.django_db
+def test_obligation_caps_at_four_years(member):
+    # Five enrolled, non-skipping years — but tuition is 4 years total.
+    for yr in (2021, 2022, 2023, 2024, 2025):
+        p = _period(f"AY {yr}", f"y{yr}", date(yr, 9, 1), date(yr + 1, 8, 31), Decimal("2000"))
+        _enroll(member, p, TuitionEnrollment.Status.PAID_IN_FULL)
+    _tuition(member, "8000", datetime(2025, 1, 1, 12, tzinfo=tz.utc))  # exactly 4 years
+
+    s = _member_tuition_summary(member)
+    assert s["obligation"] == Decimal("8000")   # 4 years, never 5
+    assert s["paying_years"] == 4
+    assert s["owes"] == Decimal("0")            # paid up on the 4 owed years
+    # The 5th (newest) year is "requirement met", not owed.
+    newest = next(r for r in s["rows"] if r["period"].slug == "y2025")
+    assert newest["state"] == "met"
+
+
+@pytest.mark.django_db
 def test_matt_all_paying_years_show_covered(member):
     _matt(member)
     s = _member_tuition_summary(member)
