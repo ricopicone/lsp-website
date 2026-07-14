@@ -1752,12 +1752,51 @@ def test_treasurer_in_training_count_excludes_on_leave(current_period):
     assert ctx["tuition_in_training_count"] == 1  # only the active candidate
 
 
+# --- Batched cumulative coverage across enrollees ----------------------
+
+@pytest.mark.django_db
+def test_tuition_coverage_batched_standings_and_per_year():
+    """The batched coverage helper matches the single-member ledger: obligation
+    excludes skipping, the running total sweeps years oldest-first, and each
+    year's coverage sums correctly across students."""
+    from payments.models import Payment
+    from payments.views import _tuition_coverage
+
+    p22 = TuitionPeriod.objects.create(
+        name="AY 2022–2023", slug="cov-a", start_date=date(2022, 9, 1),
+        decision_due_date=date(2022, 10, 1), end_date=date(2023, 8, 31),
+        tuition_amount=Decimal("2000.00"))
+    p23 = TuitionPeriod.objects.create(
+        name="AY 2023–2024", slug="cov-b", start_date=date(2023, 9, 1),
+        decision_due_date=date(2023, 10, 1), end_date=date(2024, 8, 31),
+        tuition_amount=Decimal("2000.00"))
+    a = _mk_candidate("cova@example.com")
+    b = _mk_candidate("covb@example.com")
+    for u in (a, b):
+        TuitionEnrollment.objects.create(user=u, tuition_period=p22, status=TuitionEnrollment.Status.COMMITTED)
+        TuitionEnrollment.objects.create(user=u, tuition_period=p23, status=TuitionEnrollment.Status.COMMITTED)
+    # a pays $3000 (covers 22-23 fully + half of 23-24); b pays $2000 (22-23 only).
+    Payment.objects.create(payment_type=Payment.Type.TUITION, user=a, amount=Decimal("3000"),
+                           status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE)
+    Payment.objects.create(payment_type=Payment.Type.TUITION, user=b, amount=Decimal("2000"),
+                           status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE)
+
+    standings, covered_by_period, user_period = _tuition_coverage()
+    assert standings[a.id]["obligation"] == Decimal("4000")
+    assert standings[a.id]["owes"] == Decimal("1000")
+    assert standings[b.id]["owes"] == Decimal("2000")
+    # 22-23 fully covered by both ($4000); 23-24 only a's remainder ($1000).
+    assert covered_by_period[p22.id] == Decimal("4000")
+    assert covered_by_period[p23.id] == Decimal("1000")
+    assert user_period[(a.id, p23.id)]["covered"] == Decimal("1000")
+
+
 # --- Backfilled (installment-less) tuition shows on the dashboard -------
 
 @pytest.mark.django_db
-def test_backfilled_tuition_counts_toward_collected():
-    """Imported tuition with no installment link (Stripe/treasurer backfill)
-    still counts as collected for its academic year."""
+def test_untied_tuition_counts_toward_collected_via_coverage():
+    """Imported tuition with no installment link still counts as collected —
+    the cumulative coverage sweeps it onto the student's enrolled year."""
     from payments.models import Payment
     from payments.views import (
         _treasurer_tuition_context,
@@ -1770,6 +1809,8 @@ def test_backfilled_tuition_counts_toward_collected():
         end_date=date(2023, 8, 31), tuition_amount=Decimal("2000.00"),
     )
     u = _mk_candidate("backfill@example.com")
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=period, status=TuitionEnrollment.Status.COMMITTED)
     Payment.objects.create(
         payment_type=Payment.Type.TUITION, user=u, amount=Decimal("2000.00"),
         status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
@@ -1817,7 +1858,10 @@ def test_member_assigns_tuition_period_and_note(client):
 
 
 @pytest.mark.django_db
-def test_assigned_period_overrides_date_in_dashboard():
+def test_tuition_collected_counts_regardless_of_payment_date():
+    """Coverage counts a payment toward the student's enrolled year no matter
+    when it was paid — a summer prepayment (August, before the AY starts) still
+    covers that year's obligation."""
     from payments.models import Payment
     from payments.views import _treasurer_tuition_context
     p2022 = TuitionPeriod.objects.create(
@@ -1826,12 +1870,12 @@ def test_assigned_period_overrides_date_in_dashboard():
         end_date=date(2023, 8, 31), tuition_amount=Decimal("2000.00"),
     )
     u = _mk_candidate("ovr@example.com")
-    # Paid in August 2022 (date → AY 2021) but assigned to AY 2022.
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=p2022, status=TuitionEnrollment.Status.COMMITTED)
     Payment.objects.create(
         payment_type=Payment.Type.TUITION, user=u, amount=Decimal("2000.00"),
         status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
-        tuition_period=p2022,
-        paid_at=timezone.make_aware(datetime(2022, 8, 15, 12)),
+        paid_at=timezone.make_aware(datetime(2022, 8, 15, 12)),  # before AY starts
     )
     ctx = _treasurer_tuition_context(p2022)
     assert ctx["tuition_total_collected"] == Decimal("2000.00")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -26,7 +26,6 @@ from django.utils.http import urlencode
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from accounts.membership import current_academic_year_start as ay_of
 from registrations.models import Registration
 
 from .forms import DonationForm, TuitionDecisionForm
@@ -944,25 +943,61 @@ def _confirmed_pct(sources) -> int | None:
     return round(100 * confirmed / len(sources))
 
 
-def _backfilled_tuition_collected(period) -> Decimal:
-    """Succeeded tuition payments with no installment link (historical Stripe /
-    treasurer-ledger imports), summed for ``period`` by payment date. The
-    payment-plan flow links tuition via ``tuition_installment``; backfilled lump
-    payments don't, so they'd otherwise be invisible on the tuition dashboard."""
-    base = Payment.objects.filter(
-        payment_type=Payment.Type.TUITION,
-        status=Payment.Status.SUCCEEDED,
-        tuition_installment__isnull=True,
+def _tuition_coverage():
+    """Cumulative tuition coverage across every enrollee, in a handful of queries.
+
+    Sweeps each member's *total* tuition paid across their non-skipping years
+    oldest year first (same basis as ``_member_tuition_summary``), so payments
+    are never allocated to a specific year by guesswork. Returns:
+
+    - ``standings``: ``{user_id: {obligation, total_paid, balance, owes, credit}}``
+    - ``covered_by_period``: ``{period_id: Decimal}`` — the coverage landing on
+      each year (the honest "collected per year", counting untied payments).
+    - ``user_period``: ``{(user_id, period_id): {covered, rate, skipping}}`` —
+      how much of a student's total reaches a given year. (Task #437.)
+    """
+    enrollments = list(
+        TuitionEnrollment.objects.select_related("tuition_period")
     )
-    # Payments the member assigned to this AY win outright; the rest fall back
-    # to the AY their payment date lands in.
-    assigned = base.filter(tuition_period=period).aggregate(s=Sum("amount"))["s"]
-    dated = base.filter(
-        tuition_period__isnull=True,
-        paid_at__date__gte=period.start_date,
-        paid_at__date__lte=period.end_date,
-    ).aggregate(s=Sum("amount"))["s"]
-    return (assigned or Decimal("0")) + (dated or Decimal("0"))
+    by_user = defaultdict(list)
+    for e in enrollments:
+        by_user[e.user_id].append(e)
+
+    paid_by_user = defaultdict(lambda: Decimal("0"))
+    for row in (
+        Payment.objects.filter(
+            payment_type=Payment.Type.TUITION,
+            status=Payment.Status.SUCCEEDED, user__isnull=False,
+        ).values("user").annotate(s=Sum("amount"))
+    ):
+        paid_by_user[row["user"]] = row["s"] or Decimal("0")
+
+    standings = {}
+    covered_by_period = defaultdict(lambda: Decimal("0"))
+    user_period = {}
+    for uid, enrs in by_user.items():
+        total_paid = paid_by_user.get(uid, Decimal("0"))
+        remaining = total_paid
+        obligation = Decimal("0")
+        for e in sorted(enrs, key=lambda e: e.tuition_period.start_date):
+            pid = e.tuition_period_id
+            rate = e.tuition_period.tuition_amount or Decimal("0")
+            if e.status == TuitionEnrollment.Status.SKIPPING:
+                user_period[(uid, pid)] = {"covered": Decimal("0"), "rate": rate,
+                                           "skipping": True}
+                continue
+            obligation += rate
+            covered = min(rate, remaining)
+            remaining -= covered
+            covered_by_period[pid] += covered
+            user_period[(uid, pid)] = {"covered": covered, "rate": rate,
+                                       "skipping": False}
+        balance = obligation - total_paid
+        standings[uid] = {
+            "obligation": obligation, "total_paid": total_paid, "balance": balance,
+            "owes": max(balance, Decimal("0")), "credit": max(-balance, Decimal("0")),
+        }
+    return standings, covered_by_period, user_period
 
 
 def _treasurer_tuition_context(selected_period=None) -> dict:
@@ -1005,55 +1040,46 @@ def _treasurer_tuition_context(selected_period=None) -> dict:
     for e in enrollments:
         status_counter[e.status] = status_counter.get(e.status, 0) + 1
 
-    # Per-enrollment paid-so-far for the period (drives collected + remaining).
-    paid_by_enrollment: dict[int, Decimal] = {}
-    for row in (
-        Payment.objects.filter(
-            payment_type=Payment.Type.TUITION,
-            status=Payment.Status.SUCCEEDED,
-            tuition_installment__enrollment__tuition_period=period,
-        )
-        .values("tuition_installment__enrollment")
-        .annotate(s=Sum("amount"))
-    ):
-        paid_by_enrollment[row["tuition_installment__enrollment"]] = row["s"] or Decimal("0")
-    total_collected = sum(paid_by_enrollment.values(), Decimal("0"))
-    # Plus historical backfill: tuition payments with no installment link
-    # (imported from Stripe / the treasurer ledger), attributed to the period
-    # whose academic year contains the payment date.
-    total_collected += _backfilled_tuition_collected(period)
+    # Cumulative tuition coverage across all enrollees (counts untied payments,
+    # oldest year first) — the honest basis for every dollar figure on this tab.
+    standings, covered_by_period, user_period = _tuition_coverage()
 
     full = period.tuition_amount or Decimal("0")
-    # Remaining balance for students who committed / are on a plan but haven't
-    # fully paid. Meaningful for any year (uncollected-from-committed).
+    total_collected = covered_by_period.get(period.id, Decimal("0"))
+
+    # Uncollected from students who committed / are on a plan for this year:
+    # the part of this year's rate their cumulative payments don't yet cover.
     committed_remaining = Decimal("0")
     for e in enrollments:
         if e.status in (
             TuitionEnrollment.Status.COMMITTED,
             TuitionEnrollment.Status.PAYMENT_PLAN,
         ):
-            paid = paid_by_enrollment.get(e.id, Decimal("0"))
-            committed_remaining += max(full - paid, Decimal("0"))
+            cov = user_period.get((e.user_id, period.id), {}).get("covered", Decimal("0"))
+            committed_remaining += max(full - cov, Decimal("0"))
 
-    # Per-student rows for the selected year (retrospective record).
+    # Per-student rows: each student's overall tuition standing (not per-year
+    # allocation) plus their decision for the selected year. Sorted most-owed
+    # first so who-to-chase floats to the top.
     status_labels = dict(TuitionEnrollment.Status.choices)
     enrollment_rows = []
-    for e in sorted(
-        enrollments,
-        key=lambda e: (e.user.last_name or "", e.user.first_name or "", e.user.email),
-    ):
-        paid = paid_by_enrollment.get(e.id, Decimal("0"))
-        remaining = (
-            Decimal("0") if e.status == TuitionEnrollment.Status.SKIPPING
-            else max(full - paid, Decimal("0"))
-        )
+    for e in enrollments:
+        st = standings.get(e.user_id, {})
         enrollment_rows.append({
             "user": e.user, "status": e.status,
             "status_label": status_labels.get(e.status, e.status),
             "source": e.source, "source_label": e.get_source_display(),
             "notes": e.notes,
-            "paid": paid, "remaining": remaining,
+            "obligation": st.get("obligation", Decimal("0")),
+            "total_paid": st.get("total_paid", Decimal("0")),
+            "balance": st.get("balance", Decimal("0")),
+            "owes": st.get("owes", Decimal("0")),
+            "credit": st.get("credit", Decimal("0")),
         })
+    enrollment_rows.sort(
+        key=lambda r: (-r["balance"], r["user"].last_name or "",
+                       r["user"].first_name or "", r["user"].email)
+    )
 
     # Forward-looking sections — current period only (live in-training roster).
     in_training_count = 0
@@ -1150,37 +1176,10 @@ def _treasurer_tuition_longitudinal() -> dict:
     ):
         status_by_period.setdefault(row["tuition_period_id"], {})[row["status"]] = row["n"]
 
-    collected_by_period: dict[int, Decimal] = {}
-    for row in (
-        Payment.objects.filter(
-            payment_type=Payment.Type.TUITION,
-            status=Payment.Status.SUCCEEDED,
-        )
-        .values("tuition_installment__enrollment__tuition_period")
-        .annotate(s=Sum("amount"))
-    ):
-        pid = row["tuition_installment__enrollment__tuition_period"]
-        if pid is not None:
-            collected_by_period[pid] = row["s"] or Decimal("0")
-
-    # Fold in installment-less backfill (Stripe/treasurer imports). Member-
-    # assigned payments go to their chosen AY; the rest bucket by payment date.
-    period_id_by_ay = {ay_of(p.start_date): p.id for p in periods}
-    base = Payment.objects.filter(
-        payment_type=Payment.Type.TUITION,
-        status=Payment.Status.SUCCEEDED,
-        tuition_installment__isnull=True,
-    )
-    for pid, amount in base.filter(
-        tuition_period__isnull=False
-    ).values_list("tuition_period_id", "amount"):
-        collected_by_period[pid] = collected_by_period.get(pid, Decimal("0")) + amount
-    for paid_at, amount in base.filter(
-        tuition_period__isnull=True, paid_at__isnull=False
-    ).values_list("paid_at", "amount"):
-        pid = period_id_by_ay.get(ay_of(paid_at.date()))
-        if pid is not None:
-            collected_by_period[pid] = collected_by_period.get(pid, Decimal("0")) + amount
+    # Collected per year on the cumulative-coverage basis (counts untied
+    # payments; no per-payment date guessing), consistent with the member page
+    # and the per-year tiles.
+    _, collected_by_period, _ = _tuition_coverage()
 
     rows = []
     for p in periods:
