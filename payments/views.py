@@ -525,6 +525,12 @@ def treasurer_member_detail(request, user_id: int):
     )
 
 
+# In-training members owe a fixed number of years of tuition total (skipping
+# defers, it doesn't reduce the count). Never obligate beyond this — a 5th
+# enrolled year is "requirement met", not owed.
+TUITION_YEARS_REQUIRED = 4
+
+
 def _member_tuition_summary(user) -> dict:
     """Tuition as a **cumulative ledger**, not a per-payment-to-year allocation.
 
@@ -557,9 +563,12 @@ def _member_tuition_summary(user) -> dict:
     # Coverage: sweep the running total across the paying years OLDEST first, so
     # back tuition reads as covered before newer years. This is a display
     # derivation from two numbers (total paid + the ordered rates) — NOT a
-    # per-payment allocation — so the money model stays cumulative.
+    # per-payment allocation — so the money model stays cumulative. Only the
+    # first TUITION_YEARS_REQUIRED non-skipping years are owed; any beyond that
+    # are "met" (the 4-year requirement is satisfied — never obligate a 5th).
     obligation = Decimal("0")
     paying_years = 0
+    counted = 0
     skipping = []
     coverage = {}
     remaining = total_paid
@@ -567,6 +576,10 @@ def _member_tuition_summary(user) -> dict:
         if e.status == TuitionEnrollment.Status.SKIPPING:
             skipping.append(e.tuition_period)
             coverage[e.id] = "skipping"
+            continue
+        counted += 1
+        if counted > TUITION_YEARS_REQUIRED:
+            coverage[e.id] = "met"          # requirement met — not owed
             continue
         rate = e.tuition_period.tuition_amount or Decimal("0")
         obligation += rate
@@ -595,6 +608,7 @@ def _member_tuition_summary(user) -> dict:
         "credit": max(-balance, Decimal("0")),
         "paying_years": paying_years,
         "skipping": skipping,
+        "years_required": TUITION_YEARS_REQUIRED,
         # Paid past the obligation while a year is deferred → likely a skipping
         # year that's actually being paid (surfaces the exact decision to fix).
         "conflict": balance < 0 and bool(skipping),
@@ -979,19 +993,26 @@ def _tuition_coverage():
         total_paid = paid_by_user.get(uid, Decimal("0"))
         remaining = total_paid
         obligation = Decimal("0")
+        counted = 0
         for e in sorted(enrs, key=lambda e: e.tuition_period.start_date):
             pid = e.tuition_period_id
             rate = e.tuition_period.tuition_amount or Decimal("0")
             if e.status == TuitionEnrollment.Status.SKIPPING:
                 user_period[(uid, pid)] = {"covered": Decimal("0"), "rate": rate,
-                                           "skipping": True}
+                                           "skipping": True, "met": False}
+                continue
+            counted += 1
+            if counted > TUITION_YEARS_REQUIRED:
+                # Beyond the 4-year requirement — not owed, no coverage.
+                user_period[(uid, pid)] = {"covered": Decimal("0"), "rate": rate,
+                                           "skipping": False, "met": True}
                 continue
             obligation += rate
             covered = min(rate, remaining)
             remaining -= covered
             covered_by_period[pid] += covered
             user_period[(uid, pid)] = {"covered": covered, "rate": rate,
-                                       "skipping": False}
+                                       "skipping": False, "met": False}
         balance = obligation - total_paid
         standings[uid] = {
             "obligation": obligation, "total_paid": total_paid, "balance": balance,

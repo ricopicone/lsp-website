@@ -64,13 +64,14 @@
         </thead>
         <tbody>
           {% for r in tuition.rows %}
-          <tr class="{% if r.skipping %}text-base-content/50{% endif %}">
+          <tr class="{% if r.skipping or r.state == 'met' %}text-base-content/50{% endif %}">
             <td class="whitespace-nowrap">{{ r.period.name }}</td>
-            <td class="text-right whitespace-nowrap">{% if r.skipping %}—{% else %}{{ r.rate|usd }}{% endif %}</td>
+            <td class="text-right whitespace-nowrap">{% if r.skipping or r.state == 'met' %}—{% else %}{{ r.rate|usd }}{% endif %}</td>
             <td>
               {% if r.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
               {% elif r.state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
               {% elif r.state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
+              {% elif r.state == "met" %}<span class="badge badge-ghost badge-sm" title="Beyond the {{ tuition.years_required }}-year tuition requirement — not owed">Requirement met</span>
               {% else %}<span class="badge badge-ghost badge-sm">Skipping</span>{% endif %}
             </td>
           </tr>
