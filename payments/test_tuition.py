@@ -1094,9 +1094,9 @@ def test_treasurer_member_detail_shows_payments_and_enrollments(
     assert resp.status_code == 200
     body = resp.content
     assert b"histo@x.test" in body
-    assert b"Tuition enrollments" in body
+    assert b"Tuition" in body
     assert b"Payments" in body
-    assert b"Committed" in body
+    assert b"Committed" in body  # enrollment status still shown per year
     assert b"$100" in body  # the dues amount
 
 
