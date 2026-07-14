@@ -22,45 +22,45 @@
     </div>
   </header>
 
-  {% comment %}Tuition — paid vs owed per academic year, most recent first.{% endcomment %}
+  {% comment %}Tuition — running balance per academic year, most recent first.{% endcomment %}
   <section class="space-y-3">
     <h3 class="font-serif text-lg text-base-content">Tuition</h3>
-    {% if tuition_rows %}
+    {% if tuition.rows %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Academic year</th><th>Status</th><th class="text-right">Owed</th><th class="text-right">Paid</th><th>Payments</th></tr>
+          <tr><th>Academic year</th><th>Status</th><th class="text-right">Owed</th><th class="text-right">Paid</th><th class="text-right">Balance</th></tr>
         </thead>
         <tbody>
-          {% for r in tuition_rows %}
+          {% for r in tuition.rows %}
           <tr>
-            <td class="whitespace-nowrap">{{ r.period.name }}</td>
+            <td class="whitespace-nowrap">
+              {{ r.period.name }}{% if r.flag %}<span class="text-warning font-semibold cursor-help" title="Marked paid in full, but a balance remains">*</span>{% endif %}
+            </td>
             <td>{% if r.enrollment %}{% status_badge r.enrollment.status %}{% else %}<span class="text-base-content/40 text-xs">no decision</span>{% endif %}</td>
             <td class="text-right whitespace-nowrap">{{ r.owed|usd }}</td>
-            <td class="text-right whitespace-nowrap {% if r.overpaid or r.short %}text-warning font-medium{% endif %}">
-              {{ r.paid|usd }}
-              {% if r.overpaid %}<span class="badge badge-warning badge-sm" title="Paid more than owed — review">over</span>{% endif %}
-              {% if r.short %}<span class="badge badge-warning badge-outline badge-sm" title="Marked paid in full but paid less than owed">short</span>{% endif %}
-            </td>
-            <td class="text-xs text-base-content/70">
-              {% for p in r.payments %}
-                <span class="whitespace-nowrap">{{ p.amount|usd }} · {{ p.transaction_date|date:"M j, Y" }}{% if not p.tuition_installment_id %}<span class="text-base-content/40" title="Attributed by payment date — not wired to an installment">*</span>{% endif %}</span>{% if not forloop.last %} · {% endif %}
-              {% empty %}<span class="text-base-content/40">no payments</span>{% endfor %}
-            </td>
+            <td class="text-right whitespace-nowrap">{{ r.applied|usd }}</td>
+            <td class="text-right whitespace-nowrap {% if r.balance %}text-warning font-medium{% endif %}">{{ r.balance|usd }}</td>
           </tr>
           {% endfor %}
         </tbody>
+        <tfoot>
+          <tr class="border-t-2 border-base-300 font-medium text-base-content">
+            <td colspan="2">Total</td>
+            <td class="text-right whitespace-nowrap">{{ tuition.total_owed|usd }}</td>
+            <td class="text-right whitespace-nowrap">{{ tuition.total_paid|usd }}</td>
+            <td class="text-right whitespace-nowrap {% if tuition.total_balance %}text-warning{% endif %}">{{ tuition.total_balance|usd }}</td>
+          </tr>
+        </tfoot>
       </table>
     </div>
-    <p class="text-xs text-base-content/50"><span class="text-base-content/40">*</span> attributed to the year by payment date (not linked to an installment plan).</p>
+    <div class="text-xs text-base-content/55 space-y-0.5">
+      {% if tuition.credit %}<p class="text-success">Credit: {{ tuition.credit|usd }} paid ahead (applies to future years).</p>{% endif %}
+      <p>Payments are applied to the oldest unpaid year first, except where a payment is tied to a specific year.</p>
+      {% for r in tuition.rows %}{% if r.flag %}<p><span class="text-warning font-semibold">*</span> {{ r.period.name }} is marked paid in full but still shows a balance — reconcile.</p>{% endif %}{% endfor %}
+    </div>
     {% else %}
-    <p class="text-sm text-base-content/60">No tuition on file.</p>
-    {% endif %}
-    {% if tuition_orphan %}
-    <p class="text-xs text-warning">
-      {{ tuition_orphan|length }} tuition payment{{ tuition_orphan|length|pluralize }} fall outside every academic-year window:
-      {% for p in tuition_orphan %}{{ p.amount|usd }} ({{ p.transaction_date|date:"M j, Y" }}){% if not forloop.last %}, {% endif %}{% endfor %}.
-    </p>
+    <p class="text-sm text-base-content/60">No tuition on file.{% if tuition.credit %} <span class="text-success">Credit: {{ tuition.credit|usd }}.</span>{% endif %}</p>
     {% endif %}
   </section>
 
