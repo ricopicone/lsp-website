@@ -200,3 +200,47 @@ def test_zero_amount_open_charge_reads_paid(member):
     c = _charge(member, Charge.Category.REGISTRATION, "0", date(2026, 9, 1))
     acct = ledger.member_account(member)
     assert acct["charge_states"][c.id] == "paid"
+
+
+def test_accounts_overview_rows_and_ordering(member):
+    other = User.objects.create_user(email="lg2@x.test", password="x")
+    today = timezone.now().date()
+    start = today.year if today.month >= 9 else today.year - 1
+    p = _dues_period(start)
+    _charge(member, Charge.Category.DUES, "100", p.start_date, dues_period=p)
+    _charge(other, Charge.Category.DUES, "100", p.start_date, dues_period=p)
+    _pay(other, Payment.Type.DUES, "100", WHEN)
+    rows = ledger.accounts_overview()
+    assert [r["user"].email for r in rows] == ["lg@x.test", "lg2@x.test"]  # owed first
+    assert rows[0]["owes"] == Decimal("100")
+    assert rows[1]["balance"] == Decimal("0")
+    assert rows[1]["dues_state"] == "paid"
+    assert rows[1]["last_payment"] is not None
+
+
+def test_accounts_overview_includes_payment_only_members(member):
+    _pay(member, Payment.Type.TUITION, "500", WHEN)
+    rows = ledger.accounts_overview()
+    assert rows and rows[0]["credit"] == Decimal("500")
+
+
+def test_accounts_overview_query_count(member, django_assert_max_num_queries):
+    p = _dues_period(2026)
+    for i in range(10):
+        u = User.objects.create_user(email=f"bulk{i}@x.test", password="x")
+        _charge(u, Charge.Category.DUES, "100", p.start_date, dues_period=p)
+        _pay(u, Payment.Type.DUES, "40", WHEN)
+    with django_assert_max_num_queries(8):
+        ledger.accounts_overview()
+
+
+def test_collected_this_ay_groups_by_category(member):
+    _dues_period(2026)
+    _pay(member, Payment.Type.DUES, "100", WHEN)
+    _pay(member, Payment.Type.TUITION, "2000", WHEN)
+    _pay(member, Payment.Type.DONATION, "50", WHEN)  # donations reported too
+    out = ledger.collected_this_ay(today=date(2026, 9, 20))
+    assert out["by_category"][Payment.Type.DUES] == Decimal("100")
+    assert out["by_category"][Payment.Type.TUITION] == Decimal("2000")
+    assert out["by_category"][Payment.Type.DONATION] == Decimal("50")
+    assert out["total"] == Decimal("2150")
