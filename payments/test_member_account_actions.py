@@ -62,6 +62,23 @@ def test_add_charge_rejects_bad_amount(client, treasurer, member):
     assert Charge.objects.count() == 0
 
 
+def test_add_charge_rejects_out_of_range_amount(client, treasurer, member):
+    """A huge exponent must be rejected cleanly, not 500 at save-time."""
+    resp = client.post(
+        reverse("treasurer_charge_add", args=[member.id]),
+        {"category": "dues", "amount": "1e999", "effective_date": "2026-09-01"})
+    assert resp.status_code == 302
+    assert Charge.objects.count() == 0
+
+
+def test_add_charge_rejects_sub_cent_amount(client, treasurer, member):
+    resp = client.post(
+        reverse("treasurer_charge_add", args=[member.id]),
+        {"category": "dues", "amount": "100.555", "effective_date": "2026-09-01"})
+    assert resp.status_code == 302
+    assert Charge.objects.count() == 0
+
+
 def test_waive_void_adjust_reopen(client, treasurer, member):
     c = Charge.objects.create(
         user=member, category=Charge.Category.DUES, amount=Decimal("100"),
@@ -118,3 +135,26 @@ def test_record_offline_tuition_payment_flips_enrollment(client, treasurer, memb
                 {"category": "tuition", "amount": "2000"})
     enr = TuitionEnrollment.objects.get(user=member)
     assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL
+
+
+def test_record_tuition_payment_over_skipping_appends_audit_note(
+        client, treasurer, member):
+    """Flipping an explicit SKIPPING decision must leave an audit trail."""
+    from django.utils import timezone
+
+    from payments.models import TuitionEnrollment
+    y = timezone.now().date().year
+    start = y if timezone.now().date().month >= 9 else y - 1
+    period = TuitionPeriod.objects.create(
+        name=f"AY {start}-{start + 1} T", slug=f"t-{start}",
+        start_date=date(start, 9, 1), end_date=date(start + 1, 8, 31),
+        decision_due_date=date(start, 8, 31), tuition_amount=Decimal("2000"))
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=period,
+        status=TuitionEnrollment.Status.SKIPPING)
+    client.post(reverse("treasurer_record_payment", args=[member.id]),
+                {"category": "tuition", "amount": "2000"})
+    enr = TuitionEnrollment.objects.get(user=member)
+    assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL
+    assert "tr2@x.test" in enr.notes
+    assert "Skipping" in enr.notes  # records what the status was changed from

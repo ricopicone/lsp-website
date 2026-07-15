@@ -575,6 +575,21 @@ def _safe_next(request, fallback: str):
     return redirect(fallback)
 
 
+def _parse_amount(raw: str) -> Decimal | None:
+    """A positive money amount that fits the payment fields
+    (max_digits=8, decimal_places=2), or None."""
+    from decimal import InvalidOperation
+    try:
+        amount = Decimal(raw)
+    except (InvalidOperation, TypeError):
+        return None
+    if not amount.is_finite() or amount <= 0 or amount > Decimal("999999.99"):
+        return None
+    if amount != amount.quantize(Decimal("0.01")):
+        return None  # more than 2 decimal places
+    return amount
+
+
 @login_required
 @user_passes_test(_is_staff)
 def treasurer_member_detail(request, user_id: int):
@@ -617,10 +632,8 @@ def treasurer_charge_add(request, user_id: int):
     if category not in Charge.Category.values:
         messages.error(request, "Choose a valid category.")
         return redirect("treasurer_member_detail", user_id=target.id)
-    try:
-        amount = Decimal(request.POST.get("amount", ""))
-        assert amount > 0
-    except Exception:
+    amount = _parse_amount(request.POST.get("amount", ""))
+    if amount is None:
         messages.error(request, "Enter a positive amount.")
         return redirect("treasurer_member_detail", user_id=target.id)
     try:
@@ -649,10 +662,8 @@ def treasurer_charge_update(request, charge_id: int):
     action = request.POST.get("action")
     email = request.user.email
     if action == "adjust":
-        try:
-            amount = Decimal(request.POST.get("amount", ""))
-            assert amount > 0
-        except Exception:
+        amount = _parse_amount(request.POST.get("amount", ""))
+        if amount is None:
             messages.error(request, "Enter a positive amount.")
             return redirect("treasurer_member_detail", user_id=charge.user_id)
         charge.add_note(f"Amount ${charge.amount} → ${amount} by treasurer {email}.",
@@ -668,6 +679,7 @@ def treasurer_charge_update(request, charge_id: int):
         charge.add_note(f"Reopened by treasurer {email}.", save=False)
         charge.status = Charge.Status.OPEN
     else:
+        messages.error(request, "Unknown action.")
         return redirect("treasurer_member_detail", user_id=charge.user_id)
     charge.staff_adjusted = True
     charge.save(update_fields=("amount", "status", "staff_adjusted", "notes"))
@@ -685,10 +697,8 @@ def treasurer_record_payment(request, user_id: int):
     if category not in Payment.Type.values:
         messages.error(request, "Choose a valid category.")
         return redirect("treasurer_member_detail", user_id=target.id)
-    try:
-        amount = Decimal(request.POST.get("amount", ""))
-        assert amount > 0
-    except Exception:
+    amount = _parse_amount(request.POST.get("amount", ""))
+    if amount is None:
         messages.error(request, "Enter a positive amount.")
         return redirect("treasurer_member_detail", user_id=target.id)
 
@@ -699,9 +709,28 @@ def treasurer_record_payment(request, user_id: int):
         if category == Payment.Type.TUITION:
             period = TuitionPeriod.current()
             if period is not None:
-                enr, _ = TuitionEnrollment.objects.update_or_create(
+                prior_status = (
+                    TuitionEnrollment.objects.filter(
+                        user=target, tuition_period=period,
+                    ).values_list("status", flat=True).first()
+                )
+                enr, created = TuitionEnrollment.objects.update_or_create(
                     user=target, tuition_period=period,
                     defaults={"status": TuitionEnrollment.Status.COMMITTED})
+                if created or prior_status != enr.status:
+                    # Audit the status flip — update_or_create can silently
+                    # overwrite an explicit decision (e.g. Skipping).
+                    was = (
+                        f" (was {TuitionEnrollment.Status(prior_status).label})"
+                        if prior_status else ""
+                    )
+                    enr.notes = (
+                        (enr.notes + "\n" if enr.notes else "")
+                        + f"[{timezone.now().date()}] Treasurer "
+                        f"({request.user.email}) set status to Committed while "
+                        f"recording an offline tuition payment{was}."
+                    )
+                    enr.save(update_fields=("notes",))
                 installment = TuitionInstallment.objects.create(
                     enrollment=enr, sequence=enr.installments.count() + 1,
                     due_date=period.decision_due_date, amount=amount)
