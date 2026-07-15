@@ -24,6 +24,18 @@
              href="{% url 'payments:transactions_csv' %}">Download CSV →</a>
         </div>
       </div>
+      <div class="p-4">
+        <div class="flex flex-wrap items-baseline gap-2 justify-between">
+          <div>
+            <h3 class="font-medium">Member balances CSV</h3>
+            <p class="text-sm text-base-content/60">
+              Every member's obligation, paid total, and balance on the unified ledger.
+            </p>
+          </div>
+          <a class="btn btn-sm btn-primary"
+             href="{% url 'balances_csv' %}">Download CSV →</a>
+        </div>
+      </div>
     </div>
   </section>
 

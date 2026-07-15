@@ -1775,6 +1775,25 @@ def transactions_csv(request):
     return response
 
 
+@login_required
+@user_passes_test(_is_staff)
+def balances_csv(request):
+    """Every member's ledger standing as CSV (task #439)."""
+    from payments import ledger
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="lsp-balances.csv"'
+    writer = csv.writer(response)
+    writer.writerow(["name", "email", "role", "obligation", "paid", "balance",
+                     "owes", "credit", "tuition_years_covered", "dues_state"])
+    for r in ledger.accounts_overview():
+        writer.writerow([
+            r["user"].get_full_name(), r["user"].email,
+            r["user"].profile.role, r["obligation"], r["paid"], r["balance"],
+            r["owes"], r["credit"], r["tuition_covered"], r["dues_state"] or ""])
+    return response
+
+
 def _parse_date(value):
     if not value:
         return None

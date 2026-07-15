@@ -185,6 +185,7 @@ urlpatterns = [
     path("treasurer/members/<int:user_id>/record-payment/",
          _payment_views.treasurer_record_payment, name="treasurer_record_payment"),
     path("treasurer/exports/", _payment_views.treasurer_exports, name="treasurer_exports"),
+    path("treasurer/exports/balances.csv", _payment_views.balances_csv, name="balances_csv"),
     path("treasurer/help/", _payment_views.treasurer_help, name="treasurer_help"),
     path("treasurer/payments/", _payment_views.treasurer_payments, name="treasurer_payments"),
     path("treasurer/payments/<int:payment_id>/refund/",
