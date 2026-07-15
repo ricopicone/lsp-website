@@ -79,6 +79,120 @@ def test_add_charge_rejects_sub_cent_amount(client, treasurer, member):
     assert Charge.objects.count() == 0
 
 
+def test_add_dues_charge_binds_period_no_sync_double_mint(client, treasurer, member):
+    """A manual dues charge must bind the period FK — the minting sync keys
+    idempotency on (user, dues_period), so a period-less manual charge would
+    get double-minted by the next rollover/Sync click (task #439 fix 3)."""
+    from django.utils import timezone
+
+    from payments import charges as charges_mod
+    y = timezone.now().date().year
+    start = y if timezone.now().date().month >= 9 else y - 1
+    period = DuesPeriod.objects.create(
+        name=f"AY {start}-{start + 1}", slug=f"ay-{start}-{start + 1}",
+        start_date=date(start, 9, 1), due_date=date(start, 9, 30),
+        end_date=date(start + 1, 8, 31),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"))
+    resp = client.post(
+        reverse("treasurer_charge_add", args=[member.id]),
+        {"category": "dues", "amount": "100", "dues_period": str(period.id)})
+    assert resp.status_code == 302
+    c = Charge.objects.get(user=member)
+    assert c.dues_period_id == period.id
+    assert c.effective_date == period.start_date
+    minted = charges_mod.sync_dues_charges(period)
+    assert minted == 0
+    assert Charge.objects.filter(
+        user=member, category=Charge.Category.DUES).count() == 1
+
+
+def test_add_dues_charge_defaults_to_current_period(client, treasurer, member):
+    """No explicit period posted -> falls back to the current DuesPeriod."""
+    from django.utils import timezone
+    y = timezone.now().date().year
+    start = y if timezone.now().date().month >= 9 else y - 1
+    period = DuesPeriod.objects.create(
+        name=f"AY {start}-{start + 1}", slug=f"ay-{start}-{start + 1}",
+        start_date=date(start, 9, 1), due_date=date(start, 9, 30),
+        end_date=date(start + 1, 8, 31),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"))
+    client.post(
+        reverse("treasurer_charge_add", args=[member.id]),
+        {"category": "dues", "amount": "100"})
+    c = Charge.objects.get(user=member)
+    assert c.dues_period_id == period.id
+
+
+def test_add_dues_charge_duplicate_period_rejected(client, treasurer, member):
+    from django.contrib.messages import get_messages
+    from django.utils import timezone
+    y = timezone.now().date().year
+    start = y if timezone.now().date().month >= 9 else y - 1
+    period = DuesPeriod.objects.create(
+        name=f"AY {start}-{start + 1}", slug=f"ay-{start}-{start + 1}",
+        start_date=date(start, 9, 1), due_date=date(start, 9, 30),
+        end_date=date(start + 1, 8, 31),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"))
+    client.post(
+        reverse("treasurer_charge_add", args=[member.id]),
+        {"category": "dues", "amount": "100", "dues_period": str(period.id)})
+    resp = client.post(
+        reverse("treasurer_charge_add", args=[member.id]),
+        {"category": "dues", "amount": "100", "dues_period": str(period.id)})
+    assert Charge.objects.filter(
+        user=member, category=Charge.Category.DUES).count() == 1
+    msgs = [str(m) for m in get_messages(resp.wsgi_request)]
+    assert any("already exists" in m for m in msgs)
+
+
+def test_add_dues_charge_shows_in_dues_state(client, treasurer, member):
+    from django.utils import timezone
+
+    from payments import ledger
+    y = timezone.now().date().year
+    start = y if timezone.now().date().month >= 9 else y - 1
+    period = DuesPeriod.objects.create(
+        name=f"AY {start}-{start + 1}", slug=f"ay-{start}-{start + 1}",
+        start_date=date(start, 9, 1), due_date=date(start, 9, 30),
+        end_date=date(start + 1, 8, 31),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"))
+    client.post(
+        reverse("treasurer_charge_add", args=[member.id]),
+        {"category": "dues", "amount": "100", "dues_period": str(period.id)})
+    acct = ledger.member_account(member)
+    assert acct["dues_state"] == "unpaid"
+
+
+def test_add_tuition_charge_binds_period_and_rejects_duplicate(client, treasurer, member):
+    from django.contrib.messages import get_messages
+    period = TuitionPeriod.objects.create(
+        name="AY 2026-2027 T", slug="t-2026-add",
+        start_date=date(2026, 9, 1), end_date=date(2027, 8, 31),
+        decision_due_date=date(2026, 8, 31), tuition_amount=Decimal("2000"))
+    resp = client.post(
+        reverse("treasurer_charge_add", args=[member.id]),
+        {"category": "tuition", "amount": "500", "tuition_period": str(period.id)})
+    assert resp.status_code == 302
+    c = Charge.objects.get(user=member)
+    assert c.tuition_period_id == period.id
+    assert c.effective_date == period.start_date
+    resp2 = client.post(
+        reverse("treasurer_charge_add", args=[member.id]),
+        {"category": "tuition", "amount": "500", "tuition_period": str(period.id)})
+    assert Charge.objects.filter(
+        user=member, category=Charge.Category.TUITION).count() == 1
+    msgs = [str(m) for m in get_messages(resp2.wsgi_request)]
+    assert any("already exists" in m for m in msgs)
+
+
 def test_waive_void_adjust_reopen(client, treasurer, member):
     c = Charge.objects.create(
         user=member, category=Charge.Category.DUES, amount=Decimal("100"),

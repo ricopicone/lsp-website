@@ -492,6 +492,8 @@ def treasurer_member_detail(request, user_id: int):
         .select_related("event", "price_tier")
         .order_by("-created_at")
     )
+    current_dues = DuesPeriod.current()
+    current_tuition = TuitionPeriod.current()
     return _treasurer_render(
         request, "accounts", "payments/treasurer/member_detail.html",
         {
@@ -501,6 +503,10 @@ def treasurer_member_detail(request, user_id: int):
             "charge_categories": Charge.Category.choices,
             "payment_categories": Payment.Type.choices,
             "today": timezone.now().date(),
+            "dues_periods": DuesPeriod.objects.all(),  # newest first (Meta.ordering)
+            "tuition_periods": TuitionPeriod.objects.all(),
+            "current_dues_period_id": current_dues.id if current_dues else None,
+            "current_tuition_period_id": current_tuition.id if current_tuition else None,
         },
     )
 
@@ -509,7 +515,13 @@ def treasurer_member_detail(request, user_id: int):
 @user_passes_test(_is_staff)
 @require_POST
 def treasurer_charge_add(request, user_id: int):
-    """Manually add a charge to a member's account (do-not-over-automate)."""
+    """Manually add a charge to a member's account (do-not-over-automate).
+
+    Dues/tuition charges must bind their period FK — the minting syncs
+    (``sync_dues_charges`` / ``sync_tuition_charges``) key idempotency on
+    (user, period), so a period-less manual charge would get double-minted
+    by the next rollover/Sync click.
+    """
     from accounts.models import Source
 
     from .models import Charge
@@ -523,19 +535,67 @@ def treasurer_charge_add(request, user_id: int):
     if amount is None:
         messages.error(request, "Enter a positive amount.")
         return redirect("treasurer_member_detail", user_id=target.id)
-    try:
-        eff = date.fromisoformat(request.POST.get("effective_date", ""))
-    except ValueError:
-        eff = timezone.now().date()
+
+    period_kwargs = {}
+    eff = None
+    if category == Charge.Category.DUES:
+        period = _resolve_period(
+            request.POST.get("dues_period"), DuesPeriod, DuesPeriod.current())
+        if period is not None:
+            dup = Charge.objects.filter(
+                user=target, category=Charge.Category.DUES, dues_period=period,
+            ).exclude(status=Charge.Status.VOID).exists()
+            if dup:
+                messages.error(
+                    request,
+                    f"A dues charge for {period.name} already exists on this "
+                    "account — adjust the existing charge instead.",
+                )
+                return redirect("treasurer_member_detail", user_id=target.id)
+            period_kwargs["dues_period"] = period
+            eff = period.start_date
+    elif category == Charge.Category.TUITION:
+        period = _resolve_period(
+            request.POST.get("tuition_period"), TuitionPeriod, TuitionPeriod.current())
+        if period is not None:
+            dup = Charge.objects.filter(
+                user=target, category=Charge.Category.TUITION, tuition_period=period,
+            ).exclude(status=Charge.Status.VOID).exists()
+            if dup:
+                messages.error(
+                    request,
+                    f"A tuition charge for {period.name} already exists on "
+                    "this account — adjust the existing charge instead.",
+                )
+                return redirect("treasurer_member_detail", user_id=target.id)
+            period_kwargs["tuition_period"] = period
+            eff = period.start_date
+
+    if eff is None:
+        try:
+            eff = date.fromisoformat(request.POST.get("effective_date", ""))
+        except ValueError:
+            eff = timezone.now().date()
     note = (request.POST.get("note") or "").strip()
     charge = Charge.objects.create(
         user=target, category=category, amount=amount, effective_date=eff,
-        source=Source.STAFF, staff_adjusted=True,
+        source=Source.STAFF, staff_adjusted=True, **period_kwargs,
     )
     charge.add_note(
         f"Added by treasurer {request.user.email}." + (f" {note}" if note else ""))
     messages.success(request, f"Added a ${amount} {category} charge.")
     return redirect("treasurer_member_detail", user_id=target.id)
+
+
+def _resolve_period(posted_id, model, fallback):
+    """Resolve a posted period id against ``model``, falling back to
+    ``fallback`` (typically ``Model.current()``) when unposted/invalid."""
+    if posted_id:
+        try:
+            return model.objects.filter(pk=posted_id).first() or fallback
+        except (TypeError, ValueError):
+            return fallback
+    return fallback
 
 
 @login_required
