@@ -13,6 +13,7 @@ the design spec:
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 
 from django.utils import timezone
 
@@ -59,3 +60,134 @@ def sync_dues_charges(period) -> int:
         )
         created += 1
     return created
+
+
+def sync_tuition_charges(user) -> None:
+    """Recompute ``user``'s tuition charges from their enrollment decisions.
+
+    Mints/revives/voids only sync-managed rows (``staff_adjusted=False``).
+    """
+    from payments.ledger import TUITION_YEARS_REQUIRED
+
+    from .models import TuitionEnrollment
+
+    today = timezone.now().date()
+    enrollments = list(
+        TuitionEnrollment.objects.filter(user=user)
+        .select_related("tuition_period")
+        .order_by("tuition_period__start_date")
+    )
+    should: dict[int, object] = {}          # tuition_period_id -> enrollment
+    counted = 0
+    for e in enrollments:
+        if e.status == TuitionEnrollment.Status.SKIPPING:
+            continue
+        counted += 1
+        if counted > TUITION_YEARS_REQUIRED:
+            continue                        # beyond the cap — never owed
+        should[e.tuition_period_id] = e
+
+    existing: dict[int, Charge] = {}        # prefer a non-VOID row per period
+    for c in Charge.objects.filter(
+        user=user, category=Charge.Category.TUITION, tuition_period__isnull=False,
+    ).order_by("id"):
+        prev = existing.get(c.tuition_period_id)
+        if prev is None or (prev.status == Charge.Status.VOID
+                            and c.status != Charge.Status.VOID):
+            existing[c.tuition_period_id] = c
+
+    for pid, e in should.items():
+        rate = e.tuition_period.tuition_amount or Decimal("0")
+        c = existing.get(pid)
+        if c is None:
+            Charge.objects.create(
+                user=user,
+                category=Charge.Category.TUITION,
+                amount=rate,
+                effective_date=e.tuition_period.start_date,
+                tuition_period=e.tuition_period,
+                source=e.source,
+                notes=f"[{today}] Minted from the {e.tuition_period.name} "
+                      "enrollment decision.",
+            )
+            continue
+        if c.staff_adjusted:
+            continue                        # conflicts surface at read time
+        changed = []
+        if c.status == Charge.Status.VOID:
+            c.status = Charge.Status.OPEN
+            changed.append("status")
+            c.add_note("Revived — year re-entered the tuition requirement.",
+                       save=False)
+            changed.append("notes")
+        if c.amount != rate:
+            c.amount = rate
+            changed.append("amount")
+        if changed:
+            c.save(update_fields=set(changed))
+
+    for pid, c in existing.items():
+        if pid in should or c.staff_adjusted or c.status == Charge.Status.VOID:
+            continue
+        c.status = Charge.Status.VOID
+        c.add_note("Voided — year is skipping or beyond the 4-year requirement.",
+                   save=False)
+        c.save(update_fields=("status", "notes"))
+
+
+def tuition_charge_conflicts() -> list[dict]:
+    """Staff-adjusted tuition charges that disagree with the enrollment-derived
+    expectation. Batched for the Reconcile tab."""
+    from collections import defaultdict
+
+    from payments.ledger import TUITION_YEARS_REQUIRED
+
+    from .models import TuitionEnrollment
+
+    enrollments_by_user = defaultdict(list)
+    for e in TuitionEnrollment.objects.select_related("tuition_period").order_by(
+        "tuition_period__start_date",
+    ):
+        enrollments_by_user[e.user_id].append(e)
+
+    expected: dict[tuple[int, int], Decimal] = {}   # (user_id, period_id) -> rate
+    for uid, enrs in enrollments_by_user.items():
+        counted = 0
+        for e in enrs:
+            if e.status == TuitionEnrollment.Status.SKIPPING:
+                continue
+            counted += 1
+            if counted > TUITION_YEARS_REQUIRED:
+                continue
+            expected[(uid, e.tuition_period_id)] = (
+                e.tuition_period.tuition_amount or Decimal("0")
+            )
+
+    out = []
+    staff_rows = (
+        Charge.objects.filter(
+            category=Charge.Category.TUITION, staff_adjusted=True,
+            tuition_period__isnull=False,
+        )
+        .select_related("user", "tuition_period")
+    )
+    for c in staff_rows:
+        rate = expected.get((c.user_id, c.tuition_period_id))
+        if rate is None and c.status == Charge.Status.OPEN:
+            out.append({
+                "user": c.user, "charge": c, "expected_rate": None,
+                "problem": "Open charge for a year that is skipping or beyond "
+                           "the 4-year requirement (not owed).",
+            })
+        elif rate is not None and c.status != Charge.Status.OPEN:
+            out.append({
+                "user": c.user, "charge": c, "expected_rate": rate,
+                "problem": f"Year is owed (rate ${rate}) but the charge is "
+                           f"{c.get_status_display().lower()}.",
+            })
+        elif rate is not None and c.amount != rate:
+            out.append({
+                "user": c.user, "charge": c, "expected_rate": rate,
+                "problem": f"Amount ${c.amount} differs from the year's rate ${rate}.",
+            })
+    return out

@@ -148,7 +148,7 @@ def test_tuition_rows_carry_enrollment_decisions(member):
     TuitionEnrollment.objects.create(
         user=member, tuition_period=t26,
         status=TuitionEnrollment.Status.COMMITTED, source="staff")
-    _charge(member, Charge.Category.TUITION, "2000", t26.start_date, tuition_period=t26)
+    # Signal (Task 5) creates the charge automatically; no manual creation needed
     acct = ledger.member_account(member)
     by_slug = {r["period"].slug: r["state"] for r in acct["tuition_rows"]}
     assert by_slug["t-2025"] == "skipping"
@@ -161,9 +161,7 @@ def test_enrollment_beyond_cap_reads_met(member):
         TuitionEnrollment.objects.create(
             user=member, tuition_period=tp,
             status=TuitionEnrollment.Status.COMMITTED, source="staff")
-    for tp in periods[:4]:  # sync (Task 5) will mint only the first four
-        _charge(member, Charge.Category.TUITION, "2000", tp.start_date,
-                tuition_period=tp)
+    # Signal (Task 5) creates charges only for the first four non-skipping years
     acct = ledger.member_account(member)
     by_slug = {r["period"].slug: r["state"] for r in acct["tuition_rows"]}
     assert by_slug["t-2025"] == "met"   # 5th non-skipping year — never owed
