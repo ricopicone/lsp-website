@@ -19,7 +19,7 @@ from django.utils import timezone
 
 from accounts.models import Source
 
-from .models import Charge
+from .models import Charge, Payment
 
 logger = logging.getLogger(__name__)
 
@@ -202,8 +202,6 @@ def mint_registration_charge(payment) -> Charge | None:
     Minting at settle time (not at registration creation) means abandoned
     checkouts never create account debt. Idempotent per registration.
     """
-    from .models import Payment
-
     if not payment.registration_id or payment.amount <= 0:
         return None
     existing = (
@@ -252,7 +250,8 @@ def mint_comped_charge(registration) -> Charge | None:
 
 
 def void_registration_charge(registration, reason: str) -> None:
-    """Void the registration's charge (cancel/refund keeps the books square)."""
+    """Void any non-void charges for the registration (cancel/refund keeps
+    the books square)."""
     for c in Charge.objects.filter(registration=registration).exclude(
         status=Charge.Status.VOID,
     ):

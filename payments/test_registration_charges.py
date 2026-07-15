@@ -63,6 +63,27 @@ def test_zero_amount_payment_mints_nothing(member, registration):
     assert Charge.objects.filter(registration=registration).count() == 0
 
 
+def test_completed_payment_for_cancelled_registration_mints_nothing(
+    member, registration,
+):
+    """A stale Checkout session settling after a self-cancel must not mint
+    debt against the cancelled registration. (Payment success side-effects —
+    receipt etc. — still apply; only the charge is suppressed.)"""
+    registration.status = Registration.Status.CANCELLED
+    registration.save(update_fields=("status",))
+    p = Payment.objects.create(
+        user=member, payment_type=Payment.Type.REGISTRATION,
+        registration=registration, amount=Decimal("60"),
+        method=Payment.Method.STRIPE,
+    )
+    complete_payment(p)
+    assert Charge.objects.filter(registration=registration).count() == 0
+    p.refresh_from_db()
+    assert p.status == Payment.Status.SUCCEEDED  # payment itself still settles
+    registration.refresh_from_db()
+    assert registration.status == Registration.Status.CANCELLED
+
+
 def test_comp_mints_pre_waived_charge(member, registration):
     c = charges.mint_comped_charge(registration)
     assert c.status == Charge.Status.WAIVED
