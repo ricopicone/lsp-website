@@ -216,6 +216,21 @@ def test_accounts_overview_rows_and_ordering(member):
     assert rows[1]["last_payment"] is not None
 
 
+def test_accounts_overview_excludes_personas(member):
+    """Training-sandbox personas must not appear on the Accounts tab or
+    balances CSV (task #439 fix 4a; mirrors the reconcile-autocomplete
+    persona filter)."""
+    persona = User.objects.create_user(email="persona-lg@x.test", password="x")
+    persona.profile.is_persona = True
+    persona.profile.save()
+    today = timezone.now().date()
+    start = today.year if today.month >= 9 else today.year - 1
+    p = _dues_period(start)
+    _charge(persona, Charge.Category.DUES, "100", p.start_date, dues_period=p)
+    rows = ledger.accounts_overview()
+    assert persona.email not in [r["user"].email for r in rows]
+
+
 def test_accounts_overview_includes_payment_only_members(member):
     _pay(member, Payment.Type.TUITION, "500", WHEN)
     rows = ledger.accounts_overview()

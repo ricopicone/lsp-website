@@ -203,8 +203,11 @@ def treasurer_accounts(request):
     # default: accounts_overview's most-owed-first ordering
 
     from accounts.models import Profile
+    # "balance" is the default sort — don't count it as an active filter, or
+    # the Clear link (gated on filter_qs) shows even with nothing to clear.
     filter_qs = urlencode({k: v for k, v in (
-        ("q", q), ("balance", balance), ("role", role), ("sort", sort)) if v})
+        ("q", q), ("balance", balance), ("role", role),
+        ("sort", sort if sort != "balance" else "")) if v})
     return _treasurer_render(request, "accounts", "payments/treasurer/accounts.html", {
         "rows": rows,
         "q": q,
@@ -602,13 +605,24 @@ def _resolve_period(posted_id, model, fallback):
 @user_passes_test(_is_staff)
 @require_POST
 def treasurer_charge_update(request, charge_id: int):
-    """Adjust / waive / void / reopen one charge, with an audit note."""
+    """Adjust / waive / void / reopen one charge, with an audit note.
+
+    Status gating (task #439 fix 4b): adjust/waive only from OPEN, void from
+    OPEN or WAIVED, reopen only from WAIVED. Reopening a VOID charge is
+    deliberately not offered here — it risks colliding with the partial
+    unique constraint on (user, dues_period)/(user, tuition_period) if a
+    sync has since minted a fresh row for that period; use *Add a charge*
+    instead.
+    """
     from .models import Charge
 
     charge = get_object_or_404(Charge, pk=charge_id)
     action = request.POST.get("action")
     email = request.user.email
     if action == "adjust":
+        if charge.status != Charge.Status.OPEN:
+            messages.error(request, "Only an open charge can be adjusted.")
+            return redirect("treasurer_member_detail", user_id=charge.user_id)
         amount = _parse_amount(request.POST.get("amount", ""))
         if amount is None:
             messages.error(request, "Enter a positive amount.")
@@ -617,12 +631,21 @@ def treasurer_charge_update(request, charge_id: int):
                         save=False)
         charge.amount = amount
     elif action == "waive":
+        if charge.status != Charge.Status.OPEN:
+            messages.error(request, "Only an open charge can be waived.")
+            return redirect("treasurer_member_detail", user_id=charge.user_id)
         charge.add_note(f"Waived by treasurer {email}.", save=False)
         charge.status = Charge.Status.WAIVED
     elif action == "void":
+        if charge.status not in (Charge.Status.OPEN, Charge.Status.WAIVED):
+            messages.error(request, "Only an open or waived charge can be voided.")
+            return redirect("treasurer_member_detail", user_id=charge.user_id)
         charge.add_note(f"Voided by treasurer {email}.", save=False)
         charge.status = Charge.Status.VOID
     elif action == "reopen":
+        if charge.status != Charge.Status.WAIVED:
+            messages.error(request, "Only a waived charge can be reopened.")
+            return redirect("treasurer_member_detail", user_id=charge.user_id)
         charge.add_note(f"Reopened by treasurer {email}.", save=False)
         charge.status = Charge.Status.OPEN
     else:

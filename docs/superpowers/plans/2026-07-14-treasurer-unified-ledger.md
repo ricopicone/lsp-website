@@ -3397,6 +3397,8 @@ git commit -m "docs(treasurer): rewrite guide for the unified ledger; status (ta
 3. `manage.py audit_ledger` — review balances + disagreements with Rico/treasurer.
 4. Treasurer cleanup pass: Accounts → filter owing → waive/verify `assumed` dues charges. **This must finish before the member-facing timers are re-enabled at launch** (else the banner/reminders nag members who paid the current year) — it is on the launch checklist.
 5. Update the connector project memories (`treasurer-payments-rework-2026-07`, launch-checklist) from the session.
+6. **Timing on step 4 is tighter than "before launch timers":** the landing-page unpaid-dues banner reads the ledger live and is not gated on any timer — it goes live the moment `backfill_charges` runs. So the treasurer's waive/verify pass on assumed charges must happen immediately after steps 2–3 (`backfill_charges` + `audit_ledger`), before members meaningfully see the banner — not just "sometime before launch." Consider running the backfill during a low-traffic window so the gap is short.
+7. Before flipping `SURVEY_ENABLED` at launch, reconcile the survey↔ledger seam: survey-created dues payments have no matching charge (uncharged credit on the member's account), and survey-created PAID_IN_FULL tuition enrollments mint charges with no matching payment. Neither is handled by this rework — it needs its own small follow-up task before survey-driven data can safely touch the unified ledger.
 
 ## Out of scope (from the spec)
 

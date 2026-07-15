@@ -195,7 +195,9 @@ def accounts_overview() -> list[dict]:
     user_ids = set(charges_by_user) | set(paid_by_user)
     users = {
         u.id: u
-        for u in User.objects.filter(id__in=user_ids).select_related("profile")
+        for u in User.objects.filter(
+            id__in=user_ids, profile__is_persona=False,
+        ).select_related("profile")
     }
 
     rows = []

@@ -213,6 +213,24 @@ def test_waive_void_adjust_reopen(client, treasurer, member):
     assert c.notes.count("tr2@x.test") == 4  # every action audited
 
 
+def test_charge_update_rejects_adjust_on_waived(client, treasurer, member):
+    """Status gating (task #439 fix 4b): adjust/waive only from OPEN, void
+    from OPEN or WAIVED, reopen only from WAIVED (reopening VOID risks the
+    partial-unique constraint on (user, period))."""
+    from django.contrib.messages import get_messages
+    c = Charge.objects.create(
+        user=member, category=Charge.Category.DUES, amount=Decimal("100"),
+        effective_date=date(2026, 9, 1), status=Charge.Status.WAIVED)
+    resp = client.post(
+        reverse("treasurer_charge_update", args=[c.id]),
+        {"action": "adjust", "amount": "80"})
+    c.refresh_from_db()
+    assert c.amount == Decimal("100")  # unchanged
+    assert c.status == Charge.Status.WAIVED  # unchanged
+    msgs = [str(m) for m in get_messages(resp.wsgi_request)]
+    assert any("open" in m.lower() for m in msgs)
+
+
 def test_record_offline_dues_payment(client, treasurer, member):
     from django.utils import timezone
     y = timezone.now().date().year

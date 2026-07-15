@@ -252,6 +252,10 @@ def mint_comped_charge(registration) -> Charge | None:
 def void_registration_charge(registration, reason: str) -> None:
     """Void any non-void charges for the registration (cancel/refund keeps
     the books square)."""
+    # Deliberately includes staff_adjusted rows, unlike the sync-safety rule
+    # elsewhere in this module — a cancel/refund actually moves money back,
+    # so even a treasurer-touched charge must be voided to keep the books
+    # square. This is the one intentional exception.
     for c in Charge.objects.filter(registration=registration).exclude(
         status=Charge.Status.VOID,
     ):

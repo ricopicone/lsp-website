@@ -58,6 +58,21 @@ def test_balance_filter_is_linkable(client, roster):
     assert b"owing@x.test" not in resp.content
 
 
+def test_clear_link_hidden_with_no_filters_active(client, roster):
+    """The default sort ("balance") must not count as an active filter, or
+    the Clear link (gated on filter_qs) shows even with nothing to clear
+    (task #439 fix 4c)."""
+    resp = client.get(reverse("treasurer_accounts"))
+    assert resp.context["filter_qs"] == ""
+    assert b">Clear<" not in resp.content
+
+
+def test_clear_link_shown_with_a_real_filter_active(client, roster):
+    resp = client.get(reverse("treasurer_accounts") + "?balance=owing")
+    assert resp.context["filter_qs"]
+    assert b">Clear<" in resp.content
+
+
 def test_search_filters_by_name_or_email(client, roster):
     resp = client.get(reverse("treasurer_accounts") + "?q=owing")
     assert b"owing@x.test" in resp.content
