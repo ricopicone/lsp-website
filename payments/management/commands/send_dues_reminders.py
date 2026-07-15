@@ -7,7 +7,8 @@ already reminded within that interval.
 
 Skips:
 - users not in ``DUES_OBLIGATED_ROLES``
-- users who already paid for the current period
+- users whose unified-ledger dues state for the current period is paid,
+  waived, or unminted (``None`` — no charge, nothing to chase)
 - users whose last reminder was within the period's reminder_interval_days
 - when no current period exists, or it's not yet past due date
 """
@@ -21,8 +22,9 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from notifications.categories import Category
+from payments import ledger
 from payments import notifications as notify_payments
-from payments.dues import is_dues_obligated, user_paid_for_period
+from payments.dues import is_dues_obligated
 from payments.emails import send_dues_reminder
 from payments.models import DuesPeriod, DuesReminder
 from payments.sending import ThrottledSender
@@ -67,7 +69,8 @@ class Command(BaseCommand):
             if not is_dues_obligated(user):
                 skipped_not_obligated += 1
                 continue
-            if user_paid_for_period(user, period):
+            state = ledger.member_account(user)["dues_state"]
+            if state in (None, "paid", "waived"):
                 skipped_paid += 1
                 continue
             if DuesReminder.objects.filter(

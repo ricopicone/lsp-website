@@ -281,7 +281,8 @@ def _formation_money_context(request) -> dict:
     Tuition: the four-year progress, this year's decision/installments. Dues:
     this year's obligation + status. Payments: full history (editable type/note,
     and academic year for tuition) from the My Payments table."""
-    from payments.dues import is_dues_obligated, user_paid_for_period
+    from payments import ledger
+    from payments.dues import is_dues_obligated
     from payments.forms import TuitionDecisionForm
     from payments.models import (
         DuesPeriod,
@@ -311,7 +312,7 @@ def _formation_money_context(request) -> dict:
     dues_amount = (
         dues_period.amount_for_role(profile.role) if dues_period is not None else None
     )
-    dues_paid = user_paid_for_period(user, dues_period)
+    dues_paid = ledger.member_account(user)["dues_state"] in ("paid", "waived")
 
     # --- Payments (all) — one editable table (type + note + tuition AY) ---
     # Order by the same date the table shows (paid_at, falling back to

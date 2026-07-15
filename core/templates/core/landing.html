@@ -86,13 +86,12 @@ sections (alerts, "Coming up") never leave an orphaned gap.
   {% endif %}
 
   {# ===================== Member alerts (functional) ===================== #}
-  {% if dues_period_unpaid %}
+  {% if outstanding_balance %}
   <div class="space-y-3 mt-8">
     <div role="alert" class="alert alert-warning">
       <span>
-        Your <strong>{{ dues_period_unpaid.name }}</strong> dues
-        (${{ dues_amount_owed }}, due {{ dues_period_unpaid.due_date|date:"M j, Y" }})
-        haven't been paid yet, <a href="{% url 'dues' %}" class="link">pay now</a>.
+        You have an outstanding balance of ${{ outstanding_balance }}. See your
+        <a href="{% url 'payments:index' %}" class="link">account</a> for details.
       </span>
     </div>
   </div>

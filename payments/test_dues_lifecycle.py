@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import Profile, User
-from payments.dues import is_dues_obligated, user_paid_for_period
+from payments.dues import is_dues_obligated
 from payments.models import DuesPeriod, DuesReminder, Payment
 
 
@@ -85,7 +85,7 @@ def test_current_returns_none_when_no_period_covers_date():
     assert DuesPeriod.current(on_date=long_after) is None
 
 
-# ---- is_dues_obligated + user_paid_for_period -------------------------
+# ---- is_dues_obligated --------------------------------------------------
 
 
 def test_candidate_role_is_obligated(member):
@@ -101,35 +101,6 @@ def test_external_role_not_obligated(external_user):
 def test_anonymous_not_obligated():
     from django.contrib.auth.models import AnonymousUser
     assert is_dues_obligated(AnonymousUser()) is False
-
-
-@pytest.mark.django_db
-def test_user_paid_for_period_false_when_no_payment(member, current_period):
-    assert user_paid_for_period(member, current_period) is False
-
-
-@pytest.mark.django_db
-def test_user_paid_for_period_true_after_succeeded_payment(member, current_period):
-    Payment.objects.create(
-        payment_type=Payment.Type.DUES,
-        user=member,
-        amount=current_period.amount_for_role("candidate"),
-        status=Payment.Status.SUCCEEDED,
-        dues_period=current_period,
-    )
-    assert user_paid_for_period(member, current_period) is True
-
-
-@pytest.mark.django_db
-def test_user_paid_for_period_false_for_pending_payment(member, current_period):
-    Payment.objects.create(
-        payment_type=Payment.Type.DUES,
-        user=member,
-        amount=current_period.amount_for_role("candidate"),
-        status=Payment.Status.PENDING,
-        dues_period=current_period,
-    )
-    assert user_paid_for_period(member, current_period) is False
 
 
 # ---- /dues/ view uses current period ----------------------------------
@@ -155,6 +126,9 @@ def test_dues_post_attaches_period_to_payment(client, member, current_period):
 def test_dues_page_shows_already_paid_when_user_has_succeeded_payment(
     client, member, current_period,
 ):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
@@ -176,20 +150,24 @@ def test_dues_page_shows_already_paid_when_user_has_succeeded_payment(
 def test_landing_shows_banner_for_obligated_unpaid_member(
     client, member, current_period,
 ):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     client.force_login(member)
     response = client.get(reverse("core:landing"))
-    assert b"dues" in response.content.lower()
-    assert b"pay now" in response.content.lower()
+    assert b"outstanding balance" in response.content.lower()
 
 
 def test_landing_no_banner_for_external_user(client, external_user, current_period):
     client.force_login(external_user)
     response = client.get(reverse("core:landing"))
-    assert b"haven&#x27;t been paid" not in response.content
-    assert b"pay now" not in response.content.lower()
+    assert b"outstanding balance" not in response.content.lower()
 
 
 def test_landing_no_banner_when_paid(client, member, current_period):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
@@ -199,7 +177,7 @@ def test_landing_no_banner_when_paid(client, member, current_period):
     )
     client.force_login(member)
     response = client.get(reverse("core:landing"))
-    assert b"pay now" not in response.content.lower()
+    assert b"outstanding balance" not in response.content.lower()
 
 
 # ---- send_dues_reminders command --------------------------------------
@@ -224,6 +202,9 @@ def test_reminders_skipped_before_due_date(member, current_period):
 
 @pytest.mark.django_db
 def test_reminders_sent_to_obligated_unpaid_member(member, current_period):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     _set_period_due_in_past(current_period)
     out = StringIO()
     call_command("send_dues_reminders", stdout=out)
@@ -235,6 +216,9 @@ def test_reminders_sent_to_obligated_unpaid_member(member, current_period):
 
 @pytest.mark.django_db
 def test_reminders_skip_user_with_recent_reminder(member, current_period):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     _set_period_due_in_past(current_period)
     DuesReminder.objects.create(user=member, dues_period=current_period)
     call_command("send_dues_reminders", stdout=StringIO())
@@ -245,6 +229,9 @@ def test_reminders_skip_user_with_recent_reminder(member, current_period):
 
 @pytest.mark.django_db
 def test_reminders_skip_paid_user(member, current_period):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     _set_period_due_in_past(current_period)
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
@@ -259,6 +246,16 @@ def test_reminders_skip_paid_user(member, current_period):
 
 
 @pytest.mark.django_db
+def test_reminders_skip_unminted_charge(member, current_period):
+    """No dues charge minted for the member yet → dues_state is None →
+    nothing to chase, even though the member is obligated (task #439)."""
+    _set_period_due_in_past(current_period)
+    call_command("send_dues_reminders", stdout=StringIO())
+    assert len(mail.outbox) == 0
+    assert DuesReminder.objects.filter(user=member).count() == 0
+
+
+@pytest.mark.django_db
 def test_reminders_skip_non_obligated_roles(external_user, current_period):
     _set_period_due_in_past(current_period)
     call_command("send_dues_reminders", stdout=StringIO())
@@ -267,6 +264,9 @@ def test_reminders_skip_non_obligated_roles(external_user, current_period):
 
 @pytest.mark.django_db
 def test_reminders_dry_run_sends_nothing_and_logs_nothing(member, current_period):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     _set_period_due_in_past(current_period)
     call_command("send_dues_reminders", "--dry-run", stdout=StringIO())
     assert len(mail.outbox) == 0
@@ -276,6 +276,9 @@ def test_reminders_dry_run_sends_nothing_and_logs_nothing(member, current_period
 @pytest.mark.django_db
 def test_reminder_resumes_after_seven_days(member, current_period):
     """A reminder older than 7 days no longer blocks a fresh send."""
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     _set_period_due_in_past(current_period)
     old = DuesReminder.objects.create(user=member, dues_period=current_period)
     DuesReminder.objects.filter(pk=old.pk).update(
@@ -501,4 +504,4 @@ def test_landing_banner_hidden_for_on_leave(client, member, current_period):
     member.profile.save()
     client.force_login(member)
     response = client.get(reverse("core:landing"))
-    assert b"pay now" not in response.content.lower()
+    assert b"outstanding balance" not in response.content.lower()

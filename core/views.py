@@ -95,23 +95,13 @@ def landing(request):
         .count()
     )
 
-    dues_period_unpaid = None
-    dues_amount_owed = None
+    outstanding_balance = None
     if request.user.is_authenticated:
-        from payments.dues import is_dues_obligated, user_paid_for_period
-        from payments.models import DuesPeriod
+        from payments import ledger
 
-        # Dues banner for obligated unpaid members.
-        current_period = DuesPeriod.current()
-        if (
-            current_period is not None
-            and is_dues_obligated(request.user)
-            and not user_paid_for_period(request.user, current_period)
-        ):
-            dues_period_unpaid = current_period
-            dues_amount_owed = current_period.amount_for_role(
-                request.user.profile.role
-            )
+        acct = ledger.member_account(request.user)
+        if acct["owes"] > 0:
+            outstanding_balance = acct["owes"]
 
     return render(
         request,
@@ -121,8 +111,7 @@ def landing(request):
             "directory_count": directory_count,
             "analyst_count": analyst_count,
             "seminar_count": seminar_count,
-            "dues_period_unpaid": dues_period_unpaid,
-            "dues_amount_owed": dues_amount_owed,
+            "outstanding_balance": outstanding_balance,
         },
     )
 

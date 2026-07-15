@@ -1,8 +1,10 @@
 """Dues-lifecycle helpers (REG-12).
 
-Pure-function answers to:
-- *Is this user obligated to pay dues?* (depends on their role)
-- *Has this user paid for the current dues period?*
+Pure-function answer to *is this user obligated to pay dues?* (depends on
+their role) — the definition of who a dues charge gets minted for
+(:func:`payments.charges.sync_dues_charges`). *Has this user paid?* is no
+longer answered here — it's a read of the unified ledger
+(``payments.ledger.member_account(user)["dues_state"]``, task #439).
 
 The model entities (``DuesPeriod``, ``DuesReminder``) live in
 :mod:`payments.models`; this module is the read-side seam other apps
@@ -39,16 +41,3 @@ def obligated_users_qs():
         profile__standing=Profile.Standing.ACTIVE,
         profile__role__in=list(settings.DUES_OBLIGATED_ROLES),
     )
-
-
-def user_paid_for_period(user, period) -> bool:
-    """True when ``user`` has a SUCCEEDED dues Payment for ``period``."""
-    if period is None or not user.is_authenticated:
-        return False
-    from .models import Payment  # avoid circular import
-    return Payment.objects.filter(
-        user=user,
-        payment_type=Payment.Type.DUES,
-        dues_period=period,
-        status=Payment.Status.SUCCEEDED,
-    ).exists()

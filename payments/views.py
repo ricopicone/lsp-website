@@ -976,13 +976,15 @@ def dues_pay(request):
     today (which shouldn't happen in production once the bootstrap data
     migration + auto-rollover command are running).
     """
-    from .dues import user_paid_for_period
+    from . import ledger
     from .models import DuesPeriod
 
     period = DuesPeriod.current()
 
     # Already paid for the current cycle — show a friendly status panel.
-    if period is not None and user_paid_for_period(request.user, period):
+    if period is not None and ledger.member_account(request.user)["dues_state"] in (
+        "paid", "waived",
+    ):
         return render(
             request,
             "payments/dues_already_paid.html",
