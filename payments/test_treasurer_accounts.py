@@ -114,3 +114,13 @@ def test_help_tab_renders_rewritten_guide(client, roster):
     resp = client.get(reverse("treasurer_help"))
     assert resp.status_code == 200
     assert b"one account per member" in resp.content.lower()
+
+
+def test_empty_ledger_notice_shown_and_hidden(client, treasurer, roster):
+    from payments.models import Charge
+    # roster fixture minted a charge → notice hidden
+    resp = client.get(reverse("treasurer_accounts"))
+    assert b"No charges have been minted yet" not in resp.content
+    Charge.objects.all().delete()
+    resp = client.get(reverse("treasurer_accounts"))
+    assert b"No charges have been minted yet" in resp.content
