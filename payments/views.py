@@ -596,32 +596,55 @@ def treasurer_record_payment(request, user_id: int):
         if category == Payment.Type.TUITION:
             period = TuitionPeriod.current()
             if period is not None:
-                prior_status = (
-                    TuitionEnrollment.objects.filter(
-                        user=target, tuition_period=period,
-                    ).values_list("status", flat=True).first()
-                )
-                enr, created = TuitionEnrollment.objects.update_or_create(
+                prior = TuitionEnrollment.objects.filter(
                     user=target, tuition_period=period,
-                    defaults={"status": TuitionEnrollment.Status.COMMITTED})
-                if created or prior_status != enr.status:
-                    # Audit the status flip — update_or_create can silently
-                    # overwrite an explicit decision (e.g. Skipping).
-                    was = (
-                        f" (was {TuitionEnrollment.Status(prior_status).label})"
-                        if prior_status else ""
-                    )
+                ).first()
+                prior_status = prior.status if prior else None
+                full_amount = amount >= period.tuition_amount
+                if full_amount:
+                    enr, created = TuitionEnrollment.objects.update_or_create(
+                        user=target, tuition_period=period,
+                        defaults={"status": TuitionEnrollment.Status.COMMITTED})
+                    if created or prior_status != enr.status:
+                        # Audit the status flip — update_or_create can
+                        # silently overwrite an explicit decision (e.g.
+                        # Skipping).
+                        was = (
+                            f" (was {TuitionEnrollment.Status(prior_status).label})"
+                            if prior_status else ""
+                        )
+                        enr.notes = (
+                            (enr.notes + "\n" if enr.notes else "")
+                            + f"[{timezone.now().date()}] Treasurer "
+                            f"({request.user.email}) set status to Committed "
+                            f"while recording an offline tuition payment{was}."
+                        )
+                        enr.save(update_fields=("notes",))
+                    installment = TuitionInstallment.objects.create(
+                        enrollment=enr, sequence=enr.installments.count() + 1,
+                        due_date=period.decision_due_date, amount=amount)
+                    kwargs["tuition_installment"] = installment
+                else:
+                    # A partial payment stands alone — it must not flip the
+                    # enrollment to PAID_IN_FULL (that mislabels the
+                    # decision record and grants covered-tier event access
+                    # via Gate 2). No installment is created; leave the
+                    # enrollment at its existing status (COMMITTED if this
+                    # is the first decision on record).
+                    if prior is None:
+                        enr = TuitionEnrollment.objects.create(
+                            user=target, tuition_period=period,
+                            status=TuitionEnrollment.Status.COMMITTED)
+                    else:
+                        enr = prior
                     enr.notes = (
                         (enr.notes + "\n" if enr.notes else "")
                         + f"[{timezone.now().date()}] Treasurer "
-                        f"({request.user.email}) set status to Committed while "
-                        f"recording an offline tuition payment{was}."
+                        f"({request.user.email}) recorded a partial offline "
+                        f"tuition payment of ${amount}; year not marked paid "
+                        "in full."
                     )
                     enr.save(update_fields=("notes",))
-                installment = TuitionInstallment.objects.create(
-                    enrollment=enr, sequence=enr.installments.count() + 1,
-                    due_date=period.decision_due_date, amount=amount)
-                kwargs["tuition_installment"] = installment
         elif category == Payment.Type.DUES:
             kwargs["dues_period"] = DuesPeriod.current()
         payment = Payment.objects.create(

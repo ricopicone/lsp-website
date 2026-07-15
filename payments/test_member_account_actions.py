@@ -137,6 +137,59 @@ def test_record_offline_tuition_payment_flips_enrollment(client, treasurer, memb
     assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL
 
 
+def test_record_offline_partial_tuition_payment_does_not_flip_enrollment(
+        client, treasurer, member):
+    """A partial offline tuition payment (less than the year's full rate)
+    must not flip the enrollment to PAID_IN_FULL — that mislabels the
+    decision record and grants covered-tier event access (task #439 fix 2).
+    No installment should be minted (installments drive the paid-in-full
+    check), and the payment should still succeed with a receipt."""
+    from django.utils import timezone
+
+    from payments.models import Payment, TuitionEnrollment, TuitionInstallment
+    y = timezone.now().date().year
+    start = y if timezone.now().date().month >= 9 else y - 1
+    TuitionPeriod.objects.create(
+        name=f"AY {start}-{start + 1} T", slug=f"t-{start}",
+        start_date=date(start, 9, 1), end_date=date(start + 1, 8, 31),
+        decision_due_date=date(start, 8, 31), tuition_amount=Decimal("2000"))
+    resp = client.post(reverse("treasurer_record_payment", args=[member.id]),
+                        {"category": "tuition", "amount": "50"})
+    assert resp.status_code == 302
+    enr = TuitionEnrollment.objects.get(user=member)
+    assert enr.status == TuitionEnrollment.Status.COMMITTED
+    assert TuitionInstallment.objects.filter(enrollment=enr).count() == 0
+    assert "tr2@x.test" in enr.notes
+    assert "partial offline tuition payment of $50" in enr.notes
+    p = Payment.objects.get(user=member)
+    assert p.status == Payment.Status.SUCCEEDED
+    assert p.tuition_installment_id is None
+    assert hasattr(p, "receipt")
+
+
+def test_record_offline_partial_tuition_payment_preserves_skipping_status(
+        client, treasurer, member):
+    """A partial payment must not overwrite an explicit prior decision like
+    SKIPPING — only a full payment forces COMMITTED."""
+    from django.utils import timezone
+
+    from payments.models import TuitionEnrollment
+    y = timezone.now().date().year
+    start = y if timezone.now().date().month >= 9 else y - 1
+    period = TuitionPeriod.objects.create(
+        name=f"AY {start}-{start + 1} T", slug=f"t-{start}",
+        start_date=date(start, 9, 1), end_date=date(start + 1, 8, 31),
+        decision_due_date=date(start, 8, 31), tuition_amount=Decimal("2000"))
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=period,
+        status=TuitionEnrollment.Status.SKIPPING)
+    client.post(reverse("treasurer_record_payment", args=[member.id]),
+                {"category": "tuition", "amount": "50"})
+    enr = TuitionEnrollment.objects.get(user=member)
+    assert enr.status == TuitionEnrollment.Status.SKIPPING
+    assert "partial offline tuition payment of $50" in enr.notes
+
+
 def test_record_tuition_payment_over_skipping_appends_audit_note(
         client, treasurer, member):
     """Flipping an explicit SKIPPING decision must leave an audit trail."""
