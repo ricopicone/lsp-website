@@ -1461,14 +1461,26 @@ def my_payments_update(request):
 
     periods = {str(tp.id): tp for tp in TuitionPeriod.objects.all()}
     changed = 0
+    blocked_donation_retype = False
     for p in Payment.objects.filter(user=request.user):
         fields = []
 
         new_type = request.POST.get(f"type_{p.id}")
         if new_type in Payment.Type.values and new_type != p.payment_type:
-            p.payment_type = new_type
-            p.source = Source.SELF_REPORTED
-            fields += ["payment_type", "source"]
+            is_donation_flip = (
+                new_type == Payment.Type.DONATION
+                or p.payment_type == Payment.Type.DONATION
+            )
+            if is_donation_flip:
+                # Donations are excluded from the ledger pot (ledger._counts)
+                # — flipping to/from DONATION moves money into or out of the
+                # member's own balance. That needs treasurer review, not
+                # self-service.
+                blocked_donation_retype = True
+            else:
+                p.payment_type = new_type
+                p.source = Source.SELF_REPORTED
+                fields += ["payment_type", "source"]
 
         note_key = f"note_{p.id}"
         if note_key in request.POST:
@@ -1489,8 +1501,14 @@ def my_payments_update(request):
             p.save(update_fields=fields)
             changed += 1
 
-    messages.success(
-        request,
-        f"Saved {changed} payment update(s)." if changed else "No changes to save.",
-    )
+    if blocked_donation_retype:
+        messages.error(
+            request,
+            "To reclassify a donation, or reclassify a payment as a "
+            "donation, contact the treasurer.",
+        )
+    if changed:
+        messages.success(request, f"Saved {changed} payment update(s).")
+    elif not blocked_donation_retype:
+        messages.success(request, "No changes to save.")
     return redirect(_tuition_tab_url())

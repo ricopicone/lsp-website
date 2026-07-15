@@ -1642,6 +1642,49 @@ def test_member_assigns_tuition_period_and_note(client):
 
 
 @pytest.mark.django_db
+def test_member_cannot_retype_donation_to_dues(client):
+    """Donations are excluded from the ledger pot (payments/ledger.py
+    ``_counts``) — a member re-typing their own donation into a counting
+    category (or vice versa) would move money into/out of their balance
+    without treasurer review. Non-donation<->non-donation retypes stay
+    self-service (task #439 fix 1)."""
+    from django.contrib.messages import get_messages
+
+    from payments.models import Payment
+    u = _mk_candidate("donor@example.com")
+    pay = Payment.objects.create(
+        payment_type=Payment.Type.DONATION, user=u, amount=Decimal("100.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+    )
+    client.force_login(u)
+    resp = client.post(reverse("my_payments_update"), {
+        f"type_{pay.id}": Payment.Type.DUES,
+    })
+    pay.refresh_from_db()
+    assert pay.payment_type == Payment.Type.DONATION  # unchanged
+    msgs = [str(m) for m in get_messages(resp.wsgi_request)]
+    assert any("contact the treasurer" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_member_can_retype_dues_to_tuition(client):
+    """Non-donation <-> non-donation retypes are balance-neutral (both count
+    toward the pot) and stay self-service."""
+    from payments.models import Payment
+    u = _mk_candidate("retype@example.com")
+    pay = Payment.objects.create(
+        payment_type=Payment.Type.DUES, user=u, amount=Decimal("100.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+    )
+    client.force_login(u)
+    client.post(reverse("my_payments_update"), {
+        f"type_{pay.id}": Payment.Type.TUITION,
+    })
+    pay.refresh_from_db()
+    assert pay.payment_type == Payment.Type.TUITION
+
+
+@pytest.mark.django_db
 def test_tuition_collected_counts_regardless_of_payment_date():
     """Coverage counts a payment toward the student's enrolled year no matter
     when it was paid — a summer prepayment (August, before the AY starts) still
