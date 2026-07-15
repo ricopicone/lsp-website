@@ -5,6 +5,7 @@ from datetime import timezone as tz
 from decimal import Decimal
 
 import pytest
+from django.utils import timezone
 
 from accounts.models import User
 from payments import ledger
@@ -180,7 +181,11 @@ def test_conflict_flag_credit_plus_skipping_year(member):
 
 
 def test_dues_state_for_current_period(member):
-    p = _dues_period(2026)
+    # Build a dues period covering *today* — dues_state keys off
+    # DuesPeriod.current(), which is date-sensitive.
+    today = timezone.now().date()
+    start = today.year if today.month >= 9 else today.year - 1
+    p = _dues_period(start)
     c = _charge(member, Charge.Category.DUES, "100", p.start_date, dues_period=p)
     acct = ledger.member_account(member)
     assert acct["dues_state"] == "unpaid"

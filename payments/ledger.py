@@ -125,15 +125,15 @@ def member_account(user) -> dict:
             "state": state,
         })
 
-    # Find the most recent dues charge (by effective_date) to determine dues_state.
-    dues_charges = [c for c in charges if c.category == Charge.Category.DUES]
     current_dues = DuesPeriod.current()
     dues_state = None
-    if dues_charges:
-        # Use the most recent dues charge.
-        dc = max(dues_charges, key=lambda c: (c.effective_date, c.id))
-        dues_state = ("waived" if dc.status == Charge.Status.WAIVED
-                      else states.get(dc.id, "unpaid"))
+    if current_dues is not None:
+        dc = next((c for c in charges
+                   if c.category == Charge.Category.DUES
+                   and c.dues_period_id == current_dues.id), None)
+        if dc is not None:
+            dues_state = ("waived" if dc.status == Charge.Status.WAIVED
+                          else states.get(dc.id, "unpaid"))
 
     balance = obligation - paid
     return {
