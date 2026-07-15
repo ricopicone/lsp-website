@@ -1,7 +1,7 @@
 # Treasurer Admin Guide
 
-*A walk-through of the treasurer admin: managing dues, tuition,
-payments, refunds, and the academic-year settings that drive them.*
+*A walk-through of the treasurer admin: the unified member ledger, dues,
+tuition, payments, refunds, and the academic-year settings that drive them.*
 
 ---
 
@@ -16,181 +16,244 @@ That's the path for a treasurer account. (If your account also has full
 site-admin rights, you'll additionally see a direct **Treasurer dashboard**
 link right in the dropdown — either route lands in the same place.)
 
-You'll arrive on the **Overview** tab. Eight tabs run across the top:
+You'll arrive on the **Overview** tab. Seven tabs run across the top:
 
 | Tab | What it's for |
 |---|---|
-| **Overview** | At-a-glance snapshot of tuition + dues for the current academic year |
-| **Tuition** | Per-student tuition status, any year, plus all-years trends |
-| **Dues** | Per-member dues status, any year, plus all-years trends |
-| **Members** | Look up any member to see their full payment history |
+| **Overview** | Academic-year tiles plus one needs-attention queue — everything that wants you, in one place |
+| **Accounts** | Every member's balance on the unified ledger — search, filter, and sort, with the URL carrying your filters so a filtered view is a shareable link |
 | **Payments** | Chronological list of all payments with refund / mark-paid controls |
+| **Reconcile** | Provisional payments awaiting categorization, Stripe payments with no linked member, and charge conflicts |
 | **Settings** | Edit dues + tuition amounts and reminder cadence per academic year |
-| **Exports** | Download CSVs of payment data |
+| **Exports** | Download CSVs of transactions and member balances |
 | **Help** | This page |
+
+---
+
+## How the account works
+
+There is **one account per member** — not a separate tuition ledger, a
+separate dues ledger, and so on. That used to be the design, and it
+caused real confusion: the school's historical records simply aren't
+clean enough to say with confidence which dollar paid which year's
+tuition versus which year's dues. So the ledger now works the
+traditional way — one account per member, with two kinds of entries:
+
+- **Charges** — what a member owes. A charge is created for each year's
+  dues, for each year of tuition a student owes (up to the four-year
+  requirement, and only for years they haven't marked Skipping), and for
+  each event registration fee once it settles.
+- **Payments** — money that came in, whether through Stripe or recorded by
+  you as an offline cash/check/arrangement.
+
+All of a member's charges and payments sit together on **one running
+balance**. When a payment lands, it covers the **oldest open charge
+first**, then the next-oldest, and so on. Money is **not earmarked** — a
+category (dues, tuition, registration) is a label for reporting, not a
+separate pot. That's a deliberate change: a member who overpaid one thing
+and underpaid another now shows their *true net position* — one number —
+rather than a confusing mix of "behind on dues, ahead on tuition" that
+never quite made sense.
+
+Categories still matter for two things the school tracks closely:
+
+- **Total tuition paid** — the running sum of tuition payments, shown on
+  every member's account page.
+- **Tuition-years progress** — in-training members (Pre-Candidate and
+  Candidate, on either the analyst or scholar track) owe **four years** of
+  tuition total. The years don't have to be contiguous — a student may mark
+  a year **Skipping** and pay it later — but the requirement is capped at
+  four; it's never open-ended, and it's never waived permanently. Skipping
+  a year means that year doesn't generate a tuition charge; when a
+  non-skipping year is fully covered by the sweep, it counts toward the
+  four.
+
+Full Analysts, Scholars, and external visitors (Auditors) never owe
+tuition. Dues, by contrast, are owed annually by every in-training and
+full member (not Auditors), tiered by role — the amounts live on the
+Settings tab.
 
 ---
 
 ## Overview tab
 
-Two cards summarizing the current academic year — **Tuition on the left,
-Dues on the right** — each leading with the dollar figures that matter and a
-small bar showing the split:
+Tiles across the top summarize the current academic year:
 
-- **Tuition card**: the annual amount, then three featured totals —
-  **Collected** (money in), **Planned, unpaid** (remaining balances from
-  students who committed or are on a payment plan), and **Owed, undecided**
-  (students who owe a decision but haven't recorded one). Below: in-training
-  count, the **reconciliation queue size**, and total outstanding.
-- **Dues card**: the three tier amounts and due date, then **Collected** vs
-  **Outstanding** (what unpaid obligated members still owe), with
-  obligated / paid / unpaid counts.
+- **Collected this AY** — total money in, broken out underneath by dues /
+  tuition / registration / donation.
+- **Outstanding** — the total everyone still owes (click through to
+  Accounts, pre-filtered to owing).
+- **Accounts owing** and **Accounts in credit** — headcounts, each a link
+  into the filtered Accounts view.
 
-Use this to see at a glance whether anything needs work. If the tuition
-reconciliation queue is non-zero, open the Tuition tab.
+Below the tiles is the **needs-attention queue** — the one place that
+surfaces everything that wants a decision from you:
+
+- **Undecided** — in-training members with no tuition decision on file for
+  the current year. Each row has a one-click **Skipping** button if that's
+  the right call; otherwise open their account page to record what they
+  told you.
+- **Committed, not yet paid** — members who said they'd pay tuition this
+  year but no payment (or payment plan) is on file yet. Click through to
+  their account page to record it once it arrives.
+- **Charge conflicts** — a staff-adjusted charge that disagrees with what
+  the system would otherwise expect (see *Reconcile tab* below).
+- **Assumed** and **No payer** counts — link straight to the Reconcile tab.
+
+If the queue is empty, there's nothing waiting on you today.
 
 ---
 
-## Reading the historical data
+## Accounts tab
 
-Before you dig in, some context on what's already loaded:
+The full member roster, one row per account: obligation, paid, balance,
+tuition-years progress (n of 4), a dues badge for the current year, and
+the date of the last payment. A **Sync charges** button mints any missing
+current-year dues charges — use it if a new member joined mid-year or a
+role change wasn't picked up automatically.
+
+Filters sit above the table and **live in the page's URL**:
+
+- **q** — search by name or email.
+- **balance** — Any / Owing / Credit / Square.
+- **role** — any LSP role.
+- **sort** — most owed first (default), name, most paid, or latest payment.
+
+Because the filters are query-string parameters, a filtered view — say,
+"everyone who's owing" — is a link you can copy and send, or bookmark, and
+it will reopen exactly that view.
+
+---
+
+## Reading a member's statement
+
+Click any member on the Accounts tab (or search from there) to open their
+account page. It has four parts:
+
+1. **Tiles** — balance (owed, in credit, or "Paid up"), total tuition
+   paid, tuition years covered out of four, and a dues-this-AY badge.
+   If a payment pushed the balance into credit while a tuition year is
+   marked Skipping, a warning banner explains the likely mix-up — a
+   skipped year that was actually paid — so you can fix the decision at
+   its source.
+2. **Tuition decisions** — one row per academic year the member has an
+   enrollment for: their decision, the year's rate, and where that
+   charge stands (paid / partial / unpaid / waived / requirement met /
+   skipping). The current year's row gets **Committed** and **Skipping**
+   buttons so you can set it directly here, without sending the member
+   back to `/tuition/`.
+3. **Statement** — the heart of the page: every charge and payment,
+   chronological, with a **running balance** column so you can see the
+   account's history unfold. Each charge row carries **Waive**, **Void**,
+   and **Adjust** actions (and **Reopen** once waived); each payment row
+   carries **Mark paid** (pending offline payments), **Refund**, and
+   **Resend receipt** as applicable. Hovering a line's provenance icon
+   shows where it came from — imported, verified, assumed, or
+   staff-entered — and any notes attached.
+4. **Actions** — an **Add a charge** form (any category, amount, effective
+   date, and an optional note) and a **Record an offline payment** form
+   that takes any category and amount. Recording an offline **tuition**
+   payment keeps the old side-effects — it sets the year's enrollment to
+   Committed if needed and creates the matching installment record — so
+   nothing downstream breaks.
+
+Every one of these actions writes a **dated, attributed note** onto the
+charge or payment it touched (who did it, when, and what changed), so the
+statement doubles as an audit trail. Below the statement, the member's
+event registrations are listed for reference.
+
+---
+
+## Historical data
+
+Some context on what's already loaded, and what still needs your eye:
 
 - **AY 2024–25 and 2025–26 were imported** from the previous treasurer's
-  spreadsheets — tuition and dues payments, with the matching students/members.
-- For tuition, **a student who has no payment recorded for a year is shown as
-  "Skipping" that year.** For past years this is an *assumption* (we didn't have
-  per-year enrollment records), so don't read it as a confirmed choice.
-- Each record quietly carries a **provenance** — imported, verified (a real
-  Stripe payment), assumed, or staff-entered — so that when we later confirm
-  figures against bank/Stripe records, confirmed data is promoted rather than
-  overwritten.
-- A short **member survey at launch** will let people confirm their own join
-  year and which years they paid, which will firm up the older numbers.
+  spreadsheets — tuition and dues payments, matched to the students and
+  members on file.
+- Every charge and payment carries a **provenance**: imported, verified (a
+  real Stripe payment), assumed, or staff-entered — visible on hover on
+  the statement — so that when a figure is later confirmed against
+  bank/Stripe records, the confirmed version can be trusted over a guess.
+- **Dues charges were backfilled** for past academic years back to the
+  first well-recorded year, and those backfilled charges are marked
+  **assumed** — a best guess that a member owed dues that year, not a
+  confirmed fact. **Before the reminder emails are switched back on at
+  launch**, review the Accounts tab filtered to **Owing**, and for each
+  assumed charge you don't believe is real, **waive it** from that
+  member's statement. This pass matters: an unreviewed assumed charge
+  will otherwise nag a member who actually paid, or who joined after that
+  year, with a reminder email they shouldn't get.
 
-So: current-year figures are solid; the further back you look, the more the
-"Skipping" rows are best-guesses awaiting confirmation.
+So: current-year figures are solid; the further back you look, the more a
+row is a best guess awaiting your review.
 
 ---
 
-## Tuition tab
+## Common workflows
 
-At the top is a **year selector** — the dashboard opens on the current academic
-year, but you can switch to any past year to see exactly who paid and what was
-collected. The current year additionally shows the forward-looking tools
-(reconciliation queue, record-payment buttons); past years show the
-retrospective record only.
+- **"A member paid me dues or tuition in cash or by check."** → open their
+  account page → **Record an offline payment** → pick the category and
+  enter the amount. A receipt and confirmation email go out automatically,
+  same as a Stripe payment.
+- **"A student is skipping tuition this year."** → open their account page
+  → **Tuition decisions** table → **Skipping** on the current year's row
+  (or use the one-click **Skipping** button from the Overview queue if
+  they're listed there as undecided).
+- **"I want to forgive a charge."** → open the member's account page →
+  find the charge on the statement → **Waive**. Waived charges stay
+  visible (for the record) but drop out of the obligation total; **Reopen**
+  undoes it if you change your mind.
+- **"Why does this member show as owing?"** → open their account page and
+  read the statement top to bottom: it's their obligation (every open
+  charge) minus what's come in, with the oldest charges covered first. A
+  member can look "behind" on one category while actually ahead overall —
+  the running balance at the bottom of the statement is the real answer.
 
-### Who pays tuition
+Members can't accidentally pay dues twice — the `/dues/` page checks
+whether a real payment already exists for the current period before
+letting them start a new Stripe checkout, independent of whether a charge
+has been minted yet.
 
-The four "in-training" roles owe annual tuition:
+---
 
-- Pre-Candidate Analyst
-- Candidate Analyst
-- Pre-Candidate Scholar
-- Candidate Scholar
-
-Full Analysts, Scholars, and external visitors (Auditors) do not pay tuition.
-
-**Total years required:** four. The years do **not** have to be
-contiguous — a student may skip one or more years and pay them later.
-A student transitions out of the in-training roles only after four total
-tuition-paid years have been recorded. **Permanent exemption is not an
-option** — skipping a year is fine, but the four-year obligation stands.
-
-### The annual decision
-
-Each academic year (Sep 1 – Aug 31), every in-training student records one
-of these for that year:
-
-| Decision | Meaning |
-|---|---|
-| **Committed** | "I plan to pay this year" — but no payment received yet |
-| **Payment plan** | "I want to pay in installments" — plan is set up |
-| **Paid in full** | The annual tuition has been received |
-| **Skipping** | "I'm not paying tuition this year" (pays regular event fees; the year doesn't count toward the four) |
-
-Students choose `committed`, `payment_plan`, or `skipping` themselves at
-**`/tuition/`**. `paid_in_full` is reached automatically when payment lands
-(Stripe Checkout, or you recording an offline payment).
-
-**Decision deadline:** August 31 by default (the day before the academic year
-starts). Adjustable per year on the Settings tab. **Reminders** go out
-automatically every N days from that date to students who haven't decided or
-whose `committed` status isn't yet backed by a payment.
-
-### Sections on the Tuition tab
-
-- **Selected-year summary** — the dollar tiles (Collected / Planned-unpaid /
-  Owed-undecided) and bar, plus in-training count, outstanding, and the
-  reconciliation queue size.
-- **Status breakdown** — how many students are in each status
-  (paid-in-full / payment-plan / committed / skipping, and — current year only
-  — "Undecided" = no decision on file).
-- **By role** *(current year)* — per-role table: total, decided, undecided,
-  committed-but-unpaid.
-- **Reconciliation queue** *(current year)* — the rows that need you: students
-  who are **undecided** or **committed without payment**. Each has two buttons:
-    - **Record payment** — records an offline tuition payment for the annual
-      amount, marks the enrollment Paid in Full, and emails the student a
-      receipt. Use this when you've received their cash / check.
-    - **Skipping** — sets their status to Skipping.
-- **Students this year** — the full roster of recorded students for the
-  selected year, each with status, amount paid, and remaining balance.
-- **All academic years** *(bottom)* — the longitudinal view: a table of every
-  year (enrolled, status counts, collected) plus two charts —
-  **tuition collected per year** and **students by status per year**. Click any
-  year in the table to jump to it.
-
-> Actions are recorded in the enrollment's notes with the date and your email,
-> so there's an audit trail.
-
-### Common tuition workflows
-
-- **"A candidate paid me the tuition amount in cash for this year."**
-  → Tuition tab → find them in the reconciliation queue → **Record payment**.
-- **"A candidate wants to do a payment plan."**
-  → Have them go to `/tuition/` and pick "set up a payment plan" (2 or 9
-  installments), payable via Stripe.
-- **"A candidate is skipping this year."**
-  → Tuition tab → find them → **Skipping**.
-- **"What did 2024–25 look like?"**
-  → Tuition tab → year selector → pick AY 2024–25.
-
-### How tuition status interacts with event registration
+## Tuition & registration gates
 
 There are **two gates** in front of event registration for in-training
-students. Both must clear for registration to go through.
+students. Both must clear for registration to go through. (These gates key
+off a student's **tuition decision** for the year — they're unaffected by
+the ledger rework; money doesn't drive them, the decision does.)
 
-#### Gate 1 — Broad: a decision must be on file
+### Gate 1 — Broad: a decision must be on file
 
-An in-training student with no tuition decision recorded for the current year
-cannot register for *any* event. They see a polite page directing them to
-`/tuition/`. **Any** of the four decisions clears this gate — **including
-`skipping`**. The point is to force engagement with the annual decision, not to
-collect money.
+An in-training student with no tuition decision recorded for the current
+year cannot register for *any* event. They see a polite page directing
+them to `/tuition/`. **Any** of the four decisions clears this gate —
+**including `skipping`**. The point is to force engagement with the
+annual decision, not to collect money.
 
-#### Gate 2 — Narrow: committed-without-payment blocked from a tuition-covered special event
+### Gate 2 — Narrow: committed-without-payment blocked from a tuition-covered special event
 
 This gate fires only when **all three** are true:
 
 1. The event's type is **Special event** (Days of Assembly, Working Days,
-   Scholarly Seminars, and the annual-program types — seminars, reading groups,
-   cartels — do **not** engage this gate).
+   Scholarly Seminars, and the annual-program types — seminars, reading
+   groups, cartels — do **not** engage this gate).
 2. The student's status is **`committed`** — they said they'd pay, but no
    payment and no payment plan is on file.
 3. The event has a "covered by tuition" price tier matching the student's
-   audience (whether an event is tuition-covered is set per-event by whoever
-   configures its price tiers).
+   audience (whether an event is tuition-covered is set per-event by
+   whoever configures its price tiers).
 
-The intuition: this stops a student from claiming "covered by tuition" pricing
-on a special event without having paid the tuition that would cover it. If the
-event isn't tuition-covered, the student just pays the regular fee and this gate
-never fires.
+The intuition: this stops a student from claiming "covered by tuition"
+pricing on a special event without having paid the tuition that would
+cover it. If the event isn't tuition-covered, the student just pays the
+regular fee and this gate never fires.
 
-#### Full case table
+### Full case table
 
-Read as: *"a student with this tuition status, registering for this kind of
-event, gets this outcome."* Gate 1 applies first, then Gate 2.
+Read as: *"a student with this tuition status, registering for this kind
+of event, gets this outcome."* Gate 1 applies first, then Gate 2.
 
 | Tuition status | Annual-program event (seminar, RG, cartel) | Day of Assembly, Working Day, Scholarly Seminar | Special event (no covered tier) | Special event (covered tier matching audience) |
 |---|---|---|---|---|
@@ -206,83 +269,28 @@ where required.
 
 ---
 
-## Dues tab
-
-Dues are **per-academic-year** and **tiered by role**:
-
-| Role | Default annual dues |
-|---|---|
-| Pre-candidate (analyst or scholar track) | $50 |
-| Candidate (analyst or scholar track) | $100 |
-| Analyst, Scholar | $150 |
-
-External visitors (Auditors) don't owe dues.
-
-Like Tuition, the Dues tab has a **year selector** at the top. The current year
-shows the live picture (who still owes, with record-payment buttons); past years
-show who paid and how much was collected.
-
-### Sections on the Dues tab
-
-- **Selected-year summary** — *current year:* obligated / paid / unpaid counts,
-  Collected vs Outstanding, and a small split bar. *Past years:* paid count and
-  collected total.
-- **Paid / unpaid by role** *(current year)* — a stacked bar plus a per-role
-  table.
-- **Unpaid members** *(current year)* — everyone who still owes for the year,
-  each with the amount owed and a **Record payment** button. Reminders email
-  out every N days (set on Settings) after the due date.
-- **Payments received** — for the selected year, who paid: name, role, amount,
-  date, and method. This is accurate for any year, even as the roster changes
-  over time.
-- **All academic years** *(bottom)* — a table of every year (tiers, paid count,
-  collected; unpaid only shown for the current year, where it's meaningful)
-  plus two charts: **dues collected per year** and **paying members per year**.
-  Click a year to jump to it.
-
-### Common dues workflows
-
-- **"A member wrote me a check for dues."**
-  → Dues tab → find them in Unpaid → **Record payment**.
-- **"A member paid via Stripe but it's not showing as paid."**
-  → Payments tab → find their pending payment → **Mark paid**. (Rare — the
-  website normally handles this automatically.)
-
----
-
-## Members tab
-
-Type a name or email, hit **Search**, and click **View** on a result. The detail
-page shows:
-
-- **Tuition enrollments** — every year, with status badge and (on a payment
-  plan) the installment schedule.
-- **Payments** — every payment by this member (dues, tuition, registrations,
-  donations), most recent first, with status badges.
-- **Event registrations** — every event they've registered for, with status.
-
-Use this as your one-stop lookup for "What's the story with [member]?" The page
-is read-only — to make a change, go to the relevant tab.
-
----
-
 ## Payments tab
 
 For inspecting or correcting individual payments.
 
 - **Filters**: payment type (registration / dues / donation / tuition) and
   status (succeeded / pending / refunded / failed).
-- **Each row** shows date, member, type (+ event for registrations), amount,
-  method (Stripe / Offline), status, and actions:
-    - **Mark paid** — on pending offline payments. Runs the standard success
-      side-effects: marks succeeded, issues a receipt, sends emails.
-    - **Refund** — on succeeded payments. For **Stripe** payments it issues an
-      automatic refund and marks it refunded (**irreversible** — the prompt
-      warns you). For **offline** payments it marks it refunded **for accounting
-      only** — no money moves, so you send the actual check / cash refund
-      yourself. An audit note records the date and your email.
-    - **Resend receipt** — on succeeded payments that have a receipt; handy when
-      a member loses the original.
+- **Each row** shows date, member, type (+ event for registrations),
+  amount, method (Stripe / Offline), status, and actions:
+  - **Mark paid** — on pending offline payments. Runs the standard success
+    side-effects: marks succeeded, issues a receipt, sends emails.
+  - **Refund** — on succeeded payments. For **Stripe** payments it issues
+    an automatic refund and marks it refunded (**irreversible** — the
+    prompt warns you). For **offline** payments it marks it refunded **for
+    accounting only** — no money moves, so you send the actual check /
+    cash refund yourself. An audit note records the date and your email.
+  - **Resend receipt** — on succeeded payments that have a receipt; handy
+    when a member loses the original.
+
+This tab, and everything on it, is unchanged by the ledger rework — it's
+still the place to inspect or correct one payment at a time. The
+per-member **Statement** on the Accounts tab is the place to see how that
+payment fits into the bigger picture.
 
 ---
 
@@ -292,47 +300,59 @@ Per-academic-year settings, in two tables:
 
 - **Dues** — for each year, the three tier amounts (pre-cand / candidate /
   analyst).
-- **Tuition** — for each year, the annual amount and the **decision due date**
-  (defaults to August 31, the day before the year starts).
+- **Tuition** — for each year, the annual amount and the **decision due
+  date** (defaults to August 31, the day before the year starts).
 
 The current year is marked. Editing a past year does **not** retroactively
-change anyone's recorded payments — it only affects new payments and reminders.
+change anyone's recorded charges or payments — it only affects new charges
+and reminders going forward.
 
 Below the tables, **Reminder cadences** sets how often the website emails
 reminders to unpaid members and undecided students (in days; default 7).
 Applies to the current year; future years inherit it on rollover.
 
-> A new academic year is set up automatically each September, inheriting its
-> amounts and cadence from the previous year — so changes you save here carry
-> forward.
+> A new academic year is set up automatically each September, inheriting
+> its amounts and cadence from the previous year — so changes you save
+> here carry forward.
 
 ---
 
 ## Exports tab
 
-- **All transactions CSV** — every payment with member, amount, status, method,
-  date, and Stripe reference. Good for bookkeeping or sharing with the board.
+- **All transactions CSV** — every payment with member, amount, status,
+  method, date, and Stripe reference. Good for bookkeeping or sharing with
+  the board.
+- **Member balances CSV** — every member's obligation, paid total, and
+  balance on the unified ledger — the export version of the Accounts tab.
 
-Per-event registration rosters aren't here — they live on each event's page
-(open an event under **Events** or **Program** and use its "Roster CSV" link).
+Per-event registration rosters aren't here — they live on each event's
+page (open an event under **Events** or **Program** and use its "Roster
+CSV" link).
 
 ---
 
 ## Things you don't have to do (the system handles them)
 
-- **Issuing receipts** — automatic when a Stripe payment succeeds (or when you
-  click **Record payment** / **Mark paid**).
+- **Issuing receipts** — automatic when a Stripe payment succeeds (or when
+  you click **Record an offline payment** / **Mark paid**).
 - **Sending payment-success emails** — same.
-- **Creating next year's academic period** — set up automatically so you can
-  plan ahead in Settings.
+- **Minting most charges** — dues and tuition charges are minted
+  automatically from the tier tables and each student's tuition decision;
+  registration charges mint when a registration settles. **Sync charges**
+  on the Accounts tab is only for catching up a charge that should exist
+  but hasn't been minted yet.
+- **Creating next year's academic period** — set up automatically so you
+  can plan ahead in Settings.
 - **Sending reminders** — sent on the cadence you set in Settings.
+- **Blocking double-payment** — the `/dues/` and `/tuition/` pages check
+  for an existing payment before starting a new one.
 
 ---
 
 ## When to ask the Web Coordinator for help
 
-- Bulk operations across many records (e.g. correcting a whole year's data once
-  bank records arrive).
+- Bulk operations across many records (e.g. correcting a whole year's data
+  once bank records arrive).
 - Anything that looks broken (a number doesn't add up, an email bounced).
 - Setting up a new treasurer account (when you transition out).
 - Anything you'd like to do that this admin doesn't yet handle.

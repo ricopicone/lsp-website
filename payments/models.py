@@ -514,3 +514,93 @@ class TuitionReminder(models.Model):
 
     def __str__(self):
         return f"{self.user} ← {self.tuition_period} @ {self.sent_at.isoformat()}"
+
+
+class Charge(models.Model):
+    """A debit line in a member's unified account (task #439).
+
+    The credit side is the existing :class:`Payment`. Balance and per-charge
+    coverage are *derived* in :mod:`payments.ledger` — one pot of money swept
+    across OPEN charges oldest-first; never a per-payment allocation.
+    """
+
+    class Category(models.TextChoices):
+        DUES = "dues", _("Dues")
+        TUITION = "tuition", _("Tuition")
+        REGISTRATION = "registration", _("Registration")
+
+    class Status(models.TextChoices):
+        OPEN = "open", _("Open")            # counts toward the obligation
+        WAIVED = "waived", _("Waived")      # treasurer forgave — audit only
+        VOID = "void", _("Void")            # cancelled/superseded — audit only
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="charges",
+    )
+    category = models.CharField(max_length=20, choices=Category.choices)
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    currency = models.CharField(max_length=3, default="usd")
+    effective_date = models.DateField(
+        help_text="Orders the oldest-first coverage sweep — AY start for "
+        "dues/tuition, settle date for registrations.",
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.OPEN, db_index=True,
+    )
+    dues_period = models.ForeignKey(
+        DuesPeriod, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="charges",
+    )
+    tuition_period = models.ForeignKey(
+        TuitionPeriod, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="charges",
+    )
+    registration = models.ForeignKey(
+        "registrations.Registration", on_delete=models.PROTECT, null=True,
+        blank=True, related_name="charges",
+    )
+    source = models.CharField(
+        max_length=20, choices=Source.choices, default=Source.STAFF,
+        db_index=True, help_text="Provenance — how this charge entered the system.",
+    )
+    staff_adjusted = models.BooleanField(
+        default=False,
+        help_text="Set when a treasurer edits this row; the minting syncs "
+        "then never touch it (disagreements surface on the Reconcile tab).",
+    )
+    notes = models.TextField(blank=True, help_text="Append-only audit trail.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("effective_date", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "dues_period"),
+                condition=models.Q(dues_period__isnull=False) & ~models.Q(status="void"),
+                name="charge_unique_user_dues_period",
+            ),
+            models.UniqueConstraint(
+                fields=("user", "tuition_period"),
+                condition=models.Q(tuition_period__isnull=False) & ~models.Q(status="void"),
+                name="charge_unique_user_tuition_period",
+            ),
+            models.UniqueConstraint(
+                fields=("registration",),
+                condition=models.Q(registration__isnull=False) & ~models.Q(status="void"),
+                name="charge_unique_registration",
+            ),
+        ]
+        indexes = [models.Index(fields=("user", "status"))]
+
+    def __str__(self):
+        return (
+            f"${self.amount} {self.get_category_display().lower()} charge "
+            f"({self.get_status_display()}, {self.user})"
+        )
+
+    def add_note(self, text: str, *, save=True) -> None:
+        """Append a dated line to the audit trail."""
+        line = f"[{timezone.now().date()}] {text}"
+        self.notes = (self.notes + "\n" + line) if self.notes else line
+        if save:
+            self.save(update_fields=("notes",))

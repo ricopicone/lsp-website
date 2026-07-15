@@ -121,6 +121,11 @@ def test_groups_tab_lists_current_and_past(client):
 # ---- editable My Payments table (type / note / AY) -------------------------
 
 def test_member_edits_type_and_note_on_own_payment(client):
+    """Non-donation<->non-donation retypes (both count toward the unified
+    ledger pot) stay self-service, alongside a note edit. Donation<->
+    non-donation retypes are a separate, treasurer-only path — see
+    payments/test_tuition.py::test_member_cannot_retype_donation_to_dues
+    (task #439 fix 1)."""
     from payments.models import Payment
 
     member = _user("r@x.test", role=Profile.Role.CANDIDATE)
@@ -135,17 +140,17 @@ def test_member_edits_type_and_note_on_own_payment(client):
     )
     client.force_login(member)
     resp = client.post(reverse("my_payments_update"), {
-        f"type_{mine.id}": "donation",
-        f"note_{mine.id}": "Actually a donation.",
+        f"type_{mine.id}": "dues",
+        f"note_{mine.id}": "Actually dues, not tuition.",
         # An attempt to edit someone else's payment is ignored (not in the qs).
-        f"type_{theirs.id}": "donation",
+        f"type_{theirs.id}": "dues",
     })
     assert resp.status_code == 302
     mine.refresh_from_db()
     theirs.refresh_from_db()
-    assert mine.payment_type == "donation"
+    assert mine.payment_type == "dues"
     assert mine.source == Source.SELF_REPORTED
-    assert mine.member_note == "Actually a donation."
+    assert mine.member_note == "Actually dues, not tuition."
     assert theirs.payment_type == "tuition"  # untouched
     assert theirs.source == Source.ASSUMED
 

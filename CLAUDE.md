@@ -471,6 +471,18 @@ Phase 2 plan for milestone IDs):**
   timer at launch) sends due auto-followups + redacts requests
   `retention_months` after reply/close. `DJANGO_REFERRALS_EMAIL` now a real
   setting. See `referral-workflow` memory.
+- **Unified member ledger** (task #439) — replaced the per-category
+  (dues/tuition/registration) treasurer views with one account per member:
+  `payments.Charge` (debits) swept against `Payment` (credits) in
+  `payments/ledger.py`, minted by `payments/charges.py`. The treasurer admin
+  is now 7 tabs — Overview (AY tiles + one needs-attention queue), **Accounts**
+  (every member's balance, linkable filters), Payments, Reconcile (provisional
+  payments + no-payer + charge conflicts), Settings, Exports (+ a balances
+  CSV), Help — with a per-member account page (statement, running balance,
+  add/adjust/waive/void charge, record any-category offline payment). History
+  minted via `manage.py backfill_charges`; `manage.py audit_ledger` is the
+  read-only parity check. `user_paid_for_period` is retired. See
+  `tuition-cumulative-ledger` memory.
 
 ## Open items (M7 wrap-up)
 

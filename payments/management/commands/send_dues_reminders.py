@@ -7,7 +7,8 @@ already reminded within that interval.
 
 Skips:
 - users not in ``DUES_OBLIGATED_ROLES``
-- users who already paid for the current period
+- users whose unified-ledger dues state for the current period is paid,
+  waived, or unminted (``None`` — no charge, nothing to chase)
 - users whose last reminder was within the period's reminder_interval_days
 - when no current period exists, or it's not yet past due date
 """
@@ -21,8 +22,9 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from notifications.categories import Category
+from payments import ledger
 from payments import notifications as notify_payments
-from payments.dues import is_dues_obligated, user_paid_for_period
+from payments.dues import is_dues_obligated
 from payments.emails import send_dues_reminder
 from payments.models import DuesPeriod, DuesReminder
 from payments.sending import ThrottledSender
@@ -56,7 +58,8 @@ class Command(BaseCommand):
 
         interval_cutoff = timezone.now() - timedelta(days=period.reminder_interval_days)
         sent = 0
-        skipped_paid = 0
+        skipped_covered = 0
+        skipped_no_charge = 0
         skipped_recent = 0
         skipped_not_obligated = 0
         errored = 0
@@ -67,8 +70,14 @@ class Command(BaseCommand):
             if not is_dues_obligated(user):
                 skipped_not_obligated += 1
                 continue
-            if user_paid_for_period(user, period):
-                skipped_paid += 1
+            state = ledger.member_account(user)["dues_state"]
+            if state is None:
+                # No charge minted yet → nothing to chase (distinct from
+                # "covered" so the summary can't mislead when minting lags).
+                skipped_no_charge += 1
+                continue
+            if state in ("paid", "waived"):
+                skipped_covered += 1
                 continue
             if DuesReminder.objects.filter(
                 user=user, dues_period=period, sent_at__gte=interval_cutoff,
@@ -93,7 +102,9 @@ class Command(BaseCommand):
         verb = "Would send" if dry else "Sent"
         self.stdout.write(self.style.SUCCESS(
             f"{verb} {sent} reminder(s) for {period.name}. "
-            f"Skipped: {skipped_paid} paid, {skipped_recent} reminded recently, "
+            f"Skipped: {skipped_covered} paid/waived, "
+            f"{skipped_no_charge} no charge minted, "
+            f"{skipped_recent} reminded recently, "
             f"{skipped_not_obligated} not obligated. "
             f"Errors: {errored}."
         ))

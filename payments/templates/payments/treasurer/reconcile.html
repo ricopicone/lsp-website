@@ -2,6 +2,22 @@
 {% load treasurer_filters %}
 {% block tab_content %}
 <div class="space-y-6">
+  {% if charge_conflicts %}
+  <section class="space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Charge conflicts
+      <span class="text-base-content/60 text-sm font-normal">({{ charge_conflicts|length }})</span></h3>
+    <p class="text-sm text-base-content/60">The minting sync never edits a charge a treasurer has touched — disagreements land here instead.</p>
+    <ul class="rounded-lg border border-base-300 divide-y divide-base-300">
+      {% for item in charge_conflicts %}
+      <li class="p-3 text-sm flex flex-wrap items-baseline gap-2">
+        <a class="link" href="{% url 'treasurer_member_detail' item.user.id %}">{{ item.user.get_full_name|default:item.user.email }}</a>
+        <span>{{ item.problem }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   <header class="space-y-1">
     <h2 class="font-serif text-xl text-base-content">Reconcile provisional payments</h2>
     <p class="text-sm text-base-content/70">

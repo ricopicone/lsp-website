@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import csv
-import json
 import logging
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -16,7 +15,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Q
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
@@ -61,9 +60,7 @@ def _is_staff(user):
 
 TREASURER_TABS = [
     ("overview", "Overview"),
-    ("tuition",  "Tuition"),
-    ("dues",     "Dues"),
-    ("members",  "Members"),
+    ("accounts", "Accounts"),
     ("payments", "Payments"),
     ("reconcile", "Reconcile"),
     ("settings", "Settings"),
@@ -77,9 +74,7 @@ def _treasurer_tab_links() -> list[tuple[str, str, str]]:
     from django.urls import reverse
     name_to_url = {
         "overview": reverse("treasurer"),
-        "tuition":  reverse("treasurer_tuition"),
-        "dues":     reverse("treasurer_dues"),
-        "members":  reverse("treasurer_members"),
+        "accounts": reverse("treasurer_accounts"),
         "payments": reverse("treasurer_payments"),
         "reconcile": reverse("treasurer_reconcile"),
         "settings": reverse("treasurer_settings"),
@@ -98,35 +93,147 @@ def _treasurer_render(request, tab_key: str, template: str, ctx: dict):
 @login_required
 @user_passes_test(_is_staff)
 def treasurer_dashboard(request):
-    """Overview tab — compact highlights for both tuition and dues (M7.5)."""
-    tuition_ctx = _treasurer_tuition_context()
-    dues_ctx = _treasurer_dues_context()
+    """Overview tab — ledger tiles + one consolidated needs-attention queue."""
+    from payments import ledger
 
+    rows = ledger.accounts_overview()
+    owing = [r for r in rows if r["owes"]]
     return _treasurer_render(request, "overview", "payments/treasurer/overview.html", {
-        **dues_ctx,
-        **tuition_ctx,
+        "collected": ledger.collected_this_ay(),
+        "total_outstanding": sum((r["owes"] for r in owing), Decimal("0")),
+        "owing_count": len(owing),
+        "credit_count": sum(1 for r in rows if r["credit"]),
+        "account_count": len(rows),
+        "attention": _attention_queue(rows),
+    })
+
+
+def _charge_conflicts(rows=None) -> list[dict]:
+    """Charge conflicts: staff-adjusted charges skipped by the minting sync.
+
+    When the tuition-enrollment sync runs, it never edits a charge that a
+    treasurer has touched (staff_adjusted=True) — if the charge and the
+    enrollment disagree, the charge is flagged as a conflict instead.
+    """
+    from payments.charges import tuition_charge_conflicts
+
+    if rows is None:
+        from payments import ledger
+        rows = ledger.accounts_overview()
+
+    conflicts = list(tuition_charge_conflicts())
+    conflicts += [
+        {"user": r["user"], "charge": None, "expected_rate": None,
+         "problem": f"${r['credit']} credit while a year is marked Skipping — "
+                    "a skipped year was probably actually paid."}
+        for r in rows if r["conflict"]
+    ]
+    return conflicts
+
+
+def _attention_queue(rows) -> dict:
+    """Everything that needs the treasurer, in one place."""
+    from accounts.models import Profile, Source
+
+    period = TuitionPeriod.current()
+    undecided, committed_unpaid = [], []
+    if period is not None:
+        enrollments = list(
+            TuitionEnrollment.objects.filter(tuition_period=period)
+            .select_related("user"))
+        decided_ids = {e.user_id for e in enrollments}
+        in_training = User.objects.filter(
+            is_active=True, profile__is_persona=False,
+            profile__standing=Profile.Standing.ACTIVE,
+            profile__role__in=Profile.IN_TRAINING_ROLES,
+        ).select_related("profile")
+        undecided = [u for u in in_training if u.id not in decided_ids]
+        committed_unpaid = [
+            e for e in enrollments
+            if e.status == TuitionEnrollment.Status.COMMITTED]
+    conflicts = _charge_conflicts(rows)
+    return {
+        "undecided": undecided,
+        "committed_unpaid": committed_unpaid,
+        "conflicts": conflicts,
+        "assumed_count": Payment.objects.filter(source=Source.ASSUMED).count(),
+        "no_payer_count": Payment.objects.filter(
+            source=Source.STRIPE, user__isnull=True).count(),
+        "tuition_period": period,
+    }
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_accounts(request):
+    """Accounts tab — every member's unified-ledger standing (task #439).
+
+    Filters and sort live in the querystring so filtered views are linkable
+    (the replacement for the old per-category rosters)."""
+    from payments import ledger
+
+    rows = ledger.accounts_overview()
+    q = (request.GET.get("q") or "").strip().lower()
+    balance = request.GET.get("balance") or ""
+    role = request.GET.get("role") or ""
+    sort = request.GET.get("sort") or "balance"
+
+    if q:
+        rows = [r for r in rows
+                if q in (r["user"].get_full_name() or "").lower()
+                or q in r["user"].email.lower()]
+    if balance == "owing":
+        rows = [r for r in rows if r["owes"]]
+    elif balance == "credit":
+        rows = [r for r in rows if r["credit"]]
+    elif balance == "square":
+        rows = [r for r in rows if r["balance"] == 0]
+    if role:
+        rows = [r for r in rows if r["user"].profile.role == role]
+
+    if sort == "name":
+        rows.sort(key=lambda r: (r["user"].last_name or "",
+                                 r["user"].first_name or "", r["user"].email))
+    elif sort == "paid":
+        rows.sort(key=lambda r: -r["paid"])
+    elif sort == "last":
+        rows.sort(key=lambda r: (r["last_payment"] is None,
+                                 -(r["last_payment"].timestamp()
+                                   if r["last_payment"] else 0)))
+    # default: accounts_overview's most-owed-first ordering
+
+    from accounts.models import Profile
+    # "balance" is the default sort — don't count it as an active filter, or
+    # the Clear link (gated on filter_qs) shows even with nothing to clear.
+    filter_qs = urlencode({k: v for k, v in (
+        ("q", q), ("balance", balance), ("role", role),
+        ("sort", sort if sort != "balance" else "")) if v})
+    return _treasurer_render(request, "accounts", "payments/treasurer/accounts.html", {
+        "rows": rows,
+        "q": q,
+        "selected_balance": balance,
+        "selected_role": role,
+        "selected_sort": sort,
+        "role_choices": Profile.Role.choices,
+        "filter_qs": filter_qs,
+        "total_owed": sum((r["owes"] for r in rows), Decimal("0")),
     })
 
 
 @login_required
 @user_passes_test(_is_staff)
-def treasurer_tuition(request):
-    """Tuition tab — per-year drill-down detail + longitudinal table/charts."""
-    selected = TuitionPeriod.objects.filter(slug=request.GET.get("year")).first()
-    ctx = _treasurer_tuition_context(selected)
-    ctx.update(_treasurer_tuition_longitudinal())
-    ctx["tuition_all_periods"] = list(TuitionPeriod.objects.order_by("-start_date"))
-    return _treasurer_render(request, "tuition", "payments/treasurer/tuition.html", ctx)
+@require_POST
+def treasurer_sync_charges(request):
+    """Mint any missing current-year dues charges (manual sync button)."""
+    from payments.charges import sync_dues_charges
 
-
-@login_required
-@user_passes_test(_is_staff)
-def treasurer_dues(request):
-    """Dues tab — per-year drill-down detail + longitudinal table/charts."""
-    selected = DuesPeriod.objects.filter(slug=request.GET.get("year")).first()
-    ctx = _treasurer_dues_context(selected)
-    ctx["dues_all_periods"] = list(DuesPeriod.objects.order_by("-start_date"))
-    return _treasurer_render(request, "dues", "payments/treasurer/dues.html", ctx)
+    period = DuesPeriod.current()
+    if period is not None:
+        n = sync_dues_charges(period)
+        messages.success(request, f"Synced — {n} dues charge(s) minted for {period.name}.")
+    else:
+        messages.error(request, "No current dues period.")
+    return redirect("treasurer_accounts")
 
 
 @login_required
@@ -169,6 +276,7 @@ def treasurer_reconcile(request):
         "no_payer_total": sum((p.amount for p in no_payer), Decimal("0")),
         "type_choices": Payment.Type.choices,
         "member_options": _reconcile_member_options() if need_members else [],
+        "charge_conflicts": _charge_conflicts(),
     })
 
 
@@ -347,272 +455,288 @@ def _reconcile_apply(request):
     return redirect("treasurer_reconcile")
 
 
-def _treasurer_dues_context(selected_period=None) -> dict:
-    """Build the dues-section context.
+def _safe_next(request, fallback: str):
+    """Honor a validated ?next= so member-page forms return there."""
+    from django.utils.http import url_has_allowed_host_and_scheme
 
-    The detailed sections (role breakdown, unpaid list, outstanding $, the
-    paid-members list) describe the *selected* period — the current period by
-    default, or any past year via the year selector. Forward-looking pieces
-    (unpaid members, outstanding owed) only apply to the current period; past
-    years show the retrospective paid-members list instead. ``period_stats``
-    and the charts are always all-years (longitudinal).
-    """
-    from payments.dues import obligated_users_qs
-    obligated_roles = list(settings.DUES_OBLIGATED_ROLES)
-    obligated_count = obligated_users_qs().count()
-
-    current = DuesPeriod.current()
-    selected = selected_period or current
-
-    periods = list(DuesPeriod.objects.order_by("-start_date"))
-    period_stats = []
-    for p in periods:
-        paid_payments = p.payments.filter(status=Payment.Status.SUCCEEDED)
-        paid_count = paid_payments.values("user").distinct().count()
-        total = paid_payments.aggregate(s=Sum("amount"))["s"] or Decimal("0")
-        is_cur = current is not None and p.id == current.id
-        period_stats.append({
-            "period": p,
-            "paid_count": paid_count,
-            # Unpaid is only meaningful for the current year — it's measured
-            # against today's roster. Templates show it only when is_current.
-            "unpaid_count": max(obligated_count - paid_count, 0) if is_cur else None,
-            "total_collected": total,
-            "is_current": is_cur,
-        })
-
-    current_dues_stats = next(
-        (s for s in period_stats if current and s["period"].id == current.id), None
-    )
-    selected_dues_stats = next(
-        (s for s in period_stats if selected and s["period"].id == selected.id), None
-    )
-    is_current = current is not None and selected is not None and selected.id == current.id
-
-    role_breakdown = []
-    unpaid_users = []
-    paid_members = []
-    dues_collected = selected_dues_stats["total_collected"] if selected_dues_stats else Decimal("0")
-    dues_outstanding = Decimal("0")
-    if selected is not None:
-        paid_user_ids = set(
-            selected.payments
-            .filter(status=Payment.Status.SUCCEEDED)
-            .values_list("user_id", flat=True)
-        )
-        # Retrospective: who paid this year (accurate regardless of roster churn).
-        paid_members = list(
-            selected.payments
-            .filter(status=Payment.Status.SUCCEEDED)
-            .select_related("user", "user__profile")
-            .order_by("user__last_name", "user__first_name", "-paid_at")
-        )
-        # Forward-looking role breakdown + unpaid list + outstanding: current only.
-        if is_current:
-            for role in obligated_roles:
-                users_in_role = obligated_users_qs().filter(profile__role=role)
-                total_in_role = users_in_role.count()
-                paid_in_role = users_in_role.filter(id__in=paid_user_ids).count()
-                unpaid_in_role = total_in_role - paid_in_role
-                role_breakdown.append({
-                    "role": role,
-                    "total": total_in_role,
-                    "paid": paid_in_role,
-                    "unpaid": unpaid_in_role,
-                })
-                rate = selected.amount_for_role(role) or Decimal("0")
-                dues_outstanding += rate * unpaid_in_role
-            unpaid_users = list(
-                obligated_users_qs()
-                .exclude(id__in=paid_user_ids)
-                .select_related("profile")
-                .order_by("last_name", "first_name", "email")
-            )
-
-    chron = list(reversed(period_stats))
-    chart_periods = {
-        "labels": [s["period"].name for s in chron],
-        "totals": [float(s["total_collected"]) for s in chron],
-    }
-    chart_participation = {
-        "labels": [s["period"].name for s in chron],
-        "counts": [s["paid_count"] for s in chron],
-    }
-    chart_roles = {
-        "labels": [r["role"] for r in role_breakdown],
-        "paid": [r["paid"] for r in role_breakdown],
-        "unpaid": [r["unpaid"] for r in role_breakdown],
-    }
-    chart_dues_money = {
-        "collected": float(dues_collected),
-        "outstanding": float(dues_outstanding),
-    }
-    return {
-        "period_stats":   period_stats,
-        "current_period": current,
-        "dues_selected_period": selected,
-        "dues_is_current": is_current,
-        "current_dues_stats": current_dues_stats,
-        "selected_dues_stats": selected_dues_stats,
-        "role_breakdown": role_breakdown,
-        "unpaid_users":   unpaid_users,
-        "paid_members":   paid_members,
-        "dues_confirmed_pct": _confirmed_pct(p.source for p in paid_members),
-        "obligated_count": obligated_count,
-        "dues_collected": dues_collected,
-        "dues_outstanding": dues_outstanding,
-        "dues_expected": dues_collected + dues_outstanding,
-        "chart_periods_json": json.dumps(chart_periods),
-        "chart_participation_json": json.dumps(chart_participation),
-        "chart_roles_json": json.dumps(chart_roles),
-        "chart_dues_money_json": json.dumps(chart_dues_money),
-    }
+    nxt = request.POST.get("next") or request.GET.get("next") or ""
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+        return redirect(nxt)
+    return redirect(fallback)
 
 
-@login_required
-@user_passes_test(_is_staff)
-def treasurer_members(request):
-    """Members tab — search for a member, view their full payment history."""
-    q = (request.GET.get("q") or "").strip()
-    results = []
-    if q:
-        from django.db.models import Q
-        results = list(
-            User.objects.filter(
-                Q(email__icontains=q)
-                | Q(first_name__icontains=q)
-                | Q(last_name__icontains=q),
-            )
-            .exclude(profile__is_persona=True)   # personas aren't real members
-            .select_related("profile")
-            .order_by("last_name", "first_name", "email")[:50]
-        )
-    return _treasurer_render(request, "members", "payments/treasurer/members.html", {
-        "q":       q,
-        "results": results,
-    })
+def _parse_amount(raw: str) -> Decimal | None:
+    """A positive money amount that fits the payment fields
+    (max_digits=8, decimal_places=2), or None."""
+    from decimal import InvalidOperation
+    try:
+        amount = Decimal(raw)
+    except (InvalidOperation, TypeError):
+        return None
+    if not amount.is_finite() or amount <= 0 or amount > Decimal("999999.99"):
+        return None
+    if amount != amount.quantize(Decimal("0.01")):
+        return None  # more than 2 decimal places
+    return amount
 
 
 @login_required
 @user_passes_test(_is_staff)
 def treasurer_member_detail(request, user_id: int):
-    """Per-member detail page: payments, tuition enrollments, registrations."""
+    """Per-member account: statement, balance tiles, actions (task #439)."""
+    from payments import ledger
+    from payments.models import Charge
     from registrations.models import Registration
-    target = get_object_or_404(
-        User.objects.select_related("profile"), pk=user_id,
-    )
-    payments = list(
-        Payment.objects.filter(user=target)
-        .select_related("registration__event")
-        # Sort by the real transaction date (paid_at), not the import date
-        # (created_at). See Payment.transaction_date. (Task #437.)
-        .order_by(Coalesce("paid_at", "created_at").desc())
-    )
-    tuition = _member_tuition_summary(target)
+
+    target = get_object_or_404(User.objects.select_related("profile"), pk=user_id)
+    acct = ledger.member_account(target)
     registrations = list(
         Registration.objects.filter(user=target)
         .select_related("event", "price_tier")
         .order_by("-created_at")
     )
+    current_dues = DuesPeriod.current()
+    current_tuition = TuitionPeriod.current()
     return _treasurer_render(
-        request, "members", "payments/treasurer/member_detail.html",
+        request, "accounts", "payments/treasurer/member_detail.html",
         {
-            "target":         target,
-            "payments":       payments,
-            "tuition":        tuition,
-            "registrations":  registrations,
+            "target": target,
+            "acct": acct,
+            "registrations": registrations,
+            "charge_categories": Charge.Category.choices,
+            "payment_categories": Payment.Type.choices,
+            "today": timezone.now().date(),
+            "dues_periods": DuesPeriod.objects.all(),  # newest first (Meta.ordering)
+            "tuition_periods": TuitionPeriod.objects.all(),
+            "current_dues_period_id": current_dues.id if current_dues else None,
+            "current_tuition_period_id": current_tuition.id if current_tuition else None,
         },
     )
 
 
-# In-training members owe a fixed number of years of tuition total (skipping
-# defers, it doesn't reduce the count). Never obligate beyond this — a 5th
-# enrolled year is "requirement met", not owed.
-TUITION_YEARS_REQUIRED = 4
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_charge_add(request, user_id: int):
+    """Manually add a charge to a member's account (do-not-over-automate).
 
+    Dues/tuition charges must bind their period FK — the minting syncs
+    (``sync_dues_charges`` / ``sync_tuition_charges``) key idempotency on
+    (user, period), so a period-less manual charge would get double-minted
+    by the next rollover/Sync click.
+    """
+    from accounts.models import Source
 
-def _member_tuition_summary(user) -> dict:
-    """Tuition as a **cumulative ledger**, not a per-payment-to-year allocation.
+    from .models import Charge
 
-    Guessing which academic year an individual payment belongs to is unreliable
-    — prepayments land before the year starts, catch-up payments land after, and
-    a *skipping* year (owes $0) has no bucket for money genuinely meant for it.
-    So instead of allocating each dollar to a year:
+    target = get_object_or_404(User, pk=user_id)
+    category = request.POST.get("category")
+    if category not in Charge.Category.values:
+        messages.error(request, "Choose a valid category.")
+        return redirect("treasurer_member_detail", user_id=target.id)
+    amount = _parse_amount(request.POST.get("amount", ""))
+    if amount is None:
+        messages.error(request, "Enter a positive amount.")
+        return redirect("treasurer_member_detail", user_id=target.id)
 
-    - **Obligation-to-date** = the tuition rate summed over each year the member
-      is enrolled and *not* skipping (skipped years are deferred, not counted).
-    - **Total paid** = every succeeded tuition payment, as one sum.
-    - **Balance** = obligation − paid (positive = owes, negative = paid ahead).
+    period_kwargs = {}
+    eff = None
+    if category == Charge.Category.DUES:
+        period = _resolve_period(
+            request.POST.get("dues_period"), DuesPeriod, DuesPeriod.current())
+        if period is not None:
+            dup = Charge.objects.filter(
+                user=target, category=Charge.Category.DUES, dues_period=period,
+            ).exclude(status=Charge.Status.VOID).exists()
+            if dup:
+                messages.error(
+                    request,
+                    f"A dues charge for {period.name} already exists on this "
+                    "account — adjust the existing charge instead.",
+                )
+                return redirect("treasurer_member_detail", user_id=target.id)
+            period_kwargs["dues_period"] = period
+            eff = period.start_date
+    elif category == Charge.Category.TUITION:
+        period = _resolve_period(
+            request.POST.get("tuition_period"), TuitionPeriod, TuitionPeriod.current())
+        if period is not None:
+            dup = Charge.objects.filter(
+                user=target, category=Charge.Category.TUITION, tuition_period=period,
+            ).exclude(status=Charge.Status.VOID).exists()
+            if dup:
+                messages.error(
+                    request,
+                    f"A tuition charge for {period.name} already exists on "
+                    "this account — adjust the existing charge instead.",
+                )
+                return redirect("treasurer_member_detail", user_id=target.id)
+            period_kwargs["tuition_period"] = period
+            eff = period.start_date
 
-    The per-year rows carry only the treasurer's *decision* and the rate — the
-    authoritative "which years" record — never a per-year dollar figure. A
-    ``conflict`` is flagged when the member has paid past their obligation while
-    a year is marked skipping (the classic "that skipped year was probably
-    actually paid" case). Individual payments are listed in the Payments
-    section, not here. (Tasks #435, #437.)"""
-    enrollments = list(
-        TuitionEnrollment.objects.filter(user=user)
-        .select_related("tuition_period")
-        .order_by("-tuition_period__start_date")   # newest first, for display
+    if eff is None:
+        try:
+            eff = date.fromisoformat(request.POST.get("effective_date", ""))
+        except ValueError:
+            eff = timezone.now().date()
+    note = (request.POST.get("note") or "").strip()
+    charge = Charge.objects.create(
+        user=target, category=category, amount=amount, effective_date=eff,
+        source=Source.STAFF, staff_adjusted=True, **period_kwargs,
     )
-    total_paid = Payment.objects.filter(
-        user=user, payment_type=Payment.Type.TUITION,
-        status=Payment.Status.SUCCEEDED,
-    ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    charge.add_note(
+        f"Added by treasurer {request.user.email}." + (f" {note}" if note else ""))
+    messages.success(request, f"Added a ${amount} {category} charge.")
+    return redirect("treasurer_member_detail", user_id=target.id)
 
-    # Coverage: sweep the running total across the paying years OLDEST first, so
-    # back tuition reads as covered before newer years. This is a display
-    # derivation from two numbers (total paid + the ordered rates) — NOT a
-    # per-payment allocation — so the money model stays cumulative. Only the
-    # first TUITION_YEARS_REQUIRED non-skipping years are owed; any beyond that
-    # are "met" (the 4-year requirement is satisfied — never obligate a 5th).
-    obligation = Decimal("0")
-    paying_years = 0
-    counted = 0
-    skipping = []
-    coverage = {}
-    remaining = total_paid
-    for e in sorted(enrollments, key=lambda e: e.tuition_period.start_date):
-        if e.status == TuitionEnrollment.Status.SKIPPING:
-            skipping.append(e.tuition_period)
-            coverage[e.id] = "skipping"
-            continue
-        counted += 1
-        if counted > TUITION_YEARS_REQUIRED:
-            coverage[e.id] = "met"          # requirement met — not owed
-            continue
-        rate = e.tuition_period.tuition_amount or Decimal("0")
-        obligation += rate
-        paying_years += 1
-        covered = min(rate, remaining)
-        remaining -= covered
-        coverage[e.id] = (
-            "paid" if rate and covered >= rate
-            else "partial" if covered > 0 else "unpaid"
-        )
 
-    rows = [{
-        "period": e.tuition_period, "enrollment": e,
-        "rate": e.tuition_period.tuition_amount or Decimal("0"),
-        "skipping": e.status == TuitionEnrollment.Status.SKIPPING,
-        "state": coverage[e.id],
-    } for e in enrollments]
+def _resolve_period(posted_id, model, fallback):
+    """Resolve a posted period id against ``model``, falling back to
+    ``fallback`` (typically ``Model.current()``) when unposted/invalid."""
+    if posted_id:
+        try:
+            return model.objects.filter(pk=posted_id).first() or fallback
+        except (TypeError, ValueError):
+            return fallback
+    return fallback
 
-    balance = obligation - total_paid
-    return {
-        "rows": rows,                          # newest first; decision + rate only
-        "obligation": obligation,
-        "total_paid": total_paid,
-        "balance": balance,                    # >0 owes, <0 credit
-        "owes": max(balance, Decimal("0")),
-        "credit": max(-balance, Decimal("0")),
-        "paying_years": paying_years,
-        "skipping": skipping,
-        "years_required": TUITION_YEARS_REQUIRED,
-        # Paid past the obligation while a year is deferred → likely a skipping
-        # year that's actually being paid (surfaces the exact decision to fix).
-        "conflict": balance < 0 and bool(skipping),
-    }
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_charge_update(request, charge_id: int):
+    """Adjust / waive / void / reopen one charge, with an audit note.
+
+    Status gating (task #439 fix 4b): adjust/waive only from OPEN, void from
+    OPEN or WAIVED, reopen only from WAIVED. Reopening a VOID charge is
+    deliberately not offered here — it risks colliding with the partial
+    unique constraint on (user, dues_period)/(user, tuition_period) if a
+    sync has since minted a fresh row for that period; use *Add a charge*
+    instead.
+    """
+    from .models import Charge
+
+    charge = get_object_or_404(Charge, pk=charge_id)
+    action = request.POST.get("action")
+    email = request.user.email
+    if action == "adjust":
+        if charge.status != Charge.Status.OPEN:
+            messages.error(request, "Only an open charge can be adjusted.")
+            return redirect("treasurer_member_detail", user_id=charge.user_id)
+        amount = _parse_amount(request.POST.get("amount", ""))
+        if amount is None:
+            messages.error(request, "Enter a positive amount.")
+            return redirect("treasurer_member_detail", user_id=charge.user_id)
+        charge.add_note(f"Amount ${charge.amount} → ${amount} by treasurer {email}.",
+                        save=False)
+        charge.amount = amount
+    elif action == "waive":
+        if charge.status != Charge.Status.OPEN:
+            messages.error(request, "Only an open charge can be waived.")
+            return redirect("treasurer_member_detail", user_id=charge.user_id)
+        charge.add_note(f"Waived by treasurer {email}.", save=False)
+        charge.status = Charge.Status.WAIVED
+    elif action == "void":
+        if charge.status not in (Charge.Status.OPEN, Charge.Status.WAIVED):
+            messages.error(request, "Only an open or waived charge can be voided.")
+            return redirect("treasurer_member_detail", user_id=charge.user_id)
+        charge.add_note(f"Voided by treasurer {email}.", save=False)
+        charge.status = Charge.Status.VOID
+    elif action == "reopen":
+        if charge.status != Charge.Status.WAIVED:
+            messages.error(request, "Only a waived charge can be reopened.")
+            return redirect("treasurer_member_detail", user_id=charge.user_id)
+        charge.add_note(f"Reopened by treasurer {email}.", save=False)
+        charge.status = Charge.Status.OPEN
+    else:
+        messages.error(request, "Unknown action.")
+        return redirect("treasurer_member_detail", user_id=charge.user_id)
+    charge.staff_adjusted = True
+    charge.save(update_fields=("amount", "status", "staff_adjusted", "notes"))
+    return redirect("treasurer_member_detail", user_id=charge.user_id)
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_record_payment(request, user_id: int):
+    """Record an offline payment of any category (replaces the per-category
+    record buttons). Tuition keeps the enrollment+installment side-effects."""
+    target = get_object_or_404(User, pk=user_id)
+    category = request.POST.get("category")
+    if category not in Payment.Type.values:
+        messages.error(request, "Choose a valid category.")
+        return redirect("treasurer_member_detail", user_id=target.id)
+    amount = _parse_amount(request.POST.get("amount", ""))
+    if amount is None:
+        messages.error(request, "Enter a positive amount.")
+        return redirect("treasurer_member_detail", user_id=target.id)
+
+    note = (f"Offline {category} payment recorded by treasurer "
+            f"{request.user.email} on {timezone.now().date()}.")
+    with transaction.atomic():
+        kwargs = {}
+        if category == Payment.Type.TUITION:
+            period = TuitionPeriod.current()
+            if period is not None:
+                prior = TuitionEnrollment.objects.filter(
+                    user=target, tuition_period=period,
+                ).first()
+                prior_status = prior.status if prior else None
+                full_amount = amount >= period.tuition_amount
+                if full_amount:
+                    enr, created = TuitionEnrollment.objects.update_or_create(
+                        user=target, tuition_period=period,
+                        defaults={"status": TuitionEnrollment.Status.COMMITTED})
+                    if created or prior_status != enr.status:
+                        # Audit the status flip — update_or_create can
+                        # silently overwrite an explicit decision (e.g.
+                        # Skipping).
+                        was = (
+                            f" (was {TuitionEnrollment.Status(prior_status).label})"
+                            if prior_status else ""
+                        )
+                        enr.notes = (
+                            (enr.notes + "\n" if enr.notes else "")
+                            + f"[{timezone.now().date()}] Treasurer "
+                            f"({request.user.email}) set status to Committed "
+                            f"while recording an offline tuition payment{was}."
+                        )
+                        enr.save(update_fields=("notes",))
+                    installment = TuitionInstallment.objects.create(
+                        enrollment=enr, sequence=enr.installments.count() + 1,
+                        due_date=period.decision_due_date, amount=amount)
+                    kwargs["tuition_installment"] = installment
+                else:
+                    # A partial payment stands alone — it must not flip the
+                    # enrollment to PAID_IN_FULL (that mislabels the
+                    # decision record and grants covered-tier event access
+                    # via Gate 2). No installment is created; leave the
+                    # enrollment at its existing status (COMMITTED if this
+                    # is the first decision on record).
+                    if prior is None:
+                        enr = TuitionEnrollment.objects.create(
+                            user=target, tuition_period=period,
+                            status=TuitionEnrollment.Status.COMMITTED)
+                    else:
+                        enr = prior
+                    enr.notes = (
+                        (enr.notes + "\n" if enr.notes else "")
+                        + f"[{timezone.now().date()}] Treasurer "
+                        f"({request.user.email}) recorded a partial offline "
+                        f"tuition payment of ${amount}; year not marked paid "
+                        "in full."
+                    )
+                    enr.save(update_fields=("notes",))
+        elif category == Payment.Type.DUES:
+            kwargs["dues_period"] = DuesPeriod.current()
+        payment = Payment.objects.create(
+            payment_type=category, user=target, amount=amount,
+            method=Payment.Method.OFFLINE, status=Payment.Status.PENDING,
+            notes=note, **kwargs)
+    complete_payment(payment)
+    messages.success(request, f"Recorded a ${amount} offline {category} payment.")
+    return redirect("treasurer_member_detail", user_id=target.id)
 
 
 @login_required
@@ -689,14 +813,14 @@ def treasurer_payment_refund(request, payment_id: int):
 
     payment = get_object_or_404(Payment, pk=payment_id)
     if payment.status != Payment.Status.SUCCEEDED:
-        return redirect("treasurer_payments")
+        return _safe_next(request, "treasurer_payments")
 
     if payment.method == Payment.Method.STRIPE:
         try:
             refund_payment(payment)
         except RefundError as exc:
             logger.exception("Refund failed for payment %s: %s", payment.id, exc)
-            return redirect("treasurer_payments")
+            return _safe_next(request, "treasurer_payments")
     else:
         _record_offline_refund(payment, treasurer=request.user)
         # Cascade to Registration (the Stripe path gets this via webhook).
@@ -705,7 +829,9 @@ def treasurer_payment_refund(request, payment_id: int):
                 pk=payment.registration_id,
                 status=Registration.Status.PAID,
             ).update(status=Registration.Status.REFUNDED)
-    return redirect("treasurer_payments")
+            from .charges import void_registration_charge
+            void_registration_charge(payment.registration, "Offline refund recorded.")
+    return _safe_next(request, "treasurer_payments")
 
 
 @login_required
@@ -721,12 +847,12 @@ def treasurer_payment_resend_receipt(request, payment_id: int):
     from .emails import send_receipt
     payment = get_object_or_404(Payment, pk=payment_id)
     if not hasattr(payment, "receipt"):
-        return redirect("treasurer_payments")
+        return _safe_next(request, "treasurer_payments")
     try:
         send_receipt(payment)
     except Exception:
         logger.exception("Failed to resend receipt for payment %s", payment.id)
-    return redirect("treasurer_payments")
+    return _safe_next(request, "treasurer_payments")
 
 
 def _record_offline_refund(payment: Payment, *, treasurer) -> None:
@@ -752,7 +878,7 @@ def treasurer_payment_apply_success(request, payment_id: int):
     payment = get_object_or_404(Payment, pk=payment_id)
     if payment.status == Payment.Status.PENDING:
         complete_payment(payment)
-    return redirect("treasurer_payments")
+    return _safe_next(request, "treasurer_payments")
 
 
 _INLINE_TUITION_STATUSES = {
@@ -772,11 +898,11 @@ def treasurer_tuition_set_status(request, user_id: int):
     """
     status = request.POST.get("status", "")
     if status not in _INLINE_TUITION_STATUSES:
-        return redirect("treasurer_tuition")
+        return _safe_next(request, "treasurer")
     target = get_object_or_404(User, pk=user_id)
     period = TuitionPeriod.current()
     if period is None:
-        return redirect("treasurer_tuition")
+        return _safe_next(request, "treasurer")
     with transaction.atomic():
         enr, _ = TuitionEnrollment.objects.update_or_create(
             user=target, tuition_period=period,
@@ -788,84 +914,7 @@ def treasurer_tuition_set_status(request, user_id: int):
             f"set status to {_INLINE_TUITION_STATUSES[status]}."
         )
         enr.save(update_fields=("notes",))
-    return redirect("treasurer_tuition")
-
-
-@login_required
-@user_passes_test(_is_staff)
-@require_POST
-def treasurer_dues_record_offline_payment(request, user_id: int):
-    """Record an offline dues payment for the user's role-tier amount.
-
-    Creates an OFFLINE Payment for the current DuesPeriod's per-role
-    amount and runs ``complete_payment`` — which marks SUCCEEDED, issues
-    a Receipt, and emails the member.
-    """
-    target = get_object_or_404(User, pk=user_id)
-    period = DuesPeriod.current()
-    if period is None:
-        return redirect("treasurer_dues")
-    amount = period.amount_for_role(target.profile.role)
-    if amount is None:
-        # User's role isn't dues-obligated under the current tier table.
-        return redirect("treasurer_dues")
-    with transaction.atomic():
-        payment = Payment.objects.create(
-            payment_type=Payment.Type.DUES,
-            user=target,
-            amount=amount,
-            method=Payment.Method.OFFLINE,
-            status=Payment.Status.PENDING,
-            dues_period=period,
-            notes=(
-                f"Offline dues payment recorded by treasurer "
-                f"{request.user.email} on {timezone.now().date()}."
-            ),
-        )
-    complete_payment(payment)
-    return redirect("treasurer_dues")
-
-
-@login_required
-@user_passes_test(_is_staff)
-@require_POST
-def treasurer_tuition_record_offline_payment(request, user_id: int):
-    """Record an offline tuition payment for the full annual amount.
-
-    Creates (or reuses) a COMMITTED enrollment for the current period,
-    mints a single full-amount TuitionInstallment, creates an OFFLINE
-    Payment, and runs the standard ``complete_payment`` side-effects —
-    which marks the installment paid and flips the enrollment to
-    PAID_IN_FULL. The Payment.notes carries a short audit trail.
-    """
-    target = get_object_or_404(User, pk=user_id)
-    period = TuitionPeriod.current()
-    if period is None:
-        return redirect("treasurer_tuition")
-    with transaction.atomic():
-        enr, _ = TuitionEnrollment.objects.update_or_create(
-            user=target, tuition_period=period,
-            defaults={"status": TuitionEnrollment.Status.COMMITTED},
-        )
-        installment = TuitionInstallment.objects.create(
-            enrollment=enr, sequence=enr.installments.count() + 1,
-            due_date=period.decision_due_date,
-            amount=period.tuition_amount,
-        )
-        payment = Payment.objects.create(
-            payment_type=Payment.Type.TUITION,
-            user=target,
-            amount=period.tuition_amount,
-            method=Payment.Method.OFFLINE,
-            status=Payment.Status.PENDING,
-            tuition_installment=installment,
-            notes=(
-                f"Offline tuition payment recorded by treasurer "
-                f"{request.user.email} on {timezone.now().date()}."
-            ),
-        )
-    complete_payment(payment)
-    return redirect("treasurer_tuition")
+    return _safe_next(request, "treasurer")
 
 
 @login_required
@@ -933,303 +982,6 @@ def treasurer_settings(request):
         "current_tuition_form":  current_tuition_form,
         "saved":                 request.GET.get("saved") == "1",
     })
-
-
-_TUITION_STATUS_ORDER = [
-    ("paid_in_full",  "Paid in full"),
-    ("payment_plan",  "On payment plan"),
-    ("committed",     "Committed (unpaid)"),
-    ("skipping",      "Skipping"),
-]
-
-
-def _confirmed_pct(sources) -> int | None:
-    """Percent of rows whose provenance is confirmed (verified/imported/staff)
-    vs. estimated (self-reported/assumed). None when there are no rows."""
-    from accounts.models import Source
-    sources = list(sources)
-    if not sources:
-        return None
-    confirmed = sum(
-        1 for s in sources
-        if s in (Source.VERIFIED, Source.IMPORTED, Source.STAFF)
-    )
-    return round(100 * confirmed / len(sources))
-
-
-def _tuition_coverage():
-    """Cumulative tuition coverage across every enrollee, in a handful of queries.
-
-    Sweeps each member's *total* tuition paid across their non-skipping years
-    oldest year first (same basis as ``_member_tuition_summary``), so payments
-    are never allocated to a specific year by guesswork. Returns:
-
-    - ``standings``: ``{user_id: {obligation, total_paid, balance, owes, credit}}``
-    - ``covered_by_period``: ``{period_id: Decimal}`` — the coverage landing on
-      each year (the honest "collected per year", counting untied payments).
-    - ``user_period``: ``{(user_id, period_id): {covered, rate, skipping}}`` —
-      how much of a student's total reaches a given year. (Task #437.)
-    """
-    enrollments = list(
-        TuitionEnrollment.objects.select_related("tuition_period")
-    )
-    by_user = defaultdict(list)
-    for e in enrollments:
-        by_user[e.user_id].append(e)
-
-    paid_by_user = defaultdict(lambda: Decimal("0"))
-    for row in (
-        Payment.objects.filter(
-            payment_type=Payment.Type.TUITION,
-            status=Payment.Status.SUCCEEDED, user__isnull=False,
-        ).values("user").annotate(s=Sum("amount"))
-    ):
-        paid_by_user[row["user"]] = row["s"] or Decimal("0")
-
-    standings = {}
-    covered_by_period = defaultdict(lambda: Decimal("0"))
-    user_period = {}
-    for uid, enrs in by_user.items():
-        total_paid = paid_by_user.get(uid, Decimal("0"))
-        remaining = total_paid
-        obligation = Decimal("0")
-        counted = 0
-        for e in sorted(enrs, key=lambda e: e.tuition_period.start_date):
-            pid = e.tuition_period_id
-            rate = e.tuition_period.tuition_amount or Decimal("0")
-            if e.status == TuitionEnrollment.Status.SKIPPING:
-                user_period[(uid, pid)] = {"covered": Decimal("0"), "rate": rate,
-                                           "skipping": True, "met": False}
-                continue
-            counted += 1
-            if counted > TUITION_YEARS_REQUIRED:
-                # Beyond the 4-year requirement — not owed, no coverage.
-                user_period[(uid, pid)] = {"covered": Decimal("0"), "rate": rate,
-                                           "skipping": False, "met": True}
-                continue
-            obligation += rate
-            covered = min(rate, remaining)
-            remaining -= covered
-            covered_by_period[pid] += covered
-            user_period[(uid, pid)] = {"covered": covered, "rate": rate,
-                                       "skipping": False, "met": False}
-        balance = obligation - total_paid
-        standings[uid] = {
-            "obligation": obligation, "total_paid": total_paid, "balance": balance,
-            "owes": max(balance, Decimal("0")), "credit": max(-balance, Decimal("0")),
-        }
-    return standings, covered_by_period, user_period
-
-
-def _treasurer_tuition_context(selected_period=None) -> dict:
-    """Build the tuition-section context for a selected TuitionPeriod.
-
-    For the *current* period this includes the forward-looking sections — the
-    live in-training roster, undecided students, the reconciliation queue, and
-    the 'owed by undecided' money bucket. For a selected *past* period those
-    roster-relative concepts don't apply, so it returns retrospective facts
-    only: enrollments by status, collected, and committed-but-unpaid.
-    """
-    from accounts.models import Profile
-    current = TuitionPeriod.current()
-    period = selected_period or current
-    if period is None:
-        return {
-            "tuition_period": None,
-            "tuition_selected_period": None,
-            "tuition_is_current": False,
-            "tuition_status_counts": [],
-            "tuition_role_breakdown": [],
-            "tuition_reconciliation_users": [],
-            "tuition_enrollment_rows": [],
-            "tuition_in_training_count": 0,
-            "tuition_total_collected": Decimal("0"),
-            "tuition_committed_remaining": Decimal("0"),
-            "tuition_undecided_owed": Decimal("0"),
-            "tuition_outstanding": Decimal("0"),
-            "chart_tuition_money_json": json.dumps({"collected": 0, "planned": 0, "owed": 0}),
-        }
-
-    is_current = current is not None and period.id == current.id
-
-    enrollments = list(
-        TuitionEnrollment.objects.filter(tuition_period=period)
-        .select_related("user", "user__profile")
-    )
-    decided_user_ids = {e.user_id for e in enrollments}
-    status_counter: dict[str, int] = {}
-    for e in enrollments:
-        status_counter[e.status] = status_counter.get(e.status, 0) + 1
-
-    # Cumulative tuition coverage across all enrollees (counts untied payments,
-    # oldest year first) — the honest basis for every dollar figure on this tab.
-    standings, covered_by_period, user_period = _tuition_coverage()
-
-    full = period.tuition_amount or Decimal("0")
-    total_collected = covered_by_period.get(period.id, Decimal("0"))
-
-    # Uncollected from students who committed / are on a plan for this year:
-    # the part of this year's rate their cumulative payments don't yet cover.
-    committed_remaining = Decimal("0")
-    for e in enrollments:
-        if e.status in (
-            TuitionEnrollment.Status.COMMITTED,
-            TuitionEnrollment.Status.PAYMENT_PLAN,
-        ):
-            cov = user_period.get((e.user_id, period.id), {}).get("covered", Decimal("0"))
-            committed_remaining += max(full - cov, Decimal("0"))
-
-    # Per-student rows: each student's overall tuition standing (not per-year
-    # allocation) plus their decision for the selected year. Sorted most-owed
-    # first so who-to-chase floats to the top.
-    status_labels = dict(TuitionEnrollment.Status.choices)
-    enrollment_rows = []
-    for e in enrollments:
-        st = standings.get(e.user_id, {})
-        enrollment_rows.append({
-            "user": e.user, "status": e.status,
-            "status_label": status_labels.get(e.status, e.status),
-            "source": e.source, "source_label": e.get_source_display(),
-            "notes": e.notes,
-            "obligation": st.get("obligation", Decimal("0")),
-            "total_paid": st.get("total_paid", Decimal("0")),
-            "balance": st.get("balance", Decimal("0")),
-            "owes": st.get("owes", Decimal("0")),
-            "credit": st.get("credit", Decimal("0")),
-        })
-    enrollment_rows.sort(
-        key=lambda r: (-r["balance"], r["user"].last_name or "",
-                       r["user"].first_name or "", r["user"].email)
-    )
-
-    # Forward-looking sections — current period only (live in-training roster).
-    in_training_count = 0
-    undecided_users = []
-    role_breakdown_tuition = []
-    reconciliation_users = []
-    undecided_owed = Decimal("0")
-    if is_current:
-        in_training_qs = User.objects.filter(
-            is_active=True, profile__is_persona=False,
-            profile__standing=Profile.Standing.ACTIVE,
-            profile__role__in=Profile.IN_TRAINING_ROLES,
-        )
-        in_training_count = in_training_qs.count()
-        undecided_users = list(in_training_qs.exclude(id__in=decided_user_ids))
-        undecided_owed = full * len(undecided_users)
-        enrollment_by_user = {e.user_id: e for e in enrollments}
-        role_labels = dict(Profile.Role.choices)
-        for role in sorted(Profile.IN_TRAINING_ROLES):
-            users_in_role = in_training_qs.filter(profile__role=role)
-            total_in_role = users_in_role.count()
-            in_role_user_ids = set(users_in_role.values_list("id", flat=True))
-            decided_in_role = len(in_role_user_ids & decided_user_ids)
-            committed_in_role = sum(
-                1 for uid in in_role_user_ids
-                if enrollment_by_user.get(uid)
-                and enrollment_by_user[uid].status == TuitionEnrollment.Status.COMMITTED
-            )
-            role_breakdown_tuition.append({
-                "role":           role,
-                "role_label":     role_labels.get(role, role),
-                "total":          total_in_role,
-                "decided":        decided_in_role,
-                "undecided":      total_in_role - decided_in_role,
-                "committed_only": committed_in_role,
-            })
-        for u in undecided_users:
-            reconciliation_users.append({"user": u, "reason": "Undecided", "status": None})
-        for e in enrollments:
-            if e.status == TuitionEnrollment.Status.COMMITTED:
-                reconciliation_users.append({
-                    "user": e.user, "reason": "Committed, no payment received",
-                    "status": e.status,
-                })
-        reconciliation_users.sort(
-            key=lambda r: (r["user"].last_name or "", r["user"].first_name or "", r["user"].email)
-        )
-
-    tuition_status_counts = [
-        {"key": k, "label": label, "count": status_counter.get(k, 0)}
-        for k, label in _TUITION_STATUS_ORDER
-    ]
-    if is_current:
-        tuition_status_counts.append(
-            {"key": "undecided", "label": "Undecided", "count": len(undecided_users)}
-        )
-
-    chart_tuition_money = {
-        "collected": float(total_collected),
-        "planned": float(committed_remaining),
-        "owed": float(undecided_owed),
-    }
-
-    return {
-        "tuition_period":              period,
-        "tuition_selected_period":     period,
-        "tuition_is_current":          is_current,
-        "tuition_status_counts":       tuition_status_counts,
-        "tuition_role_breakdown":      role_breakdown_tuition,
-        "tuition_reconciliation_users": reconciliation_users,
-        "tuition_enrollment_rows":     enrollment_rows,
-        "tuition_confirmed_pct":       _confirmed_pct(e.source for e in enrollments),
-        "tuition_in_training_count":   in_training_count,
-        "tuition_total_collected":     total_collected,
-        "tuition_committed_remaining": committed_remaining,
-        "tuition_undecided_owed":      undecided_owed,
-        "tuition_outstanding":         committed_remaining + undecided_owed,
-        "chart_tuition_money_json":    json.dumps(chart_tuition_money),
-    }
-
-
-def _treasurer_tuition_longitudinal() -> dict:
-    """All-years tuition aggregation for the longitudinal table + charts.
-
-    Two aggregate queries (status counts + collected) keyed by period, so this
-    stays O(1) in query count regardless of how many academic years exist.
-    """
-    periods = list(TuitionPeriod.objects.order_by("-start_date"))
-
-    status_by_period: dict[int, dict[str, int]] = {}
-    for row in (
-        TuitionEnrollment.objects.values("tuition_period_id", "status")
-        .annotate(n=Count("id"))
-    ):
-        status_by_period.setdefault(row["tuition_period_id"], {})[row["status"]] = row["n"]
-
-    # Collected per year on the cumulative-coverage basis (counts untied
-    # payments; no per-payment date guessing), consistent with the member page
-    # and the per-year tiles.
-    _, collected_by_period, _ = _tuition_coverage()
-
-    rows = []
-    for p in periods:
-        sc = status_by_period.get(p.id, {})
-        rows.append({
-            "period":       p,
-            "paid_in_full": sc.get("paid_in_full", 0),
-            "payment_plan": sc.get("payment_plan", 0),
-            "committed":    sc.get("committed", 0),
-            "skipping":     sc.get("skipping", 0),
-            "enrolled":     sum(sc.values()),
-            "collected":    collected_by_period.get(p.id, Decimal("0")),
-        })
-
-    chron = list(reversed(rows))
-    labels = [r["period"].name for r in chron]
-    chart_collected = {"labels": labels, "totals": [float(r["collected"]) for r in chron]}
-    chart_status = {
-        "labels": labels,
-        "paid_in_full": [r["paid_in_full"] for r in chron],
-        "payment_plan": [r["payment_plan"] for r in chron],
-        "committed":    [r["committed"] for r in chron],
-        "skipping":     [r["skipping"] for r in chron],
-    }
-    return {
-        "tuition_year_rows":             rows,
-        "chart_tuition_collected_json":  json.dumps(chart_collected),
-        "chart_tuition_status_json":     json.dumps(chart_status),
-    }
 
 
 @csrf_exempt
@@ -1330,13 +1082,22 @@ def dues_pay(request):
     today (which shouldn't happen in production once the bootstrap data
     migration + auto-rollover command are running).
     """
-    from .dues import user_paid_for_period
+    from . import ledger
+    from .dues import has_dues_payment_for
     from .models import DuesPeriod
 
     period = DuesPeriod.current()
 
     # Already paid for the current cycle — show a friendly status panel.
-    if period is not None and user_paid_for_period(request.user, period):
+    # Two checks: the unified-ledger state (covered/waived by the sweep) OR a
+    # direct FK-bound dues payment for this period. The direct check is the
+    # double-payment guard — it must hold even when no charge has been minted
+    # yet (state None) or when backfilled older charges eat the pot (state
+    # "unpaid" despite this year's dues literally being paid).
+    if period is not None and (
+        ledger.member_account(request.user)["dues_state"] in ("paid", "waived")
+        or has_dues_payment_for(request.user, period)
+    ):
         return render(
             request,
             "payments/dues_already_paid.html",
@@ -1491,6 +1252,25 @@ def transactions_csv(request):
     return response
 
 
+@login_required
+@user_passes_test(_is_staff)
+def balances_csv(request):
+    """Every member's ledger standing as CSV (task #439)."""
+    from payments import ledger
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="lsp-balances.csv"'
+    writer = csv.writer(response)
+    writer.writerow(["name", "email", "role", "obligation", "paid", "balance",
+                     "owes", "credit", "tuition_years_covered", "dues_state"])
+    for r in ledger.accounts_overview():
+        writer.writerow([
+            r["user"].get_full_name(), r["user"].email,
+            r["user"].profile.role, r["obligation"], r["paid"], r["balance"],
+            r["owes"], r["credit"], r["tuition_covered"], r["dues_state"] or ""])
+    return response
+
+
 def _parse_date(value):
     if not value:
         return None
@@ -1587,6 +1367,8 @@ def _handle_charge_refunded(charge: dict) -> None:
                 pk=payment.registration_id,
                 status=Registration.Status.PAID,
             ).update(status=Registration.Status.REFUNDED)
+            from .charges import void_registration_charge
+            void_registration_charge(payment.registration, "Stripe refund (webhook).")
 
 
 def _tuition_tab_url(**params) -> str:
@@ -1785,14 +1567,26 @@ def my_payments_update(request):
 
     periods = {str(tp.id): tp for tp in TuitionPeriod.objects.all()}
     changed = 0
+    blocked_donation_retype = False
     for p in Payment.objects.filter(user=request.user):
         fields = []
 
         new_type = request.POST.get(f"type_{p.id}")
         if new_type in Payment.Type.values and new_type != p.payment_type:
-            p.payment_type = new_type
-            p.source = Source.SELF_REPORTED
-            fields += ["payment_type", "source"]
+            is_donation_flip = (
+                new_type == Payment.Type.DONATION
+                or p.payment_type == Payment.Type.DONATION
+            )
+            if is_donation_flip:
+                # Donations are excluded from the ledger pot (ledger._counts)
+                # — flipping to/from DONATION moves money into or out of the
+                # member's own balance. That needs treasurer review, not
+                # self-service.
+                blocked_donation_retype = True
+            else:
+                p.payment_type = new_type
+                p.source = Source.SELF_REPORTED
+                fields += ["payment_type", "source"]
 
         note_key = f"note_{p.id}"
         if note_key in request.POST:
@@ -1813,8 +1607,14 @@ def my_payments_update(request):
             p.save(update_fields=fields)
             changed += 1
 
-    messages.success(
-        request,
-        f"Saved {changed} payment update(s)." if changed else "No changes to save.",
-    )
+    if blocked_donation_retype:
+        messages.error(
+            request,
+            "To reclassify a donation, or reclassify a payment as a "
+            "donation, contact the treasurer.",
+        )
+    if changed:
+        messages.success(request, f"Saved {changed} payment update(s).")
+    elif not blocked_donation_retype:
+        messages.success(request, "No changes to save.")
     return redirect(_tuition_tab_url())

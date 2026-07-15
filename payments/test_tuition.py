@@ -330,7 +330,11 @@ def staff_user(db):
 
 
 @pytest.mark.django_db
-def test_treasurer_dashboard_shows_tuition_section(client, staff_user, current_period):
+def test_treasurer_overview_shows_tuition_attention_items(
+    client, staff_user, current_period,
+):
+    """The old Tuition tab's 'Reconciliation queue' is now the Overview's
+    consolidated needs-attention queue (task #439)."""
     _mk_candidate("c1@x.test")  # undecided
     u_committed = _mk_candidate("c2@x.test")
     TuitionEnrollment.objects.create(
@@ -344,16 +348,14 @@ def test_treasurer_dashboard_shows_tuition_section(client, staff_user, current_p
     )
 
     client.force_login(staff_user)
-    resp = client.get(reverse("treasurer_tuition"))
+    resp = client.get(reverse("treasurer"))
     assert resp.status_code == 200
     body = resp.content
-    assert b"Tuition" in body
     assert current_period.name.encode() in body
     # Counts: 1 paid, 1 committed, 1 undecided.
-    assert b"Reconciliation queue" in body
     assert b"c1@x.test" in body  # undecided
     assert b"c2@x.test" in body  # committed
-    # PAID c3 should NOT appear in the tuition reconciliation queue.
+    # PAID c3 should NOT appear in the needs-attention queue.
     assert b"c3@x.test" not in body
 
 
@@ -401,13 +403,21 @@ def test_treasurer_dashboard_tuition_counts_collected(
 
 @pytest.mark.django_db
 def test_treasurer_dashboard_handles_no_period(client, staff_user):
-    """Renders politely when no TuitionPeriod is configured."""
+    """Renders politely when no TuitionPeriod is configured.
+
+    The unified overview (task #439) no longer headlines a single tuition
+    period on its own card, so there's no more per-card "no period"
+    message — confirm instead that the page still renders and the
+    needs-attention queue has no tuition-period-anchored rows.
+    """
     from payments.models import TuitionPeriod
     TuitionPeriod.objects.all().delete()
     client.force_login(staff_user)
     resp = client.get("/treasurer/")
     assert resp.status_code == 200
-    assert b"No current academic year configured" in resp.content
+    assert resp.context["attention"]["tuition_period"] is None
+    assert resp.context["attention"]["undecided"] == []
+    assert resp.context["attention"]["committed_unpaid"] == []
 
 
 @pytest.mark.django_db
@@ -424,26 +434,14 @@ def test_treasurer_dashboard_requires_staff(client, current_period):
 
 
 @pytest.mark.django_db
-def test_treasurer_overview_shows_both_dues_and_tuition_cards(
-    client, staff_user, current_period,
-):
-    client.force_login(staff_user)
-    resp = client.get(reverse("treasurer"))
-    assert resp.status_code == 200
-    body = resp.content
-    assert b"Dues" in body
-    assert b"Tuition" in body
-    # Tab nav should include all four tabs.
-    for label in (b"Overview", b"Tuition", b"Dues", b"Settings"):
-        assert label in body
-
-
-@pytest.mark.django_db
 def test_treasurer_tabs_all_require_staff(client, current_period):
-    """All four tabs are gated by the staff check."""
+    """The collapsed tab bar (task #439) is gated by the staff check.
+    (The old Tuition/Dues/Members tabs are now unconditional redirects, not
+    staff views — that redirect behavior is covered in
+    test_treasurer_accounts.py::test_old_tab_urls_redirect_to_accounts.)"""
     u = _mk_candidate("not-staff@x.test")
     client.force_login(u)
-    for name in ("treasurer", "treasurer_tuition", "treasurer_dues", "treasurer_settings"):
+    for name in ("treasurer", "treasurer_accounts", "treasurer_settings"):
         assert client.get(reverse(name)).status_code == 302
 
 
@@ -684,17 +682,19 @@ def test_treasurer_tuition_set_status_rejects_invalid_status(
 
 
 @pytest.mark.django_db
-def test_treasurer_tuition_record_offline_payment_flips_to_paid_in_full(
+def test_treasurer_record_payment_tuition_flips_to_paid_in_full(
     client, staff_user, current_period,
 ):
-    """Record-offline creates installment + payment, runs complete_payment,
-    enrollment lands on PAID_IN_FULL."""
+    """The generic record-payment action (task #439's replacement for the old
+    per-category offline-record buttons) creates installment + payment, runs
+    complete_payment, enrollment lands on PAID_IN_FULL."""
     from payments.models import Payment, TuitionInstallment
 
     u = _mk_candidate("offline-pay@x.test")
     client.force_login(staff_user)
     resp = client.post(
-        reverse("treasurer_tuition_record_offline_payment", args=[u.id])
+        reverse("treasurer_record_payment", args=[u.id]),
+        {"category": "tuition", "amount": str(current_period.tuition_amount)},
     )
     assert resp.status_code == 302
     enr = TuitionEnrollment.objects.get(user=u, tuition_period=current_period)
@@ -712,21 +712,27 @@ def test_treasurer_tuition_actions_require_staff(client, current_period):
     """Non-staff can't trigger the resolution actions."""
     u = _mk_candidate("anyone@x.test")
     client.force_login(u)
-    for name in ("treasurer_tuition_set_status",
-                 "treasurer_tuition_record_offline_payment"):
-        resp = client.post(reverse(name, args=[u.id]), {"status": "skipping"})
-        assert resp.status_code == 302
-        assert "/accounts/login/" in resp.url
+    resp = client.post(
+        reverse("treasurer_tuition_set_status", args=[u.id]), {"status": "skipping"})
+    assert resp.status_code == 302
+    assert "/accounts/login/" in resp.url
+    resp = client.post(
+        reverse("treasurer_record_payment", args=[u.id]),
+        {"category": "tuition", "amount": "1"})
+    assert resp.status_code == 302
+    assert "/accounts/login/" in resp.url
 
 
 # --- Treasurer offline dues payment recording ---------------------------
 
 
 @pytest.mark.django_db
-def test_treasurer_dues_record_offline_payment_creates_succeeded_payment(
+def test_treasurer_record_payment_dues_creates_succeeded_payment(
     client, staff_user,
 ):
-    """Records a SUCCEEDED Payment for the user's role-tier amount."""
+    """Records a SUCCEEDED Payment for the user's role-tier amount via the
+    generic record-payment action (replaces the old dues-only offline-record
+    button)."""
     from payments.models import DuesPeriod, Payment
 
     u = _mk_candidate("dues-off@x.test")
@@ -735,7 +741,8 @@ def test_treasurer_dues_record_offline_payment_creates_succeeded_payment(
     expected_amount = period.amount_for_role(u.profile.role)
     client.force_login(staff_user)
     resp = client.post(
-        reverse("treasurer_dues_record_offline_payment", args=[u.id])
+        reverse("treasurer_record_payment", args=[u.id]),
+        {"category": "dues", "amount": str(expected_amount)},
     )
     assert resp.status_code == 302
     payment = Payment.objects.get(user=u, payment_type=Payment.Type.DUES)
@@ -747,25 +754,7 @@ def test_treasurer_dues_record_offline_payment_creates_succeeded_payment(
 
 
 @pytest.mark.django_db
-def test_treasurer_dues_record_offline_payment_skips_non_obligated(
-    client, staff_user,
-):
-    """Roles outside the tier table (e.g. external) → no Payment created."""
-    from payments.models import Payment
-
-    u = User.objects.create_user(email="ext@x.test", password="x")
-    u.profile.role = Profile.Role.EXTERNAL
-    u.profile.save()
-    client.force_login(staff_user)
-    resp = client.post(
-        reverse("treasurer_dues_record_offline_payment", args=[u.id])
-    )
-    assert resp.status_code == 302
-    assert not Payment.objects.filter(user=u).exists()
-
-
-@pytest.mark.django_db
-def test_treasurer_dues_record_offline_payment_requires_staff(client):
+def test_treasurer_record_payment_requires_staff(client):
     from payments.models import Payment
 
     u = User.objects.create_user(email="not-staff@x.test", password="x")
@@ -773,7 +762,8 @@ def test_treasurer_dues_record_offline_payment_requires_staff(client):
     u.profile.save()
     client.force_login(u)
     resp = client.post(
-        reverse("treasurer_dues_record_offline_payment", args=[u.id])
+        reverse("treasurer_record_payment", args=[u.id]),
+        {"category": "dues", "amount": "100"},
     )
     assert resp.status_code == 302
     assert "/accounts/login/" in resp.url
@@ -1040,36 +1030,15 @@ def test_treasurer_help_renders_markdown(client, staff_user):
 
 @pytest.mark.django_db
 def test_treasurer_new_tabs_require_staff(client, current_period):
-    """Exports + Payments + Members tabs gated to staff."""
+    """Exports + Payments tabs gated to staff. (The old Members tab's search
+    is now Accounts's ``?q=`` filter — staff-gating for that view is covered
+    by test_treasurer_accounts.py::test_requires_staff; the search behavior
+    itself by test_search_filters_by_name_or_email in the same file.)"""
     u = _mk_candidate("not-staff-tab@x.test")
     client.force_login(u)
-    for name in ("treasurer_exports", "treasurer_payments", "treasurer_members"):
+    for name in ("treasurer_exports", "treasurer_payments"):
         resp = client.get(reverse(name))
         assert resp.status_code == 302
-
-
-# --- Members tab --------------------------------------------------------
-
-
-@pytest.mark.django_db
-def test_treasurer_members_search_finds_matching_users(client, staff_user):
-    _mk_candidate("alice@x.test")
-    _mk_candidate("bob@x.test")
-    client.force_login(staff_user)
-    resp = client.get(reverse("treasurer_members") + "?q=alice")
-    body = resp.content
-    assert b"alice@x.test" in body
-    assert b"bob@x.test" not in body
-
-
-@pytest.mark.django_db
-def test_treasurer_members_empty_search_shows_form_only(client, staff_user):
-    _mk_candidate("anyone@x.test")
-    client.force_login(staff_user)
-    resp = client.get(reverse("treasurer_members"))
-    body = resp.content
-    assert b"Search by name or email" in body
-    assert b"anyone@x.test" not in body
 
 
 @pytest.mark.django_db
@@ -1457,124 +1426,6 @@ def test_complete_payment_is_idempotent_for_tuition(current_period):
     assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL
 
 
-# --- Treasurer dashboard money buckets ----------------------------------
-
-
-@pytest.mark.django_db
-def test_tuition_context_money_buckets(current_period):
-    """_treasurer_tuition_context exposes collected / committed-remaining /
-    undecided-owed dollar buckets for the current period."""
-    from payments.models import Payment
-    from payments.views import _treasurer_tuition_context
-
-    full = current_period.tuition_amount
-    paid = (full / 2).quantize(Decimal("0.01"))
-
-    # Candidate A: on a payment plan, paid half.
-    a = _mk_candidate(email="a@x.test")
-    enr = TuitionEnrollment.objects.create(
-        user=a, tuition_period=current_period,
-        status=TuitionEnrollment.Status.PAYMENT_PLAN,
-    )
-    inst = TuitionInstallment.objects.create(
-        enrollment=enr, sequence=1, due_date=current_period.start_date, amount=paid,
-    )
-    Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=a, amount=paid,
-        status=Payment.Status.SUCCEEDED, tuition_installment=inst,
-    )
-    # Candidate B: in-training but no decision recorded → undecided.
-    _mk_candidate(email="b@x.test")
-
-    ctx = _treasurer_tuition_context()
-    assert ctx["tuition_total_collected"] == paid
-    assert ctx["tuition_committed_remaining"] == full - paid
-    assert ctx["tuition_undecided_owed"] == full  # one undecided in-training student
-    assert ctx["tuition_outstanding"] == (full - paid) + full
-
-
-# --- Longitudinal + per-year drill-down ---------------------------------
-
-
-@pytest.mark.django_db
-def test_tuition_longitudinal_aggregates_per_year(current_period):
-    """_treasurer_tuition_longitudinal rolls up collected + status counts per AY."""
-    from payments.models import Payment
-    from payments.views import _treasurer_tuition_longitudinal
-
-    past = TuitionPeriod.objects.create(
-        name="AY past", slug="ay-past-tuition",
-        start_date=date(2000, 9, 1), decision_due_date=date(2000, 8, 31),
-        end_date=date(2001, 8, 31), tuition_amount=Decimal("1000"),
-    )
-    u = _mk_candidate(email="long@x.test")
-    enr = TuitionEnrollment.objects.create(
-        user=u, tuition_period=past, status=TuitionEnrollment.Status.PAID_IN_FULL,
-    )
-    inst = TuitionInstallment.objects.create(
-        enrollment=enr, sequence=1, due_date=past.start_date, amount=Decimal("1000"),
-    )
-    Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("1000"),
-        status=Payment.Status.SUCCEEDED, tuition_installment=inst,
-    )
-
-    ctx = _treasurer_tuition_longitudinal()
-    rows = {r["period"].slug: r for r in ctx["tuition_year_rows"]}
-    assert rows["ay-past-tuition"]["collected"] == Decimal("1000")
-    assert rows["ay-past-tuition"]["paid_in_full"] == 1
-    assert rows["ay-past-tuition"]["enrolled"] == 1
-    # Both periods represented; current AY present with zero collected.
-    assert current_period.slug in rows
-
-
-@pytest.mark.django_db
-def test_tuition_context_past_year_hides_forward_looking(current_period):
-    """Selecting a past period returns retrospective facts only — no live
-    in-training roster, no reconciliation queue."""
-    from payments.models import Payment
-    from payments.views import _treasurer_tuition_context
-
-    past = TuitionPeriod.objects.create(
-        name="AY past2", slug="ay-past2-tuition",
-        start_date=date(2001, 9, 1), decision_due_date=date(2001, 8, 31),
-        end_date=date(2002, 8, 31), tuition_amount=Decimal("1000"),
-    )
-    u = _mk_candidate(email="past@x.test")
-    enr = TuitionEnrollment.objects.create(
-        user=u, tuition_period=past, status=TuitionEnrollment.Status.PAYMENT_PLAN,
-    )
-    inst = TuitionInstallment.objects.create(
-        enrollment=enr, sequence=1, due_date=past.start_date, amount=Decimal("400"),
-    )
-    Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("400"),
-        status=Payment.Status.SUCCEEDED, tuition_installment=inst,
-    )
-
-    ctx = _treasurer_tuition_context(past)
-    assert ctx["tuition_is_current"] is False
-    assert ctx["tuition_in_training_count"] == 0
-    assert ctx["tuition_reconciliation_users"] == []
-    assert ctx["tuition_undecided_owed"] == Decimal("0")
-    assert ctx["tuition_total_collected"] == Decimal("400")
-    assert ctx["tuition_committed_remaining"] == Decimal("600")  # 1000 - 400
-    assert len(ctx["tuition_enrollment_rows"]) == 1
-
-
-def test_treasurer_tuition_year_selector_loads_past(client, staff_user, current_period):
-    """?year=<slug> renders the selected past year."""
-    TuitionPeriod.objects.create(
-        name="AY 1999", slug="ay-1999-tuition",
-        start_date=date(1999, 9, 1), decision_due_date=date(1999, 8, 31),
-        end_date=date(2000, 8, 31), tuition_amount=Decimal("1000"),
-    )
-    client.force_login(staff_user)
-    resp = client.get(reverse("treasurer_tuition") + "?year=ay-1999-tuition")
-    assert resp.status_code == 200
-    assert b"AY 1999" in resp.content
-
-
 # --- assume_skip_when_unpaid command ------------------------------------
 
 
@@ -1740,89 +1591,21 @@ def test_tuition_gate_skips_on_leave_student(current_period):
 
 
 @pytest.mark.django_db
-def test_treasurer_in_training_count_excludes_on_leave(current_period):
-    from payments.views import _treasurer_tuition_context
+def test_attention_undecided_excludes_on_leave(current_period):
+    """The Overview's needs-attention 'undecided' bucket (task #439's
+    replacement for the old Tuition tab's in-training count) excludes
+    on-leave students the same way."""
+    from payments import ledger
+    from payments.views import _attention_queue
 
-    _mk_candidate(email="active-it@x.test")
+    active = _mk_candidate(email="active-it@x.test")
     leave = _mk_candidate(email="leave-it@x.test")
     leave.profile.standing = Profile.Standing.ON_LEAVE
     leave.profile.save()
 
-    ctx = _treasurer_tuition_context()
-    assert ctx["tuition_in_training_count"] == 1  # only the active candidate
-
-
-# --- Batched cumulative coverage across enrollees ----------------------
-
-@pytest.mark.django_db
-def test_tuition_coverage_batched_standings_and_per_year():
-    """The batched coverage helper matches the single-member ledger: obligation
-    excludes skipping, the running total sweeps years oldest-first, and each
-    year's coverage sums correctly across students."""
-    from payments.models import Payment
-    from payments.views import _tuition_coverage
-
-    p22 = TuitionPeriod.objects.create(
-        name="AY 2022–2023", slug="cov-a", start_date=date(2022, 9, 1),
-        decision_due_date=date(2022, 10, 1), end_date=date(2023, 8, 31),
-        tuition_amount=Decimal("2000.00"))
-    p23 = TuitionPeriod.objects.create(
-        name="AY 2023–2024", slug="cov-b", start_date=date(2023, 9, 1),
-        decision_due_date=date(2023, 10, 1), end_date=date(2024, 8, 31),
-        tuition_amount=Decimal("2000.00"))
-    a = _mk_candidate("cova@example.com")
-    b = _mk_candidate("covb@example.com")
-    committed = TuitionEnrollment.Status.COMMITTED
-    for u in (a, b):
-        TuitionEnrollment.objects.create(user=u, tuition_period=p22, status=committed)
-        TuitionEnrollment.objects.create(user=u, tuition_period=p23, status=committed)
-    # a pays $3000 (covers 22-23 fully + half of 23-24); b pays $2000 (22-23 only).
-    Payment.objects.create(payment_type=Payment.Type.TUITION, user=a, amount=Decimal("3000"),
-                           status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE)
-    Payment.objects.create(payment_type=Payment.Type.TUITION, user=b, amount=Decimal("2000"),
-                           status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE)
-
-    standings, covered_by_period, user_period = _tuition_coverage()
-    assert standings[a.id]["obligation"] == Decimal("4000")
-    assert standings[a.id]["owes"] == Decimal("1000")
-    assert standings[b.id]["owes"] == Decimal("2000")
-    # 22-23 fully covered by both ($4000); 23-24 only a's remainder ($1000).
-    assert covered_by_period[p22.id] == Decimal("4000")
-    assert covered_by_period[p23.id] == Decimal("1000")
-    assert user_period[(a.id, p23.id)]["covered"] == Decimal("1000")
-
-
-# --- Backfilled (installment-less) tuition shows on the dashboard -------
-
-@pytest.mark.django_db
-def test_untied_tuition_counts_toward_collected_via_coverage():
-    """Imported tuition with no installment link still counts as collected —
-    the cumulative coverage sweeps it onto the student's enrolled year."""
-    from payments.models import Payment
-    from payments.views import (
-        _treasurer_tuition_context,
-        _treasurer_tuition_longitudinal,
-    )
-
-    period = TuitionPeriod.objects.create(
-        name="AY 2022–2023", slug="ay-2022-2023",
-        start_date=date(2022, 9, 1), decision_due_date=date(2022, 10, 1),
-        end_date=date(2023, 8, 31), tuition_amount=Decimal("2000.00"),
-    )
-    u = _mk_candidate("backfill@example.com")
-    TuitionEnrollment.objects.create(
-        user=u, tuition_period=period, status=TuitionEnrollment.Status.COMMITTED)
-    Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("2000.00"),
-        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
-        paid_at=timezone.make_aware(datetime(2022, 10, 15, 12, 0)),
-    )
-    ctx = _treasurer_tuition_context(period)
-    assert ctx["tuition_total_collected"] == Decimal("2000.00")
-
-    longi = _treasurer_tuition_longitudinal()
-    row = next(r for r in longi["tuition_year_rows"] if r["period"].id == period.id)
-    assert row["collected"] == Decimal("2000.00")
+    att = _attention_queue(ledger.accounts_overview())
+    assert active in att["undecided"]
+    assert leave not in att["undecided"]
 
 
 # --- Member tuition AY assignment + treasurer override ------------------
@@ -1859,12 +1642,58 @@ def test_member_assigns_tuition_period_and_note(client):
 
 
 @pytest.mark.django_db
+def test_member_cannot_retype_donation_to_dues(client):
+    """Donations are excluded from the ledger pot (payments/ledger.py
+    ``_counts``) — a member re-typing their own donation into a counting
+    category (or vice versa) would move money into/out of their balance
+    without treasurer review. Non-donation<->non-donation retypes stay
+    self-service (task #439 fix 1)."""
+    from django.contrib.messages import get_messages
+
+    from payments.models import Payment
+    u = _mk_candidate("donor@example.com")
+    pay = Payment.objects.create(
+        payment_type=Payment.Type.DONATION, user=u, amount=Decimal("100.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+    )
+    client.force_login(u)
+    resp = client.post(reverse("my_payments_update"), {
+        f"type_{pay.id}": Payment.Type.DUES,
+    })
+    pay.refresh_from_db()
+    assert pay.payment_type == Payment.Type.DONATION  # unchanged
+    msgs = [str(m) for m in get_messages(resp.wsgi_request)]
+    assert any("contact the treasurer" in m for m in msgs)
+
+
+@pytest.mark.django_db
+def test_member_can_retype_dues_to_tuition(client):
+    """Non-donation <-> non-donation retypes are balance-neutral (both count
+    toward the pot) and stay self-service."""
+    from payments.models import Payment
+    u = _mk_candidate("retype@example.com")
+    pay = Payment.objects.create(
+        payment_type=Payment.Type.DUES, user=u, amount=Decimal("100.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+    )
+    client.force_login(u)
+    client.post(reverse("my_payments_update"), {
+        f"type_{pay.id}": Payment.Type.TUITION,
+    })
+    pay.refresh_from_db()
+    assert pay.payment_type == Payment.Type.TUITION
+
+
+@pytest.mark.django_db
 def test_tuition_collected_counts_regardless_of_payment_date():
     """Coverage counts a payment toward the student's enrolled year no matter
     when it was paid — a summer prepayment (August, before the AY starts) still
-    covers that year's obligation."""
+    covers that year's obligation. Ported onto ``ledger.member_account`` (task
+    #439); the ledger sweep is date-blind by construction (one fungible pot,
+    no per-payment year guessing), so this is now a structural regression
+    guard on that surface rather than a date-filter test."""
+    from payments import ledger
     from payments.models import Payment
-    from payments.views import _treasurer_tuition_context
     p2022 = TuitionPeriod.objects.create(
         name="AY 2022–2023", slug="ay-2022-2023-y",
         start_date=date(2022, 9, 1), decision_due_date=date(2022, 10, 1),
@@ -1878,5 +1707,6 @@ def test_tuition_collected_counts_regardless_of_payment_date():
         status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
         paid_at=timezone.make_aware(datetime(2022, 8, 15, 12)),  # before AY starts
     )
-    ctx = _treasurer_tuition_context(p2022)
-    assert ctx["tuition_total_collected"] == Decimal("2000.00")
+    acct = ledger.member_account(u)
+    row = next(r for r in acct["tuition_rows"] if r["period"].slug == "ay-2022-2023-y")
+    assert row["state"] == "paid"

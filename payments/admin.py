@@ -1,6 +1,7 @@
 from django.contrib import admin, messages
 
 from .models import (
+    Charge,
     DuesPeriod,
     DuesReminder,
     Payment,
@@ -148,3 +149,13 @@ class TuitionReminderAdmin(admin.ModelAdmin):
     search_fields = ("user__email",)
     readonly_fields = ("user", "tuition_period", "sent_at")
     date_hierarchy = "sent_at"
+
+
+@admin.register(Charge)
+class ChargeAdmin(admin.ModelAdmin):
+    list_display = ("user", "category", "amount", "status", "effective_date",
+                    "source", "staff_adjusted")
+    list_filter = ("category", "status", "source", "staff_adjusted")
+    search_fields = ("user__email", "user__first_name", "user__last_name", "notes")
+    autocomplete_fields = ("user", "dues_period", "tuition_period", "registration")
+    date_hierarchy = "effective_date"
