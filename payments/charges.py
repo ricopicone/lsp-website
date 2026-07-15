@@ -62,13 +62,34 @@ def sync_dues_charges(period) -> int:
     return created
 
 
+def _owed_periods(enrollments) -> dict[int, object]:
+    """Map ``tuition_period_id -> enrollment`` for the years a member actually
+    owes: non-skipping enrollments oldest-first, capped at
+    ``TUITION_YEARS_REQUIRED``. ``enrollments`` must already be ordered
+    oldest-first by period start date. The expected rate for an owed year is
+    ``enrollment.tuition_period.tuition_amount`` — derive it at the call site.
+    """
+    from payments.ledger import TUITION_YEARS_REQUIRED
+
+    from .models import TuitionEnrollment
+
+    owed: dict[int, object] = {}
+    counted = 0
+    for e in enrollments:
+        if e.status == TuitionEnrollment.Status.SKIPPING:
+            continue
+        counted += 1
+        if counted > TUITION_YEARS_REQUIRED:
+            continue                        # beyond the cap — never owed
+        owed[e.tuition_period_id] = e
+    return owed
+
+
 def sync_tuition_charges(user) -> None:
     """Recompute ``user``'s tuition charges from their enrollment decisions.
 
     Mints/revives/voids only sync-managed rows (``staff_adjusted=False``).
     """
-    from payments.ledger import TUITION_YEARS_REQUIRED
-
     from .models import TuitionEnrollment
 
     today = timezone.now().date()
@@ -77,15 +98,7 @@ def sync_tuition_charges(user) -> None:
         .select_related("tuition_period")
         .order_by("tuition_period__start_date")
     )
-    should: dict[int, object] = {}          # tuition_period_id -> enrollment
-    counted = 0
-    for e in enrollments:
-        if e.status == TuitionEnrollment.Status.SKIPPING:
-            continue
-        counted += 1
-        if counted > TUITION_YEARS_REQUIRED:
-            continue                        # beyond the cap — never owed
-        should[e.tuition_period_id] = e
+    should = _owed_periods(enrollments)     # tuition_period_id -> enrollment
 
     existing: dict[int, Charge] = {}        # prefer a non-VOID row per period
     for c in Charge.objects.filter(
@@ -140,8 +153,6 @@ def tuition_charge_conflicts() -> list[dict]:
     expectation. Batched for the Reconcile tab."""
     from collections import defaultdict
 
-    from payments.ledger import TUITION_YEARS_REQUIRED
-
     from .models import TuitionEnrollment
 
     enrollments_by_user = defaultdict(list)
@@ -152,16 +163,8 @@ def tuition_charge_conflicts() -> list[dict]:
 
     expected: dict[tuple[int, int], Decimal] = {}   # (user_id, period_id) -> rate
     for uid, enrs in enrollments_by_user.items():
-        counted = 0
-        for e in enrs:
-            if e.status == TuitionEnrollment.Status.SKIPPING:
-                continue
-            counted += 1
-            if counted > TUITION_YEARS_REQUIRED:
-                continue
-            expected[(uid, e.tuition_period_id)] = (
-                e.tuition_period.tuition_amount or Decimal("0")
-            )
+        for pid, e in _owed_periods(enrs).items():
+            expected[(uid, pid)] = e.tuition_period.tuition_amount or Decimal("0")
 
     out = []
     staff_rows = (
