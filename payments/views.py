@@ -100,14 +100,58 @@ def _treasurer_render(request, tab_key: str, template: str, ctx: dict):
 @login_required
 @user_passes_test(_is_staff)
 def treasurer_dashboard(request):
-    """Overview tab — compact highlights for both tuition and dues (M7.5)."""
-    tuition_ctx = _treasurer_tuition_context()
-    dues_ctx = _treasurer_dues_context()
+    """Overview tab — ledger tiles + one consolidated needs-attention queue."""
+    from payments import ledger
 
+    rows = ledger.accounts_overview()
+    owing = [r for r in rows if r["owes"]]
     return _treasurer_render(request, "overview", "payments/treasurer/overview.html", {
-        **dues_ctx,
-        **tuition_ctx,
+        "collected": ledger.collected_this_ay(),
+        "total_outstanding": sum((r["owes"] for r in owing), Decimal("0")),
+        "owing_count": len(owing),
+        "credit_count": sum(1 for r in rows if r["credit"]),
+        "account_count": len(rows),
+        "attention": _attention_queue(rows),
     })
+
+
+def _attention_queue(rows) -> dict:
+    """Everything that needs the treasurer, in one place."""
+    from accounts.models import Profile, Source
+    from payments.charges import tuition_charge_conflicts
+
+    period = TuitionPeriod.current()
+    undecided, committed_unpaid = [], []
+    if period is not None:
+        enrollments = list(
+            TuitionEnrollment.objects.filter(tuition_period=period)
+            .select_related("user"))
+        decided_ids = {e.user_id for e in enrollments}
+        in_training = User.objects.filter(
+            is_active=True, profile__is_persona=False,
+            profile__standing=Profile.Standing.ACTIVE,
+            profile__role__in=Profile.IN_TRAINING_ROLES,
+        ).select_related("profile")
+        undecided = [u for u in in_training if u.id not in decided_ids]
+        committed_unpaid = [
+            e for e in enrollments
+            if e.status == TuitionEnrollment.Status.COMMITTED]
+    conflicts = list(tuition_charge_conflicts())
+    conflicts += [
+        {"user": r["user"], "charge": None, "expected_rate": None,
+         "problem": f"${r['credit']} credit while a year is marked Skipping — "
+                    "a skipped year was probably actually paid."}
+        for r in rows if r["conflict"]
+    ]
+    return {
+        "undecided": undecided,
+        "committed_unpaid": committed_unpaid,
+        "conflicts": conflicts,
+        "assumed_count": Payment.objects.filter(source=Source.ASSUMED).count(),
+        "no_payer_count": Payment.objects.filter(
+            source=Source.STRIPE, user__isnull=True).count(),
+        "tuition_period": period,
+    }
 
 
 @login_required

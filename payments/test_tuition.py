@@ -401,13 +401,21 @@ def test_treasurer_dashboard_tuition_counts_collected(
 
 @pytest.mark.django_db
 def test_treasurer_dashboard_handles_no_period(client, staff_user):
-    """Renders politely when no TuitionPeriod is configured."""
+    """Renders politely when no TuitionPeriod is configured.
+
+    The unified overview (task #439) no longer headlines a single tuition
+    period on its own card, so there's no more per-card "no period"
+    message — confirm instead that the page still renders and the
+    needs-attention queue has no tuition-period-anchored rows.
+    """
     from payments.models import TuitionPeriod
     TuitionPeriod.objects.all().delete()
     client.force_login(staff_user)
     resp = client.get("/treasurer/")
     assert resp.status_code == 200
-    assert b"No current academic year configured" in resp.content
+    assert resp.context["attention"]["tuition_period"] is None
+    assert resp.context["attention"]["undecided"] == []
+    assert resp.context["attention"]["committed_unpaid"] == []
 
 
 @pytest.mark.django_db

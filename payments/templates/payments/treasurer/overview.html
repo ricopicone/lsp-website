@@ -3,99 +3,118 @@
 {% block tab_content %}
 <div class="space-y-8">
 
-  <p class="text-sm text-base-content/60">
-    At-a-glance state for the current academic year. Use the tabs above
-    for the full per-section views.
-  </p>
+  <header class="space-y-1">
+    <h2 class="font-serif text-2xl text-base-content">Treasurer overview</h2>
+    {% if collected.window %}
+    <p class="text-sm text-base-content/60">
+      Current academic year: {{ collected.window.0|date:"M j, Y" }}–{{ collected.window.1|date:"M j, Y" }}.
+      One ledger per member — see the
+      <a href="{% url 'treasurer_accounts' %}" class="link">Accounts</a> tab for the full list.
+    </p>
+    {% else %}
+    <p class="text-sm text-base-content/60">
+      No current academic year configured. One ledger per member — see the
+      <a href="{% url 'treasurer_accounts' %}" class="link">Accounts</a> tab for the full list.
+    </p>
+    {% endif %}
+  </header>
 
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-    {% comment %}Tuition card (left){% endcomment %}
-    <section class="rounded-lg border border-base-300 p-5 space-y-4">
-      <header class="flex items-baseline justify-between">
-        <h2 class="font-serif text-xl text-base-content">Tuition</h2>
-        <a href="{% url 'treasurer_tuition' %}" class="text-sm link link-primary">Details →</a>
-      </header>
-      {% if tuition_period %}
-      <p class="text-sm text-base-content/70">
-        <strong>{{ tuition_period.name }}</strong> · {{ tuition_period.tuition_amount|usd0 }}/yr ·
-        <span class="whitespace-nowrap">decisions due {{ tuition_period.decision_due_date|date:"M j, Y" }}</span>
+  {% comment %}Tiles row{% endcomment %}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="rounded border border-base-300 p-2.5 space-y-1">
+      {% include "payments/treasurer/_money_tile.html" with label="Collected this AY" value=collected.total tone="success" %}
+      {% if collected.by_category %}
+      <p class="text-xs text-base-content/55 leading-snug">
+        Dues {{ collected.by_category.dues|default:0|usd0 }} ·
+        Tuition {{ collected.by_category.tuition|default:0|usd0 }} ·
+        Registration {{ collected.by_category.registration|default:0|usd0 }} ·
+        Donation {{ collected.by_category.donation|default:0|usd0 }}
       </p>
-
-      {% comment %}Featured dollar amounts{% endcomment %}
-      <div class="grid grid-cols-3 gap-2">
-        {% include "payments/treasurer/_money_tile.html" with label="Collected" value=tuition_total_collected tone="success" %}
-        {% include "payments/treasurer/_money_tile.html" with label="Planned, unpaid" value=tuition_committed_remaining tone="info" %}
-        {% include "payments/treasurer/_money_tile.html" with label="Owed, undecided" value=tuition_undecided_owed tone="warning" %}
-      </div>
-
-      <div>
-        <canvas id="chart-tuition-money" height="46"></canvas>
-      </div>
-
-      <div class="grid grid-cols-3 gap-2 text-sm pt-1 border-t border-base-300/40">
-        <div>
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">In-training</div>
-          <div class="font-serif text-lg">{{ tuition_in_training_count }}</div>
-        </div>
-        <div>
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Recon queue</div>
-          <div class="font-serif text-lg {% if tuition_reconciliation_users|length %}text-warning{% endif %}">{{ tuition_reconciliation_users|length }}</div>
-        </div>
-        <div>
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Outstanding</div>
-          <div class="font-serif text-lg">{{ tuition_outstanding|usd }}</div>
-        </div>
-      </div>
-      {% else %}
-      <p class="text-sm text-base-content/60">No current academic year configured.</p>
       {% endif %}
-    </section>
-
-    {% comment %}Dues card (right){% endcomment %}
-    <section class="rounded-lg border border-base-300 p-5 space-y-4">
-      <header class="flex items-baseline justify-between">
-        <h2 class="font-serif text-xl text-base-content">Dues</h2>
-        <a href="{% url 'treasurer_dues' %}" class="text-sm link link-primary">Details →</a>
-      </header>
-      {% if current_period %}
-      <p class="text-sm text-base-content/70">
-        <strong>{{ current_period.name }}</strong> ·
-        {{ current_period.dues_amount_pre_candidate|usd0 }}/{{ current_period.dues_amount_candidate|usd0 }}/{{ current_period.dues_amount_analyst|usd0 }}
-        pre-cand·cand·analyst ·
-        due {{ current_period.due_date|date:"M j, Y" }}
-      </p>
-
-      {% comment %}Featured dollar amounts{% endcomment %}
-      <div class="grid grid-cols-2 gap-2">
-        {% include "payments/treasurer/_money_tile.html" with label="Collected" value=dues_collected tone="success" %}
-        {% include "payments/treasurer/_money_tile.html" with label="Outstanding" value=dues_outstanding tone="warning" %}
-      </div>
-
-      <div>
-        <canvas id="chart-dues-money" height="46"></canvas>
-      </div>
-
-      <div class="grid grid-cols-3 gap-2 text-sm pt-1 border-t border-base-300/40">
-        <div>
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Obligated</div>
-          <div class="font-serif text-lg">{{ obligated_count }}</div>
-        </div>
-        <div>
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Paid</div>
-          <div class="font-serif text-lg text-success">{{ current_dues_stats.paid_count|default:0 }}</div>
-        </div>
-        <div>
-          <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Unpaid</div>
-          <div class="font-serif text-lg {% if current_dues_stats.unpaid_count %}text-warning{% endif %}">{{ current_dues_stats.unpaid_count|default:0 }}</div>
-        </div>
-      </div>
-      {% else %}
-      <p class="text-sm text-base-content/60">No current academic year configured.</p>
-      {% endif %}
-    </section>
-
+    </div>
+    <a href="{% url 'treasurer_accounts' %}?balance=owing" class="block hover:opacity-80">
+      {% include "payments/treasurer/_money_tile.html" with label="Outstanding" value=total_outstanding tone="warning" %}
+    </a>
+    <div>{% include "payments/treasurer/_money_tile.html" with label="Accounts owing" value=owing_count %}</div>
+    <a href="{% url 'treasurer_accounts' %}?balance=credit" class="block hover:opacity-80">
+      {% include "payments/treasurer/_money_tile.html" with label="Accounts in credit" value=credit_count %}
+    </a>
   </div>
+
+  {% comment %}Needs attention{% endcomment %}
+  <section class="rounded-lg border border-base-300 p-5 space-y-3">
+    <header>
+      <h3 class="font-serif text-lg text-base-content">Needs attention</h3>
+    </header>
+
+    {% if attention.undecided or attention.committed_unpaid or attention.conflicts or attention.assumed_count or attention.no_payer_count %}
+    <ul class="divide-y divide-base-300/60">
+      {% for u in attention.undecided %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="badge badge-warning badge-outline badge-sm">Undecided</span>
+          <a class="link" href="{% url 'treasurer_member_detail' u.id %}">{{ u.get_full_name|default:u.email }}</a>
+          <span class="text-base-content/60">no tuition decision for {{ attention.tuition_period.name }}</span>
+        </div>
+        <form method="post" action="{% url 'treasurer_tuition_set_status' u.id %}">
+          {% csrf_token %}
+          <input type="hidden" name="status" value="skipping">
+          <input type="hidden" name="next" value="{% url 'treasurer' %}">
+          <button type="submit" class="btn btn-ghost btn-xs">Skipping</button>
+        </form>
+      </li>
+      {% endfor %}
+
+      {% for e in attention.committed_unpaid %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="badge badge-info badge-outline badge-sm">Committed</span>
+          <a class="link" href="{% url 'treasurer_member_detail' e.user.id %}">{{ e.user.get_full_name|default:e.user.email }}</a>
+          <span class="text-base-content/60">committed, not yet paid</span>
+        </div>
+        <a class="link link-primary text-sm" href="{% url 'treasurer_member_detail' e.user.id %}">Record payment →</a>
+      </li>
+      {% endfor %}
+
+      {% for item in attention.conflicts %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="badge badge-error badge-outline badge-sm">Conflict</span>
+          <a class="link" href="{% url 'treasurer_member_detail' item.user.id %}">{{ item.user.get_full_name|default:item.user.email }}</a>
+          <span class="text-base-content/60">{{ item.problem }}</span>
+        </div>
+        <a class="link text-sm" href="{% url 'treasurer_member_detail' item.user.id %}">Review →</a>
+      </li>
+      {% endfor %}
+
+      {% if attention.assumed_count %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="badge badge-neutral badge-outline badge-sm">Assumed</span>
+          <span class="text-base-content/60">
+            {{ attention.assumed_count }} payment{{ attention.assumed_count|pluralize }} imported with an assumed category
+          </span>
+        </div>
+        <a class="link link-primary text-sm" href="{% url 'treasurer_reconcile' %}">Reconcile →</a>
+      </li>
+      {% endif %}
+
+      {% if attention.no_payer_count %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="badge badge-neutral badge-outline badge-sm">No payer</span>
+          <span class="text-base-content/60">
+            {{ attention.no_payer_count }} Stripe payment{{ attention.no_payer_count|pluralize }} not linked to a member
+          </span>
+        </div>
+        <a class="link link-primary text-sm" href="{% url 'treasurer_reconcile' %}">Reconcile →</a>
+      </li>
+      {% endif %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-base-content/60">Nothing needs attention.</p>
+    {% endif %}
+  </section>
 
   <p class="text-xs text-base-content/60 pt-2">
     Adjust amounts and reminder cadence under
@@ -107,27 +126,4 @@
   </p>
 
 </div>
-
-<script id="chart-tuition-money-data" type="application/json">{{ chart_tuition_money_json|safe }}</script>
-<script id="chart-dues-money-data" type="application/json">{{ chart_dues_money_json|safe }}</script>
-<script>
-  (function () {
-    var c = LSPCharts.colors();
-    var t = LSPCharts.readJSON("chart-tuition-money-data");
-    if (t) {
-      LSPCharts.moneyBar("chart-tuition-money", [
-        { label: "Collected", value: t.collected, color: c.success },
-        { label: "Planned, unpaid", value: t.planned, color: c.info },
-        { label: "Owed, undecided", value: t.owed, color: c.warning },
-      ]);
-    }
-    var d = LSPCharts.readJSON("chart-dues-money-data");
-    if (d) {
-      LSPCharts.moneyBar("chart-dues-money", [
-        { label: "Collected", value: d.collected, color: c.success },
-        { label: "Outstanding", value: d.outstanding, color: c.warning },
-      ]);
-    }
-  })();
-</script>
 {% endblock %}
