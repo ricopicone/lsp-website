@@ -93,3 +93,9 @@ def test_tab_bar_is_seven_tabs(client, roster):
     assert [k for k, _ in TREASURER_TABS] == [
         "overview", "accounts", "payments", "reconcile",
         "settings", "exports", "help"]
+
+
+def test_help_tab_renders_rewritten_guide(client, roster):
+    resp = client.get(reverse("treasurer_help"))
+    assert resp.status_code == 200
+    assert b"one account per member" in resp.content.lower()
