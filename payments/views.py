@@ -61,6 +61,7 @@ def _is_staff(user):
 
 TREASURER_TABS = [
     ("overview", "Overview"),
+    ("accounts", "Accounts"),
     ("tuition",  "Tuition"),
     ("dues",     "Dues"),
     ("members",  "Members"),
@@ -77,6 +78,7 @@ def _treasurer_tab_links() -> list[tuple[str, str, str]]:
     from django.urls import reverse
     name_to_url = {
         "overview": reverse("treasurer"),
+        "accounts": reverse("treasurer_accounts"),
         "tuition":  reverse("treasurer_tuition"),
         "dues":     reverse("treasurer_dues"),
         "members":  reverse("treasurer_members"),
@@ -127,6 +129,76 @@ def treasurer_dues(request):
     ctx = _treasurer_dues_context(selected)
     ctx["dues_all_periods"] = list(DuesPeriod.objects.order_by("-start_date"))
     return _treasurer_render(request, "dues", "payments/treasurer/dues.html", ctx)
+
+
+@login_required
+@user_passes_test(_is_staff)
+def treasurer_accounts(request):
+    """Accounts tab — every member's unified-ledger standing (task #439).
+
+    Filters and sort live in the querystring so filtered views are linkable
+    (the replacement for the old per-category rosters)."""
+    from payments import ledger
+
+    rows = ledger.accounts_overview()
+    q = (request.GET.get("q") or "").strip().lower()
+    balance = request.GET.get("balance") or ""
+    role = request.GET.get("role") or ""
+    sort = request.GET.get("sort") or "balance"
+
+    if q:
+        rows = [r for r in rows
+                if q in (r["user"].get_full_name() or "").lower()
+                or q in r["user"].email.lower()]
+    if balance == "owing":
+        rows = [r for r in rows if r["owes"]]
+    elif balance == "credit":
+        rows = [r for r in rows if r["credit"]]
+    elif balance == "square":
+        rows = [r for r in rows if r["balance"] == 0]
+    if role:
+        rows = [r for r in rows if r["user"].profile.role == role]
+
+    if sort == "name":
+        rows.sort(key=lambda r: (r["user"].last_name or "",
+                                 r["user"].first_name or "", r["user"].email))
+    elif sort == "paid":
+        rows.sort(key=lambda r: -r["paid"])
+    elif sort == "last":
+        rows.sort(key=lambda r: (r["last_payment"] is None,
+                                 -(r["last_payment"].timestamp()
+                                   if r["last_payment"] else 0)))
+    # default: accounts_overview's most-owed-first ordering
+
+    from accounts.models import Profile
+    filter_qs = urlencode({k: v for k, v in (
+        ("q", q), ("balance", balance), ("role", role), ("sort", sort)) if v})
+    return _treasurer_render(request, "accounts", "payments/treasurer/accounts.html", {
+        "rows": rows,
+        "q": q,
+        "selected_balance": balance,
+        "selected_role": role,
+        "selected_sort": sort,
+        "role_choices": Profile.Role.choices,
+        "filter_qs": filter_qs,
+        "total_owed": sum((r["owes"] for r in rows), Decimal("0")),
+    })
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_sync_charges(request):
+    """Mint any missing current-year dues charges (manual sync button)."""
+    from payments.charges import sync_dues_charges
+
+    period = DuesPeriod.current()
+    if period is not None:
+        n = sync_dues_charges(period)
+        messages.success(request, f"Synced — {n} dues charge(s) minted for {period.name}.")
+    else:
+        messages.error(request, "No current dues period.")
+    return redirect("treasurer_accounts")
 
 
 @login_required
