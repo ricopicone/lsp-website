@@ -705,6 +705,8 @@ def treasurer_payment_refund(request, payment_id: int):
                 pk=payment.registration_id,
                 status=Registration.Status.PAID,
             ).update(status=Registration.Status.REFUNDED)
+            from .charges import void_registration_charge
+            void_registration_charge(payment.registration, "Offline refund recorded.")
     return redirect("treasurer_payments")
 
 
@@ -1587,6 +1589,8 @@ def _handle_charge_refunded(charge: dict) -> None:
                 pk=payment.registration_id,
                 status=Registration.Status.PAID,
             ).update(status=Registration.Status.REFUNDED)
+            from .charges import void_registration_charge
+            void_registration_charge(payment.registration, "Stripe refund (webhook).")
 
 
 def _tuition_tab_url(**params) -> str:

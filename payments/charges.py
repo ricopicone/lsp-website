@@ -194,3 +194,68 @@ def tuition_charge_conflicts() -> list[dict]:
                 "problem": f"Amount ${c.amount} differs from the year's rate ${rate}.",
             })
     return out
+
+
+def mint_registration_charge(payment) -> Charge | None:
+    """Mint the settled-registration charge alongside its payment.
+
+    Minting at settle time (not at registration creation) means abandoned
+    checkouts never create account debt. Idempotent per registration.
+    """
+    from .models import Payment
+
+    if not payment.registration_id or payment.amount <= 0:
+        return None
+    existing = (
+        Charge.objects.filter(registration_id=payment.registration_id)
+        .exclude(status=Charge.Status.VOID)
+        .first()
+    )
+    if existing is not None:
+        return existing
+    user_id = payment.user_id or payment.registration.user_id
+    when = payment.paid_at or timezone.now()
+    return Charge.objects.create(
+        user_id=user_id,
+        category=Charge.Category.REGISTRATION,
+        amount=payment.amount,
+        effective_date=when.date(),
+        registration_id=payment.registration_id,
+        source=(Source.VERIFIED if payment.method == Payment.Method.STRIPE
+                else Source.STAFF),
+        notes=f"[{when.date()}] Minted from payment #{payment.pk} at settle.",
+    )
+
+
+def mint_comped_charge(registration) -> Charge | None:
+    """A comp is a waived charge — the comped value shows on the statement."""
+    if not registration.quoted_amount or registration.quoted_amount <= 0:
+        return None
+    existing = (
+        Charge.objects.filter(registration=registration)
+        .exclude(status=Charge.Status.VOID)
+        .first()
+    )
+    if existing is not None:
+        return existing
+    today = timezone.now().date()
+    return Charge.objects.create(
+        user_id=registration.user_id,
+        category=Charge.Category.REGISTRATION,
+        amount=registration.quoted_amount,
+        effective_date=today,
+        registration=registration,
+        status=Charge.Status.WAIVED,
+        source=Source.STAFF,
+        notes=f"[{today}] Comped registration — charge waived at mint.",
+    )
+
+
+def void_registration_charge(registration, reason: str) -> None:
+    """Void the registration's charge (cancel/refund keeps the books square)."""
+    for c in Charge.objects.filter(registration=registration).exclude(
+        status=Charge.Status.VOID,
+    ):
+        c.status = Charge.Status.VOID
+        c.add_note(reason, save=False)
+        c.save(update_fields=("status", "notes"))

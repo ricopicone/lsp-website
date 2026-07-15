@@ -290,6 +290,9 @@ def cancel_registration(request, reg_id: int):
         )
         return redirect("registrations:confirm", reg_id=reg.id)
 
+    from payments.charges import void_registration_charge
+    void_registration_charge(reg, "Registration cancelled by the member.")
+
     try:
         notify_payments.registration_cancelled(reg, refund=refund)
     except Exception:

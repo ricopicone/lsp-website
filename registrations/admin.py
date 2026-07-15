@@ -46,6 +46,8 @@ class RegistrationAdmin(admin.ModelAdmin):
             reg.status = Registration.Status.COMPED
             reg.staff_notes = (reg.staff_notes or "") + note_line
             reg.save(update_fields=("status", "staff_notes"))
+            from payments.charges import mint_comped_charge
+            mint_comped_charge(reg)
             try:
                 notify_payments.registration_confirmed(reg)
             except Exception:

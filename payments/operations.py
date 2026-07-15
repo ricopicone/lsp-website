@@ -44,6 +44,9 @@ def complete_payment(payment: Payment) -> None:
                 pk=payment.registration_id,
                 status=Registration.Status.AWAITING_PAYMENT,
             ).update(status=Registration.Status.PAID)
+        if payment.registration_id and payment.amount > 0:
+            from .charges import mint_registration_charge
+            mint_registration_charge(payment)
         if payment.payment_type == Payment.Type.TUITION and payment.tuition_installment_id:
             _apply_tuition_payment_success(payment)
         if not hasattr(payment, "receipt"):
