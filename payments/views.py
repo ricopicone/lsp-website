@@ -565,36 +565,156 @@ def treasurer_members(request):
     })
 
 
+def _safe_next(request, fallback: str):
+    """Honor a validated ?next= so member-page forms return there."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    nxt = request.POST.get("next") or request.GET.get("next") or ""
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+        return redirect(nxt)
+    return redirect(fallback)
+
+
 @login_required
 @user_passes_test(_is_staff)
 def treasurer_member_detail(request, user_id: int):
-    """Per-member detail page: payments, tuition enrollments, registrations."""
+    """Per-member account: statement, balance tiles, actions (task #439)."""
+    from payments import ledger
+    from payments.models import Charge
     from registrations.models import Registration
-    target = get_object_or_404(
-        User.objects.select_related("profile"), pk=user_id,
-    )
-    payments = list(
-        Payment.objects.filter(user=target)
-        .select_related("registration__event")
-        # Sort by the real transaction date (paid_at), not the import date
-        # (created_at). See Payment.transaction_date. (Task #437.)
-        .order_by(Coalesce("paid_at", "created_at").desc())
-    )
-    tuition = _member_tuition_summary(target)
+
+    target = get_object_or_404(User.objects.select_related("profile"), pk=user_id)
+    acct = ledger.member_account(target)
     registrations = list(
         Registration.objects.filter(user=target)
         .select_related("event", "price_tier")
         .order_by("-created_at")
     )
     return _treasurer_render(
-        request, "members", "payments/treasurer/member_detail.html",
+        request, "accounts", "payments/treasurer/member_detail.html",
         {
-            "target":         target,
-            "payments":       payments,
-            "tuition":        tuition,
-            "registrations":  registrations,
+            "target": target,
+            "acct": acct,
+            "registrations": registrations,
+            "charge_categories": Charge.Category.choices,
+            "payment_categories": Payment.Type.choices,
+            "today": timezone.now().date(),
         },
     )
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_charge_add(request, user_id: int):
+    """Manually add a charge to a member's account (do-not-over-automate)."""
+    from accounts.models import Source
+
+    from .models import Charge
+
+    target = get_object_or_404(User, pk=user_id)
+    category = request.POST.get("category")
+    if category not in Charge.Category.values:
+        messages.error(request, "Choose a valid category.")
+        return redirect("treasurer_member_detail", user_id=target.id)
+    try:
+        amount = Decimal(request.POST.get("amount", ""))
+        assert amount > 0
+    except Exception:
+        messages.error(request, "Enter a positive amount.")
+        return redirect("treasurer_member_detail", user_id=target.id)
+    try:
+        eff = date.fromisoformat(request.POST.get("effective_date", ""))
+    except ValueError:
+        eff = timezone.now().date()
+    note = (request.POST.get("note") or "").strip()
+    charge = Charge.objects.create(
+        user=target, category=category, amount=amount, effective_date=eff,
+        source=Source.STAFF, staff_adjusted=True,
+    )
+    charge.add_note(
+        f"Added by treasurer {request.user.email}." + (f" {note}" if note else ""))
+    messages.success(request, f"Added a ${amount} {category} charge.")
+    return redirect("treasurer_member_detail", user_id=target.id)
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_charge_update(request, charge_id: int):
+    """Adjust / waive / void / reopen one charge, with an audit note."""
+    from .models import Charge
+
+    charge = get_object_or_404(Charge, pk=charge_id)
+    action = request.POST.get("action")
+    email = request.user.email
+    if action == "adjust":
+        try:
+            amount = Decimal(request.POST.get("amount", ""))
+            assert amount > 0
+        except Exception:
+            messages.error(request, "Enter a positive amount.")
+            return redirect("treasurer_member_detail", user_id=charge.user_id)
+        charge.add_note(f"Amount ${charge.amount} → ${amount} by treasurer {email}.",
+                        save=False)
+        charge.amount = amount
+    elif action == "waive":
+        charge.add_note(f"Waived by treasurer {email}.", save=False)
+        charge.status = Charge.Status.WAIVED
+    elif action == "void":
+        charge.add_note(f"Voided by treasurer {email}.", save=False)
+        charge.status = Charge.Status.VOID
+    elif action == "reopen":
+        charge.add_note(f"Reopened by treasurer {email}.", save=False)
+        charge.status = Charge.Status.OPEN
+    else:
+        return redirect("treasurer_member_detail", user_id=charge.user_id)
+    charge.staff_adjusted = True
+    charge.save(update_fields=("amount", "status", "staff_adjusted", "notes"))
+    return redirect("treasurer_member_detail", user_id=charge.user_id)
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_record_payment(request, user_id: int):
+    """Record an offline payment of any category (replaces the per-category
+    record buttons). Tuition keeps the enrollment+installment side-effects."""
+    target = get_object_or_404(User, pk=user_id)
+    category = request.POST.get("category")
+    if category not in Payment.Type.values:
+        messages.error(request, "Choose a valid category.")
+        return redirect("treasurer_member_detail", user_id=target.id)
+    try:
+        amount = Decimal(request.POST.get("amount", ""))
+        assert amount > 0
+    except Exception:
+        messages.error(request, "Enter a positive amount.")
+        return redirect("treasurer_member_detail", user_id=target.id)
+
+    note = (f"Offline {category} payment recorded by treasurer "
+            f"{request.user.email} on {timezone.now().date()}.")
+    with transaction.atomic():
+        kwargs = {}
+        if category == Payment.Type.TUITION:
+            period = TuitionPeriod.current()
+            if period is not None:
+                enr, _ = TuitionEnrollment.objects.update_or_create(
+                    user=target, tuition_period=period,
+                    defaults={"status": TuitionEnrollment.Status.COMMITTED})
+                installment = TuitionInstallment.objects.create(
+                    enrollment=enr, sequence=enr.installments.count() + 1,
+                    due_date=period.decision_due_date, amount=amount)
+                kwargs["tuition_installment"] = installment
+        elif category == Payment.Type.DUES:
+            kwargs["dues_period"] = DuesPeriod.current()
+        payment = Payment.objects.create(
+            payment_type=category, user=target, amount=amount,
+            method=Payment.Method.OFFLINE, status=Payment.Status.PENDING,
+            notes=note, **kwargs)
+    complete_payment(payment)
+    messages.success(request, f"Recorded a ${amount} offline {category} payment.")
+    return redirect("treasurer_member_detail", user_id=target.id)
 
 
 # In-training members owe a fixed number of years of tuition total (skipping
@@ -761,14 +881,14 @@ def treasurer_payment_refund(request, payment_id: int):
 
     payment = get_object_or_404(Payment, pk=payment_id)
     if payment.status != Payment.Status.SUCCEEDED:
-        return redirect("treasurer_payments")
+        return _safe_next(request, "treasurer_payments")
 
     if payment.method == Payment.Method.STRIPE:
         try:
             refund_payment(payment)
         except RefundError as exc:
             logger.exception("Refund failed for payment %s: %s", payment.id, exc)
-            return redirect("treasurer_payments")
+            return _safe_next(request, "treasurer_payments")
     else:
         _record_offline_refund(payment, treasurer=request.user)
         # Cascade to Registration (the Stripe path gets this via webhook).
@@ -779,7 +899,7 @@ def treasurer_payment_refund(request, payment_id: int):
             ).update(status=Registration.Status.REFUNDED)
             from .charges import void_registration_charge
             void_registration_charge(payment.registration, "Offline refund recorded.")
-    return redirect("treasurer_payments")
+    return _safe_next(request, "treasurer_payments")
 
 
 @login_required
@@ -795,12 +915,12 @@ def treasurer_payment_resend_receipt(request, payment_id: int):
     from .emails import send_receipt
     payment = get_object_or_404(Payment, pk=payment_id)
     if not hasattr(payment, "receipt"):
-        return redirect("treasurer_payments")
+        return _safe_next(request, "treasurer_payments")
     try:
         send_receipt(payment)
     except Exception:
         logger.exception("Failed to resend receipt for payment %s", payment.id)
-    return redirect("treasurer_payments")
+    return _safe_next(request, "treasurer_payments")
 
 
 def _record_offline_refund(payment: Payment, *, treasurer) -> None:
@@ -826,7 +946,7 @@ def treasurer_payment_apply_success(request, payment_id: int):
     payment = get_object_or_404(Payment, pk=payment_id)
     if payment.status == Payment.Status.PENDING:
         complete_payment(payment)
-    return redirect("treasurer_payments")
+    return _safe_next(request, "treasurer_payments")
 
 
 _INLINE_TUITION_STATUSES = {
@@ -846,11 +966,11 @@ def treasurer_tuition_set_status(request, user_id: int):
     """
     status = request.POST.get("status", "")
     if status not in _INLINE_TUITION_STATUSES:
-        return redirect("treasurer_tuition")
+        return _safe_next(request, "treasurer")
     target = get_object_or_404(User, pk=user_id)
     period = TuitionPeriod.current()
     if period is None:
-        return redirect("treasurer_tuition")
+        return _safe_next(request, "treasurer")
     with transaction.atomic():
         enr, _ = TuitionEnrollment.objects.update_or_create(
             user=target, tuition_period=period,
@@ -862,7 +982,7 @@ def treasurer_tuition_set_status(request, user_id: int):
             f"set status to {_INLINE_TUITION_STATUSES[status]}."
         )
         enr.save(update_fields=("notes",))
-    return redirect("treasurer_tuition")
+    return _safe_next(request, "treasurer")
 
 
 @login_required

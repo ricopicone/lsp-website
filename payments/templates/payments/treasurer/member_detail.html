@@ -4,7 +4,7 @@
 <div class="space-y-8">
 
   <nav class="text-sm">
-    <a href="{% url 'treasurer_members' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Members</a>
+    <a href="{% url 'treasurer_accounts' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Accounts</a>
   </nav>
 
   <header class="space-y-1">
@@ -22,57 +22,81 @@
     </div>
   </header>
 
-  {% comment %}Tuition — cumulative ledger: obligation-to-date vs total paid.{% endcomment %}
+  {% comment %}1. Tiles row — balance, tuition-to-date, tuition years, dues this AY.{% endcomment %}
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="rounded border border-base-300 p-2.5">
+      <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Balance</div>
+      <div class="font-serif text-xl leading-tight {% if acct.owes %}text-warning{% elif acct.credit %}text-success{% endif %}">
+        {% if acct.owes %}{{ acct.owes|usd }} owed
+        {% elif acct.credit %}{{ acct.credit|usd }} credit
+        {% else %}Paid up{% endif %}
+      </div>
+    </div>
+    {% include "payments/treasurer/_money_tile.html" with label="Total tuition paid" value=acct.total_tuition_paid %}
+    <div class="rounded border border-base-300 p-2.5">
+      <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Tuition years</div>
+      <div class="font-serif text-xl leading-tight">{{ acct.tuition_years_covered }} of {{ acct.tuition_years_required }}</div>
+    </div>
+    <div class="rounded border border-base-300 p-2.5">
+      <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Dues this AY</div>
+      <div class="leading-tight pt-1">
+        {% if acct.dues_state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
+        {% elif acct.dues_state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
+        {% elif acct.dues_state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
+        {% elif acct.dues_state == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>
+        {% else %}<span class="text-base-content/40 text-xs">—</span>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% comment %}2. Conflict alert.{% endcomment %}
+  {% if acct.conflict %}
+  <div class="alert alert-warning py-2 text-sm">
+    <span>Paid {{ acct.credit|usd }} beyond the obligation while a year is marked <strong>Skipping</strong>.
+    This usually means a skipped year was actually paid — the student's tuition decision for that year needs correcting, after which the obligation and balance will reflect it.</span>
+  </div>
+  {% endif %}
+
+  {% comment %}3. Tuition decisions.{% endcomment %}
   <section class="space-y-3">
-    <h3 class="font-serif text-lg text-base-content">Tuition</h3>
-
-    {% comment %}Headline: one running balance across all years being paid.{% endcomment %}
-    <div class="rounded-lg border border-base-300 p-4 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-      <div>
-        <div class="text-xs uppercase tracking-wide text-base-content/50">Paid of owed to date</div>
-        <div class="text-lg">
-          <span class="font-medium">{{ tuition.total_paid|usd }}</span>
-          <span class="text-base-content/50">of {{ tuition.obligation|usd }}</span>
-        </div>
-      </div>
-      <div>
-        <div class="text-xs uppercase tracking-wide text-base-content/50">Balance</div>
-        <div class="text-lg font-semibold {% if tuition.owes %}text-warning{% elif tuition.credit %}text-success{% endif %}">
-          {% if tuition.owes %}{{ tuition.owes|usd }} owed
-          {% elif tuition.credit %}{{ tuition.credit|usd }} credit
-          {% else %}Paid up{% endif %}
-        </div>
-      </div>
-      <div class="text-xs text-base-content/50">
-        {{ tuition.paying_years }} year{{ tuition.paying_years|pluralize }} being paid{% if tuition.skipping %} · {{ tuition.skipping|length }} skipping{% endif %}
-      </div>
-    </div>
-
-    {% if tuition.conflict %}
-    <div class="alert alert-warning py-2 text-sm">
-      <span>Paid {{ tuition.credit|usd }} beyond the obligation while a year is marked <strong>Skipping</strong>
-      ({% for tp in tuition.skipping %}{{ tp.name }}, {{ tp.tuition_amount|usd }}{% if not forloop.last %}; {% endif %}{% endfor %}).
-      This usually means a skipped year was actually paid — the student's tuition decision for that year needs correcting, after which the obligation and balance will reflect it.</span>
-    </div>
-    {% endif %}
-
-    {% if tuition.rows %}
+    <h3 class="font-serif text-lg text-base-content">Tuition decisions</h3>
+    {% if acct.tuition_rows %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Academic year</th><th class="text-right">Rate</th><th>Status</th></tr>
+          <tr><th>Academic year</th><th>Decision</th><th class="text-right">Rate</th><th>Status</th><th>Actions</th></tr>
         </thead>
         <tbody>
-          {% for r in tuition.rows %}
-          <tr class="{% if r.skipping or r.state == 'met' %}text-base-content/50{% endif %}">
+          {% for r in acct.tuition_rows %}
+          <tr>
             <td class="whitespace-nowrap">{{ r.period.name }}</td>
-            <td class="text-right whitespace-nowrap">{% if r.skipping or r.state == 'met' %}—{% else %}{{ r.rate|usd }}{% endif %}</td>
+            <td class="text-xs text-base-content/70">{{ r.enrollment.get_status_display }}</td>
+            <td class="text-right whitespace-nowrap">{{ r.rate|usd }}</td>
             <td>
               {% if r.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
               {% elif r.state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
               {% elif r.state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
-              {% elif r.state == "met" %}<span class="badge badge-ghost badge-sm" title="Beyond the {{ tuition.years_required }}-year tuition requirement — not owed">Requirement met</span>
+              {% elif r.state == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>
+              {% elif r.state == "met" %}<span class="badge badge-ghost badge-sm" title="Beyond the {{ acct.tuition_years_required }}-year tuition requirement — not owed">Requirement met</span>
               {% else %}<span class="badge badge-ghost badge-sm">Skipping</span>{% endif %}
+            </td>
+            <td>
+              {% if r.period.start_date <= today and today <= r.period.end_date %}
+              <div class="flex flex-wrap gap-1">
+                <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}" class="contents">
+                  {% csrf_token %}
+                  <input type="hidden" name="status" value="committed">
+                  <input type="hidden" name="next" value="{{ request.path }}">
+                  <button type="submit" class="btn btn-ghost btn-xs">Committed</button>
+                </form>
+                <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}" class="contents">
+                  {% csrf_token %}
+                  <input type="hidden" name="status" value="skipping">
+                  <input type="hidden" name="next" value="{{ request.path }}">
+                  <button type="submit" class="btn btn-ghost btn-xs">Skipping</button>
+                </form>
+              </div>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -80,37 +104,126 @@
       </table>
     </div>
     {% else %}
-    <p class="text-sm text-base-content/60">No tuition enrollments on file.{% if tuition.total_paid %} Paid {{ tuition.total_paid|usd }} in tuition.{% endif %}</p>
+    <p class="text-sm text-base-content/60">No tuition enrollments on file.</p>
     {% endif %}
-    <p class="text-xs text-base-content/50">
-      Tuition is a running balance — total paid against the obligation for the years being paid (skipped years are deferred, not counted). Per-year status reflects coverage by the running total, oldest year first; individual payments (listed under Payments) aren't allocated to specific years.
-    </p>
   </section>
 
-  {% comment %}Payments — all categories, most recent first.{% endcomment %}
+  {% comment %}4. Statement — the unified running balance.{% endcomment %}
   <section class="space-y-3">
-    <h3 class="font-serif text-lg text-base-content">Payments <span class="text-base-content/60 text-sm font-normal">({{ payments|length }})</span></h3>
-    {% if payments %}
+    <h3 class="font-serif text-lg text-base-content">Statement</h3>
+    {% if acct.lines %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Date</th><th>Type</th><th>Amount</th><th>Method</th><th>Status</th><th class="w-8"></th></tr>
+          <tr>
+            <th>Date</th><th>Description</th>
+            <th class="text-right">Charge</th><th class="text-right">Payment</th>
+            <th class="text-right">Balance</th><th>Status</th><th>Actions</th>
+          </tr>
         </thead>
         <tbody>
-          {% for p in payments %}
+          {% for ln in acct.lines %}
           <tr>
-            <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.transaction_date|user_datetime:True }}</td>
+            <td class="whitespace-nowrap text-xs text-base-content/70">{{ ln.date|date:"M j, Y" }}</td>
             <td>
-              {{ p.get_payment_type_display }}
-              {% if p.registration %}
-              <div class="text-xs text-base-content/60">{{ p.registration.event.title|truncatechars:32 }}</div>
+              {% if ln.kind == "charge" %}
+                {{ ln.obj.get_category_display }} charge
+                {% if ln.obj.dues_period %}
+                <div class="text-xs text-base-content/60">{{ ln.obj.dues_period.name }}</div>
+                {% elif ln.obj.tuition_period %}
+                <div class="text-xs text-base-content/60">{{ ln.obj.tuition_period.name }}</div>
+                {% elif ln.obj.registration %}
+                <div class="text-xs text-base-content/60">{{ ln.obj.registration.event.title|truncatechars:32 }}</div>
+                {% endif %}
+                {% include "payments/treasurer/_provenance_popover.html" with source=ln.obj.source source_label=ln.obj.get_source_display notes=ln.obj.notes trigger="icon" %}
+              {% else %}
+                {{ ln.obj.get_payment_type_display }} payment
+                {% if ln.obj.registration %}
+                <div class="text-xs text-base-content/60">{{ ln.obj.registration.event.title|truncatechars:32 }}</div>
+                {% endif %}
+                {% include "payments/treasurer/_provenance_popover.html" with source=ln.obj.source source_label=ln.obj.get_source_display notes=ln.obj.notes member_note=ln.obj.member_note trigger="icon" %}
               {% endif %}
             </td>
-            <td class="whitespace-nowrap">${{ p.amount }}</td>
-            <td class="text-xs">{{ p.get_method_display }}</td>
-            <td>{% status_badge p.status %}</td>
-            <td class="text-right">
-              {% include "payments/treasurer/_provenance_popover.html" with source=p.source source_label=p.get_source_display notes=p.notes member_note=p.member_note trigger="icon" %}
+            <td class="text-right whitespace-nowrap">{% if ln.kind == "charge" %}{{ ln.delta|usd }}{% endif %}</td>
+            <td class="text-right whitespace-nowrap">{% if ln.kind == "payment" %}{{ ln.obj.amount|usd }}{% endif %}</td>
+            <td class="text-right whitespace-nowrap {% if ln.running > 0 %}text-warning{% elif ln.running < 0 %}text-success{% endif %}">{{ ln.running|usd }}</td>
+            <td>
+              {% if ln.kind == "charge" %}
+                {% if ln.obj.status == "open" %}
+                  {% if ln.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
+                  {% elif ln.state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
+                  {% else %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>{% endif %}
+                {% elif ln.obj.status == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>{% endif %}
+              {% else %}
+                {% status_badge ln.obj.status %}
+              {% endif %}
+            </td>
+            <td>
+              <div class="flex flex-wrap gap-1">
+                {% if ln.kind == "charge" %}
+                  {% if ln.obj.status == "open" %}
+                  <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="waive">
+                    <button type="submit" class="btn btn-ghost btn-xs">Waive</button>
+                  </form>
+                  <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Void this charge? It will be removed from the running balance.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="void">
+                    <button type="submit" class="btn btn-ghost btn-xs text-error">Void</button>
+                  </form>
+                  <details class="dropdown">
+                    <summary class="btn btn-ghost btn-xs">Adjust</summary>
+                    <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}"
+                          class="dropdown-content z-10 menu p-2 shadow bg-base-100 rounded-box w-48 border border-base-300 flex-row gap-1">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="adjust">
+                      <input type="number" step="0.01" min="0.01" name="amount" value="{{ ln.obj.amount }}"
+                             class="input input-bordered input-xs w-20" required>
+                      <button type="submit" class="btn btn-primary btn-xs">Save</button>
+                    </form>
+                  </details>
+                  {% elif ln.obj.status == "waived" %}
+                  <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="reopen">
+                    <button type="submit" class="btn btn-ghost btn-xs">Reopen</button>
+                  </form>
+                  {% endif %}
+                {% else %}
+                  {% if ln.obj.status == "pending" and ln.obj.method == "offline" %}
+                  <form method="post" action="{% url 'treasurer_payment_apply_success' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Mark this payment as paid? This sends a receipt + emails the member.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <button type="submit" class="btn btn-primary btn-xs">Mark paid</button>
+                  </form>
+                  {% elif ln.obj.status == "succeeded" and ln.obj.method == "stripe" %}
+                  <form method="post" action="{% url 'treasurer_payment_refund' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Refund {{ ln.obj.amount|usd }} via Stripe? This is irreversible.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
+                  </form>
+                  {% elif ln.obj.status == "succeeded" and ln.obj.method == "offline" %}
+                  <form method="post" action="{% url 'treasurer_payment_refund' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Mark this {{ ln.obj.amount|usd }} offline payment as REFUNDED for accounting?\n\nThis does NOT move any money — you will need to send the refund check (or process the cash refund) manually.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
+                  </form>
+                  {% endif %}
+                  {% if ln.obj.status == "succeeded" and ln.obj.receipt %}
+                  <form method="post" action="{% url 'treasurer_payment_resend_receipt' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Resend the receipt email to {{ ln.obj.user.email|default:ln.obj.email }}?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <button type="submit" class="btn btn-ghost btn-xs">Resend receipt</button>
+                  </form>
+                  {% endif %}
+                {% endif %}
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -118,9 +231,46 @@
       </table>
     </div>
     {% else %}
-    <p class="text-sm text-base-content/60">No payments on file.</p>
+    <p class="text-sm text-base-content/60">No charges or payments on file.</p>
     {% endif %}
   </section>
+
+  {% comment %}5. Add charge + record payment.{% endcomment %}
+  <div class="grid md:grid-cols-2 gap-4">
+    <section class="space-y-2 rounded-lg border border-base-300 p-4">
+      <h3 class="font-serif text-base text-base-content">Add a charge</h3>
+      <form method="post" action="{% url 'treasurer_charge_add' target.id %}" class="space-y-2">
+        {% csrf_token %}
+        <select name="category" class="select select-bordered select-sm w-full" required>
+          {% for value, label in charge_categories %}
+          <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input type="number" step="0.01" min="0.01" name="amount" placeholder="Amount" class="input input-bordered input-sm w-full" required>
+        <input type="date" name="effective_date" value="{{ today|date:'Y-m-d' }}" class="input input-bordered input-sm w-full">
+        <input type="text" name="note" placeholder="Note (optional)" class="input input-bordered input-sm w-full">
+        <button type="submit" class="btn btn-sm btn-primary">Add charge</button>
+      </form>
+    </section>
+    <section class="space-y-2 rounded-lg border border-base-300 p-4">
+      <h3 class="font-serif text-base text-base-content">Record an offline payment</h3>
+      <form method="post" action="{% url 'treasurer_record_payment' target.id %}" class="space-y-2">
+        {% csrf_token %}
+        <select name="category" class="select select-bordered select-sm w-full" required>
+          {% for value, label in payment_categories %}
+          <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input type="number" step="0.01" min="0.01" name="amount" placeholder="Amount" class="input input-bordered input-sm w-full" required>
+        <button type="submit" class="btn btn-sm btn-primary">Record payment</button>
+      </form>
+    </section>
+  </div>
+
+  {% comment %}6. Footnote.{% endcomment %}
+  <p class="text-xs text-base-content/50">
+    One account per member—charges and payments in one running balance, oldest charges covered first. Categories are labels for reporting; money is not earmarked.
+  </p>
 
   {% comment %}Event registrations.{% endcomment %}
   <section class="space-y-3">
