@@ -6,7 +6,7 @@ from decimal import Decimal
 from io import StringIO
 
 import pytest
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 
 from accounts.models import User
 from payments.models import Charge, DuesPeriod, Payment, TuitionEnrollment, TuitionPeriod
@@ -61,8 +61,10 @@ def test_dues_backfill_respects_start_and_provenance():
 def test_dues_backfill_skips_members_who_joined_later():
     _dues_period(2022)
     _member("b2@x.test", year_joined=2024)
-    _run()
+    out = _run()
     assert Charge.objects.count() == 0
+    assert "1 skipped (joined later)" in out
+    assert "currently-obligated members only" in out
 
 
 def test_idempotent_rerun():
@@ -114,3 +116,10 @@ def test_dry_run_writes_nothing():
     out = _run("--dry-run")
     assert Charge.objects.count() == 0
     assert "dry run" in out.lower()
+    assert "would mint" in out
+    assert "would sync" in out
+
+
+def test_invalid_dues_from_raises():
+    with pytest.raises(CommandError, match="Invalid --dues-from"):
+        _run("--dues-from", "not-a-date")

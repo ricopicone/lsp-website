@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import date
 
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Sum
 from django.utils import timezone
 
@@ -41,7 +41,12 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         self.dry = opts["dry_run"]
-        dues_from = date.fromisoformat(opts["dues_from"])
+        try:
+            dues_from = date.fromisoformat(opts["dues_from"])
+        except ValueError:
+            raise CommandError(
+                f"Invalid --dues-from date: {opts['dues_from']!r}"
+            ) from None
         if self.dry:
             self.stdout.write("DRY RUN — nothing will be written.")
         self._dues(dues_from)
@@ -68,11 +73,13 @@ class Command(BaseCommand):
                 .values_list("user_id", flat=True)
             )
             n = 0
+            skipped_joined_later = 0
             for user in obligated_users_qs().select_related("profile"):
                 if user.id in have:
                     continue
                 yj = user.profile.year_joined
                 if yj and yj > period.start_date.year:
+                    skipped_joined_later += 1
                     continue  # joined after this AY — no historical debt
                 amount = period.amount_for_role(user.profile.role)
                 if amount is None:
@@ -86,7 +93,16 @@ class Command(BaseCommand):
                               "tier table (historical role assumed current).",
                     )
                 n += 1
-            self._log(f"dues {period.name}: {n} charge(s)")
+            verb = "would mint" if self.dry else "minted"
+            line = f"dues {period.name}: {verb} {n} charge(s)"
+            if skipped_joined_later:
+                line += f", {skipped_joined_later} skipped (joined later)"
+            self._log(line)
+        self.stdout.write(
+            "note: dues passes cover currently-obligated members only (active "
+            "standing, dues-obligated role); departed/role-changed members get "
+            "no historical charges — treasurer adds those manually if owed."
+        )
 
     def _tuition(self):
         uids = (
@@ -97,7 +113,8 @@ class Command(BaseCommand):
             if not self.dry:
                 sync_tuition_charges(user)
             n += 1
-        self._log(f"tuition: synced {n} member(s)")
+        verb = "would sync" if self.dry else "synced"
+        self._log(f"tuition: {verb} {n} member(s)")
 
     def _registrations(self):
         from registrations.models import Registration
@@ -119,7 +136,8 @@ class Command(BaseCommand):
             if not self.dry:
                 mint_comped_charge(reg)
             m += 1
-        self._log(f"registrations: {n} paid + {m} comped processed")
+        verb = "would process" if self.dry else "processed"
+        self._log(f"registrations: {verb} {n} paid + {m} comped")
 
     def _pre_ledger_dues_settlement(self, dues_from: date):
         """Old dues money (periods before the backfill window) would read as
@@ -154,4 +172,5 @@ class Command(BaseCommand):
                           "as credit.",
                 )
             n += 1
-        self._log(f"pre-ledger dues settlements: {n} charge(s)")
+        verb = "would mint" if self.dry else "minted"
+        self._log(f"pre-ledger dues settlements: {verb} {n} charge(s)")
