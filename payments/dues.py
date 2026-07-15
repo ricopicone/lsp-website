@@ -41,3 +41,17 @@ def obligated_users_qs():
         profile__standing=Profile.Standing.ACTIVE,
         profile__role__in=list(settings.DUES_OBLIGATED_ROLES),
     )
+
+
+def has_dues_payment_for(user, period) -> bool:
+    """Double-payment guard for the member-facing /dues/ page: has this
+    member already made a SUCCEEDED dues payment for this period? This is
+    deliberately NOT the dues *status* source — the unified ledger
+    (payments.ledger) owns status; this only prevents paying twice."""
+    if period is None or not user.is_authenticated:
+        return False
+    from .models import Payment
+    return Payment.objects.filter(
+        user=user, payment_type=Payment.Type.DUES,
+        dues_period=period, status=Payment.Status.SUCCEEDED,
+    ).exists()

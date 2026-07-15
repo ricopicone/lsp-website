@@ -126,9 +126,9 @@ def test_dues_post_attaches_period_to_payment(client, member, current_period):
 def test_dues_page_shows_already_paid_when_user_has_succeeded_payment(
     client, member, current_period,
 ):
-    from payments.charges import sync_dues_charges
-
-    sync_dues_charges(current_period)  # mint the ledger charge for member
+    """The real production sequence — a SUCCEEDED dues payment exists but NO
+    charge has been minted (ledger dues_state is None). The double-payment
+    guard must still show the already-paid panel (task #439 review)."""
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
@@ -141,6 +141,40 @@ def test_dues_page_shows_already_paid_when_user_has_succeeded_payment(
     assert response.status_code == 200
     assert b"paid up" in response.content
     # No Stripe redirect — confirm button isn't on the already-paid page.
+    assert b"Continue to payment" not in response.content
+
+
+def test_dues_page_already_paid_despite_older_backfilled_debt(
+    client, member, current_period,
+):
+    """A backfilled older charge eats the pot, so the oldest-first sweep
+    leaves this year's dues charge "unpaid" — but the member literally made
+    this period's dues payment. The FK-bound guard must still show the
+    already-paid panel, never re-offer payment (task #439 review)."""
+    from payments.charges import sync_dues_charges
+    from payments.models import Charge
+
+    sync_dues_charges(current_period)  # this year's dues charge for member
+    Charge.objects.create(  # backfilled historical debt, older than this AY
+        user=member,
+        category=Charge.Category.TUITION,
+        amount=Decimal("5000"),
+        effective_date=current_period.start_date - timedelta(days=365),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=member,
+        amount=current_period.amount_for_role("candidate"),
+        status=Payment.Status.SUCCEEDED,
+        dues_period=current_period,
+    )
+    # Sanity: the sweep really does mark this year's dues unpaid.
+    from payments import ledger
+    assert ledger.member_account(member)["dues_state"] == "unpaid"
+    client.force_login(member)
+    response = client.get(reverse("dues"))
+    assert response.status_code == 200
+    assert b"paid up" in response.content
     assert b"Continue to payment" not in response.content
 
 

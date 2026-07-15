@@ -977,13 +977,20 @@ def dues_pay(request):
     migration + auto-rollover command are running).
     """
     from . import ledger
+    from .dues import has_dues_payment_for
     from .models import DuesPeriod
 
     period = DuesPeriod.current()
 
     # Already paid for the current cycle — show a friendly status panel.
-    if period is not None and ledger.member_account(request.user)["dues_state"] in (
-        "paid", "waived",
+    # Two checks: the unified-ledger state (covered/waived by the sweep) OR a
+    # direct FK-bound dues payment for this period. The direct check is the
+    # double-payment guard — it must hold even when no charge has been minted
+    # yet (state None) or when backfilled older charges eat the pot (state
+    # "unpaid" despite this year's dues literally being paid).
+    if period is not None and (
+        ledger.member_account(request.user)["dues_state"] in ("paid", "waived")
+        or has_dues_payment_for(request.user, period)
     ):
         return render(
             request,

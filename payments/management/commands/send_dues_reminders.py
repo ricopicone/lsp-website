@@ -58,7 +58,8 @@ class Command(BaseCommand):
 
         interval_cutoff = timezone.now() - timedelta(days=period.reminder_interval_days)
         sent = 0
-        skipped_paid = 0
+        skipped_covered = 0
+        skipped_no_charge = 0
         skipped_recent = 0
         skipped_not_obligated = 0
         errored = 0
@@ -70,8 +71,13 @@ class Command(BaseCommand):
                 skipped_not_obligated += 1
                 continue
             state = ledger.member_account(user)["dues_state"]
-            if state in (None, "paid", "waived"):
-                skipped_paid += 1
+            if state is None:
+                # No charge minted yet → nothing to chase (distinct from
+                # "covered" so the summary can't mislead when minting lags).
+                skipped_no_charge += 1
+                continue
+            if state in ("paid", "waived"):
+                skipped_covered += 1
                 continue
             if DuesReminder.objects.filter(
                 user=user, dues_period=period, sent_at__gte=interval_cutoff,
@@ -96,7 +102,9 @@ class Command(BaseCommand):
         verb = "Would send" if dry else "Sent"
         self.stdout.write(self.style.SUCCESS(
             f"{verb} {sent} reminder(s) for {period.name}. "
-            f"Skipped: {skipped_paid} paid, {skipped_recent} reminded recently, "
+            f"Skipped: {skipped_covered} paid/waived, "
+            f"{skipped_no_charge} no charge minted, "
+            f"{skipped_recent} reminded recently, "
             f"{skipped_not_obligated} not obligated. "
             f"Errors: {errored}."
         ))
