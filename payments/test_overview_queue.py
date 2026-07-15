@@ -43,6 +43,10 @@ def test_overview_renders_with_ledger_numbers(client, treasurer):
     assert resp.status_code == 200
     assert resp.context["total_outstanding"] == Decimal("100")
     assert resp.context["owing_count"] == 1
+    # The Outstanding tile renders currency; the count tiles must render
+    # plain counts, never "$1.00"-style currency (owing_count == 1 here).
+    assert b"$100.00" in resp.content
+    assert b"$1.00" not in resp.content
 
 
 def test_attention_queue_lists_undecided_and_committed(client, treasurer):

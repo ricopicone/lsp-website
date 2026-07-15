@@ -35,9 +35,9 @@
     <a href="{% url 'treasurer_accounts' %}?balance=owing" class="block hover:opacity-80">
       {% include "payments/treasurer/_money_tile.html" with label="Outstanding" value=total_outstanding tone="warning" %}
     </a>
-    <div>{% include "payments/treasurer/_money_tile.html" with label="Accounts owing" value=owing_count %}</div>
+    <div>{% include "payments/treasurer/_money_tile.html" with label="Accounts owing" value=owing_count raw=True %}</div>
     <a href="{% url 'treasurer_accounts' %}?balance=credit" class="block hover:opacity-80">
-      {% include "payments/treasurer/_money_tile.html" with label="Accounts in credit" value=credit_count %}
+      {% include "payments/treasurer/_money_tile.html" with label="Accounts in credit" value=credit_count raw=True %}
     </a>
   </div>
 
