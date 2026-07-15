@@ -115,10 +115,32 @@ def treasurer_dashboard(request):
     })
 
 
+def _charge_conflicts(rows=None) -> list[dict]:
+    """Charge conflicts: staff-adjusted charges skipped by the minting sync.
+
+    When the tuition-enrollment sync runs, it never edits a charge that a
+    treasurer has touched (staff_adjusted=True) — if the charge and the
+    enrollment disagree, the charge is flagged as a conflict instead.
+    """
+    from payments.charges import tuition_charge_conflicts
+
+    if rows is None:
+        from payments import ledger
+        rows = ledger.accounts_overview()
+
+    conflicts = list(tuition_charge_conflicts())
+    conflicts += [
+        {"user": r["user"], "charge": None, "expected_rate": None,
+         "problem": f"${r['credit']} credit while a year is marked Skipping — "
+                    "a skipped year was probably actually paid."}
+        for r in rows if r["conflict"]
+    ]
+    return conflicts
+
+
 def _attention_queue(rows) -> dict:
     """Everything that needs the treasurer, in one place."""
     from accounts.models import Profile, Source
-    from payments.charges import tuition_charge_conflicts
 
     period = TuitionPeriod.current()
     undecided, committed_unpaid = [], []
@@ -136,13 +158,7 @@ def _attention_queue(rows) -> dict:
         committed_unpaid = [
             e for e in enrollments
             if e.status == TuitionEnrollment.Status.COMMITTED]
-    conflicts = list(tuition_charge_conflicts())
-    conflicts += [
-        {"user": r["user"], "charge": None, "expected_rate": None,
-         "problem": f"${r['credit']} credit while a year is marked Skipping — "
-                    "a skipped year was probably actually paid."}
-        for r in rows if r["conflict"]
-    ]
+    conflicts = _charge_conflicts(rows)
     return {
         "undecided": undecided,
         "committed_unpaid": committed_unpaid,
@@ -285,6 +301,7 @@ def treasurer_reconcile(request):
         "no_payer_total": sum((p.amount for p in no_payer), Decimal("0")),
         "type_choices": Payment.Type.choices,
         "member_options": _reconcile_member_options() if need_members else [],
+        "charge_conflicts": _charge_conflicts(),
     })
 
 
