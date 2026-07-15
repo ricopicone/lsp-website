@@ -52,7 +52,7 @@
   {% comment %}2. Conflict alert.{% endcomment %}
   {% if acct.conflict %}
   <div class="alert alert-warning py-2 text-sm">
-    <span>Paid {{ acct.credit|usd }} beyond the obligation while a year is marked <strong>Skipping</strong>.
+    <span>Paid {{ acct.tuition_overpaid|usd }} beyond the tuition obligation while a year is marked <strong>Skipping</strong>.
     This usually means a skipped year was actually paid — the student's tuition decision for that year needs correcting, after which the obligation and balance will reflect it.</span>
   </div>
   {% endif %}

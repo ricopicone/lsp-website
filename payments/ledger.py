@@ -95,6 +95,16 @@ def member_account(user) -> dict:
         1 for c in open_charges
         if c.category == Charge.Category.TUITION and states[c.id] == "paid"
     )
+    # Tuition-only overage for the skipping-conflict heuristic. Skipping is a
+    # tuition concept — dues and registration fees are owed regardless — so the
+    # cross-category balance must not drive this flag (#437's original,
+    # tuition-scoped semantics).
+    tuition_obligation = sum(
+        (c.amount for c in open_charges
+         if c.category == Charge.Category.TUITION),
+        Decimal("0"),
+    )
+    tuition_overpaid = max(total_tuition_paid - tuition_obligation, Decimal("0"))
 
     # Per-year tuition decisions with the charge's sweep state. A non-skipping
     # enrollment with no non-void charge is beyond the 4-year cap → "met".
@@ -146,11 +156,12 @@ def member_account(user) -> dict:
         "total_tuition_paid": total_tuition_paid,
         "tuition_years_covered": tuition_years_covered,
         "tuition_years_required": TUITION_YEARS_REQUIRED,
+        "tuition_overpaid": tuition_overpaid,
         "tuition_rows": tuition_rows,
         "dues_state": dues_state,
         "current_dues_period": current_dues,
         "charge_states": states,
-        "conflict": balance < 0 and bool(skipping),
+        "conflict": tuition_overpaid > 0 and bool(skipping),
     }
 
 
@@ -185,6 +196,19 @@ def accounts_overview() -> list[dict]:
         paid_by_user[row["user"]] = row["s"] or Decimal("0")
         last_by_user[row["user"]] = row["last"]
 
+    # Tuition-only paid sums — the skipping-conflict heuristic is tuition-
+    # scoped (see member_account), never the cross-category balance.
+    tuition_paid_by_user: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    for row in (
+        Payment.objects.filter(
+            status=Payment.Status.SUCCEEDED, user__isnull=False,
+            payment_type=Payment.Type.TUITION,
+        )
+        .values("user")
+        .annotate(s=Sum("amount"))
+    ):
+        tuition_paid_by_user[row["user"]] = row["s"] or Decimal("0")
+
     skipping_users = set(
         TuitionEnrollment.objects.filter(
             status=TuitionEnrollment.Status.SKIPPING,
@@ -211,6 +235,15 @@ def accounts_overview() -> list[dict]:
         obligation = sum((c.amount for c in open_charges), Decimal("0"))
         states = _charge_states(open_charges, paid)
         balance = obligation - paid
+        tuition_obligation = sum(
+            (c.amount for c in open_charges
+             if c.category == Charge.Category.TUITION),
+            Decimal("0"),
+        )
+        tuition_overpaid = max(
+            tuition_paid_by_user.get(uid, Decimal("0")) - tuition_obligation,
+            Decimal("0"),
+        )
         dues_state = None
         if current_dues is not None:
             dc = next((c for c in charges
@@ -232,7 +265,8 @@ def accounts_overview() -> list[dict]:
             ),
             "dues_state": dues_state,
             "last_payment": last_by_user.get(uid),
-            "conflict": balance < 0 and uid in skipping_users,
+            "tuition_overpaid": tuition_overpaid,
+            "conflict": tuition_overpaid > 0 and uid in skipping_users,
         })
     rows.sort(key=lambda r: (-r["balance"], r["user"].last_name or "",
                              r["user"].first_name or "", r["user"].email))

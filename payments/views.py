@@ -29,6 +29,7 @@ from registrations.models import Registration
 
 from .forms import DonationForm, TuitionDecisionForm
 from .models import (
+    Charge,
     DuesPeriod,
     Payment,
     TuitionEnrollment,
@@ -124,8 +125,9 @@ def _charge_conflicts(rows=None) -> list[dict]:
     conflicts = list(tuition_charge_conflicts())
     conflicts += [
         {"user": r["user"], "charge": None, "expected_rate": None,
-         "problem": f"${r['credit']} credit while a year is marked Skipping — "
-                    "a skipped year was probably actually paid."}
+         "problem": f"${r['tuition_overpaid']} paid beyond the tuition "
+                    "obligation while a year is marked Skipping — a skipped "
+                    "year was probably actually paid."}
         for r in rows if r["conflict"]
     ]
     return conflicts
@@ -217,6 +219,10 @@ def treasurer_accounts(request):
         "role_choices": Profile.Role.choices,
         "filter_qs": filter_qs,
         "total_owed": sum((r["owes"] for r in rows), Decimal("0")),
+        # Pre-backfill/pre-sync state: with no charges minted every obligation
+        # reads $0 and payments show as credit — say so instead of confusing.
+        "ledger_empty": not Charge.objects.exclude(
+            status=Charge.Status.VOID).exists(),
     })
 
 

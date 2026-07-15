@@ -17,6 +17,12 @@
     </form>
   </header>
 
+  {% if ledger_empty %}
+  <div class="alert alert-info text-sm">
+    <span><strong>No charges have been minted yet</strong>, so every obligation reads $0 and payments show as credit. Run the one-time history backfill (<code>manage.py backfill_charges</code>, see the Help tab), then use <strong>Sync charges</strong> above to mint the current year's dues.</span>
+  </div>
+  {% endif %}
+
   <form method="get" class="flex flex-wrap items-end gap-2">
     <input type="search" name="q" value="{{ q }}" placeholder="Name or email"
            class="input input-bordered input-sm w-56" />
@@ -58,7 +64,7 @@
           <td>
             <a class="link" href="{% url 'treasurer_member_detail' r.user.id %}">
               {{ r.user.get_full_name|default:r.user.email }}</a>
-            {% if r.conflict %}<span class="badge badge-warning badge-xs ml-1" title="Paid past obligation while a year is marked Skipping">conflict</span>{% endif %}
+            {% if r.conflict %}<span class="badge badge-warning badge-xs ml-1" title="Paid past the tuition obligation while a year is marked Skipping">conflict</span>{% endif %}
           </td>
           <td class="text-xs">{{ r.user.profile.get_role_display }}</td>
           <td class="text-right whitespace-nowrap">{{ r.obligation|usd }}</td>

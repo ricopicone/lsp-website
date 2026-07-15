@@ -257,3 +257,45 @@ def test_collected_this_ay_groups_by_category(member):
     assert out["by_category"][Payment.Type.TUITION] == Decimal("2000")
     assert out["by_category"][Payment.Type.DONATION] == Decimal("50")
     assert out["total"] == Decimal("2150")
+
+
+def test_conflict_is_tuition_scoped_not_cross_category(member):
+    """Dues overpayment + a skipping tuition year is NOT a conflict — skipping
+    is a tuition-only concept; dues/registrations are owed regardless (#439)."""
+    t25 = _tuition_period(2025, "2000")
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=t25,
+        status=TuitionEnrollment.Status.SKIPPING, source="staff")
+    _pay(member, Payment.Type.DUES, "100", WHEN)   # cross-category credit only
+    acct = ledger.member_account(member)
+    assert acct["credit"] == Decimal("100")
+    assert acct["conflict"] is False
+    assert acct["tuition_overpaid"] == Decimal("0")
+
+
+def test_conflict_fires_on_tuition_overpay_with_skipping(member):
+    t25 = _tuition_period(2025, "2000")
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=t25,
+        status=TuitionEnrollment.Status.SKIPPING, source="staff")
+    _pay(member, Payment.Type.TUITION, "500", WHEN)
+    acct = ledger.member_account(member)
+    assert acct["conflict"] is True
+    assert acct["tuition_overpaid"] == Decimal("500")
+
+
+def test_accounts_overview_conflict_is_tuition_scoped(member):
+    t25 = _tuition_period(2025, "2000")
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=t25,
+        status=TuitionEnrollment.Status.SKIPPING, source="staff")
+    _pay(member, Payment.Type.DUES, "100", WHEN)
+    other = User.objects.create_user(email="lg3@x.test", password="x")
+    TuitionEnrollment.objects.create(
+        user=other, tuition_period=t25,
+        status=TuitionEnrollment.Status.SKIPPING, source="staff")
+    _pay(other, Payment.Type.TUITION, "500", WHEN)
+    by = {r["user"].email: r for r in ledger.accounts_overview()}
+    assert by["lg@x.test"]["conflict"] is False        # dues credit only
+    assert by["lg3@x.test"]["conflict"] is True        # tuition overpay
+    assert by["lg3@x.test"]["tuition_overpaid"] == Decimal("500")
