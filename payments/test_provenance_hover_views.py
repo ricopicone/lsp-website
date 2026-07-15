@@ -75,7 +75,9 @@ def test_payments_tab_shows_provenance_hover(client, treasurer):
 
 
 @pytest.mark.django_db
-def test_dues_tab_badge_gets_hover(client, treasurer, current_period):
+def test_member_statement_dues_row_gets_hover(client, treasurer, current_period):
+    """The old Dues-tab badge hover now lives on the member's unified
+    statement (task #439) — same provenance popover, new surface."""
     member = User.objects.create_user(email="m3@x.test", password="x")
     Payment.objects.create(
         user=member, payment_type=Payment.Type.DUES, amount="100.00",
@@ -84,7 +86,9 @@ def test_dues_tab_badge_gets_hover(client, treasurer, current_period):
         notes="[tz-import:dues-25-26#17] | method unrecorded in ledger",
     )
     client.force_login(treasurer)
-    resp = client.get(reverse("treasurer_dues"), SERVER_NAME="localhost")
+    resp = client.get(
+        reverse("treasurer_member_detail", args=[member.id]), SERVER_NAME="localhost",
+    )
     assert resp.status_code == 200
     body = resp.content.decode()
     assert "data-prov-trigger" in body

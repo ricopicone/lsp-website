@@ -79,3 +79,17 @@ def test_sync_button_mints_current_dues(client, roster, treasurer):
     # current period is 2026-27 only if today falls inside it; the view must
     # no-op gracefully otherwise — both outcomes are acceptable here, the
     # sync's own behavior is covered in test_charges_sync.py.
+
+
+def test_old_tab_urls_redirect_to_accounts(client, roster):
+    for name in ("treasurer_tuition", "treasurer_dues", "treasurer_members"):
+        resp = client.get(reverse(name))
+        assert resp.status_code == 302
+        assert resp["Location"] == reverse("treasurer_accounts")
+
+
+def test_tab_bar_is_seven_tabs(client, roster):
+    from payments.views import TREASURER_TABS
+    assert [k for k, _ in TREASURER_TABS] == [
+        "overview", "accounts", "payments", "reconcile",
+        "settings", "exports", "help"]
