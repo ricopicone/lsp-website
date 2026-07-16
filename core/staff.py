@@ -331,22 +331,30 @@ def board_membership_admin(request):
     form = None
     if request.method == "POST":
         member = get_object_or_404(User, pk=request.POST.get("member"))
-        form = MembershipChangeForm(request.POST)
+        form = MembershipChangeForm(request.POST, member=member)
         if form.is_valid():
-            record_membership_change(
-                member,
-                role=form.cleaned_data["role"],
-                standing=form.cleaned_data["standing"],
-                effective_ay=form.cleaned_data["effective_ay"],
-                notes=form.cleaned_data["notes"],
-                by=request.user,
-            )
-            messages.success(
-                request,
-                f"Recorded a membership change for "
-                f"{member.get_full_name() or member.email}.",
-            )
-            return redirect(f"{reverse('board_membership_admin')}?member={member.pk}")
+            from django.core.exceptions import ValidationError
+
+            try:
+                record_membership_change(
+                    member,
+                    role=form.cleaned_data["role"],
+                    standing=form.cleaned_data["standing"],
+                    effective_ay=form.cleaned_data["effective_ay"],
+                    notes=form.cleaned_data["notes"],
+                    by=request.user,
+                )
+            except ValidationError as exc:
+                messages.error(request, " ".join(exc.messages))
+            else:
+                messages.success(
+                    request,
+                    f"Recorded a membership change for "
+                    f"{member.get_full_name() or member.email}.",
+                )
+                return redirect(
+                    f"{reverse('board_membership_admin')}?member={member.pk}"
+                )
     else:
         member_id = request.GET.get("member")
         if member_id:
@@ -373,11 +381,14 @@ def board_membership_admin(request):
             MembershipTenure.objects.filter(user=member).order_by("-start_ay")
         )
         if form is None:
-            form = MembershipChangeForm(initial={
-                "role": member.profile.role,
-                "standing": member.profile.standing,
-                "effective_ay": current_academic_year_start(),
-            })
+            form = MembershipChangeForm(
+                initial={
+                    "role": member.profile.role,
+                    "standing": member.profile.standing,
+                    "effective_ay": current_academic_year_start(),
+                },
+                member=member,
+            )
 
     return render(request, "core/staff/admin/board_membership.html", {
         "q": q, "results": results, "member": member,

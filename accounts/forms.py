@@ -383,6 +383,23 @@ class MembershipChangeForm(forms.Form):
         }),
     )
 
+    def __init__(self, *args, member=None, **kwargs):
+        self.member = member
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned = super().clean()
+        role = cleaned.get("role")
+        if self.member is not None and role:
+            from django.core.exceptions import ValidationError
+
+            from .membership import validate_role_transition
+            try:
+                validate_role_transition(self.member, role)
+            except ValidationError as exc:
+                raise forms.ValidationError(exc.messages)
+        return cleaned
+
 
 class AdvisorSelectForm(forms.Form):
     """An in-training member picks their Advisor from the eligible pool."""

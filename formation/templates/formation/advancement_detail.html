@@ -42,6 +42,28 @@
     {% endif %}
   </section>
 
+  {% if tuition_reasons is not None %}
+  <section class="space-y-2">
+    <h3 class="font-serif text-lg text-base-content">Tuition standing</h3>
+    {% if tuition_reasons %}
+    <div class="alert alert-warning text-sm">
+      <div>
+        <p class="font-medium">Tuition must be settled before this promotion can be approved:</p>
+        <ul class="list-disc ml-5">
+          {% for r in tuition_reasons %}<li>{{ r }}</li>{% endfor %}
+        </ul>
+      </div>
+    </div>
+    <p class="text-xs text-base-content/70 mt-1">Resolve on the member's
+      <a class="link" href="{% url 'treasurer_member_detail' adv.member.id %}" title="Treasurer access required">treasurer account page</a>
+      (record payment, adjust, waive, or void), then retry.</p>
+    {% else %}
+    <p class="text-sm"><span class="badge badge-success badge-sm">clear</span>
+      Tuition requirement settled — no financial block on this promotion.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {% comment %}Decision{% endcomment %}
   {% if adv.is_open %}
   <section class="rounded-xl border border-base-300 p-5 space-y-4">

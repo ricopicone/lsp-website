@@ -23,7 +23,8 @@
           <td>{{ a.get_kind_display }}</td>
           <td class="text-sm">{{ a.advisor.get_full_name|default:a.advisor.email|default:"—" }}</td>
           <td class="text-sm">{% if a.presented_at %}{{ a.presented_at|date:"M j, Y" }}{% else %}<span class="text-base-content/40">not yet</span>{% endif %}</td>
-          <td><span class="badge badge-sm {% if a.status == 'approved' %}badge-success{% elif a.status == 'presented' %}badge-info{% elif a.is_open %}badge-warning{% else %}badge-ghost{% endif %}">{{ a.get_status_display }}</span></td>
+          <td><span class="badge badge-sm {% if a.status == 'approved' %}badge-success{% elif a.status == 'presented' %}badge-info{% elif a.is_open %}badge-warning{% else %}badge-ghost{% endif %}">{{ a.get_status_display }}</span>
+            {% if a.tuition_blocked %}<span class="badge badge-warning badge-xs" title="Tuition must be settled before approval">tuition</span>{% endif %}</td>
           <td><a href="{% url 'formation:advancement_detail' a.pk %}" class="btn btn-ghost btn-xs">Open →</a></td>
         </tr>
         {% empty %}
