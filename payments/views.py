@@ -956,41 +956,21 @@ def treasurer_payment_split(request, payment_id: int):
 
         settle_targets = [(payment, first_amount)] if first_settle else []
         for t, a, settle in parts[1:]:
-            child = Payment.objects.create(
-                user_id=payment.user_id,
-                payment_type=t,
-                amount=a,
-                status=Payment.Status.SUCCEEDED,
-                method=payment.method,
-                email=payment.email,
-                currency=payment.currency,
-                livemode=payment.livemode,
+            child = _create_split_child(
+                payment, t, a, when,
                 source=Source.VERIFIED,
-                split_from=payment,
-                paid_at=payment.paid_at,
-                dues_period=(_period_for(t, when)
-                             if t == Payment.Type.DUES else None),
-                tuition_period=(_period_for(t, when)
-                                if t == Payment.Type.TUITION else None),
-                notes=(f"[{today}] Split from payment #{payment.pk} "
-                       f"(${old_amount} {labels[old_type]}) by treasurer "
-                       f"{request.user.email}; the original receipt covers "
-                       "the full amount."),
+                actor_label=f"treasurer {request.user.email}",
+                original=f"${old_amount} {labels[old_type]}",
             )
             if settle:
                 settle_targets.append((child, a))
         for target, amount in settle_targets:
-            Charge.objects.create(
-                user_id=payment.user_id,
-                category=Charge.Category.REGISTRATION,
-                amount=amount,
-                effective_date=when,
+            _mint_settlement_charge(
+                payment, amount, when,
                 source=Source.STAFF,
-                staff_adjusted=True,
-                notes=(f"[{today}] Settlement charge inserted with the split "
-                       f"of payment #{payment.pk} (part: payment "
-                       f"#{target.pk}) by treasurer {request.user.email} — "
-                       "the original event fee was never recorded."),
+                actor_label=f"treasurer {request.user.email}",
+                cause=(f"the split of payment #{payment.pk} "
+                       f"(part: payment #{target.pk})"),
             )
     flash = f"Split into {breakdown}."
     if settle_targets:
@@ -1121,6 +1101,59 @@ def _int_or_none(raw):
         return int(raw)
     except (TypeError, ValueError):
         return None
+
+
+def _mint_settlement_charge(payment, amount, when, *, source, actor_label,
+                            cause):
+    """Insert the honor-system-era settlement Charge that pairs with a
+    payment re-categorized (or split) into Registration — the original event
+    fee was never recorded, so the pair nets to zero exactly where it sits in
+    the statement. Shared by the treasurer and member retype/split paths
+    (task #439): ``source``/``actor_label`` carry each side's provenance and
+    attribution ("treasurer x@y" vs "member x@y"); ``cause`` is the
+    mid-sentence description ("re-categorization of payment #N" / "the split
+    of payment #N (part: payment #M)")."""
+    return Charge.objects.create(
+        user_id=payment.user_id,
+        category=Charge.Category.REGISTRATION,
+        amount=amount,
+        effective_date=when,
+        source=source,
+        staff_adjusted=True,
+        notes=(f"[{timezone.now().date()}] Settlement charge inserted with "
+               f"{cause} by {actor_label} — the original event fee was "
+               "never recorded."),
+    )
+
+
+def _create_split_child(parent, part_type, amount, when, *, source,
+                        actor_label, original):
+    """Create one sibling Payment row of a split: copies method/email/
+    currency/livemode/paid_at off the (already-mutated) parent, binds the
+    part's AY period via ``_period_for``, and records the audit note. Shared
+    by the treasurer and member split paths (task #439); ``original``
+    describes the pre-split row ("$400 Tuition") and ``actor_label`` the
+    actor ("treasurer x@y" vs "member x@y")."""
+    return Payment.objects.create(
+        user_id=parent.user_id,
+        payment_type=part_type,
+        amount=amount,
+        status=Payment.Status.SUCCEEDED,
+        method=parent.method,
+        email=parent.email,
+        currency=parent.currency,
+        livemode=parent.livemode,
+        source=source,
+        split_from=parent,
+        paid_at=parent.paid_at,
+        dues_period=(_period_for(part_type, when)
+                     if part_type == Payment.Type.DUES else None),
+        tuition_period=(_period_for(part_type, when)
+                        if part_type == Payment.Type.TUITION else None),
+        notes=(f"[{timezone.now().date()}] Split from payment #{parent.pk} "
+               f"({original}) by {actor_label}; the original receipt covers "
+               "the full amount."),
+    )
 
 
 def _period_for(new_type, when):
@@ -1372,17 +1405,11 @@ def treasurer_payment_retype(request, payment_id: int):
             # payment so the pair nets to zero exactly where it sits in the
             # statement — no phantom credit, no invented debt.
             when = (payment.paid_at or payment.created_at).date()
-            Charge.objects.create(
-                user_id=payment.user_id,
-                category=Charge.Category.REGISTRATION,
-                amount=payment.amount,
-                effective_date=when,
+            _mint_settlement_charge(
+                payment, payment.amount, when,
                 source=Source.STAFF,
-                staff_adjusted=True,
-                notes=(f"[{timezone.now().date()}] Settlement charge inserted "
-                       f"with re-categorization of payment #{payment.pk} by "
-                       f"treasurer {request.user.email} — the original event "
-                       "fee was never recorded."),
+                actor_label=f"treasurer {request.user.email}",
+                cause=f"re-categorization of payment #{payment.pk}",
             )
             flash += (" Inserted a matching Registration charge dated "
                       "with the payment.")
@@ -2243,17 +2270,11 @@ def my_payment_retype(request, payment_id: int):
             # payment so the pair nets to zero exactly where it sits in the
             # statement — no phantom credit, no invented debt.
             when = (payment.paid_at or payment.created_at).date()
-            Charge.objects.create(
-                user_id=payment.user_id,
-                category=Charge.Category.REGISTRATION,
-                amount=payment.amount,
-                effective_date=when,
+            _mint_settlement_charge(
+                payment, payment.amount, when,
                 source=Source.SELF_REPORTED,
-                staff_adjusted=True,
-                notes=(f"[{timezone.now().date()}] Settlement charge inserted "
-                       f"with re-categorization of payment #{payment.pk} by "
-                       f"member {request.user.email} — the original event "
-                       "fee was never recorded."),
+                actor_label=f"member {request.user.email}",
+                cause=f"re-categorization of payment #{payment.pk}",
             )
             flash += (" Inserted a matching Registration charge dated "
                       "with the payment.")
@@ -2351,41 +2372,21 @@ def my_payment_split(request, payment_id: int):
 
         settle_targets = [(payment, first_amount)] if first_settle else []
         for t, a, settle in parts[1:]:
-            child = Payment.objects.create(
-                user_id=payment.user_id,
-                payment_type=t,
-                amount=a,
-                status=Payment.Status.SUCCEEDED,
-                method=payment.method,
-                email=payment.email,
-                currency=payment.currency,
-                livemode=payment.livemode,
+            child = _create_split_child(
+                payment, t, a, when,
                 source=Source.SELF_REPORTED,
-                split_from=payment,
-                paid_at=payment.paid_at,
-                dues_period=(_period_for(t, when)
-                             if t == Payment.Type.DUES else None),
-                tuition_period=(_period_for(t, when)
-                                if t == Payment.Type.TUITION else None),
-                notes=(f"[{today}] Split from payment #{payment.pk} "
-                       f"(${old_amount} {labels[old_type]}) by member "
-                       f"{request.user.email}; the original receipt covers "
-                       "the full amount."),
+                actor_label=f"member {request.user.email}",
+                original=f"${old_amount} {labels[old_type]}",
             )
             if settle:
                 settle_targets.append((child, a))
         for target, amount in settle_targets:
-            Charge.objects.create(
-                user_id=payment.user_id,
-                category=Charge.Category.REGISTRATION,
-                amount=amount,
-                effective_date=when,
+            _mint_settlement_charge(
+                payment, amount, when,
                 source=Source.SELF_REPORTED,
-                staff_adjusted=True,
-                notes=(f"[{today}] Settlement charge inserted with the split "
-                       f"of payment #{payment.pk} (part: payment "
-                       f"#{target.pk}) by member {request.user.email} — "
-                       "the original event fee was never recorded."),
+                actor_label=f"member {request.user.email}",
+                cause=(f"the split of payment #{payment.pk} "
+                       f"(part: payment #{target.pk})"),
             )
     flash = f"Split into {breakdown}."
     if settle_targets:
