@@ -89,8 +89,9 @@ def test_formation_page_shows_tabs_for_candidate(client):
     body = client.get(reverse("formation:formation")).content
     assert b"My LSP" in body
     # A candidate owes tuition + dues, so those tabs appear alongside the
-    # always-on ones. Tabs are real, shareable ?tab= links.
-    for key in (b"groups", b"events", b"works", b"tuition", b"dues", b"profile"):
+    # always-on ones — dues now lives on the unified "My account" tab
+    # (task #439). Tabs are real, shareable ?tab= links.
+    for key in (b"groups", b"events", b"works", b"tuition", b"account", b"profile"):
         assert b'href="?tab=' + key + b'"' in body
 
 
@@ -328,13 +329,13 @@ def test_skipping_year_is_not_one_of_the_four(current_period):
     assert ctx["tuition_years_started"] == 0
 
 
-# ---- dues section ----------------------------------------------------------
+# ---- dues section (now on the unified "My account" tab, task #439) --------
 
 def test_dues_section_offers_payment_when_unpaid(client, current_period):
     member = _user("dues@x.test", role=Profile.Role.CANDIDATE)
     client.force_login(member)
-    # Dues now have their own tab (split from Tuition).
-    body = client.get(reverse("formation:formation") + "?tab=dues").content
+    # Dues now live on the unified account tab, alongside the statement.
+    body = client.get(reverse("formation:formation") + "?tab=account").content
     assert b"Membership dues" in body
     # An obligated, unpaid member is offered a pay action.
     assert b"dues" in body.lower()

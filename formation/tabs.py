@@ -4,8 +4,8 @@ the menu and the in-page tab bar agree on which tabs a member has.
 
 Kept deliberately cheap: it runs on every page via the context processor, so it
 uses role/standing *properties* (no per-page queries) except the rare
-``is_lsp_member`` membership fallback. Tuition/Dues key on the obligation
-properties here; the hub view passes ``tuition``/``dues`` overrides so it can
+``is_lsp_member`` membership fallback. Tuition/Account key on the obligation
+properties here; the hub view passes ``tuition``/``account`` overrides so it can
 *also* surface them when there's payment history (``show_money_tab``).
 """
 
@@ -22,11 +22,14 @@ _HEAD = [
 ]
 
 
-def available_tabs(user, *, tuition=None, dues=None):
+def available_tabs(user, *, tuition=None, account=None):
     """Ordered ``(key, label)`` tabs available to ``user`` for the My LSP hub.
 
-    ``tuition`` / ``dues`` default to the member's obligation properties; pass a
-    bool to override (the hub view forces them on when payment history exists).
+    ``tuition`` / ``account`` default to the member's obligation properties;
+    pass a bool to override (the hub view forces them on when payment history
+    exists). ``account`` is the unified "My account" tab (task #439) — one
+    running balance across dues, tuition, and registration charges; it
+    replaces the old standalone "Dues" tab.
     """
     if not getattr(user, "is_authenticated", False):
         return []
@@ -38,13 +41,13 @@ def available_tabs(user, *, tuition=None, dues=None):
     member = is_lsp_member(user)
 
     show_tuition = (profile is not None and profile.owes_tuition) if tuition is None else tuition
-    show_dues = is_dues_obligated(user) if dues is None else dues
+    show_account = is_dues_obligated(user) if account is None else account
 
     tabs = list(_HEAD)
     if show_tuition:
         tabs.append(("tuition", "Tuition"))
-    if show_dues:
-        tabs.append(("dues", "Dues"))
+    if show_account:
+        tabs.append(("account", "My account"))
     if member:
         tabs.append(("proposals", "Proposals"))
     if member and getattr(settings, "SUGGESTIONS_ENABLED", False):

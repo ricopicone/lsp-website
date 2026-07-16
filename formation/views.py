@@ -136,7 +136,7 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     )
     ctx["show_money_tab"] = show_money_tab
 
-    tabs = available_tabs(user, tuition=show_money_tab, dues=show_money_tab)
+    tabs = available_tabs(user, tuition=show_money_tab, account=show_money_tab)
     keys = {k for k, _ in tabs}
     active = request.GET.get("tab") or "formation"
     if active not in keys:
@@ -148,7 +148,7 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     # Formation tab's advisor/steps above are always built: it's the default.)
     if active in ("groups", "events"):
         ctx.update(_formation_groups_events_context(request))
-    elif active in ("tuition", "dues"):
+    elif active in ("tuition", "account"):
         ctx.update(_formation_money_context(request))
     elif active == "works":
         from works.queries import my_works_qs
@@ -276,11 +276,14 @@ def _formation_steps(user):
 
 
 def _formation_money_context(request) -> dict:
-    """Tuition + dues + the member's own payment history (all on one tab).
+    """Tuition + the unified account (statement/balance/dues) + the member's
+    own payment history — all on one tab (task #439: the member-facing view
+    onto the unified ledger, ``payments.ledger.member_account``).
 
-    Tuition: the four-year progress, this year's decision/installments. Dues:
-    this year's obligation + status. Payments: full history (editable type/note,
-    and academic year for tuition) from the My Payments table."""
+    Tuition: the four-year progress, this year's decision/installments,
+    ledger-derived years-covered count. Account: the running-balance
+    statement + this year's dues status. Payments: full history (editable
+    type/note, and academic year for tuition) from the My Payments table."""
     from payments import ledger
     from payments.dues import is_dues_obligated
     from payments.forms import TuitionDecisionForm
@@ -293,6 +296,10 @@ def _formation_money_context(request) -> dict:
 
     user = request.user
     profile = user.profile
+
+    # --- The unified account — computed once, everything below derives from it. ---
+    acct = ledger.member_account(user)
+    requirement_met = ledger.tuition_requirement_met(user)
 
     # --- Tuition (current year) ---
     period = TuitionPeriod.current()
@@ -312,7 +319,7 @@ def _formation_money_context(request) -> dict:
     dues_amount = (
         dues_period.amount_for_role(profile.role) if dues_period is not None else None
     )
-    dues_paid = ledger.member_account(user)["dues_state"] in ("paid", "waived")
+    dues_paid = acct["dues_state"] in ("paid", "waived")
 
     # --- Payments (all) — one editable table (type + note + tuition AY) ---
     # Order by the same date the table shows (paid_at, falling back to
@@ -347,6 +354,9 @@ def _formation_money_context(request) -> dict:
 
     return {
         "show_money_tab": show_money_tab,
+        # unified account (task #439) — statement/balance/tuition-years tile
+        "acct": acct,
+        "requirement_met": requirement_met,
         # tuition
         "owes_tuition": profile.owes_tuition,
         "tuition_period": period,

@@ -1,0 +1,133 @@
+{% load treasurer_filters %}
+{% comment %}
+My account tab (task #439) — the member-facing view onto the unified
+ledger (payments.ledger.member_account): balance/dues/tuition-years
+tiles, the existing "Pay dues" flow (reused from the old Dues tab,
+unchanged endpoint), a member-safe statement, and the shared My Payments
+table. Never renders Charge.notes, Payment.notes, or source/provenance —
+those are treasurer-only (see payments/treasurer/member_detail.html for
+the full picture with actions).
+{% endcomment %}
+  <div class="space-y-8">
+
+    {# ---- Tiles ---- #}
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div class="rounded border border-base-300 p-2.5">
+        <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Balance</div>
+        <div class="font-serif text-xl leading-tight {% if acct.owes %}text-warning{% elif acct.credit %}text-success{% endif %}">
+          {% if acct.owes %}{{ acct.owes|usd }} owed
+          {% elif acct.credit %}{{ acct.credit|usd }} credit
+          {% else %}Paid up{% endif %}
+        </div>
+      </div>
+      <div class="rounded border border-base-300 p-2.5">
+        <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Dues this year</div>
+        <div class="leading-tight pt-1">
+          {% if acct.dues_state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
+          {% elif acct.dues_state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
+          {% elif acct.dues_state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
+          {% elif acct.dues_state == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>
+          {% else %}<span class="text-base-content/40 text-xs">—</span>{% endif %}
+        </div>
+      </div>
+      <div class="rounded border border-base-300 p-2.5">
+        <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Tuition years</div>
+        <div class="leading-tight pt-1">
+          {% if requirement_met %}
+          <span class="badge badge-success badge-sm">Requirement met</span>
+          {% else %}
+          <div class="font-serif text-xl leading-tight">{{ acct.tuition_years_covered }} of {{ acct.tuition_years_required }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# ---- Dues (reused from the old Dues tab — same endpoint) ---- #}
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-base-content">Membership dues</h2>
+      {% if dues_obligated %}
+        {% if not dues_period %}
+        <p class="text-sm text-base-content/70">No dues year is currently configured.</p>
+        {% elif dues_paid %}
+        <div class="rounded-lg border border-success/30 bg-success/5 px-5 py-4 text-sm">
+          Dues paid for {{ dues_period.name }} <span class="text-success">✓</span>
+        </div>
+        {% else %}
+        <div class="rounded-lg border border-base-300 p-5 space-y-3">
+          <p class="text-sm">My dues for {{ dues_period.name }}: <strong>${{ dues_amount }}</strong>.</p>
+          <form method="post" action="{% url 'dues' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary">Pay ${{ dues_amount }} dues →</button>
+          </form>
+        </div>
+        {% endif %}
+      {% else %}
+      <p class="text-sm text-base-content/60">You don't owe membership dues right now.</p>
+      {% endif %}
+    </section>
+
+    {# ---- Statement — the member-safe rendering of acct.lines ---- #}
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-base-content">Statement</h2>
+      {% if acct.lines %}
+      <div class="overflow-x-auto rounded-lg border border-base-300">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Date</th><th>Description</th>
+              <th class="text-right">Charge</th><th class="text-right">Payment</th>
+              <th class="text-right">Balance</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ln in acct.lines %}
+            <tr>
+              <td class="whitespace-nowrap text-xs text-base-content/70">{{ ln.date|date:"M j, Y" }}</td>
+              <td>
+                {% if ln.kind == "charge" %}
+                  {{ ln.obj.get_category_display }} charge
+                  {% if ln.obj.dues_period %}
+                  <div class="text-xs text-base-content/60">{{ ln.obj.dues_period.name }}</div>
+                  {% elif ln.obj.tuition_period %}
+                  <div class="text-xs text-base-content/60">{{ ln.obj.tuition_period.name }}</div>
+                  {% elif ln.obj.registration %}
+                  <div class="text-xs text-base-content/60">{{ ln.obj.registration.event.title|truncatechars:32 }}</div>
+                  {% endif %}
+                {% else %}
+                  {{ ln.obj.get_payment_type_display }} payment
+                  {% if ln.obj.registration %}
+                  <div class="text-xs text-base-content/60">{{ ln.obj.registration.event.title|truncatechars:32 }}</div>
+                  {% endif %}
+                {% endif %}
+              </td>
+              <td class="text-right whitespace-nowrap">{% if ln.kind == "charge" %}{{ ln.delta|usd }}{% endif %}</td>
+              <td class="text-right whitespace-nowrap">{% if ln.kind == "payment" %}{{ ln.obj.amount|usd }}{% endif %}</td>
+              <td class="text-right whitespace-nowrap {% if ln.running > 0 %}text-warning{% elif ln.running < 0 %}text-success{% endif %}">{{ ln.running|usd }}</td>
+              <td>
+                {% if ln.kind == "charge" %}
+                  {% if ln.obj.status == "open" %}
+                    {% if ln.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
+                    {% elif ln.state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
+                    {% else %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>{% endif %}
+                  {% elif ln.obj.status == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>{% endif %}
+                {% else %}
+                  {% status_badge ln.obj.status %}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/60">No charges or payments on file yet.</p>
+      {% endif %}
+    </section>
+
+    {% include "formation/_my_payments_table.html" %}
+
+    <p class="text-xs text-base-content/50">
+      Your charges and payments sit on one running balance, oldest charges are covered first.
+      Categories are labels for reporting, your money is not split into separate pots.
+    </p>
+  </div>

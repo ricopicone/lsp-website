@@ -22,7 +22,11 @@
         <div class="flex items-baseline justify-between gap-3 flex-wrap">
           <h3 class="font-medium text-base-content">Tuition progress</h3>
           <p class="text-sm text-base-content/70">
-            ${{ tuition_total_paid }} paid of ${{ tuition_total_goal }} ({{ tuition_total_pct }}%)
+            {% if requirement_met %}
+            <span class="badge badge-success badge-sm">Requirement met</span>
+            {% else %}
+            {{ acct.tuition_years_covered }} of {{ acct.tuition_years_required }} years covered
+            {% endif %}
           </p>
         </div>
         <p class="text-xs text-base-content/60">
@@ -60,14 +64,22 @@
           Students skipping a year still pay the regular per-event fee.</p>
       </div>
 
-      {% if tuition_enrollment %}
+      {% if tuition_enrollment and not requirement_met %}
       <div class="rounded-lg border border-primary/30 bg-primary/5 px-5 py-4 text-sm">
         <p>Current decision for {{ tuition_period.name }}:
           <strong>{{ tuition_enrollment.get_status_display }}</strong>
           <span class="text-base-content/60">(recorded {{ tuition_enrollment.decided_at|user_datetime }})</span>
         </p>
       </div>
+      {% endif %}
 
+      {% if requirement_met %}
+      <div class="rounded-lg border border-success/30 bg-success/5 px-5 py-4 text-sm">
+        You have four tuition years on record, no further annual decision is needed.
+      </div>
+      {% endif %}
+
+      {% if tuition_enrollment %}
       {% if tuition_enrollment.status == "committed" and not tuition_installments %}
       <div class="rounded-lg border border-base-300 p-5 space-y-3">
         <h3 class="font-serif text-lg text-base-content">Pay tuition</h3>
@@ -132,6 +144,7 @@
       {% endif %}
       {% endif %}
 
+      {% if not requirement_met %}
       <form method="post" action="{% url 'tuition' %}" class="space-y-4 rounded-lg border border-base-300 p-5">
         {% csrf_token %}
         <fieldset class="space-y-2">
@@ -146,6 +159,7 @@
         </fieldset>
         <button type="submit" class="btn btn-primary">Record decision</button>
       </form>
+      {% endif %}
       {% endif %}
     </section>
     {% include "formation/_my_payments_table.html" %}
