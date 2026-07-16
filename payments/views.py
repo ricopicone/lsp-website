@@ -482,19 +482,19 @@ def treasurer_submission_decide(request, submission_id: int):
     Approve mints the matching Payment/Charge exactly per spec: a payment
     is dated ``claimed_date`` at noon UTC and bound to the covering dues/
     tuition period; a charge is OPEN + ``staff_adjusted`` (so the minting
-    syncs never touch it). Both carry ``source=SELF_REPORTED`` — the
+    syncs never touch it) with its dues/tuition period FK bound — the syncs
+    key idempotency on (user, period), so a period-less charge would get
+    double-minted by the next rollover/enrollment sync (see
+    ``treasurer_charge_add``). Both carry ``source=SELF_REPORTED`` — the
     member's own say-so, honor-system era — and a note naming the
     submission and the deciding treasurer. Decline just records the note;
-    nothing is minted. Idempotent: an already-decided submission no-ops.
+    nothing is minted. Idempotent AND race-safe: the row is fetched under
+    ``select_for_update`` (mirroring the Stripe-webhook pattern), so a
+    double-submitted decide sees the already-decided status and no-ops.
     """
     from datetime import timezone as dt_timezone
 
     from accounts.models import Source
-
-    submission = get_object_or_404(LedgerSubmission, pk=submission_id)
-    if submission.status != LedgerSubmission.Status.PENDING:
-        messages.error(request, "That submission was already decided.")
-        return redirect("treasurer_reconcile")
 
     decision = request.POST.get("decision")
     if decision not in ("approve", "decline"):
@@ -502,21 +502,18 @@ def treasurer_submission_decide(request, submission_id: int):
         return redirect("treasurer_reconcile")
     note = (request.POST.get("note") or "").strip()[:2000]
 
-    if decision == "approve" and submission.kind == LedgerSubmission.Kind.CHARGE \
-            and submission.category not in Charge.Category.values:
-        messages.error(
-            request,
-            f"'{submission.category}' isn't a valid charge category — "
-            "decline this submission or ask the member to re-submit it "
-            "as a payment instead.",
-        )
-        return redirect("treasurer_reconcile")
-
-    header = (f"Member-reported history (submission #{submission.id}), "
-              f"approved by treasurer {request.user.email}.")
-    mint_note = header + (f"\n{submission.details}" if submission.details else "")
-
     with transaction.atomic():
+        submission = get_object_or_404(
+            LedgerSubmission.objects.select_for_update(), pk=submission_id)
+        if submission.status != LedgerSubmission.Status.PENDING:
+            messages.error(request, "That submission was already decided.")
+            return redirect("treasurer_reconcile")
+
+        header = (f"Member-reported history (submission #{submission.id}), "
+                  f"approved by treasurer {request.user.email}.")
+        mint_note = header + (
+            f"\n{submission.details}" if submission.details else "")
+
         if decision == "approve":
             if submission.kind == LedgerSubmission.Kind.PAYMENT:
                 kwargs = {}
@@ -538,12 +535,47 @@ def treasurer_submission_decide(request, submission_id: int):
                 )
                 submission.created_payment = payment
             else:
+                # Defense in depth — the member form now refuses these too.
+                if submission.category not in Charge.Category.values:
+                    messages.error(
+                        request,
+                        f"'{submission.category}' isn't a valid charge "
+                        "category — decline this submission or ask the "
+                        "member to re-submit it as a payment instead.",
+                    )
+                    return redirect("treasurer_reconcile")
+                # Bind the AY period for dues/tuition — the minting syncs key
+                # idempotency on (user, period); a period-less charge would
+                # get double-minted by the next sync. Mirrors
+                # treasurer_charge_add, incl. the duplicate-charge guard.
+                period_kwargs = {}
+                eff = submission.claimed_date
+                period = _period_for(submission.category, submission.claimed_date)
+                if period is not None:
+                    fk = ("dues_period"
+                          if submission.category == Charge.Category.DUES
+                          else "tuition_period")
+                    dup = Charge.objects.filter(
+                        user=submission.user, category=submission.category,
+                        **{fk: period},
+                    ).exclude(status=Charge.Status.VOID).exists()
+                    if dup:
+                        messages.error(
+                            request,
+                            f"A {submission.category} charge for "
+                            f"{period.name} already exists on this account "
+                            "— adjust the existing charge instead, then "
+                            "decline this submission with a note.",
+                        )
+                        return redirect("treasurer_reconcile")
+                    period_kwargs[fk] = period
+                    eff = period.start_date
                 charge = Charge.objects.create(
                     user=submission.user, category=submission.category,
                     amount=submission.amount,
-                    effective_date=submission.claimed_date,
+                    effective_date=eff,
                     status=Charge.Status.OPEN, source=Source.SELF_REPORTED,
-                    staff_adjusted=True, notes=mint_note,
+                    staff_adjusted=True, notes=mint_note, **period_kwargs,
                 )
                 submission.created_charge = charge
             submission.status = LedgerSubmission.Status.APPROVED
@@ -2437,6 +2469,13 @@ def my_ledger_submission_create(request):
     category = request.POST.get("category")
     if category not in Payment.Type.values:
         messages.error(request, "Choose a valid category.")
+        return redirect(_account_tab_url())
+    if (kind == LedgerSubmission.Kind.CHARGE
+            and category not in Charge.Category.values):
+        messages.error(
+            request,
+            "Donations can only be reported as payments. Choose the "
+            "payment option, or a dues, tuition, or registration category.")
         return redirect(_account_tab_url())
     amount = _parse_amount(request.POST.get("amount", ""))
     if amount is None:

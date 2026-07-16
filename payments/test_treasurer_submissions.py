@@ -156,6 +156,96 @@ def test_approve_charge_mints_staff_adjusted(client, treasurer, member):
     assert f"submission #{submission.id}" in charge.notes
 
 
+def test_approve_tuition_charge_binds_period_and_sync_mints_nothing_extra(
+        client, treasurer, member):
+    """A dues/tuition charge must bind its period FK — the minting syncs
+    key idempotency on (user, period), so a period-less charge would get
+    double-minted by the next enrollment sync. Order matters: the claim is
+    approved first (pre-records history, no enrollment yet); when the
+    enrollment decision later lands (its post_save signal fires
+    sync_tuition_charges), the sync must see the period-bound charge and
+    NOT mint a second one."""
+    from payments.charges import sync_tuition_charges
+    from payments.models import TuitionEnrollment
+
+    period = _tuition_period()
+    submission = _submission(
+        member, kind=LedgerSubmission.Kind.CHARGE,
+        category=Payment.Type.TUITION, amount=Decimal("2000.00"),
+        claimed_date=date(2019, 9, 15))
+
+    resp = client.post(
+        reverse("treasurer_submission_decide", args=[submission.id]),
+        {"decision": "approve"})
+    assert resp.status_code == 302
+    submission.refresh_from_db()
+    charge = submission.created_charge
+    assert charge is not None
+    assert charge.tuition_period_id == period.id
+    assert charge.effective_date == period.start_date  # AY start, not claimed
+    assert charge.staff_adjusted is True
+
+    # The enrollment decision arrives later — its save signal runs the sync.
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=period,
+        status=TuitionEnrollment.Status.COMMITTED)
+    sync_tuition_charges(member)  # belt and suspenders: run it again directly
+    assert Charge.objects.filter(
+        user=member, category=Charge.Category.TUITION, tuition_period=period,
+    ).exclude(status=Charge.Status.VOID).count() == 1
+
+
+def test_approve_dues_charge_binds_period_and_sync_mints_nothing_extra(
+        client, treasurer, member):
+    from payments.charges import sync_dues_charges
+
+    period = _dues_period()
+    submission = _submission(
+        member, kind=LedgerSubmission.Kind.CHARGE,
+        category=Payment.Type.DUES, amount=Decimal("100.00"),
+        claimed_date=date(2019, 10, 1))
+
+    resp = client.post(
+        reverse("treasurer_submission_decide", args=[submission.id]),
+        {"decision": "approve"})
+    assert resp.status_code == 302
+    submission.refresh_from_db()
+    charge = submission.created_charge
+    assert charge is not None
+    assert charge.dues_period_id == period.id
+    assert charge.effective_date == period.start_date
+
+    sync_dues_charges(period)
+    assert Charge.objects.filter(
+        user=member, category=Charge.Category.DUES, dues_period=period,
+    ).exclude(status=Charge.Status.VOID).count() == 1
+
+
+def test_approve_duplicate_period_charge_refused(client, treasurer, member):
+    """The member already has a non-VOID charge for that (user, period) —
+    refuse the approval (mirror treasurer_charge_add's duplicate guard);
+    the submission stays PENDING for a decline-with-note."""
+    period = _tuition_period()
+    Charge.objects.create(
+        user=member, category=Charge.Category.TUITION,
+        amount=Decimal("2000.00"), effective_date=period.start_date,
+        tuition_period=period)
+    submission = _submission(
+        member, kind=LedgerSubmission.Kind.CHARGE,
+        category=Payment.Type.TUITION, amount=Decimal("2000.00"),
+        claimed_date=date(2019, 9, 15))
+
+    resp = client.post(
+        reverse("treasurer_submission_decide", args=[submission.id]),
+        {"decision": "approve"})
+    assert resp.status_code == 302
+    submission.refresh_from_db()
+    assert submission.status == LedgerSubmission.Status.PENDING
+    assert submission.created_charge is None
+    assert Charge.objects.filter(
+        user=member, tuition_period=period).count() == 1
+
+
 def test_approve_charge_invalid_category_refused(client, treasurer, member):
     """A charge claim in a category with no Charge.Category equivalent
     (e.g. donation) can't be minted — refuse gracefully rather than 500."""

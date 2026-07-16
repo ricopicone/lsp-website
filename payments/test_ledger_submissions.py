@@ -100,6 +100,21 @@ def test_create_rejects_bad_category(client, member):
     assert not LedgerSubmission.objects.filter(user=member).exists()
 
 
+def test_create_charge_donation_refused(client, member):
+    """A charge claim must use a Charge.Category-compatible category —
+    donation has no charge equivalent, so it's refused at create time
+    (the treasurer-side decide guard stays as defense in depth)."""
+    resp = client.post(
+        reverse("my_ledger_submission_create"),
+        _valid_payload(kind=LedgerSubmission.Kind.CHARGE,
+                       category=Payment.Type.DONATION))
+    assert resp.status_code == 302
+    assert not LedgerSubmission.objects.filter(user=member).exists()
+    messages = [str(m) for m in get_messages(resp.wsgi_request)]
+    assert any("Donations can only be reported as payments" in m
+               for m in messages)
+
+
 def test_create_rejects_bad_amount(client, member):
     resp = client.post(
         reverse("my_ledger_submission_create"),
