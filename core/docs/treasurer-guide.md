@@ -303,6 +303,14 @@ For inspecting or correcting individual payments.
   account; when it isn't, it shows whatever Stripe told us about the
   payer — a name or an email — with an "unlinked" badge, so an unmatched
   payment is never just "anonymous". The actions are:
+  - **Split** — divides one payment into parts with different categories,
+    when a single check or charge covered several things at once (say,
+    $400 that was really $150 dues plus a $250 seminar fee). The amounts
+    must add up exactly; each Registration part can tick "insert matching
+    charge" for the honor-system case described under Re-categorize. Rows
+    from a split carry a **split** badge, and refunding **any** part
+    refunds the **entire original charge** — the confirmation warns you,
+    with the full original amount, before anything happens.
   - **Assign** — links (or re-links) the payment to a member's account.
     Start typing a name or email and pick from the list. The payment's
     money moves onto that member's running balance, its provenance is
