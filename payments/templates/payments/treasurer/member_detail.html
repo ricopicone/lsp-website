@@ -176,7 +176,7 @@
                   <button type="button" class="btn btn-ghost btn-xs"
                           onclick="document.getElementById('adjust-{{ ln.obj.id }}').showModal()">Adjust</button>
                   <dialog id="adjust-{{ ln.obj.id }}" class="modal">
-                    <div class="modal-box max-w-xs">
+                    <div class="modal-box max-w-xs whitespace-normal text-left">
                       <h3 class="font-serif text-lg mb-3">Adjust charge amount</h3>
                       <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="space-y-2">
                         {% csrf_token %}

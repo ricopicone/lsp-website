@@ -6,7 +6,7 @@ Include with: payment, type_choices, dues_periods, tuition_periods, next_url.
 <button type="button" class="btn btn-ghost btn-xs"
         onclick="document.getElementById('retype-{{ payment.id }}').showModal()">Re-categorize</button>
 <dialog id="retype-{{ payment.id }}" class="modal">
-  <div class="modal-box max-w-sm">
+  <div class="modal-box max-w-sm whitespace-normal text-left">
     <h3 class="font-serif text-lg mb-3">Re-categorize payment</h3>
     <p class="text-sm text-base-content/70 mb-3">${{ payment.amount }} · currently {{ payment.get_payment_type_display }}</p>
     <form method="post" action="{% url 'treasurer_payment_retype' payment.id %}" class="space-y-2">
