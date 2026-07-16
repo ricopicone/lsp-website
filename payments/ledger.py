@@ -308,12 +308,16 @@ def collected_this_ay(today=None) -> dict:
     return {"window": window, "by_category": by_cat, "total": total}
 
 
-def tuition_requirement_met(user) -> bool:
-    """Four non-skipping tuition years on record — no further annual
-    decision is required. The 4-year cap means a fifth year never mints a
-    charge, so nagging for a skip/committed status past that point is
-    noise (Rico, 2026-07-16). Money still owed on the four years is
-    chased through the ledger, not through decision reminders."""
+def tuition_decision_exempt(user) -> bool:
+    """Four non-skipping tuition years on record — no fifth-year decision
+    nag. The 4-year cap means a fifth year never mints a charge, so asking
+    for a skip/committed status past that point is noise (Rico,
+    2026-07-16). This is deliberately NOT the same thing as the
+    "requirement met" badge shown to members, which means the four years
+    are actually *paid* (``tuition_years_covered >= tuition_years_required``
+    in :func:`member_account`) — a member can be decision-exempt with money
+    still owed; that money is chased through the ledger, not through
+    decision reminders."""
     from .models import TuitionEnrollment
 
     return TuitionEnrollment.objects.filter(user=user).exclude(

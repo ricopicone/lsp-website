@@ -149,10 +149,10 @@ def _attention_queue(rows) -> dict:
             profile__standing=Profile.Standing.ACTIVE,
             profile__role__in=Profile.IN_TRAINING_ROLES,
         ).select_related("profile")
-        from payments.ledger import tuition_requirement_met
+        from payments.ledger import tuition_decision_exempt
         undecided = [u for u in in_training
                      if u.id not in decided_ids
-                     and not tuition_requirement_met(u)]
+                     and not tuition_decision_exempt(u)]
         committed_unpaid = [
             e for e in enrollments
             if e.status == TuitionEnrollment.Status.COMMITTED]

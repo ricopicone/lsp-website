@@ -399,9 +399,12 @@ def test_member_page_offers_add_year_and_all_year_toggles(client, treasurer, mem
     assert f'value="{past.id}"' in content
 
 
-def test_requirement_met_members_need_no_new_year_decision(client, treasurer, member):
+def test_decision_exempt_members_need_no_new_year_decision(client, treasurer, member):
     """Four non-skipping years on record: no Gate-1 registration block, no
-    Undecided listing — a fifth-year decision is never demanded (task #439)."""
+    Undecided listing — a fifth-year decision is never demanded (task #439).
+    This is decision-exemption, deliberately distinct from the payment-based
+    "requirement met" badge (see formation/test_account_tab.py) — these four
+    years carry no payments at all here, and exemption still holds."""
     from django.utils import timezone as djtz
 
     from payments import ledger
@@ -423,7 +426,7 @@ def test_requirement_met_members_need_no_new_year_decision(client, treasurer, me
         TuitionEnrollment.objects.create(
             user=member, tuition_period=tp,
             status=TuitionEnrollment.Status.COMMITTED, source="staff")
-    assert ledger.tuition_requirement_met(member) is True
+    assert ledger.tuition_decision_exempt(member) is True
     from registrations.views import _tuition_block_reason
     assert _tuition_block_reason(member, event=None) is None  # Gate 1 exempt
     resp = client.get(reverse("treasurer"))

@@ -119,8 +119,8 @@ def _tuition_block_reason(user, event) -> str | None:
     profile = getattr(user, "profile", None)
     if not (profile and profile.owes_tuition):
         return None
-    from payments.ledger import tuition_requirement_met
-    if tuition_requirement_met(user):
+    from payments.ledger import tuition_decision_exempt
+    if tuition_decision_exempt(user):
         return None  # four non-skipping years on record — no annual decision
     from payments.models import TuitionEnrollment, TuitionPeriod
     period = TuitionPeriod.current()

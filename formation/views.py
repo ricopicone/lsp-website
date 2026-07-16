@@ -299,7 +299,16 @@ def _formation_money_context(request) -> dict:
 
     # --- The unified account — computed once, everything below derives from it. ---
     acct = ledger.member_account(user)
-    requirement_met = ledger.tuition_requirement_met(user)
+    # "Requirement met" (the member-facing badge) means the four years are
+    # actually *paid* — payment-based, not enrollment-based. Keep this
+    # separate from decision-exemption (below): a member can have four
+    # non-skipping enrollments on record with money still owed, in which
+    # case they're exempt from a fifth-year decision but have NOT met the
+    # requirement (task #439 / Rico, 2026-07-16).
+    requirement_met = acct["tuition_years_covered"] >= acct["tuition_years_required"]
+    # Decision-exemption: four non-skipping years on record — no further
+    # annual tuition decision is asked for, regardless of payment status.
+    decision_exempt = ledger.tuition_decision_exempt(user)
 
     # --- Tuition (current year) ---
     period = TuitionPeriod.current()
@@ -357,6 +366,7 @@ def _formation_money_context(request) -> dict:
         # unified account (task #439) — statement/balance/tuition-years tile
         "acct": acct,
         "requirement_met": requirement_met,
+        "decision_exempt": decision_exempt,
         # tuition
         "owes_tuition": profile.owes_tuition,
         "tuition_period": period,

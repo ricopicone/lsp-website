@@ -111,9 +111,18 @@ def test_account_tab_pay_dues_button_absent_when_paid(client):
     assert "Dues paid" in body
 
 
-# ---- 4. Requirement-met exemption -------------------------------------------
+# ---- 4. Decision-exemption vs payment-based "requirement met" --------------
+#
+# task #439: `payments.ledger.tuition_decision_exempt` (>=4 non-skipping
+# enrollments) is the right rule for skipping the annual-decision nag but the
+# WRONG rule for the "Requirement met" badge, which must mean PAID
+# (`tuition_years_covered >= tuition_years_required`). A member can be
+# decision-exempt with money still owed on those four years — see Rico's
+# case below.
 
-def _mint_four_tuition_years(member):
+def _mint_four_tuition_years(member, paid_years=0):
+    """Mint 4 non-skipping $800 tuition enrollments; optionally pay the
+    oldest `paid_years` of them off in full."""
     for y in (2020, 2021, 2022, 2023):
         tp = TuitionPeriod.objects.create(
             name=f"AY {y}–{y + 1}", slug=f"ay-{y}-{y + 1}-reqmet-test",
@@ -124,26 +133,62 @@ def _mint_four_tuition_years(member):
             user=member, tuition_period=tp,
             status=TuitionEnrollment.Status.COMMITTED,
         )
+    if paid_years:
+        Payment.objects.create(
+            user=member, payment_type=Payment.Type.TUITION,
+            amount=Decimal("800.00") * paid_years,
+            status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+            paid_at=timezone.now(),
+        )
 
 
-def test_requirement_met_hides_decision_form_on_tuition_tab(client):
-    member = _user("reqmet@x.test")
+def test_decision_exempt_hides_decision_form_on_tuition_tab(client):
+    """4 non-skipping years, none paid: exempt from a fifth-year decision —
+    but NOT "requirement met" (that's payment-based), so the quiet
+    exemption note shows, not the paid-in-full notice."""
+    member = _user("decexempt@x.test")
     _mint_four_tuition_years(member)
     client.force_login(member)
     body = client.get(reverse("formation:formation") + "?tab=tuition").content.decode()
-    assert "no further annual decision is needed" in body
+    assert "No annual tuition decision is needed, four years are on record." in body
     assert "Record decision" not in body
+    assert "Requirement met" not in body
 
 
-def test_requirement_met_badge_on_account_tile(client):
+def test_requirement_met_badge_on_account_tile_when_paid(client):
+    """The badge is payment-based: all four years fully paid off."""
     member = _user("reqmet2@x.test")
-    _mint_four_tuition_years(member)
+    _mint_four_tuition_years(member, paid_years=4)
     client.force_login(member)
     body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
     assert "Requirement met" in body
 
 
-def test_not_requirement_met_still_shows_decision_form(client, db):
+def test_partial_coverage_rico_case_no_badge_but_decision_exempt(client):
+    """Rico's case: 4 non-skipping enrollments, only 3 years' worth paid.
+    Account tile shows progress (3 of 4) with NO "Requirement met" badge;
+    the tuition-tab decision form stays hidden (still decision-exempt);
+    Gate 1 (registrations._tuition_block_reason) does not block."""
+    member = _user("rico@x.test")
+    _mint_four_tuition_years(member, paid_years=3)
+    client.force_login(member)
+
+    account_body = client.get(
+        reverse("formation:formation") + "?tab=account").content.decode()
+    assert "3 of 4" in account_body
+    assert "Requirement met" not in account_body
+
+    tuition_body = client.get(
+        reverse("formation:formation") + "?tab=tuition").content.decode()
+    assert "Record decision" not in tuition_body
+    assert ("No annual tuition decision is needed, four years are on record."
+            in tuition_body)
+
+    from registrations.views import _tuition_block_reason
+    assert _tuition_block_reason(member, event=None) is None
+
+
+def test_not_decision_exempt_still_shows_decision_form(client, db):
     member = _user("notreqmet@x.test")
     if TuitionPeriod.current() is None:
         TuitionPeriod.objects.create(
@@ -154,7 +199,7 @@ def test_not_requirement_met_still_shows_decision_form(client, db):
     client.force_login(member)
     body = client.get(reverse("formation:formation") + "?tab=tuition").content.decode()
     assert "Record decision" in body
-    assert "no further annual decision is needed" not in body
+    assert "No annual tuition decision is needed" not in body
 
 
 # ---- 5. Tab list -------------------------------------------------------------

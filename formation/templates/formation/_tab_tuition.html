@@ -64,7 +64,7 @@
           Students skipping a year still pay the regular per-event fee.</p>
       </div>
 
-      {% if tuition_enrollment and not requirement_met %}
+      {% if tuition_enrollment and not decision_exempt %}
       <div class="rounded-lg border border-primary/30 bg-primary/5 px-5 py-4 text-sm">
         <p>Current decision for {{ tuition_period.name }}:
           <strong>{% if tuition_decision_label %}{{ tuition_decision_label }}{% else %}{{ tuition_enrollment.get_status_display }}{% endif %}</strong>
@@ -75,7 +75,11 @@
 
       {% if requirement_met %}
       <div class="rounded-lg border border-success/30 bg-success/5 px-5 py-4 text-sm">
-        You have four tuition years on record, no further annual decision is needed.
+        Your tuition requirement is met, four years are paid in full. No further annual decision is needed.
+      </div>
+      {% elif decision_exempt %}
+      <div class="rounded-lg border border-base-300 bg-base-200/40 px-5 py-4 text-sm text-base-content/70">
+        No annual tuition decision is needed, four years are on record.
       </div>
       {% endif %}
 
@@ -144,7 +148,7 @@
       {% endif %}
       {% endif %}
 
-      {% if not requirement_met %}
+      {% if not decision_exempt %}
       <form method="post" action="{% url 'tuition' %}" class="space-y-4 rounded-lg border border-base-300 p-5">
         {% csrf_token %}
         <fieldset class="space-y-2">
