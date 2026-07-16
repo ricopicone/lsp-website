@@ -640,7 +640,7 @@ def test_treasurer_tuition_set_status_records_skipping(
     enr = TuitionEnrollment.objects.get(user=u, tuition_period=current_period)
     assert enr.status == TuitionEnrollment.Status.SKIPPING
     # Audit trail recorded in notes.
-    assert "set status to Skipping" in enr.notes
+    assert "status to Skipping" in enr.notes   # note names the year now
     assert staff_user.email in enr.notes
 
 

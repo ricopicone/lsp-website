@@ -343,3 +343,88 @@ def test_record_tuition_payment_over_skipping_appends_audit_note(
     assert enr.status == TuitionEnrollment.Status.PAID_IN_FULL
     assert "tr2@x.test" in enr.notes
     assert "Skipping" in enr.notes  # records what the status was changed from
+
+
+def test_set_tuition_status_for_any_year(client, treasurer, member):
+    """The treasurer can record or toggle a decision for ANY year, not just
+    the current one — an explicit period id targets that year (task #439)."""
+    from payments.models import TuitionEnrollment, TuitionPeriod
+    past = TuitionPeriod.objects.create(
+        name="AY 2022-2023", slug="t-2022-any", start_date=date(2022, 9, 1),
+        end_date=date(2023, 8, 31), decision_due_date=date(2022, 8, 31),
+        tuition_amount=Decimal("2000"))
+    resp = client.post(
+        reverse("treasurer_tuition_set_status", args=[member.id]),
+        {"status": "skipping", "period": str(past.id)})
+    assert resp.status_code == 302
+    enr = TuitionEnrollment.objects.get(user=member, tuition_period=past)
+    assert enr.status == TuitionEnrollment.Status.SKIPPING
+    assert "AY 2022-2023" in enr.notes or "tr2@x.test" in enr.notes
+    # toggle it back
+    client.post(reverse("treasurer_tuition_set_status", args=[member.id]),
+                {"status": "committed", "period": str(past.id)})
+    enr.refresh_from_db()
+    assert enr.status == TuitionEnrollment.Status.COMMITTED
+    # charges follow the decision via the sync
+    from payments.models import Charge
+    assert Charge.objects.filter(
+        user=member, tuition_period=past, status=Charge.Status.OPEN).exists()
+
+
+def test_set_tuition_status_invalid_period_refused(client, treasurer, member):
+    from payments.models import TuitionEnrollment
+    client.post(reverse("treasurer_tuition_set_status", args=[member.id]),
+                {"status": "skipping", "period": "999999"})
+    assert TuitionEnrollment.objects.filter(user=member).count() == 0
+
+
+def test_member_page_offers_add_year_and_all_year_toggles(client, treasurer, member):
+    from payments.models import TuitionEnrollment, TuitionPeriod
+    past = TuitionPeriod.objects.create(
+        name="AY 2021-2022", slug="t-2021-any", start_date=date(2021, 9, 1),
+        end_date=date(2022, 8, 31), decision_due_date=date(2021, 8, 31),
+        tuition_amount=Decimal("2000"))
+    TuitionPeriod.objects.create(
+        name="AY 2020-2021", slug="t-2020-any", start_date=date(2020, 9, 1),
+        end_date=date(2021, 8, 31), decision_due_date=date(2020, 8, 31),
+        tuition_amount=Decimal("2000"))
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=past,
+        status=TuitionEnrollment.Status.COMMITTED, source="staff")
+    content = client.get(
+        reverse("treasurer_member_detail", args=[member.id])).content.decode()
+    assert "Add year" in content
+    assert "AY 2020-2021" in content          # unenrolled year offered
+    # the past year's row carries toggle buttons (period-targeted form)
+    assert f'value="{past.id}"' in content
+
+
+def test_requirement_met_members_need_no_new_year_decision(client, treasurer, member):
+    """Four non-skipping years on record: no Gate-1 registration block, no
+    Undecided listing — a fifth-year decision is never demanded (task #439)."""
+    from django.utils import timezone as djtz
+
+    from payments import ledger
+    from payments.models import TuitionEnrollment, TuitionPeriod
+    today = djtz.now().date()
+    start = today.year if today.month >= 9 else today.year - 1
+    # current period exists but the member has NO decision for it
+    TuitionPeriod.objects.create(
+        name=f"AY {start}-{start + 1}", slug=f"t-{start}-met",
+        start_date=date(start, 9, 1), end_date=date(start + 1, 8, 31),
+        decision_due_date=date(start, 8, 31), tuition_amount=Decimal("2000"))
+    for i in range(4):
+        tp = TuitionPeriod.objects.create(
+            name=f"AY {start - 4 + i}-{start - 3 + i}", slug=f"t-met-{i}",
+            start_date=date(start - 4 + i, 9, 1),
+            end_date=date(start - 3 + i, 8, 31),
+            decision_due_date=date(start - 4 + i, 8, 31),
+            tuition_amount=Decimal("2000"))
+        TuitionEnrollment.objects.create(
+            user=member, tuition_period=tp,
+            status=TuitionEnrollment.Status.COMMITTED, source="staff")
+    assert ledger.tuition_requirement_met(member) is True
+    from registrations.views import _tuition_block_reason
+    assert _tuition_block_reason(member, event=None) is None  # Gate 1 exempt
+    resp = client.get(reverse("treasurer"))
+    assert member not in resp.context["attention"]["undecided"]
