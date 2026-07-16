@@ -1335,8 +1335,9 @@ def treasurer_payment_assign(request, payment_id: int):
 def treasurer_payment_retype(request, payment_id: int):
     """Re-categorize a payment (treasurer override — donation flips allowed).
 
-    The member-side path (my_payments_update) deliberately blocks
-    donation↔non-donation; this is the audited staff counterpart."""
+    The member's own statement action (``my_payment_retype``, task #439)
+    also allows donation flips now (full parity); this is the audited
+    staff counterpart, VERIFIED-provenance and unscoped to any one member."""
     from accounts.models import Source
 
     payment = get_object_or_404(Payment, pk=payment_id)
@@ -1929,17 +1930,6 @@ def _handle_charge_refunded(charge: dict) -> None:
             void_registration_charge(payment.registration, "Stripe refund (webhook).")
 
 
-def _tuition_tab_url(**params) -> str:
-    """The tuition tab of the member's Formation hub — where tuition lives now.
-    Extra params (e.g. ``stripe='success'``) ride along."""
-    from urllib.parse import urlencode
-
-    from django.urls import reverse
-
-    query = {"tab": "tuition", **{k: v for k, v in params.items() if v}}
-    return reverse("formation:formation") + "?" + urlencode(query)
-
-
 def _account_tab_url(**params) -> str:
     """The Account tab of the member's My LSP hub — where the member
     statement actions (retype/split/note, task #439) return to."""
@@ -1973,7 +1963,7 @@ def tuition_decision(request):
             messages.success(request, "Your tuition decision has been recorded.")
         else:
             messages.error(request, "Please choose one of the listed options.")
-    return redirect(_tuition_tab_url())
+    return redirect(_account_tab_url())
 
 
 @login_required
@@ -1988,19 +1978,19 @@ def tuition_pay_in_full(request):
     """
     profile = request.user.profile
     if not profile.owes_tuition:
-        return redirect(_tuition_tab_url())
+        return redirect(_account_tab_url())
     period = TuitionPeriod.current()
     if period is None:
-        return redirect(_tuition_tab_url())
+        return redirect(_account_tab_url())
     enrollment = TuitionEnrollment.objects.filter(
         user=request.user, tuition_period=period,
     ).first()
     if enrollment is None:
-        return redirect(_tuition_tab_url())
+        return redirect(_account_tab_url())
     if enrollment.installments.exists():
         # Already on a payment plan / has installments — direct to pay one
         # rather than minting a parallel "full" installment.
-        return redirect(_tuition_tab_url())
+        return redirect(_account_tab_url())
     with transaction.atomic():
         installment = TuitionInstallment.objects.create(
             enrollment=enrollment, sequence=1,
@@ -2030,23 +2020,23 @@ def tuition_setup_plan(request):
     """
     profile = request.user.profile
     if not profile.owes_tuition:
-        return redirect(_tuition_tab_url())
+        return redirect(_account_tab_url())
     period = TuitionPeriod.current()
     if period is None:
-        return redirect(_tuition_tab_url())
+        return redirect(_account_tab_url())
     enrollment = TuitionEnrollment.objects.filter(
         user=request.user, tuition_period=period,
     ).first()
     if enrollment is None or enrollment.status != TuitionEnrollment.Status.PAYMENT_PLAN:
-        return redirect(_tuition_tab_url())
+        return redirect(_account_tab_url())
     if enrollment.installments.exists():
-        return redirect(_tuition_tab_url())
+        return redirect(_account_tab_url())
     try:
         count = int(request.POST.get("installment_count", "0"))
     except (TypeError, ValueError):
-        return redirect(_tuition_tab_url())
+        return redirect(_account_tab_url())
     if count not in (2, 9):
-        return redirect(_tuition_tab_url())
+        return redirect(_account_tab_url())
 
     schedule = _build_installment_schedule(period, count)
     with transaction.atomic():
@@ -2055,7 +2045,7 @@ def tuition_setup_plan(request):
                 enrollment=enrollment, sequence=seq,
                 due_date=due_date, amount=amount,
             )
-    return redirect(_tuition_tab_url())
+    return redirect(_account_tab_url())
 
 
 def _build_installment_schedule(
@@ -2108,7 +2098,7 @@ def tuition_pay_installment(request, installment_id: int):
         pk=installment_id, enrollment__user=request.user,
     )
     if installment.paid:
-        return redirect(_tuition_tab_url())
+        return redirect(_account_tab_url())
     with transaction.atomic():
         payment = Payment.objects.create(
             payment_type=Payment.Type.TUITION,
@@ -2120,86 +2110,6 @@ def tuition_pay_installment(request, installment_id: int):
         )
     session = create_tuition_session(payment)
     return redirect(session.url)
-
-
-@login_required
-@require_POST
-def my_payments_update(request):
-    """A member edits their *own* payments from the My Payments table: the
-    **type** (re-categorizing e.g. a provisional/ASSUMED charge — promoted to
-    ``SELF_REPORTED``), a **note** the treasurer can see (``member_note``), and —
-    for tuition payments — the **academic year** it counts toward
-    (``tuition_period``, resolving an ambiguous August date). Per-row fields
-    ``type_<id>`` / ``note_<id>`` / ``period_<id>``; constrained to the member's
-    own payments so a stale/forged id can't touch anyone else's."""
-    from accounts.models import Source
-
-    periods = {str(tp.id): tp for tp in TuitionPeriod.objects.all()}
-    changed = 0
-    blocked_donation_retype = False
-    blocked_split_retype = False
-    for p in Payment.objects.filter(user=request.user):
-        fields = []
-
-        new_type = request.POST.get(f"type_{p.id}")
-        if (new_type in Payment.Type.values and new_type != p.payment_type
-                and (p.split_from_id or p.split_parts.exists())):
-            # Split rows are treasurer-constructed bookkeeping; a member
-            # re-typing one part would silently desync the family.
-            blocked_split_retype = True
-            new_type = None
-        if new_type in Payment.Type.values and new_type != p.payment_type:
-            is_donation_flip = (
-                new_type == Payment.Type.DONATION
-                or p.payment_type == Payment.Type.DONATION
-            )
-            if is_donation_flip:
-                # Donations are excluded from the ledger pot (ledger._counts)
-                # — flipping to/from DONATION moves money into or out of the
-                # member's own balance. That needs treasurer review, not
-                # self-service.
-                blocked_donation_retype = True
-            else:
-                p.payment_type = new_type
-                p.source = Source.SELF_REPORTED
-                fields += ["payment_type", "source"]
-
-        note_key = f"note_{p.id}"
-        if note_key in request.POST:
-            note = (request.POST.get(note_key) or "").strip()[:1000]
-            if p.member_note != note:
-                p.member_note = note
-                fields.append("member_note")
-
-        period_key = f"period_{p.id}"
-        if period_key in request.POST:
-            new_period = periods.get(request.POST.get(period_key) or "")
-            new_period_id = new_period.id if new_period else None
-            if p.tuition_period_id != new_period_id:
-                p.tuition_period_id = new_period_id
-                fields.append("tuition_period")
-
-        if fields:
-            p.save(update_fields=fields)
-            changed += 1
-
-    if blocked_donation_retype:
-        messages.error(
-            request,
-            "To reclassify a donation, or reclassify a payment as a "
-            "donation, contact the treasurer.",
-        )
-    if blocked_split_retype:
-        messages.error(
-            request,
-            "One of these payments was split by the treasurer, so its "
-            "category can only be changed by the treasurer.",
-        )
-    if changed:
-        messages.success(request, f"Saved {changed} payment update(s).")
-    elif not blocked_donation_retype and not blocked_split_retype:
-        messages.success(request, "No changes to save.")
-    return redirect(_tuition_tab_url())
 
 
 @login_required

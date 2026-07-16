@@ -153,8 +153,6 @@ urlpatterns = [
     path("tuition/setup-plan/", _payment_views.tuition_setup_plan, name="tuition_setup_plan"),
     path("tuition/installments/<int:installment_id>/pay/",
          _payment_views.tuition_pay_installment, name="tuition_pay_installment"),
-    path("payments/my/update/", _payment_views.my_payments_update,
-         name="my_payments_update"),
     path("payments/my/<int:payment_id>/retype/",
          _payment_views.my_payment_retype, name="my_payment_retype"),
     path("payments/my/<int:payment_id>/split/",

@@ -81,6 +81,38 @@ def test_member_safety_hides_treasurer_notes(client):
     assert charge.notes == "TREASURER-EYES-ONLY-MARKER"  # sanity: same row
 
 
+def test_member_safety_hides_treasurer_notes_with_statement_actions_rendered(client):
+    """Same leakage guard, extended to the statement-action modals (task
+    #439): a retype/split/note-eligible row (no registration, succeeded,
+    not split) exercises the real render path — the modals must render
+    (sanity the assertion below isn't vacuous) without ever leaking
+    Payment.notes/Charge.notes or the provenance ``source`` label."""
+    from accounts.models import Source
+
+    member = _user("safety2@x.test")
+    Charge.objects.create(
+        user=member, category=Charge.Category.DUES, amount=Decimal("50.00"),
+        effective_date=date(2026, 9, 1), notes="TREASURER-EYES-ONLY-MARKER-2",
+    )
+    Payment.objects.create(
+        user=member, payment_type=Payment.Type.DUES, amount=Decimal("10.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        notes="TREASURER-EYES-ONLY-MARKER-2", source=Source.VERIFIED,
+        paid_at=timezone.now(),
+    )
+
+    client.force_login(member)
+    body = client.get(
+        reverse("formation:formation") + "?tab=account").content.decode()
+    # Sanity: the statement actions actually rendered for this row.
+    assert 'title="Re-categorize"' in body
+    assert 'title="Split across categories"' in body
+    assert 'title="Note"' in body
+    # The leakage guard itself.
+    assert "TREASURER-EYES-ONLY-MARKER-2" not in body
+    assert "Verified against records" not in body
+
+
 # ---- 3. Dues pay button gating ----------------------------------------------
 
 def test_account_tab_pay_dues_button_present_when_unpaid(client):
@@ -142,14 +174,14 @@ def _mint_four_tuition_years(member, paid_years=0):
         )
 
 
-def test_decision_exempt_hides_decision_form_on_tuition_tab(client):
+def test_decision_exempt_hides_decision_form_on_account_tab(client):
     """4 non-skipping years, none paid: exempt from a fifth-year decision —
     but NOT "requirement met" (that's payment-based), so the quiet
     exemption note shows, not the paid-in-full notice."""
     member = _user("decexempt@x.test")
     _mint_four_tuition_years(member)
     client.force_login(member)
-    body = client.get(reverse("formation:formation") + "?tab=tuition").content.decode()
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
     assert "No annual tuition decision is needed, four years are on record." in body
     assert "Record decision" not in body
     assert "Requirement met" not in body
@@ -177,12 +209,9 @@ def test_partial_coverage_rico_case_no_badge_but_decision_exempt(client):
         reverse("formation:formation") + "?tab=account").content.decode()
     assert "3 of 4" in account_body
     assert "Requirement met" not in account_body
-
-    tuition_body = client.get(
-        reverse("formation:formation") + "?tab=tuition").content.decode()
-    assert "Record decision" not in tuition_body
+    assert "Record decision" not in account_body
     assert ("No annual tuition decision is needed, four years are on record."
-            in tuition_body)
+            in account_body)
 
     from registrations.views import _tuition_block_reason
     assert _tuition_block_reason(member, event=None) is None
@@ -197,24 +226,143 @@ def test_not_decision_exempt_still_shows_decision_form(client, db):
             end_date=timezone.now().date(), tuition_amount=Decimal("800.00"),
         )
     client.force_login(member)
-    body = client.get(reverse("formation:formation") + "?tab=tuition").content.decode()
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
     assert "Record decision" in body
     assert "No annual tuition decision is needed" not in body
 
 
 # ---- 5. Tab list -------------------------------------------------------------
 
-def test_available_tabs_shows_my_account_not_dues():
+def test_available_tabs_shows_account_not_dues_or_tuition():
     u = _user("tablist@x.test")
-    tabs = available_tabs(u, tuition=True, account=True)
-    assert ("account", "My account") in tabs
+    tabs = available_tabs(u, account=True)
+    assert ("account", "Account") in tabs
     assert not any(key == "dues" for key, _ in tabs)
+    assert not any(key == "tuition" for key, _ in tabs)
 
 
-def test_formation_page_tab_bar_shows_my_account(client):
+def test_formation_page_tab_bar_shows_account(client):
     member = _user("tabbar@x.test")
     client.force_login(member)
     body = client.get(reverse("formation:formation")).content
     assert b'href="?tab=account"' in body
-    assert b">My account<" in body
+    assert b">Account<" in body
     assert b'href="?tab=dues"' not in body
+    assert b'href="?tab=tuition"' not in body
+
+
+def test_old_tab_tuition_link_falls_back_to_account(client):
+    """An old bookmarked/emailed ?tab=tuition link (the Tuition tab is
+    retired, task #439) lands on the Account tab rather than 404ing or
+    silently falling through to the Formation tab."""
+    member = _user("oldlink@x.test")
+    client.force_login(member)
+    resp = client.get(reverse("formation:formation") + "?tab=tuition")
+    assert resp.status_code == 200
+    assert resp.context["active_tab"] == "account"
+
+
+def test_old_tab_tuition_link_falls_back_to_formation_when_no_money_tab(client):
+    """If the member doesn't have the Account tab at all (no obligation, no
+    history), the ?tab=tuition fallback still degrades gracefully to the
+    default Formation tab rather than landing on an unavailable tab."""
+    member = _user("oldlink2@x.test", role=Profile.Role.MEMBER)
+    client.force_login(member)
+    resp = client.get(reverse("formation:formation") + "?tab=tuition")
+    assert resp.status_code == 200
+    assert resp.context["active_tab"] == "formation"
+
+
+# ---- 6. Decision form lives inside the Account tab ---------------------------
+
+def test_decision_form_posts_from_within_account_tab(client, db):
+    """The tuition decision form (moved verbatim from the retired Tuition
+    tab) still works when it's POSTed from inside the Account tab."""
+    from payments.models import TuitionPeriod
+
+    member = _user("decideacct@x.test")
+    if TuitionPeriod.current() is None:
+        TuitionPeriod.objects.create(
+            name="Test AY", slug="test-ay-decideacct",
+            start_date=timezone.now().date(), decision_due_date=timezone.now().date(),
+            end_date=timezone.now().date(), tuition_amount=Decimal("800.00"),
+        )
+    client.force_login(member)
+    resp = client.post(reverse("tuition"), {"status": "committed"})
+    assert resp.status_code == 302
+    assert "tab=account" in resp.url
+
+    enr = TuitionEnrollment.objects.get(user=member)
+    assert enr.status == TuitionEnrollment.Status.COMMITTED
+
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+    assert "Committed" in body
+
+
+# ---- 7. Statement actions — retype/split/note buttons on own rows ----------
+
+def test_statement_actions_render_on_own_payment_rows(client):
+    member = _user("actions@x.test")
+    Payment.objects.create(
+        user=member, payment_type=Payment.Type.DONATION, amount=Decimal("40.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        paid_at=timezone.now(),
+    )
+    client.force_login(member)
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+    assert 'title="Re-categorize"' in body
+    assert 'title="Split across categories"' in body
+    assert 'title="Note"' in body
+    assert reverse("my_payment_note", args=[Payment.objects.get(user=member).id]) in body
+
+
+def test_statement_actions_hidden_on_registration_settling_payment(client):
+    """Retype and split are refused for registration-settling payments (the
+    registration owns that link) — the buttons don't even render."""
+    from events.models import Audience, Event, PriceTier
+    from registrations.models import Registration
+
+    member = _user("actionsreg@x.test")
+    event = Event.objects.create(
+        title="Gated Seminar", slug="gated-seminar-acct",
+        start_date=date(2026, 9, 1), end_date=date(2026, 12, 15),
+    )
+    tier = PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal("50"))
+    registration = Registration.objects.create(
+        user=member, event=event, price_tier=tier,
+        quoted_amount=Decimal("50"), status=Registration.Status.PAID)
+    payment = Payment.objects.create(
+        user=member, payment_type=Payment.Type.REGISTRATION, amount=Decimal("50"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        registration=registration, paid_at=timezone.now(),
+    )
+    client.force_login(member)
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+    assert 'title="Re-categorize"' not in body
+    assert 'title="Split across categories"' not in body
+    # The note action is still available (it's payment-only, not
+    # registration-gated).
+    assert reverse("my_payment_note", args=[payment.id]) in body
+
+
+def test_split_action_hidden_when_already_split(client):
+    """A split row's Split button is hidden (a split row can't be
+    re-split); its Re-categorize button stays available (full parity —
+    task #439 deliberately allows a member to re-categorize their own
+    split children)."""
+    parent = Payment.objects.create(
+        user=_user("actionssplit@x.test"), payment_type=Payment.Type.TUITION,
+        amount=Decimal("400.00"), status=Payment.Status.SUCCEEDED,
+        method=Payment.Method.OFFLINE, paid_at=timezone.now(),
+    )
+    child = Payment.objects.create(
+        user=parent.user, payment_type=Payment.Type.DUES, amount=Decimal("150.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        split_from=parent, paid_at=parent.paid_at,
+    )
+    client.force_login(parent.user)
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+    assert body.count('title="Re-categorize"') == 2   # parent + child
+    assert body.count('title="Split across categories"') == 0
+    assert reverse("my_payment_note", args=[child.id]) in body

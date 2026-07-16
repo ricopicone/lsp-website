@@ -20,7 +20,7 @@
       {% if owes_tuition %}
       <li class="flex items-center justify-between gap-4 rounded-lg border border-base-300 bg-base-200/40 px-4 py-3">
         <span class="text-base-content">Tuition for this academic year</span>
-        <a href="{% url 'formation:formation' %}?tab=tuition" class="btn btn-primary btn-sm">Manage tuition</a>
+        <a href="{% url 'formation:formation' %}?tab=account" class="btn btn-primary btn-sm">Manage tuition</a>
       </li>
       {% endif %}
     </ul>
@@ -37,7 +37,7 @@
         <div class="font-medium text-base-content">Dues</div>
         <p class="text-sm text-base-content/70 mt-1">Pay your annual membership dues.</p>
       </a>
-      <a href="{% url 'formation:formation' %}?tab=tuition" class="block rounded-lg border border-base-300 bg-base-100 p-4 hover:border-primary transition-colors">
+      <a href="{% url 'formation:formation' %}?tab=account" class="block rounded-lg border border-base-300 bg-base-100 p-4 hover:border-primary transition-colors">
         <div class="font-medium text-base-content">Tuition</div>
         <p class="text-sm text-base-content/70 mt-1">Your tuition decision, plan, and payments.</p>
       </a>

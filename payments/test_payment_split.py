@@ -276,20 +276,11 @@ def test_webhook_refund_cascades_to_split_siblings(client, treasurer):
     assert "split charge" in child.notes
 
 
-def test_member_cannot_retype_split_rows(client, treasurer):
-    m = _member("sp12@x.test")
-    p = _payment(m, amount="400")
-    _split(client, p, [("dues", "150"), ("registration", "250")])
-    child = Payment.objects.get(split_from=p)
-    client.force_login(m)
-    client.post(reverse("my_payments_update"), {
-        f"type_{p.id}": "registration",
-        f"type_{child.id}": "dues",
-    })
-    p.refresh_from_db()
-    child.refresh_from_db()
-    assert p.payment_type == Payment.Type.DUES         # unchanged
-    assert child.payment_type == Payment.Type.REGISTRATION
+# The retired My Payments table's split-row retype block
+# (test_member_cannot_retype_split_rows, which posted to my_payments_update)
+# is gone (task #439) — full parity now deliberately ALLOWS a member to
+# re-categorize their own split children, the opposite outcome. See
+# test_my_payment_actions.py::test_retype_split_child_allowed_for_own_row.
 
 
 def test_resend_receipt_refused_on_split_parent(client, treasurer):

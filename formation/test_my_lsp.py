@@ -28,7 +28,7 @@ def test_available_tabs_candidate_full_order():
     keys = [k for k, _ in available_tabs(u)]
     assert keys == [
         "formation", "groups", "events", "works",
-        "tuition", "account", "proposals", "profile",
+        "account", "proposals", "profile",
     ]
 
 
@@ -184,19 +184,21 @@ def test_link_absent_when_doc_unset(client):
     assert client.get(reverse("formation:formation")).context["formation_doc"] is None
 
 
-# ---- My Payments ordering --------------------------------------------------
+# ---- Statement ordering -----------------------------------------------------
 
-def test_my_payments_ordered_by_displayed_date():
-    """The table shows paid_at (falling back to created_at); the rows must be
-    ordered by that same date, newest first — not by created_at alone. A
+def test_statement_ordered_by_paid_at_not_created_at():
+    """The Account tab statement (``payments.ledger.member_account``) orders
+    its lines chronologically (oldest first) off each line's displayed
+    date — paid_at, falling back to created_at — not created_at alone. A
     backfilled offline payment is entered (created) after a newer Stripe
-    payment but paid earlier, so created_at and the displayed date diverge."""
+    payment but paid earlier, so created_at and the displayed date diverge
+    (ported from the retired My Payments table's ordering test, task #439)."""
     from datetime import datetime
     from datetime import timezone as tz
 
     from django.utils import timezone
 
-    from formation.views import _formation_money_context
+    from payments import ledger
     from payments.models import Payment
 
     u = _user("pay@x.test", role=Profile.Role.ANALYST)
@@ -221,14 +223,11 @@ def test_my_payments_ordered_by_displayed_date():
     # The recent charge was created earlier but paid in July.
     recent = _mk("60.00", created_at=datetime(2026, 6, 20, tzinfo=tz.utc), paid_at=new_paid)
 
-    rf = RequestFactory()
-    request = rf.get("/my/?tab=dues")
-    request.user = u
-    ctx = _formation_money_context(request)
-
-    ids = [p.id for p in ctx["my_payments"]]
-    # Newest displayed date (July, the recent payment) must come first.
-    assert ids == [recent.id, backfill.id]
+    acct = ledger.member_account(u)
+    ids = [ln["obj"].id for ln in acct["lines"] if ln["kind"] == "payment"]
+    # Chronological order (oldest first, the statement's convention) driven
+    # by paid_at, not created_at.
+    assert ids == [backfill.id, recent.id]
 
 
 # ---- legacy redirects ------------------------------------------------------
