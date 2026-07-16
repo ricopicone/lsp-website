@@ -169,16 +169,17 @@
                         onsubmit="return confirm('Waive this {{ ln.obj.amount|usd }} charge? It stops counting toward what is owed but stays visible for audit.');">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="waive">
-                    <button type="submit" class="btn btn-ghost btn-xs">Waive</button>
+                    <button type="submit" class="btn btn-ghost btn-xs" title="Waive" aria-label="Waive">{% icon "eraser" %}</button>
                   </form>
                   <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents"
                         onsubmit="return confirm('Void this charge? It will be removed from the running balance.');">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="void">
-                    <button type="submit" class="btn btn-ghost btn-xs text-error">Void</button>
+                    <button type="submit" class="btn btn-ghost btn-xs text-error" title="Void" aria-label="Void">{% icon "x" %}</button>
                   </form>
                   <button type="button" class="btn btn-ghost btn-xs"
-                          onclick="document.getElementById('adjust-{{ ln.obj.id }}').showModal()">Adjust</button>
+                          title="Adjust amount" aria-label="Adjust amount"
+                          onclick="document.getElementById('adjust-{{ ln.obj.id }}').showModal()">{% icon "pencil" %}</button>
                   <dialog id="adjust-{{ ln.obj.id }}" class="modal">
                     <div class="modal-box max-w-xs whitespace-normal text-left">
                       <h3 class="font-serif text-lg mb-3">Adjust charge amount</h3>
@@ -202,7 +203,7 @@
                         onsubmit="return confirm('Reopen this charge? It counts toward what is owed again.');">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="reopen">
-                    <button type="submit" class="btn btn-ghost btn-xs">Reopen</button>
+                    <button type="submit" class="btn btn-ghost btn-xs" title="Reopen" aria-label="Reopen">{% icon "rotate-ccw" %}</button>
                   </form>
                   {% endif %}
                 {% else %}
