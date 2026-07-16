@@ -348,3 +348,70 @@ def test_requires_staff(client, member):
     assert resp.status_code in (302, 403)
     payment.refresh_from_db()
     assert payment.payment_type == Payment.Type.DONATION
+
+
+def _settle_member(email):
+    u = User.objects.create_user(email=email, password="x")
+    u.profile.role = "candidate"
+    u.profile.save()
+    return u
+
+
+def _settle_payment(user, ptype, amount):
+    from datetime import datetime
+    from datetime import timezone as tz
+    p = Payment.objects.create(
+        user=user, payment_type=ptype, amount=Decimal(amount),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE)
+    Payment.objects.filter(pk=p.pk).update(
+        paid_at=datetime(2026, 1, 10, 12, tzinfo=tz.utc))
+    p.refresh_from_db()
+    return p
+
+
+def test_retype_with_settle_mints_matching_charge(client, treasurer):
+    """The honor-system case: a 'tuition' payment that was really an event fee
+    re-categorizes to Registration WITH a matching settlement charge, netting
+    to zero instead of phantom credit (task #439)."""
+    from payments import ledger
+    from payments.models import Charge
+
+    m = _settle_member("settle@x.test")
+    p = _settle_payment(m, Payment.Type.TUITION, "250")
+    resp = client.post(
+        reverse("treasurer_payment_retype", args=[p.id]),
+        {"payment_type": "registration", "settle_charge": "1"})
+    assert resp.status_code == 302
+    p.refresh_from_db()
+    assert p.payment_type == Payment.Type.REGISTRATION
+    c = Charge.objects.get(user=m, category=Charge.Category.REGISTRATION)
+    assert c.amount == Decimal("250")
+    assert c.effective_date == p.paid_at.date()
+    assert c.staff_adjusted is True
+    assert f"payment #{p.pk}" in c.notes
+    assert "never" in c.notes                     # "never recorded" rationale
+    acct = ledger.member_account(m)
+    assert acct["balance"] == Decimal("0")        # nets to zero, no credit
+
+
+def test_settle_refused_for_non_registration_target(client, treasurer):
+    from payments.models import Charge
+
+    m = _settle_member("settle2@x.test")
+    p = _settle_payment(m, Payment.Type.DONATION, "100")
+    client.post(reverse("treasurer_payment_retype", args=[p.id]),
+                {"payment_type": "dues", "settle_charge": "1"})
+    p.refresh_from_db()
+    assert p.payment_type == Payment.Type.DONATION   # whole action refused
+    assert Charge.objects.filter(user=m).count() == 0
+
+
+def test_settle_refused_without_member(client, treasurer):
+    from payments.models import Charge
+
+    p = _settle_payment(None, Payment.Type.DONATION, "60")
+    client.post(reverse("treasurer_payment_retype", args=[p.id]),
+                {"payment_type": "registration", "settle_charge": "1"})
+    p.refresh_from_db()
+    assert p.payment_type == Payment.Type.DONATION
+    assert Charge.objects.count() == 0

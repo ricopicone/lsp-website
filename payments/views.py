@@ -987,6 +987,21 @@ def treasurer_payment_retype(request, payment_id: int):
             "the Reconcile tab first.",
         )
         return _safe_next(request, "treasurer_payments")
+    settle = bool(request.POST.get("settle_charge"))
+    if settle and new_type != Payment.Type.REGISTRATION:
+        messages.error(
+            request,
+            "The settle option applies only when re-categorizing to "
+            "Registration.",
+        )
+        return _safe_next(request, "treasurer_payments")
+    if settle and payment.user_id is None:
+        messages.error(
+            request,
+            "This payment has no member attached. Link it to a member on "
+            "the Reconcile tab first.",
+        )
+        return _safe_next(request, "treasurer_payments")
 
     flash = None
     with transaction.atomic():
@@ -1034,6 +1049,25 @@ def treasurer_payment_retype(request, payment_id: int):
         payment.save()
 
         flash = f"Re-categorized as {labels[new_type]}."
+        if settle:
+            # Honor-system era: the event fee this payment settled was never
+            # recorded as a charge. Insert the matching charge dated with the
+            # payment so the pair nets to zero exactly where it sits in the
+            # statement — no phantom credit, no invented debt.
+            Charge.objects.create(
+                user_id=payment.user_id,
+                category=Charge.Category.REGISTRATION,
+                amount=payment.amount,
+                effective_date=when,
+                source=Source.STAFF,
+                staff_adjusted=True,
+                notes=(f"[{timezone.now().date()}] Settlement charge inserted "
+                       f"with re-categorization of payment #{payment.pk} by "
+                       f"treasurer {request.user.email} — the original event "
+                       "fee was never recorded."),
+            )
+            flash += (" Inserted a matching Registration charge dated "
+                      "with the payment.")
         if unlinked_installment is not None:
             # The backing money just left. Reset the installment's paid flag
             # if no other succeeded payment still covers it — but do NOT

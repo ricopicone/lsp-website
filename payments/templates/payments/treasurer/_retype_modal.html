@@ -33,6 +33,10 @@ Include with: payment, type_choices, dues_periods, tuition_periods, next_url.
         {% endfor %}
       </select>
       <p class="text-xs text-base-content/50">The year selectors apply only when the matching category is chosen.</p>
+      <label class="flex items-start gap-2 text-xs text-base-content/70 pt-1">
+        <input type="checkbox" name="settle_charge" value="1" class="checkbox checkbox-xs mt-0.5">
+        <span>Also insert a matching <strong>Registration charge</strong> dated with the payment. Use when re-categorizing to Registration and the original event fee was never recorded, so the pair nets to zero instead of showing as credit.</span>
+      </label>
       <div class="modal-action mt-4">
         <button type="submit" class="btn btn-primary btn-sm">Save</button>
         <button type="button" class="btn btn-ghost btn-sm"

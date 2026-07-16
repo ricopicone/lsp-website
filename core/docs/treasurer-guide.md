@@ -322,7 +322,16 @@ For inspecting or correcting individual payments.
     category (a check marked dues that was really tuition, that sort of
     thing). Pick the correct category, and if it's dues or tuition, which
     year it belongs to (the form guesses the year from the payment's date;
-    override it if needed). The change writes a dated audit note to the
+    override it if needed). When the correct category is **Registration**
+    and the original event fee was never recorded — common for the
+    honor-system years, where a $250 "tuition" payment was often really a
+    seminar fee — tick **"Also insert a matching Registration charge"**:
+    the charge is created with the payment's own date and amount, so the
+    pair nets to zero on the member's statement instead of appearing as
+    credit for a fee we have no record of. There's deliberately no
+    automatic detection here: one $250 payment can be a partial tuition
+    installment or a seminar fee, and repeated same-amount payments can be
+    a payment plan or per-meeting billing — only you can tell which. The change writes a dated audit note to the
     payment, and — unlike the member's own self-service re-type on their
     payment history, which blocks it — this is the one place a **donation
     can be flipped** into or out of another category. Because donations
