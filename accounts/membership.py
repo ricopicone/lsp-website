@@ -10,10 +10,11 @@ the change), a new open tenure (the new role + standing), and the live
 
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from .models import MembershipTenure, Source
+from .models import MembershipTenure, Profile, Source
 
 
 def current_academic_year_start(on_date=None) -> int:
@@ -50,15 +51,13 @@ def validate_role_transition(user, new_role) -> None:
     the Meeting of Analysts. No override flag: the ledger is the override
     (spec 2026-07-16).
     """
-    from django.core.exceptions import ValidationError
-
-    from accounts.models import Profile
-
     if new_role not in GATED_ROLES:
         return
     profile = getattr(user, "profile", None)
     if profile is None or profile.role not in Profile.IN_TRAINING_ROLES:
         return  # not a promotion out of training (bootstrap/external records)
+    # payments.ledger imports accounts models, so this import stays lazy —
+    # importing it at module top would create an accounts↔payments cycle.
     from payments.ledger import tuition_clearance
 
     reasons = tuition_clearance(user)

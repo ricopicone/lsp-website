@@ -154,7 +154,7 @@ def test_detail_shows_tuition_standing(client):
 
     resp = client.get(reverse("formation:advancement_detail", args=[settled_adv.pk]))
     assert b"Tuition standing" in resp.content
-    assert b"clear" in resp.content
+    assert b"no financial block" in resp.content
 
 
 # ---- queue: badge ------------------------------------------------------------
@@ -166,4 +166,4 @@ def test_queue_badges_blocked_rows(client):
 
     client.force_login(_analyst("rev3@x.test"))
     resp = client.get(reverse("formation:advancement_queue"))
-    assert b"tuition" in resp.content
+    assert b"Tuition must be settled" in resp.content

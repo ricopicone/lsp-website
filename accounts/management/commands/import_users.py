@@ -25,7 +25,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.core.validators import validate_email
 from django.db import transaction
 
-from accounts.membership import validate_role_transition
+from accounts.membership import GATED_ROLES, validate_role_transition
 from accounts.models import Profile, User
 
 REQUIRED_COLUMNS = {"email"}
@@ -236,7 +236,7 @@ class Command(BaseCommand):
             if profile_fields:
                 # Check if role is being elevated to analyst or scholar
                 new_role = profile_fields.get("role")
-                if new_role and new_role in {"analyst", "scholar"}:
+                if new_role and new_role in GATED_ROLES:
                     if new_role != existing.profile.role:
                         # Role is changing to a gated role; validate the transition
                         try:

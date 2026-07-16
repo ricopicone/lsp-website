@@ -88,7 +88,7 @@ def test_non_analyst_targets_unaffected():
     assert u.profile.role == "candidate"
 
 
-def test_settled_candidate_promotes():
+def test_voided_charges_do_not_create_covered_years():
     u = _candidate_owing("rg4@x.test")
     from payments.models import Charge
     for c in Charge.objects.filter(user=u):       # treasurer voids the charge
@@ -98,6 +98,14 @@ def test_settled_candidate_promotes():
     # …but 0 of 4 years covered still blocks:
     with pytest.raises(ValidationError):
         _promote(u)
+
+
+def test_settled_candidate_promotes():
+    u = _candidate_settled("rg4b@x.test")
+    tenure = _promote(u)
+    u.profile.refresh_from_db()
+    assert u.profile.role == "analyst"
+    assert tenure.role == "analyst"
 
 
 # ---- MembershipChangeForm (Board membership admin) -------------------

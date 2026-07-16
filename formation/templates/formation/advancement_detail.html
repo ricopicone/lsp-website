@@ -54,6 +54,9 @@
         </ul>
       </div>
     </div>
+    <p class="text-xs text-base-content/70 mt-1">Resolve on the member's
+      <a class="link" href="{% url 'treasurer_member_detail' adv.member.id %}" title="Treasurer access required">treasurer account page</a>
+      (record payment, adjust, waive, or void), then retry.</p>
     {% else %}
     <p class="text-sm"><span class="badge badge-success badge-sm">clear</span>
       Tuition requirement settled — no financial block on this promotion.</p>

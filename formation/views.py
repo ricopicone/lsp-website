@@ -18,7 +18,7 @@ from django.db.models import Case, IntegerField, Value, When
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from accounts.membership import current_academic_year_start
+from accounts.membership import GATED_ROLES, current_academic_year_start
 from accounts.models import Profile
 from admissions.views import _can_review, _require_review
 
@@ -803,7 +803,7 @@ def advancement_queue(request):
     )
     for a in advancements:
         a.tuition_blocked = bool(
-            a.is_open and a.advance_role in ("analyst", "scholar")
+            a.is_open and a.advance_role in GATED_ROLES
             and tuition_clearance(a.member)
         )
     return render(request, "formation/advancement_queue.html", {
@@ -820,7 +820,7 @@ def advancement_detail(request, pk):
         pk=pk,
     )
     tuition_reasons = None
-    if adv.advance_role in ("analyst", "scholar") and adv.is_open:
+    if adv.advance_role in GATED_ROLES and adv.is_open:
         from payments.ledger import tuition_clearance
         tuition_reasons = tuition_clearance(adv.member)
     return render(request, "formation/advancement_detail.html", {

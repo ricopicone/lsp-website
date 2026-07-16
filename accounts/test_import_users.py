@@ -275,6 +275,6 @@ def test_update_allows_role_elevation_when_tuition_settled(tmp_path):
     assert user.profile.role == Profile.Role.ANALYST
     # And first_name SHOULD have updated
     assert user.first_name == "New"
-    # No warning should be present
+    # No role-elevation-skipped warning should be present
     stderr_text = err.getvalue()
-    assert "warning" not in stderr_text or "owing" not in stderr_text.lower()
+    assert "skipped" not in stderr_text
