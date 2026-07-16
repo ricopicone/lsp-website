@@ -7,7 +7,7 @@ callers hide the button for those rows.
 <button type="button" class="btn btn-ghost btn-xs"
         onclick="document.getElementById('assign-{{ payment.id }}').showModal()">Assign</button>
 <dialog id="assign-{{ payment.id }}" class="modal">
-  <div class="modal-box max-w-sm">
+  <div class="modal-box max-w-sm whitespace-normal text-left">
     <h3 class="font-serif text-lg mb-3">Assign payment to an account</h3>
     <p class="text-sm text-base-content/70 mb-3">
       ${{ payment.amount }} · {{ payment.get_payment_type_display }}

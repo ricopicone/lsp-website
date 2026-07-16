@@ -138,3 +138,17 @@ def test_member_page_has_assign_and_modal(client, treasurer):
     content = resp.content.decode()
     assert "<dialog" in content
     assert "Assign" in content
+
+
+def test_modal_boxes_reset_nowrap_inheritance(client, treasurer):
+    """The action row is whitespace-nowrap; dialogs nested inside it must
+    reset to normal wrapping or their copy renders as one huge line."""
+    m = _member("wrap@x.test")
+    _payment(user=m)
+    for url in (reverse("treasurer_payments"),
+                reverse("treasurer_member_detail", args=[m.id])):
+        content = client.get(url).content.decode()
+        assert "modal-box" in content
+        boxes = [seg for seg in content.split("<div class=") if seg.startswith('"modal-box')]
+        assert boxes, url
+        assert all("whitespace-normal" in seg.split(">")[0] for seg in boxes), url
