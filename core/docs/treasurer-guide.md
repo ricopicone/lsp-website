@@ -69,9 +69,13 @@ Categories still matter for two things the school tracks closely:
   four.
 
 Full Analysts, Scholars, and external visitors (Auditors) never owe
-tuition. Dues, by contrast, are owed annually by every in-training and
-full member (not Auditors), tiered by role — the amounts live on the
-Settings tab.
+tuition. Becoming an Analyst or Scholar certifies the four-year
+requirement was completed, so a transitioned member's tuition history is
+frozen: the website stops minting, changing, or flagging their tuition
+charges, and any old tuition charge on their account exists only where a
+recorded payment covers it. Dues, by contrast, are owed annually by every
+in-training and full member (not Auditors), tiered by role — the amounts
+live on the Settings tab.
 
 ---
 

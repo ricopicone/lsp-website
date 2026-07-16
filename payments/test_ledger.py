@@ -28,7 +28,10 @@ def _clean_periods():
 
 @pytest.fixture
 def member():
-    return User.objects.create_user(email="lg@x.test", password="x")
+    u = User.objects.create_user(email="lg@x.test", password="x")
+    u.profile.role = "candidate"  # in-training: tuition history isn't frozen
+    u.profile.save()
+    return u
 
 
 def _dues_period(start_year, **amounts):

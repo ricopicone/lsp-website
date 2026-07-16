@@ -24,7 +24,10 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def member(db):
     TuitionPeriod.objects.all().delete()  # seed migration pre-populates periods
-    return User.objects.create_user(email="mt@x.test", password="x")
+    u = User.objects.create_user(email="mt@x.test", password="x")
+    u.profile.role = "candidate"  # in-training: tuition history isn't frozen
+    u.profile.save()
+    return u
 
 
 def _period(name, slug, s, e, amt):
