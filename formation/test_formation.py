@@ -290,9 +290,9 @@ def test_tuition_progress_counts_paid_and_projects_to_four_years(current_period)
     ctx = _tuition_progress(member)
     assert ctx["tuition_years_started"] == 1
     assert len(ctx["tuition_slots"]) == 4          # one started + three projected
-    assert ctx["tuition_total_paid"] == half
+    assert sum(sl["paid"] for sl in ctx["tuition_slots"]) == half
     # Goal = this year's amount + 3 projected years at the current rate.
-    assert ctx["tuition_total_goal"] == full * 4
+    assert sum(sl["goal"] for sl in ctx["tuition_slots"]) == full * 4
 
 
 def test_tuition_progress_counts_payments_without_installments(current_period):
@@ -313,7 +313,8 @@ def test_tuition_progress_counts_payments_without_installments(current_period):
     )
     ctx = _tuition_progress(member)
     assert ctx["tuition_years_started"] == 1
-    assert ctx["tuition_total_paid"] == current_period.tuition_amount
+    assert (sum(sl["paid"] for sl in ctx["tuition_slots"])
+            == current_period.tuition_amount)
     assert sum(1 for s in ctx["tuition_slots"] if s["projected"]) == 3
 
 

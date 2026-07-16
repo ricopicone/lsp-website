@@ -361,6 +361,11 @@ def _formation_money_context(request) -> dict:
         "owes_tuition": profile.owes_tuition,
         "tuition_period": period,
         "tuition_enrollment": enrollment,
+        # A fully covered year reads as its outcome, not the recorded
+        # decision ("Committed" that is actually paid shows "Paid").
+        "tuition_decision_label": next(
+            (r["decision_label"] for r in acct["tuition_rows"]
+             if enrollment and r["enrollment"].pk == enrollment.pk), None),
         "tuition_installments": installments,
         "tuition_form": TuitionDecisionForm(
             initial={"status": enrollment.status} if enrollment else {}
@@ -466,14 +471,9 @@ def _tuition_progress(user) -> dict:
         })
         total_goal += rate
 
-    total_pct = int(total_paid / total_goal * 100) if total_goal else 0
     return {
         "tuition_slots": slots,
-        "tuition_total_paid": total_paid,
-        "tuition_total_goal": total_goal,
-        "tuition_total_pct": total_pct,
         "tuition_years_started": started,
-        "tuition_required_years": required,
     }
 
 

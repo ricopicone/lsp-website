@@ -129,10 +129,20 @@ def member_account(user) -> dict:
                 state = "waived"
             else:
                 state = states.get(c.id, "unpaid")
+        # The Decision column shows the recorded decision — except that a
+        # fully covered year reads as its outcome: "Paid" (the record itself
+        # is never auto-flipped; sweep coverage can shift as history firms up).
+        if state == "paid" and e.status in (
+            TuitionEnrollment.Status.COMMITTED,
+            TuitionEnrollment.Status.PAYMENT_PLAN,
+        ):
+            decision_label = "Paid"
+        else:
+            decision_label = e.get_status_display()
         tuition_rows.append({
             "enrollment": e, "period": e.tuition_period,
             "rate": e.tuition_period.tuition_amount or Decimal("0"),
-            "state": state,
+            "state": state, "decision_label": decision_label,
         })
 
     current_dues = DuesPeriod.current()

@@ -67,7 +67,7 @@
       {% if tuition_enrollment and not requirement_met %}
       <div class="rounded-lg border border-primary/30 bg-primary/5 px-5 py-4 text-sm">
         <p>Current decision for {{ tuition_period.name }}:
-          <strong>{{ tuition_enrollment.get_status_display }}</strong>
+          <strong>{% if tuition_decision_label %}{{ tuition_decision_label }}{% else %}{{ tuition_enrollment.get_status_display }}{% endif %}</strong>
           <span class="text-base-content/60">(recorded {{ tuition_enrollment.decided_at|user_datetime }})</span>
         </p>
       </div>

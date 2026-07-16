@@ -302,3 +302,28 @@ def test_accounts_overview_conflict_is_tuition_scoped(member):
     assert by["lg@x.test"]["conflict"] is False        # dues credit only
     assert by["lg3@x.test"]["conflict"] is True        # tuition overpay
     assert by["lg3@x.test"]["tuition_overpaid"] == Decimal("500")
+
+
+def test_covered_year_decision_label_reads_paid(member):
+    """A COMMITTED decision whose year the sweep fully covers displays as
+    'Paid' — the record itself is untouched (task #439)."""
+    t25 = _tuition_period(2025, "2000")
+    e = TuitionEnrollment.objects.create(
+        user=member, tuition_period=t25,
+        status=TuitionEnrollment.Status.COMMITTED, source="staff")
+    _pay(member, Payment.Type.TUITION, "2000", WHEN)
+    acct = ledger.member_account(member)
+    row = acct["tuition_rows"][0]
+    assert row["state"] == "paid"
+    assert row["decision_label"] == "Paid"
+    e.refresh_from_db()
+    assert e.status == TuitionEnrollment.Status.COMMITTED  # record untouched
+
+
+def test_uncovered_year_decision_label_is_the_decision(member):
+    t25 = _tuition_period(2025, "2000")
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=t25,
+        status=TuitionEnrollment.Status.COMMITTED, source="staff")
+    acct = ledger.member_account(member)
+    assert acct["tuition_rows"][0]["decision_label"] == "Committed (will pay)"
