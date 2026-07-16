@@ -63,6 +63,30 @@ def _hover_title(value: _dt.datetime) -> str:
 
 
 @register.filter
+def user_date(value, show_year=True):
+    """Render a datetime as a compact DATE-ONLY ``<time>`` ("Jan 10, 2026" —
+    no weekday, no time) with the full local date+time and the PT equivalent
+    in the hover title. For dense tables like the treasurer's Payments tab.
+    """
+    if value is None:
+        return ""
+    active = timezone.get_current_timezone()
+    local = value.astimezone(active)
+    display = local.strftime("%b ") + str(local.day)
+    if show_year:
+        display += f", {local.year}"
+    time_str = local.strftime("%I:%M %p").lstrip("0")
+    abbr = _tz_abbr(value, active)
+    full_local = (local.strftime("%a, %b ") + str(local.day)
+                  + f", {local.year}, {time_str} {abbr}")
+    title = f"{full_local} — {_hover_title(value)}"
+    iso = local.isoformat()
+    return format_html(
+        '<time datetime="{}" title="{}">{}</time>', iso, title, display,
+    )
+
+
+@register.filter
 def user_time(value):
     """Render a datetime as a hovered ``<time>`` showing TIME ONLY in the
     active timezone, with the PT equivalent in the title attribute.

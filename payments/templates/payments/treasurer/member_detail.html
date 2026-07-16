@@ -1,5 +1,5 @@
 {% extends "payments/treasurer/base.html" %}
-{% load treasurer_filters tz_filters %}
+{% load treasurer_filters tz_filters parletre_tags %}
 {% block tab_content %}
 <div class="space-y-8">
 
@@ -83,13 +83,15 @@
             <td>
               {% if r.period.start_date <= today and today <= r.period.end_date %}
               <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
-                <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}" class="contents">
+                <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}" class="contents"
+                      onsubmit="return confirm('Set this year\'s tuition decision to Committed? The decision record is updated with an audit note.');">
                   {% csrf_token %}
                   <input type="hidden" name="status" value="committed">
                   <input type="hidden" name="next" value="{{ request.path }}">
                   <button type="submit" class="btn btn-ghost btn-xs">Committed</button>
                 </form>
-                <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}" class="contents">
+                <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}" class="contents"
+                      onsubmit="return confirm('Set this year\'s tuition decision to Skipping? The year stops generating a tuition charge; the decision record is updated with an audit note.');">
                   {% csrf_token %}
                   <input type="hidden" name="status" value="skipping">
                   <input type="hidden" name="next" value="{{ request.path }}">
@@ -163,7 +165,8 @@
               <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
                 {% if ln.kind == "charge" %}
                   {% if ln.obj.status == "open" %}
-                  <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents">
+                  <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Waive this {{ ln.obj.amount|usd }} charge? It stops counting toward what is owed but stays visible for audit.');">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="waive">
                     <button type="submit" class="btn btn-ghost btn-xs">Waive</button>
@@ -195,7 +198,8 @@
                     <form method="dialog" class="modal-backdrop"><button>close</button></form>
                   </dialog>
                   {% elif ln.obj.status == "waived" %}
-                  <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents">
+                  <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Reopen this charge? It counts toward what is owed again.');">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="reopen">
                     <button type="submit" class="btn btn-ghost btn-xs">Reopen</button>
@@ -207,21 +211,21 @@
                         onsubmit="return confirm('Mark this payment as paid? This sends a receipt + emails the member.');">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.path }}">
-                    <button type="submit" class="btn btn-primary btn-xs">Mark paid</button>
+                    <button type="submit" class="btn btn-primary btn-xs" title="Mark paid" aria-label="Mark paid">{% icon "check" %}</button>
                   </form>
                   {% elif ln.obj.status == "succeeded" and ln.obj.method == "stripe" %}
                   <form method="post" action="{% url 'treasurer_payment_refund' ln.obj.id %}" class="contents"
                         onsubmit="return confirm('{% if ln.obj.is_split %}This payment is part of a SPLIT. Refunding refunds the ENTIRE original ${{ ln.obj.split_family_total }} charge, all parts included.\n\n{% endif %}Refund {% if ln.obj.is_split %}${{ ln.obj.split_family_total }}{% else %}{{ ln.obj.amount|usd }}{% endif %} via Stripe? This is irreversible.');">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.path }}">
-                    <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
+                    <button type="submit" class="btn btn-ghost btn-xs text-error" title="Refund" aria-label="Refund">{% icon "undo" %}</button>
                   </form>
                   {% elif ln.obj.status == "succeeded" and ln.obj.method == "offline" %}
                   <form method="post" action="{% url 'treasurer_payment_refund' ln.obj.id %}" class="contents"
                         onsubmit="return confirm('{% if ln.obj.is_split %}This payment is part of a SPLIT. Refunding marks the ENTIRE original ${{ ln.obj.split_family_total }} charge refunded, all parts included.\n\n{% endif %}Mark this {% if ln.obj.is_split %}entire ${{ ln.obj.split_family_total }} split{% else %}{{ ln.obj.amount|usd }}{% endif %} offline payment as REFUNDED for accounting?\n\nThis does NOT move any money — you will need to send the refund check (or process the cash refund) manually.');">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.path }}">
-                    <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
+                    <button type="submit" class="btn btn-ghost btn-xs text-error" title="Refund" aria-label="Refund">{% icon "undo" %}</button>
                   </form>
                   {% endif %}
                   {% if ln.obj.status == "succeeded" and ln.obj.receipt and not ln.obj.is_split %}
@@ -229,7 +233,7 @@
                         onsubmit="return confirm('Resend the receipt email to {{ ln.obj.user.email|default:ln.obj.email }}?');">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.path }}">
-                    <button type="submit" class="btn btn-ghost btn-xs">Resend receipt</button>
+                    <button type="submit" class="btn btn-ghost btn-xs" title="Resend receipt" aria-label="Resend receipt">{% icon "mail" %}</button>
                   </form>
                   {% endif %}
                   {% if not ln.obj.registration_id %}
