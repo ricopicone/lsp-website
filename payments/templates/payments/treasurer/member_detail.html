@@ -211,7 +211,7 @@
                   </form>
                   {% elif ln.obj.status == "succeeded" and ln.obj.method == "stripe" %}
                   <form method="post" action="{% url 'treasurer_payment_refund' ln.obj.id %}" class="contents"
-                        onsubmit="return confirm('{% if ln.obj.is_split %}This payment is part of a SPLIT. Refunding refunds the ENTIRE original ${{ ln.obj.split_family_total }} charge, all parts included.\n\n{% endif %}Refund {{ ln.obj.amount|usd }} via Stripe? This is irreversible.');">
+                        onsubmit="return confirm('{% if ln.obj.is_split %}This payment is part of a SPLIT. Refunding refunds the ENTIRE original ${{ ln.obj.split_family_total }} charge, all parts included.\n\n{% endif %}Refund {% if ln.obj.is_split %}${{ ln.obj.split_family_total }}{% else %}{{ ln.obj.amount|usd }}{% endif %} via Stripe? This is irreversible.');">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.path }}">
                     <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
