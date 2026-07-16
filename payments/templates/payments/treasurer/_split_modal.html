@@ -6,7 +6,7 @@ next_url. Callers gate the button on: succeeded, no registration link, a
 member attached, not already split.
 {% endcomment %}
 <button type="button" class="btn btn-ghost btn-xs" title="Split across categories" aria-label="Split across categories"
-        onclick="document.getElementById('split-{{ payment.id }}').showModal()">{% icon "scissors" %}</button>
+        onclick="document.getElementById('split-{{ payment.id }}').showModal()">{% icon "split" %}</button>
 <dialog id="split-{{ payment.id }}" class="modal">
   <div class="modal-box max-w-md whitespace-normal text-left">
     <h3 class="font-serif text-lg mb-1">Split payment</h3>
