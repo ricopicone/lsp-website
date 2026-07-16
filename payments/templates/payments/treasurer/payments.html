@@ -5,8 +5,8 @@
 
   <p class="text-sm text-base-content/60">
     Recent payments across all categories — registrations, dues, tuition,
-    donations. Use the filters to narrow. For routine reconciliation, use
-    the Tuition and Dues tabs instead.
+    donations. Use the filters to narrow; member-by-member work lives on
+    the Accounts tab.
   </p>
 
   <form method="get" class="flex flex-wrap items-end gap-3">
@@ -48,7 +48,7 @@
       <thead>
         <tr>
           <th>Date</th>
-          <th>User</th>
+          <th>Payer</th>
           <th>Type</th>
           <th>Amount</th>
           <th>Method</th>
@@ -63,11 +63,11 @@
           <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.transaction_date|user_datetime:True }}</td>
           <td>
             {% if p.user %}
-              <div>{{ p.user.first_name }} {{ p.user.last_name }}</div>
-              <div class="text-xs text-base-content/60">{{ p.user.email }}</div>
+              <a class="link link-hover" href="{% url 'treasurer_member_detail' p.user.id %}">{{ p.payer_label }}</a>
             {% else %}
-              <span class="text-base-content/60 text-xs italic">anonymous</span>
-              {% if p.email %}<div class="text-xs text-base-content/60">{{ p.email }}</div>{% endif %}
+              <div class="text-base-content/80">{{ p.payer_label }}</div>
+              {% if p.payer_detail %}<div class="text-xs text-base-content/60">{{ p.payer_detail }}</div>{% endif %}
+              <span class="badge badge-ghost badge-xs" title="Not linked to a member account — use Assign">unlinked</span>
             {% endif %}
           </td>
           <td>
@@ -83,7 +83,7 @@
           <td class="text-xs">{{ p.get_method_display }}</td>
           <td>{% status_badge p.status %}</td>
           <td>
-            <div class="flex flex-wrap gap-1">
+            <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
               {% if p.status == "pending" %}
               <form method="post" action="{% url 'treasurer_payment_apply_success' p.id %}" class="contents"
                     onsubmit="return confirm('Mark this payment as paid? This sends a receipt + emails the member.');">
@@ -110,35 +110,10 @@
                 <button type="submit" class="btn btn-ghost btn-xs">Resend receipt</button>
               </form>
               {% endif %}
-              <details class="dropdown">
-                <summary class="btn btn-ghost btn-xs">Re-categorize</summary>
-                <form method="post" action="{% url 'treasurer_payment_retype' p.id %}"
-                      class="dropdown-content z-10 menu p-3 shadow bg-base-100 rounded-box w-60 border border-base-300 flex-col gap-2">
-                  {% csrf_token %}
-                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <select name="payment_type" class="select select-bordered select-xs w-full" required>
-                    {% for value, label in type_choices %}
-                    <option value="{{ value }}" {% if value == p.payment_type %}disabled selected{% endif %}>{{ label }}{% if value == p.payment_type %} (current){% endif %}</option>
-                    {% endfor %}
-                  </select>
-                  <label class="text-[0.65rem] text-base-content/60">Dues year</label>
-                  <select name="dues_period" class="select select-bordered select-xs w-full">
-                    <option value="">Auto (from payment date)</option>
-                    {% for period in dues_periods %}
-                    <option value="{{ period.id }}">{{ period.name }}</option>
-                    {% endfor %}
-                  </select>
-                  <label class="text-[0.65rem] text-base-content/60">Tuition year</label>
-                  <select name="tuition_period" class="select select-bordered select-xs w-full">
-                    <option value="">Auto (from payment date)</option>
-                    {% for period in tuition_periods %}
-                    <option value="{{ period.id }}">{{ period.name }}</option>
-                    {% endfor %}
-                  </select>
-                  <p class="text-[0.65rem] text-base-content/50">Used only when the matching category is chosen.</p>
-                  <button type="submit" class="btn btn-primary btn-xs">Save</button>
-                </form>
-              </details>
+              {% if not p.registration_id %}
+              {% include "payments/treasurer/_retype_modal.html" with payment=p type_choices=type_choices dues_periods=dues_periods tuition_periods=tuition_periods next_url=request.get_full_path %}
+              {% include "payments/treasurer/_assign_modal.html" with payment=p next_url=request.get_full_path %}
+              {% endif %}
             </div>
           </td>
           <td class="text-right">
@@ -152,6 +127,9 @@
         {% endfor %}
       </tbody>
     </table>
+    <datalist id="member-options">
+      {% for m in member_options %}<option value="{{ m.value }}">{% endfor %}
+    </datalist>
   </div>
 
   {% if has_assumed %}

@@ -1,0 +1,32 @@
+{% comment %}
+Assign-to-account modal for one payment. Requires a page-level
+<datalist id="member-options"> (rendered once per page). Include with:
+payment, next_url. Registration-settling payments are refused server-side;
+callers hide the button for those rows.
+{% endcomment %}
+<button type="button" class="btn btn-ghost btn-xs"
+        onclick="document.getElementById('assign-{{ payment.id }}').showModal()">Assign</button>
+<dialog id="assign-{{ payment.id }}" class="modal">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-serif text-lg mb-3">Assign payment to an account</h3>
+    <p class="text-sm text-base-content/70 mb-3">
+      ${{ payment.amount }} · {{ payment.get_payment_type_display }}
+      {% if payment.user %}· currently on {{ payment.user.get_full_name|default:payment.user.email }}{% endif %}
+    </p>
+    <form method="post" action="{% url 'treasurer_payment_assign' payment.id %}" class="space-y-2">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <label class="text-xs text-base-content/60" for="assign-user-{{ payment.id }}">Member</label>
+      <input id="assign-user-{{ payment.id }}" name="assign_user" list="member-options"
+             class="input input-bordered input-sm w-full"
+             placeholder="Type a name or email" required>
+      <p class="text-xs text-base-content/50">Moves this money onto the chosen member's account and marks the payment verified. The audit note records the previous payer.</p>
+      <div class="modal-action mt-4">
+        <button type="submit" class="btn btn-primary btn-sm">Assign</button>
+        <button type="button" class="btn btn-ghost btn-sm"
+                onclick="document.getElementById('assign-{{ payment.id }}').close()">Cancel</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>

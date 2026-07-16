@@ -297,8 +297,18 @@ For inspecting or correcting individual payments.
 
 - **Filters**: payment type (registration / dues / donation / tuition) and
   status (succeeded / pending / refunded / failed).
-- **Each row** shows date, member, type (+ event for registrations),
-  amount, method (Stripe / Offline), status, and actions:
+- **Each row** shows date, payer, type (+ event for registrations),
+  amount, method (Stripe / Offline), status, and actions. The **Payer**
+  column shows the member's name when the payment is linked to an
+  account; when it isn't, it shows whatever Stripe told us about the
+  payer — a name or an email — with an "unlinked" badge, so an unmatched
+  payment is never just "anonymous". The actions are:
+  - **Assign** — links (or re-links) the payment to a member's account.
+    Start typing a name or email and pick from the list. The payment's
+    money moves onto that member's running balance, its provenance is
+    marked verified, and a dated audit note records who it was
+    attributed to before. Registration payments can't be re-assigned
+    here — the registration owns its member.
   - **Mark paid** — on pending offline payments. Runs the standard success
     side-effects: marks succeeded, issues a receipt, sends emails.
   - **Refund** — on succeeded payments. For **Stripe** payments it issues
