@@ -118,6 +118,7 @@
               {% include "payments/treasurer/_split_modal.html" with payment=p type_choices=type_choices next_url=request.get_full_path %}
               {% endif %}
               {% endif %}
+              {% include "payments/treasurer/_note_modal.html" with obj=p kind="p" next_url=request.get_full_path %}
             </div>
           </td>
           <td class="text-right">

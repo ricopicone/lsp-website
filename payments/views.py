@@ -823,6 +823,43 @@ def treasurer_payments(request):
 @login_required
 @user_passes_test(_is_staff)
 @require_POST
+def treasurer_payment_note(request, payment_id: int):
+    """Append a treasurer note to a payment (staff-only; members never see
+    Payment.notes — their own channel is member_note)."""
+    payment = get_object_or_404(Payment, pk=payment_id)
+    note = (request.POST.get("note") or "").strip()[:2000]
+    if not note:
+        messages.error(request, "Write a note first.")
+        return _safe_next(request, "treasurer_payments")
+    line = (f"[{timezone.now().date()}] Note by treasurer "
+            f"{request.user.email}: {note}")
+    payment.notes = (payment.notes + "\n" + line) if payment.notes else line
+    payment.save(update_fields=("notes",))
+    messages.success(request, "Note added.")
+    return _safe_next(request, "treasurer_payments")
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_charge_note(request, charge_id: int):
+    """Append a treasurer note to a charge. Deliberately does NOT set
+    staff_adjusted — a comment must not freeze the row against the sync."""
+    charge = get_object_or_404(Charge, pk=charge_id)
+    note = (request.POST.get("note") or "").strip()[:2000]
+    if not note:
+        messages.error(request, "Write a note first.")
+        return _safe_next(request, "treasurer_payments")
+    charge.add_note(f"Note by treasurer {request.user.email}: {note}")
+    messages.success(request, "Note added.")
+    return _safe_next(request, "treasurer_payments")
+
+
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
 def treasurer_payment_split(request, payment_id: int):
     """Split one payment into sibling rows with different categories.
 
