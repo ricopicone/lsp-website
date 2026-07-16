@@ -70,7 +70,7 @@
           {% for r in acct.tuition_rows %}
           <tr>
             <td class="whitespace-nowrap">{{ r.period.name }}</td>
-            <td class="text-xs text-base-content/70">{{ r.enrollment.get_status_display }}</td>
+            <td class="text-xs text-base-content/70">{{ r.decision_label }}</td>
             <td class="text-right whitespace-nowrap">{{ r.rate|usd }}</td>
             <td>
               {% if r.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
@@ -284,28 +284,38 @@
       <h3 class="font-serif text-base text-base-content">Add a charge</h3>
       <form method="post" action="{% url 'treasurer_charge_add' target.id %}" class="space-y-2">
         {% csrf_token %}
-        <select name="category" class="select select-bordered select-sm w-full" required>
+        <select name="category" class="select select-bordered select-sm w-full" required
+                onchange="var v=this.value;
+                          document.getElementById('addchg-dues').hidden=(v!=='dues');
+                          document.getElementById('addchg-tuition').hidden=(v!=='tuition');
+                          document.getElementById('addchg-date').hidden=(v==='dues'||v==='tuition');">
           {% for value, label in charge_categories %}
           <option value="{{ value }}">{{ label }}</option>
           {% endfor %}
         </select>
         <input type="number" step="0.01" min="0.01" name="amount" placeholder="Amount" class="input input-bordered input-sm w-full" required>
-        <label class="text-xs text-base-content/60">Dues year (if category is Dues)</label>
-        <select name="dues_period" class="select select-bordered select-sm w-full">
-          <option value="">Current dues year</option>
-          {% for p in dues_periods %}
-          <option value="{{ p.id }}" {% if p.id == current_dues_period_id %}selected{% endif %}>{{ p.name }}</option>
-          {% endfor %}
-        </select>
-        <label class="text-xs text-base-content/60">Tuition year (if category is Tuition)</label>
-        <select name="tuition_period" class="select select-bordered select-sm w-full">
-          <option value="">Current tuition year</option>
-          {% for p in tuition_periods %}
-          <option value="{{ p.id }}" {% if p.id == current_tuition_period_id %}selected{% endif %}>{{ p.name }}</option>
-          {% endfor %}
-        </select>
-        <label class="text-xs text-base-content/60">Effective date (registration/other categories only)</label>
-        <input type="date" name="effective_date" value="{{ today|date:'Y-m-d' }}" class="input input-bordered input-sm w-full">
+        <div id="addchg-dues" class="space-y-1">
+          <label class="text-xs text-base-content/60">Dues year</label>
+          <select name="dues_period" class="select select-bordered select-sm w-full">
+            <option value="">Current dues year</option>
+            {% for p in dues_periods %}
+            <option value="{{ p.id }}" {% if p.id == current_dues_period_id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div id="addchg-tuition" hidden class="space-y-1">
+          <label class="text-xs text-base-content/60">Tuition year</label>
+          <select name="tuition_period" class="select select-bordered select-sm w-full">
+            <option value="">Current tuition year</option>
+            {% for p in tuition_periods %}
+            <option value="{{ p.id }}" {% if p.id == current_tuition_period_id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div id="addchg-date" hidden class="space-y-1">
+          <label class="text-xs text-base-content/60">Effective date</label>
+          <input type="date" name="effective_date" value="{{ today|date:'Y-m-d' }}" class="input input-bordered input-sm w-full">
+        </div>
         <input type="text" name="note" placeholder="Note (optional)" class="input input-bordered input-sm w-full">
         <button type="submit" class="btn btn-sm btn-primary">Add charge</button>
       </form>

@@ -299,7 +299,7 @@ def _formation_walkthrough() -> Checklist:
 
 def _tuition_dues_walkthrough() -> Checklist:
     return Checklist("tuition_dues", "Sort tuition & dues", [
-        ChecklistTask(id="td_tab", label="Open the Tuition & Dues tab",
+        ChecklistTask(id="td_tab", label="Open the Tuition tab",
                       detail="Everything in one place.", resolve_url=_tuition_tab_url, manual=True),
         ChecklistTask(id="td_decision", label="Record your tuition decision",
                       detail="Committed, payment plan, paid in full, or skipping.",
