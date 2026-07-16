@@ -1137,6 +1137,7 @@ def _period_for(new_type, when):
 
 
 def _apply_category_change(payment, new_type, *, treasurer_email,
+                           actor_label="treasurer",
                            dues_period_post=None, tuition_period_post=None):
     """Mutate ``payment``'s category and its category FKs; the caller saves,
     inside the same transaction.
@@ -1146,6 +1147,10 @@ def _apply_category_change(payment, new_type, *, treasurer_email,
     tuition installment. The enrollment's decision status is never
     auto-changed (do-not-over-automate) — a dated review note is appended
     instead. Returns ``(audit_details, extra_flash)``.
+
+    ``actor_label`` attributes the internal installment-review note ("by
+    treasurer …" vs "by member …") — the treasurer statement actions and the
+    member statement actions (task #439) share this helper.
     """
     details = []
     unlinked_installment = None
@@ -1173,11 +1178,12 @@ def _apply_category_change(payment, new_type, *, treasurer_email,
 
     extra_flash = _unwind_installment(
         payment, unlinked_installment, treasurer_email=treasurer_email,
-        cause="re-categorized away from tuition")
+        actor_label=actor_label, cause="re-categorized away from tuition")
     return details, extra_flash
 
 
-def _unwind_installment(payment, installment, *, treasurer_email, cause):
+def _unwind_installment(payment, installment, *, treasurer_email, cause,
+                         actor_label="treasurer"):
     """After ``payment`` stops backing ``installment``: reset its paid flag if
     no other succeeded payment covers it — but do NOT auto-change the
     enrollment's status (a decision record; do-not-over-automate): leave a
@@ -1198,7 +1204,7 @@ def _unwind_installment(payment, installment, *, treasurer_email, cause):
     outcome = "unpaid again" if was_paid else "unlinked"
     review_note = (
         f"[{timezone.now().date()}] Payment #{payment.id} "
-        f"{cause} by treasurer "
+        f"{cause} by {actor_label} "
         f"{treasurer_email}; installment "
         f"#{installment.sequence} {outcome} — review "
         "this year's decision status."
@@ -1907,6 +1913,17 @@ def _tuition_tab_url(**params) -> str:
     return reverse("formation:formation") + "?" + urlencode(query)
 
 
+def _account_tab_url(**params) -> str:
+    """The Account tab of the member's My LSP hub — where the member
+    statement actions (retype/split/note, task #439) return to."""
+    from urllib.parse import urlencode
+
+    from django.urls import reverse
+
+    query = {"tab": "account", **{k: v for k, v in params.items() if v}}
+    return reverse("formation:formation") + "?" + urlencode(query)
+
+
 @login_required
 def tuition_decision(request):
     """Record the annual tuition decision (M7.5).
@@ -2156,3 +2173,240 @@ def my_payments_update(request):
     elif not blocked_donation_retype and not blocked_split_retype:
         messages.success(request, "No changes to save.")
     return redirect(_tuition_tab_url())
+
+
+@login_required
+@require_POST
+def my_payment_retype(request, payment_id: int):
+    """Member statement action: re-categorize one of the member's OWN
+    payments (task #439, member Account v2 — full treasurer parity).
+
+    Mirrors ``treasurer_payment_retype`` mechanically (shares
+    ``_apply_category_change`` / ``_unwind_installment``), with these
+    deltas: scoped to ``request.user`` (a stale/forged id 404s rather than
+    touching another member's row — never a cross-account leak); no
+    donation-flip block (Rico 2026-07-16 — full parity, the old
+    ``my_payments_update`` restriction does not carry forward);
+    ``payment.source`` is promoted to ``SELF_REPORTED`` (not ``VERIFIED`` —
+    a member's own say-so, distinct from a treasurer's); the audit note and
+    any settle-charge note are attributed to the member. Registration-
+    settling payments still refuse (the registration owns that link)."""
+    from accounts.models import Source
+
+    payment = get_object_or_404(Payment, pk=payment_id, user=request.user)
+    new_type = request.POST.get("payment_type")
+    if new_type not in Payment.Type.values:
+        messages.error(request, "Choose a valid category.")
+        return _safe_next(request, _account_tab_url())
+    if new_type == payment.payment_type:
+        messages.error(request, "That payment already has that category.")
+        return _safe_next(request, _account_tab_url())
+    if payment.registration_id:
+        messages.error(
+            request,
+            "This payment settles an event registration. Contact the "
+            "treasurer to correct the registration link.",
+        )
+        return _safe_next(request, _account_tab_url())
+    settle = bool(request.POST.get("settle_charge"))
+    if settle and new_type != Payment.Type.REGISTRATION:
+        messages.error(
+            request,
+            "The settle option applies only when re-categorizing to "
+            "Registration.",
+        )
+        return _safe_next(request, _account_tab_url())
+
+    labels = dict(Payment.Type.choices)
+    old_type = payment.payment_type
+    with transaction.atomic():
+        details, extra_flash = _apply_category_change(
+            payment, new_type,
+            treasurer_email=request.user.email,
+            actor_label="member",
+            dues_period_post=request.POST.get("dues_period"),
+            tuition_period_post=request.POST.get("tuition_period"),
+        )
+        payment.source = Source.SELF_REPORTED
+        audit = (f"[{timezone.now().date()}] Re-categorized "
+                 f"{labels[old_type]} → {labels[new_type]} by member "
+                 f"{request.user.email}."
+                 + (f" ({'; '.join(details)})" if details else ""))
+        payment.notes = (
+            (payment.notes + "\n" + audit) if payment.notes else audit)
+        payment.save()
+
+        flash = f"Re-categorized as {labels[new_type]}."
+        if settle:
+            # Honor-system era: the event fee this payment settled was never
+            # recorded as a charge. Insert the matching charge dated with the
+            # payment so the pair nets to zero exactly where it sits in the
+            # statement — no phantom credit, no invented debt.
+            when = (payment.paid_at or payment.created_at).date()
+            Charge.objects.create(
+                user_id=payment.user_id,
+                category=Charge.Category.REGISTRATION,
+                amount=payment.amount,
+                effective_date=when,
+                source=Source.SELF_REPORTED,
+                staff_adjusted=True,
+                notes=(f"[{timezone.now().date()}] Settlement charge inserted "
+                       f"with re-categorization of payment #{payment.pk} by "
+                       f"member {request.user.email} — the original event "
+                       "fee was never recorded."),
+            )
+            flash += (" Inserted a matching Registration charge dated "
+                      "with the payment.")
+        flash += extra_flash
+    messages.success(request, flash)
+    return _safe_next(request, _account_tab_url())
+
+
+@login_required
+@require_POST
+def my_payment_split(request, payment_id: int):
+    """Member statement action: split one of the member's OWN payments into
+    sibling rows with different categories (task #439, member Account v2 —
+    full treasurer parity).
+
+    Mirrors ``treasurer_payment_split`` mechanically, scoped to
+    ``request.user``. Donation parts are allowed (full parity). Every
+    minted row (siblings + any settlement charge) carries
+    ``source=SELF_REPORTED``; the audit/settlement notes are attributed to
+    the member. Registration-settling payments and already-split rows
+    still refuse — same system invariants as the treasurer version."""
+    from accounts.models import Source
+
+    payment = get_object_or_404(Payment, pk=payment_id, user=request.user)
+    if payment.status != Payment.Status.SUCCEEDED:
+        messages.error(request, "Only succeeded payments can be split.")
+        return _safe_next(request, _account_tab_url())
+    if payment.registration_id:
+        messages.error(
+            request,
+            "This payment settles an event registration and cannot be split.")
+        return _safe_next(request, _account_tab_url())
+    if payment.split_from_id or payment.split_parts.exists():
+        messages.error(request, "This payment is already part of a split.")
+        return _safe_next(request, _account_tab_url())
+
+    types = request.POST.getlist("part_type")
+    amounts = request.POST.getlist("part_amount")
+    settle_rows = set(request.POST.getlist("part_settle"))
+    parts = []
+    for i, (t, raw) in enumerate(zip(types, amounts)):
+        if not (raw or "").strip():
+            continue  # empty extra row in the form
+        amount = _parse_amount(raw)
+        if t not in Payment.Type.values or amount is None:
+            messages.error(
+                request, "Each part needs a valid category and amount.")
+            return _safe_next(request, _account_tab_url())
+        settle = str(i) in settle_rows and t == Payment.Type.REGISTRATION
+        parts.append((t, amount, settle))
+    if len(parts) < 2:
+        messages.error(request, "A split needs at least two parts.")
+        return _safe_next(request, _account_tab_url())
+    if sum((a for _, a, _ in parts), Decimal("0")) != payment.amount:
+        messages.error(
+            request, f"The parts must add up to exactly ${payment.amount}.")
+        return _safe_next(request, _account_tab_url())
+
+    labels = dict(Payment.Type.choices)
+    old_type, old_amount = payment.payment_type, payment.amount
+    when = (payment.paid_at or payment.created_at).date()
+    today = timezone.now().date()
+    breakdown = ", ".join(f"${a} {labels[t]}" for t, a, _ in parts)
+    extra_flash = ""
+    with transaction.atomic():
+        first_type, first_amount, first_settle = parts[0]
+        details = []
+        # A split always unlinks a tuition installment — the single-installment
+        # linkage no longer describes the (now divided) money — and unwinds it
+        # if nothing else backs it. This runs regardless of the first part's
+        # category (a same-category first part would otherwise keep the full
+        # installment marked paid against a reduced amount).
+        if payment.tuition_installment_id:
+            details.append(
+                f"unlinked installment #{payment.tuition_installment_id}")
+            _installment = payment.tuition_installment
+            payment.tuition_installment = None
+            extra_flash += _unwind_installment(
+                payment, _installment, treasurer_email=request.user.email,
+                actor_label="member", cause="split across categories")
+        if first_type != old_type:
+            _details, _extra = _apply_category_change(
+                payment, first_type, treasurer_email=request.user.email,
+                actor_label="member")
+            details += _details
+            extra_flash += _extra
+        payment.amount = first_amount
+        payment.source = Source.SELF_REPORTED
+        audit = (f"[{today}] Split ${old_amount} {labels[old_type]} into "
+                 f"{breakdown} by member {request.user.email}."
+                 + (f" ({'; '.join(details)})" if details else ""))
+        payment.notes = (
+            (payment.notes + "\n" + audit) if payment.notes else audit)
+        payment.save()
+
+        settle_targets = [(payment, first_amount)] if first_settle else []
+        for t, a, settle in parts[1:]:
+            child = Payment.objects.create(
+                user_id=payment.user_id,
+                payment_type=t,
+                amount=a,
+                status=Payment.Status.SUCCEEDED,
+                method=payment.method,
+                email=payment.email,
+                currency=payment.currency,
+                livemode=payment.livemode,
+                source=Source.SELF_REPORTED,
+                split_from=payment,
+                paid_at=payment.paid_at,
+                dues_period=(_period_for(t, when)
+                             if t == Payment.Type.DUES else None),
+                tuition_period=(_period_for(t, when)
+                                if t == Payment.Type.TUITION else None),
+                notes=(f"[{today}] Split from payment #{payment.pk} "
+                       f"(${old_amount} {labels[old_type]}) by member "
+                       f"{request.user.email}; the original receipt covers "
+                       "the full amount."),
+            )
+            if settle:
+                settle_targets.append((child, a))
+        for target, amount in settle_targets:
+            Charge.objects.create(
+                user_id=payment.user_id,
+                category=Charge.Category.REGISTRATION,
+                amount=amount,
+                effective_date=when,
+                source=Source.SELF_REPORTED,
+                staff_adjusted=True,
+                notes=(f"[{today}] Settlement charge inserted with the split "
+                       f"of payment #{payment.pk} (part: payment "
+                       f"#{target.pk}) by member {request.user.email} — "
+                       "the original event fee was never recorded."),
+            )
+    flash = f"Split into {breakdown}."
+    if settle_targets:
+        flash += " Inserted matching Registration charge(s)."
+    flash += extra_flash
+    messages.success(request, flash)
+    return _safe_next(request, _account_tab_url())
+
+
+@login_required
+@require_POST
+def my_payment_note(request, payment_id: int):
+    """Member statement action: write/replace the member's own note on one
+    of their payments (task #439, member Account v2). Replaces
+    ``member_note`` in full (not append — this is the member's own
+    editable field, matching the retired ``my_payments_update`` table's
+    note column); an empty submission clears it."""
+    payment = get_object_or_404(Payment, pk=payment_id, user=request.user)
+    note = (request.POST.get("note") or "").strip()[:1000]
+    if payment.member_note != note:
+        payment.member_note = note
+        payment.save(update_fields=("member_note",))
+        messages.success(request, "Note saved." if note else "Note cleared.")
+    return _safe_next(request, _account_tab_url())
