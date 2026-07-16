@@ -363,10 +363,26 @@ Done (see `git log` for specifics):
   admin role field, and the CSV importer (skips + warns); no override
   switch — settling the member's ledger *is* the override. The treasurer's
   Payments tab and member statement gained **Re-categorize**, an audited
-  action that re-types a payment (with a bound dues/tuition period) and,
-  uniquely, allows donation flips; retyping away from tuition unwinds an
-  unbacked installment and leaves a review note rather than auto-changing
-  the enrollment decision.
+  action that re-types a payment (with a bound dues/tuition period) and
+  allows donation flips; retyping away from tuition unwinds an unbacked
+  installment and leaves a review note rather than auto-changing the
+  enrollment decision.
+- **Member Account v2** (task #439). The member's Tuition + "My account"
+  tabs are now one **Account tab**, with a "Requirement met" (payment-based,
+  `tuition_years_covered` ≥ 4) vs. the enrollment-based **decision
+  exemption** (`tuition_decision_exempt`, ≥4 non-skipping years — only
+  silences the annual-decision nag, doesn't imply paid) kept as two
+  explicitly distinct predicates. Members get full statement-action parity
+  with the treasurer on their **own** payments — re-categorize, split
+  (donation flips included), and note — via `my_payment_retype`/
+  `my_payment_split`/`my_payment_note`, all stamped `source=SELF_REPORTED`
+  ("Member-reported") and audit-noted by email so the treasurer's
+  provenance hover always shows who acted. The retired My-payments table is
+  gone. A new **history-submission queue** (`payments.LedgerSubmission`)
+  lets a member report a pre-website payment or fee; the treasurer's
+  Reconcile tab reviews each (approve mints a member-reported Payment/Charge
+  bound to the right AY period with a duplicate-charge guard; decline just
+  notes it), and the member is notified either way.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

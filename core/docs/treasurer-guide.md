@@ -23,7 +23,7 @@ You'll arrive on the **Overview** tab. Seven tabs run across the top:
 | **Overview** | Academic-year tiles plus one needs-attention queue — everything that wants you, in one place |
 | **Accounts** | Every member's balance on the unified ledger — search, filter, and sort, with the URL carrying your filters so a filtered view is a shareable link |
 | **Payments** | Chronological list of all payments with refund / mark-paid controls |
-| **Reconcile** | Provisional payments awaiting categorization, Stripe payments with no linked member, and charge conflicts |
+| **Reconcile** | Member-submitted history reports awaiting a decision, provisional payments awaiting categorization, Stripe payments with no linked member, and charge conflicts |
 | **Settings** | Edit dues + tuition amounts and reminder cadence per academic year |
 | **Exports** | Download CSVs of transactions and member balances |
 | **Help** | This page |
@@ -67,6 +67,22 @@ Categories still matter for two things the school tracks closely:
   a year means that year doesn't generate a tuition charge; when a
   non-skipping year is fully covered by the sweep, it counts toward the
   four.
+
+That four-year number drives **two different things**, and they're easy to
+conflate:
+
+- **"Requirement met"** — the green badge on the tuition tile, and the
+  per-year "requirement met" state on the Tuition decisions table — means
+  the member has **paid in full across all four years**. It's payment-based.
+- The **annual-decision exemption** is a separate, quieter milestone: once a
+  member has **four non-skipping years on record** (committed, on a payment
+  plan, or paid — Skipping doesn't count), they stop being asked for a
+  yearly decision — no more Undecided-queue nag, no more Gate 1 block —
+  whether or not every one of those years is actually paid off. A member can
+  be decision-exempt and still owe real money; that money is chased through
+  the balance on their statement, not through decision reminders. Don't read
+  "no decision needed" as "nothing owed" — the balance tile is the source of
+  truth for that.
 
 Full Analysts, Scholars, and external visitors (Auditors) never owe
 tuition. Becoming an Analyst or Scholar certifies the four-year
@@ -113,13 +129,17 @@ surfaces everything that wants a decision from you:
 - **Undecided** — in-training members with no tuition decision on file for
   the current year. Each row has a one-click **Skipping** button if that's
   the right call; otherwise open their account page to record what they
-  told you.
+  told you. A member drops off this list once they're decision-exempt (four
+  non-skipping years on record) even if they still owe money — see *How the
+  account works*, above.
 - **Committed, not yet paid** — members who said they'd pay tuition this
   year but no payment (or payment plan) is on file yet. Click through to
   their account page to record it once it arrives.
 - **Charge conflicts** — a staff-adjusted charge that disagrees with what
-  the system would otherwise expect (see *Reconcile tab* below).
-- **Assumed** and **No payer** counts — link straight to the Reconcile tab.
+  the system would otherwise expect (see *Reconcile tab*, below).
+- **Assumed**, **No payer**, and **Member submissions** counts — link
+  straight to the Reconcile tab (see *Reconcile tab*, below, for what each
+  one is).
 
 If the queue is empty, there's nothing waiting on you today.
 
@@ -170,8 +190,12 @@ account page. It has four parts:
    carries **Mark paid** (pending offline payments), **Refund**,
    **Resend receipt**, and **Re-categorize** as applicable (see *Payments
    tab*, below, for what Re-categorize does). Hovering a line's provenance icon
-   shows where it came from — imported, verified, assumed, or
-   staff-entered — and any notes attached.
+   shows where it came from — imported, verified, assumed, member-reported,
+   or staff-entered — and any notes attached. The member sees their own
+   simplified version of this same statement on their Account tab, with
+   **Re-categorize**, **Split**, and **Note** actions on their own rows (see
+   the note under *Payments tab*, below) — so a line here can already carry
+   a member-reported provenance and audit note by the time you look at it.
 4. **Actions** — an **Add a charge** form (any category, amount, effective
    date, and an optional note) and a **Record an offline payment** form
    that takes any category and amount. Recording an offline **tuition**
@@ -339,14 +363,14 @@ For inspecting or correcting individual payments.
     credit for a fee we have no record of. There's deliberately no
     automatic detection here: one $250 payment can be a partial tuition
     installment or a seminar fee, and repeated same-amount payments can be
-    a payment plan or per-meeting billing — only you can tell which. The change writes a dated audit note to the
-    payment, and — unlike the member's own self-service re-type on their
-    payment history, which blocks it — this is the one place a **donation
-    can be flipped** into or out of another category. Because donations
-    sit outside the ledger's obligation math, flipping one **moves money
-    in or out of the member's account pot**: turning a donation into
-    tuition adds a charge-covering payment to their balance; turning a
-    tuition payment into a donation removes one. If you re-categorize a
+    a payment plan or per-meeting billing — only you can tell which. The
+    change writes a dated audit note to the payment. **Donations can be
+    flipped** into or out of another category here — the members' own
+    version of this action allows it too now (see the note below). Because
+    donations sit outside the ledger's obligation math, flipping one
+    **moves money in or out of the member's account pot**: turning a
+    donation into tuition adds a charge-covering payment to their balance;
+    turning a tuition payment into a donation removes one. If you re-categorize a
     payment **away from tuition** and it was backing an unpaid
     installment, the installment goes back to unpaid and a review note is
     added to that year's tuition decision — the decision itself doesn't
@@ -361,7 +385,77 @@ This tab, and everything on it besides Re-categorize, is unchanged by the
 ledger rework — it's still the place to inspect or correct one payment at
 a time. The per-member **Statement** on the Accounts tab is the place to
 see how that payment fits into the bigger picture (and offers the same
-Re-categorize action per row).
+Re-categorize action per row, plus **Split**, described above).
+
+**Members can now do some of this themselves.** From their own Account tab
+statement, a member can re-categorize or split one of their **own**
+payments — full parity with the actions above, including flipping a
+donation. (Same restriction as yours: a payment that settles an event
+registration can't be re-categorized or split, on either side.) That means
+**a payment's category can change without any action from you** — a member
+fixing their own mislabeled check is expected, not a bug. You can always
+tell who did what: hover a statement line's provenance icon. A member-made
+change shows a **"Member-reported (survey)"** source badge (a holdover
+label — it also covers the newer self-service actions and the
+history-submissions queue below, not just the original tuition survey),
+and the note underneath spells out what happened and names the member's
+email, e.g. "Re-categorized Dues → Tuition by member alice@example.com."
+A treasurer's own edit instead shows a **"Verified against records"**
+badge and a note naming you. Members also have their own **Note** field
+per payment (`member_note`) — separate from your treasurer-only notes —
+which shows in the same popover, labeled "Member note: …".
+
+---
+
+## Reconcile tab
+
+Everything that needs a human decision before it settles cleanly onto
+someone's ledger. Four sections, in the order they appear:
+
+- **Member submissions** — see below.
+- **Charge conflicts** — a staff-adjusted charge that disagrees with what
+  the minting sync would otherwise expect. The sync never edits a charge
+  you've touched (`staff_adjusted`), so a disagreement lands here instead
+  of silently being overwritten. Read the note, and adjust either side by
+  hand.
+- **Reconcile provisional payments** — payments imported as **assumed**
+  (mostly recurring charges booked as tuition pending the member survey).
+  Grouped by payer; confirm or reclassify each payer's group in one submit.
+- **No payer** — Stripe charges that are categorized but linked to no
+  member, so they never show up on anyone's statement. Link each to a
+  member, or mark it an anonymous donation.
+
+### Member submissions
+
+Members can report a payment or fee from **before the website's records
+begin** — the honor-system era a spreadsheet import can't reliably
+reconstruct. From their Account tab, a member fills in what it was (a
+payment or a charge), the category, amount, date, and a free-text
+description ("Report missing history"), which files as a **pending**
+submission. Nothing lands on their account yet — that's your call.
+
+Each pending submission shows here with the member's name, what they
+claimed, and their description. You either:
+
+- **Approve** — mints the matching entry on the member's account:
+  a **payment** (offline, member-reported provenance, dated the day they
+  claimed) for a claimed payment, or an **open charge** (also
+  member-reported, and marked staff-adjusted so the minting sync leaves it
+  alone) for a claimed fee. Either way it's bound to the right academic
+  year automatically when the category is dues or tuition. The mint
+  carries a note identifying the submission number and your email, plus
+  the member's own description — so the provenance trail is complete. If a
+  non-void charge already exists for that member in that category and
+  year, approval is **refused** rather than double-minting — the message
+  tells you to adjust the existing charge instead and decline the
+  submission with a note pointing at it.
+- **Decline** — mints nothing. Whatever note you enter (a reason, a
+  request for more detail, a reference to where you found the real record)
+  is saved as the decision note.
+
+Either way the member gets notified with your decision (and your note on a
+decline), and their own list of past submissions — visible below their
+"Report missing history" form — updates to show the outcome.
 
 ---
 
