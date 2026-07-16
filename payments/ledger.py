@@ -296,3 +296,40 @@ def collected_this_ay(today=None) -> dict:
         by_cat[row["payment_type"]] = row["s"] or Decimal("0")
         total += by_cat[row["payment_type"]]
     return {"window": window, "by_category": by_cat, "total": total}
+
+
+def tuition_clearance(user) -> list[str]:
+    """Reasons a member's tuition standing blocks promotion to Analyst/Scholar.
+
+    Empty list = clear. Necessary-but-insufficient: completing the Passage /
+    Traversée remains the Meeting of Analysts' decision — this is only the
+    financial criterion (spec 2026-07-16). Personas are exempt. No override
+    flag exists: settling the ledger (record payment / adjust / waive / void)
+    is the override.
+    """
+    profile = getattr(user, "profile", None)
+    if profile is None or profile.is_persona:
+        return []
+    acct = member_account(user)
+    reasons = []
+    # Replay the account's oldest-first sweep over the statement lines and
+    # report the uncovered slice of every OPEN tuition charge.
+    remaining = acct["paid"]
+    for ln in acct["lines"]:
+        if ln["kind"] != "charge" or not ln["counts"]:
+            continue  # payments, waived charges: no obligation to cover
+        c = ln["obj"]
+        covered = min(c.amount, remaining)
+        remaining -= covered
+        if c.category != Charge.Category.TUITION:
+            continue
+        uncovered = c.amount - covered
+        if uncovered > 0:
+            where = (f"{c.tuition_period.name} tuition charge"
+                     if c.tuition_period_id else "A tuition charge")
+            reasons.append(f"{where} has ${uncovered} uncovered.")
+    if acct["tuition_years_covered"] < acct["tuition_years_required"]:
+        reasons.append(
+            f"{acct['tuition_years_covered']} of "
+            f"{acct['tuition_years_required']} tuition years covered.")
+    return reasons
