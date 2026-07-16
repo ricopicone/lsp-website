@@ -110,6 +110,35 @@
                 <button type="submit" class="btn btn-ghost btn-xs">Resend receipt</button>
               </form>
               {% endif %}
+              <details class="dropdown">
+                <summary class="btn btn-ghost btn-xs">Re-categorize</summary>
+                <form method="post" action="{% url 'treasurer_payment_retype' p.id %}"
+                      class="dropdown-content z-10 menu p-3 shadow bg-base-100 rounded-box w-60 border border-base-300 flex-col gap-2">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <select name="payment_type" class="select select-bordered select-xs w-full" required>
+                    {% for value, label in type_choices %}
+                    <option value="{{ value }}" {% if value == p.payment_type %}disabled selected{% endif %}>{{ label }}{% if value == p.payment_type %} (current){% endif %}</option>
+                    {% endfor %}
+                  </select>
+                  <label class="text-[0.65rem] text-base-content/60">Dues year</label>
+                  <select name="dues_period" class="select select-bordered select-xs w-full">
+                    <option value="">Auto (from payment date)</option>
+                    {% for period in dues_periods %}
+                    <option value="{{ period.id }}">{{ period.name }}</option>
+                    {% endfor %}
+                  </select>
+                  <label class="text-[0.65rem] text-base-content/60">Tuition year</label>
+                  <select name="tuition_period" class="select select-bordered select-xs w-full">
+                    <option value="">Auto (from payment date)</option>
+                    {% for period in tuition_periods %}
+                    <option value="{{ period.id }}">{{ period.name }}</option>
+                    {% endfor %}
+                  </select>
+                  <p class="text-[0.65rem] text-base-content/50">Used only when the matching category is chosen.</p>
+                  <button type="submit" class="btn btn-primary btn-xs">Save</button>
+                </form>
+              </details>
             </div>
           </td>
           <td class="text-right">
