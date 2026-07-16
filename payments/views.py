@@ -31,6 +31,7 @@ from .forms import DonationForm, TuitionDecisionForm
 from .models import (
     Charge,
     DuesPeriod,
+    LedgerSubmission,
     Payment,
     TuitionEnrollment,
     TuitionInstallment,
@@ -2321,3 +2322,46 @@ def my_payment_note(request, payment_id: int):
         payment.save(update_fields=("member_note",))
         messages.success(request, "Note saved." if note else "Note cleared.")
     return _safe_next(request, _account_tab_url())
+
+
+@login_required
+@require_POST
+def my_ledger_submission_create(request):
+    """Member endpoint: report a missing historical payment or charge (task
+    #439, member Account v2 §3). Crucial for students who started before
+    the site's records begin — this only files the claim as PENDING; a
+    treasurer approves (minting the matching Payment/Charge) or declines it
+    from the Reconcile tab's Member submissions queue."""
+    kind = request.POST.get("kind")
+    if kind not in LedgerSubmission.Kind.values:
+        messages.error(request, "Choose whether this was a payment or a charge.")
+        return redirect(_account_tab_url())
+    category = request.POST.get("category")
+    if category not in Payment.Type.values:
+        messages.error(request, "Choose a valid category.")
+        return redirect(_account_tab_url())
+    amount = _parse_amount(request.POST.get("amount", ""))
+    if amount is None:
+        messages.error(request, "Enter a positive amount.")
+        return redirect(_account_tab_url())
+    try:
+        claimed_date = date.fromisoformat(request.POST.get("claimed_date", ""))
+    except ValueError:
+        messages.error(request, "Enter a valid date.")
+        return redirect(_account_tab_url())
+    if claimed_date > timezone.now().date():
+        messages.error(request, "The date can't be in the future.")
+        return redirect(_account_tab_url())
+    details = (request.POST.get("details") or "").strip()[:2000]
+    if not details:
+        messages.error(request, "Describe what this was.")
+        return redirect(_account_tab_url())
+
+    LedgerSubmission.objects.create(
+        user=request.user, kind=kind, category=category, amount=amount,
+        claimed_date=claimed_date, details=details,
+    )
+    messages.success(
+        request,
+        "Thanks, the treasurer will review your report and follow up.")
+    return redirect(_account_tab_url())

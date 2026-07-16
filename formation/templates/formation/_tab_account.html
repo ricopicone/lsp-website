@@ -295,6 +295,82 @@ payments/treasurer/member_detail.html for the full picture with actions).
       {% endif %}
     </section>
 
+    {# ---- Report missing history (task #439 §3) ---- #}
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-base-content">Report missing history</h2>
+      <details class="rounded-lg border border-base-300 p-4">
+        <summary class="cursor-pointer text-sm font-medium">Report a payment or fee from before the website's records begin</summary>
+        <p class="text-sm text-base-content/70 mt-3">
+          If you paid dues or tuition, or owed a fee, before this website tracked your
+          account, tell us about it here. The treasurer reviews each report and either
+          adds it to your account or follows up with you.
+        </p>
+        <form method="post" action="{% url 'my_ledger_submission_create' %}" class="mt-4 space-y-3">
+          {% csrf_token %}
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="block space-y-1 text-sm">
+              <span class="text-base-content/60">What was it</span>
+              <select name="kind" class="select select-bordered select-sm w-full">
+                {% for value, label in submission_kind_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="block space-y-1 text-sm">
+              <span class="text-base-content/60">Category</span>
+              <select name="category" class="select select-bordered select-sm w-full">
+                {% for value, label in payment_type_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="block space-y-1 text-sm">
+              <span class="text-base-content/60">Amount</span>
+              <input type="text" name="amount" inputmode="decimal" placeholder="0.00"
+                     class="input input-bordered input-sm w-full">
+            </label>
+            <label class="block space-y-1 text-sm">
+              <span class="text-base-content/60">Date</span>
+              <input type="date" name="claimed_date" max="{{ today|date:'Y-m-d' }}"
+                     class="input input-bordered input-sm w-full">
+            </label>
+          </div>
+          <label class="block space-y-1 text-sm">
+            <span class="text-base-content/60">Tell us about it</span>
+            <textarea name="details" rows="3" maxlength="2000"
+                      class="textarea textarea-bordered textarea-sm w-full"
+                      placeholder="e.g. I paid $2,000 tuition in fall 2019, by check to the treasurer at the time."></textarea>
+          </label>
+          <button type="submit" class="btn btn-primary btn-sm">Submit report</button>
+        </form>
+      </details>
+
+      {% if my_submissions %}
+      <div class="overflow-x-auto rounded-lg border border-base-300">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Date</th><th>Kind</th><th>Category</th>
+              <th class="text-right">Amount</th><th>Status</th><th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in my_submissions %}
+            <tr>
+              <td class="whitespace-nowrap text-xs text-base-content/70">{{ s.claimed_date|date:"M j, Y" }}</td>
+              <td>{{ s.get_kind_display }}</td>
+              <td>{{ s.get_category_display }}</td>
+              <td class="text-right whitespace-nowrap">{{ s.amount|usd }}</td>
+              <td>{% status_badge s.status %}</td>
+              <td class="text-xs text-base-content/70">{{ s.decision_note }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </section>
+
     <p class="text-xs text-base-content/50">
       Your charges and payments sit on one running balance, oldest charges are covered first.
       Categories are labels for reporting, your money is not split into separate pots.

@@ -286,10 +286,18 @@ def _formation_money_context(request) -> dict:
     in from the old Tuition tab) and dues, all on one tab. Statement rows
     carry the member's own retype/split/note actions (full treasurer parity
     on their own payments — ``payments.views.my_payment_retype`` etc.)."""
+    from django.utils import timezone
+
     from payments import ledger
     from payments.dues import is_dues_obligated
     from payments.forms import TuitionDecisionForm
-    from payments.models import DuesPeriod, Payment, TuitionEnrollment, TuitionPeriod
+    from payments.models import (
+        DuesPeriod,
+        LedgerSubmission,
+        Payment,
+        TuitionEnrollment,
+        TuitionPeriod,
+    )
     from payments.views import _attach_split_info
 
     user = request.user
@@ -373,6 +381,11 @@ def _formation_money_context(request) -> dict:
         "tuition_periods": tuition_periods,
         "dues_periods": dues_periods,
         "payment_type_choices": Payment.Type.choices,
+        # history submissions (task #439 §3) — "Report missing history"
+        "submission_kind_choices": LedgerSubmission.Kind.choices,
+        "my_submissions": list(
+            LedgerSubmission.objects.filter(user=user).order_by("-created_at")),
+        "today": timezone.now().date(),
     }
 
 

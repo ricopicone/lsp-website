@@ -57,6 +57,9 @@ _STATUS_BADGE = {
     "payment_plan": ("info",    "Payment plan"),
     "committed":    ("warning", "Committed"),
     "skipping":     ("ghost",   "Skipping"),
+    # LedgerSubmission.Status ("pending" reuses the Payment mapping above)
+    "approved":     ("success", "Approved"),
+    "declined":     ("error",   "Declined"),
 }
 
 
