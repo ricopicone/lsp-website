@@ -206,6 +206,7 @@
                     <button type="submit" class="btn btn-ghost btn-xs" title="Reopen" aria-label="Reopen">{% icon "rotate-ccw" %}</button>
                   </form>
                   {% endif %}
+                  {% include "payments/treasurer/_note_modal.html" with obj=ln.obj kind="c" next_url=request.path %}
                 {% else %}
                   {% if ln.obj.status == "pending" and ln.obj.method == "offline" %}
                   <form method="post" action="{% url 'treasurer_payment_apply_success' ln.obj.id %}" class="contents"
@@ -244,6 +245,7 @@
                   {% include "payments/treasurer/_split_modal.html" with payment=ln.obj type_choices=payment_categories next_url=request.path %}
                   {% endif %}
                   {% endif %}
+                  {% include "payments/treasurer/_note_modal.html" with obj=ln.obj kind="p" next_url=request.path %}
                 {% endif %}
               </div>
             </td>

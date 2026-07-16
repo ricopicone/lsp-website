@@ -1,0 +1,29 @@
+{% load parletre_tags %}
+{% comment %}
+Append-only treasurer note on a charge or payment. Include with:
+obj (Charge or Payment), kind ("p" for payment, "c" for charge), next_url.
+Existing notes stay visible in the provenance hover and in the modal.
+{% endcomment %}
+<button type="button" class="btn btn-ghost btn-xs" title="Add note" aria-label="Add note"
+        onclick="document.getElementById('note-{{ kind }}-{{ obj.id }}').showModal()">{% icon "sticky-note" %}</button>
+<dialog id="note-{{ kind }}-{{ obj.id }}" class="modal">
+  <div class="modal-box max-w-sm whitespace-normal text-left">
+    <h3 class="font-serif text-lg mb-2">Add note</h3>
+    {% if obj.notes %}
+    <div class="text-xs text-base-content/60 bg-base-200 rounded p-2 mb-3 max-h-32 overflow-y-auto whitespace-pre-line">{{ obj.notes }}</div>
+    {% endif %}
+    <form method="post" action="{% if kind == "p" %}{% url 'treasurer_payment_note' obj.id %}{% else %}{% url 'treasurer_charge_note' obj.id %}{% endif %}" class="space-y-2">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <textarea name="note" rows="3" maxlength="2000" required
+                class="textarea textarea-bordered w-full text-sm"
+                placeholder="Visible to treasurer staff only, never to the member."></textarea>
+      <div class="modal-action mt-2">
+        <button type="submit" class="btn btn-primary btn-sm">Save note</button>
+        <button type="button" class="btn btn-ghost btn-sm"
+                onclick="document.getElementById('note-{{ kind }}-{{ obj.id }}').close()">Cancel</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
