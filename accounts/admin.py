@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
@@ -13,8 +14,32 @@ from .models import (
 )
 
 
+class ProfileAdminForm(forms.ModelForm):
+    """Blocks a staff-edited Profile.role change that would promote a
+    tuition-owing in-training member out of training (task #439's tuition
+    gate, mirrored here since the Django admin bypasses
+    record_membership_change)."""
+
+    class Meta:
+        model = Profile
+        fields = "__all__"
+
+    def clean_role(self):
+        role = self.cleaned_data["role"]
+        if self.instance.pk and role != self.instance.role:
+            from django.core.exceptions import ValidationError
+
+            from .membership import validate_role_transition
+            try:
+                validate_role_transition(self.instance.user, role)
+            except ValidationError as exc:
+                raise forms.ValidationError(" ".join(exc.messages))
+        return role
+
+
 class ProfileInline(admin.StackedInline):
     model = Profile
+    form = ProfileAdminForm
     fk_name = "user"  # Profile also has persona_owner → must disambiguate.
     can_delete = False
     fields = (
@@ -76,6 +101,7 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
+    form = ProfileAdminForm
     list_display = ("user", "role", "is_faculty", "clinical_background")
     list_filter = ("role", "is_faculty", "public", "clinical_background")
     search_fields = ("user__email", "user__first_name", "user__last_name")
