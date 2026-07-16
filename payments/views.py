@@ -907,77 +907,101 @@ def treasurer_payment_retype(request, payment_id: int):
     if new_type == payment.payment_type:
         messages.error(request, "That payment already has that category.")
         return _safe_next(request, "treasurer_payments")
-
-    old_type = payment.payment_type
-    details = []
-    unlinked_installment = None
-    if payment.dues_period_id and new_type != Payment.Type.DUES:
-        details.append(f"was {payment.dues_period}")
-        payment.dues_period = None
-    if new_type != Payment.Type.TUITION:
-        if payment.tuition_period_id:
-            details.append(f"was {payment.tuition_period}")
-            payment.tuition_period = None
-        if payment.tuition_installment_id:
-            details.append(
-                f"unlinked installment #{payment.tuition_installment_id}")
-            unlinked_installment = payment.tuition_installment
-            payment.tuition_installment = None
-
-    when = (payment.paid_at or payment.created_at).date()
-    if new_type == Payment.Type.DUES:
-        payment.dues_period = _resolve_period(
-            request.POST.get("dues_period"), DuesPeriod,
-            DuesPeriod.objects.filter(
-                start_date__lte=when, end_date__gte=when).first()
-            or DuesPeriod.current(),
+    if payment.registration_id:
+        messages.error(
+            request,
+            "This payment settles an event registration. Use the refund or "
+            "comp flows instead, or correct the registration link in the "
+            "Django admin first.",
         )
-    elif new_type == Payment.Type.TUITION:
-        payment.tuition_period = _resolve_period(
-            request.POST.get("tuition_period"), TuitionPeriod,
-            TuitionPeriod.objects.filter(
-                start_date__lte=when, end_date__gte=when).first()
-            or TuitionPeriod.current(),
+        return _safe_next(request, "treasurer_payments")
+    if payment.user_id is None and new_type in (
+        Payment.Type.DUES, Payment.Type.TUITION,
+    ):
+        messages.error(
+            request,
+            "This payment has no member attached. Link it to a member on "
+            "the Reconcile tab first.",
         )
+        return _safe_next(request, "treasurer_payments")
 
-    payment.payment_type = new_type
-    payment.source = Source.VERIFIED
-    labels = dict(Payment.Type.choices)
-    audit = (f"[{timezone.now().date()}] Re-categorized "
-             f"{labels[old_type]} → {labels[new_type]} by treasurer "
-             f"{request.user.email}."
-             + (f" ({'; '.join(details)})" if details else ""))
-    payment.notes = (payment.notes + "\n" + audit) if payment.notes else audit
-    payment.save()
+    flash = None
+    with transaction.atomic():
+        old_type = payment.payment_type
+        details = []
+        unlinked_installment = None
+        if payment.dues_period_id and new_type != Payment.Type.DUES:
+            details.append(f"was {payment.dues_period}")
+            payment.dues_period = None
+        if new_type != Payment.Type.TUITION:
+            if payment.tuition_period_id:
+                details.append(f"was {payment.tuition_period}")
+                payment.tuition_period = None
+            if payment.tuition_installment_id:
+                details.append(
+                    f"unlinked installment #{payment.tuition_installment_id}")
+                unlinked_installment = payment.tuition_installment
+                payment.tuition_installment = None
 
-    flash = f"Re-categorized as {labels[new_type]}."
-    if unlinked_installment is not None:
-        # The backing money just left. Reset the installment's paid flag if
-        # no other succeeded payment still covers it — but do NOT auto-change
-        # the enrollment's status (a decision record; do-not-over-automate):
-        # leave a dated review note for the treasurer instead.
-        still_backed = unlinked_installment.payments.filter(
-            status=Payment.Status.SUCCEEDED,
-        ).exclude(pk=payment.pk).exists()
-        if not still_backed:
-            if unlinked_installment.paid:
-                unlinked_installment.paid = False
-                unlinked_installment.paid_at = None
-                unlinked_installment.save(update_fields=("paid", "paid_at"))
-            enrollment = unlinked_installment.enrollment
-            review_note = (
-                f"[{timezone.now().date()}] Payment #{payment.id} "
-                "re-categorized away from tuition by treasurer "
-                f"{request.user.email}; installment "
-                f"#{unlinked_installment.sequence} unpaid again — review "
-                "this year's decision status."
+        when = (payment.paid_at or payment.created_at).date()
+        if new_type == Payment.Type.DUES:
+            payment.dues_period = _resolve_period(
+                request.POST.get("dues_period"), DuesPeriod,
+                DuesPeriod.objects.filter(
+                    start_date__lte=when, end_date__gte=when).first()
+                or DuesPeriod.current(),
             )
-            enrollment.notes = (
-                (enrollment.notes + "\n" if enrollment.notes else "")
-                + review_note)
-            enrollment.save(update_fields=("notes",))
-            flash += (" Review the member's tuition decision for "
-                      f"{enrollment.tuition_period.name}.")
+        elif new_type == Payment.Type.TUITION:
+            payment.tuition_period = _resolve_period(
+                request.POST.get("tuition_period"), TuitionPeriod,
+                TuitionPeriod.objects.filter(
+                    start_date__lte=when, end_date__gte=when).first()
+                or TuitionPeriod.current(),
+            )
+
+        payment.payment_type = new_type
+        payment.source = Source.VERIFIED
+        labels = dict(Payment.Type.choices)
+        audit = (f"[{timezone.now().date()}] Re-categorized "
+                 f"{labels[old_type]} → {labels[new_type]} by treasurer "
+                 f"{request.user.email}."
+                 + (f" ({'; '.join(details)})" if details else ""))
+        payment.notes = (
+            (payment.notes + "\n" + audit) if payment.notes else audit)
+        payment.save()
+
+        flash = f"Re-categorized as {labels[new_type]}."
+        if unlinked_installment is not None:
+            # The backing money just left. Reset the installment's paid flag
+            # if no other succeeded payment still covers it — but do NOT
+            # auto-change the enrollment's status (a decision record;
+            # do-not-over-automate): leave a dated review note for the
+            # treasurer instead.
+            still_backed = unlinked_installment.payments.filter(
+                status=Payment.Status.SUCCEEDED,
+            ).exclude(pk=payment.pk).exists()
+            if not still_backed:
+                was_paid = unlinked_installment.paid
+                if was_paid:
+                    unlinked_installment.paid = False
+                    unlinked_installment.paid_at = None
+                    unlinked_installment.save(
+                        update_fields=("paid", "paid_at"))
+                enrollment = unlinked_installment.enrollment
+                outcome = "unpaid again" if was_paid else "unlinked"
+                review_note = (
+                    f"[{timezone.now().date()}] Payment #{payment.id} "
+                    "re-categorized away from tuition by treasurer "
+                    f"{request.user.email}; installment "
+                    f"#{unlinked_installment.sequence} {outcome} — review "
+                    "this year's decision status."
+                )
+                enrollment.notes = (
+                    (enrollment.notes + "\n" if enrollment.notes else "")
+                    + review_note)
+                enrollment.save(update_fields=("notes",))
+                flash += (" Review the member's tuition decision for "
+                          f"{enrollment.tuition_period.name}.")
     messages.success(request, flash)
     return _safe_next(request, "treasurer_payments")
 
