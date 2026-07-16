@@ -82,7 +82,7 @@
             </td>
             <td>
               {% if r.period.start_date <= today and today <= r.period.end_date %}
-              <div class="flex flex-wrap gap-1">
+              <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
                 <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}" class="contents">
                   {% csrf_token %}
                   <input type="hidden" name="status" value="committed">
@@ -159,7 +159,7 @@
               {% endif %}
             </td>
             <td>
-              <div class="flex flex-wrap gap-1">
+              <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
                 {% if ln.kind == "charge" %}
                   {% if ln.obj.status == "open" %}
                   <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents">
@@ -173,17 +173,26 @@
                     <input type="hidden" name="action" value="void">
                     <button type="submit" class="btn btn-ghost btn-xs text-error">Void</button>
                   </form>
-                  <details class="dropdown">
-                    <summary class="btn btn-ghost btn-xs">Adjust</summary>
-                    <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}"
-                          class="dropdown-content z-10 menu p-2 shadow bg-base-100 rounded-box w-48 border border-base-300 flex-row gap-1">
-                      {% csrf_token %}
-                      <input type="hidden" name="action" value="adjust">
-                      <input type="number" step="0.01" min="0.01" name="amount" value="{{ ln.obj.amount }}"
-                             class="input input-bordered input-xs w-20" required>
-                      <button type="submit" class="btn btn-primary btn-xs">Save</button>
-                    </form>
-                  </details>
+                  <button type="button" class="btn btn-ghost btn-xs"
+                          onclick="document.getElementById('adjust-{{ ln.obj.id }}').showModal()">Adjust</button>
+                  <dialog id="adjust-{{ ln.obj.id }}" class="modal">
+                    <div class="modal-box max-w-xs">
+                      <h3 class="font-serif text-lg mb-3">Adjust charge amount</h3>
+                      <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="space-y-2">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="adjust">
+                        <label class="text-xs text-base-content/60" for="adjust-amount-{{ ln.obj.id }}">New amount</label>
+                        <input id="adjust-amount-{{ ln.obj.id }}" type="number" step="0.01" min="0.01" name="amount"
+                               value="{{ ln.obj.amount }}" class="input input-bordered input-sm w-full" required>
+                        <div class="modal-action mt-4">
+                          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                          <button type="button" class="btn btn-ghost btn-sm"
+                                  onclick="document.getElementById('adjust-{{ ln.obj.id }}').close()">Cancel</button>
+                        </div>
+                      </form>
+                    </div>
+                    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                  </dialog>
                   {% elif ln.obj.status == "waived" %}
                   <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents">
                     {% csrf_token %}
@@ -222,35 +231,10 @@
                     <button type="submit" class="btn btn-ghost btn-xs">Resend receipt</button>
                   </form>
                   {% endif %}
-                  <details class="dropdown">
-                    <summary class="btn btn-ghost btn-xs">Re-categorize</summary>
-                    <form method="post" action="{% url 'treasurer_payment_retype' ln.obj.id %}"
-                          class="dropdown-content z-10 menu p-3 shadow bg-base-100 rounded-box w-60 border border-base-300 flex-col gap-2">
-                      {% csrf_token %}
-                      <input type="hidden" name="next" value="{{ request.path }}">
-                      <select name="payment_type" class="select select-bordered select-xs w-full" required>
-                        {% for value, label in payment_categories %}
-                        <option value="{{ value }}" {% if value == ln.obj.payment_type %}disabled selected{% endif %}>{{ label }}{% if value == ln.obj.payment_type %} (current){% endif %}</option>
-                        {% endfor %}
-                      </select>
-                      <label class="text-[0.65rem] text-base-content/60">Dues year</label>
-                      <select name="dues_period" class="select select-bordered select-xs w-full">
-                        <option value="">Auto (from payment date)</option>
-                        {% for period in dues_periods %}
-                        <option value="{{ period.id }}">{{ period.name }}</option>
-                        {% endfor %}
-                      </select>
-                      <label class="text-[0.65rem] text-base-content/60">Tuition year</label>
-                      <select name="tuition_period" class="select select-bordered select-xs w-full">
-                        <option value="">Auto (from payment date)</option>
-                        {% for period in tuition_periods %}
-                        <option value="{{ period.id }}">{{ period.name }}</option>
-                        {% endfor %}
-                      </select>
-                      <p class="text-[0.65rem] text-base-content/50">Used only when the matching category is chosen.</p>
-                      <button type="submit" class="btn btn-primary btn-xs">Save</button>
-                    </form>
-                  </details>
+                  {% if not ln.obj.registration_id %}
+                  {% include "payments/treasurer/_retype_modal.html" with payment=ln.obj type_choices=payment_categories dues_periods=dues_periods tuition_periods=tuition_periods next_url=request.path %}
+                  {% include "payments/treasurer/_assign_modal.html" with payment=ln.obj next_url=request.path %}
+                  {% endif %}
                 {% endif %}
               </div>
             </td>
@@ -344,4 +328,7 @@
   </section>
 
 </div>
+<datalist id="member-options">
+  {% for m in member_options %}<option value="{{ m.value }}">{% endfor %}
+</datalist>
 {% endblock %}

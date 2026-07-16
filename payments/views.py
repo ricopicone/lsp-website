@@ -511,6 +511,7 @@ def treasurer_member_detail(request, user_id: int):
             "registrations": registrations,
             "charge_categories": Charge.Category.choices,
             "payment_categories": Payment.Type.choices,
+            "member_options": _reconcile_member_options(),
             "today": timezone.now().date(),
             "dues_periods": DuesPeriod.objects.all(),  # newest first (Meta.ordering)
             "tuition_periods": TuitionPeriod.objects.all(),
@@ -787,6 +788,18 @@ def treasurer_payments(request):
     # asterisk legend only shows when there's an asterisk to explain.
     has_assumed = any(p.source == Source.ASSUMED for p in page_obj)
 
+    # Payer column: the member's name when linked; otherwise whatever the
+    # Stripe import knew — the parsed payer name, falling back to the
+    # payment's own email. Never just "anonymous".
+    for p in page_obj:
+        if p.user_id:
+            p.payer_label = (p.user.get_full_name() or "").strip() or p.user.email
+            p.payer_detail = ""
+        else:
+            name = _payer_name_from_notes(p)
+            p.payer_label = name or p.email or "unknown payer"
+            p.payer_detail = p.email if (name and p.email) else ""
+
     return _treasurer_render(request, "payments", "payments/treasurer/payments.html", {
         "payments":           page_obj,
         "page_obj":           page_obj,
@@ -800,6 +813,7 @@ def treasurer_payments(request):
         "total_count":        page_obj.paginator.count,
         "dues_periods":       DuesPeriod.objects.all(),  # newest first (Meta.ordering)
         "tuition_periods":    TuitionPeriod.objects.all(),
+        "member_options":     _reconcile_member_options(),
     })
 
 
@@ -892,6 +906,55 @@ def treasurer_payment_apply_success(request, payment_id: int):
 @login_required
 @user_passes_test(_is_staff)
 @require_POST
+def treasurer_payment_assign(request, payment_id: int):
+    """Assign (or reassign) a payment to a member's account.
+
+    Mirrors the Reconcile queue's semantics: member resolved from the
+    autocomplete value, provenance promoted to VERIFIED, and a dated audit
+    note recording who the money was attributed to before. Registration-
+    settling payments refuse — the registration owns its member.
+    """
+    from accounts.models import Source
+
+    payment = get_object_or_404(Payment, pk=payment_id)
+    if payment.registration_id:
+        messages.error(
+            request,
+            "This payment settles an event registration, which owns its "
+            "member. Correct the registration instead.",
+        )
+        return _safe_next(request, "treasurer_payments")
+    assign = (request.POST.get("assign_user") or "").strip()
+    target = _resolve_assign_user(assign) if assign else None
+    if target is None:
+        messages.error(request, f"No member found for '{assign}'.")
+        return _safe_next(request, "treasurer_payments")
+    if target.id == payment.user_id:
+        messages.error(request, "That payment is already on this account.")
+        return _safe_next(request, "treasurer_payments")
+
+    if payment.user_id:
+        old_label = (payment.user.get_full_name() or "").strip() or ""
+        old_label = f"{old_label} ({payment.user.email})".strip()
+    else:
+        old_label = (_payer_name_from_notes(payment) or payment.email
+                     or "no member")
+    with transaction.atomic():
+        payment.user = target
+        payment.source = Source.VERIFIED
+        audit = (f"[{timezone.now().date()}] Assigned to {target.email} by "
+                 f"treasurer {request.user.email}. (was {old_label})")
+        payment.notes = (
+            (payment.notes + "\n" + audit) if payment.notes else audit)
+        payment.save(update_fields=("user", "source", "notes"))
+    who = target.get_full_name() or target.email
+    messages.success(request, f"Assigned to {who}.")
+    return _safe_next(request, "treasurer_payments")
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
 def treasurer_payment_retype(request, payment_id: int):
     """Re-categorize a payment (treasurer override — donation flips allowed).
 
@@ -918,6 +981,21 @@ def treasurer_payment_retype(request, payment_id: int):
     if payment.user_id is None and new_type in (
         Payment.Type.DUES, Payment.Type.TUITION,
     ):
+        messages.error(
+            request,
+            "This payment has no member attached. Link it to a member on "
+            "the Reconcile tab first.",
+        )
+        return _safe_next(request, "treasurer_payments")
+    settle = bool(request.POST.get("settle_charge"))
+    if settle and new_type != Payment.Type.REGISTRATION:
+        messages.error(
+            request,
+            "The settle option applies only when re-categorizing to "
+            "Registration.",
+        )
+        return _safe_next(request, "treasurer_payments")
+    if settle and payment.user_id is None:
         messages.error(
             request,
             "This payment has no member attached. Link it to a member on "
@@ -971,6 +1049,25 @@ def treasurer_payment_retype(request, payment_id: int):
         payment.save()
 
         flash = f"Re-categorized as {labels[new_type]}."
+        if settle:
+            # Honor-system era: the event fee this payment settled was never
+            # recorded as a charge. Insert the matching charge dated with the
+            # payment so the pair nets to zero exactly where it sits in the
+            # statement — no phantom credit, no invented debt.
+            Charge.objects.create(
+                user_id=payment.user_id,
+                category=Charge.Category.REGISTRATION,
+                amount=payment.amount,
+                effective_date=when,
+                source=Source.STAFF,
+                staff_adjusted=True,
+                notes=(f"[{timezone.now().date()}] Settlement charge inserted "
+                       f"with re-categorization of payment #{payment.pk} by "
+                       f"treasurer {request.user.email} — the original event "
+                       "fee was never recorded."),
+            )
+            flash += (" Inserted a matching Registration charge dated "
+                      "with the payment.")
         if unlinked_installment is not None:
             # The backing money just left. Reset the installment's paid flag
             # if no other succeeded payment still covers it — but do NOT
