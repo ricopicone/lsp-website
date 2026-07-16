@@ -85,9 +85,17 @@ class Command(BaseCommand):
             is_active=True, profile__role__in=Profile.IN_TRAINING_ROLES,
         ).select_related("profile")
 
+        from payments.ledger import tuition_requirement_met
+
         for user in eligible_users:
             if not user.profile.owes_tuition:
                 skipped_not_owing += 1
+                continue
+
+            if tuition_requirement_met(user):
+                # Four non-skipping years on record — no annual decision is
+                # required; remaining money is chased through the ledger.
+                skipped_done += 1
                 continue
 
             enrollment = TuitionEnrollment.objects.filter(

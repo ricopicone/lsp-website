@@ -81,24 +81,24 @@
               {% else %}<span class="badge badge-ghost badge-sm">Skipping</span>{% endif %}
             </td>
             <td>
-              {% if r.period.start_date <= today and today <= r.period.end_date %}
               <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
                 <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}" class="contents"
-                      onsubmit="return confirm('Set this year\'s tuition decision to Committed? The decision record is updated with an audit note.');">
+                      onsubmit="return confirm('Set the {{ r.period.name }} tuition decision to Committed? The decision record is updated with an audit note and charges follow the decision.');">
                   {% csrf_token %}
                   <input type="hidden" name="status" value="committed">
+                  <input type="hidden" name="period" value="{{ r.period.id }}">
                   <input type="hidden" name="next" value="{{ request.path }}">
-                  <button type="submit" class="btn btn-ghost btn-xs">Committed</button>
+                  <button type="submit" class="btn btn-ghost btn-xs" {% if r.state != "skipping" %}disabled{% endif %}>Committed</button>
                 </form>
                 <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}" class="contents"
-                      onsubmit="return confirm('Set this year\'s tuition decision to Skipping? The year stops generating a tuition charge; the decision record is updated with an audit note.');">
+                      onsubmit="return confirm('Set the {{ r.period.name }} tuition decision to Skipping? The year stops generating a tuition charge; the decision record is updated with an audit note.');">
                   {% csrf_token %}
                   <input type="hidden" name="status" value="skipping">
+                  <input type="hidden" name="period" value="{{ r.period.id }}">
                   <input type="hidden" name="next" value="{{ request.path }}">
-                  <button type="submit" class="btn btn-ghost btn-xs">Skipping</button>
+                  <button type="submit" class="btn btn-ghost btn-xs" {% if r.state == "skipping" %}disabled{% endif %}>Skipping</button>
                 </form>
               </div>
-              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -107,6 +107,25 @@
     </div>
     {% else %}
     <p class="text-sm text-base-content/60">No tuition enrollments on file.</p>
+    {% endif %}
+    {% if unenrolled_tuition_periods %}
+    <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}"
+          class="flex flex-wrap items-center gap-2"
+          onsubmit="return confirm('Record this tuition decision? The decision record is updated with an audit note and charges follow the decision.');">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.path }}">
+      <span class="text-xs text-base-content/60">Add year:</span>
+      <select name="period" class="select select-bordered select-xs" required>
+        {% for tp in unenrolled_tuition_periods %}
+        <option value="{{ tp.id }}">{{ tp.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="status" class="select select-bordered select-xs">
+        <option value="committed">Committed</option>
+        <option value="skipping">Skipping</option>
+      </select>
+      <button type="submit" class="btn btn-ghost btn-xs">Add</button>
+    </form>
     {% endif %}
   </section>
 

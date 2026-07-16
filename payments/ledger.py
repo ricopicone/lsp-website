@@ -298,6 +298,19 @@ def collected_this_ay(today=None) -> dict:
     return {"window": window, "by_category": by_cat, "total": total}
 
 
+def tuition_requirement_met(user) -> bool:
+    """Four non-skipping tuition years on record — no further annual
+    decision is required. The 4-year cap means a fifth year never mints a
+    charge, so nagging for a skip/committed status past that point is
+    noise (Rico, 2026-07-16). Money still owed on the four years is
+    chased through the ledger, not through decision reminders."""
+    from .models import TuitionEnrollment
+
+    return TuitionEnrollment.objects.filter(user=user).exclude(
+        status=TuitionEnrollment.Status.SKIPPING,
+    ).count() >= TUITION_YEARS_REQUIRED
+
+
 def tuition_clearance(user) -> list[str]:
     """Reasons a member's tuition standing blocks promotion to Analyst/Scholar.
 

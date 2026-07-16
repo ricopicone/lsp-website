@@ -149,7 +149,10 @@ def _attention_queue(rows) -> dict:
             profile__standing=Profile.Standing.ACTIVE,
             profile__role__in=Profile.IN_TRAINING_ROLES,
         ).select_related("profile")
-        undecided = [u for u in in_training if u.id not in decided_ids]
+        from payments.ledger import tuition_requirement_met
+        undecided = [u for u in in_training
+                     if u.id not in decided_ids
+                     and not tuition_requirement_met(u)]
         committed_unpaid = [
             e for e in enrollments
             if e.status == TuitionEnrollment.Status.COMMITTED]
@@ -514,6 +517,8 @@ def treasurer_member_detail(request, user_id: int):
             "charge_categories": Charge.Category.choices,
             "payment_categories": Payment.Type.choices,
             "member_options": _reconcile_member_options(),
+            "unenrolled_tuition_periods": TuitionPeriod.objects.exclude(
+                enrollments__user=target),
             "today": timezone.now().date(),
             "dues_periods": DuesPeriod.objects.all(),  # newest first (Meta.ordering)
             "tuition_periods": TuitionPeriod.objects.all(),
@@ -1111,6 +1116,13 @@ def treasurer_payment_apply_success(request, payment_id: int):
     return _safe_next(request, "treasurer_payments")
 
 
+def _int_or_none(raw):
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _period_for(new_type, when):
     """The AY period containing ``when`` for a dues/tuition category, falling
     back to the current one. None for other categories."""
@@ -1393,8 +1405,15 @@ def treasurer_tuition_set_status(request, user_id: int):
     if status not in _INLINE_TUITION_STATUSES:
         return _safe_next(request, "treasurer")
     target = get_object_or_404(User, pk=user_id)
-    period = TuitionPeriod.current()
+    # An explicit period id targets any year (treasurer history repair,
+    # task #439); default stays the current year for the queue buttons.
+    period_id = request.POST.get("period")
+    if period_id:
+        period = TuitionPeriod.objects.filter(pk=_int_or_none(period_id)).first()
+    else:
+        period = TuitionPeriod.current()
     if period is None:
+        messages.error(request, "Choose a valid academic year.")
         return _safe_next(request, "treasurer")
     with transaction.atomic():
         enr, _ = TuitionEnrollment.objects.update_or_create(
@@ -1404,7 +1423,7 @@ def treasurer_tuition_set_status(request, user_id: int):
         enr.notes = (
             (enr.notes + "\n" if enr.notes else "")
             + f"[{timezone.now().date()}] Treasurer ({request.user.email}) "
-            f"set status to {_INLINE_TUITION_STATUSES[status]}."
+            f"set {period.name} status to {_INLINE_TUITION_STATUSES[status]}."
         )
         enr.save(update_fields=("notes",))
     return _safe_next(request, "treasurer")
