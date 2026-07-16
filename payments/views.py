@@ -165,6 +165,8 @@ def _attention_queue(rows) -> dict:
         "assumed_count": Payment.objects.filter(source=Source.ASSUMED).count(),
         "no_payer_count": Payment.objects.filter(
             source=Source.STRIPE, user__isnull=True).count(),
+        "submission_count": LedgerSubmission.objects.filter(
+            status=LedgerSubmission.Status.PENDING).count(),
         "tuition_period": period,
     }
 
@@ -277,6 +279,10 @@ def treasurer_reconcile(request):
     no_payer_groups = _payer_groups(no_payer)
 
     need_members = any(not g["matched"] for g in group_list) or bool(no_payer_groups)
+    submissions = list(
+        LedgerSubmission.objects.filter(status=LedgerSubmission.Status.PENDING)
+        .select_related("user")
+    )
     return _treasurer_render(request, "reconcile", "payments/treasurer/reconcile.html", {
         "groups": group_list,
         "assumed_count": len(assumed),
@@ -287,6 +293,7 @@ def treasurer_reconcile(request):
         "type_choices": Payment.Type.choices,
         "member_options": _reconcile_member_options() if need_members else [],
         "charge_conflicts": _charge_conflicts(),
+        "submissions": submissions,
     })
 
 
@@ -462,6 +469,97 @@ def _reconcile_apply(request):
         return redirect("treasurer_reconcile")
     note = f"→ {new_type}" + (f", linked {assigned_user.email}" if assigned_user else "")
     messages.success(request, f"Reconciled {n} payment(s) {note}.")
+    return redirect("treasurer_reconcile")
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_submission_decide(request, submission_id: int):
+    """Approve or decline a member's history-submission claim (Reconcile
+    tab's Member submissions queue, task #439 §3).
+
+    Approve mints the matching Payment/Charge exactly per spec: a payment
+    is dated ``claimed_date`` at noon UTC and bound to the covering dues/
+    tuition period; a charge is OPEN + ``staff_adjusted`` (so the minting
+    syncs never touch it). Both carry ``source=SELF_REPORTED`` — the
+    member's own say-so, honor-system era — and a note naming the
+    submission and the deciding treasurer. Decline just records the note;
+    nothing is minted. Idempotent: an already-decided submission no-ops.
+    """
+    from datetime import timezone as dt_timezone
+
+    from accounts.models import Source
+
+    submission = get_object_or_404(LedgerSubmission, pk=submission_id)
+    if submission.status != LedgerSubmission.Status.PENDING:
+        messages.error(request, "That submission was already decided.")
+        return redirect("treasurer_reconcile")
+
+    decision = request.POST.get("decision")
+    if decision not in ("approve", "decline"):
+        messages.error(request, "Choose approve or decline.")
+        return redirect("treasurer_reconcile")
+    note = (request.POST.get("note") or "").strip()[:2000]
+
+    if decision == "approve" and submission.kind == LedgerSubmission.Kind.CHARGE \
+            and submission.category not in Charge.Category.values:
+        messages.error(
+            request,
+            f"'{submission.category}' isn't a valid charge category — "
+            "decline this submission or ask the member to re-submit it "
+            "as a payment instead.",
+        )
+        return redirect("treasurer_reconcile")
+
+    header = (f"Member-reported history (submission #{submission.id}), "
+              f"approved by treasurer {request.user.email}.")
+    mint_note = header + (f"\n{submission.details}" if submission.details else "")
+
+    with transaction.atomic():
+        if decision == "approve":
+            if submission.kind == LedgerSubmission.Kind.PAYMENT:
+                kwargs = {}
+                if submission.category == Payment.Type.DUES:
+                    kwargs["dues_period"] = _period_for(
+                        Payment.Type.DUES, submission.claimed_date)
+                elif submission.category == Payment.Type.TUITION:
+                    kwargs["tuition_period"] = _period_for(
+                        Payment.Type.TUITION, submission.claimed_date)
+                paid_at = datetime(
+                    submission.claimed_date.year, submission.claimed_date.month,
+                    submission.claimed_date.day, 12, 0, tzinfo=dt_timezone.utc,
+                )
+                payment = Payment.objects.create(
+                    payment_type=submission.category, user=submission.user,
+                    amount=submission.amount, status=Payment.Status.SUCCEEDED,
+                    method=Payment.Method.OFFLINE, source=Source.SELF_REPORTED,
+                    paid_at=paid_at, notes=mint_note, **kwargs,
+                )
+                submission.created_payment = payment
+            else:
+                charge = Charge.objects.create(
+                    user=submission.user, category=submission.category,
+                    amount=submission.amount,
+                    effective_date=submission.claimed_date,
+                    status=Charge.Status.OPEN, source=Source.SELF_REPORTED,
+                    staff_adjusted=True, notes=mint_note,
+                )
+                submission.created_charge = charge
+            submission.status = LedgerSubmission.Status.APPROVED
+        else:
+            submission.status = LedgerSubmission.Status.DECLINED
+        submission.decision_note = note
+        submission.decided_by = request.user
+        submission.decided_at = timezone.now()
+        submission.save()
+
+    from . import notifications as _payment_notifications
+    _payment_notifications.ledger_submission_decided(submission)
+
+    messages.success(
+        request,
+        f"Submission #{submission.id} {submission.get_status_display().lower()}.")
     return redirect("treasurer_reconcile")
 
 

@@ -2,6 +2,50 @@
 {% load treasurer_filters %}
 {% block tab_content %}
 <div class="space-y-6">
+  {% if submissions %}
+  <section class="space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Member submissions
+      <span class="text-base-content/60 text-sm font-normal">({{ submissions|length }})</span></h3>
+    <p class="text-sm text-base-content/60">
+      Members reporting a payment or fee from before the site's records begin. Approve
+      mints the matching entry on their account (honor-system era, member-reported); decline
+      just records your note.
+    </p>
+    <ul class="rounded-xl border border-base-300 divide-y divide-base-300">
+      {% for s in submissions %}
+      <li class="p-4 space-y-3">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <a class="link font-medium text-sm" href="{% url 'treasurer_member_detail' s.user.id %}">{{ s.user.get_full_name|default:s.user.email }}</a>
+          <span class="text-xs text-base-content/55">Filed {{ s.created_at|date:"M j, Y" }}</span>
+        </div>
+        <p class="text-sm">
+          {{ s.get_kind_display }} · {{ s.get_category_display }} ·
+          <strong>{{ s.amount|usd }}</strong> · dated {{ s.claimed_date|date:"M j, Y" }}
+        </p>
+        <p class="text-sm text-base-content/70 whitespace-pre-wrap">{{ s.details }}</p>
+        <form method="post" action="{% url 'treasurer_submission_decide' s.id %}"
+              class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
+          {% csrf_token %}
+          <div class="space-y-1 grow min-w-48">
+            <label class="block text-xs text-base-content/60" for="subnote-{{ s.id }}">Note (optional)</label>
+            <input id="subnote-{{ s.id }}" name="note" type="text" autocomplete="off"
+                   class="input input-bordered input-sm w-full" placeholder="Reason, reference, etc.">
+          </div>
+          <button type="submit" name="decision" value="approve" class="btn btn-primary btn-sm"
+                  onclick="return confirm('Approve this claim? This adds a ${{ s.amount }} {{ s.get_category_display|lower }} {{ s.kind }} to {{ s.user.email }}\'s account.');">
+            Approve
+          </button>
+          <button type="submit" name="decision" value="decline" class="btn btn-ghost btn-sm"
+                  onclick="return confirm('Decline this claim? Nothing will be added to the account.');">
+            Decline
+          </button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   {% if charge_conflicts %}
   <section class="space-y-3">
     <h3 class="font-serif text-lg text-base-content">Charge conflicts
