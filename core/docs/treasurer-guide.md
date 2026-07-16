@@ -77,6 +77,23 @@ recorded payment covers it. Dues, by contrast, are owed annually by every
 in-training and full member (not Auditors), tiered by role — the amounts
 live on the Settings tab.
 
+Because that four-year certification means something, the website won't
+let a student be **promoted to Analyst or Scholar while tuition is
+unsettled** — any tuition charge with money still owed on it, or fewer
+than four years covered, blocks the promotion. This gate applies wherever
+a role change like that can happen: the Meeting of Analysts' advancement
+approval, the Board's membership-change form, a role edit in the Django
+admin, and the CSV member importer (which skips the row and warns rather
+than failing the whole file). A promotion that's blocked this way shows
+you exactly why — which years and how much — right on the advancement
+page. **There's no override switch.** The fix is always on the member's
+account page: record the missing payment, adjust a charge, waive it, or
+void it — whatever's true — and the promotion clears on retry. A waived
+year settles the money owed but does **not** count as one of the four
+covered years; if the school means to credit a year without collecting
+payment for it, that's a decision for the tuition-years count itself, not
+something a waiver does as a side effect.
+
 ---
 
 ## Overview tab
@@ -150,8 +167,9 @@ account page. It has four parts:
    chronological, with a **running balance** column so you can see the
    account's history unfold. Each charge row carries **Waive**, **Void**,
    and **Adjust** actions (and **Reopen** once waived); each payment row
-   carries **Mark paid** (pending offline payments), **Refund**, and
-   **Resend receipt** as applicable. Hovering a line's provenance icon
+   carries **Mark paid** (pending offline payments), **Refund**,
+   **Resend receipt**, and **Re-categorize** as applicable (see *Payments
+   tab*, below, for what Re-categorize does). Hovering a line's provenance icon
    shows where it came from — imported, verified, assumed, or
    staff-entered — and any notes attached.
 4. **Actions** — an **Add a charge** form (any category, amount, effective
@@ -290,11 +308,33 @@ For inspecting or correcting individual payments.
     cash refund yourself. An audit note records the date and your email.
   - **Resend receipt** — on succeeded payments that have a receipt; handy
     when a member loses the original.
+  - **Re-categorize** — fixes a payment that was logged under the wrong
+    category (a check marked dues that was really tuition, that sort of
+    thing). Pick the correct category, and if it's dues or tuition, which
+    year it belongs to (the form guesses the year from the payment's date;
+    override it if needed). The change writes a dated audit note to the
+    payment, and — unlike the member's own self-service re-type on their
+    payment history, which blocks it — this is the one place a **donation
+    can be flipped** into or out of another category. Because donations
+    sit outside the ledger's obligation math, flipping one **moves money
+    in or out of the member's account pot**: turning a donation into
+    tuition adds a charge-covering payment to their balance; turning a
+    tuition payment into a donation removes one. If you re-categorize a
+    payment **away from tuition** and it was backing an unpaid
+    installment, the installment goes back to unpaid and a review note is
+    added to that year's tuition decision — the decision itself doesn't
+    change automatically (that's still yours to set). And if the payment
+    belongs to a **transitioned member** (an Analyst or Scholar, tuition
+    history frozen), re-categorizing it doesn't touch their frozen
+    charges — follow up with a manual **Adjust** or **Void** on the
+    relevant charge from their account page so the statement still adds
+    up.
 
-This tab, and everything on it, is unchanged by the ledger rework — it's
-still the place to inspect or correct one payment at a time. The
-per-member **Statement** on the Accounts tab is the place to see how that
-payment fits into the bigger picture.
+This tab, and everything on it besides Re-categorize, is unchanged by the
+ledger rework — it's still the place to inspect or correct one payment at
+a time. The per-member **Statement** on the Accounts tab is the place to
+see how that payment fits into the bigger picture (and offers the same
+Re-categorize action per row).
 
 ---
 

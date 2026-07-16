@@ -354,6 +354,19 @@ Done (see `git log` for specifics):
   Settings roster). One-time reconcile migration
   (`committees.0010_reconcile_school_officers`). See the `board-officer-titles`
   memory + `docs/superpowers/specs/2026-07-12-shared-school-officers-design.md`.
+- **Tuition clearance gate + treasurer payment re-categorize** (task #439).
+  Promotion to Analyst/Scholar is blocked while tuition is unsettled (any
+  uncovered tuition charge, or fewer than four covered years) —
+  `payments.ledger.tuition_clearance()` enforced at the membership
+  chokepoint (`accounts.membership.validate_role_transition`), the Meeting
+  of Analysts' advancement approval, the Board membership form, the Django
+  admin role field, and the CSV importer (skips + warns); no override
+  switch — settling the member's ledger *is* the override. The treasurer's
+  Payments tab and member statement gained **Re-categorize**, an audited
+  action that re-types a payment (with a bound dues/tuition period) and,
+  uniquely, allows donation flips; retyping away from tuition unwinds an
+  unbacked installment and leaves a review note rather than auto-changing
+  the enrollment decision.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
