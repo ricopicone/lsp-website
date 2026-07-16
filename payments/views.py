@@ -910,6 +910,7 @@ def treasurer_payment_retype(request, payment_id: int):
 
     old_type = payment.payment_type
     details = []
+    unlinked_installment = None
     if payment.dues_period_id and new_type != Payment.Type.DUES:
         details.append(f"was {payment.dues_period}")
         payment.dues_period = None
@@ -920,22 +921,23 @@ def treasurer_payment_retype(request, payment_id: int):
         if payment.tuition_installment_id:
             details.append(
                 f"unlinked installment #{payment.tuition_installment_id}")
+            unlinked_installment = payment.tuition_installment
             payment.tuition_installment = None
 
     when = (payment.paid_at or payment.created_at).date()
     if new_type == Payment.Type.DUES:
-        payment.dues_period = (
-            DuesPeriod.objects.filter(pk=request.POST.get("dues_period") or 0).first()
-            or DuesPeriod.objects.filter(
+        payment.dues_period = _resolve_period(
+            request.POST.get("dues_period"), DuesPeriod,
+            DuesPeriod.objects.filter(
                 start_date__lte=when, end_date__gte=when).first()
-            or DuesPeriod.current()
+            or DuesPeriod.current(),
         )
     elif new_type == Payment.Type.TUITION:
-        payment.tuition_period = (
-            TuitionPeriod.objects.filter(pk=request.POST.get("tuition_period") or 0).first()
-            or TuitionPeriod.objects.filter(
+        payment.tuition_period = _resolve_period(
+            request.POST.get("tuition_period"), TuitionPeriod,
+            TuitionPeriod.objects.filter(
                 start_date__lte=when, end_date__gte=when).first()
-            or TuitionPeriod.current()
+            or TuitionPeriod.current(),
         )
 
     payment.payment_type = new_type
@@ -947,7 +949,36 @@ def treasurer_payment_retype(request, payment_id: int):
              + (f" ({'; '.join(details)})" if details else ""))
     payment.notes = (payment.notes + "\n" + audit) if payment.notes else audit
     payment.save()
-    messages.success(request, f"Re-categorized as {labels[new_type]}.")
+
+    flash = f"Re-categorized as {labels[new_type]}."
+    if unlinked_installment is not None:
+        # The backing money just left. Reset the installment's paid flag if
+        # no other succeeded payment still covers it — but do NOT auto-change
+        # the enrollment's status (a decision record; do-not-over-automate):
+        # leave a dated review note for the treasurer instead.
+        still_backed = unlinked_installment.payments.filter(
+            status=Payment.Status.SUCCEEDED,
+        ).exclude(pk=payment.pk).exists()
+        if not still_backed:
+            if unlinked_installment.paid:
+                unlinked_installment.paid = False
+                unlinked_installment.paid_at = None
+                unlinked_installment.save(update_fields=("paid", "paid_at"))
+            enrollment = unlinked_installment.enrollment
+            review_note = (
+                f"[{timezone.now().date()}] Payment #{payment.id} "
+                "re-categorized away from tuition by treasurer "
+                f"{request.user.email}; installment "
+                f"#{unlinked_installment.sequence} unpaid again — review "
+                "this year's decision status."
+            )
+            enrollment.notes = (
+                (enrollment.notes + "\n" if enrollment.notes else "")
+                + review_note)
+            enrollment.save(update_fields=("notes",))
+            flash += (" Review the member's tuition decision for "
+                      f"{enrollment.tuition_period.name}.")
+    messages.success(request, flash)
     return _safe_next(request, "treasurer_payments")
 
 
