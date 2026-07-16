@@ -823,9 +823,10 @@ def test_treasurer_payments_tab_filters_by_type(
     )
     client.force_login(staff_user)
     resp = client.get(reverse("treasurer_payments") + "?type=donation")
-    body = resp.content
-    assert b"don-only@x.test" in body
-    assert b"dues-only@x.test" not in body
+    # Assert on the filtered queryset, not raw page content — every member's
+    # email now appears in the page-level Assign autocomplete datalist.
+    rows = list(resp.context["payments"])
+    assert [p.user.email for p in rows] == ["don-only@x.test"]
 
 
 @pytest.mark.django_db
