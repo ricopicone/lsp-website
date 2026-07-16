@@ -21,6 +21,8 @@ def test_reconcile_lists_staff_adjusted_conflict(client):
         end_date=date(2027, 8, 31), decision_due_date=date(2026, 8, 31),
         tuition_amount=Decimal("2000"))
     u = User.objects.create_user(email="cf@x.test", password="x")
+    u.profile.role = "candidate"  # in-training: tuition history isn't frozen
+    u.profile.save()
     e = TuitionEnrollment.objects.create(
         user=u, tuition_period=tp, status=TuitionEnrollment.Status.COMMITTED,
         source="staff")

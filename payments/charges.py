@@ -89,8 +89,20 @@ def sync_tuition_charges(user) -> None:
     """Recompute ``user``'s tuition charges from their enrollment decisions.
 
     Mints/revives/voids only sync-managed rows (``staff_adjusted=False``).
+
+    Applies only to in-training members: transitioning to Analyst/Scholar
+    certifies the tuition requirement was completed, so a transitioned
+    member's tuition history is FROZEN — never minted, voided, revived, or
+    flagged. Reconstruction of pre-records history is the
+    ``reconcile_transitioned_tuition`` command's job.
     """
+    from accounts.models import Profile
+
     from .models import TuitionEnrollment
+
+    profile = getattr(user, "profile", None)
+    if profile is None or profile.role not in Profile.IN_TRAINING_ROLES:
+        return
 
     today = timezone.now().date()
     enrollments = list(
@@ -166,15 +178,21 @@ def tuition_charge_conflicts() -> list[dict]:
         for pid, e in _owed_periods(enrs).items():
             expected[(uid, pid)] = e.tuition_period.tuition_amount or Decimal("0")
 
+    from accounts.models import Profile
+
     out = []
     staff_rows = (
         Charge.objects.filter(
             category=Charge.Category.TUITION, staff_adjusted=True,
             tuition_period__isnull=False,
         )
-        .select_related("user", "tuition_period")
+        .select_related("user__profile", "tuition_period")
     )
     for c in staff_rows:
+        # Transitioned members' tuition history is frozen (see
+        # sync_tuition_charges) — no expectations, so nothing to conflict.
+        if c.user.profile.role not in Profile.IN_TRAINING_ROLES:
+            continue
         rate = expected.get((c.user_id, c.tuition_period_id))
         if rate is None and c.status == Charge.Status.OPEN:
             out.append({
