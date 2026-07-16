@@ -27,6 +27,29 @@ def is_parletre_member(user) -> bool:
 # plain class. Add new glyphs here, reference with {% icon "name" %}.
 
 _ICON_PATHS = {
+    # --- treasurer admin actions (task #439) ---
+    "check": '<path d="M20 6 9 17l-5-5"/>',
+    "undo": (
+        '<path d="M9 14 4 9l5-5"/>'
+        '<path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/>'
+    ),
+    "tag": (
+        '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 '
+        '2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a'
+        '2.426 2.426 0 0 0 0-3.42z"/>'
+        '<circle cx="7.5" cy="7.5" r=".5"/>'
+    ),
+    "user-plus": (
+        '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>'
+        '<circle cx="9" cy="7" r="4"/>'
+        '<line x1="19" x2="19" y1="8" y2="14"/>'
+        '<line x1="22" x2="16" y1="11" y2="11"/>'
+    ),
+    "scissors": (
+        '<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/>'
+        '<path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/>'
+        '<path d="M14.8 14.8 20 20"/>'
+    ),
     # locked / private
     "lock": (
         '<rect x="3" y="11" width="18" height="11" rx="2"/>'

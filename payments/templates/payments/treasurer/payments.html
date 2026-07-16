@@ -1,5 +1,5 @@
 {% extends "payments/treasurer/base.html" %}
-{% load treasurer_filters tz_filters %}
+{% load treasurer_filters tz_filters parletre_tags %}
 {% block tab_content %}
 <div class="space-y-6">
 
@@ -60,7 +60,7 @@
       <tbody>
         {% for p in payments %}
         <tr>
-          <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.transaction_date|user_datetime:True }}</td>
+          <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.transaction_date|user_date }}</td>
           <td>
             {% if p.user %}
               <a class="link link-hover" href="{% url 'treasurer_member_detail' p.user.id %}">{{ p.payer_label }}</a>
@@ -89,26 +89,26 @@
               <form method="post" action="{% url 'treasurer_payment_apply_success' p.id %}" class="contents"
                     onsubmit="return confirm('Mark this payment as paid? This sends a receipt + emails the member.');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-primary btn-xs">Mark paid</button>
+                <button type="submit" class="btn btn-primary btn-xs" title="Mark paid" aria-label="Mark paid">{% icon "check" %}</button>
               </form>
               {% elif p.status == "succeeded" and p.method == "stripe" %}
               <form method="post" action="{% url 'treasurer_payment_refund' p.id %}" class="contents"
                     onsubmit="return confirm('{% if p.is_split %}This payment is part of a SPLIT. Refunding refunds the ENTIRE original ${{ p.split_family_total }} charge, all parts included.\n\n{% endif %}Refund {% if p.is_split %}${{ p.split_family_total }}{% else %}${{ p.amount }}{% endif %} via Stripe? This is irreversible.');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
+                <button type="submit" class="btn btn-ghost btn-xs text-error" title="Refund" aria-label="Refund">{% icon "undo" %}</button>
               </form>
               {% elif p.status == "succeeded" and p.method == "offline" %}
               <form method="post" action="{% url 'treasurer_payment_refund' p.id %}" class="contents"
                     onsubmit="return confirm('{% if p.is_split %}This payment is part of a SPLIT. Refunding marks the ENTIRE original ${{ p.split_family_total }} charge refunded, all parts included.\n\n{% endif %}Mark this {% if p.is_split %}entire ${{ p.split_family_total }} split{% else %}${{ p.amount }}{% endif %} offline payment as REFUNDED for accounting?\n\nThis does NOT move any money — you will need to send the refund check (or process the cash refund) manually.');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
+                <button type="submit" class="btn btn-ghost btn-xs text-error" title="Refund" aria-label="Refund">{% icon "undo" %}</button>
               </form>
               {% endif %}
               {% if p.status == "succeeded" and p.receipt and not p.is_split %}
               <form method="post" action="{% url 'treasurer_payment_resend_receipt' p.id %}" class="contents"
                     onsubmit="return confirm('Resend the receipt email to {{ p.user.email|default:p.email }}?');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs">Resend receipt</button>
+                <button type="submit" class="btn btn-ghost btn-xs" title="Resend receipt" aria-label="Resend receipt">{% icon "mail" %}</button>
               </form>
               {% endif %}
               {% if not p.registration_id %}

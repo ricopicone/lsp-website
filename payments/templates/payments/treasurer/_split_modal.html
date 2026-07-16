@@ -1,11 +1,12 @@
+{% load parletre_tags %}
 {% comment %}
 Split-payment modal: divide one payment into sibling rows with different
 categories (amounts must sum exactly). Include with: payment, type_choices,
 next_url. Callers gate the button on: succeeded, no registration link, a
 member attached, not already split.
 {% endcomment %}
-<button type="button" class="btn btn-ghost btn-xs"
-        onclick="document.getElementById('split-{{ payment.id }}').showModal()">Split</button>
+<button type="button" class="btn btn-ghost btn-xs" title="Split across categories" aria-label="Split across categories"
+        onclick="document.getElementById('split-{{ payment.id }}').showModal()">{% icon "scissors" %}</button>
 <dialog id="split-{{ payment.id }}" class="modal">
   <div class="modal-box max-w-md whitespace-normal text-left">
     <h3 class="font-serif text-lg mb-1">Split payment</h3>

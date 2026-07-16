@@ -1,11 +1,12 @@
+{% load parletre_tags %}
 {% comment %}
 Assign-to-account modal for one payment. Requires a page-level
 <datalist id="member-options"> (rendered once per page). Include with:
 payment, next_url. Registration-settling payments are refused server-side;
 callers hide the button for those rows.
 {% endcomment %}
-<button type="button" class="btn btn-ghost btn-xs"
-        onclick="document.getElementById('assign-{{ payment.id }}').showModal()">Assign</button>
+<button type="button" class="btn btn-ghost btn-xs" title="Assign to an account" aria-label="Assign to an account"
+        onclick="document.getElementById('assign-{{ payment.id }}').showModal()">{% icon "user-plus" %}</button>
 <dialog id="assign-{{ payment.id }}" class="modal">
   <div class="modal-box max-w-sm whitespace-normal text-left">
     <h3 class="font-serif text-lg mb-3">Assign payment to an account</h3>
