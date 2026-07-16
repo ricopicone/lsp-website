@@ -100,6 +100,9 @@ def decide_advancement(advancement, *, approve, by, effective_ay=None, note=""):
                 f"No advancement target for {advancement.from_role} "
                 f"({advancement.get_kind_display()})."
             )
+        from accounts.membership import validate_role_transition
+
+        validate_role_transition(advancement.member, target_role)
         effective_ay = effective_ay or current_academic_year_start()
         record_membership_change(
             advancement.member,

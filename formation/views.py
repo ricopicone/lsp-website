@@ -794,11 +794,18 @@ def advisee_set_background(request, pk):
 @login_required
 def advancement_queue(request):
     _require_review(request)
+    from payments.ledger import tuition_clearance
+
     advancements = list(
         Advancement.objects.select_related(
             "member", "member__profile", "advisor"
         ).order_by("status", "-requested_at")
     )
+    for a in advancements:
+        a.tuition_blocked = bool(
+            a.is_open and a.advance_role in ("analyst", "scholar")
+            and tuition_clearance(a.member)
+        )
     return render(request, "formation/advancement_queue.html", {
         "advancements": advancements,
         "open_statuses": Advancement.OPEN_STATUSES,
@@ -812,9 +819,14 @@ def advancement_detail(request, pk):
         Advancement.objects.select_related("member", "member__profile", "advisor"),
         pk=pk,
     )
+    tuition_reasons = None
+    if adv.advance_role in ("analyst", "scholar") and adv.is_open:
+        from payments.ledger import tuition_clearance
+        tuition_reasons = tuition_clearance(adv.member)
     return render(request, "formation/advancement_detail.html", {
         "adv": adv,
         "default_ay": current_academic_year_start(),
+        "tuition_reasons": tuition_reasons,
     })
 
 
@@ -829,10 +841,17 @@ def advancement_decide(request, pk):
     decision = request.POST.get("decision")
     note = (request.POST.get("note") or "").strip()
     if decision == "approve":
+        from django.core.exceptions import ValidationError
+
         ay = request.POST.get("effective_ay")
         effective_ay = int(ay) if ay and ay.isdigit() else current_academic_year_start()
-        decide_advancement(adv, approve=True, by=request.user,
-                            effective_ay=effective_ay, note=note)
+        try:
+            decide_advancement(adv, approve=True, by=request.user,
+                                effective_ay=effective_ay, note=note)
+        except ValidationError as exc:
+            messages.error(
+                request, "Cannot approve — " + " ".join(exc.messages))
+            return redirect("formation:advancement_detail", pk=pk)
         name = adv.member.get_full_name() or adv.member.email
         role_label = dict(Profile.Role.choices).get(adv.advance_role, "the next step")
         messages.success(request, f"Approved — {name} advances to {role_label}.")
