@@ -138,6 +138,7 @@
                 {% include "payments/treasurer/_provenance_popover.html" with source=ln.obj.source source_label=ln.obj.get_source_display notes=ln.obj.notes trigger="icon" %}
               {% else %}
                 {{ ln.obj.get_payment_type_display }} payment
+                {% if ln.obj.is_split %}<span class="badge badge-info badge-xs ml-1" title="Part of a split payment — the entire original charge was ${{ ln.obj.split_family_total }}">split</span>{% endif %}
                 {% if ln.obj.registration %}
                 <div class="text-xs text-base-content/60">{{ ln.obj.registration.event.title|truncatechars:32 }}</div>
                 {% endif %}
@@ -210,20 +211,20 @@
                   </form>
                   {% elif ln.obj.status == "succeeded" and ln.obj.method == "stripe" %}
                   <form method="post" action="{% url 'treasurer_payment_refund' ln.obj.id %}" class="contents"
-                        onsubmit="return confirm('Refund {{ ln.obj.amount|usd }} via Stripe? This is irreversible.');">
+                        onsubmit="return confirm('{% if ln.obj.is_split %}This payment is part of a SPLIT. Refunding refunds the ENTIRE original ${{ ln.obj.split_family_total }} charge, all parts included.\n\n{% endif %}Refund {% if ln.obj.is_split %}${{ ln.obj.split_family_total }}{% else %}{{ ln.obj.amount|usd }}{% endif %} via Stripe? This is irreversible.');">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.path }}">
                     <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
                   </form>
                   {% elif ln.obj.status == "succeeded" and ln.obj.method == "offline" %}
                   <form method="post" action="{% url 'treasurer_payment_refund' ln.obj.id %}" class="contents"
-                        onsubmit="return confirm('Mark this {{ ln.obj.amount|usd }} offline payment as REFUNDED for accounting?\n\nThis does NOT move any money — you will need to send the refund check (or process the cash refund) manually.');">
+                        onsubmit="return confirm('{% if ln.obj.is_split %}This payment is part of a SPLIT. Refunding marks the ENTIRE original ${{ ln.obj.split_family_total }} charge refunded, all parts included.\n\n{% endif %}Mark this {% if ln.obj.is_split %}entire ${{ ln.obj.split_family_total }} split{% else %}{{ ln.obj.amount|usd }}{% endif %} offline payment as REFUNDED for accounting?\n\nThis does NOT move any money — you will need to send the refund check (or process the cash refund) manually.');">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.path }}">
                     <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
                   </form>
                   {% endif %}
-                  {% if ln.obj.status == "succeeded" and ln.obj.receipt %}
+                  {% if ln.obj.status == "succeeded" and ln.obj.receipt and not ln.obj.is_split %}
                   <form method="post" action="{% url 'treasurer_payment_resend_receipt' ln.obj.id %}" class="contents"
                         onsubmit="return confirm('Resend the receipt email to {{ ln.obj.user.email|default:ln.obj.email }}?');">
                     {% csrf_token %}
@@ -234,6 +235,9 @@
                   {% if not ln.obj.registration_id %}
                   {% include "payments/treasurer/_retype_modal.html" with payment=ln.obj type_choices=payment_categories dues_periods=dues_periods tuition_periods=tuition_periods next_url=request.path %}
                   {% include "payments/treasurer/_assign_modal.html" with payment=ln.obj next_url=request.path %}
+                  {% if ln.obj.status == "succeeded" and ln.obj.user_id and not ln.obj.is_split %}
+                  {% include "payments/treasurer/_split_modal.html" with payment=ln.obj type_choices=payment_categories next_url=request.path %}
+                  {% endif %}
                   {% endif %}
                 {% endif %}
               </div>

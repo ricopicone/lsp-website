@@ -1,0 +1,46 @@
+{% comment %}
+Split-payment modal: divide one payment into sibling rows with different
+categories (amounts must sum exactly). Include with: payment, type_choices,
+next_url. Callers gate the button on: succeeded, no registration link, a
+member attached, not already split.
+{% endcomment %}
+<button type="button" class="btn btn-ghost btn-xs"
+        onclick="document.getElementById('split-{{ payment.id }}').showModal()">Split</button>
+<dialog id="split-{{ payment.id }}" class="modal">
+  <div class="modal-box max-w-md whitespace-normal text-left">
+    <h3 class="font-serif text-lg mb-1">Split payment</h3>
+    <p class="text-sm text-base-content/70 mb-3">
+      ${{ payment.amount }} {{ payment.get_payment_type_display }} — the parts must add up to exactly ${{ payment.amount }}.
+    </p>
+    <form method="post" action="{% url 'treasurer_payment_split' payment.id %}" class="space-y-3">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      {% for _ in "123" %}
+      <fieldset class="flex flex-wrap items-center gap-2">
+        <select name="part_type" class="select select-bordered select-sm" aria-label="Part {{ forloop.counter }} category">
+          {% for value, label in type_choices %}
+          <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input type="text" name="part_amount" placeholder="0.00" aria-label="Part {{ forloop.counter }} amount"
+               class="input input-bordered input-sm w-24">
+        <label class="flex items-center gap-1 text-xs text-base-content/70">
+          <input type="checkbox" name="part_settle" value="{{ forloop.counter0 }}" class="checkbox checkbox-xs">
+          insert matching charge
+        </label>
+      </fieldset>
+      {% endfor %}
+      <p class="text-xs text-base-content/50">
+        Rows with an empty amount are ignored. "Insert matching charge" applies to Registration parts whose
+        event fee was never recorded, so the pair nets to zero. Refunding any part later refunds the entire
+        original charge.
+      </p>
+      <div class="modal-action mt-2">
+        <button type="submit" class="btn btn-primary btn-sm">Split</button>
+        <button type="button" class="btn btn-ghost btn-sm"
+                onclick="document.getElementById('split-{{ payment.id }}').close()">Cancel</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>

@@ -203,6 +203,16 @@ class Payment(models.Model):
         "directly (overrides the date-based attribution; e.g. an August payment "
         "the member assigns to a specific AY).",
     )
+    split_from = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="split_parts",
+        help_text="Set on the sibling rows created when a payment is split "
+        "across categories; the parent row keeps the Stripe identifiers and "
+        "the receipt. Refunding any part refunds the whole original charge.",
+    )
     notes = models.TextField(blank=True, help_text="Staff notes — e.g. for offline payments.")
     member_note = models.TextField(
         blank=True,
