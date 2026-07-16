@@ -218,13 +218,13 @@
                   </form>
                   {% elif ln.obj.status == "succeeded" and ln.obj.method == "offline" %}
                   <form method="post" action="{% url 'treasurer_payment_refund' ln.obj.id %}" class="contents"
-                        onsubmit="return confirm('{% if ln.obj.is_split %}This payment is part of a SPLIT. Refunding marks the ENTIRE original ${{ ln.obj.split_family_total }} charge refunded, all parts included.\n\n{% endif %}Mark this {{ ln.obj.amount|usd }} offline payment as REFUNDED for accounting?\n\nThis does NOT move any money — you will need to send the refund check (or process the cash refund) manually.');">
+                        onsubmit="return confirm('{% if ln.obj.is_split %}This payment is part of a SPLIT. Refunding marks the ENTIRE original ${{ ln.obj.split_family_total }} charge refunded, all parts included.\n\n{% endif %}Mark this {% if ln.obj.is_split %}entire ${{ ln.obj.split_family_total }} split{% else %}{{ ln.obj.amount|usd }}{% endif %} offline payment as REFUNDED for accounting?\n\nThis does NOT move any money — you will need to send the refund check (or process the cash refund) manually.');">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.path }}">
                     <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
                   </form>
                   {% endif %}
-                  {% if ln.obj.status == "succeeded" and ln.obj.receipt %}
+                  {% if ln.obj.status == "succeeded" and ln.obj.receipt and not ln.obj.is_split %}
                   <form method="post" action="{% url 'treasurer_payment_resend_receipt' ln.obj.id %}" class="contents"
                         onsubmit="return confirm('Resend the receipt email to {{ ln.obj.user.email|default:ln.obj.email }}?');">
                     {% csrf_token %}

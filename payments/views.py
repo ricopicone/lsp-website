@@ -885,9 +885,24 @@ def treasurer_payment_split(request, payment_id: int):
     with transaction.atomic():
         first_type, first_amount, first_settle = parts[0]
         details = []
+        # A split always unlinks a tuition installment — the single-installment
+        # linkage no longer describes the (now divided) money — and unwinds it
+        # if nothing else backs it. This runs regardless of the first part's
+        # category (a same-category first part would otherwise keep the full
+        # installment marked paid against a reduced amount).
+        if payment.tuition_installment_id:
+            details.append(
+                f"unlinked installment #{payment.tuition_installment_id}")
+            _installment = payment.tuition_installment
+            payment.tuition_installment = None
+            extra_flash += _unwind_installment(
+                payment, _installment, treasurer_email=request.user.email,
+                cause="split across categories")
         if first_type != old_type:
-            details, extra_flash = _apply_category_change(
+            _details, _extra = _apply_category_change(
                 payment, first_type, treasurer_email=request.user.email)
+            details += _details
+            extra_flash += _extra
         payment.amount = first_amount
         payment.source = Source.VERIFIED
         audit = (f"[{today}] Split ${old_amount} {labels[old_type]} into "
@@ -906,6 +921,7 @@ def treasurer_payment_split(request, payment_id: int):
                 status=Payment.Status.SUCCEEDED,
                 method=payment.method,
                 email=payment.email,
+                currency=payment.currency,
                 livemode=payment.livemode,
                 source=Source.VERIFIED,
                 split_from=payment,
@@ -1016,6 +1032,13 @@ def treasurer_payment_resend_receipt(request, payment_id: int):
     """
     from .emails import send_receipt
     payment = get_object_or_404(Payment, pk=payment_id)
+    if payment.split_from_id or payment.split_parts.exists():
+        messages.error(
+            request,
+            "This payment was split, so the original receipt no longer "
+            "matches its parts. Send the member corrected details manually.",
+        )
+        return _safe_next(request, "treasurer_payments")
     if not hasattr(payment, "receipt"):
         return _safe_next(request, "treasurer_payments")
     try:
@@ -1099,37 +1122,44 @@ def _apply_category_change(payment, new_type, *, treasurer_email,
             tuition_period_post, TuitionPeriod, _period_for(new_type, when))
     payment.payment_type = new_type
 
-    extra_flash = ""
-    if unlinked_installment is not None:
-        # The backing money just left. Reset the installment's paid flag if
-        # no other succeeded payment still covers it — but do NOT auto-change
-        # the enrollment's status (a decision record; do-not-over-automate):
-        # leave a dated review note for the treasurer instead.
-        still_backed = unlinked_installment.payments.filter(
-            status=Payment.Status.SUCCEEDED,
-        ).exclude(pk=payment.pk).exists()
-        if not still_backed:
-            was_paid = unlinked_installment.paid
-            if was_paid:
-                unlinked_installment.paid = False
-                unlinked_installment.paid_at = None
-                unlinked_installment.save(update_fields=("paid", "paid_at"))
-            enrollment = unlinked_installment.enrollment
-            outcome = "unpaid again" if was_paid else "unlinked"
-            review_note = (
-                f"[{timezone.now().date()}] Payment #{payment.id} "
-                "re-categorized away from tuition by treasurer "
-                f"{treasurer_email}; installment "
-                f"#{unlinked_installment.sequence} {outcome} — review "
-                "this year's decision status."
-            )
-            enrollment.notes = (
-                (enrollment.notes + "\n" if enrollment.notes else "")
-                + review_note)
-            enrollment.save(update_fields=("notes",))
-            extra_flash = (" Review the member's tuition decision for "
-                           f"{enrollment.tuition_period.name}.")
+    extra_flash = _unwind_installment(
+        payment, unlinked_installment, treasurer_email=treasurer_email,
+        cause="re-categorized away from tuition")
     return details, extra_flash
+
+
+def _unwind_installment(payment, installment, *, treasurer_email, cause):
+    """After ``payment`` stops backing ``installment``: reset its paid flag if
+    no other succeeded payment covers it — but do NOT auto-change the
+    enrollment's status (a decision record; do-not-over-automate): leave a
+    dated review note for the treasurer instead. Returns the extra flash."""
+    if installment is None:
+        return ""
+    still_backed = installment.payments.filter(
+        status=Payment.Status.SUCCEEDED,
+    ).exclude(pk=payment.pk).exists()
+    if still_backed:
+        return ""
+    was_paid = installment.paid
+    if was_paid:
+        installment.paid = False
+        installment.paid_at = None
+        installment.save(update_fields=("paid", "paid_at"))
+    enrollment = installment.enrollment
+    outcome = "unpaid again" if was_paid else "unlinked"
+    review_note = (
+        f"[{timezone.now().date()}] Payment #{payment.id} "
+        f"{cause} by treasurer "
+        f"{treasurer_email}; installment "
+        f"#{installment.sequence} {outcome} — review "
+        "this year's decision status."
+    )
+    enrollment.notes = (
+        (enrollment.notes + "\n" if enrollment.notes else "")
+        + review_note)
+    enrollment.save(update_fields=("notes",))
+    return (" Review the member's tuition decision for "
+            f"{enrollment.tuition_period.name}.")
 
 
 def _attach_split_info(payments) -> None:
@@ -1788,6 +1818,19 @@ def _handle_charge_refunded(charge: dict) -> None:
         if payment.status != Payment.Status.REFUNDED:
             payment.status = Payment.Status.REFUNDED
             payment.save(update_fields=("status",))
+        # A refund of the original intent refunds the whole split family —
+        # only the parent carries the intent id, so cascade to siblings here
+        # (mirrors treasurer_payment_refund's whole-charge semantics).
+        siblings = list(payment.split_parts.exclude(
+            status=Payment.Status.REFUNDED))
+        if siblings:
+            audit = (f"[{timezone.now().date()}] Refunded as part of the "
+                     "entire original split charge (Stripe refund webhook).")
+            for part in siblings:
+                part.status = Payment.Status.REFUNDED
+                part.notes = (
+                    (part.notes + "\n" + audit) if part.notes else audit)
+                part.save(update_fields=("status", "notes"))
         if payment.registration_id:
             Registration.objects.filter(
                 pk=payment.registration_id,
@@ -1994,10 +2037,17 @@ def my_payments_update(request):
     periods = {str(tp.id): tp for tp in TuitionPeriod.objects.all()}
     changed = 0
     blocked_donation_retype = False
+    blocked_split_retype = False
     for p in Payment.objects.filter(user=request.user):
         fields = []
 
         new_type = request.POST.get(f"type_{p.id}")
+        if (new_type in Payment.Type.values and new_type != p.payment_type
+                and (p.split_from_id or p.split_parts.exists())):
+            # Split rows are treasurer-constructed bookkeeping; a member
+            # re-typing one part would silently desync the family.
+            blocked_split_retype = True
+            new_type = None
         if new_type in Payment.Type.values and new_type != p.payment_type:
             is_donation_flip = (
                 new_type == Payment.Type.DONATION
@@ -2039,8 +2089,14 @@ def my_payments_update(request):
             "To reclassify a donation, or reclassify a payment as a "
             "donation, contact the treasurer.",
         )
+    if blocked_split_retype:
+        messages.error(
+            request,
+            "One of these payments was split by the treasurer, so its "
+            "category can only be changed by the treasurer.",
+        )
     if changed:
         messages.success(request, f"Saved {changed} payment update(s).")
-    elif not blocked_donation_retype:
+    elif not blocked_donation_retype and not blocked_split_retype:
         messages.success(request, "No changes to save.")
     return redirect(_tuition_tab_url())

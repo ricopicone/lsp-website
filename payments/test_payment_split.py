@@ -228,3 +228,78 @@ def test_split_button_hidden_for_ineligible_rows(client, treasurer):
     Payment.objects.all().update(status=Payment.Status.REFUNDED)
     content = client.get(reverse("treasurer_payments")).content.decode()
     assert 'id="split-' not in content                 # refunded: hidden
+
+
+def test_same_category_first_part_still_unlinks_installment(client, treasurer):
+    """Critical regression: a split whose first part keeps the original
+    category must still unlink and unwind the tuition installment — the
+    single-installment linkage no longer matches the divided money."""
+    from payments.models import TuitionEnrollment, TuitionInstallment
+    from payments.operations import complete_payment
+    m = _member("sp10@x.test")
+    tp = TuitionPeriod.objects.create(
+        name="AY 2025-2026 T2", slug="t-2025-split2",
+        start_date=date(2025, 9, 1), end_date=date(2026, 8, 31),
+        decision_due_date=date(2025, 8, 31), tuition_amount=Decimal("2000"))
+    enr = TuitionEnrollment.objects.create(
+        user=m, tuition_period=tp, status=TuitionEnrollment.Status.COMMITTED,
+        source="staff")
+    inst = TuitionInstallment.objects.create(
+        enrollment=enr, sequence=1, due_date=tp.decision_due_date,
+        amount=Decimal("400"))
+    p = Payment.objects.create(
+        user=m, payment_type=Payment.Type.TUITION, amount=Decimal("400"),
+        status=Payment.Status.PENDING, method=Payment.Method.OFFLINE,
+        tuition_installment=inst)
+    complete_payment(p)
+    _split(client, p, [("tuition", "150"), ("registration", "250")])
+    p.refresh_from_db()
+    inst.refresh_from_db()
+    enr.refresh_from_db()
+    assert p.payment_type == Payment.Type.TUITION      # first part kept type
+    assert p.amount == Decimal("150")
+    assert p.tuition_installment_id is None            # always unlinked
+    assert inst.paid is False                          # unwound
+    assert "review this year's decision status" in enr.notes
+
+
+def test_webhook_refund_cascades_to_split_siblings(client, treasurer):
+    m = _member("sp11@x.test")
+    p = _payment(m, amount="400", intent="pi_split_wh")
+    _split(client, p, [("dues", "150"), ("registration", "250")])
+    from payments.views import _handle_charge_refunded
+    _handle_charge_refunded({"payment_intent": "pi_split_wh"})
+    p.refresh_from_db()
+    child = Payment.objects.get(split_from=p)
+    assert p.status == Payment.Status.REFUNDED
+    assert child.status == Payment.Status.REFUNDED
+    assert "split charge" in child.notes
+
+
+def test_member_cannot_retype_split_rows(client, treasurer):
+    m = _member("sp12@x.test")
+    p = _payment(m, amount="400")
+    _split(client, p, [("dues", "150"), ("registration", "250")])
+    child = Payment.objects.get(split_from=p)
+    client.force_login(m)
+    client.post(reverse("my_payments_update"), {
+        f"type_{p.id}": "registration",
+        f"type_{child.id}": "dues",
+    })
+    p.refresh_from_db()
+    child.refresh_from_db()
+    assert p.payment_type == Payment.Type.DUES         # unchanged
+    assert child.payment_type == Payment.Type.REGISTRATION
+
+
+def test_resend_receipt_refused_on_split_parent(client, treasurer):
+    from django.core import mail
+
+    from payments.models import Receipt
+    m = _member("sp13@x.test")
+    p = _payment(m, amount="400", intent="pi_split_rc")
+    Receipt.create_for_payment(p)
+    _split(client, p, [("dues", "150"), ("registration", "250")])
+    mail.outbox.clear()
+    client.post(reverse("treasurer_payment_resend_receipt", args=[p.id]))
+    assert len(mail.outbox) == 0
