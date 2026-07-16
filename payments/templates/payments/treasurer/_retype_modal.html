@@ -14,29 +14,36 @@ Include with: payment, type_choices, dues_periods, tuition_periods, next_url.
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ next_url }}">
       <label class="text-xs text-base-content/60" for="retype-type-{{ payment.id }}">New category</label>
-      <select id="retype-type-{{ payment.id }}" name="payment_type" class="select select-bordered select-sm w-full" required>
+      <select id="retype-type-{{ payment.id }}" name="payment_type" class="select select-bordered select-sm w-full" required
+              onchange="var v=this.value;
+                        document.getElementById('retype-dues-wrap-{{ payment.id }}').hidden=(v!=='dues');
+                        document.getElementById('retype-tuition-wrap-{{ payment.id }}').hidden=(v!=='tuition');
+                        document.getElementById('retype-settle-wrap-{{ payment.id }}').hidden=(v!=='registration');">
         {% for value, label in type_choices %}
         <option value="{{ value }}" {% if value == payment.payment_type %}disabled selected{% endif %}>{{ label }}{% if value == payment.payment_type %} (current){% endif %}</option>
         {% endfor %}
       </select>
-      <label class="text-xs text-base-content/60" for="retype-dues-{{ payment.id }}">Dues year</label>
-      <select id="retype-dues-{{ payment.id }}" name="dues_period" class="select select-bordered select-sm w-full">
-        <option value="">Auto (from payment date)</option>
-        {% for period in dues_periods %}
-        <option value="{{ period.id }}">{{ period.name }}</option>
-        {% endfor %}
-      </select>
-      <label class="text-xs text-base-content/60" for="retype-tuition-{{ payment.id }}">Tuition year</label>
-      <select id="retype-tuition-{{ payment.id }}" name="tuition_period" class="select select-bordered select-sm w-full">
-        <option value="">Auto (from payment date)</option>
-        {% for period in tuition_periods %}
-        <option value="{{ period.id }}">{{ period.name }}</option>
-        {% endfor %}
-      </select>
-      <p class="text-xs text-base-content/50">The year selectors apply only when the matching category is chosen.</p>
-      <label class="flex items-start gap-2 text-xs text-base-content/70 pt-1">
+      <div id="retype-dues-wrap-{{ payment.id }}" hidden class="space-y-1">
+        <label class="text-xs text-base-content/60" for="retype-dues-{{ payment.id }}">Dues year</label>
+        <select id="retype-dues-{{ payment.id }}" name="dues_period" class="select select-bordered select-sm w-full">
+          <option value="">Auto (from payment date)</option>
+          {% for period in dues_periods %}
+          <option value="{{ period.id }}">{{ period.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="retype-tuition-wrap-{{ payment.id }}" hidden class="space-y-1">
+        <label class="text-xs text-base-content/60" for="retype-tuition-{{ payment.id }}">Tuition year</label>
+        <select id="retype-tuition-{{ payment.id }}" name="tuition_period" class="select select-bordered select-sm w-full">
+          <option value="">Auto (from payment date)</option>
+          {% for period in tuition_periods %}
+          <option value="{{ period.id }}">{{ period.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <label id="retype-settle-wrap-{{ payment.id }}" hidden class="flex items-start gap-2 text-xs text-base-content/70 pt-1">
         <input type="checkbox" name="settle_charge" value="1" class="checkbox checkbox-xs mt-0.5">
-        <span>Also insert a matching <strong>Registration charge</strong> dated with the payment. Use when re-categorizing to Registration and the original event fee was never recorded, so the pair nets to zero instead of showing as credit.</span>
+        <span>Also insert a matching <strong>Registration charge</strong> dated with the payment. Use when the original event fee was never recorded, so the pair nets to zero instead of showing as credit.</span>
       </label>
       <div class="modal-action mt-4">
         <button type="submit" class="btn btn-primary btn-sm">Save</button>

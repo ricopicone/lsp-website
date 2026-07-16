@@ -415,3 +415,17 @@ def test_settle_refused_without_member(client, treasurer):
     p.refresh_from_db()
     assert p.payment_type == Payment.Type.DONATION
     assert Charge.objects.count() == 0
+
+
+def test_retype_modal_fields_are_conditional(client, treasurer):
+    """Year selectors and the settle checkbox start hidden and are toggled by
+    the category select (only the matching category's fields show)."""
+    m = _settle_member("cond@x.test")
+    _settle_payment(m, Payment.Type.DONATION, "100")
+    content = client.get(reverse("treasurer_payments")).content.decode()
+    for wrap in ("retype-dues-wrap-", "retype-tuition-wrap-",
+                 "retype-settle-wrap-"):
+        assert wrap in content
+        seg = content[content.index(wrap):content.index(wrap) + 120]
+        assert "hidden" in seg
+    assert "onchange=" in content
