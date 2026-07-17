@@ -614,3 +614,68 @@ class Charge(models.Model):
         self.notes = (self.notes + "\n" + line) if self.notes else line
         if save:
             self.save(update_fields=("notes",))
+
+
+class LedgerSubmission(models.Model):
+    """A member's claim of a missing historical payment or charge (task #439).
+
+    Crucial for students who started before the site's records begin — a
+    member reports "I paid $2,000 tuition in 2019" and the treasurer approves
+    (minting the matching :class:`Payment`/:class:`Charge`, honor-system era,
+    ``source=SELF_REPORTED``) or declines it from the Reconcile queue's
+    Member submissions section. See docs/superpowers/specs/
+    2026-07-16-member-account-v2-design.md §3.
+    """
+
+    class Kind(models.TextChoices):
+        PAYMENT = "payment", _("Payment (I paid this)")
+        CHARGE = "charge", _("Charge (I owed this)")
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        APPROVED = "approved", _("Approved")
+        DECLINED = "declined", _("Declined")
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ledger_submissions",
+    )
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    category = models.CharField(
+        max_length=20,
+        choices=Payment.Type.choices,
+        help_text="Payment.Type values for a payment claim; dues/tuition/"
+        "registration (Charge.Category) for a charge claim.",
+    )
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    claimed_date = models.DateField(help_text="When the member says this happened.")
+    details = models.TextField(help_text="The member's account of what this was.")
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True,
+    )
+    decision_note = models.TextField(blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ledger_submissions_decided",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    created_payment = models.ForeignKey(
+        Payment, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    created_charge = models.ForeignKey(
+        Charge, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return (f"{self.get_kind_display()} claim: ${self.amount} "
+                f"({self.get_status_display()}, {self.user})")

@@ -64,7 +64,7 @@ def test_index_has_dues_tuition_donate_links(client):
     body = client.get(reverse("payments:index"), SERVER_NAME="localhost").content.decode()
     assert reverse("dues") in body
     assert reverse("donate") in body
-    assert "/formation/?tab=tuition" in body
+    assert "/formation/?tab=account" in body
 
 
 @pytest.mark.django_db

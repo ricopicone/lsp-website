@@ -139,13 +139,14 @@ def test_tuition_view_requires_login(client):
 
 @pytest.mark.django_db
 def test_tuition_view_renders_for_in_training_student(client, current_period):
-    """The tuition surface lives on the Formation hub's Tuition tab now."""
+    """The tuition surface lives on the Formation hub's Account tab now
+    (folded in from the retired Tuition tab, task #439)."""
     u = _mk_candidate()
     client.force_login(u)
-    resp = client.get(reverse("formation:formation") + "?tab=tuition")
+    resp = client.get(reverse("formation:formation") + "?tab=account")
     assert resp.status_code == 200
-    # The Tuition tab shows the four-year progress + the annual decision form.
-    # (Dues moved to its own tab.)
+    # The Account tab shows the four-year progress + the annual decision form
+    # alongside Dues.
     assert b"My decision" in resp.content
     assert b"Tuition" in resp.content
 
@@ -153,7 +154,7 @@ def test_tuition_view_renders_for_in_training_student(client, current_period):
 @pytest.mark.django_db
 def test_tuition_endpoint_redirects_to_formation_hub(client, current_period):
     """The legacy /tuition/ endpoint now only handles the decision POST; a GET
-    just bounces to the Formation hub's Tuition tab."""
+    just bounces to the Formation hub's Account tab."""
     u = _mk_candidate()
     client.force_login(u)
     resp = client.get(reverse("tuition"))
@@ -173,7 +174,7 @@ def test_tuition_tab_explains_when_role_not_in_training(client, current_period):
         status=Payment.Status.SUCCEEDED,
     )
     client.force_login(u)
-    resp = client.get(reverse("formation:formation") + "?tab=tuition")
+    resp = client.get(reverse("formation:formation") + "?tab=account")
     assert resp.status_code == 200
     assert b"not in a tuition-paying role" in resp.content
 
@@ -1610,79 +1611,18 @@ def test_attention_undecided_excludes_on_leave(current_period):
 
 
 # --- Member tuition AY assignment + treasurer override ------------------
-
-@pytest.mark.django_db
-def test_member_assigns_tuition_period_and_note(client):
-    from payments.models import Payment
-    p2022 = TuitionPeriod.objects.create(
-        name="AY 2022–2023", slug="ay-2022-2023-x",
-        start_date=date(2022, 9, 1), decision_due_date=date(2022, 10, 1),
-        end_date=date(2023, 8, 31), tuition_amount=Decimal("2000.00"),
-    )
-    u = _mk_candidate("assign@example.com")
-    pay = Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=u, amount=Decimal("500.00"),
-        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
-        paid_at=timezone.make_aware(datetime(2022, 8, 20, 12)),  # ambiguous August
-    )
-    other = _mk_candidate("other@example.com")
-    other_pay = Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=other, amount=Decimal("500.00"),
-        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
-    )
-    client.force_login(u)
-    client.post(reverse("my_payments_update"), {
-        f"period_{pay.id}": str(p2022.id), f"note_{pay.id}": "This was for 22-23.",
-        f"period_{other_pay.id}": str(p2022.id),  # not the member's — ignored
-    })
-    pay.refresh_from_db()
-    other_pay.refresh_from_db()
-    assert pay.tuition_period_id == p2022.id
-    assert pay.member_note == "This was for 22-23."
-    assert other_pay.tuition_period_id is None  # constrained to own payments
-
-
-@pytest.mark.django_db
-def test_member_cannot_retype_donation_to_dues(client):
-    """Donations are excluded from the ledger pot (payments/ledger.py
-    ``_counts``) — a member re-typing their own donation into a counting
-    category (or vice versa) would move money into/out of their balance
-    without treasurer review. Non-donation<->non-donation retypes stay
-    self-service (task #439 fix 1)."""
-    from django.contrib.messages import get_messages
-
-    from payments.models import Payment
-    u = _mk_candidate("donor@example.com")
-    pay = Payment.objects.create(
-        payment_type=Payment.Type.DONATION, user=u, amount=Decimal("100.00"),
-        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
-    )
-    client.force_login(u)
-    resp = client.post(reverse("my_payments_update"), {
-        f"type_{pay.id}": Payment.Type.DUES,
-    })
-    pay.refresh_from_db()
-    assert pay.payment_type == Payment.Type.DONATION  # unchanged
-    msgs = [str(m) for m in get_messages(resp.wsgi_request)]
-    assert any("contact the treasurer" in m for m in msgs)
-
-
-@pytest.mark.django_db
-def test_member_can_retype_dues_to_tuition(client):
-    """Non-donation <-> non-donation retypes are balance-neutral (both count
-    toward the pot) and stay self-service."""
-    from payments.models import Payment
-    u = _mk_candidate("retype@example.com")
-    pay = Payment.objects.create(
-        payment_type=Payment.Type.DUES, user=u, amount=Decimal("100.00"),
-        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
-    )
-    client.force_login(u)
-    client.post(reverse("my_payments_update"), {
-        f"type_{pay.id}": Payment.Type.TUITION,
-    })
-    pay.refresh_from_db()
-    assert pay.payment_type == Payment.Type.TUITION
+#
+# The retired My Payments table (my_payments_update — silently filtered a
+# forged cross-member id out of its per-row loop) is gone (task #439); its
+# AY-assignment + note intent is now covered by the member statement actions
+# (payments/test_my_payment_actions.py::test_retype_ay_binding_posted_tuition_period,
+# ::test_note_write_replace_clear_round_trip), which 404 on a stale/forged id
+# instead of silently ignoring it — own-payment scoping still holds
+# (::test_retype_other_members_payment_404s_unchanged,
+# ::test_note_other_members_payment_404s). The old donation<->non-donation
+# retype block is now full parity (Rico, 2026-07-16) — see
+# ::test_retype_donation_to_dues_applies_self_reported_member_note, which
+# tests the opposite (now-allowed) outcome.
 
 
 @pytest.mark.django_db

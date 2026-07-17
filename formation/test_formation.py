@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.advisor import set_advisor
-from accounts.models import Profile, Source, User
+from accounts.models import Profile, User
 from formation.advancement import step_label_for_member
 from formation.models import Advancement, step_label_for
 from payments.models import TuitionEnrollment, TuitionPeriod
@@ -88,10 +88,10 @@ def test_formation_page_shows_tabs_for_candidate(client):
     client.force_login(member)
     body = client.get(reverse("formation:formation")).content
     assert b"My LSP" in body
-    # A candidate owes tuition + dues, so those tabs appear alongside the
-    # always-on ones — dues now lives on the unified "My account" tab
-    # (task #439). Tabs are real, shareable ?tab= links.
-    for key in (b"groups", b"events", b"works", b"tuition", b"account", b"profile"):
+    # A candidate owes tuition + dues, so the Account tab appears alongside
+    # the always-on ones — tuition and dues live on the one unified Account
+    # tab (task #439). Tabs are real, shareable ?tab= links.
+    for key in (b"groups", b"events", b"works", b"account", b"profile"):
         assert b'href="?tab=' + key + b'"' in body
 
 
@@ -119,45 +119,19 @@ def test_groups_tab_lists_current_and_past(client):
     assert b">Current<" in body and b">Past<" in body
 
 
-# ---- editable My Payments table (type / note / AY) -------------------------
+# ---- Account tab statement --------------------------------------------------
+#
+# The editable "My Payments" table (type_<id>/note_<id>/period_<id> POSTed to
+# the retired my_payments_update endpoint) was removed in task #439; its
+# type/note/AY editing intent is now covered by the member statement actions
+# (payments/test_my_payment_actions.py::my_payment_retype/my_payment_note,
+# including cross-user 404 protection). Donation<->non-donation retypes,
+# blocked by the old table, are now full parity — see
+# payments/test_my_payment_actions.py::test_retype_donation_to_dues_....
 
-def test_member_edits_type_and_note_on_own_payment(client):
-    """Non-donation<->non-donation retypes (both count toward the unified
-    ledger pot) stay self-service, alongside a note edit. Donation<->
-    non-donation retypes are a separate, treasurer-only path — see
-    payments/test_tuition.py::test_member_cannot_retype_donation_to_dues
-    (task #439 fix 1)."""
-    from payments.models import Payment
-
-    member = _user("r@x.test", role=Profile.Role.CANDIDATE)
-    other = _user("other@x.test", role=Profile.Role.CANDIDATE)
-    mine = Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=member, amount=Decimal("100"),
-        status=Payment.Status.SUCCEEDED, source=Source.ASSUMED,
-    )
-    theirs = Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=other, amount=Decimal("100"),
-        status=Payment.Status.SUCCEEDED, source=Source.ASSUMED,
-    )
-    client.force_login(member)
-    resp = client.post(reverse("my_payments_update"), {
-        f"type_{mine.id}": "dues",
-        f"note_{mine.id}": "Actually dues, not tuition.",
-        # An attempt to edit someone else's payment is ignored (not in the qs).
-        f"type_{theirs.id}": "dues",
-    })
-    assert resp.status_code == 302
-    mine.refresh_from_db()
-    theirs.refresh_from_db()
-    assert mine.payment_type == "dues"
-    assert mine.source == Source.SELF_REPORTED
-    assert mine.member_note == "Actually dues, not tuition."
-    assert theirs.payment_type == "tuition"  # untouched
-    assert theirs.source == Source.ASSUMED
-
-
-def test_my_payments_shows_event_for_registration(client):
-    """The 'For' column links to the event a registration payment is for."""
+def test_statement_shows_event_for_registration(client):
+    """The statement's payment description links to the event a
+    registration payment is for."""
     from datetime import date as _date
 
     from events.models import Audience, Event, PriceTier
@@ -182,7 +156,7 @@ def test_my_payments_shows_event_for_registration(client):
         amount=Decimal("50.00"), status=Payment.Status.SUCCEEDED,
     )
     client.force_login(member)
-    body = client.get(reverse("formation:formation") + "?tab=tuition").content.decode()
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
     assert "Working with Masochism" in body
     assert reverse("events:detail", args=[event.slug]) in body
 

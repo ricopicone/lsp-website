@@ -115,6 +115,7 @@ def test_help_tab_renders_rewritten_guide(client, roster):
     assert resp.status_code == 200
     assert b"one account per member" in resp.content.lower()
     assert b"Re-categorize" in resp.content
+    assert b"Member submissions" in resp.content
 
 
 def test_empty_ledger_notice_shown_and_hidden(client, treasurer, roster):

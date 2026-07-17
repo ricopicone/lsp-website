@@ -133,6 +133,40 @@ def registration_pending(reg) -> None:
     emails.send_registration_pending_notice(reg)
 
 
+def _account_tab_url() -> str:
+    from urllib.parse import urlencode
+
+    from django.urls import reverse
+    return reverse("formation:formation") + "?" + urlencode({"tab": "account"})
+
+
+def ledger_submission_decided(submission) -> None:
+    """Tell the member their history submission (task #439 §3) was decided.
+
+    Reuses ``Category.REGISTRATION_STATUS`` — of the existing categories
+    it's the closest fit (an approve/decline outcome on something the
+    member submitted, in the same Payments & registration preferences
+    section) — rather than adding a brand-new category, which even though
+    it wouldn't touch the DB schema (Category is TextChoices metadata, not
+    an FK) would still need a CATEGORY_META entry and a migration for the
+    Notification.category field's ``choices`` state.
+    """
+    from .models import LedgerSubmission
+
+    kind_label = "payment" if submission.kind == LedgerSubmission.Kind.PAYMENT else "charge"
+    if submission.status == LedgerSubmission.Status.APPROVED:
+        title = (f"Your reported {kind_label} of ${submission.amount} was "
+                 "added to your account.")
+    else:
+        note = f": {submission.decision_note}" if submission.decision_note else "."
+        title = (f"Your reported {kind_label} of ${submission.amount} was "
+                 f"declined{note}")
+    notify(
+        submission.user, Category.REGISTRATION_STATUS,
+        title=title, url=_account_tab_url(), target=submission,
+    )
+
+
 def approval_reminder_inapp(event, pending_count: int) -> None:
     """Bell rows for event faculty (the cron paces the batched faculty email)."""
     url = reverse("events:detail", args=[event.slug]) + "?view=faculty"

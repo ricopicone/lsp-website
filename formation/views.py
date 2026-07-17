@@ -68,8 +68,8 @@ def _formation_url(tab="formation", **params):
 def formation(request):
     """The member's personal formation hub — a tabbed surface that gathers
     everything about their place in the School: their Advisor and advancement
-    demandes (Formation), their tuition decision + payments (Tuition), and the
-    groups they belong to now and in the past (Groups)."""
+    demandes (Formation), their tuition decision, dues, and payments
+    (Account), and the groups they belong to now and in the past (Groups)."""
     return render(request, "formation/formation.html", _formation_context(request))
 
 
@@ -136,9 +136,14 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     )
     ctx["show_money_tab"] = show_money_tab
 
-    tabs = available_tabs(user, tuition=show_money_tab, account=show_money_tab)
+    tabs = available_tabs(user, account=show_money_tab)
     keys = {k for k, _ in tabs}
     active = request.GET.get("tab") or "formation"
+    if active == "tuition":
+        # Old bookmarked/emailed ?tab=tuition links — Tuition folded into
+        # Account (task #439); land there rather than falling through to
+        # the default tab.
+        active = "account"
     if active not in keys:
         active = "formation"
     ctx["formation_tabs"] = tabs
@@ -148,7 +153,7 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     # Formation tab's advisor/steps above are always built: it's the default.)
     if active in ("groups", "events"):
         ctx.update(_formation_groups_events_context(request))
-    elif active in ("tuition", "account"):
+    elif active == "account":
         ctx.update(_formation_money_context(request))
     elif active == "works":
         from works.queries import my_works_qs
@@ -276,30 +281,43 @@ def _formation_steps(user):
 
 
 def _formation_money_context(request) -> dict:
-    """Tuition + the unified account (statement/balance/dues) + the member's
-    own payment history — all on one tab (task #439: the member-facing view
-    onto the unified ledger, ``payments.ledger.member_account``).
+    """The Account tab (task #439): the unified ledger statement/balance,
+    tuition (four-year progress, this year's decision/installments, folded
+    in from the old Tuition tab) and dues, all on one tab. Statement rows
+    carry the member's own retype/split/note actions (full treasurer parity
+    on their own payments — ``payments.views.my_payment_retype`` etc.)."""
+    from django.utils import timezone
 
-    Tuition: the four-year progress, this year's decision/installments,
-    ledger-derived years-covered count. Account: the running-balance
-    statement + this year's dues status. Payments: full history (editable
-    type/note, and academic year for tuition) from the My Payments table."""
     from payments import ledger
     from payments.dues import is_dues_obligated
     from payments.forms import TuitionDecisionForm
     from payments.models import (
         DuesPeriod,
+        LedgerSubmission,
         Payment,
         TuitionEnrollment,
         TuitionPeriod,
     )
+    from payments.views import _attach_split_info
 
     user = request.user
     profile = user.profile
 
     # --- The unified account — computed once, everything below derives from it. ---
     acct = ledger.member_account(user)
-    requirement_met = ledger.tuition_requirement_met(user)
+    # The statement's retype/split buttons need each payment line's split
+    # state (gates the Split button — a split row can't be re-split).
+    _attach_split_info([ln["obj"] for ln in acct["lines"] if ln["kind"] == "payment"])
+    # "Requirement met" (the member-facing badge) means the four years are
+    # actually *paid* — payment-based, not enrollment-based. Keep this
+    # separate from decision-exemption (below): a member can have four
+    # non-skipping enrollments on record with money still owed, in which
+    # case they're exempt from a fifth-year decision but have NOT met the
+    # requirement (task #439 / Rico, 2026-07-16).
+    requirement_met = acct["tuition_years_covered"] >= acct["tuition_years_required"]
+    # Decision-exemption: four non-skipping years on record — no further
+    # annual tuition decision is asked for, regardless of payment status.
+    decision_exempt = ledger.tuition_decision_exempt(user)
 
     # --- Tuition (current year) ---
     period = TuitionPeriod.current()
@@ -321,34 +339,15 @@ def _formation_money_context(request) -> dict:
     )
     dues_paid = acct["dues_state"] in ("paid", "waived")
 
-    # --- Payments (all) — one editable table (type + note + tuition AY) ---
-    # Order by the same date the table shows (paid_at, falling back to
-    # created_at), newest first — not by created_at alone, which diverges for
-    # backfilled/offline charges entered long after they were paid.
-    from django.db.models.functions import Coalesce
-
-    payments = list(
-        Payment.objects.filter(user=user)
-        .select_related("registration__event", "dues_period", "tuition_period")
-        .annotate(when=Coalesce("paid_at", "created_at"))
-        .order_by("-when", "-id")
-    )
-
-    # For tuition rows, pre-select the assigned AY, else the AY the payment date
-    # falls in (so the "For" column's year picker starts on the right guess).
-    from accounts.membership import current_academic_year_start as ay_of
+    # --- Period lists for the statement's re-categorize modal (dues/tuition
+    # year selectors) — the modal itself defaults to "Auto (from payment
+    # date)", so these are just the option lists, no per-payment preselection.
     tuition_periods = list(TuitionPeriod.objects.order_by("-start_date"))
-    period_id_by_ay = {ay_of(tp.start_date): tp.id for tp in tuition_periods}
-    for p in payments:
-        if p.payment_type != Payment.Type.TUITION:
-            continue
-        when = p.paid_at or p.created_at
-        p.selected_period_id = p.tuition_period_id or (
-            period_id_by_ay.get(ay_of(when.date())) if when else None
-        )
+    dues_periods = list(DuesPeriod.objects.order_by("-start_date"))
 
     show_money_tab = (
-        profile.owes_tuition or dues_obligated or bool(payments)
+        profile.owes_tuition or dues_obligated
+        or Payment.objects.filter(user=user).exists()
         or progress["tuition_years_started"] > 0
     )
 
@@ -357,6 +356,7 @@ def _formation_money_context(request) -> dict:
         # unified account (task #439) — statement/balance/tuition-years tile
         "acct": acct,
         "requirement_met": requirement_met,
+        "decision_exempt": decision_exempt,
         # tuition
         "owes_tuition": profile.owes_tuition,
         "tuition_period": period,
@@ -377,10 +377,15 @@ def _formation_money_context(request) -> dict:
         "dues_obligated": dues_obligated,
         "dues_amount": dues_amount,
         "dues_paid": dues_paid,
-        # payments
-        "my_payments": payments,
+        # statement actions (retype/split/note modals)
         "tuition_periods": tuition_periods,
+        "dues_periods": dues_periods,
         "payment_type_choices": Payment.Type.choices,
+        # history submissions (task #439 §3) — "Report missing history"
+        "submission_kind_choices": LedgerSubmission.Kind.choices,
+        "my_submissions": list(
+            LedgerSubmission.objects.filter(user=user).order_by("-created_at")),
+        "today": timezone.now().date(),
     }
 
 
