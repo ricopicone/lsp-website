@@ -363,7 +363,9 @@ payments/treasurer/member_detail.html for the full picture with actions).
               <td>{{ s.get_category_display }}</td>
               <td class="text-right whitespace-nowrap">{{ s.amount|usd }}</td>
               <td>{% status_badge s.status %}</td>
-              <td class="text-xs text-base-content/70">{{ s.decision_note }}</td>
+              <td class="text-xs text-base-content/70">
+                {% if s.status == "declined" %}{{ s.decision_note }}{% endif %}
+              </td>
             </tr>
             {% endfor %}
           </tbody>

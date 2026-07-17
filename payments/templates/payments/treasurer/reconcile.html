@@ -23,6 +23,15 @@
           <strong>{{ s.amount|usd }}</strong> · dated {{ s.claimed_date|date:"M j, Y" }}
         </p>
         <p class="text-sm text-base-content/70 whitespace-pre-wrap">{{ s.details }}</p>
+        {% if s.warnings %}
+        <ul class="space-y-1">
+          {% for w in s.warnings %}
+          <li class="text-xs text-warning flex items-start gap-1.5">
+            <span aria-hidden="true">⚠</span><span>{{ w }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
         <form method="post" action="{% url 'treasurer_submission_decide' s.id %}"
               class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
           {% csrf_token %}

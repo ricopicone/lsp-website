@@ -217,6 +217,30 @@ def test_partial_coverage_rico_case_no_badge_but_decision_exempt(client):
     assert _tuition_block_reason(member, event=None) is None
 
 
+def test_paid_charges_no_enrollments_shows_met_banner_without_decision_form(client):
+    """task #439 review finding #2: a member whose four tuition years are
+    fully paid off via CHARGES with no TuitionEnrollment rows at all (e.g.
+    minted entirely from approved pre-records history submissions) must be
+    decision-exempt too — showing the "Requirement met" badge and no
+    decision form, never both a "paid" badge and a contradictory 'record
+    your decision' form."""
+    member = _user("paidnoenroll@x.test")
+    for y in (2016, 2017, 2018, 2019):
+        Charge.objects.create(
+            user=member, category=Charge.Category.TUITION,
+            amount=Decimal("800.00"), effective_date=date(y, 9, 1))
+    Payment.objects.create(
+        user=member, payment_type=Payment.Type.TUITION, amount=Decimal("3200.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        paid_at=timezone.now(),
+    )
+    assert TuitionEnrollment.objects.filter(user=member).count() == 0
+    client.force_login(member)
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+    assert "Requirement met" in body
+    assert "Record decision" not in body
+
+
 def test_not_decision_exempt_still_shows_decision_form(client, db):
     member = _user("notreqmet@x.test")
     if TuitionPeriod.current() is None:

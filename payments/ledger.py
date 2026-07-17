@@ -309,20 +309,32 @@ def collected_this_ay(today=None) -> dict:
 
 
 def tuition_decision_exempt(user) -> bool:
-    """Four non-skipping tuition years on record — no fifth-year decision
-    nag. The 4-year cap means a fifth year never mints a charge, so asking
-    for a skip/committed status past that point is noise (Rico,
-    2026-07-16). This is deliberately NOT the same thing as the
-    "requirement met" badge shown to members, which means the four years
-    are actually *paid* (``tuition_years_covered >= tuition_years_required``
-    in :func:`member_account`) — a member can be decision-exempt with money
-    still owed; that money is chased through the ledger, not through
-    decision reminders."""
+    """Four non-skipping years on record, or four years fully paid — either
+    way, no fifth-year decision nag. The 4-year cap means a fifth year never
+    mints a charge, so asking for a skip/committed status past that point is
+    noise (Rico, 2026-07-16).
+
+    A member can reach four years two ways: four non-skipping
+    ``TuitionEnrollment`` rows (the usual, decision-by-decision path), or
+    four years' worth of tuition charges already fully paid off with no
+    enrollment decisions at all (e.g. minted from approved pre-records
+    history submissions for a member who started before the site tracked
+    enrollments — task #439 review finding #2). Paid-in-full implies the
+    member has met the requirement, so it would be a contradiction to still
+    show them an annual decision form. This reuses the same payment-based
+    sweep as the "requirement met" badge (``tuition_years_covered >=
+    tuition_years_required`` in :func:`member_account`) — which is why
+    paid-but-owed is different: a member can be decision-exempt via
+    enrollments alone with money still owed on those years; that money is
+    chased through the ledger, not through decision reminders."""
     from .models import TuitionEnrollment
 
-    return TuitionEnrollment.objects.filter(user=user).exclude(
+    if TuitionEnrollment.objects.filter(user=user).exclude(
         status=TuitionEnrollment.Status.SKIPPING,
-    ).count() >= TUITION_YEARS_REQUIRED
+    ).count() >= TUITION_YEARS_REQUIRED:
+        return True
+    acct = member_account(user)
+    return acct["tuition_years_covered"] >= acct["tuition_years_required"]
 
 
 def tuition_clearance(user) -> list[str]:

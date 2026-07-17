@@ -405,6 +405,14 @@ badge and a note naming you. Members also have their own **Note** field
 per payment (`member_note`) — separate from your treasurer-only notes —
 which shows in the same popover, labeled "Member note: …".
 
+One case still needs your eyes: if the member is a **transitioned member**
+(Analyst or Scholar, tuition history frozen) and re-types old money into or
+out of tuition, that re-type doesn't touch their frozen charges — same as
+when you do it yourself (above) — and the Reconcile tab's Charge conflicts
+queue won't flag it, since nothing there disagrees with a sync that no
+longer runs for them. Check their statement adds up and follow up with a
+manual **Adjust** or **Void** if it doesn't.
+
 ---
 
 ## Reconcile tab
@@ -435,27 +443,50 @@ description ("Report missing history"), which files as a **pending**
 submission. Nothing lands on their account yet — that's your call.
 
 Each pending submission shows here with the member's name, what they
-claimed, and their description. You either:
+claimed, and their description. A submission may also carry a soft warning
+— **possible duplicate claim** (another pending submission from the same
+member looks identical: same kind, category, amount, and date — they may
+have submitted twice by accident) or **no matching charge on file** (a
+claimed *payment* in dues/tuition whose date falls in an AY with no charge
+on record for it). Neither warning blocks approve/decline — they're just
+worth a second look before you click.
+
+You either:
 
 - **Approve** — mints the matching entry on the member's account:
   a **payment** (offline, member-reported provenance, dated the day they
   claimed) for a claimed payment, or an **open charge** (also
   member-reported, and marked staff-adjusted so the minting sync leaves it
-  alone) for a claimed fee. Either way it's bound to the right academic
-  year automatically when the category is dues or tuition. The mint
-  carries a note identifying the submission number and your email, plus
-  the member's own description — so the provenance trail is complete. If a
-  non-void charge already exists for that member in that category and
-  year, approval is **refused** rather than double-minting — the message
-  tells you to adjust the existing charge instead and decline the
-  submission with a note pointing at it.
+  alone) for a claimed fee. Either way it's bound to the matching academic
+  year *only when the claimed date actually falls inside one* — a dues or
+  tuition claim from before any period on file (the honor-system era) is
+  minted **unbound** rather than mis-attributed to whichever year happens
+  to be current right now, which would otherwise wrongly mark this year as
+  already paid. The mint carries a note identifying the submission number
+  and your email, plus the member's own description — so the provenance
+  trail is complete. If a non-void charge already exists for that member in
+  that category and year, approval is **refused** rather than
+  double-minting — the message tells you to adjust the existing charge
+  instead and decline the submission with a note pointing at it.
+
+  Approving a **payment** claim credits the member's balance immediately,
+  whether or not the fee it's paying off was ever recorded as a charge (see
+  the "no matching charge on file" warning above). If the fee itself is
+  also missing, approve the matching **charge** claim too (or add one
+  yourself from their account page) so the payment actually covers
+  something instead of just sitting as an unexplained credit.
 - **Decline** — mints nothing. Whatever note you enter (a reason, a
   request for more detail, a reference to where you found the real record)
-  is saved as the decision note.
+  is saved as the decision note. This note is shown to the member on their
+  own submissions list **only when you decline** — an approval's note is
+  treasurer-eyes-only (it's your working note, not member-facing copy).
 
 Either way the member gets notified with your decision (and your note on a
 decline), and their own list of past submissions — visible below their
-"Report missing history" form — updates to show the outcome.
+"Report missing history" form — updates to show the outcome. A member is
+capped at 10 outstanding pending submissions at a time (a guardrail against
+accidentally flooding the queue) — decide the backlog and they can submit
+more.
 
 ---
 

@@ -283,6 +283,7 @@ def treasurer_reconcile(request):
         LedgerSubmission.objects.filter(status=LedgerSubmission.Status.PENDING)
         .select_related("user")
     )
+    _annotate_submission_warnings(submissions)
     return _treasurer_render(request, "reconcile", "payments/treasurer/reconcile.html", {
         "groups": group_list,
         "assumed_count": len(assumed),
@@ -472,6 +473,56 @@ def _reconcile_apply(request):
     return redirect("treasurer_reconcile")
 
 
+def _annotate_submission_warnings(submissions) -> None:
+    """Soft advisory badges for the Reconcile tab's Member submissions queue
+    (task #439 review finding #4a), set as ``.warnings`` (a list of strings)
+    on each submission in place.
+
+    Two heuristics, both advisory only — nothing here blocks approve/decline,
+    it just flags what's worth a second look before clicking:
+
+    - **Possible duplicate** — another PENDING submission by the same member
+      with an identical (kind, category, amount, claimed_date). Members
+      sometimes re-submit a report they think didn't go through.
+    - **No matching charge on file** — a *payment* claim in dues/tuition
+      whose claimed date falls in an AY window with no non-void charge for
+      that member/category/period. Approving still mints the payment (per
+      spec, the treasurer's call) but it will simply sit as a credit on the
+      balance rather than covering anything, unless the matching charge is
+      also on file (or approved from a companion charge claim).
+
+    Computed over the queue's already-small PENDING batch — no more than one
+    query per payment-claim row for the charge check."""
+    from collections import Counter
+
+    def _key(s):
+        return (s.user_id, s.kind, s.category, s.amount, s.claimed_date)
+
+    counts = Counter(_key(s) for s in submissions)
+    for s in submissions:
+        warnings = []
+        if counts[_key(s)] > 1:
+            warnings.append(
+                "Possible duplicate claim — another pending submission from "
+                "this member looks identical.")
+        if (s.kind == LedgerSubmission.Kind.PAYMENT
+                and s.category in (Payment.Type.DUES, Payment.Type.TUITION)):
+            period = _strict_period_for(s.category, s.claimed_date)
+            has_charge = False
+            if period is not None:
+                fk = ("dues_period" if s.category == Payment.Type.DUES
+                      else "tuition_period")
+                has_charge = Charge.objects.filter(
+                    user=s.user, category=s.category, **{fk: period},
+                ).exclude(status=Charge.Status.VOID).exists()
+            if not has_charge:
+                warnings.append(
+                    "No matching charge on file for this window — "
+                    "approving credits the balance directly rather than "
+                    "covering a fee.")
+        s.warnings = warnings
+
+
 @login_required
 @user_passes_test(_is_staff)
 @require_POST
@@ -518,10 +569,10 @@ def treasurer_submission_decide(request, submission_id: int):
             if submission.kind == LedgerSubmission.Kind.PAYMENT:
                 kwargs = {}
                 if submission.category == Payment.Type.DUES:
-                    kwargs["dues_period"] = _period_for(
+                    kwargs["dues_period"] = _strict_period_for(
                         Payment.Type.DUES, submission.claimed_date)
                 elif submission.category == Payment.Type.TUITION:
-                    kwargs["tuition_period"] = _period_for(
+                    kwargs["tuition_period"] = _strict_period_for(
                         Payment.Type.TUITION, submission.claimed_date)
                 paid_at = datetime(
                     submission.claimed_date.year, submission.claimed_date.month,
@@ -550,7 +601,8 @@ def treasurer_submission_decide(request, submission_id: int):
                 # treasurer_charge_add, incl. the duplicate-charge guard.
                 period_kwargs = {}
                 eff = submission.claimed_date
-                period = _period_for(submission.category, submission.claimed_date)
+                period = _strict_period_for(
+                    submission.category, submission.claimed_date)
                 if period is not None:
                     fk = ("dues_period"
                           if submission.category == Charge.Category.DUES
@@ -1289,7 +1341,14 @@ def _create_split_child(parent, part_type, amount, when, *, source,
 
 def _period_for(new_type, when):
     """The AY period containing ``when`` for a dues/tuition category, falling
-    back to the current one. None for other categories."""
+    back to the current one. None for other categories.
+
+    NOT for binding a raw member-claimed date (history submissions) — see
+    ``_strict_period_for``: falling back to "whatever's current right now"
+    is right when re-categorizing an already-dated payment (the treasurer's
+    best guess still needs *a* period selected), but wrong for a decade-old
+    claim, where it would mis-attribute the money to this AY.
+    """
     if new_type == Payment.Type.DUES:
         model = DuesPeriod
     elif new_type == Payment.Type.TUITION:
@@ -1298,6 +1357,27 @@ def _period_for(new_type, when):
         return None
     return (model.objects.filter(
         start_date__lte=when, end_date__gte=when).first() or model.current())
+
+
+def _strict_period_for(category, when):
+    """The AY period whose window actually contains ``when`` — NO
+    ``current()`` fallback. None for other categories, or when no period's
+    window covers the date.
+
+    Used only for binding a member's raw claimed date (history submissions,
+    task #439 review finding #1): an out-of-window claim (e.g. tuition paid
+    in 2012, long before any period on file) must stay unbound rather than
+    getting mis-attributed to whatever period happens to be current today —
+    that would corrupt the double-payment guard (``has_dues_payment_for``)
+    and the per-year sync's idempotency key.
+    """
+    if category == Payment.Type.DUES:
+        model = DuesPeriod
+    elif category == Payment.Type.TUITION:
+        model = TuitionPeriod
+    else:
+        return None
+    return model.objects.filter(start_date__lte=when, end_date__gte=when).first()
 
 
 def _apply_category_change(payment, new_type, *, treasurer_email,
@@ -2461,7 +2541,20 @@ def my_ledger_submission_create(request):
     #439, member Account v2 §3). Crucial for students who started before
     the site's records begin — this only files the claim as PENDING; a
     treasurer approves (minting the matching Payment/Charge) or declines it
-    from the Reconcile tab's Member submissions queue."""
+    from the Reconcile tab's Member submissions queue. Capped at 10
+    outstanding PENDING submissions per member — a guardrail against
+    accidental repeat-submission flooding the treasurer's queue (review
+    finding #4b), not a hard limit on legitimate history (declined/approved
+    rows don't count)."""
+    if LedgerSubmission.objects.filter(
+            user=request.user, status=LedgerSubmission.Status.PENDING,
+    ).count() >= 10:
+        messages.error(
+            request,
+            "You have several reports awaiting review, please wait for "
+            "the treasurer.")
+        return redirect(_account_tab_url())
+
     kind = request.POST.get("kind")
     if kind not in LedgerSubmission.Kind.values:
         messages.error(request, "Choose whether this was a payment or a charge.")

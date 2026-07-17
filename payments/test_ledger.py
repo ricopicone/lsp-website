@@ -170,6 +170,33 @@ def test_enrollment_beyond_cap_reads_met(member):
     assert by_slug["t-2025"] == "met"   # 5th non-skipping year — never owed
 
 
+def test_decision_exempt_via_paid_charges_with_no_enrollments(member):
+    """Four years' worth of tuition charges, fully paid off, with NO
+    TuitionEnrollment rows at all (e.g. minted from approved pre-records
+    history submissions for a member who started before enrollments were
+    tracked) — decision-exempt via the paid-met OR, not just the
+    enrollment-count path (task #439 review finding #2)."""
+    for y in (2016, 2017, 2018, 2019):
+        _charge(member, Charge.Category.TUITION, "800", date(y, 9, 1))
+    _pay(member, Payment.Type.TUITION, "3200", WHEN)
+    assert TuitionEnrollment.objects.filter(user=member).count() == 0
+    acct = ledger.member_account(member)
+    assert acct["tuition_years_covered"] == 4
+    assert ledger.tuition_decision_exempt(member) is True
+
+
+def test_not_decision_exempt_with_partial_charges_and_no_enrollments(member):
+    """Same shape, but only 3 of the 4 years are actually paid off — not
+    exempt (the paid-met path requires the full four, same as the
+    enrollment-count path)."""
+    for y in (2016, 2017, 2018, 2019):
+        _charge(member, Charge.Category.TUITION, "800", date(y, 9, 1))
+    _pay(member, Payment.Type.TUITION, "2400", WHEN)  # 3 years' worth
+    acct = ledger.member_account(member)
+    assert acct["tuition_years_covered"] == 3
+    assert ledger.tuition_decision_exempt(member) is False
+
+
 def test_conflict_flag_credit_plus_skipping_year(member):
     t25 = _tuition_period(2025, "2000")
     TuitionEnrollment.objects.create(

@@ -180,6 +180,42 @@ def test_create_details_capped_at_2000_chars(client, member):
     assert len(sub.details) == 2000
 
 
+def test_create_refuses_at_ten_pending_submissions(client, member):
+    """A guardrail against flooding the queue (task #439 review finding
+    #4b) — 10 outstanding PENDING submissions is the cap; decided rows
+    (approved/declined) don't count against it."""
+    for i in range(10):
+        LedgerSubmission.objects.create(
+            user=member, kind=LedgerSubmission.Kind.PAYMENT,
+            category=Payment.Type.TUITION, amount=Decimal("100.00"),
+            claimed_date=date(2019, 9, 1), details=f"Claim {i}.")
+    resp = client.post(
+        reverse("my_ledger_submission_create"), _valid_payload())
+    assert resp.status_code == 302
+    assert LedgerSubmission.objects.filter(user=member).count() == 10
+    messages = [str(m) for m in get_messages(resp.wsgi_request)]
+    assert any("awaiting review" in m for m in messages)
+
+
+def test_create_allowed_when_pending_count_below_cap_despite_decided_rows(
+        client, member):
+    for i in range(9):
+        LedgerSubmission.objects.create(
+            user=member, kind=LedgerSubmission.Kind.PAYMENT,
+            category=Payment.Type.TUITION, amount=Decimal("100.00"),
+            claimed_date=date(2019, 9, 1), details=f"Claim {i}.")
+    for i in range(5):
+        LedgerSubmission.objects.create(
+            user=member, kind=LedgerSubmission.Kind.PAYMENT,
+            category=Payment.Type.TUITION, amount=Decimal("100.00"),
+            claimed_date=date(2019, 9, 1), details=f"Decided {i}.",
+            status=LedgerSubmission.Status.APPROVED)
+    resp = client.post(
+        reverse("my_ledger_submission_create"), _valid_payload())
+    assert resp.status_code == 302
+    assert LedgerSubmission.objects.filter(user=member).count() == 15
+
+
 def test_create_requires_login(client):
     resp = client.post(reverse("my_ledger_submission_create"), _valid_payload())
     assert resp.status_code == 302
@@ -208,6 +244,23 @@ def test_account_tab_lists_own_submissions_with_status(client, member):
     assert "$500.00" in body
     assert "Declined" in body
     assert decided.decision_note in body
+
+
+def test_account_tab_hides_decision_note_on_approved_submission(client, member):
+    """decision_note is member-visible ONLY on a decline — the guide
+    promises decline-only, and an approval's note is the treasurer's own
+    working note, not member-facing copy (task #439 review finding #3)."""
+    LedgerSubmission.objects.create(
+        user=member, kind=LedgerSubmission.Kind.PAYMENT,
+        category=Payment.Type.TUITION, amount=Decimal("2000.00"),
+        claimed_date=date(2019, 9, 1), details="Paid tuition in fall 2019.",
+        status=LedgerSubmission.Status.APPROVED,
+        decision_note="TREASURER-INTERNAL-NOTE-MARKER",
+    )
+    body = client.get(
+        reverse("formation:formation") + "?tab=account").content.decode()
+    assert "Approved" in body
+    assert "TREASURER-INTERNAL-NOTE-MARKER" not in body
 
 
 def test_account_tab_report_form_renders(client, member):

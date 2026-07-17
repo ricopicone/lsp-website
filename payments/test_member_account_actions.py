@@ -431,3 +431,37 @@ def test_decision_exempt_members_need_no_new_year_decision(client, treasurer, me
     assert _tuition_block_reason(member, event=None) is None  # Gate 1 exempt
     resp = client.get(reverse("treasurer"))
     assert member not in resp.context["attention"]["undecided"]
+
+
+def test_decision_exempt_via_paid_charges_no_enrollments_needs_no_new_year_decision(
+        client, treasurer, member):
+    """The same three guarantees as the enrollment-based test above, but
+    reached via four years of tuition CHARGES fully paid off with NO
+    TuitionEnrollment rows at all — the paid-met path (task #439 review
+    finding #2), e.g. a member whose whole tuition history was minted from
+    approved pre-records submissions."""
+    from django.utils import timezone as djtz
+
+    from payments import ledger
+    from payments.models import TuitionPeriod
+    today = djtz.now().date()
+    start = today.year if today.month >= 9 else today.year - 1
+    # current period exists but the member has NO decision for it
+    TuitionPeriod.objects.create(
+        name=f"AY {start}-{start + 1}", slug=f"t-{start}-paidmet",
+        start_date=date(start, 9, 1), end_date=date(start + 1, 8, 31),
+        decision_due_date=date(start, 8, 31), tuition_amount=Decimal("2000"))
+    for y in (start - 4, start - 3, start - 2, start - 1):
+        Charge.objects.create(
+            user=member, category=Charge.Category.TUITION,
+            amount=Decimal("800.00"), effective_date=date(y, 9, 1))
+    Payment.objects.create(
+        user=member, payment_type=Payment.Type.TUITION, amount=Decimal("3200.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        paid_at=djtz.now())
+
+    assert ledger.tuition_decision_exempt(member) is True
+    from registrations.views import _tuition_block_reason
+    assert _tuition_block_reason(member, event=None) is None  # Gate 1 exempt
+    resp = client.get(reverse("treasurer"))
+    assert member not in resp.context["attention"]["undecided"]
