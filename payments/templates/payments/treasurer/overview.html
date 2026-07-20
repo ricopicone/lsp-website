@@ -47,7 +47,7 @@
       <h3 class="font-serif text-lg text-base-content">Needs attention</h3>
     </header>
 
-    {% if attention.undecided or attention.committed_unpaid or attention.conflicts or attention.assumed_count or attention.no_payer_count or attention.submission_count %}
+    {% if attention.undecided or attention.committed_unpaid or attention.conflicts or attention.assumed_count or attention.no_payer_count or attention.submission_count or attention.member_action_count %}
     <ul class="divide-y divide-base-300/60">
       {% for u in attention.undecided %}
       <li class="flex flex-wrap items-center justify-between gap-2 py-2">
@@ -118,6 +118,18 @@
           <span class="badge badge-neutral badge-outline badge-sm">Member submissions</span>
           <span class="text-base-content/60">
             {{ attention.submission_count }} member-reported history submission{{ attention.submission_count|pluralize }} awaiting review
+          </span>
+        </div>
+        <a class="link link-primary text-sm" href="{% url 'treasurer_reconcile' %}">Reconcile →</a>
+      </li>
+      {% endif %}
+
+      {% if attention.member_action_count %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="badge badge-neutral badge-outline badge-sm">Member-changed</span>
+          <span class="text-base-content/60">
+            {{ attention.member_action_count }} payment{{ attention.member_action_count|pluralize }} a member changed in the last {{ attention.member_action_days }} days
           </span>
         </div>
         <a class="link link-primary text-sm" href="{% url 'treasurer_reconcile' %}">Reconcile →</a>

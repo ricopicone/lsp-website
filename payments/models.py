@@ -679,3 +679,41 @@ class LedgerSubmission(models.Model):
     def __str__(self):
         return (f"{self.get_kind_display()} claim: ${self.amount} "
                 f"({self.get_status_display()}, {self.user})")
+
+
+class PaymentMemberAction(models.Model):
+    """One statement action a member took on their *own* payment (task #443).
+
+    Members have full treasurer parity on their own payments — re-categorize,
+    split (donation flips included, which can raise ``tuition_years_covered``
+    and self-clear the promotion gate), and note. Those changes are visible in
+    the provenance hover but otherwise passive; this row is the treasurer's
+    active surface for them, driving a "member-changed payments" review queue
+    on the Reconcile tab. It's an append-only audit log — never edited, never
+    read back into ledger math — so no cross-references beyond the FK.
+    """
+
+    class Action(models.TextChoices):
+        RETYPE = "retype", _("Re-categorized")
+        SPLIT = "split", _("Split")
+        NOTE = "note", _("Note")
+
+    payment = models.ForeignKey(
+        Payment, on_delete=models.CASCADE, related_name="member_actions",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="payment_member_actions",
+    )
+    action = models.CharField(max_length=10, choices=Action.choices)
+    summary = models.CharField(
+        max_length=200,
+        help_text="Human-readable one-liner, e.g. 'Tuition → Donation'.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.get_action_display()} ${self.payment_id} by {self.user}"

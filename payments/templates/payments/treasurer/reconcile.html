@@ -55,6 +55,30 @@
   </section>
   {% endif %}
 
+  {% if member_actions %}
+  <section class="space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Member-changed payments
+      <span class="text-base-content/60 text-sm font-normal">({{ member_actions|length }})</span></h3>
+    <p class="text-sm text-base-content/60">
+      Changes members made to their own payments in the last {{ member_actions_days }} days —
+      re-categorizing, splitting, or annotating. These are already applied (members have full
+      parity on their own account); this is a heads-up for review, not a queue to act on. A
+      donation flip can raise a member's covered tuition years and clear their promotion gate,
+      so it's worth a look. Open the account to inspect or correct anything.
+    </p>
+    <ul class="rounded-lg border border-base-300 divide-y divide-base-300">
+      {% for a in member_actions %}
+      <li class="p-3 text-sm flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span class="text-xs text-base-content/55 whitespace-nowrap">{{ a.created_at|date:"M j" }}</span>
+        <a class="link font-medium" href="{% url 'treasurer_member_detail' a.user.id %}">{{ a.user.get_full_name|default:a.user.email }}</a>
+        <span class="text-base-content/70">{{ a.get_action_display }}:</span>
+        <span>{{ a.summary }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   {% if charge_conflicts %}
   <section class="space-y-3">
     <h3 class="font-serif text-lg text-base-content">Charge conflicts

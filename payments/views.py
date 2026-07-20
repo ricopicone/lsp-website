@@ -33,6 +33,7 @@ from .models import (
     DuesPeriod,
     LedgerSubmission,
     Payment,
+    PaymentMemberAction,
     TuitionEnrollment,
     TuitionInstallment,
     TuitionPeriod,
@@ -169,6 +170,9 @@ def _attention_queue(rows) -> dict:
             source=Source.STRIPE, user__isnull=True).count(),
         "submission_count": LedgerSubmission.objects.filter(
             status=LedgerSubmission.Status.PENDING).count(),
+        "member_action_count": PaymentMemberAction.objects.filter(
+            created_at__gte=_member_actions_since()).count(),
+        "member_action_days": MEMBER_ACTION_WINDOW_DAYS,
         "tuition_period": period,
     }
 
@@ -286,6 +290,7 @@ def treasurer_reconcile(request):
         .select_related("user")
     )
     _annotate_submission_warnings(submissions)
+    member_actions = _recent_member_actions()
     return _treasurer_render(request, "reconcile", "payments/treasurer/reconcile.html", {
         "groups": group_list,
         "assumed_count": len(assumed),
@@ -297,7 +302,32 @@ def treasurer_reconcile(request):
         "member_options": _reconcile_member_options() if need_members else [],
         "charge_conflicts": _charge_conflicts(),
         "submissions": submissions,
+        "member_actions": member_actions,
+        "member_actions_days": MEMBER_ACTION_WINDOW_DAYS,
     })
+
+
+#: How far back the "member-changed payments" review queue looks. Members have
+#: full statement parity on their own payments (task #439); this is the
+#: treasurer's passive review window over those changes (task #443).
+MEMBER_ACTION_WINDOW_DAYS = 30
+
+
+def _member_actions_since():
+    from datetime import timedelta
+
+    from django.utils import timezone as _tz
+    return _tz.now() - timedelta(days=MEMBER_ACTION_WINDOW_DAYS)
+
+
+def _recent_member_actions() -> list:
+    """Member self-service statement actions inside the review window, newest
+    first — one flat list, each with its payment + member preloaded."""
+    return list(
+        PaymentMemberAction.objects
+        .filter(created_at__gte=_member_actions_since())
+        .select_related("payment", "user")
+    )
 
 
 def _payer_groups(payments) -> list[dict]:
@@ -2325,6 +2355,14 @@ def tuition_pay_installment(request, installment_id: int):
     return redirect(session.url)
 
 
+def _log_member_action(payment, user, action: str, summary: str) -> None:
+    """Record a member's self-service statement action so the treasurer's
+    Reconcile queue can surface it (task #443). Append-only; never read back
+    into ledger math."""
+    PaymentMemberAction.objects.create(
+        payment=payment, user=user, action=action, summary=summary[:200])
+
+
 @login_required
 @require_POST
 def my_payment_retype(request, payment_id: int):
@@ -2385,6 +2423,9 @@ def my_payment_retype(request, payment_id: int):
         payment.notes = (
             (payment.notes + "\n" + audit) if payment.notes else audit)
         payment.save()
+        _log_member_action(
+            payment, request.user, PaymentMemberAction.Action.RETYPE,
+            f"{labels[old_type]} → {labels[new_type]}")
 
         flash = f"Re-categorized as {labels[new_type]}."
         if settle:
@@ -2492,6 +2533,9 @@ def my_payment_split(request, payment_id: int):
         payment.notes = (
             (payment.notes + "\n" + audit) if payment.notes else audit)
         payment.save()
+        _log_member_action(
+            payment, request.user, PaymentMemberAction.Action.SPLIT,
+            f"${old_amount} {labels[old_type]} → {breakdown}")
 
         settle_targets = [(payment, first_amount)] if first_settle else []
         for t, a, settle in parts[1:]:
@@ -2532,6 +2576,9 @@ def my_payment_note(request, payment_id: int):
     if payment.member_note != note:
         payment.member_note = note
         payment.save(update_fields=("member_note",))
+        _log_member_action(
+            payment, request.user, PaymentMemberAction.Action.NOTE,
+            "Added a note" if note else "Cleared the note")
         messages.success(request, "Note saved." if note else "Note cleared.")
     return _safe_next(request, _account_tab_url())
 

@@ -6,6 +6,7 @@ from .models import (
     DuesReminder,
     LedgerSubmission,
     Payment,
+    PaymentMemberAction,
     Receipt,
     TuitionEnrollment,
     TuitionInstallment,
@@ -169,5 +170,15 @@ class LedgerSubmissionAdmin(admin.ModelAdmin):
     list_filter = ("status", "kind", "category")
     search_fields = ("user__email", "user__first_name", "user__last_name", "details")
     autocomplete_fields = ("user", "decided_by", "created_payment", "created_charge")
+    readonly_fields = ("created_at",)
+    date_hierarchy = "created_at"
+
+
+@admin.register(PaymentMemberAction)
+class PaymentMemberActionAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "user", "action", "summary", "payment")
+    list_filter = ("action",)
+    search_fields = ("user__email", "user__first_name", "user__last_name", "summary")
+    autocomplete_fields = ("user", "payment")
     readonly_fields = ("created_at",)
     date_hierarchy = "created_at"
