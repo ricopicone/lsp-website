@@ -460,13 +460,15 @@ def test_detail_body_uses_lsp_prose(client):
 @pytest.mark.django_db
 def test_shipped_tuition_body_v2_is_clean_linked_and_covers_skipping():
     """The reworked Tuition Assistance content: no stale names, live figure,
-    links to the My LSP Tuition page and the Treasurer, and the skip decision."""
+    links to the member's own account page and the Treasurer, and the skip
+    decision. Pinned to the latest body migration, so a later reword has to
+    keep all of it true."""
     import importlib
 
     from documents.rendering import render_body
 
     mod = importlib.import_module(
-        "documents.migrations.0010_drop_yearend_reconciliation_sentence"
+        "documents.migrations.0011_tuition_assistance_account_tab"
     )
     _current_tuition_period(2500)
     html = render_body(mod.BODY, on_date=date(2026, 10, 1))
@@ -480,7 +482,11 @@ def test_shipped_tuition_body_v2_is_clean_linked_and_covers_skipping():
     assert "raises the matter with the Board" in html
     # "written" dropped from the student's own record-keeping phrasing.
     assert "written" not in html.lower()
-    assert 'href="/formation/?tab=tuition"' in html
+    # The Tuition tab was folded into Account (task #439/#443) — the copy
+    # must name the page that exists, not rely on the ?tab=tuition redirect.
+    assert 'href="/formation/?tab=account"' in html
+    assert "tab=tuition" not in html
+    assert "Tuition page" not in html
     assert 'href="mailto:treasurer@lacanschool.org"' in html
     assert "skip" in html.lower()
 

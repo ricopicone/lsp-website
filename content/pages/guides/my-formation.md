@@ -8,8 +8,9 @@ checklist: my_formation
 page. It has up to three tabs, each with its own link you can return to or share:
 
 - **Formation**—your advisor and your advancement steps.
-- **Tuition & Dues**—your decision, payments, and progress (shown when it
-  applies to you). See the [Tuition & dues](/guides/tuition-dues/) guide.
+- **Account**—your tuition decision, dues, and a statement of every charge
+  and payment (shown when it applies to you). See the
+  [Tuition & dues](/guides/tuition-dues/) guide.
 - **Groups**—the cartels, seminars, and other groups you belong to now and have
   in the past.
 
