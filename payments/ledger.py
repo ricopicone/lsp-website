@@ -353,6 +353,33 @@ def tuition_decision_exempt(user) -> bool:
     return acct["tuition_years_covered"] >= acct["tuition_years_required"]
 
 
+def decision_exempt_ids(rows=None) -> set[int]:
+    """:func:`tuition_decision_exempt` for the whole roster at once.
+
+    Same two paths, batched: four non-skipping ``TuitionEnrollment`` rows
+    (one aggregate query), or four tuition years covered by the sweep (read
+    off :func:`accounts_overview`, which the caller has usually already
+    computed — pass it in as ``rows`` to avoid recomputing it).
+    """
+    from django.db.models import Count
+
+    exempt = set(
+        TuitionEnrollment.objects
+        .exclude(status=TuitionEnrollment.Status.SKIPPING)
+        .values("user")
+        .annotate(n=Count("id"))
+        .filter(n__gte=TUITION_YEARS_REQUIRED)
+        .values_list("user", flat=True)
+    )
+    if rows is None:
+        rows = accounts_overview()
+    exempt |= {
+        r["user"].id for r in rows
+        if r["tuition_covered"] >= TUITION_YEARS_REQUIRED
+    }
+    return exempt
+
+
 def tuition_clearance(user) -> list[str]:
     """Reasons a member's tuition standing blocks promotion to Analyst/Scholar.
 

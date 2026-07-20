@@ -403,3 +403,43 @@ def test_waived_charge_has_no_covered_amount(member):
     ln = next(ln for ln in acct["lines"] if ln["obj"].id == c.id)
     assert ln["covered"] is None
     assert ln["uncovered"] is None
+
+
+# --- batched decision-exemption (task #443) -----------------------------
+
+
+def test_decision_exempt_ids_matches_the_per_member_predicate(member):
+    """``decision_exempt_ids`` is the batched form of
+    ``tuition_decision_exempt`` — the treasurer Overview uses it instead of
+    one member_account() per in-training member, so the two must agree."""
+    # Exempt via enrollments: four non-skipping years, nothing paid.
+    by_enrollment = User.objects.create_user(email="lg-enr@x.test", password="x")
+    for year in (2021, 2022, 2023, 2024):
+        TuitionEnrollment.objects.create(
+            user=by_enrollment, tuition_period=_tuition_period(year, "2000"),
+            status=TuitionEnrollment.Status.COMMITTED, source="staff")
+
+    # Exempt via payment: four tuition years covered, no enrollment rows.
+    by_payment = User.objects.create_user(email="lg-paid@x.test", password="x")
+    for year in (2017, 2018, 2019, 2020):
+        _charge(by_payment, Charge.Category.TUITION, "2000",
+                date(year, 9, 1))
+    _pay(by_payment, Payment.Type.TUITION, "8000", WHEN)
+
+    # Not exempt: three non-skipping years plus a skipped one, unpaid.
+    not_exempt = User.objects.create_user(email="lg-no@x.test", password="x")
+    for year, status in ((2013, TuitionEnrollment.Status.COMMITTED),
+                         (2014, TuitionEnrollment.Status.COMMITTED),
+                         (2015, TuitionEnrollment.Status.COMMITTED),
+                         (2016, TuitionEnrollment.Status.SKIPPING)):
+        TuitionEnrollment.objects.create(
+            user=not_exempt, tuition_period=_tuition_period(year, "2000"),
+            status=status, source="staff")
+
+    everyone = [member, by_enrollment, by_payment, not_exempt]
+    batched = ledger.decision_exempt_ids()
+    for u in everyone:
+        assert (u.id in batched) == ledger.tuition_decision_exempt(u), u.email
+    assert by_enrollment.id in batched
+    assert by_payment.id in batched
+    assert not_exempt.id not in batched

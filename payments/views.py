@@ -137,6 +137,7 @@ def _charge_conflicts(rows=None) -> list[dict]:
 def _attention_queue(rows) -> dict:
     """Everything that needs the treasurer, in one place."""
     from accounts.models import Profile, Source
+    from payments import ledger
 
     period = TuitionPeriod.current()
     undecided, committed_unpaid = [], []
@@ -150,10 +151,11 @@ def _attention_queue(rows) -> dict:
             profile__standing=Profile.Standing.ACTIVE,
             profile__role__in=Profile.IN_TRAINING_ROLES,
         ).select_related("profile")
-        from payments.ledger import tuition_decision_exempt
+        # Batched — the per-member tuition_decision_exempt() would rebuild a
+        # whole member_account for each in-training member (task #443).
+        exempt_ids = ledger.decision_exempt_ids(rows)
         undecided = [u for u in in_training
-                     if u.id not in decided_ids
-                     and not tuition_decision_exempt(u)]
+                     if u.id not in decided_ids and u.id not in exempt_ids]
         committed_unpaid = [
             e for e in enrollments
             if e.status == TuitionEnrollment.Status.COMMITTED]

@@ -345,9 +345,12 @@ def _formation_money_context(request) -> dict:
     tuition_periods = list(TuitionPeriod.objects.order_by("-start_date"))
     dues_periods = list(DuesPeriod.objects.order_by("-start_date"))
 
+    # Payment history comes off the statement we already built rather than a
+    # second Payment.exists() query (task #443).
+    has_payments = any(ln["kind"] == "payment" for ln in acct["lines"])
     show_money_tab = (
         profile.owes_tuition or dues_obligated
-        or Payment.objects.filter(user=user).exists()
+        or has_payments
         or progress["tuition_years_started"] > 0
     )
 
