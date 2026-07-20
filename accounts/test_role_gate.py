@@ -157,3 +157,71 @@ def test_profile_admin_form_allows_non_gated_edits():
     data = model_to_dict(u.profile) | {"bio": "Updated bio."}
     form = ProfileAdminForm(data=data, instance=u.profile)
     assert form.is_valid(), form.errors
+
+
+def test_user_admin_inline_formset_blocks_role_edit(client):
+    """The real surface a treasurer/admin uses is the Profile *inline* on the
+    User change page, not the bare form — the gate has to survive the
+    formset (task #443)."""
+    from django.contrib.admin.sites import site
+
+    from accounts.admin import ProfileInline, UserAdmin
+
+    u = _candidate_owing("rg9@x.test")
+    inline = ProfileInline(User, site)
+    FormSet = inline.get_formset(_admin_request(), obj=u)
+    prefix = FormSet.get_default_prefix()
+    data = {
+        f"{prefix}-TOTAL_FORMS": "1",
+        f"{prefix}-INITIAL_FORMS": "1",
+        f"{prefix}-MIN_NUM_FORMS": "0",
+        f"{prefix}-MAX_NUM_FORMS": "1",
+        f"{prefix}-0-id": str(u.profile.pk),
+        f"{prefix}-0-user": str(u.pk),
+        f"{prefix}-0-role": "analyst",
+    }
+    for field in ("default_billing_mode", "bio", "notes"):
+        data[f"{prefix}-0-{field}"] = getattr(u.profile, field) or ""
+
+    formset = FormSet(data=data, instance=u)
+    assert not formset.is_valid()
+    assert any("uncovered" in m
+               for form in formset.forms
+               for m in form.errors.get("role", []))
+    u.profile.refresh_from_db()
+    assert u.profile.role == "candidate"
+    assert UserAdmin.inlines == [ProfileInline]  # the gate is actually wired
+
+
+def test_user_admin_inline_formset_allows_a_clear_promotion(client):
+    from django.contrib.admin.sites import site
+
+    from accounts.admin import ProfileInline
+
+    u = _candidate_settled("rg10@x.test")
+    inline = ProfileInline(User, site)
+    FormSet = inline.get_formset(_admin_request(), obj=u)
+    prefix = FormSet.get_default_prefix()
+    data = {
+        f"{prefix}-TOTAL_FORMS": "1",
+        f"{prefix}-INITIAL_FORMS": "1",
+        f"{prefix}-MIN_NUM_FORMS": "0",
+        f"{prefix}-MAX_NUM_FORMS": "1",
+        f"{prefix}-0-id": str(u.profile.pk),
+        f"{prefix}-0-user": str(u.pk),
+        f"{prefix}-0-role": "analyst",
+    }
+    for field in ("default_billing_mode", "bio", "notes"):
+        data[f"{prefix}-0-{field}"] = getattr(u.profile, field) or ""
+
+    formset = FormSet(data=data, instance=u)
+    assert formset.is_valid(), formset.errors
+
+
+def _admin_request():
+    from django.test import RequestFactory
+
+    request = RequestFactory().request()
+    request.user = User.objects.create_superuser(
+        email=f"rg-admin-{User.objects.count()}@x.test", password="x")
+    return request
