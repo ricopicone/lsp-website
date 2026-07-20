@@ -20,27 +20,31 @@ def tier_for(dues_period, role: str):
 def usd(value):
     """Format a numeric value as a USD currency string (e.g. ``$100.00``).
 
+    Negatives read ``-$40.00``, not ``$-40.00`` — running balances go
+    negative whenever a member is in credit.
+
     Returns ``""`` for None so it can be used unconditionally on
     aggregate query results that may be None.
     """
-    if value is None or value == "":
-        return ""
-    try:
-        return f"${float(value):,.2f}"
-    except (ValueError, TypeError):
-        return f"${value}"
+    return _money(value, places=2)
 
 
 @register.filter
 def usd0(value):
     """Format as a whole-dollar USD string with thousands commas, no cents
     (e.g. ``$2,500``). For compact rate/headline displays."""
+    return _money(value, places=0)
+
+
+def _money(value, *, places: int) -> str:
     if value is None or value == "":
         return ""
     try:
-        return f"${float(value):,.0f}"
+        amount = float(value)
     except (ValueError, TypeError):
         return f"${value}"
+    sign = "-" if amount < 0 else ""
+    return f"{sign}${abs(amount):,.{places}f}"
 
 
 # Map status string -> (DaisyUI badge color, display label).

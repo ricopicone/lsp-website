@@ -1,8 +1,10 @@
 """Tests for treasurer template filters (task #435 — provenance hover)."""
 
+from decimal import Decimal
+
 import pytest
 
-from payments.templatetags.treasurer_filters import provenance_lines
+from payments.templatetags.treasurer_filters import provenance_lines, usd, usd0
 
 
 @pytest.mark.parametrize(
@@ -98,3 +100,33 @@ def test_popover_shows_member_note():
     html = _render(notes="", member_note="Paid at the door, will confirm.", trigger="icon")
     assert "Paid at the door, will confirm." in html
     assert "data-prov-trigger" in html
+
+
+# --- usd / usd0 sign placement (task #443) ------------------------------
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (Decimal("40"), "$40.00"),
+        (Decimal("-40"), "-$40.00"),
+        (Decimal("-1234.5"), "-$1,234.50"),
+        (Decimal("0"), "$0.00"),
+        (None, ""),
+        ("", ""),
+    ],
+)
+def test_usd_puts_the_sign_before_the_symbol(value, expected):
+    assert usd(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (Decimal("2500"), "$2,500"),
+        (Decimal("-2500"), "-$2,500"),
+        (None, ""),
+    ],
+)
+def test_usd0_puts_the_sign_before_the_symbol(value, expected):
+    assert usd0(value) == expected
