@@ -70,6 +70,7 @@ class Category(models.TextChoices):
 
     # --- Account ---------------------------------------------------------
     ACCOUNT_ADVISOR = "account_advisor", _("Advisor assignments")
+    ACCOUNT_UPDATES = "account_updates", _("Account updates")
     ACCOUNT_SECURITY = "account_security", _("Account & security")
     AVAILABILITY_REVIEW = "availability_review", _("Availability review requests")
 
@@ -246,6 +247,13 @@ CATEGORY_META: dict[str, CategoryMeta] = {
     _C.ACCOUNT_ADVISOR: _M(
         SECTION_ACCOUNT, _("Advisor assignments"),
         _("When you're chosen as, or assigned, an advisor."),
+    ),
+    # Outcomes on the member's own financial account — currently the
+    # treasurer's decision on a payment/fee the member reported from before
+    # the website (task #439 §3).
+    _C.ACCOUNT_UPDATES: _M(
+        SECTION_ACCOUNT, _("Account updates"),
+        _("Decisions on payments or fees you report for your account."),
     ),
     _C.ACCOUNT_SECURITY: _M(
         SECTION_ACCOUNT, _("Account & security"),

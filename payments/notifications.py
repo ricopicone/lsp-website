@@ -143,13 +143,9 @@ def _account_tab_url() -> str:
 def ledger_submission_decided(submission) -> None:
     """Tell the member their history submission (task #439 §3) was decided.
 
-    Reuses ``Category.REGISTRATION_STATUS`` — of the existing categories
-    it's the closest fit (an approve/decline outcome on something the
-    member submitted, in the same Payments & registration preferences
-    section) — rather than adding a brand-new category, which even though
-    it wouldn't touch the DB schema (Category is TextChoices metadata, not
-    an FK) would still need a CATEGORY_META entry and a migration for the
-    Notification.category field's ``choices`` state.
+    Filed under ``Category.ACCOUNT_UPDATES`` — this is an outcome on the
+    member's own financial account, not a registration, so the old
+    "Registration updates" preference label misdescribed it (task #443).
     """
     from .models import LedgerSubmission
 
@@ -162,7 +158,7 @@ def ledger_submission_decided(submission) -> None:
         title = (f"Your reported {kind_label} of ${submission.amount} was "
                  f"declined{note}")
     notify(
-        submission.user, Category.REGISTRATION_STATUS,
+        submission.user, Category.ACCOUNT_UPDATES,
         title=title, url=_account_tab_url(), target=submission,
     )
 

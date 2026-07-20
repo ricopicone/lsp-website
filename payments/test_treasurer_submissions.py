@@ -18,6 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import Source, User
+from notifications.categories import Category
 from notifications.models import Notification
 from payments import ledger
 from payments.models import Charge, DuesPeriod, LedgerSubmission, Payment, TuitionPeriod
@@ -391,6 +392,8 @@ def test_approve_notifies_member(client, treasurer, member):
         {"decision": "approve"})
     note = Notification.objects.get(recipient=member)
     assert "added to your account" in note.title
+    # Filed under Account updates, not "Registration updates" (task #443).
+    assert note.category == Category.ACCOUNT_UPDATES
 
 
 def test_decline_notifies_member_with_reason(client, treasurer, member):
