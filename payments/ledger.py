@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.db.models import Q
 from django.db.models.functions import Coalesce
 
 from .models import Charge, DuesPeriod, Payment, TuitionEnrollment, TuitionPeriod
@@ -20,7 +21,16 @@ from .models import Charge, DuesPeriod, Payment, TuitionEnrollment, TuitionPerio
 # it doesn't reduce the count). Never obligate beyond it.
 TUITION_YEARS_REQUIRED = 4
 
-#: Payment statuses/types that count toward the pot.
+#: Which payments count toward the pot: succeeded, and not a donation
+#: (donations are gifts, not credit against what a member owes).
+#:
+#: Defined once as a matched pair — ``COUNTING_PAYMENTS`` for querysets,
+#: :func:`_counts` for rows already in memory. Change one, change the other;
+#: ``test_ledger.py`` asserts they agree over every status × type combination.
+COUNTING_PAYMENTS = Q(status=Payment.Status.SUCCEEDED) & ~Q(
+    payment_type=Payment.Type.DONATION)
+
+
 def _counts(payment: Payment) -> bool:
     return (
         payment.status == Payment.Status.SUCCEEDED
@@ -28,19 +38,24 @@ def _counts(payment: Payment) -> bool:
     )
 
 
-def _charge_states(open_charges, paid: Decimal) -> dict[int, str]:
-    """Sweep the pot across OPEN charges (pre-sorted oldest-first) →
-    ``{charge_id: "paid" | "partial" | "unpaid"}``."""
+def _charge_states(open_charges, paid: Decimal) -> tuple[dict[int, str], dict[int, Decimal]]:
+    """Sweep the pot across OPEN charges (pre-sorted oldest-first).
+
+    Returns ``({charge_id: "paid" | "partial" | "unpaid"}, {charge_id:
+    covered_amount})`` — the covered amounts let callers report the
+    *uncovered* slice of a charge without replaying the sweep themselves.
+    """
     remaining = paid
-    states = {}
+    states, covered_by_id = {}, {}
     for c in open_charges:
         covered = min(c.amount, remaining)
         remaining -= covered
+        covered_by_id[c.id] = covered
         states[c.id] = (
             "paid" if covered >= c.amount
             else "partial" if covered > 0 else "unpaid"
         )
-    return states
+    return states, covered_by_id
 
 
 def member_account(user) -> dict:
@@ -59,17 +74,20 @@ def member_account(user) -> dict:
     )
     paid = sum((p.amount for p in payments if _counts(p)), Decimal("0"))
     obligation = sum((c.amount for c in open_charges), Decimal("0"))
-    states = _charge_states(open_charges, paid)
+    states, covered_by_id = _charge_states(open_charges, paid)
 
     # Statement: charges and payments merged chronologically with a running
     # balance. WAIVED charges and non-counting payments appear with delta 0.
     lines = []
     for c in charges:
         delta = c.amount if c.status == Charge.Status.OPEN else Decimal("0")
+        covered = covered_by_id.get(c.id)
         lines.append({
             "kind": "charge", "obj": c, "date": c.effective_date,
             "delta": delta, "counts": c.status == Charge.Status.OPEN,
             "state": states.get(c.id),
+            "covered": covered,
+            "uncovered": None if covered is None else c.amount - covered,
         })
     for p in payments:
         when = (p.paid_at or p.created_at).date()
@@ -171,6 +189,7 @@ def member_account(user) -> dict:
         "dues_state": dues_state,
         "current_dues_period": current_dues,
         "charge_states": states,
+        "charge_covered": covered_by_id,
         "conflict": tuition_overpaid > 0 and bool(skipping),
     }
 
@@ -196,10 +215,7 @@ def accounts_overview() -> list[dict]:
     paid_by_user: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
     last_by_user: dict[int, object] = {}
     for row in (
-        Payment.objects.filter(
-            status=Payment.Status.SUCCEEDED, user__isnull=False,
-        )
-        .exclude(payment_type=Payment.Type.DONATION)
+        Payment.objects.filter(COUNTING_PAYMENTS, user__isnull=False)
         .values("user")
         .annotate(s=Sum("amount"), last=Max(Coalesce("paid_at", "created_at")))
     ):
@@ -243,7 +259,7 @@ def accounts_overview() -> list[dict]:
         open_charges = [c for c in charges if c.status == Charge.Status.OPEN]
         paid = paid_by_user.get(uid, Decimal("0"))
         obligation = sum((c.amount for c in open_charges), Decimal("0"))
-        states = _charge_states(open_charges, paid)
+        states, _covered = _charge_states(open_charges, paid)
         balance = obligation - paid
         tuition_obligation = sum(
             (c.amount for c in open_charges
@@ -351,18 +367,15 @@ def tuition_clearance(user) -> list[str]:
         return []
     acct = member_account(user)
     reasons = []
-    # Replay the account's oldest-first sweep over the statement lines and
-    # report the uncovered slice of every OPEN tuition charge.
-    remaining = acct["paid"]
+    # Report the uncovered slice of every OPEN tuition charge, straight off
+    # the account's own oldest-first sweep (no second replay here).
     for ln in acct["lines"]:
         if ln["kind"] != "charge" or not ln["counts"]:
             continue  # payments, waived charges: no obligation to cover
         c = ln["obj"]
-        covered = min(c.amount, remaining)
-        remaining -= covered
         if c.category != Charge.Category.TUITION:
             continue
-        uncovered = c.amount - covered
+        uncovered = ln["uncovered"]
         if uncovered > 0:
             where = (f"{c.tuition_period.name} tuition charge"
                      if c.tuition_period_id else "A tuition charge")

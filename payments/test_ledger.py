@@ -354,3 +354,52 @@ def test_uncovered_year_decision_label_is_the_decision(member):
         status=TuitionEnrollment.Status.COMMITTED, source="staff")
     acct = ledger.member_account(member)
     assert acct["tuition_rows"][0]["decision_label"] == "Committed (will pay)"
+
+
+# --- one definition of "counts toward the pot" (task #443) --------------
+
+
+def test_counting_payments_q_matches_the_python_predicate(member):
+    """``COUNTING_PAYMENTS`` (queryset) and ``_counts`` (in-memory) are a
+    matched pair — they must agree over every status × type combination, or
+    the batched ``accounts_overview`` and the per-member ``member_account``
+    would quietly disagree about what a member has paid."""
+    made = []
+    for status in Payment.Status.values:
+        for ptype in Payment.Type.values:
+            made.append(_pay(member, ptype, "10", WHEN, status=status))
+
+    by_q = set(
+        Payment.objects.filter(ledger.COUNTING_PAYMENTS)
+        .values_list("id", flat=True)
+    )
+    by_python = {p.id for p in made if ledger._counts(p)}
+    assert by_q == by_python
+    assert by_python, "the predicate should accept something"
+
+
+# --- per-line covered / uncovered amounts (task #443) -------------------
+
+
+def test_statement_lines_expose_covered_and_uncovered(member):
+    old = _charge(member, Charge.Category.TUITION, "2000", date(2024, 9, 1))
+    new = _charge(member, Charge.Category.TUITION, "2000", date(2025, 9, 1))
+    _pay(member, Payment.Type.TUITION, "2500", WHEN)
+
+    acct = ledger.member_account(member)
+    lines = {ln["obj"].id: ln for ln in acct["lines"] if ln["kind"] == "charge"}
+    # Oldest-first: the first charge is fully covered, the second partly.
+    assert lines[old.id]["covered"] == Decimal("2000")
+    assert lines[old.id]["uncovered"] == Decimal("0")
+    assert lines[new.id]["covered"] == Decimal("500")
+    assert lines[new.id]["uncovered"] == Decimal("1500")
+    assert acct["charge_covered"][new.id] == Decimal("500")
+
+
+def test_waived_charge_has_no_covered_amount(member):
+    c = _charge(member, Charge.Category.DUES, "100", date(2025, 9, 1),
+                status=Charge.Status.WAIVED)
+    acct = ledger.member_account(member)
+    ln = next(ln for ln in acct["lines"] if ln["obj"].id == c.id)
+    assert ln["covered"] is None
+    assert ln["uncovered"] is None
