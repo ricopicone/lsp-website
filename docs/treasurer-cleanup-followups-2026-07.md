@@ -9,7 +9,17 @@ i.e. the things a code session should *not* decide unilaterally on real money.
 annotate the kept row → atomically delete the imported duplicate (SSM shell or
 Django admin, deliberately *not* the treasurer UI). A distinct Stripe `ch_…`
 id means it is a **distinct real charge** — not a duplicate — so most
-"provisional" rows are genuine money, not double-counts.
+"provisional" rows are genuine money, not double-counts. **Dup detection needs
+no Stripe access:** distinct `ch_…` ids are already on our rows.
+
+**Correction (2026-07-20): the payer is already in our data, not "in Stripe."**
+The import stores the Stripe `billing_details.email` / `receipt_email` on
+`Payment.email` and the billing name in notes (`(unmatched payer: …)`). The
+"no payer" rows are unmatched not because the data is missing but because the
+payer **is not a member** (see Bucket A). Fuzzy-matching all ~148 distinct
+unmatched payers against the directory: **~6 look like members under an
+alternate email; ~142 match no member** (public seminar attendees / donors).
+So the work here is *recognition*, not Stripe lookup.
 
 ---
 
@@ -33,23 +43,30 @@ id means it is a **distinct real charge** — not a duplicate — so most
 
 ---
 
-## Bucket A — "No payer" unallocated Stripe tuition (biggest item)
+## Bucket A — "No payer" Stripe rows are mostly NON-member income
 
-~**dozens of small recurring Stripe tuition charges** ($25–$500, mostly
-$40/$60, 2025-09 → 2026-07) that imported with **no linked member**
-(`source=assumed`, `user=NULL`). These are the bulk of the **196 provisional
-rows / $48,147** and dominate the Reconcile → **No payer** tab.
+~**217 unmatched Stripe rows** ($25–$500, incl. a $40–$500 recurring stream
+2025-26). They dominate the Reconcile → **No payer** tab. Each row already
+carries its payer email (`Payment.email`, 62 rows) and/or billing name (in
+notes). Fuzzy-matching the ~148 distinct payers against the directory:
 
-- **Action:** assign each to its member (Reconcile → No payer → **Assign**),
-  which re-types + links in one step. The recurring cadence + amounts should
-  map to specific members' monthly tuition plans once cross-checked against
-  Stripe customer/email on each charge.
-- **Why not automated:** the payer identity lives on the Stripe charge
-  (customer/email/description), not in our DB — needs the dashboard.
+- **~142 are not members** — public seminar attendees / donors (e.g. Patricia
+  Clough, Vicki Putz, Emmalea Russo, Karl Locher, 于洋). There is **no member
+  account to link these to**; they are non-member event/seminar revenue and
+  should be *recognized as such*, **not** force-assigned to a member. (If we
+  want them off the member ledger's "needs attention" surfaces, the right move
+  is a non-member/other-income marker, not an Assign.)
+- **~6 look like members under an alternate email** — assign these (Reconcile →
+  No payer → **Assign**) after confirming identity:
+  - `hpbanalysis@gmail.com` → **Hannah Patricia Bennett** (`info@hpbanalysis.com`, same domain)
+  - `jgt2859@gmail.com` "John G T…" → **John Tanner** (`jgtannerphd@…`)
+  - "Dwight Mc Can" → **Dwight McCan** (`dmccan@icloud.com`)
+  - "Katharine Jooo" → **Katharine Joo** (`katharine.joo@…`)
+  - "Christopher Westcott" → **Christopher Scott** (`christopherscottphd@…`) — *uncertain, confirm*
+  - "Robert Briones" → **Robert Beshara** — *weak, probably a different person*
 
-Representative rows (see the No-payer tab for the full list): P#618/617/616/615
-($500 ea, 2025-09), P#612–P#548 (the $40–$320 monthly stream), P#807/800/799/794
-(2026-06/07).
+**Action:** confirm the ~6, Assign them (also clears a few phantom credits in
+Bucket C); mark the rest as non-member income. Neither step needs Stripe.
 
 ---
 
@@ -57,8 +74,11 @@ Representative rows (see the No-payer tab for the full list): P#618/617/616/615
 
 `source=assumed` Stripe rows the import couldn't classify, already linked to a
 member and tagged `(provisional — confirm via survey)`. Each needs a
-**real-or-dup** decision against Stripe. Distinct `ch_…` ⇒ keep as real; only
-delete if Stripe shows the *same* charge already recorded under another row.
+**real-or-dup** and an **intent** (tuition vs seminar) decision. Dup is
+answerable from our DB — distinct `ch_…` ⇒ keep as real; a real duplicate would
+be the *same* `ch_…` twice (rare). What genuinely needs a human is **intent**:
+whether a linked member's $500 was a seminar fee (mint a settlement charge) or
+tuition — the Stripe `description` in notes helps when present.
 
 | Member | Rows to confirm | Question |
 |---|---|---|
