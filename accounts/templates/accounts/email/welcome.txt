@@ -1,0 +1,26 @@
+{% autoescape off %}Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
+
+The Lacanian School of Psychoanalysis has a new home online:
+
+  {{ site_url }}
+
+Your member account is already set up, and it uses this email address.
+Signing in is easy, and there is no password to remember unless you want
+one: on the log in page, choose "Email me a sign-in link" and we will send
+you a link that signs you in with one click.
+
+  Log in:              {{ login_url }}
+  How logging in works: {{ guide_url }}
+
+Once you are in, you can update your profile and photo for the directory,
+browse the program and register for seminars, pay dues, and join the
+members' discussion spaces. The Guides page is a good first stop:
+
+  {{ guides_url }}
+
+Questions, or trouble signing in? Just reply to this message.
+
+Warmly,
+The Lacanian School of Psychoanalysis
+{{ support_email }}
+{% endautoescape %}

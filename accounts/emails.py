@@ -98,3 +98,32 @@ def send_email_change_notice(user, old_email: str, new_email: str) -> None:
         reply_to=[settings.SUPPORT_EMAIL],
     )
     msg.send(fail_silently=False)
+
+
+def send_welcome(user) -> None:
+    """The one-time launch welcome: the site is live, here's how to sign in.
+
+    Sent by ``manage.py send_welcome_emails``, which records a
+    :class:`accounts.models.WelcomeEmail` per delivery so nobody is
+    welcomed twice.
+    """
+    base = settings.SITE_BASE_URL.rstrip("/")
+    body = render_to_string(
+        "accounts/email/welcome.txt",
+        {
+            "user": user,
+            "site_url": base + "/",
+            "login_url": base + reverse("login"),
+            "guide_url": base + reverse("guide_detail", args=["logging-in"]),
+            "guides_url": base + reverse("guides_index"),
+            "support_email": settings.SUPPORT_EMAIL,
+        },
+    )
+    msg = EmailMessage(
+        subject="Welcome to the new Lacanian School website",
+        body=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[user.email],
+        reply_to=[settings.SUPPORT_EMAIL],
+    )
+    msg.send(fail_silently=False)

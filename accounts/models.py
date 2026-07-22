@@ -907,3 +907,22 @@ class MemberIntakeSurvey(models.Model):
     def __str__(self):
         state = "submitted" if self.submitted_at else "draft"
         return f"Intake survey: {self.user} ({state})"
+
+
+class WelcomeEmail(models.Model):
+    """One row per launch welcome email sent to a member.
+
+    ``manage.py send_welcome_emails`` skips users with a row, so the
+    one-time launch announcement can be re-run safely (new members added
+    later get welcomed on the next run, nobody gets it twice).
+    """
+
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="welcome_email",
+    )
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"welcome email to {self.user.email} ({self.sent_at:%Y-%m-%d})"

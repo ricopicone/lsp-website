@@ -26,6 +26,7 @@ GUIDES_DIR = Path(settings.BASE_DIR) / "content" / "pages" / "guides"
 # Display order of the guides. A slug with no matching .md file is simply
 # skipped (so you can list it here before writing it).
 GUIDE_SLUGS: list[str] = [
+    "logging-in",
     "profile",
     "seminars",
     "parletre",
