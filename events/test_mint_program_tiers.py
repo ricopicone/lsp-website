@@ -49,10 +49,18 @@ def test_fixed_donation_and_per_session_tiers():
     assert (t.base_amount, t.sliding_scale, t.minimum_amount) == (
         Decimal("100"), True, Decimal("0"),
     )
-    t = per_session.price_tiers.get()  # $25 x 20 sessions, none turned away
-    assert (t.base_amount, t.sliding_scale, t.minimum_amount) == (
-        Decimal("500"), True, Decimal("0"),
-    )
+    t = per_session.price_tiers.get()  # $25 x 20 sessions, fixed
+    assert (t.base_amount, t.sliding_scale) == (Decimal("500"), False)
+
+
+@pytest.mark.django_db
+def test_student_rate_gets_second_tier():
+    e = _event("analysts-act-and-its-results-2026-27", sessions=6)
+    call_command("mint_program_tiers", "--commit")
+    tiers = {t.audience: t for t in e.price_tiers.all()}
+    assert tiers["all"].base_amount == Decimal("360")  # $60 x 6
+    assert tiers["student"].base_amount == Decimal("240")  # $40 x 6
+    assert not tiers["all"].sliding_scale
 
 
 @pytest.mark.django_db

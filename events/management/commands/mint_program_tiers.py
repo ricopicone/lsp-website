@@ -7,9 +7,10 @@ pricing approved 2026-07-22:
 
 - "$N or tuition"  -> fixed base N, covered by tuition.
 - donation events  -> sliding from $0, suggested $100, covered.
-- per-session fees -> whole-term base (rate x session count), sliding with a
-  one-session floor so partial attenders self-adjust ($0 floor where the note
-  says none turned away). The register flow only sells event-level tiers.
+- per-session fees -> fixed whole-term base (rate x session count, no sliding;
+  revised 2026-07-22). A stated student rate becomes a second
+  audience=student tier at student-rate x session count. The register flow
+  only sells event-level tiers.
 
 Dry-run by default; ``--commit`` writes. Idempotent: events that already have
 any tier are skipped, so re-runs (and later proposal-minted tiers) are safe.
@@ -26,7 +27,7 @@ from events.models import Audience, Event, PriceTier
 #: slug -> (kind, args)
 #:   ("fixed", amount)
 #:   ("donation", suggested)
-#:   ("per_session", rate, floor)   # base = rate x sessions; floor is absolute
+#:   ("per_session", rate, student_rate | None)  # base = rate x sessions, fixed
 TIER_SPECS: dict[str, tuple] = {
     "workshop-clinic-of-psychosis-2026-27": ("fixed", Decimal("500")),
     "sounding-out-the-signifier-2026-27": ("fixed", Decimal("500")),
@@ -39,13 +40,13 @@ TIER_SPECS: dict[str, tuple] = {
     "das-unbehagen-2026-27": ("donation", Decimal("100")),
     "clinic-of-the-death-drives-2026-27": ("donation", Decimal("100")),
     "logic-of-phantasy-xiv-xv-2026-27": ("donation", Decimal("100")),
-    # $25/class, none turned away.
-    "beyond-principle-2026-27": ("per_session", Decimal("25"), Decimal("0")),
-    # $60/session ($40 students) — floor of one meeting at the student rate.
+    # $25/class.
+    "beyond-principle-2026-27": ("per_session", Decimal("25"), None),
+    # $60/session, $40 students.
     "analysts-act-and-its-results-2026-27": ("per_session", Decimal("60"), Decimal("40")),
     "psychoanalysis-place-and-time-la-2026-27": ("per_session", Decimal("60"), Decimal("40")),
-    # $40/meeting — floor of one meeting.
-    "lacanian-clinical-practice-2026-27": ("per_session", Decimal("40"), Decimal("40")),
+    # $40/meeting.
+    "lacanian-clinical-practice-2026-27": ("per_session", Decimal("40"), None),
 }
 
 
@@ -69,31 +70,37 @@ class Command(BaseCommand):
                 continue
 
             kind = spec[0]
-            if kind == "fixed":
-                base, sliding, minimum = spec[1], False, Decimal("0")
-            elif kind == "donation":
-                base, sliding, minimum = spec[1], True, Decimal("0")
-            else:  # per_session
-                rate, minimum = spec[1], spec[2]
-                base, sliding = rate * max(event.sessions.count(), 1), True
+            sliding = kind == "donation"
+            student_base = None
+            if kind == "per_session":
+                n = max(event.sessions.count(), 1)
+                base = spec[1] * n
+                if spec[2] is not None:
+                    student_base = spec[2] * n
+            else:  # fixed / donation
+                base = spec[1]
 
-            label = f"{slug}: base ${base}" + (
-                f", sliding from ${minimum}" if sliding else ""
-            )
+            tiers = [(Audience.ALL, base)]
+            if student_base is not None:
+                tiers.append((Audience.STUDENT, student_base))
+            label = ", ".join(
+                f"{aud}=${amt}" for aud, amt in tiers
+            ) + (", sliding from $0" if sliding else "")
             if opts["commit"]:
-                PriceTier.objects.create(
-                    event=event,
-                    audience=Audience.ALL,
-                    base_amount=base,
-                    sliding_scale=sliding,
-                    minimum_amount=minimum,
-                    covered_by_tuition=True,
-                )
+                for audience, amount in tiers:
+                    PriceTier.objects.create(
+                        event=event,
+                        audience=audience,
+                        base_amount=amount,
+                        sliding_scale=sliding,
+                        minimum_amount=Decimal("0"),
+                        covered_by_tuition=True,
+                    )
                 created += 1
-                self.stdout.write(self.style.SUCCESS(f"created {label}"))
+                self.stdout.write(self.style.SUCCESS(f"created {slug}: {label}"))
             else:
                 created += 1
-                self.stdout.write(f"would create {label}")
+                self.stdout.write(f"would create {slug}: {label}")
 
         verb = "Created" if opts["commit"] else "Would create"
         self.stdout.write(
