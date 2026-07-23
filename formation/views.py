@@ -392,7 +392,8 @@ def _formation_money_context(request) -> dict:
         "upcoming_enrollment": upcoming_enrollment,
         "upcoming_tuition_form": TuitionDecisionForm(
             initial={"status": upcoming_enrollment.status}
-            if upcoming_enrollment else {}
+            if upcoming_enrollment else {},
+            auto_id="id_upcoming_%s",
         ),
         **progress,
         # dues

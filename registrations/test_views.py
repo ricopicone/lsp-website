@@ -651,7 +651,7 @@ def test_special_event_blocks_committed_student_when_event_is_tuition_covered(
     is blocked — they'd be claiming coverage they haven't paid for."""
     from accounts.models import Profile
     from events.models import Audience, PriceTier
-    from payments.models import TuitionEnrollment, TuitionPeriod
+    from payments.models import TuitionEnrollment
 
     u = User.objects.create_user(email="cand3@example.com", password="x")
     u.profile.role = Profile.Role.CANDIDATE
@@ -665,16 +665,6 @@ def test_special_event_blocks_committed_student_when_event_is_tuition_covered(
         user=u, tuition_period=tuition_period_2026,
         status=TuitionEnrollment.Status.COMMITTED,
     )
-    # _find_covered_tier's "covered by tuition" check (is_tuition_current)
-    # is keyed to *today's* period, not the event's — independent of the
-    # event-anchored gate this test exercises. Give the student a COMMITTED
-    # decision there too so the narrow gate's coverage check is satisfied.
-    current_period = TuitionPeriod.current()
-    if current_period is not None:
-        TuitionEnrollment.objects.create(
-            user=u, tuition_period=current_period,
-            status=TuitionEnrollment.Status.COMMITTED,
-        )
     client.force_login(u)
     resp = client.get(
         reverse("registrations:register", args=[special_event.slug])

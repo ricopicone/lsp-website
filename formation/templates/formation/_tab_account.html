@@ -190,9 +190,8 @@ payments/treasurer/member_detail.html for the full picture with actions).
         {% endif %}
         {% endif %}
 
-        {% if owes_tuition and upcoming_period %}
-        {# Next academic year's decision (task #450 phase A) — recorded ahead
-           of time, mirroring the current-period block above. #}
+        {% if owes_tuition and upcoming_period and not decision_exempt %}
+        {# Next academic year's decision (task #450 phase A) — recorded ahead of time, mirroring the current-period block above. #}
         <div class="rounded-lg border border-base-300 bg-base-200/30 p-5 space-y-4">
           <h3 class="font-serif text-lg text-base-content">Your {{ upcoming_period.name }} tuition decision</h3>
 

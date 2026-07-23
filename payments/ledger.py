@@ -417,9 +417,9 @@ def tuition_clearance(user) -> list[str]:
 def period_for_event(event):
     """The TuitionPeriod an event belongs to.
 
-    Annual-program events anchor to their start_date; undated or one-off
-    events fall back to the period containing today (matching the old
-    behavior for special events and Days of Assembly).
+    Every real Event has a required start_date, so events always anchor to
+    their own date. The today-fallback only applies to anchor-less objects
+    (e.g. a bare object with no start_date attribute), not real events.
     """
     anchor = getattr(event, "start_date", None)
     return TuitionPeriod.current(on_date=anchor)  # anchor=None -> today
