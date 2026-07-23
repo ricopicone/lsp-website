@@ -677,6 +677,40 @@ def program_admin_detail(request, academic_year: str):
 
 
 @login_required
+def program_admin_registration_bulk(request, academic_year: str):
+    """PC admin: open or close registration for a whole program at once.
+
+    ``action=open`` flips every DRAFT event to OPEN; ``action=close`` flips
+    every OPEN event to CLOSED. Distinct from *publishing* the program, which
+    only controls public visibility — this controls whether members can
+    register (and pay).
+    """
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    from .models import Program
+    program = get_object_or_404(Program, academic_year=academic_year)
+    if request.method != "POST":
+        return redirect(reverse("program_admin_detail", args=[academic_year]))
+
+    action = request.POST.get("action")
+    if action == "open":
+        n = program.events.filter(status=Event.Status.DRAFT).update(
+            status=Event.Status.OPEN
+        )
+        flag = f"opened={n}"
+    elif action == "close":
+        n = program.events.filter(status=Event.Status.OPEN).update(
+            status=Event.Status.CLOSED
+        )
+        flag = f"closed={n}"
+    else:
+        raise Http404()
+    return redirect(
+        reverse("program_admin_detail", args=[academic_year]) + f"?{flag}"
+    )
+
+
+@login_required
 def program_admin_event_new(request, academic_year: str):
     """PC admin: create a new event attached to this program."""
     if not _is_pc_or_staff(request.user):
