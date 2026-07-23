@@ -1,0 +1,20 @@
+{% extends "core/base.html" %}
+{% block title %}Confirm sign-in · LSP{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto py-8 space-y-6">
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">Confirm sign-in</h1>
+  </header>
+  <p class="text-base-content/80">
+    Click below to finish signing in to the Lacanian School of Psychoanalysis.
+  </p>
+  <form method="post" action="">
+    {% csrf_token %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <button type="submit" class="btn btn-primary w-full">Sign me in</button>
+  </form>
+  <p class="text-sm text-base-content/60 text-center">
+    This link works once. If you didn't request it, you can safely ignore this page.
+  </p>
+</div>
+{% endblock %}

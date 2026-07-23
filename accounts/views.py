@@ -737,15 +737,29 @@ def magic_link_request(request):
 
 
 def magic_link_consume(request, token):
-    """Log in from a magic link. Single-use; admins still hit 2FA after."""
+    """Log in from a magic link. Single-use; admins still hit 2FA after.
+
+    A single-use link is only consumed on POST: a GET renders a "Sign me in"
+    interstitial instead of logging in. Email security scanners (e.g. Microsoft
+    Defender Safe Links, common at universities and orgs) prefetch every URL in
+    inbound mail with a GET — which would otherwise burn the single-use link
+    before the member ever clicks it, so they'd see "Link expired." Scanners
+    don't submit forms, so gating consumption behind the button POST defeats
+    them while keeping the link single-use. Multi-use links (meeting windows)
+    already tolerate prefetch and stay one-click on GET.
+    """
     if request.user.is_authenticated:
         return redirect(_safe_next(request) or "/")
     link = MagicLoginLink.objects.filter(token=token).select_related("user").first()
     if link is None or not link.is_valid or not link.user.is_active:
         return render(request, "accounts/magic_link_invalid.html", status=410)
-    link.consume()
-    login(request, link.user)
-    return redirect(_safe_next(request) or settings.LOGIN_REDIRECT_URL)
+    if link.multi_use or request.method == "POST":
+        link.consume()
+        login(request, link.user)
+        return redirect(_safe_next(request) or settings.LOGIN_REDIRECT_URL)
+    return render(request, "accounts/magic_link_confirm.html", {
+        "next": _safe_next(request) or "",
+    })
 
 
 # --- Two-factor authentication (TOTP) -----------------------------------

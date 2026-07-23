@@ -8,7 +8,7 @@ of the flow").
 
 from django import forms
 from django.conf import settings
-from django.contrib.auth.forms import BaseUserCreationForm, PasswordResetForm
+from django.contrib.auth.forms import BaseUserCreationForm, PasswordResetForm, _unicode_ci_compare
 from django.contrib.auth.forms import UserChangeForm as BaseUserChangeForm
 from django.core.mail import EmailMultiAlternatives
 from django.template import loader
@@ -444,7 +444,22 @@ class ReplyToPasswordResetForm(PasswordResetForm):
     Matches the rest of the app's transactional mail (see
     ``accounts.emails``) so a member who replies to the reset email reaches
     support, not the no-reply sending address.
+
+    It also includes members who have no *usable* password, which Django's
+    default form deliberately skips. Imported members are created with an
+    unusable password (``import_users``) and password reset is their intended
+    onboarding path — without this override they'd silently receive nothing.
     """
+
+    def get_users(self, email):
+        active_users = User._default_manager.filter(
+            email__iexact=email, is_active=True,
+        )
+        # Same as Django's default, minus the ``has_usable_password()`` filter.
+        return (
+            u for u in active_users
+            if _unicode_ci_compare(email, u.email)
+        )
 
     def send_mail(self, subject_template_name, email_template_name, context,
                   from_email, to_email, html_email_template_name=None):
