@@ -163,6 +163,47 @@ def ledger_submission_decided(submission) -> None:
     )
 
 
+def notify_plan_application_submitted(application) -> None:
+    """Tell the Board a tuition payment-plan application awaits review
+    (task #450 phase B)."""
+    from committees.models import Committee
+
+    board = Committee.objects.filter(slug="board").first()
+    if board is None:
+        return
+    who = application.user.get_full_name() or application.user.email
+    period = application.tuition_period
+    url = _account_tab_url()
+    for membership in board.active_members().select_related("user"):
+        if membership.user_id == application.user_id:
+            continue
+        notify(
+            membership.user, Category.TUITION_PLAN_REVIEW,
+            title=f"Payment plan request: {who} — {period.name}",
+            url=url, target=application, email=False, dedupe=True,
+        )
+
+
+def notify_plan_application_decided(application) -> None:
+    """Tell the applicant the Board's decision on their payment-plan
+    application (task #450 phase B)."""
+    from .models import TuitionPlanApplication
+
+    period = application.tuition_period
+    if application.status == TuitionPlanApplication.Status.APPROVED:
+        title = f"The Board approved your payment plan application for {period.name}."
+    else:
+        title = (
+            "The Board was unable to approve your payment plan application "
+            f"for {period.name}. Please choose to pay in full or skip this "
+            "year on your Account tab."
+        )
+    notify(
+        application.user, Category.TUITION_PLAN_REVIEW,
+        title=title, url=_account_tab_url(), target=application,
+    )
+
+
 def approval_reminder_inapp(event, pending_count: int) -> None:
     """Bell rows for event faculty (the cron paces the batched faculty email)."""
     url = reverse("events:detail", args=[event.slug]) + "?view=faculty"

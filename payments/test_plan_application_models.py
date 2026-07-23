@@ -188,3 +188,111 @@ def test_declined_then_new_pending_is_allowed(member, staffer):
     )
     assert second.status == TuitionPlanApplication.Status.PENDING
     assert TuitionPlanApplication.objects.filter(user=member, tuition_period=period).count() == 2
+
+
+# --------------------------------------------------------------- notify ---
+
+def _board_member(email="board@x.test"):
+    from datetime import date as _date
+
+    from committees.models import Committee
+    from workgroups.models import WorkgroupMembership
+
+    u = User.objects.create_user(email=email, password="x")
+    Committee.objects.get(slug="board").add_member(
+        u, role=WorkgroupMembership.Role.MEMBER, start_date=_date(2026, 1, 1),
+    )
+    return u
+
+
+def test_submitting_notifies_board_not_applicant(member):
+    from notifications.categories import Category
+    from notifications.models import Notification
+    from payments.notifications import notify_plan_application_submitted
+
+    board_member = _board_member()
+    period = _period(
+        "AY 2026-2027", "ay-2026-2027",
+        date(2026, 9, 1), date(2027, 6, 30), date(2026, 10, 1),
+    )
+    app = TuitionPlanApplication.objects.create(
+        user=member, tuition_period=period, reasons="Reduced income this year.",
+    )
+
+    notify_plan_application_submitted(app)
+
+    note = Notification.objects.get(recipient=board_member)
+    assert note.category == Category.TUITION_PLAN_REVIEW
+    assert not Notification.objects.filter(recipient=member).exists()
+
+
+def test_submitting_does_not_notify_applicant_even_if_on_board(member):
+    """A Board member applying for their own plan shouldn't get a
+    reviewer-facing bell row about their own submission."""
+    from datetime import date as _date
+
+    from committees.models import Committee
+    from notifications.models import Notification
+    from payments.notifications import notify_plan_application_submitted
+    from workgroups.models import WorkgroupMembership
+
+    Committee.objects.get(slug="board").add_member(
+        member, role=WorkgroupMembership.Role.MEMBER, start_date=_date(2026, 1, 1),
+    )
+    period = _period(
+        "AY 2026-2027", "ay-2026-2027",
+        date(2026, 9, 1), date(2027, 6, 30), date(2026, 10, 1),
+    )
+    app = TuitionPlanApplication.objects.create(
+        user=member, tuition_period=period, reasons="Reduced income this year.",
+    )
+
+    notify_plan_application_submitted(app)
+
+    assert not Notification.objects.filter(recipient=member).exists()
+
+
+def test_deciding_notifies_applicant_approved(member, staffer):
+    from notifications.categories import Category
+    from notifications.models import Notification
+    from payments.notifications import notify_plan_application_decided
+
+    period = _period(
+        "AY 2026-2027", "ay-2026-2027",
+        date(2026, 9, 1), date(2027, 6, 30), date(2026, 10, 1),
+    )
+    app = TuitionPlanApplication.objects.create(
+        user=member, tuition_period=period, reasons="Reduced income this year.",
+    )
+    app.status = TuitionPlanApplication.Status.APPROVED
+    app.decided_by = staffer
+    app.save()
+
+    notify_plan_application_decided(app)
+
+    note = Notification.objects.get(recipient=member)
+    assert note.category == Category.TUITION_PLAN_REVIEW
+    assert "approved" in note.title
+    assert period.name in note.title
+
+
+def test_deciding_notifies_applicant_declined(member, staffer):
+    from notifications.models import Notification
+    from payments.notifications import notify_plan_application_decided
+
+    period = _period(
+        "AY 2026-2027", "ay-2026-2027",
+        date(2026, 9, 1), date(2027, 6, 30), date(2026, 10, 1),
+    )
+    app = TuitionPlanApplication.objects.create(
+        user=member, tuition_period=period, reasons="Reduced income this year.",
+    )
+    app.status = TuitionPlanApplication.Status.DECLINED
+    app.decided_by = staffer
+    app.save()
+
+    notify_plan_application_decided(app)
+
+    note = Notification.objects.get(recipient=member)
+    assert "unable to approve" in note.title
+    assert "Account tab" in note.title
