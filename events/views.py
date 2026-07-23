@@ -144,7 +144,15 @@ def program(request):
     """
     from .models import Program
     from .permissions import is_program_committee
-    year = request.GET.get("year") or current_academic_year()
+    year = request.GET.get("year")
+    if not year:
+        # Default to the newest publicly-visible program (e.g. a fall program
+        # published in July, before its academic year begins), falling back
+        # to the calendar's current AY when nothing is published yet.
+        year = next(
+            (p.academic_year for p in Program.objects.all() if p.is_public_now),
+            None,
+        ) or current_academic_year()
     try:
         academic_year_date_range(year)
     except (ValueError, IndexError):

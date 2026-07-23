@@ -186,3 +186,32 @@ def test_event_detail_404s_when_program_unpublished_for_anonymous(client):
     )
     resp = client.get(reverse("events:detail", args=["hidden-event"]))
     assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_program_view_defaults_to_latest_published(client):
+    """No ?year= — the page shows the newest publicly-visible program, even
+    when its academic year hasn't started yet (fall program published in
+    July)."""
+    from events.models import current_academic_year
+
+    current = current_academic_year()
+    next_year = f"{int(current[:4]) + 1}-{int(current[:4]) + 2}"
+    Program.objects.create(academic_year=current, published=True)
+    newer = Program.objects.create(academic_year=next_year, published=True)
+    resp = client.get(reverse("program"))
+    assert resp.status_code == 200
+    assert resp.context["program"].pk == newer.pk
+
+
+@pytest.mark.django_db
+def test_program_view_default_skips_unpublished_future(client):
+    from events.models import current_academic_year
+
+    current = current_academic_year()
+    next_year = f"{int(current[:4]) + 1}-{int(current[:4]) + 2}"
+    cur = Program.objects.create(academic_year=current, published=True)
+    Program.objects.create(academic_year=next_year, published=False)
+    resp = client.get(reverse("program"))
+    assert resp.status_code == 200
+    assert resp.context["program"].pk == cur.pk
