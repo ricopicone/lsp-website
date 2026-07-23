@@ -519,6 +519,10 @@ class Profile(models.Model):
         return self.deceased_on is not None
 
     @property
+    def is_retired(self) -> bool:
+        return self.standing == self.Standing.RETIRED
+
+    @property
     def is_active_member(self) -> bool:
         """Whether this profile currently counts as a member for access +
         dashboards: a directory role, an active-enough standing, and not

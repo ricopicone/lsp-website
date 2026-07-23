@@ -624,3 +624,38 @@ def test_find_an_analyst_map_excludes_retired_and_deceased(client):
     assert active.email in directory_emails
     assert retired.email in directory_emails
     assert deceased.email in directory_emails
+
+
+@pytest.mark.django_db
+def test_is_retired_property():
+    u = User.objects.create_user(email="rtd@example.com")
+    u.profile.standing = Profile.Standing.RETIRED
+    u.profile.save()
+    assert u.profile.is_retired is True
+    u.profile.standing = Profile.Standing.ACTIVE
+    u.profile.save()
+    assert u.profile.is_retired is False
+
+
+@pytest.mark.django_db
+def test_directory_shows_retired_marker(client):
+    u = User.objects.create_user(email="rtdir@example.com", first_name="Rhea", last_name="Tired")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.public = True
+    u.profile.standing = Profile.Standing.RETIRED
+    u.profile.save()
+    resp = client.get(f"/directory/{u.profile.directory_slug}/")
+    assert resp.status_code == 200
+    assert "Retired" in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_directory_active_member_has_no_retired_marker(client):
+    u = User.objects.create_user(email="act@example.com", first_name="Ann", last_name="Active")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.public = True
+    u.profile.save()
+    resp = client.get(f"/directory/{u.profile.directory_slug}/")
+    body = resp.content.decode()
+    # The word may appear in nav/other copy; assert the marker element text isn't present.
+    assert "Retired</span>" not in body and "Retired</p>" not in body

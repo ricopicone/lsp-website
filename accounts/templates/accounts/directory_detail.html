@@ -23,6 +23,9 @@
       {% if profile.is_deceased %}
       <p class="text-sm text-base-content/60 italic mt-1">In memoriam</p>
       {% endif %}
+      {% if profile.is_retired and not profile.is_deceased %}
+      <p class="text-sm text-base-content/60 italic mt-1">Retired</p>
+      {% endif %}
       <div class="flex flex-wrap gap-1.5">
         <span class="inline-block text-xs uppercase tracking-widest text-base-content/70 bg-base-200 px-2 py-1 rounded">{{ profile.get_role_display }}</span>
         {% if profile.is_faculty %}

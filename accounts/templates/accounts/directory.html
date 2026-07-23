@@ -44,6 +44,9 @@
             {% if p.is_deceased %}
             <div><span class="text-xs text-base-content/60 italic">In memoriam</span></div>
             {% endif %}
+            {% if p.is_retired and not p.is_deceased %}
+            <div><span class="text-xs text-base-content/60 italic">Retired</span></div>
+            {% endif %}
             {% if m.show_location and p.location %}<div class="text-xs text-base-content/60 mt-0.5">{{ p.location }}</div>{% endif %}
             {% with mems=p.user.active_public_memberships roles=p.badge_staff_roles %}
             {% if p.is_faculty or mems or roles %}
