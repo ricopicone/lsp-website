@@ -88,12 +88,20 @@ def test_enrollment_save_mints_a_tuition_charge():
 
 
 def test_sync_tuition_charges_noops_for_removed_member():
+    """A removed member's tuition never mints, even with an enrollment that
+    would otherwise clearly owe (COMMITTED, current period). Standing is set
+    to REMOVED *before* the enrollment is created, so the enrollment's own
+    post-save sync also has to hit the guard — without it, this would mint
+    a $2000 TUITION charge just like ``test_enrollment_save_mints_a_tuition_charge``.
+    """
     from payments.charges import sync_tuition_charges
     u = User.objects.create_user(email="trm@example.com")
     u.profile.role = Profile.Role.CANDIDATE
     u.profile.standing = Profile.Standing.REMOVED
     u.profile.save()
-    sync_tuition_charges(u)
+    tp = _tuition_period(2026)
+    _enroll(u, tp, "committed")  # signal fires sync_tuition_charges; guard should stop it
+    sync_tuition_charges(u)  # explicit call too, same guard
     assert not Charge.objects.filter(
         user=u, category=Charge.Category.TUITION).exists()
 
