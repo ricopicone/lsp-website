@@ -37,7 +37,9 @@ from .models import (
     TuitionEnrollment,
     TuitionInstallment,
     TuitionPeriod,
+    TuitionPlanApplication,
 )
+from .notifications import notify_plan_application_submitted
 from .operations import complete_payment
 from .stripe_checkout import (
     create_donation_session,
@@ -2199,21 +2201,50 @@ def tuition_decision(request):
         # Only the current period and the next-by-start_date future period
         # are valid decision targets (task #450 phase A) — anything else
         # (unknown/stale slug) falls back to current for backcompat.
-        upcoming = (
-            TuitionPeriod.objects.filter(start_date__gt=timezone.now().date())
-            .order_by("start_date").first()
-        )
+        upcoming = TuitionPeriod.upcoming()
         allowed = {p.slug: p for p in (period, upcoming) if p is not None}
         period = allowed.get(requested, period)
 
     if request.method == "POST" and profile.owes_tuition and period is not None:
         form = TuitionDecisionForm(request.POST)
         if form.is_valid():
+            status = form.cleaned_data["status"]
             with transaction.atomic():
-                TuitionEnrollment.objects.update_or_create(
-                    user=request.user, tuition_period=period,
-                    defaults={"status": form.cleaned_data["status"]},
-                )
+                if status == "payment_plan":
+                    # Applying for a payment plan is a request to the Board,
+                    # not a self-serve status (task #450 phase B) — the
+                    # enrollment records PLAN_REQUESTED (not PAYMENT_PLAN;
+                    # that's reached only once the Board approves) and a
+                    # PENDING TuitionPlanApplication carries the reasons for
+                    # their review.
+                    TuitionEnrollment.objects.update_or_create(
+                        user=request.user, tuition_period=period,
+                        defaults={
+                            "status": TuitionEnrollment.Status.PLAN_REQUESTED,
+                        },
+                    )
+                    application, created = (
+                        TuitionPlanApplication.objects.get_or_create(
+                            user=request.user, tuition_period=period,
+                            status=TuitionPlanApplication.Status.PENDING,
+                            defaults={
+                                "reasons": form.cleaned_data["reasons"],
+                            },
+                        )
+                    )
+                    if not created:
+                        # Re-submitting while still pending updates the
+                        # reasons in place rather than erroring or stacking
+                        # duplicate rows (the partial unique constraint only
+                        # allows one PENDING application per user/period).
+                        application.reasons = form.cleaned_data["reasons"]
+                        application.save(update_fields=["reasons"])
+                    notify_plan_application_submitted(application)
+                else:
+                    TuitionEnrollment.objects.update_or_create(
+                        user=request.user, tuition_period=period,
+                        defaults={"status": status},
+                    )
             messages.success(request, "Your tuition decision has been recorded.")
         else:
             messages.error(request, "Please choose one of the listed options.")

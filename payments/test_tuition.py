@@ -197,9 +197,14 @@ def test_post_updates_existing_enrollment(client, current_period):
         status=TuitionEnrollment.Status.SKIPPING,
     )
     client.force_login(u)
-    client.post(reverse("tuition"), {"status": "payment_plan"})
+    # Applying for a payment plan (task #450 phase B) is a Board request,
+    # not a self-serve status — it lands on PLAN_REQUESTED, not PAYMENT_PLAN,
+    # and requires reasons.
+    client.post(reverse("tuition"), {
+        "status": "payment_plan", "reasons": "Need to spread this out.",
+    })
     enr = TuitionEnrollment.objects.get(user=u, tuition_period=current_period)
-    assert enr.status == TuitionEnrollment.Status.PAYMENT_PLAN
+    assert enr.status == TuitionEnrollment.Status.PLAN_REQUESTED
     # Only one row — wasn't duplicated.
     assert TuitionEnrollment.objects.filter(
         user=u, tuition_period=current_period,

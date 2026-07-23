@@ -78,3 +78,25 @@ def test_coverage_requires_the_events_ay(periods, student):
         status=TuitionEnrollment.Status.PAID_IN_FULL,
     )
     assert _find_covered_tier(student, event) is not None
+
+
+@pytest.mark.django_db
+def test_plan_requested_not_blocked_but_not_covered(periods, student):
+    """A PLAN_REQUESTED enrollment (task #450 phase B — awaiting the Board's
+    decision) has a decision on file, so it doesn't trip the broad
+    no-decision-yet gate for a plain seminar. But it isn't a "covers_seminars"
+    status either, so it grants no tuition-covered pricing until the Board
+    approves and the enrollment becomes PAYMENT_PLAN."""
+    p25, p26 = periods
+    TuitionEnrollment.objects.create(
+        user=student, tuition_period=p26,
+        status=TuitionEnrollment.Status.PLAN_REQUESTED,
+    )
+    event = Event.objects.create(
+        title="Plain Seminar", slug="plain-seminar",
+        start_date=date(2026, 9, 15), end_date=date(2027, 6, 1),
+    )
+    assert event.event_type == Event.Type.SEMINAR
+
+    assert _tuition_block_reason(student, event) is None
+    assert _find_covered_tier(student, event) is None

@@ -297,6 +297,7 @@ def _formation_money_context(request) -> dict:
         Payment,
         TuitionEnrollment,
         TuitionPeriod,
+        TuitionPlanApplication,
     )
     from payments.views import _attach_split_info
 
@@ -323,26 +324,41 @@ def _formation_money_context(request) -> dict:
     period = TuitionPeriod.current()
     enrollment = None
     installments = []
+    tuition_plan_application = None
     if period is not None:
         enrollment = TuitionEnrollment.objects.filter(
             user=user, tuition_period=period,
         ).first()
         if enrollment is not None:
             installments = list(enrollment.installments.order_by("sequence"))
+        if enrollment is not None and (
+            enrollment.status == TuitionEnrollment.Status.PLAN_REQUESTED
+        ):
+            tuition_plan_application = TuitionPlanApplication.objects.filter(
+                user=user, tuition_period=period,
+                status=TuitionPlanApplication.Status.PENDING,
+            ).first()
     progress = _tuition_progress(user)
 
     # --- Tuition (upcoming year, task #450 phase A) — the next-by-start_date
     # future period, so a member can record next year's decision ahead of
     # time rather than waiting for it to become current. ---
-    upcoming_period = (
-        TuitionPeriod.objects.filter(start_date__gt=timezone.now().date())
-        .order_by("start_date").first()
-    )
+    upcoming_period = TuitionPeriod.upcoming()
     upcoming_enrollment = None
+    upcoming_tuition_plan_application = None
     if upcoming_period is not None:
         upcoming_enrollment = TuitionEnrollment.objects.filter(
             user=user, tuition_period=upcoming_period,
         ).first()
+        if upcoming_enrollment is not None and (
+            upcoming_enrollment.status == TuitionEnrollment.Status.PLAN_REQUESTED
+        ):
+            upcoming_tuition_plan_application = (
+                TuitionPlanApplication.objects.filter(
+                    user=user, tuition_period=upcoming_period,
+                    status=TuitionPlanApplication.Status.PENDING,
+                ).first()
+            )
 
     # --- Dues (current year) ---
     dues_period = DuesPeriod.current()
@@ -386,6 +402,9 @@ def _formation_money_context(request) -> dict:
         "tuition_form": TuitionDecisionForm(
             initial={"status": enrollment.status} if enrollment else {}
         ),
+        # pending Board payment-plan application, current period
+        # (task #450 phase B)
+        "tuition_plan_application": tuition_plan_application,
         "tuition_stripe_status": request.GET.get("stripe"),
         # upcoming year's decision (task #450 phase A)
         "upcoming_period": upcoming_period,
@@ -395,6 +414,9 @@ def _formation_money_context(request) -> dict:
             if upcoming_enrollment else {},
             auto_id="id_upcoming_%s",
         ),
+        # pending Board payment-plan application, upcoming period
+        # (task #450 phase B)
+        "upcoming_tuition_plan_application": upcoming_tuition_plan_application,
         **progress,
         # dues
         "dues_period": dues_period,

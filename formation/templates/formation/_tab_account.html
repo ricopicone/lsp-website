@@ -173,6 +173,11 @@ payments/treasurer/member_detail.html for the full picture with actions).
         {% endif %}
 
         {% if not decision_exempt %}
+        {% if tuition_enrollment.status == "plan_requested" %}
+        <div class="rounded-lg border border-base-300 bg-base-200/40 px-5 py-4 text-sm">
+          Your payment plan application is with the Board.
+        </div>
+        {% else %}
         <form method="post" action="{% url 'tuition' %}" class="space-y-4 rounded-lg border border-base-300 p-5">
           {% csrf_token %}
           <fieldset class="space-y-2">
@@ -185,8 +190,15 @@ payments/treasurer/member_detail.html for the full picture with actions).
             {% endfor %}
             {% if tuition_form.status.errors %}<p class="text-error text-sm">{{ tuition_form.status.errors|join:", " }}</p>{% endif %}
           </fieldset>
+          <div class="space-y-1">
+            <label for="{{ tuition_form.reasons.id_for_label }}" class="text-sm text-base-content">{{ tuition_form.reasons.label }}</label>
+            {{ tuition_form.reasons }}
+            <p class="text-xs text-base-content/60">{{ tuition_form.reasons.help_text }}</p>
+            {% if tuition_form.reasons.errors %}<p class="text-error text-sm">{{ tuition_form.reasons.errors|join:", " }}</p>{% endif %}
+          </div>
           <button type="submit" class="btn btn-primary">Record decision</button>
         </form>
+        {% endif %}
         {% endif %}
         {% endif %}
 
@@ -203,6 +215,11 @@ payments/treasurer/member_detail.html for the full picture with actions).
           {% endif %}
 
           {% if not decision_exempt %}
+          {% if upcoming_enrollment.status == "plan_requested" %}
+          <div class="rounded-lg border border-base-300 bg-base-200/40 px-5 py-4 text-sm">
+            Your payment plan application is with the Board.
+          </div>
+          {% else %}
           <form method="post" action="{% url 'tuition' %}" class="space-y-4">
             {% csrf_token %}
             <input type="hidden" name="period" value="{{ upcoming_period.slug }}">
@@ -216,8 +233,15 @@ payments/treasurer/member_detail.html for the full picture with actions).
               {% endfor %}
               {% if upcoming_tuition_form.status.errors %}<p class="text-error text-sm">{{ upcoming_tuition_form.status.errors|join:", " }}</p>{% endif %}
             </fieldset>
+            <div class="space-y-1">
+              <label for="{{ upcoming_tuition_form.reasons.id_for_label }}" class="text-sm text-base-content">{{ upcoming_tuition_form.reasons.label }}</label>
+              {{ upcoming_tuition_form.reasons }}
+              <p class="text-xs text-base-content/60">{{ upcoming_tuition_form.reasons.help_text }}</p>
+              {% if upcoming_tuition_form.reasons.errors %}<p class="text-error text-sm">{{ upcoming_tuition_form.reasons.errors|join:", " }}</p>{% endif %}
+            </div>
             <button type="submit" class="btn btn-primary">Record decision</button>
           </form>
+          {% endif %}
           {% endif %}
         </div>
         {% endif %}
