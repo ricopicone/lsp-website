@@ -27,10 +27,11 @@ from payments.models import Payment, TuitionEnrollment, TuitionPeriod
 
 #: Lifecycle ordering — we upgrade toward "more paid", never the reverse.
 _RANK = {
-    TuitionEnrollment.Status.SKIPPING: 0,
-    TuitionEnrollment.Status.COMMITTED: 1,
-    TuitionEnrollment.Status.PAYMENT_PLAN: 2,
-    TuitionEnrollment.Status.PAID_IN_FULL: 3,
+    TuitionEnrollment.Status.PLAN_REQUESTED: 0,
+    TuitionEnrollment.Status.SKIPPING: 1,
+    TuitionEnrollment.Status.COMMITTED: 2,
+    TuitionEnrollment.Status.PAYMENT_PLAN: 3,
+    TuitionEnrollment.Status.PAID_IN_FULL: 4,
 }
 
 

@@ -59,6 +59,7 @@ _STATUS_BADGE = {
     # TuitionEnrollment.Status
     "paid_in_full": ("success", "Paid in full"),
     "payment_plan": ("info",    "Payment plan"),
+    "plan_requested": ("warning", "Payment plan requested"),
     "committed":    ("warning", "Committed"),
     "skipping":     ("ghost",   "Skipping"),
     # LedgerSubmission.Status ("pending" reuses the Payment mapping above)

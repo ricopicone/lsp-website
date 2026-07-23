@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from payments.templatetags.treasurer_filters import provenance_lines, usd, usd0
+from payments.templatetags.treasurer_filters import provenance_lines, status_badge, usd, usd0
 
 
 @pytest.mark.parametrize(
@@ -130,3 +130,23 @@ def test_usd_puts_the_sign_before_the_symbol(value, expected):
 )
 def test_usd0_puts_the_sign_before_the_symbol(value, expected):
     assert usd0(value) == expected
+
+
+# --- status_badge filter (task #450) ----------------------------------------
+
+
+def test_status_badge_renders_plan_requested():
+    html = status_badge("plan_requested")
+    assert "badge-warning" in html
+    assert "Payment plan requested" in html
+
+
+def test_status_badge_handles_tuition_enrollment_statuses():
+    """Verify status_badge includes all TuitionEnrollment.Status values."""
+    from payments.models import TuitionEnrollment
+    from payments.templatetags.treasurer_filters import _STATUS_BADGE
+
+    for status in TuitionEnrollment.Status:
+        assert status in _STATUS_BADGE, (
+            f"Status {status} missing from _STATUS_BADGE map"
+        )

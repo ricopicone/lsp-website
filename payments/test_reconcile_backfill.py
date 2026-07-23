@@ -97,6 +97,13 @@ def test_backfill_upgrades_but_does_not_downgrade():
     assert e.status == TuitionEnrollment.Status.PAID_IN_FULL
 
 
+@pytest.mark.parametrize("status", TuitionEnrollment.Status)
+def test_backfill_rank_map_covers_all_statuses(status):
+    """Verify the rank map includes all TuitionEnrollment.Status values."""
+    from payments.management.commands.backfill_tuition_status import _RANK
+    assert status in _RANK, f"Status {status} missing from _RANK map"
+
+
 # ---- reconcile view -------------------------------------------------------
 
 def _treasurer(client):
