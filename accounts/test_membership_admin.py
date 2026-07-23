@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 from django.urls import reverse
 
@@ -137,3 +139,98 @@ def test_membership_admin_get_renders_member_timeline(client):
     assert b"Timeline" in resp.content
     assert b"Record a change" in resp.content
     assert b"AY 2025" in resp.content
+
+
+# ---- Deceased control + Removed waive-charges button (task #451) ----
+
+
+def test_board_admin_set_deceased_disables_login(client):
+    admin = User.objects.create_superuser(email="boss@example.com", password="pw")
+    client.force_login(admin)
+    member = User.objects.create_user(email="member@example.com")
+    member.profile.role = Profile.Role.ANALYST
+    member.profile.save()
+
+    resp = client.post("/admin-tools/board/membership/", {
+        "action": "set_deceased",
+        "member": member.pk,
+        "deceased_on": "2026-07-22",
+    })
+    assert resp.status_code in (200, 302)
+    member.refresh_from_db()
+    assert member.is_active is False
+    assert member.profile.deceased_on == date(2026, 7, 22)
+
+
+def test_board_admin_clear_deceased_reenables_login(client):
+    admin = User.objects.create_superuser(email="boss3@example.com", password="pw")
+    client.force_login(admin)
+    member = User.objects.create_user(email="member3@example.com")
+    from accounts.lifecycle import set_deceased
+    set_deceased(member, date(2026, 7, 22))
+    member.refresh_from_db()
+    assert member.is_active is False
+
+    resp = client.post("/admin-tools/board/membership/", {
+        "action": "clear_deceased",
+        "member": member.pk,
+    })
+    assert resp.status_code in (200, 302)
+    member.refresh_from_db()
+    assert member.is_active is True
+    assert member.profile.deceased_on is None
+
+
+def test_board_admin_waive_charges_button(client):
+    from decimal import Decimal
+
+    from payments.models import Charge
+    admin = User.objects.create_superuser(email="boss2@example.com", password="pw")
+    client.force_login(admin)
+    member = User.objects.create_user(email="rmv2@example.com")
+    member.profile.role = Profile.Role.CANDIDATE
+    member.profile.standing = Profile.Standing.REMOVED
+    member.profile.save()
+    Charge.objects.create(
+        user=member, category=Charge.Category.DUES, amount=Decimal("100"),
+        effective_date=date(2025, 9, 1), status=Charge.Status.OPEN,
+    )
+
+    resp = client.post("/admin-tools/board/membership/", {
+        "action": "waive_charges",
+        "member": member.pk,
+    })
+    assert resp.status_code in (200, 302)
+    assert not Charge.objects.filter(
+        user=member, status=Charge.Status.OPEN).exists()
+
+
+def test_membership_admin_get_shows_deceased_and_waive_controls(client):
+    from decimal import Decimal
+
+    from payments.models import Charge
+    board = _board_member()
+    client.force_login(board)
+
+    deceased_member = _user(email="dead@x.test", role=Profile.Role.ANALYST)
+    from accounts.lifecycle import set_deceased
+    set_deceased(deceased_member, date(2026, 7, 22))
+    resp = client.get(
+        reverse("board_membership_admin") + f"?member={deceased_member.pk}"
+    )
+    assert resp.status_code == 200
+    assert b"Clear deceased mark" in resp.content
+
+    removed_member = _user(email="rmv3@x.test", role=Profile.Role.CANDIDATE)
+    removed_member.profile.standing = Profile.Standing.REMOVED
+    removed_member.profile.save()
+    Charge.objects.create(
+        user=removed_member, category=Charge.Category.DUES, amount=Decimal("100"),
+        effective_date=date(2025, 9, 1), status=Charge.Status.OPEN,
+    )
+    resp = client.get(
+        reverse("board_membership_admin") + f"?member={removed_member.pk}"
+    )
+    assert resp.status_code == 200
+    assert b"Waive open charges" in resp.content
+    assert b"Mark deceased" in resp.content

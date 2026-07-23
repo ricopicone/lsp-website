@@ -49,6 +49,11 @@ class ProfileInline(admin.StackedInline):
         "public",
         "bio",
         "headshot",
+        # Direct edits here still sync User.is_active via Profile.save()
+        # (task #451); the full workflow (waive open charges + delist
+        # referrals) is the Board "Mark deceased" action at
+        # /admin-tools/board/membership/.
+        "deceased_on",
         "notes",
     )
     verbose_name_plural = "Profile"

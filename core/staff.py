@@ -330,6 +330,38 @@ def board_membership_admin(request):
     member = None
     form = None
     if request.method == "POST":
+        action = request.POST.get("action")
+        if action in {"set_deceased", "clear_deceased", "waive_charges"}:
+            from accounts.lifecycle import clear_deceased, set_deceased
+            from payments.charges import waive_open_charges
+
+            member = get_object_or_404(User, pk=request.POST.get("member"))
+            if action == "set_deceased":
+                from datetime import date as _date
+                raw = request.POST.get("deceased_on") or ""
+                try:
+                    d = _date.fromisoformat(raw)
+                except ValueError:
+                    messages.error(request, "Enter a valid date (YYYY-MM-DD).")
+                else:
+                    set_deceased(member, d, by=request.user)
+                    messages.success(
+                        request,
+                        f"Recorded {member.get_full_name() or member.email} "
+                        "as deceased. The account is disabled and open charges "
+                        "were waived.",
+                    )
+            elif action == "clear_deceased":
+                clear_deceased(member, by=request.user)
+                messages.success(
+                    request, "Cleared the deceased mark; the account is re-enabled."
+                )
+            elif action == "waive_charges":
+                n = waive_open_charges(
+                    member, reason="Waived — member removed", by=request.user,
+                )
+                messages.success(request, f"Waived {n} open charge(s).")
+            return redirect(f"{reverse('board_membership_admin')}?member={member.pk}")
         member = get_object_or_404(User, pk=request.POST.get("member"))
         form = MembershipChangeForm(request.POST, member=member)
         if form.is_valid():
@@ -376,6 +408,7 @@ def board_membership_admin(request):
         )
 
     timeline = []
+    open_owes = None
     if member is not None:
         timeline = list(
             MembershipTenure.objects.filter(user=member).order_by("-start_ay")
@@ -389,10 +422,12 @@ def board_membership_admin(request):
                 },
                 member=member,
             )
+        from payments.ledger import member_account
+        open_owes = member_account(member)["owes"]  # Decimal; 0 if nothing owed
 
     return render(request, "core/staff/admin/board_membership.html", {
         "q": q, "results": results, "member": member,
-        "timeline": timeline, "form": form,
+        "timeline": timeline, "form": form, "open_owes": open_owes,
     })
 
 
