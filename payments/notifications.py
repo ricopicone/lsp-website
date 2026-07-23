@@ -12,6 +12,8 @@ keeps the in-app/email decision in one place.
 
 from __future__ import annotations
 
+import logging
+
 from django.urls import reverse
 
 from notifications.categories import Category
@@ -19,6 +21,8 @@ from notifications.dispatch import notify
 from notifications.preferences import resolve
 
 from . import emails
+
+log = logging.getLogger("notifications")
 
 
 def _confirm_url(reg) -> str:
@@ -170,17 +174,23 @@ def notify_plan_application_submitted(application) -> None:
 
     board = Committee.objects.filter(slug="board").first()
     if board is None:
+        log.warning(
+            "notify_plan_application_submitted: no Board committee (slug="
+            "'board') found — application %s submitted with no reviewers "
+            "notified", application.pk,
+        )
         return
     who = application.user.get_full_name() or application.user.email
     period = application.tuition_period
-    url = _account_tab_url()
+    url = "/admin-tools/tuition-plans/"
+    body = f"{who} applied for a tuition payment plan for {period.name}."
     for membership in board.active_members().select_related("user"):
         if membership.user_id == application.user_id:
             continue
         notify(
             membership.user, Category.TUITION_PLAN_REVIEW,
             title=f"Payment plan request: {who} — {period.name}",
-            url=url, target=application, email=False, dedupe=True,
+            body=body, url=url, target=application, dedupe=True,
         )
 
 

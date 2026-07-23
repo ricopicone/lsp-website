@@ -252,6 +252,56 @@ def test_submitting_does_not_notify_applicant_even_if_on_board(member):
     assert not Notification.objects.filter(recipient=member).exists()
 
 
+def test_submitting_emails_board_member_with_default_preferences(
+    member, mailoutbox, django_capture_on_commit_callbacks
+):
+    """Board reviewers get an email on submit (TUITION_PLAN_REVIEW defaults to
+    immediate email); the applicant gets no notification at all."""
+    from payments.notifications import notify_plan_application_submitted
+
+    board_member = _board_member()
+    period = _period(
+        "AY 2026-2027", "ay-2026-2027",
+        date(2026, 9, 1), date(2027, 6, 30), date(2026, 10, 1),
+    )
+    app = TuitionPlanApplication.objects.create(
+        user=member, tuition_period=period, reasons="Reduced income this year.",
+    )
+
+    with django_capture_on_commit_callbacks(execute=True):
+        notify_plan_application_submitted(app)
+
+    assert len(mailoutbox) == 1
+    email = mailoutbox[0]
+    assert email.to == [board_member.email]
+    applicant_name = member.get_full_name() or member.email
+    assert applicant_name in email.subject
+    assert applicant_name in email.body
+    assert period.name in email.body
+    assert not any(m.to == [member.email] for m in mailoutbox)
+
+
+def test_submitting_with_no_board_logs_warning(member, caplog):
+    """A misconfigured Board (no committee at slug='board') is visible in
+    logs rather than failing silently."""
+    from committees.models import Committee
+    from payments.notifications import notify_plan_application_submitted
+
+    Committee.objects.filter(slug="board").delete()
+    period = _period(
+        "AY 2026-2027", "ay-2026-2027",
+        date(2026, 9, 1), date(2027, 6, 30), date(2026, 10, 1),
+    )
+    app = TuitionPlanApplication.objects.create(
+        user=member, tuition_period=period, reasons="Reduced income this year.",
+    )
+
+    with caplog.at_level("WARNING", logger="notifications"):
+        notify_plan_application_submitted(app)
+
+    assert "no Board committee" in caplog.text
+
+
 def test_deciding_notifies_applicant_approved(member, staffer):
     from notifications.categories import Category
     from notifications.models import Notification
