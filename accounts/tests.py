@@ -431,3 +431,57 @@ def test_is_active_member_predicate():
     p.standing = Profile.Standing.RETIRED
     p.save()
     assert p.is_active_member is True  # retired is still a member
+
+
+@pytest.mark.django_db
+def test_removed_member_is_not_lsp_member():
+    from accounts.permissions import is_lsp_member
+    user = User.objects.create_user(email="rm@example.com")
+    user.profile.role = Profile.Role.CANDIDATE
+    user.profile.standing = Profile.Standing.REMOVED
+    user.profile.save()
+    assert is_lsp_member(user) is False
+
+
+@pytest.mark.django_db
+def test_resigned_member_is_not_lsp_member():
+    from accounts.permissions import is_lsp_member
+    user = User.objects.create_user(email="rs@example.com")
+    user.profile.role = Profile.Role.ANALYST
+    user.profile.standing = Profile.Standing.RESIGNED
+    user.profile.save()
+    assert is_lsp_member(user) is False
+
+
+@pytest.mark.django_db
+def test_retired_member_stays_lsp_member():
+    from accounts.permissions import is_lsp_member
+    user = User.objects.create_user(email="rt@example.com")
+    user.profile.role = Profile.Role.ANALYST
+    user.profile.standing = Profile.Standing.RETIRED
+    user.profile.save()
+    assert is_lsp_member(user) is True
+
+
+@pytest.mark.django_db
+def test_directory_excludes_removed_and_resigned_keeps_deceased(client):
+    from datetime import date
+    for email, standing, deceased in [
+        ("active@x.test", Profile.Standing.ACTIVE, None),
+        ("removed@x.test", Profile.Standing.REMOVED, None),
+        ("resigned@x.test", Profile.Standing.RESIGNED, None),
+        ("deceased@x.test", Profile.Standing.ACTIVE, date(2026, 7, 22)),
+    ]:
+        u = User.objects.create_user(email=email, first_name="T", last_name=email[:4])
+        u.profile.role = Profile.Role.ANALYST
+        u.profile.standing = standing
+        u.profile.public = True
+        u.profile.deceased_on = deceased
+        u.profile.save()
+
+    from accounts.views import _directory_qs
+    listed = {p.user.email for p in _directory_qs()}
+    assert "active@x.test" in listed
+    assert "deceased@x.test" in listed       # deceased stays listed
+    assert "removed@x.test" not in listed
+    assert "resigned@x.test" not in listed

@@ -69,6 +69,7 @@ def _directory_qs():
     return (
         Profile.objects
         .filter(role__in=Profile.DIRECTORY_ROLES, public=True)
+        .exclude(standing__in=Profile.NON_MEMBER_STANDINGS)
         .select_related("user")
         .prefetch_related(
             Prefetch(
@@ -348,6 +349,7 @@ def find_an_analyst_pins(request):
     qs = (
         Profile.objects
         .filter(role__in=Profile.DIRECTORY_ROLES, public=True)
+        .exclude(standing__in=Profile.NON_MEMBER_STANDINGS)
         .exclude(location_lat__isnull=True)
         .exclude(location_lng__isnull=True)
         .select_related("user")

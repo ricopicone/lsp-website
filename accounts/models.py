@@ -490,9 +490,13 @@ class Profile(models.Model):
 
     @property
     def is_listed(self) -> bool:
-        """Whether this profile is actually shown publicly — role-eligible
-        *and* not opted out (drives the directory query and nav links)."""
-        return self.is_in_directory and self.public
+        """Shown publicly: role-eligible, opted in, and not a non-member
+        standing. Deceased members stay listed (with a memorial marker)."""
+        return (
+            self.is_in_directory
+            and self.public
+            and self.standing not in self.NON_MEMBER_STANDINGS
+        )
 
     @property
     def is_deceased(self) -> bool:
