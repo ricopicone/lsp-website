@@ -118,6 +118,30 @@ def test_help_tab_renders_rewritten_guide(client, roster):
     assert b"Member submissions" in resp.content
 
 
+def test_owing_row_shows_reminder_history(client, roster):
+    from payments.models import BalanceReminder
+
+    owing, _square = roster
+    BalanceReminder.objects.create(user=owing, balance=Decimal("100"))
+    BalanceReminder.objects.create(user=owing, balance=Decimal("100"))
+    resp = client.get(reverse("treasurer_accounts"))
+    assert resp.status_code == 200
+    row = next(r for r in resp.context["rows"] if r["user"].id == owing.id)
+    assert row["reminder_count"] == 2
+    assert row["last_reminded"] is not None
+    assert b"Reminders" in resp.content
+    assert b"Last reminded" in resp.content
+
+
+def test_no_reminders_shows_never(client, roster):
+    owing, _square = roster
+    resp = client.get(reverse("treasurer_accounts"))
+    row = next(r for r in resp.context["rows"] if r["user"].id == owing.id)
+    assert row["reminder_count"] == 0
+    assert row["last_reminded"] is None
+    assert b"never" in resp.content
+
+
 def test_empty_ledger_notice_shown_and_hidden(client, treasurer, roster):
     from payments.models import Charge
     # roster fixture minted a charge → notice hidden

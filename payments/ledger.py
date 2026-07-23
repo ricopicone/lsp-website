@@ -15,7 +15,14 @@ from decimal import Decimal
 from django.db.models import Q
 from django.db.models.functions import Coalesce
 
-from .models import Charge, DuesPeriod, Payment, TuitionEnrollment, TuitionPeriod
+from .models import (
+    BalanceReminder,
+    Charge,
+    DuesPeriod,
+    Payment,
+    TuitionEnrollment,
+    TuitionPeriod,
+)
 
 # In-training members owe this many years of tuition total (skipping defers,
 # it doesn't reduce the count). Never obligate beyond it.
@@ -201,7 +208,7 @@ def accounts_overview() -> list[dict]:
     from collections import defaultdict
 
     from django.contrib.auth import get_user_model
-    from django.db.models import Max, Sum
+    from django.db.models import Count, Max, Sum
 
     User = get_user_model()
 
@@ -240,6 +247,18 @@ def accounts_overview() -> list[dict]:
             status=TuitionEnrollment.Status.SKIPPING,
         ).values_list("user_id", flat=True)
     )
+
+    # Balance-reminder history, batched (task #450 phase D): the Owing table
+    # shows how many reminders a member has had and when the last one went
+    # out, so the treasurer can see who's already being chased.
+    reminder_count_by_user: dict[int, int] = defaultdict(int)
+    last_reminded_by_user: dict[int, object] = {}
+    for row in (
+        BalanceReminder.objects.values("user")
+        .annotate(n=Count("id"), last=Max("sent_at"))
+    ):
+        reminder_count_by_user[row["user"]] = row["n"]
+        last_reminded_by_user[row["user"]] = row["last"]
 
     current_dues = DuesPeriod.current()
     user_ids = set(charges_by_user) | set(paid_by_user)
@@ -293,6 +312,8 @@ def accounts_overview() -> list[dict]:
             "last_payment": last_by_user.get(uid),
             "tuition_overpaid": tuition_overpaid,
             "conflict": tuition_overpaid > 0 and uid in skipping_users,
+            "reminder_count": reminder_count_by_user.get(uid, 0),
+            "last_reminded": last_reminded_by_user.get(uid),
         })
     rows.sort(key=lambda r: (-r["balance"], r["user"].last_name or "",
                              r["user"].first_name or "", r["user"].email))

@@ -56,6 +56,7 @@
           <th class="text-right">Obligation</th><th class="text-right">Paid</th>
           <th class="text-right">Balance</th>
           <th>Tuition</th><th>Dues (this AY)</th><th>Last payment</th>
+          <th class="text-right">Reminders</th><th>Last reminded</th>
         </tr>
       </thead>
       <tbody>
@@ -83,9 +84,15 @@
           <td class="text-xs text-base-content/70 whitespace-nowrap">
             {% if r.last_payment %}{{ r.last_payment|user_datetime:True }}{% else %}—{% endif %}
           </td>
+          <td class="text-right text-xs">
+            {% if r.reminder_count %}{{ r.reminder_count }}{% else %}<span class="text-base-content/40">0</span>{% endif %}
+          </td>
+          <td class="text-xs text-base-content/70 whitespace-nowrap">
+            {% if r.last_reminded %}{{ r.last_reminded|user_datetime:True }}{% else %}<span class="text-base-content/40">never</span>{% endif %}
+          </td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="text-center text-base-content/60 py-6">No matching accounts.</td></tr>
+        <tr><td colspan="10" class="text-center text-base-content/60 py-6">No matching accounts.</td></tr>
         {% endfor %}
       </tbody>
     </table>

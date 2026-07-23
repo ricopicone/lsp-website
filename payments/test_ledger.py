@@ -267,6 +267,28 @@ def test_accounts_overview_includes_payment_only_members(member):
     assert rows and rows[0]["credit"] == Decimal("500")
 
 
+def test_accounts_overview_includes_reminder_history(member):
+    """Owing rows carry balance-reminder history — count + most recent send,
+    batched (not N+1) alongside the rest of accounts_overview (task #450
+    phase D)."""
+    from payments.models import BalanceReminder
+
+    other = User.objects.create_user(email="lg-noreminders@x.test", password="x")
+    p = _dues_period(2026)
+    _charge(member, Charge.Category.DUES, "100", p.start_date, dues_period=p)
+    _charge(other, Charge.Category.DUES, "100", p.start_date, dues_period=p)
+    BalanceReminder.objects.create(user=member, balance=Decimal("100"))
+    later = BalanceReminder.objects.create(user=member, balance=Decimal("100"))
+    BalanceReminder.objects.filter(pk=later.pk).update(
+        sent_at=datetime(2026, 10, 9, tzinfo=tz.utc))
+
+    by_email = {r["user"].email: r for r in ledger.accounts_overview()}
+    assert by_email[member.email]["reminder_count"] == 2
+    assert by_email[member.email]["last_reminded"] == datetime(2026, 10, 9, tzinfo=tz.utc)
+    assert by_email[other.email]["reminder_count"] == 0
+    assert by_email[other.email]["last_reminded"] is None
+
+
 def test_accounts_overview_query_count(member, django_assert_max_num_queries):
     p = _dues_period(2026)
     for i in range(10):
