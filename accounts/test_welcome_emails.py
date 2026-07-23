@@ -65,3 +65,14 @@ def test_only_restricts_recipients(members, mailoutbox):
     call_command("send_welcome_emails", "--commit", "--only", "ADA@example.com")
     assert [m.to[0] for m in mailoutbox] == ["ada@example.com"]
     assert WelcomeEmail.objects.filter(user__email="ben@example.com").count() == 0
+
+
+@pytest.mark.django_db
+def test_welcome_has_house_html_alternative(members, mailoutbox, settings):
+    settings.SITE_BASE_URL = "https://lacanschool.org"
+    call_command("send_welcome_emails", "--commit", "--only", "ada@example.com")
+    html, mime = mailoutbox[0].alternatives[0]
+    assert mime == "text/html"
+    assert "lsp-logo-crest.png" in html          # the letterhead seal
+    assert "#e1ff00" in html and "#1c1c29" in html  # silk button treatment
+    assert "https://lacanschool.org/accounts/login/" in html

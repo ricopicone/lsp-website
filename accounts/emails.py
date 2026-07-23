@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from django.conf import settings
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMessage, EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.urls import reverse
 
@@ -100,6 +100,23 @@ def send_email_change_notice(user, old_email: str, new_email: str) -> None:
     msg.send(fail_silently=False)
 
 
+def _send_with_html(subject: str, to: str, txt_template: str, context: dict) -> None:
+    """Send text + house-styled HTML (task #450): the plain body renders from
+    ``txt_template`` and the HTML alternative from its ``.html`` sibling
+    (``…/foo.txt`` -> ``…/foo.html``), both from the same context."""
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=render_to_string(txt_template, context),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[to],
+        reply_to=[settings.SUPPORT_EMAIL],
+    )
+    msg.attach_alternative(
+        render_to_string(txt_template[:-4] + ".html", context), "text/html"
+    )
+    msg.send(fail_silently=False)
+
+
 def send_welcome(user) -> None:
     """The one-time launch welcome: the site is live, here's how to sign in.
 
@@ -108,7 +125,9 @@ def send_welcome(user) -> None:
     welcomed twice.
     """
     base = settings.SITE_BASE_URL.rstrip("/")
-    body = render_to_string(
+    _send_with_html(
+        "Welcome to the LSP Website",
+        user.email,
         "accounts/email/welcome.txt",
         {
             "user": user,
@@ -117,14 +136,6 @@ def send_welcome(user) -> None:
             "guides_url": base + reverse("guides_index"),
         },
     )
-    msg = EmailMessage(
-        subject="Welcome to the LSP Website",
-        body=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[user.email],
-        reply_to=[settings.SUPPORT_EMAIL],
-    )
-    msg.send(fail_silently=False)
 
 
 # --- Batch announcements -------------------------------------------------
@@ -159,11 +170,4 @@ def send_announcement(user, key: str) -> None:
         "seminars_guide_url": base + reverse("guide_detail", args=["seminars"]),
         **spec["context"],
     }
-    msg = EmailMessage(
-        subject=spec["subject"],
-        body=render_to_string(spec["template"], context),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[user.email],
-        reply_to=[settings.SUPPORT_EMAIL],
-    )
-    msg.send(fail_silently=False)
+    _send_with_html(spec["subject"], user.email, spec["template"], context)

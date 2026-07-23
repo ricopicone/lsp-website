@@ -1,0 +1,19 @@
+{% extends "email/base_email.html" %}
+{% block title %}The {{ academic_year }} Program Is Open for Registration{% endblock %}
+{% block preheader %}Browse the year's seminars and register on each event page.{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 16px 0; font-family:Georgia, 'Iowan Old Style', serif; font-weight:normal; font-size:24px; line-height:1.3; color:#1c1c29;">The {{ academic_year }} program is open</h1>
+<p style="margin:0 0 16px 0;">Hello{% if user.first_name %} {{ user.first_name }}{% endif %},</p>
+<p style="margin:0 0 16px 0;">Registration for the {{ academic_year }} program is open. Each event page shows the readings, the schedule, and the fee, and the Register button walks you through your price, or your covered-by-tuition status, before anything is charged.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+  <tr><td style="background-color:#1c1c29; border-radius:8px;">
+    <a href="{{ program_url }}" style="display:inline-block; padding:12px 26px; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; font-weight:600; color:#e1ff00; text-decoration:none;">Browse the program</a>
+  </td></tr>
+</table>
+<p style="margin:0 0 16px 0;"><a href="{{ seminars_guide_url }}" style="color:#1c1c29;">This guide</a> covers how registration works.</p>
+<p style="margin:0 0 16px 0;">If you are in training, the site will ask you to record your {{ academic_year }} tuition decision before your first registration; you can do that ahead of time on your Account page.</p>
+<p style="margin:24px 0 0 0;">Warmly,<br>
+Rico Picone<br>
+<span style="color:#8a847e;">Web Coordinator and Developer<br>
+Lacanian School of Psychoanalysis</span></p>
+{% endblock %}
