@@ -27,7 +27,6 @@ def test_undated_event_falls_back_to_today():
     # Event model requires start_date, so test with a simple object without it
     # When start_date is absent, period_for_event falls back to TuitionPeriod.current(None),
     # which uses today's date. If no period exists for today, returns None.
+    TuitionPeriod.objects.all().delete()
     e = SimpleNamespace()  # Simple object with no start_date attribute
-    result = period_for_event(e)
-    # The result depends on whether a TuitionPeriod exists for today
-    assert result is None or isinstance(result, TuitionPeriod)
+    assert period_for_event(e) is None
