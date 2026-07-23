@@ -16,6 +16,10 @@ Skips:
 - personas and inactive users
 - balance <= 0 (nothing owed)
 - users whose last balance reminder was within 7 days
+- users whose current-period TuitionEnrollment is PLAN_REQUESTED (a payment
+  plan application is pending with the Board) or PAYMENT_PLAN with no
+  overdue unpaid installment (they're current on an approved plan) — the
+  same gentleness send_tuition_reminders' ``_needs_reminder`` applies.
 """
 
 from __future__ import annotations
@@ -29,10 +33,55 @@ from notifications.categories import Category
 from payments import ledger
 from payments import notifications as notify_payments
 from payments.emails import send_balance_reminder
-from payments.models import BalanceReminder, DuesPeriod
+from payments.models import (
+    BalanceReminder,
+    DuesPeriod,
+    TuitionEnrollment,
+    TuitionInstallment,
+    TuitionPeriod,
+)
 from payments.sending import ThrottledSender
 
 REMINDER_INTERVAL_DAYS = 7
+
+
+def _spared_plan_user_ids(today) -> set:
+    """User ids to skip: PLAN_REQUESTED, or PAYMENT_PLAN with no overdue
+    unpaid installment, in the current TuitionPeriod. One batched query
+    pair over all such enrollments, not a per-member lookup."""
+    tuition_period = TuitionPeriod.current(on_date=today)
+    if tuition_period is None:
+        return set()
+
+    enrollments = list(
+        TuitionEnrollment.objects.filter(
+            tuition_period=tuition_period,
+            status__in=(
+                TuitionEnrollment.Status.PLAN_REQUESTED,
+                TuitionEnrollment.Status.PAYMENT_PLAN,
+            ),
+        ).values("id", "user_id", "status")
+    )
+    spared = {
+        e["user_id"] for e in enrollments
+        if e["status"] == TuitionEnrollment.Status.PLAN_REQUESTED
+    }
+    plan_enrollments = {
+        e["id"]: e["user_id"] for e in enrollments
+        if e["status"] == TuitionEnrollment.Status.PAYMENT_PLAN
+    }
+    overdue_enrollment_ids = set(
+        TuitionInstallment.objects.filter(
+            enrollment_id__in=plan_enrollments.keys(),
+            paid=False,
+            due_date__lte=today,
+        ).values_list("enrollment_id", flat=True).distinct()
+    )
+    spared.update(
+        user_id for eid, user_id in plan_enrollments.items()
+        if eid not in overdue_enrollment_ids
+    )
+    return spared
 
 
 class Command(BaseCommand):
@@ -60,9 +109,11 @@ class Command(BaseCommand):
             return
 
         interval_cutoff = timezone.now() - timedelta(days=REMINDER_INTERVAL_DAYS)
+        spared_plan_user_ids = _spared_plan_user_ids(today)
         sent = 0
         skipped_no_balance = 0
         skipped_recent = 0
+        skipped_plan = 0
         errored = 0
         dry = opts["dry_run"]
         sender = ThrottledSender()
@@ -75,6 +126,9 @@ class Command(BaseCommand):
             balance = row["owes"]
             if balance <= 0:
                 skipped_no_balance += 1
+                continue
+            if user.id in spared_plan_user_ids:
+                skipped_plan += 1
                 continue
             if BalanceReminder.objects.filter(
                 user=user, sent_at__gte=interval_cutoff,
@@ -100,5 +154,6 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"{verb} {sent} balance reminder(s). "
             f"Skipped: {skipped_no_balance} no balance owed, "
+            f"{skipped_plan} pending/current payment plan, "
             f"{skipped_recent} reminded recently. Errors: {errored}."
         ))

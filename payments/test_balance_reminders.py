@@ -17,7 +17,14 @@ from django.utils import timezone
 
 from payments import ledger
 from payments.management.commands import send_balance_reminders
-from payments.models import BalanceReminder, Charge, DuesPeriod
+from payments.models import (
+    BalanceReminder,
+    Charge,
+    DuesPeriod,
+    TuitionEnrollment,
+    TuitionInstallment,
+    TuitionPeriod,
+)
 
 User = get_user_model()
 
@@ -27,6 +34,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture(autouse=True)
 def _clean_periods():
     DuesPeriod.objects.all().delete()
+    TuitionPeriod.objects.all().delete()
 
 
 @pytest.fixture
@@ -38,6 +46,15 @@ def period():
         dues_amount_pre_candidate=Decimal("50"),
         dues_amount_candidate=Decimal("100"),
         dues_amount_analyst=Decimal("150"),
+    )
+
+
+@pytest.fixture
+def tuition_period():
+    return TuitionPeriod.objects.create(
+        name="AY 2026-2027 Tuition", slug="ay-2026-2027-tuition",
+        start_date=date(2026, 9, 1), decision_due_date=date(2026, 9, 1),
+        end_date=date(2027, 8, 31), tuition_amount=Decimal("5000"),
     )
 
 
@@ -176,3 +193,65 @@ def test_balance_matches_treasurer_accounts_view(period, member, settings, monke
     )
     reminder = BalanceReminder.objects.get(user=member)
     assert reminder.balance == overview_row["owes"] == Decimal("150.00")
+
+
+@pytest.mark.django_db
+def test_plan_requested_member_not_reminded(
+    period, tuition_period, member, mailoutbox, settings, monkeypatch,
+):
+    """A member whose payment-plan request is pending with the Board isn't
+    dunned on the balance while the request is under review."""
+    settings.EMAIL_MAX_SEND_RATE = 1000.0
+    _charge(member, "100")
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=tuition_period,
+        status=TuitionEnrollment.Status.PLAN_REQUESTED,
+    )
+    _freeze(monkeypatch, "2026-10-01")
+    call_command("send_balance_reminders")
+    assert len(mailoutbox) == 0
+    assert BalanceReminder.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_payment_plan_current_member_not_reminded(
+    period, tuition_period, member, mailoutbox, settings, monkeypatch,
+):
+    """A member on an approved payment plan with no overdue installment is
+    current — no balance reminder, even though the ledger balance is > 0."""
+    settings.EMAIL_MAX_SEND_RATE = 1000.0
+    _charge(member, "100")
+    enrollment = TuitionEnrollment.objects.create(
+        user=member, tuition_period=tuition_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    TuitionInstallment.objects.create(
+        enrollment=enrollment, sequence=1,
+        due_date=date(2026, 12, 1), amount=Decimal("100"), paid=False,
+    )
+    _freeze(monkeypatch, "2026-10-01")
+    call_command("send_balance_reminders")
+    assert len(mailoutbox) == 0
+    assert BalanceReminder.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_payment_plan_overdue_installment_still_reminded(
+    period, tuition_period, member, mailoutbox, settings, monkeypatch,
+):
+    """An overdue unpaid installment on a payment plan still triggers the
+    balance reminder — the plan has lapsed into arrears."""
+    settings.EMAIL_MAX_SEND_RATE = 1000.0
+    _charge(member, "100")
+    enrollment = TuitionEnrollment.objects.create(
+        user=member, tuition_period=tuition_period,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    TuitionInstallment.objects.create(
+        enrollment=enrollment, sequence=1,
+        due_date=date(2026, 9, 1), amount=Decimal("100"), paid=False,
+    )
+    _freeze(monkeypatch, "2026-10-01")
+    call_command("send_balance_reminders")
+    assert len(mailoutbox) == 1
+    assert BalanceReminder.objects.count() == 1
