@@ -30,21 +30,35 @@ def faculty(db):
 
 
 @pytest.fixture
-def tuition_member(db):
-    """A user with a current-year tuition enrollment (status=committed).
+def tuition_period_2026(db):
+    """The TuitionPeriod covering the `event` fixture's AY (Sept 2026-Aug
+    2027). Coverage is event-anchored (task #450 phase A), so a decision
+    must be recorded against *this* period, not whatever
+    TuitionPeriod.current() happens to be on the day tests run."""
+    from payments.models import TuitionPeriod
+
+    return TuitionPeriod.objects.create(
+        name="AY 2026–2027", slug="ay-2026-2027-test",
+        start_date=date(2026, 9, 1), decision_due_date=date(2026, 10, 31),
+        end_date=date(2027, 8, 31), tuition_amount=Decimal("800.00"),
+    )
+
+
+@pytest.fixture
+def tuition_member(db, tuition_period_2026):
+    """A user with a tuition enrollment (status=committed) against the
+    `event` fixture's AY (Sept 2026-Aug 2027).
 
     A TuitionEnrollment row is the source of truth for "is this member
     tuition-paying this year?" — drives the REG-4 covered-by-tuition path.
     """
-    from payments.models import TuitionEnrollment, TuitionPeriod
+    from payments.models import TuitionEnrollment
 
     user = User.objects.create_user(email="tm@example.com")
-    period = TuitionPeriod.current()
-    if period is not None:
-        TuitionEnrollment.objects.update_or_create(
-            user=user, tuition_period=period,
-            defaults={"status": TuitionEnrollment.Status.COMMITTED},
-        )
+    TuitionEnrollment.objects.update_or_create(
+        user=user, tuition_period=tuition_period_2026,
+        defaults={"status": TuitionEnrollment.Status.COMMITTED},
+    )
     return user
 
 
@@ -87,6 +101,51 @@ def test_covered_by_tuition_does_not_apply_to_non_tuition_member(event, regular_
     )
     result = resolve_price(user=regular_user, tier=tier)
     assert result.amount == Decimal("100.00")
+
+
+def test_covered_by_tuition_keys_on_the_events_academic_year(event, regular_user):
+    """Coverage must key on the event's AY, not today's date (task #450
+    phase A). `event` is dated Sept 2026 (AY2026-2027). A member who was
+    PAID_IN_FULL for AY2025-2026 only should NOT get coverage on this
+    tier — until they also have a covers-seminars enrollment for
+    AY2026-2027, at which point they do."""
+    from payments.models import TuitionEnrollment, TuitionPeriod
+
+    # Note: the payments migration seeds a TuitionPeriod named "AY
+    # 2025–2026" for "today" (name is unique) — use a distinct name here.
+    old_period = TuitionPeriod.objects.create(
+        name="AY 2025–2026 (pricing test)", slug="ay-2025-2026-test",
+        start_date=date(2025, 9, 1), decision_due_date=date(2025, 10, 31),
+        end_date=date(2026, 8, 31), tuition_amount=Decimal("800.00"),
+    )
+    TuitionEnrollment.objects.create(
+        user=regular_user, tuition_period=old_period,
+        status=TuitionEnrollment.Status.PAID_IN_FULL,
+    )
+
+    tier = PriceTier.objects.create(
+        event=event,
+        audience=Audience.MEMBER,
+        base_amount=Decimal("100.00"),
+        covered_by_tuition=True,
+    )
+
+    # Only the 2025-26 (old) enrollment exists: no coverage on the Sept-2026 event.
+    result = resolve_price(user=regular_user, tier=tier)
+    assert result.amount == Decimal("100.00")
+
+    # Now the member also has a covers-seminars enrollment for 2026-27: covered.
+    new_period = TuitionPeriod.objects.create(
+        name="AY 2026–2027", slug="ay-2026-2027-test",
+        start_date=date(2026, 9, 1), decision_due_date=date(2026, 10, 31),
+        end_date=date(2027, 8, 31), tuition_amount=Decimal("800.00"),
+    )
+    TuitionEnrollment.objects.create(
+        user=regular_user, tuition_period=new_period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    result = resolve_price(user=regular_user, tier=tier)
+    assert result.amount == Decimal("0.00")
 
 
 def test_sliding_scale_requires_amount(event, regular_user):
