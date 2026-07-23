@@ -113,6 +113,7 @@ def send_welcome(user) -> None:
         {
             "user": user,
             "site_url": base + "/",
+            "program_url": base + reverse("program"),
             "login_url": base + reverse("login"),
             "guide_url": base + reverse("guide_detail", args=["logging-in"]),
             "guides_url": base + reverse("guides_index"),
@@ -120,7 +121,7 @@ def send_welcome(user) -> None:
         },
     )
     msg = EmailMessage(
-        subject="Welcome to the new Lacanian School website",
+        subject="Welcome to the New LSP Website",
         body=body,
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[user.email],
