@@ -280,3 +280,21 @@ def void_registration_charge(registration, reason: str) -> None:
         c.status = Charge.Status.VOID
         c.add_note(reason, save=False)
         c.save(update_fields=("status", "notes"))
+
+
+def waive_open_charges(user, *, reason: str, by=None) -> int:
+    """Waive every OPEN charge on ``user``'s account (dues / tuition /
+    registration), writing an audited note on each. Idempotent — WAIVED/VOID
+    rows are left untouched. Returns the number of charges waived.
+
+    Used when a member is marked Deceased (auto) or Removed (via the treasurer
+    one-click action). Waiving is audit-only; it never moves money.
+    """
+    note = f"{reason} (waived by {by.email})" if by is not None else reason
+    n = 0
+    for c in Charge.objects.filter(user=user, status=Charge.Status.OPEN):
+        c.status = Charge.Status.WAIVED
+        c.add_note(note, save=False)
+        c.save(update_fields=("status", "notes"))
+        n += 1
+    return n

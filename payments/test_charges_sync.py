@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from payments import charges
+from payments.charges import waive_open_charges
 from payments.models import Charge, DuesPeriod, TuitionPeriod
 
 pytestmark = pytest.mark.django_db
@@ -168,3 +169,26 @@ def test_rate_change_updates_sync_managed_charge():
     tp.save()
     charges.sync_tuition_charges(u)
     assert Charge.objects.get(user=u).amount == Decimal("2500")
+
+
+def test_waive_open_charges_waives_open_only():
+    u = User.objects.create_user(email="w@example.com")
+    open_c = Charge.objects.create(
+        user=u, category=Charge.Category.DUES, amount=Decimal("100"),
+        effective_date=date(2025, 9, 1), status=Charge.Status.OPEN,
+    )
+    already = Charge.objects.create(
+        user=u, category=Charge.Category.TUITION, amount=Decimal("200"),
+        effective_date=date(2024, 9, 1), status=Charge.Status.WAIVED,
+    )
+
+    n = waive_open_charges(u, reason="Member deceased")
+    assert n == 1
+    open_c.refresh_from_db()
+    already.refresh_from_db()
+    assert open_c.status == Charge.Status.WAIVED
+    assert "Member deceased" in open_c.notes
+    assert already.status == Charge.Status.WAIVED  # untouched
+
+    # Idempotent: a second call waives nothing.
+    assert waive_open_charges(u, reason="again") == 0
