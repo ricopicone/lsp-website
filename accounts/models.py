@@ -147,6 +147,11 @@ class Profile(models.Model):
         default=False,
         help_text="Faculty axis (USR-6). Orthogonal to role.",
     )
+    seminar_access_suspended = models.BooleanField(
+        default=False,
+        help_text="Treasurer-set: excluded from seminar group rosters until "
+        "the outstanding balance is settled.",
+    )
     clinical_background = models.BooleanField(
         default=False,
         help_text="Clinical background requires two control analyses "
@@ -376,6 +381,17 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"{self.user.email} ({self.get_role_display()})"
+
+    def add_note(self, text: str, *, save=True) -> None:
+        """Append a dated line to the audit trail (mirrors
+        ``payments.models.Charge.add_note`` — same convention, so treasurer
+        actions read the same wherever they land)."""
+        from django.utils import timezone
+
+        line = f"[{timezone.now().date()}] {text}"
+        self.notes = (self.notes + "\n" + line) if self.notes else line
+        if save:
+            self.save(update_fields=("notes",))
 
     @property
     def display_email(self) -> str:

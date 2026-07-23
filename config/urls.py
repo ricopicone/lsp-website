@@ -198,6 +198,8 @@ urlpatterns = [
          _payment_views.treasurer_charge_update, name="treasurer_charge_update"),
     path("treasurer/members/<int:user_id>/record-payment/",
          _payment_views.treasurer_record_payment, name="treasurer_record_payment"),
+    path("treasurer/members/<int:user_id>/suspend-access/",
+         _payment_views.treasurer_suspend_access, name="treasurer_suspend_access"),
     path("treasurer/exports/", _payment_views.treasurer_exports, name="treasurer_exports"),
     path("treasurer/exports/balances.csv", _payment_views.balances_csv, name="balances_csv"),
     path("treasurer/help/", _payment_views.treasurer_help, name="treasurer_help"),

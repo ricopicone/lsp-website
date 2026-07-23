@@ -19,6 +19,10 @@
       <span class="text-base-content/30 mx-1">·</span>
       <span class="badge badge-accent badge-sm">Faculty</span>
       {% endif %}
+      {% if target.profile.seminar_access_suspended %}
+      <span class="text-base-content/30 mx-1">·</span>
+      <span class="badge badge-error badge-outline badge-sm">Seminar group access suspended</span>
+      {% endif %}
     </div>
   </header>
 
@@ -334,6 +338,33 @@
       </form>
     </section>
   </div>
+
+  {% comment %}5b. Seminar group access — manual, audited suspend/restore (task #450 phase D).{% endcomment %}
+  <section class="space-y-2 rounded-lg border border-base-300 p-4">
+    <h3 class="font-serif text-base text-base-content">Seminar group access</h3>
+    {% if target.profile.seminar_access_suspended %}
+    <p class="text-sm text-base-content/70">
+      <span class="badge badge-error badge-outline badge-sm">Seminar group access suspended</span>
+      This member is excluded from seminar/reading-group workgroup rosters until access is restored. Faculty standing, if any, is unaffected.
+    </p>
+    <form method="post" action="{% url 'treasurer_suspend_access' target.id %}" class="space-y-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="restore">
+      <input type="text" name="reason" placeholder="Reason (required)—e.g. balance settled" class="input input-bordered input-sm w-full" required>
+      <button type="submit" class="btn btn-sm btn-success">Restore access</button>
+    </form>
+    {% else %}
+    <p class="text-sm text-base-content/70">
+      Suspending excludes this member from seminar/reading-group workgroup rosters (and the workgroup's Parlêtre channel) until restored—a manual, audited action; nothing sets this automatically. Faculty standing is unaffected.
+    </p>
+    <form method="post" action="{% url 'treasurer_suspend_access' target.id %}" class="space-y-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="suspend">
+      <input type="text" name="reason" placeholder="Reason (required)—e.g. balance past due" class="input input-bordered input-sm w-full" required>
+      <button type="submit" class="btn btn-sm btn-warning">Suspend seminar group access</button>
+    </form>
+    {% endif %}
+  </section>
 
   {% comment %}6. Footnote.{% endcomment %}
   <p class="text-xs text-base-content/50">

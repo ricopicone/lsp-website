@@ -1077,6 +1077,46 @@ def treasurer_charge_note(request, charge_id: int):
     return _safe_next(request, "treasurer_payments")
 
 
+@require_POST
+def treasurer_suspend_access(request, user_id: int):
+    """Suspend/restore a member's seminar-group access (task #450 phase D).
+
+    A human, audited treasurer action only — nothing automatic ever sets
+    ``Profile.seminar_access_suspended`` (do-not-over-automate). While set,
+    the member drops out of the *registrant-derived* portion of every
+    seminar/reading-group Workgroup roster (``Event.has_access_registrant`` /
+    ``access_registrant_users``) — faculty standing is untouched. Gated like
+    ``payments.views_plan_review`` (``core.access.gate_or_login``): anonymous
+    → login redirect, signed-in non-treasurer → 404, so the endpoint doesn't
+    reveal member ids to outsiders.
+    """
+    from core.access import gate_or_login
+
+    if not _is_staff(request.user):
+        return gate_or_login(request)
+
+    target = get_object_or_404(User.objects.select_related("profile"), pk=user_id)
+    action = request.POST.get("action")
+    reason = (request.POST.get("reason") or "").strip()
+    if action not in ("suspend", "restore"):
+        messages.error(request, "Unknown action.")
+        return redirect("treasurer_member_detail", user_id=target.id)
+    if not reason:
+        messages.error(request, "Give a short reason first.")
+        return redirect("treasurer_member_detail", user_id=target.id)
+
+    profile = target.profile
+    email = request.user.email
+    if action == "suspend":
+        profile.seminar_access_suspended = True
+        profile.add_note(f"Suspended by treasurer {email}. {reason}", save=False)
+        messages.success(request, "Seminar group access suspended.")
+    else:
+        profile.seminar_access_suspended = False
+        profile.add_note(f"Restored by treasurer {email}. {reason}", save=False)
+        messages.success(request, "Seminar group access restored.")
+    profile.save(update_fields=("seminar_access_suspended", "notes"))
+    return redirect("treasurer_member_detail", user_id=target.id)
 
 
 @login_required

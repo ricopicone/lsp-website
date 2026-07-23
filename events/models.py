@@ -514,8 +514,16 @@ class Event(models.Model):
     def has_access_registrant(self, user) -> bool:
         """True if ``user`` has a paid/comped Registration for this event — the
         *derived* portion of the workspace roster (kept out of the workgroup's
-        stored memberships; see ``Workgroup.is_member``)."""
+        stored memberships; see ``Workgroup.is_member``).
+
+        A treasurer-suspended member (``Profile.seminar_access_suspended``,
+        task #450 phase D) never counts here — the ONLY way this flag is set
+        is a manual, audited treasurer action (do-not-over-automate); this
+        check is what makes that flip actually cut access. Faculty are stored
+        memberships, not registrants, so they are unaffected."""
         if not getattr(user, "is_authenticated", False):
+            return False
+        if getattr(getattr(user, "profile", None), "seminar_access_suspended", False):
             return False
         from registrations.models import Registration
 
@@ -526,14 +534,17 @@ class Event(models.Model):
 
     def access_registrant_users(self):
         """Users with a paid/comped Registration — the derived participants for
-        ``Workgroup.participants()``."""
+        ``Workgroup.participants()``. Excludes treasurer-suspended members
+        (see ``has_access_registrant``)."""
         from registrations.models import Registration
 
         return [
             r.user for r in self.registrations.filter(
                 status__in=(Registration.Status.PAID, Registration.Status.COMPED),
-            ).select_related("user")
+            ).select_related("user", "user__profile")
             if r.user_id
+            and not getattr(getattr(r.user, "profile", None),
+                             "seminar_access_suspended", False)
         ]
 
     def is_workgroup_member(self, user) -> bool:
