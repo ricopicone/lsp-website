@@ -412,3 +412,14 @@ def tuition_clearance(user) -> list[str]:
             f"{acct['tuition_years_covered']} of "
             f"{acct['tuition_years_required']} tuition years covered.")
     return reasons
+
+
+def period_for_event(event):
+    """The TuitionPeriod an event belongs to.
+
+    Annual-program events anchor to their start_date; undated or one-off
+    events fall back to the period containing today (matching the old
+    behavior for special events and Days of Assembly).
+    """
+    anchor = getattr(event, "start_date", None)
+    return TuitionPeriod.current(on_date=anchor)  # anchor=None -> today
