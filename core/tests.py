@@ -210,6 +210,38 @@ def test_landing_page_skips_draft_events(client, draft_event_with_sessions):
     assert b"Draft Event" not in response.content
 
 
+@pytest.mark.django_db
+def test_landing_counts_exclude_removed_and_resigned(client):
+    """task #451: the landing-page directory/analyst counts must match
+    accounts.views._directory_qs's standing exclusion — a removed or
+    resigned member is gone from the public directory grid and must not
+    still inflate the count. Deceased members stay counted (the grid still
+    shows them)."""
+    from datetime import date as _date
+
+    def _make(email, role, standing, public=True, deceased_on=None):
+        u = User.objects.create_user(email=email)
+        u.profile.role = role
+        u.profile.standing = standing
+        u.profile.public = public
+        u.profile.deceased_on = deceased_on
+        u.profile.save()
+        return u
+
+    _make("active451@x.test", Profile.Role.ANALYST, Profile.Standing.ACTIVE)
+    _make("removed451@x.test", Profile.Role.ANALYST, Profile.Standing.REMOVED)
+    _make("resigned451@x.test", Profile.Role.ANALYST, Profile.Standing.RESIGNED)
+    _make(
+        "deceased451@x.test", Profile.Role.ANALYST, Profile.Standing.ACTIVE,
+        deceased_on=_date(2026, 7, 22),
+    )
+
+    response = client.get(reverse("core:landing"))
+    # active + deceased count; removed + resigned excluded.
+    assert response.context["directory_count"] == 2
+    assert response.context["analyst_count"] == 2
+
+
 
 
 # ---- Public events list -----------------------------------------------

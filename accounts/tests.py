@@ -464,7 +464,73 @@ def test_retired_member_stays_lsp_member():
 
 
 @pytest.mark.django_db
-def test_directory_excludes_removed_and_resigned_keeps_deceased(client):
+def test_admin_deceased_on_is_readonly_no_partial_workflow(client):
+    """task #451 fix-first: the Django admin must not offer a partial
+    'deceased' path that disables login without running the full
+    accounts.lifecycle.set_deceased() workflow (auto-waive open charges +
+    referral delisting). deceased_on is readonly on both the User-page
+    ProfileInline and the standalone ProfileAdmin; a crafted POST attempting
+    to set it must be silently ignored by Django's readonly-field handling,
+    leaving the open charge owed and the referral listing active."""
+    from payments.models import Charge
+    from referrals.models import ReferralListMember
+
+    # The admin classes declare the field readonly (belt-and-suspenders with
+    # the functional check below).
+    from .admin import ProfileAdmin, ProfileInline
+    assert "deceased_on" in ProfileInline.readonly_fields
+    assert "deceased_on" in ProfileAdmin.readonly_fields
+
+    admin_user = User.objects.create_superuser(
+        email="admin451@example.com", password="not-a-real-password",
+    )
+    client.force_login(admin_user)
+
+    target = User.objects.create_user(email="target451@example.com")
+    target.profile.role = Profile.Role.ANALYST
+    target.profile.save()
+    charge = Charge.objects.create(
+        user=target, category=Charge.Category.DUES, amount="100.00",
+        effective_date=date(2026, 9, 1),
+    )
+    listing = ReferralListMember.objects.create(user=target, is_active=True)
+
+    resp = client.get(f"/admin/accounts/user/{target.pk}/change/")
+    assert resp.status_code == 200
+    # Build a minimal valid POST from the rendered forms, then attempt to
+    # smuggle a deceased_on value into the readonly inline field.
+    data = {}
+    for field in resp.context["adminform"].form:
+        data[field.html_name] = field.value() or ""
+    for fs in resp.context["inline_admin_formsets"]:
+        for k, v in fs.formset.management_form.initial.items():
+            data[f"{fs.formset.prefix}-{k}"] = v
+        for form in fs.formset.forms:
+            for field in form:
+                if field.name == "headshot":
+                    continue  # unset FileField chokes the multipart encoder
+                value = field.value()
+                data[field.html_name] = "" if value is None else value
+    data["profile-0-deceased_on"] = "2026-07-22"
+
+    resp2 = client.post(
+        f"/admin/accounts/user/{target.pk}/change/", data, follow=True,
+    )
+    assert resp2.status_code == 200
+
+    target.refresh_from_db()
+    assert target.profile.deceased_on is None  # readonly: injection ignored
+    assert target.is_active is True  # login stays enabled
+
+    charge.refresh_from_db()
+    assert charge.status == Charge.Status.OPEN  # not auto-waived
+
+    listing.refresh_from_db()
+    assert listing.is_active is True  # not delisted
+
+
+@pytest.mark.django_db
+def test_directory_excludes_removed_and_resigned_keeps_deceased():
     from datetime import date
     for email, standing, deceased in [
         ("active@x.test", Profile.Standing.ACTIVE, None),

@@ -81,12 +81,19 @@ def landing(request):
     )
 
     # Grounded figures woven into the page (each rendered only when positive).
-    directory_count = Profile.objects.filter(
-        role__in=Profile.DIRECTORY_ROLES, public=True
-    ).count()
-    analyst_count = Profile.objects.filter(
-        role=Profile.Role.ANALYST, public=True
-    ).count()
+    # Matches accounts.views._directory_qs's standing exclusion — removed/
+    # resigned members don't inflate a public count they're not shown in
+    # (deceased members stay counted; the grid still shows them).
+    directory_count = (
+        Profile.objects.filter(role__in=Profile.DIRECTORY_ROLES, public=True)
+        .exclude(standing__in=Profile.NON_MEMBER_STANDINGS)
+        .count()
+    )
+    analyst_count = (
+        Profile.objects.filter(role=Profile.Role.ANALYST, public=True)
+        .exclude(standing__in=Profile.NON_MEMBER_STANDINGS)
+        .count()
+    )
     seminar_count = (
         Workgroup.objects.filter(
             kind=Workgroup.Kind.SEMINAR, landing_visibility=Visibility.PUBLIC

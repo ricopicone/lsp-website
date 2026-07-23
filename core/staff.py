@@ -331,11 +331,11 @@ def board_membership_admin(request):
     form = None
     if request.method == "POST":
         action = request.POST.get("action")
+        member = get_object_or_404(User, pk=request.POST.get("member"))
         if action in {"set_deceased", "clear_deceased", "waive_charges"}:
             from accounts.lifecycle import clear_deceased, set_deceased
             from payments.charges import waive_open_charges
 
-            member = get_object_or_404(User, pk=request.POST.get("member"))
             if action == "set_deceased":
                 from datetime import date as _date
                 raw = request.POST.get("deceased_on") or ""
@@ -362,7 +362,6 @@ def board_membership_admin(request):
                 )
                 messages.success(request, f"Waived {n} open charge(s).")
             return redirect(f"{reverse('board_membership_admin')}?member={member.pk}")
-        member = get_object_or_404(User, pk=request.POST.get("member"))
         form = MembershipChangeForm(request.POST, member=member)
         if form.is_valid():
             from django.core.exceptions import ValidationError

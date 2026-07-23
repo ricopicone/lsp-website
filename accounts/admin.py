@@ -49,13 +49,15 @@ class ProfileInline(admin.StackedInline):
         "public",
         "bio",
         "headshot",
-        # Direct edits here still sync User.is_active via Profile.save()
-        # (task #451); the full workflow (waive open charges + delist
-        # referrals) is the Board "Mark deceased" action at
-        # /admin-tools/board/membership/.
+        # Read-only here (task #451): a bare admin save syncs User.is_active
+        # via Profile.save() but SKIPS the full workflow (auto-waive open
+        # charges + delist referrals). Use the Board "Mark deceased" action
+        # at /admin-tools/board/membership/, which runs
+        # accounts.lifecycle.set_deceased()/clear_deceased().
         "deceased_on",
         "notes",
     )
+    readonly_fields = ("deceased_on",)
     verbose_name_plural = "Profile"
 
 
@@ -110,6 +112,10 @@ class ProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "role", "is_faculty", "clinical_background")
     list_filter = ("role", "is_faculty", "public", "clinical_background")
     search_fields = ("user__email", "user__first_name", "user__last_name")
+    # Read-only (task #451): see ProfileInline.readonly_fields above — a bare
+    # save here would skip the auto-waive + referral-delist workflow. Use the
+    # Board "Mark deceased" action instead.
+    readonly_fields = ("deceased_on",)
 
     def save_model(self, request, obj, form, change):
         # Profile.save() invalidates the geocode when ``location`` changes;
