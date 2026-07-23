@@ -364,6 +364,13 @@ class TuitionPeriod(models.Model):
             "pay in installments / skip."
         ),
     )
+    payment_due_date = models.DateField(
+        null=True, blank=True,
+        help_text=(
+            "Tuition payment due by this date (unpaid-committed reminders "
+            "escalate after it; decision reminders key off decision_due_date)."
+        ),
+    )
     end_date = models.DateField(help_text="Last day of the academic year.")
     tuition_amount = models.DecimalField(
         max_digits=8,
