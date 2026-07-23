@@ -1019,3 +1019,31 @@ class WelcomeEmail(models.Model):
 
     def __str__(self):
         return f"welcome email to {self.user.email} ({self.sent_at:%Y-%m-%d})"
+
+
+class AnnouncementEmail(models.Model):
+    """One row per announcement email sent to a member, keyed by campaign.
+
+    ``manage.py send_announcement_emails --key <key>`` skips users with a row
+    for that key, so batch announcements (site launch, a year's program
+    opening) are safely re-runnable. Distinct from :class:`WelcomeEmail`,
+    which is the evergreen per-member onboarding email.
+    """
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="announcement_emails",
+    )
+    key = models.SlugField(max_length=64)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "key"], name="one_announcement_per_user_key",
+            ),
+        ]
+
+    def __str__(self):
+        return f"announcement {self.key} to {self.user.email} ({self.sent_at:%Y-%m-%d})"

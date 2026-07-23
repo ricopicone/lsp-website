@@ -1,27 +1,18 @@
 {% autoescape off %}Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
 
-We are excited to unveil the School's new website, at the same address as
-always:
+Welcome to the Lacanian School's website. Your member account is already set
+up, and it uses this email address.
 
-  {{ site_url }}
-
-The site is now the home of member accounts, the annual program, event
-registration, and payments. To mark the occasion, registration for the
-2026–2027 program is now open:
-
-  {{ program_url }}
-
-Your member account is already set up, and it uses this email address.
 Signing in is easy, and there is no password to remember unless you want
 one: on the log in page, choose "Email me a sign-in link" and we will send
 you a link that signs you in with one click.
 
-  Log in:                    {{ login_url }}
-  How logging in works:      {{ guide_url }}
-  Seminars and registration: {{ seminars_guide_url }}
+  Log in:               {{ login_url }}
+  How logging in works: {{ guide_url }}
 
-Once you are in, you can update your profile and photo for the directory,
-register for seminars, and pay dues. The Guides page is a good first stop:
+Once you are in, a good first stop is your profile: add a photo and check
+your details for the member directory. The Guides page walks you through
+everything else, from seminars to dues:
 
   {{ guides_url }}
 

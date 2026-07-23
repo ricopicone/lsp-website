@@ -112,18 +112,56 @@ def send_welcome(user) -> None:
         "accounts/email/welcome.txt",
         {
             "user": user,
-            "site_url": base + "/",
-            "program_url": base + reverse("program"),
             "login_url": base + reverse("login"),
             "guide_url": base + reverse("guide_detail", args=["logging-in"]),
-            "seminars_guide_url": base + reverse("guide_detail", args=["seminars"]),
             "guides_url": base + reverse("guides_index"),
-            "support_email": settings.SUPPORT_EMAIL,
         },
     )
     msg = EmailMessage(
-        subject="Welcome to the New LSP Website",
+        subject="Welcome to the LSP Website",
         body=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[user.email],
+        reply_to=[settings.SUPPORT_EMAIL],
+    )
+    msg.send(fail_silently=False)
+
+
+# --- Batch announcements -------------------------------------------------
+#
+# Keyed campaigns sent by ``manage.py send_announcement_emails --key <key>``;
+# an ``AnnouncementEmail`` row per (user, key) makes re-runs safe. Add a key
+# here (subject, template, extra context) to mint a new announcement — e.g.
+# next year's program opening.
+
+ANNOUNCEMENTS: dict[str, dict] = {
+    "site-launch-2026": {
+        "subject": "The Lacanian School's New Website",
+        "template": "accounts/email/announcement_site_launch.txt",
+        "context": {},
+    },
+    "program-2026-2027": {
+        "subject": "The 2026\u20132027 Program Is Open for Registration",
+        "template": "accounts/email/announcement_program_open.txt",
+        "context": {"academic_year": "2026\u20132027"},
+    },
+}
+
+
+def send_announcement(user, key: str) -> None:
+    """Send one keyed announcement email (see ``ANNOUNCEMENTS``)."""
+    spec = ANNOUNCEMENTS[key]
+    base = settings.SITE_BASE_URL.rstrip("/")
+    context = {
+        "user": user,
+        "site_url": base + "/",
+        "program_url": base + reverse("program"),
+        "seminars_guide_url": base + reverse("guide_detail", args=["seminars"]),
+        **spec["context"],
+    }
+    msg = EmailMessage(
+        subject=spec["subject"],
+        body=render_to_string(spec["template"], context),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[user.email],
         reply_to=[settings.SUPPORT_EMAIL],

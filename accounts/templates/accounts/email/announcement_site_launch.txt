@@ -1,0 +1,21 @@
+{% autoescape off %}Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
+
+We are excited to unveil the School's new website, at the same address as
+always:
+
+  {{ site_url }}
+
+The site is now the home of the School online: member accounts, the annual
+program, event registration, payments, the member directory, and more.
+
+Two more emails follow this one. The first shows you how to sign in to your
+member account, which is already set up. The second announces the 2026–2027
+program, now open for registration.
+
+Questions? Just reply to this message.
+
+Warmly,
+Rico Picone
+Web Coordinator and Developer
+Lacanian School of Psychoanalysis
+{% endautoescape %}
