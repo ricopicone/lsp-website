@@ -342,6 +342,13 @@ def find_an_analyst(request):
 def find_an_analyst_pins(request):
     """JSON feed of geocoded public directory members for the Leaflet map.
 
+    This is the referral-discovery surface (not the directory grid): it
+    excludes ``Profile.REFERRAL_EXCLUDED_STANDINGS`` (retired / resigned /
+    removed — you would not refer someone to a member who isn't taking new
+    analysands) as well as deceased members. The directory grid
+    (``_directory_qs``) is intentionally broader and still shows retired and
+    deceased members.
+
     Returns a flat ``pins`` array — one entry per geocoded *location*, not
     per profile, so members who list two places (e.g. "San Francisco &
     Palo Alto, CA") render as two markers.
@@ -349,7 +356,8 @@ def find_an_analyst_pins(request):
     qs = (
         Profile.objects
         .filter(role__in=Profile.DIRECTORY_ROLES, public=True)
-        .exclude(standing__in=Profile.NON_MEMBER_STANDINGS)
+        .exclude(standing__in=Profile.REFERRAL_EXCLUDED_STANDINGS)
+        .filter(deceased_on__isnull=True)
         .exclude(location_lat__isnull=True)
         .exclude(location_lng__isnull=True)
         .select_related("user")

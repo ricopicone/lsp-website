@@ -516,3 +516,45 @@ def test_directory_detail_hides_referral_cta_for_deceased(client):
     body = resp.content.decode()
     # No contact email link for a deceased member.
     assert "mailto:john@x.test" not in body
+
+
+@pytest.mark.django_db
+def test_find_an_analyst_map_excludes_retired_and_deceased(client):
+    """The Find-an-Analyst map is a referral surface, not the directory grid:
+    retired and deceased members must not appear as pins, even though both
+    stay in the directory grid (task #451)."""
+    from django.urls import reverse
+
+    from accounts.views import _directory_qs
+
+    def _make(email, last, standing, deceased_on=None):
+        u = User.objects.create_user(email=email, first_name="T", last_name=last)
+        u.profile.role = Profile.Role.ANALYST
+        u.profile.standing = standing
+        u.profile.public = True
+        u.profile.deceased_on = deceased_on
+        u.profile.location = "Somewhere, CA"
+        u.profile.location_lat = 37.0
+        u.profile.location_lng = -122.0
+        u.profile.save()
+        return u
+
+    active = _make("active-map@x.test", "Active", Profile.Standing.ACTIVE)
+    retired = _make("retired-map@x.test", "Retired", Profile.Standing.RETIRED)
+    deceased = _make(
+        "deceased-map@x.test", "Deceased", Profile.Standing.ACTIVE,
+        deceased_on=date(2026, 7, 22),
+    )
+
+    data = client.get(reverse("find_an_analyst_pins")).json()
+    names = {pin["name"] for pin in data["pins"]}
+    assert "T Active" in names
+    assert "T Retired" not in names
+    assert "T Deceased" not in names
+
+    # But the directory grid still shows the retired and deceased members —
+    # only the map narrows further.
+    directory_emails = {p.user.email for p in _directory_qs()}
+    assert active.email in directory_emails
+    assert retired.email in directory_emails
+    assert deceased.email in directory_emails
