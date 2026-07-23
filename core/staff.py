@@ -296,6 +296,7 @@ def board_admin(request):
     if not _can_board(request.user):
         raise PermissionDenied
     from committees.models import Committee
+    from payments.models import TuitionPlanApplication
     board = (
         Committee.objects.filter(slug="board").select_related("workgroup").first()
     )
@@ -307,6 +308,9 @@ def board_admin(request):
     return render(request, "core/staff/admin/board.html", {
         "workspace_url": workspace_url,
         "officers": school_officers(),
+        "pending_plan_count": TuitionPlanApplication.objects.filter(
+            status=TuitionPlanApplication.Status.PENDING
+        ).count(),
     })
 
 

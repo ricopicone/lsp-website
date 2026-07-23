@@ -26,6 +26,7 @@ from core import staff as _staff_views
 from core import views as _core_views
 from events import views as _event_views
 from payments import views as _payment_views
+from payments import views_plan_review as _payment_plan_review_views
 from suggestions import views as _suggestion_views
 from workgroups import views as _workgroups_views
 
@@ -106,6 +107,11 @@ urlpatterns = [
          name="board_committees"),
     path("admin-tools/board/governance/", _staff_views.board_governance,
          name="board_governance"),
+    # Board tuition payment-plan review queue (task #450 phase B).
+    path("admin-tools/tuition-plans/",
+         _payment_plan_review_views.tuition_plan_queue, name="tuition_plan_queue"),
+    path("admin-tools/tuition-plans/<int:pk>/decide/",
+         _payment_plan_review_views.tuition_plan_decide, name="tuition_plan_decide"),
     path("admin-tools/meeting-of-analysts/", _staff_views.meeting_of_analysts_admin,
          name="meeting_of_analysts_admin"),
     path("admin-tools/assistant/", _staff_views.admin_assistant_admin,
