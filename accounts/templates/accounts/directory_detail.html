@@ -20,6 +20,9 @@
       <h1 class="font-serif text-3xl text-base-content leading-tight">
         {{ profile.display_full_name }}{% if vis.pronouns and profile.pronouns %} <span class="text-base font-sans text-base-content/50">({{ profile.pronouns }})</span>{% endif %}
       </h1>
+      {% if profile.is_deceased %}
+      <p class="text-sm text-base-content/60 italic mt-1">In memoriam</p>
+      {% endif %}
       <div class="flex flex-wrap gap-1.5">
         <span class="inline-block text-xs uppercase tracking-widest text-base-content/70 bg-base-200 px-2 py-1 rounded">{{ profile.get_role_display }}</span>
         {% if profile.is_faculty %}
@@ -60,7 +63,7 @@
       <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Member since</dt>
       <dd class="m-0">{{ profile.academic_year_joined }}</dd>
     {% endif %}
-    {% if vis.phone and profile.display_phone %}
+    {% if vis.phone and profile.display_phone and not profile.is_deceased %}
       <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Phone</dt>
       <dd class="m-0"><a href="tel:{{ profile.display_phone }}" class="link link-primary">{{ profile.display_phone.as_international }}</a></dd>
     {% endif %}
@@ -68,7 +71,7 @@
       <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Website</dt>
       <dd class="m-0"><a href="{{ profile.website }}" rel="noopener" class="link link-primary break-all">{{ profile.website }}</a></dd>
     {% endif %}
-    {% if vis.email %}
+    {% if vis.email and not profile.is_deceased %}
       <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Email</dt>
       <dd class="m-0"><a href="mailto:{{ profile.display_email }}" class="link link-primary">{{ profile.display_email }}</a></dd>
     {% endif %}

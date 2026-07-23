@@ -485,3 +485,34 @@ def test_directory_excludes_removed_and_resigned_keeps_deceased(client):
     assert "deceased@x.test" in listed       # deceased stays listed
     assert "removed@x.test" not in listed
     assert "resigned@x.test" not in listed
+
+
+@pytest.mark.django_db
+def test_directory_shows_memorial_marker_for_deceased(client):
+    from datetime import date
+    u = User.objects.create_user(email="memoriam@x.test", first_name="Jane", last_name="Doe")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.public = True
+    u.profile.deceased_on = date(2026, 7, 22)
+    u.profile.save()
+
+    resp = client.get(f"/directory/{u.profile.directory_slug}/")
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "In memoriam" in body
+
+
+@pytest.mark.django_db
+def test_directory_detail_hides_referral_cta_for_deceased(client):
+    from datetime import date
+    u = User.objects.create_user(email="nocta@x.test", first_name="John", last_name="Roe")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.public = True
+    u.profile.public_email = "john@x.test"
+    u.profile.deceased_on = date(2026, 7, 22)
+    u.profile.save()
+
+    resp = client.get(f"/directory/{u.profile.directory_slug}/")
+    body = resp.content.decode()
+    # No contact email link for a deceased member.
+    assert "mailto:john@x.test" not in body
