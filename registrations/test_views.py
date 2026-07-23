@@ -540,9 +540,23 @@ def special_event_tier(special_event):
     )
 
 
+@pytest.fixture
+def tuition_period_2026(db):
+    """The TuitionPeriod covering the `event`/`special_event` fixtures' AY
+    (Sept 2026-Aug 2027). The gate is now event-anchored (task #450 phase
+    A), so a decision must be recorded against *this* period, not whatever
+    TuitionPeriod.current() happens to be on the day tests run."""
+    from payments.models import TuitionPeriod
+    return TuitionPeriod.objects.create(
+        name="AY 2026–2027", slug="ay-2026-2027-test",
+        start_date=date(2026, 9, 1), decision_due_date=date(2026, 10, 31),
+        end_date=date(2027, 8, 31), tuition_amount=Decimal("800.00"),
+    )
+
+
 @pytest.mark.django_db
 def test_undecided_in_training_student_is_blocked_from_special_event(
-    client, special_event, special_event_tier,
+    client, special_event, special_event_tier, tuition_period_2026,
 ):
     """No-decision broad gate: special-event registration is blocked."""
     from accounts.models import Profile
@@ -559,7 +573,7 @@ def test_undecided_in_training_student_is_blocked_from_special_event(
 
 @pytest.mark.django_db
 def test_undecided_in_training_student_is_blocked_from_seminar(
-    client, event, standard_tier,
+    client, event, standard_tier, tuition_period_2026,
 ):
     """Broad gate: an in-training student with no tuition decision can't
     register for ANY event — seminars included. Once they pick any option
@@ -588,16 +602,17 @@ def test_undecided_non_in_training_user_is_not_blocked(client, event, standard_t
 
 
 @pytest.mark.django_db
-def test_decision_unlocks_seminar_for_in_training_student(client, event, standard_tier):
+def test_decision_unlocks_seminar_for_in_training_student(
+    client, event, standard_tier, tuition_period_2026,
+):
     """Any decision — even SKIPPING — clears the broad gate for seminars."""
     from accounts.models import Profile
-    from payments.models import TuitionEnrollment, TuitionPeriod
+    from payments.models import TuitionEnrollment
     u = User.objects.create_user(email="seminar-skip@example.com", password="x")
     u.profile.role = Profile.Role.CANDIDATE
     u.profile.save()
-    period = TuitionPeriod.current()
     TuitionEnrollment.objects.create(
-        user=u, tuition_period=period,
+        user=u, tuition_period=tuition_period_2026,
         status=TuitionEnrollment.Status.SKIPPING,
     )
     client.force_login(u)
@@ -607,17 +622,16 @@ def test_decision_unlocks_seminar_for_in_training_student(client, event, standar
 
 @pytest.mark.django_db
 def test_special_event_allows_skipping_student(
-    client, special_event, special_event_tier,
+    client, special_event, special_event_tier, tuition_period_2026,
 ):
     """Skipping is an explicit choice — student pays event fee, can register."""
     from accounts.models import Profile
-    from payments.models import TuitionEnrollment, TuitionPeriod
+    from payments.models import TuitionEnrollment
     u = User.objects.create_user(email="cand2@example.com", password="x")
     u.profile.role = Profile.Role.CANDIDATE
     u.profile.save()
-    period = TuitionPeriod.current()
     TuitionEnrollment.objects.create(
-        user=u, tuition_period=period,
+        user=u, tuition_period=tuition_period_2026,
         status=TuitionEnrollment.Status.SKIPPING,
     )
     client.force_login(u)
@@ -629,7 +643,7 @@ def test_special_event_allows_skipping_student(
 
 @pytest.mark.django_db
 def test_special_event_blocks_committed_student_when_event_is_tuition_covered(
-    client, special_event, special_event_tier,
+    client, special_event, special_event_tier, tuition_period_2026,
 ):
     """The narrow gate only fires when the event actually has a covered tier
     matching the student's audience. When it does, COMMITTED-without-payment
@@ -646,11 +660,20 @@ def test_special_event_blocks_committed_student_when_event_is_tuition_covered(
         event=special_event, audience=Audience.CANDIDATE,
         base_amount=Decimal("50.00"), covered_by_tuition=True,
     )
-    period = TuitionPeriod.current()
     TuitionEnrollment.objects.create(
-        user=u, tuition_period=period,
+        user=u, tuition_period=tuition_period_2026,
         status=TuitionEnrollment.Status.COMMITTED,
     )
+    # _find_covered_tier's "covered by tuition" check (is_tuition_current)
+    # is keyed to *today's* period, not the event's — independent of the
+    # event-anchored gate this test exercises. Give the student a COMMITTED
+    # decision there too so the narrow gate's coverage check is satisfied.
+    current_period = TuitionPeriod.current()
+    if current_period is not None:
+        TuitionEnrollment.objects.create(
+            user=u, tuition_period=current_period,
+            status=TuitionEnrollment.Status.COMMITTED,
+        )
     client.force_login(u)
     resp = client.get(
         reverse("registrations:register", args=[special_event.slug])
@@ -661,13 +684,13 @@ def test_special_event_blocks_committed_student_when_event_is_tuition_covered(
 
 @pytest.mark.django_db
 def test_special_event_allows_committed_student_when_event_is_not_tuition_covered(
-    client, special_event, special_event_tier,
+    client, special_event, special_event_tier, tuition_period_2026,
 ):
     """The narrow gate does NOT fire when the event has no covered tier —
     a COMMITTED student would pay the regular fee like everyone else, so
     there's nothing to gate on."""
     from accounts.models import Profile
-    from payments.models import TuitionEnrollment, TuitionPeriod
+    from payments.models import TuitionEnrollment
 
     # special_event_tier has covered_by_tuition=False (no covered tier).
     assert special_event_tier.covered_by_tuition is False
@@ -675,9 +698,8 @@ def test_special_event_allows_committed_student_when_event_is_not_tuition_covere
     u = User.objects.create_user(email="cand7@example.com", password="x")
     u.profile.role = Profile.Role.CANDIDATE
     u.profile.save()
-    period = TuitionPeriod.current()
     TuitionEnrollment.objects.create(
-        user=u, tuition_period=period,
+        user=u, tuition_period=tuition_period_2026,
         status=TuitionEnrollment.Status.COMMITTED,
     )
     client.force_login(u)
@@ -690,17 +712,16 @@ def test_special_event_allows_committed_student_when_event_is_not_tuition_covere
 
 @pytest.mark.django_db
 def test_special_event_allows_payment_plan_student(
-    client, special_event, special_event_tier,
+    client, special_event, special_event_tier, tuition_period_2026,
 ):
     """PAYMENT_PLAN means the plan is set up — they can register."""
     from accounts.models import Profile
-    from payments.models import TuitionEnrollment, TuitionPeriod
+    from payments.models import TuitionEnrollment
     u = User.objects.create_user(email="cand5@example.com", password="x")
     u.profile.role = Profile.Role.CANDIDATE
     u.profile.save()
-    period = TuitionPeriod.current()
     TuitionEnrollment.objects.create(
-        user=u, tuition_period=period,
+        user=u, tuition_period=tuition_period_2026,
         status=TuitionEnrollment.Status.PAYMENT_PLAN,
     )
     client.force_login(u)
@@ -712,14 +733,14 @@ def test_special_event_allows_payment_plan_student(
 
 @pytest.mark.django_db
 def test_special_event_without_covered_tier_charges_tuition_student(
-    client, special_event, special_event_tier,
+    client, special_event, special_event_tier, tuition_period_2026,
 ):
     """Confirms the contract: a special event that has no covered_by_tuition
     tier still charges tuition-current students the standard fee. Whether an
     event is covered by tuition is decided per-event via PriceTier
     .covered_by_tuition — it's not implied by tuition status alone."""
     from accounts.models import Profile
-    from payments.models import TuitionEnrollment, TuitionPeriod
+    from payments.models import TuitionEnrollment
 
     # special_event_tier is the standard, non-covered tier ($50.00).
     assert special_event_tier.covered_by_tuition is False
@@ -727,9 +748,8 @@ def test_special_event_without_covered_tier_charges_tuition_student(
     u = User.objects.create_user(email="cand6@example.com", password="x")
     u.profile.role = Profile.Role.CANDIDATE
     u.profile.save()
-    period = TuitionPeriod.current()
     TuitionEnrollment.objects.create(
-        user=u, tuition_period=period,
+        user=u, tuition_period=tuition_period_2026,
         status=TuitionEnrollment.Status.PAID_IN_FULL,
     )
     client.force_login(u)
@@ -744,17 +764,16 @@ def test_special_event_without_covered_tier_charges_tuition_student(
 
 @pytest.mark.django_db
 def test_seminar_does_not_block_skipping_student(
-    client, event, sliding_tier,
+    client, event, sliding_tier, tuition_period_2026,
 ):
     """Seminars deliberately don't block — students pay regular fees if skipping."""
     from accounts.models import Profile
-    from payments.models import TuitionEnrollment, TuitionPeriod
+    from payments.models import TuitionEnrollment
     u = User.objects.create_user(email="cand4@example.com", password="x")
     u.profile.role = Profile.Role.CANDIDATE
     u.profile.save()
-    period = TuitionPeriod.current()
     TuitionEnrollment.objects.create(
-        user=u, tuition_period=period,
+        user=u, tuition_period=tuition_period_2026,
         status=TuitionEnrollment.Status.SKIPPING,
     )
     client.force_login(u)

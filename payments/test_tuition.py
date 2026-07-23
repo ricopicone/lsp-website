@@ -1574,15 +1574,16 @@ def test_owes_tuition_requires_active_standing():
 def test_tuition_gate_skips_on_leave_student(current_period):
     """An on-leave in-training student with no decision is NOT blocked by the
     registration tuition gate (they don't owe tuition)."""
-    from datetime import date as _date
-
     from events.models import Event
     from registrations.views import _tuition_block_reason
 
     student = _mk_candidate()
+    # Anchor the event inside current_period's own range (task #450 phase A:
+    # the gate now keys on the event's AY, resolved via period_for_event).
+    event_date = current_period.start_date
     event = Event.objects.create(
         title="Special", slug="gate-special", event_type=Event.Type.SPECIAL_EVENT,
-        start_date=_date(2026, 9, 1), end_date=_date(2026, 9, 1),
+        start_date=event_date, end_date=event_date,
     )
     # Active + no decision → blocked (Gate 1).
     assert _tuition_block_reason(student, event) is not None

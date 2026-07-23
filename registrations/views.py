@@ -122,11 +122,14 @@ def _tuition_block_reason(user, event) -> str | None:
     from payments.ledger import tuition_decision_exempt
     if tuition_decision_exempt(user):
         return None  # four non-skipping years on record — no annual decision
-    from payments.models import TuitionEnrollment, TuitionPeriod
-    period = TuitionPeriod.current()
+    from payments.ledger import period_for_event
+    from payments.models import TuitionEnrollment
+    period = period_for_event(event)
     if period is None:
         return None
-    enr = profile.current_tuition_enrollment()
+    enr = TuitionEnrollment.objects.filter(
+        user=user, tuition_period=period,
+    ).first()
     if enr is None:
         return (
             "Before registering for any event, please record your tuition "
