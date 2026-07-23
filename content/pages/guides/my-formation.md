@@ -4,7 +4,7 @@ summary: Your personal hub—advisor, formation steps, tuition, and the groups y
 checklist: my_formation
 ---
 
-**My Formation** (`/formation/`) is your own place in the School, gathered on one
+**[My Formation](/formation/)** is your own place in the School, gathered on one
 page. It has up to three tabs, each with its own link you can return to or share:
 
 - **Formation**—your advisor and your advancement steps.

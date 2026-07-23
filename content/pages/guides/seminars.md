@@ -9,12 +9,12 @@ public, some members-only. This guide walks through finding one and registering.
 
 ## Finding what's on
 
-- **Program** (`/program/`) is the academic year's offerings—the teaching
+- **[Program](/program/)** is the academic year's offerings—the teaching
   **seminars**, the **cartels** that have formed, and the standing **reading
   groups**.
-- **Events** (`/events/`) lists standalone, one-off events—**special events**,
+- **[Events](/events/)** lists standalone, one-off events—**special events**,
   **Days of Assembly**, **Working Days**, and scholarly seminar series.
-- **Calendar** (`/calendar/`) shows everything together on a month grid.
+- **[Calendar](/calendar/)** shows everything together on a month grid.
 
 Each seminar or event has its own page with the description, faculty, sessions,
 and pricing.

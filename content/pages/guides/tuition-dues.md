@@ -10,7 +10,7 @@ The School is sustained by its members. Two things may apply to you—**dues**
 
 You'll find everything in one place under the **Account** tab of
 [My Formation](/formation/?tab=account), and you can always pay dues directly at
-`/dues/`.
+[the Dues page](/dues/).
 
 ## Dues
 
@@ -55,7 +55,7 @@ payment step. If you've chosen to **skip** the year, you pay the regular fee.
 
 ## Donations
 
-Anyone—member or not—can make a gift at `/donate/`, any amount, any time. It's
+Anyone—member or not—can make a gift on [the Donate page](/donate/), any amount, any time. It's
 always optional and separate from dues and tuition.
 
 ## Questions about your account
