@@ -214,6 +214,18 @@ payments/treasurer/member_detail.html for the full picture with actions).
           </p>
           {% endif %}
 
+          {% if upcoming_enrollment.status == "committed" and not upcoming_installments %}
+          <div class="rounded-lg border border-base-300 p-5 space-y-3">
+            <h3 class="font-serif text-lg text-base-content">Pay tuition</h3>
+            <form method="post" action="{% url 'tuition_pay_in_full' %}">
+              {% csrf_token %}
+              <input type="hidden" name="period" value="{{ upcoming_period.slug }}">
+              <button type="submit" class="btn btn-primary">Pay ${{ upcoming_period.tuition_amount }} now →</button>
+            </form>
+            <p class="text-xs text-base-content/60">You can pay ahead of {{ upcoming_period.name }}, no need to wait for it to start.</p>
+          </div>
+          {% endif %}
+
           {% if not decision_exempt %}
           {% if upcoming_enrollment.status == "plan_requested" %}
           <div class="rounded-lg border border-base-300 bg-base-200/40 px-5 py-4 text-sm">

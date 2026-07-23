@@ -345,11 +345,16 @@ def _formation_money_context(request) -> dict:
     # time rather than waiting for it to become current. ---
     upcoming_period = TuitionPeriod.upcoming()
     upcoming_enrollment = None
+    upcoming_installments = []
     upcoming_tuition_plan_application = None
     if upcoming_period is not None:
         upcoming_enrollment = TuitionEnrollment.objects.filter(
             user=user, tuition_period=upcoming_period,
         ).first()
+        if upcoming_enrollment is not None:
+            upcoming_installments = list(
+                upcoming_enrollment.installments.order_by("sequence")
+            )
         if upcoming_enrollment is not None and (
             upcoming_enrollment.status == TuitionEnrollment.Status.PLAN_REQUESTED
         ):
@@ -409,6 +414,7 @@ def _formation_money_context(request) -> dict:
         # upcoming year's decision (task #450 phase A)
         "upcoming_period": upcoming_period,
         "upcoming_enrollment": upcoming_enrollment,
+        "upcoming_installments": upcoming_installments,
         "upcoming_tuition_form": TuitionDecisionForm(
             initial={"status": upcoming_enrollment.status}
             if upcoming_enrollment else {},

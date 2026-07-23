@@ -2186,6 +2186,25 @@ def _account_tab_url(**params) -> str:
     return reverse("formation:formation") + "?" + urlencode(query)
 
 
+def _resolve_tuition_period(request) -> TuitionPeriod | None:
+    """Resolve the target TuitionPeriod from an optional POST ``period`` slug.
+
+    Mirrors ``tuition_decision``'s validation (task #450 phase A/B): only the
+    current period and the next-by-start_date upcoming period are valid
+    targets — an unknown/stale slug falls back to current for backcompat.
+    Used by the pay-in-full and plan-setup views (task #450 phase B #5) so a
+    member can pay for / set up a plan against next year's tuition ahead of
+    time, not just the current year's.
+    """
+    period = TuitionPeriod.current()
+    requested = request.POST.get("period", "")
+    if requested:
+        upcoming = TuitionPeriod.upcoming()
+        allowed = {p.slug: p for p in (period, upcoming) if p is not None}
+        period = allowed.get(requested, period)
+    return period
+
+
 @login_required
 def tuition_decision(request):
     """Record the annual tuition decision (M7.5).
@@ -2195,15 +2214,7 @@ def tuition_decision(request):
     POST; every other request just redirects there.
     """
     profile = request.user.profile
-    period = TuitionPeriod.current()
-    requested = request.POST.get("period", "")
-    if requested:
-        # Only the current period and the next-by-start_date future period
-        # are valid decision targets (task #450 phase A) — anything else
-        # (unknown/stale slug) falls back to current for backcompat.
-        upcoming = TuitionPeriod.upcoming()
-        allowed = {p.slug: p for p in (period, upcoming) if p is not None}
-        period = allowed.get(requested, period)
+    period = _resolve_tuition_period(request)
 
     if request.method == "POST" and profile.owes_tuition and period is not None:
         form = TuitionDecisionForm(request.POST)
@@ -2264,7 +2275,7 @@ def tuition_pay_in_full(request):
     profile = request.user.profile
     if not profile.owes_tuition:
         return redirect(_account_tab_url())
-    period = TuitionPeriod.current()
+    period = _resolve_tuition_period(request)
     if period is None:
         return redirect(_account_tab_url())
     enrollment = TuitionEnrollment.objects.filter(
@@ -2306,7 +2317,7 @@ def tuition_setup_plan(request):
     profile = request.user.profile
     if not profile.owes_tuition:
         return redirect(_account_tab_url())
-    period = TuitionPeriod.current()
+    period = _resolve_tuition_period(request)
     if period is None:
         return redirect(_account_tab_url())
     enrollment = TuitionEnrollment.objects.filter(
