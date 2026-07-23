@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounts', '0035_alter_membershiptenure_source'),
+        ('accounts', '0036_welcomeemail'),
     ]
 
     operations = [
@@ -23,6 +23,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='profile',
             name='standing',
-            field=models.CharField(choices=[('active', 'Active'), ('on_leave', 'On leave'), ('resigned', 'Resigned'), ('emeritus', 'Emeritus'), ('retired', 'Retired'), ('removed', 'Removed')], default='active', help_text='Membership standing (active / on leave / resigned / emeritus). Live cache; the Board sets it via Membership administration.', max_length=16),
+            field=models.CharField(choices=[('active', 'Active'), ('on_leave', 'On leave'), ('resigned', 'Resigned'), ('emeritus', 'Emeritus'), ('retired', 'Retired'), ('removed', 'Removed')], default='active', help_text='Membership standing (active / on leave / resigned / emeritus / retired / removed). Live cache; the Board sets it via Membership administration.', max_length=16),
         ),
     ]
