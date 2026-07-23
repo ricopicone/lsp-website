@@ -91,12 +91,15 @@ class Profile(models.Model):
 
     class Standing(models.TextChoices):
         """Membership standing — orthogonal to role. Active is the default; the
-        Board records transitions (on-leave, resigned, emeritus) via Membership
-        administration."""
+        Board records transitions (on-leave, resigned, emeritus, retired,
+        removed) via Membership administration. Deceased is a separate axis
+        (``deceased_on``), not a standing."""
         ACTIVE = "active", _("Active")
         ON_LEAVE = "on_leave", _("On leave")
         RESIGNED = "resigned", _("Resigned")
         EMERITUS = "emeritus", _("Emeritus")
+        RETIRED = "retired", _("Retired")
+        REMOVED = "removed", _("Removed")
 
     class BillingMode(models.TextChoices):
         PER_CLASS = "per_class", _("Per class")
@@ -309,6 +312,16 @@ class Profile(models.Model):
             "(e.g. 2018 ⇒ 'AY 2018–2019'). Self-reported; we're harvesting it."
         ),
     )
+    deceased_on = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Date recorded as deceased. Orthogonal to standing — a member may "
+            "be Retired and Deceased. Setting this disables the account "
+            "(login off) for security; the member stays listed in the "
+            "directory with an 'In memoriam' marker."
+        ),
+    )
     default_billing_mode = models.CharField(
         max_length=16,
         choices=BillingMode.choices,
@@ -441,6 +454,15 @@ class Profile(models.Model):
         "member",
     })
 
+    #: Standings that are NOT members: no members-only access, off the public
+    #: directory, not counted in member dashboards. Resigned joins Removed here.
+    NON_MEMBER_STANDINGS = frozenset({"resigned", "removed"})
+
+    #: Standings dropped from the Find-an-Analyst referral distribution pool
+    #: (they are no longer taking new analysands). Deceased is excluded too, via
+    #: ``is_deceased``. Emeritus / on-leave keep their referral listing.
+    REFERRAL_EXCLUDED_STANDINGS = frozenset({"retired", "resigned", "removed"})
+
     #: Roles that owe tuition each academic year (M7.5 — see tuition_lifecycle).
     IN_TRAINING_ROLES = frozenset({
         "pre_candidate",
@@ -470,6 +492,21 @@ class Profile(models.Model):
         """Whether this profile is actually shown publicly — role-eligible
         *and* not opted out (drives the directory query and nav links)."""
         return self.is_in_directory and self.public
+
+    @property
+    def is_deceased(self) -> bool:
+        return self.deceased_on is not None
+
+    @property
+    def is_active_member(self) -> bool:
+        """Whether this profile currently counts as a member for access +
+        dashboards: a directory role, an active-enough standing, and not
+        deceased. (Directory *listing* keeps deceased — see the directory qs.)"""
+        return (
+            self.role in self.DIRECTORY_ROLES
+            and self.standing not in self.NON_MEMBER_STANDINGS
+            and not self.is_deceased
+        )
 
     @property
     def owes_tuition(self) -> bool:
@@ -527,7 +564,7 @@ class Profile(models.Model):
     @classmethod
     def from_db(cls, db, field_names, values):
         instance = super().from_db(db, field_names, values)
-        for f in ("location", "location_lat", "location_lng"):
+        for f in ("location", "location_lat", "location_lng", "deceased_on"):
             if f in field_names:
                 setattr(instance, "_loaded_" + f, values[field_names.index(f)])
         return instance
@@ -585,6 +622,20 @@ class Profile(models.Model):
                     }
                     kwargs["update_fields"] = update_fields
 
+        # Deceased ⇒ account disabled (security); cleared ⇒ re-enabled. Synced
+        # at the model level so every save path (admin, lifecycle helper,
+        # scripts) is consistent. Heavier side-effects (waive, referral) live in
+        # accounts.lifecycle, not here.
+        deceased_being_saved = update_fields is None or "deceased_on" in update_fields
+        if deceased_being_saved and self.user_id is not None:
+            old_deceased = getattr(self, "_loaded_deceased_on", self._GEOCODE_UNSET)
+            changed = old_deceased is self._GEOCODE_UNSET or old_deceased != self.deceased_on
+            if changed:
+                want_active = self.deceased_on is None
+                if self.user.is_active != want_active:
+                    self.user.is_active = want_active
+                    self.user.save(update_fields=["is_active"])
+
         super().save(*args, **kwargs)
 
         # Refresh the snapshot so a later save on the same instance compares
@@ -592,6 +643,7 @@ class Profile(models.Model):
         self._loaded_location = self.location
         self._loaded_location_lat = self.location_lat
         self._loaded_location_lng = self.location_lng
+        self._loaded_deceased_on = self.deceased_on
 
 
 class EmailChangeRequest(models.Model):

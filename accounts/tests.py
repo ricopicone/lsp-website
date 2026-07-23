@@ -1,5 +1,7 @@
 """Tests for the accounts app: the custom user model and profiles."""
 
+from datetime import date
+
 import pytest
 
 from .models import Profile, User
@@ -378,3 +380,54 @@ def test_find_an_analyst_ack_failure_does_not_block_redirect(
     from referrals.models import ReferralRequest
 
     assert ReferralRequest.objects.filter(email="inquirer@example.com").exists()
+
+
+@pytest.mark.django_db
+def test_new_standing_values_exist():
+    assert Profile.Standing.RETIRED == "retired"
+    assert Profile.Standing.REMOVED == "removed"
+    # Emeritus is kept, not replaced.
+    assert Profile.Standing.EMERITUS == "emeritus"
+
+
+@pytest.mark.django_db
+def test_non_member_standings_set():
+    assert Profile.NON_MEMBER_STANDINGS == frozenset({"resigned", "removed"})
+
+
+@pytest.mark.django_db
+def test_setting_deceased_on_disables_login_on_save():
+    user = User.objects.create_user(email="d@example.com")
+    assert user.is_active is True
+    user.profile.deceased_on = date(2026, 7, 22)
+    user.profile.save()
+    user.refresh_from_db()
+    assert user.is_active is False
+    assert user.profile.is_deceased is True
+
+
+@pytest.mark.django_db
+def test_clearing_deceased_on_reenables_login_on_save():
+    user = User.objects.create_user(email="d2@example.com")
+    user.profile.deceased_on = date(2026, 7, 22)
+    user.profile.save()
+    user.profile.deceased_on = None
+    user.profile.save()
+    user.refresh_from_db()
+    assert user.is_active is True
+
+
+@pytest.mark.django_db
+def test_is_active_member_predicate():
+    user = User.objects.create_user(email="m@example.com")
+    p = user.profile
+    p.role = Profile.Role.ANALYST
+    p.standing = Profile.Standing.ACTIVE
+    p.save()
+    assert p.is_active_member is True
+    p.standing = Profile.Standing.REMOVED
+    p.save()
+    assert p.is_active_member is False
+    p.standing = Profile.Standing.RETIRED
+    p.save()
+    assert p.is_active_member is True  # retired is still a member
