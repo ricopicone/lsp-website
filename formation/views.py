@@ -331,6 +331,19 @@ def _formation_money_context(request) -> dict:
             installments = list(enrollment.installments.order_by("sequence"))
     progress = _tuition_progress(user)
 
+    # --- Tuition (upcoming year, task #450 phase A) — the next-by-start_date
+    # future period, so a member can record next year's decision ahead of
+    # time rather than waiting for it to become current. ---
+    upcoming_period = (
+        TuitionPeriod.objects.filter(start_date__gt=timezone.now().date())
+        .order_by("start_date").first()
+    )
+    upcoming_enrollment = None
+    if upcoming_period is not None:
+        upcoming_enrollment = TuitionEnrollment.objects.filter(
+            user=user, tuition_period=upcoming_period,
+        ).first()
+
     # --- Dues (current year) ---
     dues_period = DuesPeriod.current()
     dues_obligated = is_dues_obligated(user)
@@ -374,6 +387,13 @@ def _formation_money_context(request) -> dict:
             initial={"status": enrollment.status} if enrollment else {}
         ),
         "tuition_stripe_status": request.GET.get("stripe"),
+        # upcoming year's decision (task #450 phase A)
+        "upcoming_period": upcoming_period,
+        "upcoming_enrollment": upcoming_enrollment,
+        "upcoming_tuition_form": TuitionDecisionForm(
+            initial={"status": upcoming_enrollment.status}
+            if upcoming_enrollment else {}
+        ),
         **progress,
         # dues
         "dues_period": dues_period,

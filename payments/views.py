@@ -2194,6 +2194,17 @@ def tuition_decision(request):
     """
     profile = request.user.profile
     period = TuitionPeriod.current()
+    requested = request.POST.get("period", "")
+    if requested:
+        # Only the current period and the next-by-start_date future period
+        # are valid decision targets (task #450 phase A) — anything else
+        # (unknown/stale slug) falls back to current for backcompat.
+        upcoming = (
+            TuitionPeriod.objects.filter(start_date__gt=timezone.now().date())
+            .order_by("start_date").first()
+        )
+        allowed = {p.slug: p for p in (period, upcoming) if p is not None}
+        period = allowed.get(requested, period)
 
     if request.method == "POST" and profile.owes_tuition and period is not None:
         form = TuitionDecisionForm(request.POST)

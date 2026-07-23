@@ -189,6 +189,39 @@ payments/treasurer/member_detail.html for the full picture with actions).
         </form>
         {% endif %}
         {% endif %}
+
+        {% if owes_tuition and upcoming_period %}
+        {# Next academic year's decision (task #450 phase A) — recorded ahead
+           of time, mirroring the current-period block above. #}
+        <div class="rounded-lg border border-base-300 bg-base-200/30 p-5 space-y-4">
+          <h3 class="font-serif text-lg text-base-content">Your {{ upcoming_period.name }} tuition decision</h3>
+
+          {% if upcoming_enrollment %}
+          <p class="text-sm">Current decision for {{ upcoming_period.name }}:
+            <strong>{{ upcoming_enrollment.get_status_display }}</strong>
+            <span class="text-base-content/60">(recorded {{ upcoming_enrollment.decided_at|user_datetime }})</span>
+          </p>
+          {% endif %}
+
+          {% if not decision_exempt %}
+          <form method="post" action="{% url 'tuition' %}" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="period" value="{{ upcoming_period.slug }}">
+            <fieldset class="space-y-2">
+              <legend class="font-serif text-base text-base-content mb-2">{{ upcoming_tuition_form.status.label }}</legend>
+              {% for radio in upcoming_tuition_form.status %}
+              <label class="flex items-start gap-3 cursor-pointer">
+                {{ radio.tag }}
+                <span class="text-sm">{{ radio.choice_label }}</span>
+              </label>
+              {% endfor %}
+              {% if upcoming_tuition_form.status.errors %}<p class="text-error text-sm">{{ upcoming_tuition_form.status.errors|join:", " }}</p>{% endif %}
+            </fieldset>
+            <button type="submit" class="btn btn-primary">Record decision</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endif %}
       </section>
 
       {# -------- Dues -------- #}
