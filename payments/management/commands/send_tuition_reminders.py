@@ -4,7 +4,8 @@ Mirrors send_dues_reminders. Sends to active users whose Profile.role is
 in IN_TRAINING_ROLES and either:
 
 - have no TuitionEnrollment for the current period, OR
-- have status=COMMITTED but no PAID_IN_FULL transition yet, OR
+- have status=COMMITTED and are past the period's payment_due_date (falls
+  back to decision_due_date if unset), OR
 - have status=PAYMENT_PLAN with an overdue unpaid installment
 
 Throttled to one email per user per week via TuitionReminder rows.
@@ -30,16 +31,20 @@ from payments.sending import ThrottledSender
 User = get_user_model()
 
 
-def _needs_reminder(enrollment: TuitionEnrollment | None, today) -> bool:
+def _needs_reminder(enrollment: TuitionEnrollment | None, today, period: TuitionPeriod) -> bool:
     """Decide whether this user should receive a reminder right now."""
     if enrollment is None:
-        return True  # no decision yet
+        return True  # no decision yet (decision_due gating happens in handle())
     if enrollment.status == TuitionEnrollment.Status.PAID_IN_FULL:
         return False
     if enrollment.status == TuitionEnrollment.Status.SKIPPING:
         return False  # explicit no — don't pester
     if enrollment.status == TuitionEnrollment.Status.COMMITTED:
-        return True  # committed but unpaid
+        # Committed but unpaid — wait for the payment due date (falling back
+        # to decision_due_date for periods that don't set one) before
+        # escalating to reminders.
+        pay_due = period.payment_due_date or period.decision_due_date
+        return today > pay_due
     if enrollment.status == TuitionEnrollment.Status.PAYMENT_PLAN:
         # Overdue installment?
         return enrollment.installments.filter(
@@ -101,7 +106,7 @@ class Command(BaseCommand):
             enrollment = TuitionEnrollment.objects.filter(
                 user=user, tuition_period=period,
             ).first()
-            if not _needs_reminder(enrollment, today):
+            if not _needs_reminder(enrollment, today, period):
                 skipped_done += 1
                 continue
 
