@@ -59,7 +59,12 @@ def eligible_profiles():
     """
     from accounts.models import Profile
 
-    return Profile.objects.filter(role__in=AVAILABILITY_ROLES)
+    return Profile.objects.filter(
+        role__in=AVAILABILITY_ROLES,
+        standing=Profile.Standing.ACTIVE,
+        is_persona=False,
+        user__is_active=True,
+    )
 
 
 def is_eligible(profile) -> bool:

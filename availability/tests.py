@@ -207,6 +207,27 @@ def test_candidate_is_not_eligible():
     assert user.profile not in services.eligible_profiles()
 
 
+def test_eligible_profiles_excludes_retired_and_deceased():
+    active = User.objects.create_user(email="av-active@example.com")
+    active.profile.role = Profile.Role.ANALYST
+    active.profile.save()
+
+    retired = User.objects.create_user(email="av-retired@example.com")
+    retired.profile.role = Profile.Role.ANALYST
+    retired.profile.standing = Profile.Standing.RETIRED
+    retired.profile.save()
+
+    deceased = User.objects.create_user(email="av-deceased@example.com")
+    deceased.profile.role = Profile.Role.ANALYST
+    deceased.profile.deceased_on = _dt.date(2026, 7, 23)  # sets is_active=False
+    deceased.profile.save()
+
+    ids = set(services.eligible_profiles().values_list("user_id", flat=True))
+    assert active.id in ids
+    assert retired.id not in ids
+    assert deceased.id not in ids
+
+
 # ---- Phase 2: the coordinator console ------------------------------------
 
 
