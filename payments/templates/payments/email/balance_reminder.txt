@@ -1,0 +1,17 @@
+{% autoescape off %}{{ user.first_name|default:"Hello" }},
+
+Your Lacanian School account currently shows an outstanding balance of
+${{ balance }}. This may include dues, tuition, or event fees that are
+past due.
+
+You can review your account and make a payment here:
+
+  {{ account_url }}
+
+If you've already paid, you can ignore this — it crossed in the mail.
+
+Questions, or having trouble paying? Reply to this email — it goes to
+{{ support_email }}.
+
+— Lacanian School of Psychoanalysis
+{% endautoescape %}

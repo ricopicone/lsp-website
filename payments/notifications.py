@@ -120,6 +120,16 @@ def tuition_reminder_inapp(user, period) -> None:
     )
 
 
+def balance_reminder_inapp(user, balance) -> None:
+    """Bell row for an outstanding-balance reminder (the cron paces the
+    email itself through ``ThrottledSender``, gated by :func:`should_email`)."""
+    notify(
+        user, Category.BALANCE_REMINDER,
+        title=f"Reminder: ${balance} outstanding on your account",
+        url=_account_tab_url(), email=False, dedupe=True,
+    )
+
+
 # --- Faculty-facing ---------------------------------------------------------
 
 def registration_pending(reg) -> None:

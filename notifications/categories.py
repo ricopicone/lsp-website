@@ -41,6 +41,7 @@ class Category(models.TextChoices):
     DUES_REMINDER = "dues_reminder", _("Dues reminders")
     TUITION_REMINDER = "tuition_reminder", _("Tuition reminders")
     TUITION_PLAN_REVIEW = "tuition_plan_review", _("Tuition payment plans")
+    BALANCE_REMINDER = "balance_reminder", _("Balance reminders")
 
     # --- Cartels ---------------------------------------------------------
     CARTEL_INVITE = "cartel_invite", _("Cartel invitations")
@@ -171,6 +172,11 @@ CATEGORY_META: dict[str, CategoryMeta] = {
         SECTION_PAYMENTS, _("Tuition payment plans"),
         _("For Board members: a payment plan application to review. Also "
           "carries the Board's decision on a plan application you filed."),
+    ),
+    _C.BALANCE_REMINDER: _M(
+        SECTION_PAYMENTS, _("Balance reminders"),
+        _("Periodic reminders when your account has an outstanding balance "
+          "(dues, tuition, or event fees)."),
     ),
     # Cartels.
     _C.CARTEL_INVITE: _M(SECTION_CARTELS, _("Cartel invitations")),

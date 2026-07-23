@@ -606,6 +606,32 @@ class TuitionReminder(models.Model):
         return f"{self.user} ← {self.tuition_period} @ {self.sent_at.isoformat()}"
 
 
+class BalanceReminder(models.Model):
+    """One row per outstanding-balance reminder email sent (task #450 phase D).
+
+    Unlike :class:`DuesReminder`/:class:`TuitionReminder`, a balance reminder
+    isn't tied to a single period — the amount is the member's whole unified-
+    ledger balance (dues + tuition + registration fees), so the row just
+    records who and how much. Drives the weekly throttle: the send command
+    skips users reminded in the last seven days.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="balance_reminders",
+    )
+    sent_at = models.DateTimeField(auto_now_add=True)
+    balance = models.DecimalField(max_digits=8, decimal_places=2)
+
+    class Meta:
+        ordering = ("-sent_at",)
+        indexes = [models.Index(fields=("user", "-sent_at"))]
+
+    def __str__(self):
+        return f"{self.user} ← ${self.balance} @ {self.sent_at.isoformat()}"
+
+
 class Charge(models.Model):
     """A debit line in a member's unified account (task #439).
 

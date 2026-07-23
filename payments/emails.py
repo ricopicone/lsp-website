@@ -177,6 +177,30 @@ def send_tuition_reminder(user, period, *, enrollment=None) -> None:
     _send(subject=subject, body=body, to=[user.email], sender="LSP Treasurer")
 
 
+def send_balance_reminder(user, balance) -> None:
+    """Weekly reminder to a member with an outstanding unified-ledger balance
+    (task #450 phase D).
+
+    ``balance`` is the same number the treasurer's Accounts view shows as
+    "Owing" — computed by ``payments.ledger`` (dues + tuition + registration
+    fees, whichever is unpaid), never recomputed here.
+    """
+    subject = "Your Lacanian School account balance"
+    account_url = settings.SITE_BASE_URL.rstrip("/") + reverse(
+        "formation:formation") + "?tab=account"
+    with _recipient_timezone(user):
+        body = render_to_string(
+            "payments/email/balance_reminder.txt",
+            {
+                "user": user,
+                "balance": balance,
+                "account_url": account_url,
+                "support_email": settings.SUPPORT_EMAIL,
+            },
+        )
+    _send(subject=subject, body=body, to=[user.email], sender="LSP Treasurer")
+
+
 def send_cancellation_email(registration: Registration, refund=None) -> None:
     """Notify the participant that their registration was cancelled.
 
