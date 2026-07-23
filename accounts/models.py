@@ -2,7 +2,7 @@ import secrets
 from datetime import timedelta
 
 from django.contrib.auth.models import AbstractUser
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
@@ -130,8 +130,9 @@ class Profile(models.Model):
         max_length=16,
         choices=Standing.choices,
         default=Standing.ACTIVE,
-        help_text="Membership standing (active / on leave / resigned / emeritus). "
-        "Live cache; the Board sets it via Membership administration.",
+        help_text="Membership standing (active / on leave / resigned / emeritus / "
+        "retired / removed). Live cache; the Board sets it via Membership "
+        "administration.",
     )
     timezone = models.CharField(
         max_length=64,
@@ -625,7 +626,18 @@ class Profile(models.Model):
         # Deceased ⇒ account disabled (security); cleared ⇒ re-enabled. Synced
         # at the model level so every save path (admin, lifecycle helper,
         # scripts) is consistent. Heavier side-effects (waive, referral) live in
-        # accounts.lifecycle, not here.
+        # accounts.lifecycle, not here. NOTE: this sync fires only through
+        # Profile.save() — a bulk ``Profile.objects.update(deceased_on=...)``
+        # bypasses instance save() and won't touch ``User.is_active``.
+        #
+        # Intent (whether a sync is needed, and the desired ``want_active``)
+        # is computed here, against the pre-save snapshot, but the actual
+        # ``User`` write is deferred until after ``super().save()`` succeeds
+        # and wrapped with it in one atomic block — so the Profile's
+        # ``deceased_on`` and the User's ``is_active`` commit together, never
+        # one without the other.
+        need_user_sync = False
+        want_active = None
         deceased_being_saved = update_fields is None or "deceased_on" in update_fields
         if deceased_being_saved and self.user_id is not None:
             old_deceased = getattr(self, "_loaded_deceased_on", self._GEOCODE_UNSET)
@@ -633,10 +645,15 @@ class Profile(models.Model):
             if changed:
                 want_active = self.deceased_on is None
                 if self.user.is_active != want_active:
-                    self.user.is_active = want_active
-                    self.user.save(update_fields=["is_active"])
+                    need_user_sync = True
 
-        super().save(*args, **kwargs)
+        if need_user_sync:
+            with transaction.atomic():
+                super().save(*args, **kwargs)
+                self.user.is_active = want_active
+                self.user.save(update_fields=["is_active"])
+        else:
+            super().save(*args, **kwargs)
 
         # Refresh the snapshot so a later save on the same instance compares
         # against what's now persisted.
