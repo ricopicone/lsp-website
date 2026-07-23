@@ -94,18 +94,19 @@ def user(db):
 
 
 @pytest.fixture
-def tuition_member(db):
-    """Tuition-current user — has a current TuitionEnrollment with COMMITTED
-    status, the source of truth for the covered-by-tuition path."""
-    from payments.models import TuitionEnrollment, TuitionPeriod
+def tuition_member(db, tuition_period_2026):
+    """Tuition-current user — has a TuitionEnrollment with COMMITTED status
+    against the `event` fixture's AY (Sept 2026-Aug 2027), the source of
+    truth for the covered-by-tuition path. The gate is event-anchored (task
+    #450 phase A), so this must match `event`'s dates, not whatever
+    TuitionPeriod.current() happens to be on the day tests run."""
+    from payments.models import TuitionEnrollment
 
     u = User.objects.create_user(email="member@example.com", password="testpass-XYZ")
-    period = TuitionPeriod.current()
-    if period is not None:
-        TuitionEnrollment.objects.update_or_create(
-            user=u, tuition_period=period,
-            defaults={"status": TuitionEnrollment.Status.COMMITTED},
-        )
+    TuitionEnrollment.objects.update_or_create(
+        user=u, tuition_period=tuition_period_2026,
+        defaults={"status": TuitionEnrollment.Status.COMMITTED},
+    )
     return u
 
 

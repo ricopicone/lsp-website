@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 
 from events.models import Event
 from payments.models import TuitionEnrollment, TuitionPeriod
-from registrations.views import _tuition_block_reason
+from registrations.views import _find_covered_tier, _tuition_block_reason
 
 User = get_user_model()
 
@@ -52,3 +52,29 @@ def test_gate_demands_the_events_ay_decision(periods, student):
         status=TuitionEnrollment.Status.SKIPPING,
     )
     assert _tuition_block_reason(student, event) is None
+
+
+@pytest.mark.django_db
+def test_coverage_requires_the_events_ay(periods, student):
+    from events.models import Audience, PriceTier
+
+    p25, p26 = periods
+    TuitionEnrollment.objects.create(
+        user=student, tuition_period=p25,
+        status=TuitionEnrollment.Status.PAID_IN_FULL,
+    )
+    event = Event.objects.create(
+        title="Fall2", slug="fall2", start_date=date(2026, 9, 15),
+        end_date=date(2027, 6, 1),
+    )
+    PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal("200"),
+        covered_by_tuition=True,
+    )
+    assert _find_covered_tier(student, event) is None
+
+    TuitionEnrollment.objects.create(
+        user=student, tuition_period=p26,
+        status=TuitionEnrollment.Status.PAID_IN_FULL,
+    )
+    assert _find_covered_tier(student, event) is not None

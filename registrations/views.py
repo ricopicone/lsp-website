@@ -52,7 +52,9 @@ def _find_covered_tier(user, event: Event) -> PriceTier | None:
     role (or ``all``).
     """
     profile = getattr(user, "profile", None) if user.is_authenticated else None
-    if not (profile and profile.is_tuition_current()):
+    if not (profile and profile.is_tuition_current(
+        getattr(event, "start_date", None)
+    )):
         return None
     qs = PriceTier.objects.filter(
         event=event, session__isnull=True, covered_by_tuition=True,
