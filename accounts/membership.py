@@ -111,4 +111,10 @@ def record_membership_change(
     profile.role = role
     profile.standing = standing
     profile.save(update_fields=["role", "standing"])
+
+    # Non-member / non-practicing standings drop the member from the referral
+    # pool (kept lazy — referrals imports accounts).
+    from accounts.lifecycle import sync_referral_listing
+    sync_referral_listing(member)
+
     return tenure
