@@ -357,6 +357,39 @@ class Workgroup(models.Model):
     def _user_role(user):
         return getattr(getattr(user, "profile", None), "role", None)
 
+    def _is_auto_member(self, user) -> bool:
+        """Whether ``user`` is a role-derived member of this group: an
+        active-standing, active-account, non-persona holder of
+        ``auto_member_role``. (Retired / on-leave / resigned / removed and
+        deceased members are excluded — formation duties require active
+        standing.)"""
+        from accounts.models import Profile
+        if not self.auto_member_role:
+            return False
+        p = getattr(user, "profile", None)
+        return (
+            p is not None
+            and p.role == self.auto_member_role
+            and p.standing == Profile.Standing.ACTIVE
+            and not p.is_persona
+            and getattr(user, "is_active", False)
+        )
+
+    def _auto_member_user_qs(self):
+        """Users who are role-derived members of this group (see
+        :meth:`_is_auto_member`) as a queryset, for roster enumeration."""
+        from django.contrib.auth import get_user_model
+
+        from accounts.models import Profile
+        if not self.auto_member_role:
+            return get_user_model().objects.none()
+        return get_user_model().objects.filter(
+            profile__role=self.auto_member_role,
+            profile__standing=Profile.Standing.ACTIVE,
+            profile__is_persona=False,
+            is_active=True,
+        )
+
     def is_member(self, user) -> bool:
         """*Active* membership — the access primitive the cross-cutting apps
         call (channel posting, current roster, full workspace).
@@ -377,7 +410,7 @@ class Workgroup(models.Model):
             return False
         # Role-derived membership (e.g. every Analyst belongs to the Meeting of
         # Analysts) — automatic, no stored row.
-        if self.auto_member_role and self._user_role(user) == self.auto_member_role:
+        if self._is_auto_member(user):
             return True
         if self.memberships.serving().filter(user=user).exists():
             return True
@@ -421,12 +454,7 @@ class Workgroup(models.Model):
             )
         # Role-derived members (e.g. all Analysts in the Meeting of Analysts).
         if self.auto_member_role:
-            from django.contrib.auth import get_user_model
-
-            users = (get_user_model().objects
-                     .filter(profile__role=self.auto_member_role, is_active=True,
-                             profile__is_persona=False)
-                     .select_related("profile"))
+            users = self._auto_member_user_qs().select_related("profile")
             for u in users:
                 if u.pk not in seen:
                     seen[u.pk] = Participant(

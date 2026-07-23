@@ -247,6 +247,22 @@ def test_auto_member_role_derives_membership():
     assert not WorkgroupMembership.objects.filter(workgroup=wg, user=analyst).exists()
 
 
+def test_auto_member_workgroup_excludes_retired():
+    """Role-derived membership requires *active* standing (task #451) — a
+    retired analyst still holds the Analyst role but is no longer a member
+    of a role-derived group (e.g. the Meeting of Analysts)."""
+    wg = _wg(kind=Workgroup.Kind.COMMITTEE, auto_member_role="analyst")
+    active = _user("moa-active@x.test", role=Profile.Role.ANALYST)
+    retired = _user("moa-retired@x.test", role=Profile.Role.ANALYST)
+    retired.profile.standing = Profile.Standing.RETIRED
+    retired.profile.save()
+
+    assert wg.is_member(active) is True
+    assert wg.is_member(retired) is False
+    users = [p.user for p in wg.participants()]
+    assert active in users and retired not in users
+
+
 def test_reading_group_open_join_and_leave(client):
     """A reading group is standing + open-join: any LSP member joins directly
     (stored membership), and can leave."""
@@ -684,6 +700,21 @@ def test_meeting_of_analysts_members_includes_analysts_excludes_others():
     members = meeting_of_analysts_members()
     assert analyst in members
     assert other not in members
+
+
+def test_meeting_of_analysts_members_excludes_retired():
+    """A retired analyst is no longer counted in the Meeting of Analysts
+    (task #451) — active standing is required, not just the Analyst role."""
+    from workgroups.permissions import meeting_of_analysts_members
+
+    active = _user("moa-mem-active@x.test", role=Profile.Role.ANALYST)
+    retired = _user("moa-mem-retired@x.test", role=Profile.Role.ANALYST)
+    retired.profile.standing = Profile.Standing.RETIRED
+    retired.profile.save()
+
+    members = meeting_of_analysts_members()
+    assert active in members
+    assert retired not in members
 
 
 @pytest.mark.parametrize("key", ["president", "vice_president"])

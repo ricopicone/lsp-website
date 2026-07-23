@@ -120,6 +120,7 @@ def meeting_of_analysts_members():
         User.objects.filter(
             profile__role=Profile.Role.ANALYST, is_active=True,
             profile__is_persona=False,
+            profile__standing=Profile.Standing.ACTIVE,
         ).values_list("pk", flat=True)
     )
     roster_ids = []
