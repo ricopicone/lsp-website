@@ -116,6 +116,7 @@ def send_welcome(user) -> None:
             "program_url": base + reverse("program"),
             "login_url": base + reverse("login"),
             "guide_url": base + reverse("guide_detail", args=["logging-in"]),
+            "seminars_guide_url": base + reverse("guide_detail", args=["seminars"]),
             "guides_url": base + reverse("guides_index"),
             "support_email": settings.SUPPORT_EMAIL,
         },

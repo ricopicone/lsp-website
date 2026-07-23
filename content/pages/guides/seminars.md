@@ -42,5 +42,9 @@ automatically.
 
 ## Try it now
 
-There's a free **Preview Seminar** set up for exactly this—register for it to see
-the whole flow end to end, then cancel if you like. Nothing is charged.
+Browse [this year's program](/program/) and open any seminar that interests
+you. Each event page shows the readings, the schedule, the fee, and the
+Register button, and registering always shows you your price (or your
+covered-by-tuition status) before anything is charged. If you change your
+mind after registering, you can cancel from the confirmation page and any
+payment is refunded automatically.
