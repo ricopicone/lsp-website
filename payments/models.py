@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -398,6 +400,20 @@ class TuitionPeriod(models.Model):
         on = on_date or timezone.now().date()
         return cls.objects.filter(start_date__lte=on, end_date__gte=on).first()
 
+    @classmethod
+    def upcoming(cls, on_date=None):
+        """Return the earliest period whose start_date is after ``on_date``
+        (default today), or None. Distinct from ``current()`` — a period
+        already underway is not "upcoming"."""
+        on = on_date or timezone.now().date()
+        return cls.objects.filter(start_date__gt=on).order_by("start_date").first()
+
+    def clean(self):
+        if self.payment_due_date and self.payment_due_date < self.decision_due_date:
+            raise ValidationError(
+                {"payment_due_date": "payment_due_date cannot be before decision_due_date."}
+            )
+
 
 class TuitionEnrollment(models.Model):
     """A student's per-year tuition decision and status.
@@ -416,6 +432,7 @@ class TuitionEnrollment(models.Model):
         PAYMENT_PLAN = "payment_plan", _("On payment plan")
         PAID_IN_FULL = "paid_in_full", _("Paid in full")
         SKIPPING = "skipping", _("Skipping this year")
+        PLAN_REQUESTED = "plan_requested", _("Payment plan requested")
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -462,6 +479,62 @@ class TuitionEnrollment(models.Model):
             self.Status.PAYMENT_PLAN,
             self.Status.PAID_IN_FULL,
         }
+
+
+class TuitionPlanApplication(models.Model):
+    """A student's request to the Board for a tuition payment plan
+    (task #450 phase B).
+
+    A student may have at most one PENDING application per
+    (user, tuition_period) at a time — the partial unique constraint below
+    enforces that — but a DECLINED (or APPROVED) application doesn't block a
+    later resubmission for the same period.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        APPROVED = "approved", _("Approved")
+        DECLINED = "declined", _("Declined")
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tuition_plan_applications",
+    )
+    tuition_period = models.ForeignKey(
+        TuitionPeriod,
+        on_delete=models.PROTECT,
+        related_name="plan_applications",
+    )
+    reasons = models.TextField(
+        help_text="The student's stated reasons for requesting a payment plan.",
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    note = models.TextField(blank=True, help_text="Board's decision note, if any.")
+
+    class Meta:
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "tuition_period"),
+                condition=Q(status="pending"),
+                name="one_pending_plan_application",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user} → {self.tuition_period} ({self.get_status_display()})"
 
 
 class TuitionInstallment(models.Model):
