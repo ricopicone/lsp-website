@@ -442,7 +442,7 @@ def board_appointments(request):
     """
     if not _can_board(request.user):
         raise PermissionDenied
-    from accounts.models import User
+    from accounts.models import Profile, User
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -481,6 +481,7 @@ def board_appointments(request):
     )
     appointable = list(
         User.objects.filter(is_active=True, profile__is_persona=False)
+        .exclude(profile__standing__in=Profile.NON_MEMBER_STANDINGS)
         .select_related("profile")
         .order_by("last_name", "first_name", "email")
     )
@@ -539,7 +540,7 @@ def board_governance(request):
 
     member_qs = Profile.objects.filter(
         role__in=Profile.DIRECTORY_ROLES, is_persona=False, user__is_active=True,
-    )
+    ).exclude(standing__in=Profile.NON_MEMBER_STANDINGS)
     by_standing = {
         row["standing"]: row["n"]
         for row in member_qs.values("standing").annotate(n=Count("pk"))

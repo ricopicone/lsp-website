@@ -103,6 +103,8 @@ def sync_tuition_charges(user) -> None:
     profile = getattr(user, "profile", None)
     if profile is None or profile.role not in Profile.IN_TRAINING_ROLES:
         return
+    if profile.standing in Profile.NON_MEMBER_STANDINGS or profile.deceased_on:
+        return  # removed / resigned / deceased — never mint new tuition
 
     today = timezone.now().date()
     enrollments = list(

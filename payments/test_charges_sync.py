@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 from django.utils import timezone
 
-from accounts.models import User
+from accounts.models import Profile, User
 from payments import charges
 from payments.charges import waive_open_charges
 from payments.models import Charge, DuesPeriod, TuitionPeriod
@@ -85,6 +85,17 @@ def test_enrollment_save_mints_a_tuition_charge():
     assert c.amount == Decimal("2000")
     assert c.tuition_period_id == tp.id
     assert c.status == Charge.Status.OPEN
+
+
+def test_sync_tuition_charges_noops_for_removed_member():
+    from payments.charges import sync_tuition_charges
+    u = User.objects.create_user(email="trm@example.com")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.standing = Profile.Standing.REMOVED
+    u.profile.save()
+    sync_tuition_charges(u)
+    assert not Charge.objects.filter(
+        user=u, category=Charge.Category.TUITION).exists()
 
 
 def test_flip_to_skipping_voids_and_back_revives():

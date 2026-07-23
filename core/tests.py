@@ -865,6 +865,24 @@ def test_board_pages_render_for_board(db, client, name):
     assert client.get(reverse(name)).status_code == 200
 
 
+@pytest.mark.django_db
+def test_board_governance_excludes_removed_members(client):
+    admin = User.objects.create_superuser(email="gov@example.com", password="pw")
+    client.force_login(admin)
+    active = User.objects.create_user(email="ga@example.com")
+    active.profile.role = Profile.Role.ANALYST
+    active.profile.save()
+    removed = User.objects.create_user(email="gr@example.com")
+    removed.profile.role = Profile.Role.ANALYST
+    removed.profile.standing = Profile.Standing.REMOVED
+    removed.profile.save()
+
+    resp = client.get("/admin-tools/board/governance/")  # name: board_governance
+    assert resp.status_code == 200
+    # total_members counts active but not removed
+    assert resp.context["total_members"] == 1
+
+
 def test_appoint_and_remove_staff_role(db, client):
     from core.access import has_staff_role
     from core.models import StaffRole
@@ -999,3 +1017,17 @@ def test_appointments_omits_president_and_vice_president(client):
     })
     assert resp.status_code in (200, 302)
     assert target not in StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.all()
+
+
+@pytest.mark.django_db
+def test_appointments_excludes_removed_member(client):
+    """task #451: a removed member shouldn't be an appointable option."""
+    boss = User.objects.create_user(email="boss2@x.test", is_staff=True, is_superuser=True)
+    client.force_login(boss)
+    removed = User.objects.create_user(email="removed-appt@x.test")
+    removed.profile.standing = Profile.Standing.REMOVED
+    removed.profile.save()
+
+    resp = client.get(reverse("board_appointments"))
+    assert resp.status_code == 200
+    assert removed not in resp.context["appointable"]
