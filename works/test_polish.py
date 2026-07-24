@@ -40,3 +40,33 @@ class TestStructuredCitationFields:
         w = make_work(doi="10.1234/xyz")
         assert w.doi_url == "https://doi.org/10.1234/xyz"
         assert make_work(title="No doi", slug="no-doi").doi_url == ""
+
+
+class TestWorkFormCitation:
+    def _data(self, **kw):
+        base = {
+            "title": "T", "kind": "external",
+            "listing_visibility": "public", "content_visibility": "members",
+            "external_type": "article", "container_title": "J of X",
+            "volume": "1", "issue": "2", "pages": "3–4",
+            "doi": "https://doi.org/10.1234/xyz",
+        }
+        base.update(kw)
+        return base
+
+    def test_saves_structured_fields_and_normalizes_doi(self, author):
+        from works.forms import WorkForm
+
+        form = WorkForm(self._data(), current_user=author)
+        assert form.is_valid(), form.errors
+        w = form.save()
+        assert w.container_title == "J of X"
+        assert w.doi == "10.1234/xyz"
+
+    def test_doi_prefix_variants(self, author):
+        from works.forms import WorkForm
+
+        for raw in ("doi:10.1/a", "http://dx.doi.org/10.1/a", "10.1/a"):
+            form = WorkForm(self._data(doi=raw), current_user=author)
+            assert form.is_valid(), form.errors
+            assert form.cleaned_data["doi"] == "10.1/a"

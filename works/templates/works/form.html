@@ -68,12 +68,71 @@
       {% if form.abstract.errors %}<p class="text-error text-xs mt-1">{{ form.abstract.errors|join:", " }}</p>{% endif %}
     </div>
 
+    <fieldset id="citation-fields" class="space-y-4 border-t border-base-300/60 pt-5">
+      <legend class="font-serif text-lg">Publication details</legend>
+      <p class="text-xs text-base-content/60 -mt-2">For external publications. Fill what applies, the site renders a Chicago-style citation.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="space-y-1">
+          <label for="{{ form.external_type.id_for_label }}" class="block text-sm font-medium">Type</label>
+          {{ form.external_type }}
+        </div>
+        <div class="space-y-1">
+          <label for="{{ form.container_title.id_for_label }}" class="block text-sm font-medium">Journal / book title</label>
+          {{ form.container_title }}
+          <p class="text-xs text-base-content/60">{{ form.container_title.help_text }}</p>
+        </div>
+        <div class="space-y-1">
+          <label for="{{ form.publisher.id_for_label }}" class="block text-sm font-medium">Publisher</label>
+          {{ form.publisher }}
+        </div>
+        <div class="space-y-1">
+          <label for="{{ form.edition.id_for_label }}" class="block text-sm font-medium">Edition</label>
+          {{ form.edition }}
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-4">
+        <div class="space-y-1">
+          <label for="{{ form.volume.id_for_label }}" class="block text-sm font-medium">Volume</label>
+          {{ form.volume }}
+        </div>
+        <div class="space-y-1">
+          <label for="{{ form.issue.id_for_label }}" class="block text-sm font-medium">Issue</label>
+          {{ form.issue }}
+        </div>
+        <div class="space-y-1">
+          <label for="{{ form.pages.id_for_label }}" class="block text-sm font-medium">Pages</label>
+          {{ form.pages }}
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="space-y-1">
+          <label for="{{ form.editors.id_for_label }}" class="block text-sm font-medium">Editors</label>
+          {{ form.editors }}
+        </div>
+        <div class="space-y-1">
+          <label for="{{ form.translators.id_for_label }}" class="block text-sm font-medium">Translators</label>
+          {{ form.translators }}
+        </div>
+        <div class="space-y-1">
+          <label for="{{ form.doi.id_for_label }}" class="block text-sm font-medium">DOI</label>
+          {{ form.doi }}
+          <p class="text-xs text-base-content/60">{{ form.doi.help_text }}</p>
+          {% if form.doi.errors %}<p class="text-error text-xs mt-1">{{ form.doi.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="space-y-1">
+          <label for="{{ form.isbn.id_for_label }}" class="block text-sm font-medium">ISBN</label>
+          {{ form.isbn }}
+        </div>
+      </div>
+    </fieldset>
+
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div class="space-y-1">
         <label for="{{ form.publication_info.id_for_label }}" class="block text-sm font-medium">
-          Publication info <span class="text-base-content/50 font-normal">(optional)</span>
+          Citation note <span class="text-base-content/50 font-normal">(optional)</span>
         </label>
         {{ form.publication_info }}
+        <p class="text-xs text-base-content/60">{{ form.publication_info.help_text }}</p>
         {% if form.publication_info.errors %}<p class="text-error text-xs mt-1">{{ form.publication_info.errors|join:", " }}</p>{% endif %}
       </div>
       <div class="space-y-1">
@@ -207,6 +266,17 @@
   the file goes straight to S3 (bypassing the app server) and only its key is
   submitted with the form. Falls back to a normal server-side upload otherwise
   (dev) or if anything fails.{% endcomment %}
+  <script>
+  (function () {
+    var kind = document.getElementById("id_kind");
+    var fs = document.getElementById("citation-fields");
+    if (!kind || !fs) return;
+    function sync() { fs.style.display = kind.value === "external" ? "" : "none"; }
+    kind.addEventListener("change", sync);
+    sync();
+  })();
+  </script>
+
   <script>
   (function () {
     var input = document.getElementById("id_video");
