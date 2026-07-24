@@ -63,15 +63,39 @@
   <section class="rounded-xl border border-base-300 p-5 space-y-4">
     <h2 class="font-serif text-xl text-base-content">Control analysis</h2>
 
-    <form method="post" action="{% url 'formation:advisee_set_background' advisee.pk %}" class="flex items-center gap-2 text-sm">
+    <form method="post" action="{% url 'formation:advisee_set_background' advisee.pk %}" class="space-y-2 text-sm">
       {% csrf_token %}
-      <label class="flex items-center gap-2">
-        <input type="checkbox" name="clinical_background" class="checkbox checkbox-sm" {% if advisee.profile.clinical_background %}checked{% endif %}>
-        Clinical background (2 control analyses; unchecked = academic, 3)
-      </label>
-      <button class="btn btn-ghost btn-xs">Save</button>
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="flex items-center gap-1">
+          <input type="radio" name="background" value="clinical" class="radio radio-sm"
+                 {% if advisee.profile.formation_background == "clinical" %}checked{% endif %}>
+          Clinical (2: one 4-year, one 2-year)
+        </label>
+        <label class="flex items-center gap-1">
+          <input type="radio" name="background" value="academic" class="radio radio-sm"
+                 {% if advisee.profile.formation_background == "academic" %}checked{% endif %}>
+          Academic (3: one 4-year, two 2-year)
+        </label>
+      </div>
+      <input type="text" name="note" placeholder="Optional note (for the record)"
+             class="input input-bordered input-sm w-full">
+      <button class="btn btn-ghost btn-xs">Save background</button>
     </form>
+    {% if advisee.profile.formation_background == "unreviewed" %}
+    <p class="text-xs text-warning">Not yet determined by the Meeting of Analysts.</p>
+    {% endif %}
+    {% if background_history %}
+    <details class="text-xs text-base-content/60">
+      <summary class="cursor-pointer">History</summary>
+      <ul class="mt-1 space-y-1">
+        {% for h in background_history %}
+        <li>{{ h.created_at|date:"M j, Y" }}: {{ h.background }}{% if h.set_by %}, by {{ h.set_by.get_full_name|default:h.set_by.email }}{% endif %}{% if h.note %} , {{ h.note }}{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
 
+    {% if control_progress.reviewed %}
     <div class="space-y-1">
       <progress class="progress progress-primary w-full" value="{{ control_progress.total_years }}" max="{{ control_progress.total_target }}"></progress>
       <p class="text-sm text-base-content/70">{{ control_progress.total_years|floatformat:1 }} of {{ control_progress.total_target }} total years across control analyses.</p>
@@ -103,6 +127,9 @@
       </div>
       {% endfor %}
     </div>
+    {% else %}
+    <p class="text-sm text-base-content/60">Control requirement will show once a background is set above.</p>
+    {% endif %}
 
     {% if control_entries %}
     <ul class="space-y-3">

@@ -172,6 +172,7 @@
         remote, toward the years shown below. There's no approval step here.
       </p>
 
+      {% if control_progress.reviewed %}
       <div class="space-y-1">
         <progress class="progress progress-primary w-full" value="{{ control_progress.total_years }}" max="{{ control_progress.total_target }}"></progress>
         <p class="text-sm text-base-content/70">{{ control_progress.total_years|floatformat:1 }} of {{ control_progress.total_target }} total years across your control analyses.</p>
@@ -203,6 +204,9 @@
         </div>
         {% endfor %}
       </div>
+      {% else %}
+      <p class="text-sm text-base-content/70">Your control-analysis requirement will be set by the Meeting of Analysts. You can still log your control analyses below.</p>
+      {% endif %}
 
       {% if control_entries %}
       <ul class="space-y-3">

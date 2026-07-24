@@ -87,3 +87,17 @@ def external_analyst_decision(obj) -> None:
         url=reverse("formation:formation") + "?tab=formation#control", target=obj,
         email_fn=lambda: emails.send_external_analyst_decision(obj),
     )
+
+
+def background_set(member, determination) -> None:
+    from notifications.categories import Category
+
+    label = {"clinical": "clinical", "academic": "academic"}.get(
+        determination.background, determination.background
+    )
+    notify(
+        member, Category.FORMATION_BACKGROUND,
+        title=f"Your formation control requirement has been set to {label}",
+        url=reverse("formation:formation") + "#control",
+        target=determination,
+    )

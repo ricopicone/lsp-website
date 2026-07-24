@@ -54,6 +54,7 @@ class Category(models.TextChoices):
     ADMISSIONS_DECISION = "admissions_decision", _("Admissions decisions")
     ADMISSIONS_ADVANCEMENT = "admissions_advancement", _("Advancement (demande)")
     EXTERNAL_CONTROL_ANALYST = "external_control_analyst", _("External control analyst review")
+    FORMATION_BACKGROUND = "formation_background", _("Formation background")
 
     # --- Groups (workgroups / cartels / committees / seminars) ----------
     GROUP_MEMBERSHIP = "group_membership", _("Added to or removed from a group")
@@ -259,6 +260,12 @@ CATEGORY_META: dict[str, CategoryMeta] = {
     _C.ACCOUNT_ADVISOR: _M(
         SECTION_ACCOUNT, _("Advisor assignments"),
         _("When you're chosen as, or assigned, an advisor."),
+    ),
+    _C.FORMATION_BACKGROUND: _M(
+        SECTION_ACCOUNT, _("Formation background"),
+        _("When the Meeting of Analysts or your advisor sets your "
+          "control-analysis requirement (clinical or academic)."),
+        default_email=_E.OFF,
     ),
     # Outcomes on the member's own financial account — currently the
     # treasurer's decision on a payment/fee the member reported from before

@@ -53,7 +53,7 @@ def test_control_progress_fills_slots_by_longest_per_tag(db):
 
     u = User.objects.create_user(email="p@example.com", password="x")
     u.profile.role = Profile.Role.PRE_CANDIDATE  # academic -> 2 two-year slots
-    u.profile.clinical_background = False
+    u.profile.formation_background = Profile.FormationBackground.ACADEMIC
     u.profile.save()
 
     today = dt.date.today()
@@ -87,7 +87,7 @@ def test_control_progress_total_years_is_float_with_no_entries(db):
 
     u = User.objects.create_user(email="nc@example.com", password="x")
     u.profile.role = Profile.Role.PRE_CANDIDATE
-    u.profile.clinical_background = True
+    u.profile.formation_background = Profile.FormationBackground.CLINICAL
     u.profile.save()
 
     prog = control_progress(u)
@@ -101,7 +101,7 @@ def test_control_progress_clinical_has_one_two_year_slot(db):
 
     u = User.objects.create_user(email="c@example.com", password="x")
     u.profile.role = Profile.Role.ANALYST
-    u.profile.clinical_background = True
+    u.profile.formation_background = Profile.FormationBackground.CLINICAL
     u.profile.save()
     prog = control_progress(u)
     assert prog["total_target"] == 6            # 4 + 2*1
@@ -121,3 +121,22 @@ def test_control_requirement_tag_defaults_four_year():
 
     reloaded = ControlAnalysis.objects.get(pk=ca.pk)
     assert reloaded.requirement == "two_year"
+
+
+def test_control_progress_unreviewed_has_no_target(db):
+    from accounts.models import Profile, User
+    from formation.control import control_progress
+
+    u = User.objects.create_user(email="unrev@example.com", password="x")
+    u.profile.role = Profile.Role.PRE_CANDIDATE
+    u.profile.formation_background = Profile.FormationBackground.UNREVIEWED
+    u.profile.save()
+    ControlAnalysis.objects.create(
+        member=u, supervisor_name="S", requirement="four_year",
+        start_date=dt.date.today() - dt.timedelta(days=int(365.25 * 2)),
+    )
+
+    prog = control_progress(u)
+    assert prog["reviewed"] is False
+    assert "total_target" not in prog
+    assert prog["total_years"] == pytest.approx(2.0, abs=0.05)

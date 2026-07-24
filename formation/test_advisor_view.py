@@ -62,7 +62,7 @@ def test_staff_advisee_cannot_view_own_advisee_detail(client):
     assert resp.status_code in (403, 404)
 
 
-def test_advisor_sets_advisee_clinical_background(client, db):
+def test_advisor_sets_advisee_background(client, db):
     from django.urls import reverse
 
     from accounts.models import Advisorship, Profile, User
@@ -77,7 +77,8 @@ def test_advisor_sets_advisee_clinical_background(client, db):
     client.force_login(advisor)
 
     resp = client.post(reverse("formation:advisee_set_background", args=[advisee.pk]),
-                       {"clinical_background": "on"})
+                       {"background": "clinical", "note": "Licensed clinician."})
     assert resp.status_code == 302
     advisee.profile.refresh_from_db()
-    assert advisee.profile.clinical_background is True
+    assert advisee.profile.formation_background == Profile.FormationBackground.CLINICAL
+    assert advisee.background_determinations.first().note == "Licensed clinician."

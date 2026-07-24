@@ -77,7 +77,11 @@ def test_member_cannot_delete_others_entry(client):
 
 @pytest.mark.django_db
 def test_formation_tab_shows_control_context(client):
+    from accounts.models import Profile
+
     u = User.objects.create_user(email="f@x.test", password="x")
+    u.profile.formation_background = Profile.FormationBackground.CLINICAL
+    u.profile.save()
     ControlAnalysis.objects.create(member=u, supervisor_name="S",
         modality="remote", start_date=dt.date(2021, 1, 1))
     client.force_login(u)
@@ -174,3 +178,19 @@ def test_control_save_syncs_supervisor_name_from_school_analyst(client, db):
     ca = ControlAnalysis.objects.get(member=member)
     assert ca.school_analyst_id == analyst.pk
     assert ca.supervisor_name == "Jane Roe"
+
+
+@pytest.mark.django_db
+def test_formation_tab_shows_neutral_when_unreviewed(client):
+    from accounts.models import Profile
+
+    u = User.objects.create_user(email="stu@example.com", password="x")
+    u.profile.role = Profile.Role.PRE_CANDIDATE
+    u.profile.formation_background = Profile.FormationBackground.UNREVIEWED
+    u.profile.save()
+    client.force_login(u)
+
+    resp = client.get(reverse("formation:formation"), SERVER_NAME="localhost")
+    assert resp.status_code == 200
+    assert b"Meeting of Analysts" in resp.content  # neutral copy
+    assert b"total years across your control analyses" not in resp.content

@@ -188,6 +188,8 @@ def test_accept_scholar_admits_as_precandidate_scholar():
 
 
 def test_accept_sets_clinical_background_for_clinical_analyst():
+    from accounts.models import Profile
+
     board = _board_member()
     applicant = _user("clin@x.test")
     app = Application.objects.create(
@@ -196,10 +198,12 @@ def test_accept_sets_clinical_background_for_clinical_analyst():
     )
     accept_application(app, by=board, effective_ay=2026)
     applicant.profile.refresh_from_db()
-    assert applicant.profile.clinical_background is True
+    assert applicant.profile.formation_background == Profile.FormationBackground.CLINICAL
 
 
 def test_accept_academic_or_scholar_stays_academic():
+    from accounts.models import Profile
+
     board = _board_member()
     applicant = _user("acad@x.test")
     app = Application.objects.create(
@@ -207,7 +211,7 @@ def test_accept_academic_or_scholar_stays_academic():
     )
     accept_application(app, by=board, effective_ay=2026)
     applicant.profile.refresh_from_db()
-    assert applicant.profile.clinical_background is False
+    assert applicant.profile.formation_background == Profile.FormationBackground.ACADEMIC
 
 
 def test_reject_sets_status():

@@ -109,8 +109,8 @@ class UserAdmin(BaseUserAdmin):
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
     form = ProfileAdminForm
-    list_display = ("user", "role", "is_faculty", "clinical_background")
-    list_filter = ("role", "is_faculty", "public", "clinical_background")
+    list_display = ("user", "role", "is_faculty", "formation_background")
+    list_filter = ("role", "is_faculty", "public", "formation_background")
     search_fields = ("user__email", "user__first_name", "user__last_name")
     # Read-only (task #451): see ProfileInline.readonly_fields above — a bare
     # save here would skip the auto-waive + referral-delist workflow. Use the

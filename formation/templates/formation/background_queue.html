@@ -1,0 +1,31 @@
+{% extends "core/base.html" %}
+{% block content %}
+<div class="mx-auto max-w-3xl px-4 py-8 space-y-6">
+  <nav class="text-sm"><a href="{% url 'meeting_of_analysts_admin' %}" class="link link-hover text-base-content/60">← Meeting of Analysts Admin</a></nav>
+  <h1 class="font-serif text-2xl">Formation backgrounds</h1>
+  <p class="text-sm text-base-content/70">Set each in-training student's background, which determines their control-analysis requirement (clinical: one 4-year and one 2-year; academic: one 4-year and two 2-year). Students not yet reviewed are listed first.</p>
+  <ul class="space-y-3">
+    {% for p in students %}
+    <li class="rounded-xl border border-base-300 p-4 space-y-2">
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-medium">{{ p.user.get_full_name|default:p.user.email }}</span>
+        {% if p.formation_background == unreviewed_value %}
+        <span class="badge badge-warning badge-sm">unreviewed</span>
+        {% else %}
+        <span class="badge badge-ghost badge-sm">{{ p.get_formation_background_display }}</span>
+        {% endif %}
+      </div>
+      <form method="post" action="{% url 'formation:background_detail' p.user.pk %}" class="flex flex-wrap items-center gap-3 text-sm">
+        {% csrf_token %}
+        <label class="flex items-center gap-1"><input type="radio" name="background" value="clinical" class="radio radio-sm" {% if p.formation_background == "clinical" %}checked{% endif %}> Clinical</label>
+        <label class="flex items-center gap-1"><input type="radio" name="background" value="academic" class="radio radio-sm" {% if p.formation_background == "academic" %}checked{% endif %}> Academic</label>
+        <input type="text" name="note" placeholder="Optional note" class="input input-bordered input-sm flex-1 min-w-40">
+        <button class="btn btn-primary btn-sm">Save</button>
+      </form>
+    </li>
+    {% empty %}
+    <li class="text-sm text-base-content/60">No in-training students.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}
