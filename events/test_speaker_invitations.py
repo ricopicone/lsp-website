@@ -255,3 +255,56 @@ def test_accept_rejects_expired_token(client):
 def test_accept_rejects_unknown_token(client):
     resp = client.get(reverse("events:speaker_invitation_accept", args=["nope"]))
     assert resp.status_code == 410
+
+
+def test_end_to_end_derek_scenario(client):
+    """Mirror the real case: an external speaker with a comma in the name and no
+    email, on a special event that also has a member-speaker. PC adds the email
+    and sends; the speaker activates and can then join the meeting room."""
+    from events.permissions import can_edit_event
+    from video.services import can_enter_event
+
+    e = _special_event("masochism-e2e")
+    # Co-speaker who is an LSP member (already has a login; no invite needed).
+    member = User.objects.create_user(
+        email="swales@x.test", first_name="Stephanie", last_name="Swales",
+    )
+    e.member_speakers.add(member)
+    # External speaker, comma in name, no email — the Derek case.
+    derek = Speaker.objects.create(name="Derek Hook, Ph.D.", slug="derek-e2e")
+    e.speakers.add(derek)
+
+    pc = _pc_user()
+    client.force_login(pc)
+
+    # 1. Edit page surfaces Derek with the add-email affordance.
+    resp = client.get(reverse("events:edit", args=[e.slug]))
+    assert b"Derek Hook, Ph.D." in resp.content
+    assert b"No email on file" in resp.content
+
+    # 2. PC adds the email and sends in one step.
+    client.post(
+        reverse("events:speaker_invite", args=[e.slug, derek.pk]),
+        {"email": "derek@x.test", "message": "Please join us."},
+    )
+    derek.refresh_from_db()
+    assert derek.email == "derek@x.test"
+    assert derek.user is not None
+    assert derek.user.profile.role == Profile.Role.EXTERNAL
+    assert len(mail.outbox) == 1
+    inv = SpeakerInvitation.objects.get(speaker=derek)
+
+    # 3. Derek activates via the link (fresh, logged-out client).
+    activate_client = client.__class__()
+    url = reverse("events:speaker_invitation_accept", args=[inv.token])
+    resp = activate_client.post(
+        url, {"new_password1": "Sw0rdfish!42", "new_password2": "Sw0rdfish!42"}
+    )
+    assert resp.status_code == 302
+    assert resp.url == reverse("events:detail", args=[e.slug])
+
+    # 4. Derek is now a presenter with room access; the co-member is unaffected.
+    derek.user.refresh_from_db()
+    assert can_edit_event(derek.user, e) is True
+    assert can_enter_event(e, derek.user) is True
+    assert e.is_presenter(member) is True   # member-speaker still works
