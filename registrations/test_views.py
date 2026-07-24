@@ -482,7 +482,7 @@ def test_pre_selects_user_role_matching_tier(
 def test_login_page_renders(client):
     response = client.get(reverse("login"))
     assert response.status_code == 200
-    assert b"Log in" in response.content
+    assert b"Sign in" in response.content
 
 
 @pytest.mark.django_db

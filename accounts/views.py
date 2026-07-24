@@ -397,7 +397,9 @@ def find_an_analyst_pins(request):
 def _safe_next(request) -> str | None:
     """Only allow ``next`` redirects to relative URLs we control."""
     nxt = request.POST.get("next") or request.GET.get("next")
-    if nxt and nxt.startswith("/") and not nxt.startswith("//"):
+    if nxt and url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts=None, require_https=request.is_secure()
+    ):
         return nxt
     return None
 
