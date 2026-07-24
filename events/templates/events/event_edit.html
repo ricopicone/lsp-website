@@ -216,19 +216,29 @@
         <span class="font-medium text-base-content">{{ row.speaker.name }}</span>
         {% if row.status == "ready" %}
         <span class="badge badge-warning badge-sm">Ready to invite</span>
+        {% elif row.status == "needs_email" %}
+        <span class="badge badge-ghost badge-sm">No email on file</span>
         {% elif row.status == "invited" %}
         <span class="badge badge-outline badge-sm">Invited, awaiting sign-in</span>
         {% else %}
         <span class="badge badge-success badge-sm">Active</span>
         {% endif %}
       </div>
-      <p class="text-xs text-base-content/60">{{ row.speaker.email }}</p>
+      {% if row.speaker.email %}<p class="text-xs text-base-content/60">{{ row.speaker.email }}</p>{% endif %}
       {% if row.status != "active" %}
       <form method="post" action="{% url 'events:speaker_invite' event.slug row.speaker.pk %}" class="space-y-2">
         {% csrf_token %}
+        {% if row.status == "needs_email" %}
+        <div class="form-control space-y-1">
+          <label class="label-text text-xs" for="email-{{ row.speaker.pk }}">Email address (needed to invite)</label>
+          <input type="email" name="email" id="email-{{ row.speaker.pk }}" required
+                 placeholder="speaker@example.com"
+                 class="input input-bordered input-sm w-full">
+        </div>
+        {% endif %}
         <textarea name="message" rows="3" class="textarea textarea-bordered w-full text-sm">{{ row.default_message }}</textarea>
         <button type="submit" class="btn btn-primary btn-sm">
-          {% if row.status == "invited" %}Resend invitation{% else %}Confirm &amp; send invitation{% endif %}
+          {% if row.status == "invited" %}Resend invitation{% elif row.status == "needs_email" %}Add email &amp; send invitation{% else %}Confirm &amp; send invitation{% endif %}
         </button>
       </form>
       {% endif %}

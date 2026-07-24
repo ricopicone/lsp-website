@@ -1150,6 +1150,9 @@ def change_request_decide(request, pk: int):
 @require_POST
 def speaker_invite(request, slug, speaker_id):
     """PC/staff confirm-and-send an external-speaker invitation (task #463)."""
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+
     from .models import Speaker
     from .speaker_invitations import send_invitation
 
@@ -1157,8 +1160,21 @@ def speaker_invite(request, slug, speaker_id):
     if not can_edit_event(request.user, event):
         return HttpResponseForbidden("You don't have permission to invite speakers.")
     speaker = get_object_or_404(Speaker, pk=speaker_id, events=event)
+    # An external speaker added without an email shows an inline field to add one
+    # here; set it before inviting.
+    new_email = request.POST.get("email", "").strip()
+    if new_email and not (speaker.email or "").strip():
+        try:
+            validate_email(new_email)
+        except ValidationError:
+            messages.error(request, "That doesn't look like a valid email address.")
+            return redirect("events:edit", slug=event.slug)
+        speaker.email = new_email
+        speaker.save(update_fields=["email"])
     if not (speaker.email or "").strip():
-        messages.error(request, f"{speaker.name} has no email to invite.")
+        messages.error(
+            request, f"Add an email address for {speaker.name} before inviting."
+        )
         return redirect("events:edit", slug=event.slug)
     message = request.POST.get("message", "").strip()
     send_invitation(speaker, event, message)
@@ -1172,8 +1188,8 @@ def _speaker_invite_rows(event):
     rows = []
     for s in event.speakers.all().select_related("user"):
         if not (s.email or "").strip():
-            continue
-        if s.user_id and s.user.has_usable_password():
+            status = "needs_email"   # shown with an inline "add an email" field
+        elif s.user_id and s.user.has_usable_password():
             status = "active"
         elif s.user_id:
             status = "invited"   # provisioned; awaiting activation

@@ -132,13 +132,62 @@ def test_edit_page_shows_ready_to_invite_panel(client):
     assert b"Derek Hook" in resp.content
 
 
-def test_no_email_speaker_gets_no_panel(client):
+def test_emailless_speaker_shows_add_email_affordance(client):
     e = _special_event("panel-2")
     s = Speaker.objects.create(name="No Email", slug="no-email")
     e.speakers.add(s)
     client.force_login(_pc_user())
     resp = client.get(reverse("events:edit", args=[e.slug]))
+    # The speaker is shown (not silently skipped) with a way to add an email.
+    assert b"No Email" in resp.content
+    assert b"No email on file" in resp.content
+    assert b'name="email"' in resp.content
     assert b"Ready to invite" not in resp.content
+
+
+def test_adding_email_then_sending_invites(client):
+    e = _special_event("panel-2b")
+    s = Speaker.objects.create(name="Derek Hook", slug="dh-addmail")
+    e.speakers.add(s)
+    client.force_login(_pc_user())
+    resp = client.post(
+        reverse("events:speaker_invite", args=[e.slug, s.pk]),
+        {"email": "derek@x.test", "message": "Please join us."}, follow=True,
+    )
+    assert resp.status_code == 200
+    s.refresh_from_db()
+    assert s.email == "derek@x.test"
+    assert s.user is not None
+    assert len(mail.outbox) == 1
+
+
+def test_invite_without_email_errors_and_does_not_send(client):
+    e = _special_event("panel-2c")
+    s = Speaker.objects.create(name="Derek", slug="dh-noemail2")
+    e.speakers.add(s)
+    client.force_login(_pc_user())
+    client.post(
+        reverse("events:speaker_invite", args=[e.slug, s.pk]),
+        {"message": "x"}, follow=True,
+    )
+    s.refresh_from_db()
+    assert s.email == ""
+    assert s.user is None
+    assert len(mail.outbox) == 0
+
+
+def test_invite_with_invalid_email_errors(client):
+    e = _special_event("panel-2d")
+    s = Speaker.objects.create(name="Derek", slug="dh-bademail")
+    e.speakers.add(s)
+    client.force_login(_pc_user())
+    client.post(
+        reverse("events:speaker_invite", args=[e.slug, s.pk]),
+        {"email": "not-an-email", "message": "x"}, follow=True,
+    )
+    s.refresh_from_db()
+    assert s.email == ""
+    assert len(mail.outbox) == 0
 
 
 def test_confirm_send_invites(client):
