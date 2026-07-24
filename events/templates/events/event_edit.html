@@ -203,5 +203,39 @@
   </script>
   {% endif %}
 
+  {% if speaker_invites %}
+  <section class="space-y-3 border-t border-base-300/60 pt-6">
+    <h2 class="font-serif text-lg text-base-content">External speakers</h2>
+    <p class="text-xs text-base-content/60">
+      Invite an external speaker to log in so they can join the meeting and see
+      the presenter view. Review the message, then confirm to send.
+    </p>
+    {% for row in speaker_invites %}
+    <div class="rounded-lg border border-base-300 p-3 space-y-2">
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-medium text-base-content">{{ row.speaker.name }}</span>
+        {% if row.status == "ready" %}
+        <span class="badge badge-warning badge-sm">Ready to invite</span>
+        {% elif row.status == "invited" %}
+        <span class="badge badge-outline badge-sm">Invited, awaiting sign-in</span>
+        {% else %}
+        <span class="badge badge-success badge-sm">Active</span>
+        {% endif %}
+      </div>
+      <p class="text-xs text-base-content/60">{{ row.speaker.email }}</p>
+      {% if row.status != "active" %}
+      <form method="post" action="{% url 'events:speaker_invite' event.slug row.speaker.pk %}" class="space-y-2">
+        {% csrf_token %}
+        <textarea name="message" rows="3" class="textarea textarea-bordered w-full text-sm">{{ row.default_message }}</textarea>
+        <button type="submit" class="btn btn-primary btn-sm">
+          {% if row.status == "invited" %}Resend invitation{% else %}Confirm &amp; send invitation{% endif %}
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
 </div>
 {% endblock %}

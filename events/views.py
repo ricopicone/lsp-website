@@ -326,7 +326,9 @@ def event_edit(request, slug: str):
     if request.method != "POST":
         form = EventDescriptionForm(instance=event)
         return render(request, "events/event_edit.html", {
-            "event": event, "form": form, **_schedule_editor_context(event),
+            "event": event, "form": form,
+            "speaker_invites": _speaker_invite_rows(event),
+            **_schedule_editor_context(event),
         })
 
     # Snapshot the live reviewable values *before* binding — ModelForm validation
@@ -1141,6 +1143,47 @@ def change_request_decide(request, pk: int):
         messages.success(request, "Change declined.")
     event_notifications.notify_change_decided(cr)
     return redirect("program_admin_changes")
+
+
+@login_required
+@require_POST
+def speaker_invite(request, slug, speaker_id):
+    """PC/staff confirm-and-send an external-speaker invitation (task #463)."""
+    from .models import Speaker
+    from .speaker_invitations import send_invitation
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to invite speakers.")
+    speaker = get_object_or_404(Speaker, pk=speaker_id, events=event)
+    if not (speaker.email or "").strip():
+        messages.error(request, f"{speaker.name} has no email to invite.")
+        return redirect("events:edit", slug=event.slug)
+    message = request.POST.get("message", "").strip()
+    send_invitation(speaker, event, message)
+    messages.success(request, f"Invitation sent to {speaker.name} ({speaker.email}).")
+    return redirect("events:edit", slug=event.slug)
+
+
+def _speaker_invite_rows(event):
+    """Per-speaker invite state for the edit page."""
+    from .speaker_invitations import default_invitation_message
+    rows = []
+    for s in event.speakers.all().select_related("user"):
+        if not (s.email or "").strip():
+            continue
+        if s.user_id and s.user.has_usable_password():
+            status = "active"
+        elif s.user_id:
+            status = "invited"   # provisioned; awaiting activation
+        else:
+            status = "ready"
+        rows.append({
+            "speaker": s,
+            "status": status,
+            "default_message": default_invitation_message(s, event),
+        })
+    return rows
 
 
 def speaker_invitation_accept(request, token):  # fleshed out in Task 6

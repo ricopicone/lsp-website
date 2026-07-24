@@ -5,9 +5,11 @@ from datetime import date, timedelta
 
 import pytest
 from django.core import mail
+from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import Profile, User
+from committees.models import Committee
 from events.models import Event, Speaker, SpeakerInvitation
 
 pytestmark = pytest.mark.django_db
@@ -110,3 +112,59 @@ def test_send_invitation_resend_refreshes_token():
     assert inv2.pk == inv1.pk
     assert inv2.token != t1
     assert len(mail.outbox) == 2
+
+
+def _pc_user():
+    u = User.objects.create_user(email="pc@x.test")
+    Committee.objects.get_or_create(
+        slug="programming-committee", defaults={"name": "Programming Committee"}
+    )[0].add_member(u, start_date=date(2026, 1, 1))
+    return u
+
+
+def test_edit_page_shows_ready_to_invite_panel(client):
+    e = _special_event("panel-1")
+    s = Speaker.objects.create(name="Derek Hook", slug="dh-panel", email="derek@x.test")
+    e.speakers.add(s)
+    client.force_login(_pc_user())
+    resp = client.get(reverse("events:edit", args=[e.slug]))
+    assert b"Ready to invite" in resp.content
+    assert b"Derek Hook" in resp.content
+
+
+def test_no_email_speaker_gets_no_panel(client):
+    e = _special_event("panel-2")
+    s = Speaker.objects.create(name="No Email", slug="no-email")
+    e.speakers.add(s)
+    client.force_login(_pc_user())
+    resp = client.get(reverse("events:edit", args=[e.slug]))
+    assert b"Ready to invite" not in resp.content
+
+
+def test_confirm_send_invites(client):
+    e = _special_event("panel-3")
+    s = Speaker.objects.create(name="Derek Hook", slug="dh-send2", email="derek@x.test")
+    e.speakers.add(s)
+    client.force_login(_pc_user())
+    resp = client.post(
+        reverse("events:speaker_invite", args=[e.slug, s.pk]),
+        {"message": "Please join us."}, follow=True,
+    )
+    assert resp.status_code == 200
+    s.refresh_from_db()
+    assert s.user is not None
+    assert len(mail.outbox) == 1
+
+
+def test_speaker_invite_forbidden_for_non_pc(client):
+    e = _special_event("panel-4")
+    s = Speaker.objects.create(name="Derek", slug="dh-forbid", email="derek@x.test")
+    e.speakers.add(s)
+    client.force_login(User.objects.create_user(email="rando@x.test"))
+    resp = client.post(
+        reverse("events:speaker_invite", args=[e.slug, s.pk]),
+        {"message": "x"},
+    )
+    assert resp.status_code == 403
+    s.refresh_from_db()
+    assert s.user is None
