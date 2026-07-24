@@ -189,6 +189,102 @@ def test_faculty_view_param_ignored_for_random_user(
     assert b"Roster" not in response.content
 
 
+# ---- Special-event presenters (task #463) ------------------------------
+#
+# A PC-organized event (special event, assembly, work day, scholarly) shares
+# the Programming Committee's workgroup, so its presenters can't be stored as
+# a FACULTY role there — they're listed as ``member_speakers`` instead. They
+# still get the event's faculty surfaces, scoped to that one event.
+
+
+@pytest.fixture
+def special_event(db):
+    return Event.objects.create(
+        title="Working with Masochism", slug="working-with-masochism",
+        description="initial body",
+        start_date=date(2026, 9, 6), end_date=date(2026, 9, 6),
+        published=True, status=Event.Status.OPEN,
+        event_type=Event.Type.SPECIAL_EVENT,
+    )
+
+
+@pytest.fixture
+def presenter(db, special_event):
+    u = User.objects.create_user(
+        email="presenter@example.com", first_name="Stephanie", last_name="Swales",
+    )
+    special_event.member_speakers.add(u)
+    return u
+
+
+def test_special_event_presenter_sees_faculty_view_link(client, special_event, presenter):
+    client.force_login(presenter)
+    response = client.get(reverse("events:detail", args=[special_event.slug]))
+    assert response.status_code == 200
+    assert b"Faculty view" in response.content
+    assert b"Edit description" in response.content
+
+
+def test_special_event_presenter_sees_roster(
+    client, special_event, presenter, random_user,
+):
+    tier = PriceTier.objects.create(
+        event=special_event, audience=Audience.STUDENT, base_amount=Decimal("50.00")
+    )
+    Registration.objects.create(
+        user=random_user, event=special_event, price_tier=tier,
+        quoted_amount=Decimal("50.00"),
+    )
+    client.force_login(presenter)
+    response = client.get(
+        reverse("events:detail", args=[special_event.slug]) + "?view=faculty"
+    )
+    assert response.status_code == 200
+    assert b"Roster" in response.content
+    assert b"rando@example.com" in response.content
+
+
+def test_special_event_presenter_may_edit(client, special_event, presenter):
+    client.force_login(presenter)
+    response = client.get(reverse("events:edit", args=[special_event.slug]))
+    assert response.status_code == 200
+
+
+def test_special_event_presenter_may_mint_pricing_code(client, special_event, presenter):
+    client.force_login(presenter)
+    response = client.post(
+        reverse("events:generate_code", args=[special_event.slug]),
+        {"pricing_mode": "percent_off", "amount_or_percent": "25"},
+    )
+    assert response.status_code == 302
+    assert PricingCode.objects.get(event=special_event).issued_by == presenter
+
+
+def test_special_event_presenter_has_no_rights_on_another_special_event(
+    client, special_event, presenter,
+):
+    """Presenting one PC event must not confer rights on every PC event —
+    they all share the Programming Committee's workgroup."""
+    other = Event.objects.create(
+        title="Days of Assembly", slug="days-of-assembly",
+        start_date=date(2026, 10, 3), end_date=date(2026, 10, 3),
+        published=True, status=Event.Status.OPEN,
+        event_type=Event.Type.SPECIAL_EVENT,
+    )
+    client.force_login(presenter)
+    assert client.get(reverse("events:edit", args=[other.slug])).status_code == 403
+
+
+def test_member_speaker_on_an_offering_is_a_guest_not_faculty(
+    client, event, random_user,
+):
+    """Offerings have their own workgroup where real faculty live, so a member
+    speaker there is a guest — no edit rights."""
+    event.member_speakers.add(random_user)
+    client.force_login(random_user)
+    assert client.get(reverse("events:edit", args=[event.slug])).status_code == 403
+
+
 # ---- Pricing-code generation (PROG-8 / REG-17) -------------------------
 
 

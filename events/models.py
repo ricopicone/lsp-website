@@ -459,6 +459,27 @@ class Event(models.Model):
             return False
         return self._faculty_memberships().filter(user=user).exists()
 
+    def is_presenter(self, user) -> bool:
+        """True if ``user`` presents at this *PC-organized* event as a listed
+        member speaker (task #463).
+
+        A PC-organized event (special event, assembly, work day, scholarly)
+        shares the Programming Committee's workgroup, so its faculty can't be
+        stored as a role there: that would put the presenter on the PC roster
+        and make them faculty of every PC event. Their presenters are recorded
+        as ``member_speakers`` instead, and this is what earns them the event's
+        faculty surfaces — scoped to the one event.
+
+        Offerings (seminar / reading group / cartel) have their own workgroup
+        where real faculty live, so a member speaker there is a guest and gets
+        nothing.
+        """
+        if not getattr(user, "is_authenticated", False):
+            return False
+        if self.event_type in self.ANNUAL_PROGRAM_TYPES:
+            return False
+        return self.member_speakers.filter(pk=user.pk).exists()
+
     def add_faculty(self, user):
         """Idempotent: give ``user`` the FACULTY role on this event's workgroup.
 

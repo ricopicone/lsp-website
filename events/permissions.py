@@ -16,14 +16,15 @@ def can_edit_event(user, event) -> bool:
     """True if ``user`` may edit ``event`` (PROG-7) or see its faculty surfaces (PROG-8).
 
     Event-edit rights come from: Django staff, the LSP Staff designation (which
-    replaced the former 'lsp-staff' committee), the event's own faculty, or
+    replaced the former 'lsp-staff' committee), the event's own faculty, the
+    presenters of a PC-organized event (``Event.is_presenter``, task #463), or
     Programming Committee membership.
     """
     if not getattr(user, "is_authenticated", False):
         return False
     if user.is_staff or _is_lsp_staff(user):
         return True
-    if event.is_faculty(user):
+    if event.is_faculty(user) or event.is_presenter(user):
         return True
     return WorkgroupMembership.objects.serving().filter(
         user=user,
