@@ -336,3 +336,28 @@ class ExternalControlAnalyst(models.Model):
     @property
     def is_open(self) -> bool:
         return self.status in self.OPEN_STATUSES
+
+
+class BackgroundDetermination(models.Model):
+    """Immutable audit row: one per actual change to a student's
+    ``Profile.formation_background``. The Profile holds the current
+    (denormalized) value; this table is the history."""
+
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="background_determinations",
+    )
+    background = models.CharField(max_length=12)
+    previous = models.CharField(max_length=12, blank=True)
+    set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.member} -> {self.background} ({self.created_at:%Y-%m-%d})"
