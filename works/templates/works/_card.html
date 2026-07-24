@@ -27,7 +27,7 @@
     {% endif %}{% endif %}
     <div class="flex flex-wrap items-center gap-2 text-[11px] text-base-content/55">
       {% if work.publication_date %}<span>{{ work.publication_date|date:"Y" }}</span>{% endif %}
-      <span class="uppercase tracking-wider">{{ work.get_kind_display }}</span>
+      <span class="uppercase tracking-wider">{{ work.kind_label }}</span>
       {% if work.listing_visibility == "members" %}
       <span class="badge badge-ghost badge-xs">Members</span>
       {% endif %}

@@ -45,6 +45,21 @@ class TestStructuredCitationFields:
         assert make_work(title="No doi", slug="no-doi").doi_url == ""
 
 
+class TestKindLabel:
+    def test_specific_external_types(self):
+        assert make_work(slug="b", external_type="book").kind_label == "Book"
+        assert make_work(slug="a", external_type="article").kind_label == "Journal article"
+        assert make_work(slug="c", external_type="chapter").kind_label == "Book chapter"
+
+    def test_other_and_blank_fall_back_to_external_publication(self):
+        assert make_work(slug="o", external_type="other").kind_label == "External publication"
+        assert make_work(slug="n").kind_label == "External publication"
+
+    def test_non_external_kinds_unchanged(self):
+        w = make_work(slug="p", kind=Work.Kind.PALIMPSEST)
+        assert w.kind_label == "Palimpsest"
+
+
 class TestWorkFormCitation:
     def _data(self, **kw):
         base = {
