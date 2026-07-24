@@ -815,6 +815,7 @@ def advisee_detail(request, pk):
         "external_entries": ExternalActivity.objects.filter(member=advisee)
         .order_by("kind", "-start_date"),
         "notes": AdvisorNote.objects.filter(advisee=advisee).select_related("author"),
+        "background_history": advisee.background_determinations.select_related("set_by")[:5],
     }
     return render(request, "formation/advisee_detail.html", ctx)
 
@@ -843,16 +844,25 @@ def advisee_note_add(request, pk):
 @login_required
 @require_POST
 def advisee_set_background(request, pk):
-    """Advisor (or staff) sets an advisee's clinical/academic background."""
-    from accounts.models import User
+    """Advisor (or staff) sets an advisee's formation background - audited."""
+    from accounts.models import Profile, User
 
+    from .background import set_background
     from .permissions import can_view_advisee
+
     advisee = get_object_or_404(User.objects.select_related("profile"), pk=pk)
     if not can_view_advisee(request.user, advisee):
         raise PermissionDenied
-    advisee.profile.clinical_background = bool(request.POST.get("clinical_background"))
-    advisee.profile.save(update_fields=["clinical_background"])
-    messages.success(request, "Background updated.")
+    value = request.POST.get("background")
+    valid = {Profile.FormationBackground.CLINICAL, Profile.FormationBackground.ACADEMIC}
+    if value not in valid:
+        messages.error(request, "Choose clinical or academic.")
+        return redirect("formation:advisee_detail", pk=advisee.pk)
+    if set_background(advisee, value, by=request.user,
+                      note=request.POST.get("note", "")):
+        messages.success(request, "Background updated.")
+    else:
+        messages.info(request, "No change.")
     return redirect("formation:advisee_detail", pk=advisee.pk)
 
 
