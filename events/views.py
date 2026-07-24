@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import (
@@ -1186,5 +1187,40 @@ def _speaker_invite_rows(event):
     return rows
 
 
-def speaker_invitation_accept(request, token):  # fleshed out in Task 6
-    raise Http404()
+def speaker_invitation_accept(request, token):
+    """Activate an invited external-speaker login: set a password, sign in, and
+    land on the event page (task #463).
+
+    Consumption happens only on the POST that sets the password, so email
+    security scanners that GET-prefetch the link can't burn it
+    (memory ``auth-email-scanner-and-reset-gotchas``).
+    """
+    from django.contrib.auth import login
+    from django.contrib.auth.forms import SetPasswordForm
+
+    from .models import SpeakerInvitation
+
+    inv = (
+        SpeakerInvitation.objects
+        .filter(token=token)
+        .select_related("user", "speaker")
+        .first()
+    )
+    if inv is None or not inv.is_valid or not inv.user.is_active:
+        return render(request, "events/speaker_invitation_invalid.html", status=410)
+
+    event = inv.speaker.events.order_by("start_date").first()
+    if request.method == "POST":
+        form = SetPasswordForm(inv.user, request.POST)
+        if form.is_valid():
+            form.save()
+            inv.consume()
+            login(request, inv.user)
+            if event is not None:
+                return redirect("events:detail", slug=event.slug)
+            return redirect(settings.LOGIN_REDIRECT_URL)
+    else:
+        form = SetPasswordForm(inv.user)
+    return render(request, "events/speaker_invitation_accept.html", {
+        "form": form, "invitation": inv, "event": event,
+    })

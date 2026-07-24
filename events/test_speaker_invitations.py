@@ -168,3 +168,41 @@ def test_speaker_invite_forbidden_for_non_pc(client):
     assert resp.status_code == 403
     s.refresh_from_db()
     assert s.user is None
+
+
+def test_accept_sets_password_and_logs_in(client):
+    from events.speaker_invitations import send_invitation
+    e = _special_event("accept-1")
+    s = Speaker.objects.create(name="Derek Hook", slug="dh-accept", email="derek@x.test")
+    e.speakers.add(s)
+    inv = send_invitation(s, e, message="hi")
+    url = reverse("events:speaker_invitation_accept", args=[inv.token])
+    assert client.get(url).status_code == 200
+    inv.refresh_from_db()
+    assert inv.used_at is None
+    resp = client.post(url, {"new_password1": "Sw0rdfish!42", "new_password2": "Sw0rdfish!42"})
+    assert resp.status_code == 302
+    assert resp.url == reverse("events:detail", args=[e.slug])
+    inv.refresh_from_db()
+    assert inv.used_at is not None
+    inv.user.refresh_from_db()
+    assert inv.user.has_usable_password() is True
+    from video.services import can_enter_event
+    assert can_enter_event(e, inv.user) is True
+
+
+def test_accept_rejects_expired_token(client):
+    from events.speaker_invitations import send_invitation
+    e = _special_event("accept-2")
+    s = Speaker.objects.create(name="Derek", slug="dh-exp", email="derek@x.test")
+    e.speakers.add(s)
+    inv = send_invitation(s, e, message="hi")
+    inv.expires_at = timezone.now() - timedelta(minutes=1)
+    inv.save(update_fields=["expires_at"])
+    resp = client.get(reverse("events:speaker_invitation_accept", args=[inv.token]))
+    assert resp.status_code == 410
+
+
+def test_accept_rejects_unknown_token(client):
+    resp = client.get(reverse("events:speaker_invitation_accept", args=["nope"]))
+    assert resp.status_code == 410
