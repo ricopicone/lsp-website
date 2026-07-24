@@ -291,7 +291,9 @@ def test_member_speaker_on_an_offering_is_a_guest_not_faculty(
 def test_linked_external_speaker_gets_presenter_access(client, special_event):
     from events.models import Speaker
     u = User.objects.create_user(email="ext@example.com", first_name="Derek", last_name="Hook")
-    s = Speaker.objects.create(name="Derek Hook", slug="derek-hook-1", email="ext@example.com", user=u)
+    s = Speaker.objects.create(
+        name="Derek Hook", slug="derek-hook-1", email="ext@example.com", user=u,
+    )
     special_event.speakers.add(s)
     assert special_event.is_presenter(u) is True
     from events.permissions import can_edit_event
@@ -329,10 +331,12 @@ def test_linked_external_speaker_on_offering_gets_nothing(db):
 
 
 def test_linked_external_speaker_absent_from_directory(client, db):
-    from events.models import Speaker
     from accounts.views import _directory_qs
+    from events.models import Speaker
     u = User.objects.create_user(email="ext4@example.com", first_name="Derek", last_name="Hook")
-    Speaker.objects.create(name="Derek Hook", slug="derek-hook-2", email="ext4@example.com", user=u)
+    Speaker.objects.create(
+        name="Derek Hook", slug="derek-hook-2", email="ext4@example.com", user=u,
+    )
     assert u not in [p.user for p in _directory_qs()]
 
 
