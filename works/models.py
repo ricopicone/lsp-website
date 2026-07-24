@@ -281,6 +281,18 @@ class Work(models.Model):
         return f"https://doi.org/{self.doi}" if self.doi else ""
 
     @property
+    def kind_label(self) -> str:
+        """Catalog label: the specific publication type when known ("Book",
+        "Journal article"); the generic kind for Other/unset and non-external."""
+        if (
+            self.kind == self.Kind.EXTERNAL
+            and self.external_type
+            and self.external_type != self.ExternalType.OTHER
+        ):
+            return self.get_external_type_display()
+        return self.get_kind_display()
+
+    @property
     def abstract_html(self) -> str:
         if not self.abstract:
             return ""

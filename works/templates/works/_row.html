@@ -7,7 +7,7 @@
     <a href="{{ work.get_absolute_url }}" class="font-medium text-base-content hover:text-primary">{{ work.title }}</a>.
     {% if work.kind == "external" %}{% with sl=work|work_source_line %}{% if sl %}{{ sl }}{% elif work.publication_info %}{{ work.publication_info }}{% endif %}{% endwith %}{% elif work.publication_info %}{{ work.publication_info }}{% endif %}
   </p>
-  <span class="text-[11px] uppercase tracking-wider text-base-content/50">{{ work.get_kind_display }}</span>
+  <span class="text-[11px] uppercase tracking-wider text-base-content/50">{{ work.kind_label }}</span>
   {% if work.listing_visibility == "members" %}<span class="badge badge-ghost badge-xs">Members</span>{% endif %}
   {% if work.files.all %}<span class="text-[11px] text-base-content/50" title="PDF available">PDF</span>{% endif %}
   {% if work.video %}<span class="text-[11px] text-base-content/50" title="Video available">Video</span>{% endif %}
