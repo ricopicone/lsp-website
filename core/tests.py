@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import Profile, User
 from events.models import Event, Session
@@ -208,6 +209,31 @@ def test_landing_page_lists_upcoming_events(client, event_with_sessions):
 def test_landing_page_skips_draft_events(client, draft_event_with_sessions):
     response = client.get(reverse("core:landing"))
     assert b"Draft Event" not in response.content
+
+
+@pytest.mark.django_db
+def test_landing_page_pins_a_special_event_above_the_seminars(client):
+    """task #461: a special event buried by September's seminars comes first,
+    and its type badge takes the accent tint. Selection rules live in
+    events/test_upcoming.py; this covers the view + template wiring."""
+    today = timezone.now().date()
+    for i in range(4):
+        Event.objects.create(
+            title=f"Buried Seminar {i}", slug=f"buried-seminar-{i}",
+            event_type=Event.Type.SEMINAR,
+            start_date=today + timedelta(days=10 + i),
+            end_date=today + timedelta(days=200), published=True,
+        )
+    Event.objects.create(
+        title="Pinned Study Day", slug="pinned-study-day",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=today + timedelta(days=40),
+        end_date=today + timedelta(days=40), published=True,
+    )
+
+    body = client.get(reverse("core:landing")).content.decode()
+    assert body.index("Pinned Study Day") < body.index("Buried Seminar 0")
+    assert "bg-accent/15 text-accent border-accent/25" in body
 
 
 @pytest.mark.django_db

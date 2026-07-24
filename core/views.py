@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -16,7 +16,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from core.context_processors import DEFAULT_SITE_THEME, SITE_THEME_COOKIE, SITE_THEMES
-from events.models import Event, Session
+from events.models import Session
+from events.upcoming import landing_events
 
 
 def set_site_theme(request, theme):
@@ -61,24 +62,7 @@ def landing(request):
     from workgroups.models import Visibility, Workgroup
 
     today = timezone.now().date()
-    # "Coming up" shows events that haven't started yet — with one exception:
-    # seminars (year-long) that started within the last month and aren't over,
-    # so a freshly-begun seminar still surfaces for late registration.
-    a_month_ago = today - timedelta(days=31)
-    seminar_types = [Event.Type.SEMINAR, Event.Type.SCHOLARLY_SEMINAR]
-    upcoming = (
-        Event.objects.filter(published=True)
-        .filter(
-            models.Q(start_date__gte=today)
-            | models.Q(
-                event_type__in=seminar_types,
-                start_date__gte=a_month_ago,
-                start_date__lt=today,
-                end_date__gte=today,
-            )
-        )
-        .order_by("start_date", "title")[:4]
-    )
+    upcoming = landing_events(request.user)
 
     # Grounded figures woven into the page (each rendered only when positive).
     # Matches accounts.views._directory_qs's standing exclusion — removed/
