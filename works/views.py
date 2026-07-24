@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Prefetch, Q
+from django.db.models import F, OuterRef, Prefetch, Q, Subquery, Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import (
     FileResponse,
     Http404,
@@ -63,6 +64,30 @@ def index(request):
             | Q(authors__last_name__icontains=q)
         ).distinct()
 
+    sort = request.GET.get("sort") or "random"
+    if sort not in ("random", "year", "added", "author"):
+        sort = "random"
+    if sort == "year":
+        qs = qs.order_by(F("publication_date").desc(nulls_last=True), "-created_at")
+    elif sort == "added":
+        qs = qs.order_by("-created_at")
+    elif sort == "author":
+        # First LSP author's last name, else the free-text external authors;
+        # works with neither sort last.
+        first_author = Subquery(
+            WorkAuthor.objects.filter(work=OuterRef("pk"))
+            .order_by("display_order")
+            .values("user__last_name")[:1]
+        )
+        qs = qs.annotate(
+            _author_key=Coalesce(
+                NullIf(Lower(first_author), Value("")),
+                NullIf(Lower("external_authors"), Value("")),
+            )
+        ).order_by(F("_author_key").asc(nulls_last=True), "title")
+    else:
+        qs = qs.order_by("?")
+
     years_qs = (
         _annotated_qs(request.user)
         .exclude(publication_date__isnull=True)
@@ -80,6 +105,13 @@ def index(request):
         "selected_year": year,
         "has_pdf": has_pdf,
         "q": q,
+        "selected_sort": sort,
+        "sort_choices": [
+            ("random", "Random"),
+            ("year", "Publication year"),
+            ("added", "Recently added"),
+            ("author", "Author A–Z"),
+        ],
     })
 
 

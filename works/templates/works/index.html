@@ -37,13 +37,21 @@
         {% endfor %}
       </select>
     </div>
+    <div>
+      <label for="filter-sort" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Sort</label>
+      <select id="filter-sort" name="sort" class="select select-bordered select-sm">
+        {% for value, label in sort_choices %}
+        <option value="{{ value }}" {% if value == selected_sort %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <label class="cursor-pointer flex items-center gap-2 text-sm">
       <input type="checkbox" name="has_pdf" value="1" {% if has_pdf %}checked{% endif %}
              class="checkbox checkbox-sm">
       <span>Has PDF</span>
     </label>
     <button type="submit" class="btn btn-sm">Filter</button>
-    {% if selected_kind or selected_year or has_pdf or q %}
+    {% if selected_kind or selected_year or has_pdf or q or selected_sort != "random" %}
     <a href="{% url 'works:index' %}" class="btn btn-ghost btn-sm">Clear</a>
     {% endif %}
   </form>

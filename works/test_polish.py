@@ -108,3 +108,36 @@ class TestDetailCitation:
                        url="https://ex.org/q")
         r2 = client.get(w2.get_absolute_url())
         assert "External link" in r2.content.decode()
+
+
+class TestIndexSort:
+    @pytest.fixture(autouse=True)
+    def works(self, author, django_user_model):
+        z = django_user_model.objects.create_user(
+            email="z@example.org", password="x", first_name="Ann", last_name="Zed",
+        )
+        self.a = make_work(title="Alpha", slug="alpha", author=z,
+                           publication_date=datetime.date(2020, 1, 1))
+        self.b = make_work(title="Beta", slug="beta",
+                           publication_date=datetime.date(2024, 1, 1), author=author)
+        self.c = make_work(title="Gamma", slug="gamma")  # undated, no authors
+
+    def _titles(self, client, sort):
+        r = client.get("/works/", {"sort": sort})
+        return [w.title for w in r.context["works"]]
+
+    def test_year_newest_first_undated_last(self, client):
+        assert self._titles(client, "year") == ["Beta", "Alpha", "Gamma"]
+
+    def test_added_recent_first(self, client):
+        assert self._titles(client, "added") == ["Gamma", "Beta", "Alpha"]
+
+    def test_author_alpha_blank_last(self, client):
+        # Swales < Zed; the author-less work sorts last.
+        assert self._titles(client, "author") == ["Beta", "Alpha", "Gamma"]
+
+    def test_default_and_bogus_return_all_as_random(self, client):
+        for params in ({}, {"sort": "random"}, {"sort": "nonsense"}):
+            r = client.get("/works/", params)
+            assert {w.title for w in r.context["works"]} == {"Alpha", "Beta", "Gamma"}
+            assert r.context["selected_sort"] == "random"
