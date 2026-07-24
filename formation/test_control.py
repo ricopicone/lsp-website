@@ -121,3 +121,22 @@ def test_control_requirement_tag_defaults_four_year():
 
     reloaded = ControlAnalysis.objects.get(pk=ca.pk)
     assert reloaded.requirement == "two_year"
+
+
+def test_control_progress_unreviewed_has_no_target(db):
+    from accounts.models import Profile, User
+    from formation.control import control_progress
+
+    u = User.objects.create_user(email="unrev@example.com", password="x")
+    u.profile.role = Profile.Role.PRE_CANDIDATE
+    u.profile.formation_background = Profile.FormationBackground.UNREVIEWED
+    u.profile.save()
+    ControlAnalysis.objects.create(
+        member=u, supervisor_name="S", requirement="four_year",
+        start_date=dt.date.today() - dt.timedelta(days=int(365.25 * 2)),
+    )
+
+    prog = control_progress(u)
+    assert prog["reviewed"] is False
+    assert "total_target" not in prog
+    assert prog["total_years"] == pytest.approx(2.0, abs=0.05)

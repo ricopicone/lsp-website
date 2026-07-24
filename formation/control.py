@@ -25,6 +25,9 @@ def control_progress(user) -> dict:
     settings_ = FormationSettings.load()
     req = user.profile.control_requirement()
     entries = list(ControlAnalysis.objects.filter(member=user))
+    total_years = round(sum((c.duration_years for c in entries), 0.0), 2)
+    if req is None:
+        return {"reviewed": False, "total_years": total_years}
 
     four = sorted(
         (c for c in entries if c.requirement == ControlAnalysis.Requirement.FOUR_YEAR),
@@ -40,9 +43,9 @@ def control_progress(user) -> dict:
         _slot(twos[i] if i < len(twos) else None, settings_.two_year_threshold)
         for i in range(n_two)
     ]
-    total_years = round(sum((c.duration_years for c in entries), 0.0), 2)
     total_target = settings_.four_year_threshold + settings_.two_year_threshold * n_two
     return {
+        "reviewed": True,
         "total_years": total_years,
         "total_target": total_target,
         "four_year": _slot(four[0] if four else None, settings_.four_year_threshold),
