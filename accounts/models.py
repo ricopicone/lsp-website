@@ -549,30 +549,14 @@ class Profile(models.Model):
         ).first()
 
     def is_tuition_current(self, on_date=None) -> bool:
-        """Source of truth for "is this user covered by tuition for seminars?".
+        """Source of truth for "is this user tuition-paying this year?".
 
-        True when either:
-
-        * the user has an enrollment for ``on_date``'s period with a
-          ``covers_seminars`` status (committed / payment_plan /
-          paid_in_full), or
-        * the user has completed the four-year tuition requirement and is
-          therefore ``tuition_decision_exempt`` — no annual decision applies,
-          so a covered-by-tuition seminar must still be free (task #468).
-          Without this, a member who finished paying tuition bypasses the
-          registration decision gate yet gets charged the full seminar fee.
-
-        False for SKIPPING (an explicit opt-out for that year), no row and
-        not exempt, or no current period.
+        Returns True when the user has a current-period enrollment with a
+        ``covers_seminars`` status (committed / payment_plan / paid_in_full).
+        Returns False for SKIPPING, no row, or no current period.
         """
         enr = self.current_tuition_enrollment(on_date)
-        if enr is not None:
-            # An explicit decision for this year wins — SKIPPING means the
-            # member opted out and pays the regular fee even if a *past*
-            # requirement was met.
-            return enr.covers_seminars
-        from payments.ledger import tuition_decision_exempt
-        return tuition_decision_exempt(self.user)
+        return bool(enr and enr.covers_seminars)
 
     def control_requirement(self) -> dict:
         """How many control analyses this member owes, by slot. Clinical

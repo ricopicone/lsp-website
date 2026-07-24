@@ -134,37 +134,6 @@ def test_covered_by_tuition_keys_on_the_events_academic_year(event, regular_user
     result = resolve_price(user=regular_user, tier=tier)
     assert result.amount == Decimal("100.00")
 
-
-def test_covered_by_tuition_for_requirement_met_member(event, regular_user):
-    """A member who completed the four-year tuition requirement is covered
-    for seminars even with no decision row for the event's AY (task #468).
-
-    This is Garret Barnwell's case: four non-skipping prior-year
-    enrollments, none for AY2026-2027 (the `event` fixture's year). Because
-    the annual decision no longer applies (``tuition_decision_exempt``), the
-    covered-by-tuition tier must resolve to $0 rather than the full fee."""
-    from payments.models import TuitionEnrollment, TuitionPeriod
-
-    for i in range(1, 5):
-        start = date(2026, 9, 1) - timedelta(days=365 * i + 1)
-        period = TuitionPeriod.objects.create(
-            name=f"AY prior {i} (pricing test)", slug=f"ay-prior-{i}-test",
-            start_date=start, decision_due_date=start + timedelta(days=60),
-            end_date=start + timedelta(days=364), tuition_amount=Decimal("2000.00"),
-        )
-        TuitionEnrollment.objects.create(
-            user=regular_user, tuition_period=period,
-            status=TuitionEnrollment.Status.PAID_IN_FULL,
-        )
-
-    tier = PriceTier.objects.create(
-        event=event, audience=Audience.MEMBER,
-        base_amount=Decimal("100.00"), covered_by_tuition=True,
-    )
-    result = resolve_price(user=regular_user, tier=tier)
-    assert result.amount == Decimal("0.00")
-    assert "tuition" in result.explanation.lower()
-
     # Now the member also has a covers-seminars enrollment for 2026-27: covered.
     new_period = TuitionPeriod.objects.create(
         name="AY 2026–2027", slug="ay-2026-2027-test",

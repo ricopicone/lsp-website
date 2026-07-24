@@ -92,41 +92,6 @@ def test_payment_plan_status_is_tuition_current(current_period):
 
 
 @pytest.mark.django_db
-def test_requirement_met_member_is_tuition_current_without_current_enrollment(
-    current_period,
-):
-    """A member who has completed the 4-year tuition requirement is covered
-    for seminars even without a decision row for the target year (task #468).
-
-    Mirrors Garret Barnwell: four non-skipping prior-year enrollments, no
-    enrollment for ``current_period`` — yet ``is_tuition_current`` must be
-    True because the annual decision no longer applies (they're
-    ``tuition_decision_exempt``)."""
-    u = _mk_candidate()
-    # Four non-skipping enrollments in four distinct prior years, and NONE
-    # for current_period — the year the seminar falls in.
-    for i in range(1, 5):
-        start = current_period.start_date - timedelta(days=365 * i + 1)
-        period = TuitionPeriod.objects.create(
-            name=f"Prior AY {i}",
-            slug=f"prior-ay-{i}",
-            start_date=start,
-            decision_due_date=start + timedelta(days=60),
-            end_date=start + timedelta(days=364),
-            tuition_amount=Decimal("2000.00"),
-        )
-        TuitionEnrollment.objects.create(
-            user=u, tuition_period=period,
-            status=TuitionEnrollment.Status.PAID_IN_FULL,
-        )
-
-    assert not TuitionEnrollment.objects.filter(
-        user=u, tuition_period=current_period
-    ).exists()
-    assert u.profile.is_tuition_current() is True
-
-
-@pytest.mark.django_db
 def test_enrollment_unique_per_user_per_period(current_period):
     u = _mk_candidate()
     TuitionEnrollment.objects.create(
