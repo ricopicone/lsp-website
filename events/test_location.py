@@ -138,16 +138,16 @@ def test_registered_sees_live_now_when_room_occupied(client, monkeypatch):
 
 
 def test_not_yet_open_shows_no_register_link(client):
-    # Draft-status (registration not yet open) event, previewable by staff.
-    # The "Register for details" link would 404, so it must not be shown.
+    # Published but registration not yet open, seen by a regular (non-host)
+    # member. The "Register for details" link would 404, so it must not show —
+    # they get the opening-soon wording instead. (A host would see the room
+    # affordance, not this gate — covered by the presenter tests above.)
     e = _event(slug="draft-talk")
     e.status = Event.Status.DRAFT
     e.save()
     now = timezone.now()
     _session(e, start=now + timedelta(days=2), end=now + timedelta(days=2, hours=1))
     u = _member()
-    u.is_staff = True  # so the draft event page is viewable
-    u.save()
     client.force_login(u)
     resp = client.get(reverse("events:detail", args=[e.slug]))
     assert resp.status_code == 200
@@ -166,6 +166,76 @@ def test_closed_shows_no_register_link(client):
     assert resp.status_code == 200
     assert b"Register for details" not in resp.content
     assert b"Registration is closed" in resp.content
+
+
+def _presenter(event, email="speaker@x.test"):
+    """An LSP member listed as a speaker on the event (grants can_edit_event via
+    Event.is_presenter for a non-offering event) — not registered."""
+    u = _member(email=email)
+    event.member_speakers.add(u)
+    return u
+
+
+@daily_on
+def test_presenter_sees_room_without_registering(client):
+    # A speaker never registers/pays for their own event; the join affordance
+    # must not be behind the registration gate for them.
+    e = _event(slug="spk-talk")
+    now = timezone.now()
+    _session(e, start=now + timedelta(days=2), end=now + timedelta(days=2, hours=1))
+    u = _presenter(e)
+    client.force_login(u)
+    resp = client.get(reverse("events:detail", args=[e.slug]))
+    assert b"Register for details" not in resp.content
+    assert b"Open room (host)" in resp.content
+
+
+@daily_on
+def test_presenter_sees_join_when_live(client):
+    e = _event(slug="spk-live")
+    now = timezone.now()
+    _session(e, start=now - timedelta(minutes=5), end=now + timedelta(minutes=55))
+    u = _presenter(e)
+    client.force_login(u)
+    resp = client.get(reverse("events:detail", args=[e.slug]))
+    assert b"Join the meeting room" in resp.content
+    assert b"Register for details" not in resp.content
+
+
+@daily_on
+def test_presenter_sees_clarifying_text_about_how_attendees_join(client):
+    e = _event(slug="spk-help")
+    now = timezone.now()
+    _session(e, start=now + timedelta(days=2), end=now + timedelta(days=2, hours=1))
+    u = _presenter(e)
+    client.force_login(u)
+    resp = client.get(reverse("events:detail", args=[e.slug]))
+    # Explains the attendee mechanism so a speaker can answer "how do I join?".
+    assert b"no separate meeting link" in resp.content
+
+
+@daily_on
+def test_presenter_sees_room_in_faculty_view(client):
+    e = _event(slug="spk-facview")
+    now = timezone.now()
+    _session(e, start=now + timedelta(days=2), end=now + timedelta(days=2, hours=1))
+    u = _presenter(e)
+    client.force_login(u)
+    resp = client.get(reverse("events:detail", args=[e.slug]) + "?view=faculty")
+    assert b"Open room (host)" in resp.content
+    assert b"no separate meeting link" in resp.content
+
+
+@daily_on
+def test_anon_still_sees_register_gate_not_room(client):
+    # The gate change must not leak the host affordance to logged-out visitors.
+    e = _event(slug="anon-gate")
+    now = timezone.now()
+    _session(e, start=now + timedelta(days=2), end=now + timedelta(days=2, hours=1))
+    resp = client.get(reverse("events:detail", args=[e.slug]))
+    assert b"Register for details" in resp.content
+    assert b"Open room (host)" not in resp.content
+    assert b"no separate meeting link" not in resp.content
 
 
 def test_in_person_shows_venue_not_online(client):
