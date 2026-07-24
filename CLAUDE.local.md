@@ -1,43 +1,30 @@
-# Resuming task #443
+# Resuming task #461
 
-**Task:** Ledger follow-ups from task #439 (post-ship polish)
+**Task:** Coming Up: Pin Upcoming Special Events to the Top
 
 ## Description
-Deferred items from the unified-ledger / member-Account-v2 build (all reviewed-and-triaged, none urgent):
-
-**Code follow-ups**
-- Add an ACCOUNT_UPDATES notification category (+CATEGORY_META migration) for history-submission decisions; currently reuses REGISTRATION_STATUS ("Registration updates" preference label is misleading).
-- Treasurer surface for "member-changed payments in the last N days" — members now have full parity (incl. donation flips, which can raise tuition_years_covered and self-clear the promotion gate); changes are audit-visible in provenance hovers but passive.
-- Batch `tuition_decision_exempt` in the Overview attention loop (calls member_account per in-training member; fine at ~80, batch via accounts_overview if roster grows). Fold show_money_tab's extra Payment.exists() into the same acct call.
-- Negative running balances render "$-40.00" (usd filter sign placement) — treasurer + member statements.
-- payments/ledger.py: expose per-line covered amounts from member_account so tuition_clearance stops replaying the sweep inline.
-- `_counts()` predicate dedup (Python vs DB-level filter in accounts_overview/audit).
-- End-to-end wiring tests for comp/cancel/refund charge hooks; ProfileInline formset gate test.
-- Update the Tuition Assistance Document content (stale "My LSP Tuition page" / ?tab=tuition wording — works via fallback, reads stale).
-
-**Launch-coupled (already on launch checklist, listed for completeness)**
-- Survey↔ledger reconciliation before SURVEY_ENABLED (survey-created dues payments mint no charges; survey PAID_IN_FULL enrollments mint charges without payments).
-- Populate Profile.year_joined (survey) before ever minting pre-2024 dues years.
-
-**Treasurer data work (tools all live: Assign, Re-categorize+settle, Split+settle, submissions queue)**
-- Continue the cleanup pass: verify/waive assumed 24-25/25-26 dues (Accounts→Owing), Matt Lovett's likely-wrong 25-26 Skipping, mis-typed tuition payments (Garcia $5.85k, Tod $2.2k, Sheila; Chamberlin deduped to honest $1.2k credit), more ledger-vs-Stripe dedups as found (process: verify date/amount/source/intent → annotate kept Stripe row → atomically delete imported duplicates).
+We have a special event in September that's getting buried by seminars all starting then. I think we should pin upcoming special events to the top. Maybe a good rule to start with: Pin upcoming special events to the top if they occur within the next two months. Design, plan, build, commit, merge into main locally, push to deploy
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
 
 ### launch-checklist (status)
-Things deliberately gated OFF until launch is intended (set in the host `.env` / systemd on the EC2 box):
+**Cutover executed 2026-07-22 (task #450), including the URL cutover.**
 
-- **Re-enable member-facing cron timers** — `lsp-dues-cron`, `lsp-registration-reminders`, `lsp-parletre-digests` (disabled 2026-06-01 so reminders don't email real members early; purge timer stays on). **Add** at launch: a daily `send_notification_digests` timer; a daily `process_referrals` timer; a frequent (~5 min) `send_meeting_reminders` timer; a daily `send_availability_reminders` timer (task #272 — yearly analyst-availability review, self-guards once/AY, only fires when AvailabilitySettings.reminder_mode=Automatic); and **NEW (task #272): a weekly `send_interview_reminders` timer** — reminds admission interviewers with outstanding reports (only those agreed-but-not-reported, >7 days since last reminder; to the analyst only). Member-facing → keep off until launch.
-- **Admin 2FA enforcement** — `DJANGO_TWO_FACTOR_ENFORCED=true`.
-- **Public login-email change** — `DJANGO_EMAIL_CHANGE_PUBLIC=true` (currently allowlisted to rico).
-- **SES send rate** — `DJANGO_EMAIL_MAX_SEND_RATE=14`.
-- **Stripe live cutover** — rico's test account → LSP's (Garrett's) live account; roll the import key, `STRIPE_LIVE_ONLY` guard already in prod.
-- **Feature flags** — `DJANGO_SUGGESTIONS_ENABLED`, `SURVEY_ENABLED`. (`DJANGO_DAILY_ENABLED`/video is ON in prod.)
+**Flags/timers (done):** `DJANGO_EMAIL_CHANGE_PUBLIC=true`, `DJANGO_EMAIL_MAX_SEND_RATE=14`; timers enabled: registration-reminders, parletre-digests + 5 new (notification-digests 15:00 UTC, process-referrals 16:00, availability-reminders 17:00, interview-reminders Mon 17:30, meeting-reminders 5-min). `lsp-dues-cron.service` gained the missing `send_tuition_reminders` ExecStart. Stripe was already on the school's live account; final import sweep committed (6 dues payments/$800; verify $0.00). Suggestions flag moot (hard-off in production.py).
 
-Data tasks before opening registration: reconcile backfilled tuition enrollments, flip `is_faculty` for seminar instructors, un-mask 19 Google-Group members, set the real Zoom link on the Masochism event.
+**URL cutover (done):** `https://lacanschool.org` is the canonical site. Wix-purchased domains CANNOT change nameservers (confirmed: Wix feature-request page) → DNS remains hosted at Wix; apex A + www CNAME were hand-edited in the Wix panel to the EIP (54.188.243.116). Host nginx: `lsp-canonical.conf` (apex proxy + old-Wix-path 301 map + www→apex); `app.lacanschool.org` 301s to apex EXCEPT `/payments/webhooks/` (Stripe's registered endpoint keeps proxying — POSTs don't follow redirects). One LE cert covers apex+www (exp 2026-10-20). Env: ALLOWED_HOSTS/CSRF = all three hosts; SITE_BASE_URL=https://lacanschool.org. S3 CORS (private + recordings buckets) includes the new origins. DMARC is now a real TXT (p=none, rua=website@). Gotcha: Wix's domain-unassign flow silently dropped the `app` A record (brief outage until re-added by hand).
 
-Note: referral workflow + analyst-availability feature + admissions-coordinator workflow are all LIVE now — only their member-facing timers (above) wait for launch. Admissions interviewer-invitation defaults to review-first (coordinator clicks Invite); set AdmissionsSettings.invitation_mode=Automatic to auto-invite on submit.
+**Reply-by-email stays on parletre.ricopic.one** — Wix's Google-Workspace MX preset blocks custom/subdomain MX records (this is WHY the test domain exists). PARLETRE_REPLY_DOMAIN was briefly flipped and reverted.
+
+**Still deliberately HELD (Rico's decisions 2026-07-22):**
+- `lsp-dues-cron.timer` disabled until the treasurer clears Accounts→Owing (assumed 24-25/25-26 dues, task #443). Enable: `systemctl enable --now lsp-dues-cron.timer`.
+- `SURVEY_ENABLED` off until the survey↔ledger charge-minting gap is closed.
+- `DJANGO_TWO_FACTOR_ENFORCED` off ~a few weeks so admins can log in first.
+
+**Future: cut Wix out entirely** — "Transfer away from Wix" registrar transfer (to Route 53 Domains, ~$15/yr, 5-7 days, zero downtime). The pre-staged Route 53 hosted zone (Z07184784MROHMIJPJLF; full mirror + parletre MX/DKIM) goes live then; unlocks subdomain MX → move reply-by-email to parletre.lacanschool.org.
+
+**Data tasks before opening registration:** reconcile backfilled tuition enrollments (#443 ongoing), flip `is_faculty` for seminar instructors, un-mask 19 Google-Group members, set the real Zoom link on the Masochism event, populate year_joined (survey) before minting pre-2024 dues years.
 
 ### do-not-over-automate (decision)
 The school **explicitly asked that automation not remove human discretion** (architecture §4.1, "space for the singular"). Faculty use sliding-scale and "none turned away for lack of funds" pricing; tuition-paying members are exempt from seminar fees; some faculty bill per class.
@@ -67,6 +54,9 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **auth-email-scanner-and-reset-gotchas** (gotcha) — Email link-scanners consume single-use links (POST-gate them); Django password reset silently skips unusable-password (imported) members
+- **membership-standing-axis** (architecture) — Profile.Standing (active/on_leave/resigned/emeritus/retired/removed) is the membership axis + orthogonal Profile.deceased_on date (task #451 SHIPPED); billing keys off standing==ACTIVE; NON_MEMBER_STANDINGS={resigned,removed} gate directory
+- **deleting-an-event-with-registrations** (gotcha) — To delete an Event you must first delete its Registrations: Registration.event AND Registration.price_tier are both on_delete=PROTECT
 - **unified-member-ledger-design** (status) — Task #439 LIVE on prod (deployed + backfilled 2026-07-15): unified per-member ledger, 7-tab treasurer admin; --dues-from 2024-09-01 (year_joined mostly null made earlier minting unsafe); treasurer cleanup pass is the open item
 - **prod-host-access-ssm** (reference) — When ssh lsp is unresponsive, run prod commands via AWS SSM (same channel as deploy); instance i-070b087afa041f233
 - **treasurer-payments-rework-2026-07** (status) — Big treasurer/payments-data cleanup + UI rework shipped Jul 13-14 2026 (tasks #435/#437); interface simplification is the next planned step
@@ -119,7 +109,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=443`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=461`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.
