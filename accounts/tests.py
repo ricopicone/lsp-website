@@ -751,3 +751,16 @@ def test_directory_card_retired_and_deceased_shows_only_memorial(client):
     body = client.get("/directory/").content.decode()
     assert "In memoriam" in body
     assert "Retired</span>" not in body  # deceased takes precedence
+
+
+@pytest.mark.django_db
+def test_header_offers_signup_to_anonymous_visitors(client):
+    resp = client.get("/")
+    content = resp.content.decode()
+    assert 'href="/accounts/signup/"' in content
+    assert 'href="/accounts/login/"' in content
+
+    member = User.objects.create_user(email="m2@example.org", password="pw")
+    client.force_login(member)
+    content = client.get("/").content.decode()
+    assert 'href="/accounts/signup/"' not in content
