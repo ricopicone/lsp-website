@@ -5,8 +5,12 @@ per work::
 
     [{"slug": "...", "fields": {"container_title": "...", ...}}, ...]
 
-Only fields in ``Work.STRUCTURED_CITATION_FIELDS`` are allowed, and only
-currently-empty fields are filled — member edits are never overwritten.
+Only fields in ``Work.STRUCTURED_CITATION_FIELDS`` (plus an empty
+``publication_date``) are allowed, and only currently-empty fields are
+filled — member edits are never overwritten. An entry may also carry
+``"set_publication_info"``: an explicit reviewed REPLACEMENT for the
+legacy free-form line (usually ``""`` once its content is fully captured
+by the structured fields, so the citation doesn't render twice).
 Idempotent; run with ``--dry-run`` first.
 """
 
@@ -27,7 +31,7 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         with open(opts["mapping"]) as fh:
             entries = json.load(fh)
-        allowed = set(Work.STRUCTURED_CITATION_FIELDS)
+        allowed = set(Work.STRUCTURED_CITATION_FIELDS) | {"publication_date"}
         applied = skipped = 0
         for entry in entries:
             slug, fields = entry.get("slug"), entry.get("fields") or {}
@@ -45,6 +49,11 @@ class Command(BaseCommand):
                     continue
                 setattr(work, name, value)
                 changed.append(name)
+            if "set_publication_info" in entry:
+                new_info = entry["set_publication_info"] or ""
+                if work.publication_info != new_info:
+                    work.publication_info = new_info
+                    changed.append("publication_info")
             if changed:
                 applied += len(changed)
                 verb = "would set" if opts["dry_run"] else "set"
