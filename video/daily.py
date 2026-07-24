@@ -143,18 +143,26 @@ def verify_webhook(timestamp: str, raw_body: bytes, signature: str) -> bool:
 
 
 def create_meeting_token(
-    *, room_name: str, user_name: str = "", is_owner: bool = False, exp: int | None = None
+    *, room_name: str, user_name: str = "", is_owner: bool = False,
+    exp: int | None = None, start_audio_off: bool = False,
+    start_video_off: bool = False,
 ) -> str:
     """Mint a short-lived meeting token scoped to ``room_name``.
 
     ``is_owner`` grants moderator controls (faculty/leaders). ``exp`` is a unix
-    timestamp after which the token is rejected.
+    timestamp after which the token is rejected. ``start_audio_off`` /
+    ``start_video_off`` join the participant muted / camera-off (a soft speaker
+    spotlight — they can turn them back on).
     """
     props: dict = {"room_name": room_name, "is_owner": is_owner}
     if user_name:
         props["user_name"] = user_name
     if exp is not None:
         props["exp"] = exp
+    if start_audio_off:
+        props["start_audio_off"] = True
+    if start_video_off:
+        props["start_video_off"] = True
     resp = requests.post(
         _url("meeting-tokens"), json={"properties": props}, headers=_headers(), timeout=15
     )
