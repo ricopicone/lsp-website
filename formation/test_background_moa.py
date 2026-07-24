@@ -53,7 +53,7 @@ def test_queue_excludes_personas(client):
     persona = _student("persona@example.com")
     persona.profile.is_persona = True
     persona.profile.save()
-    real = _student("real@example.com")
+    _student("real@example.com")
     client.force_login(_analyst())
     resp = client.get(reverse("formation:background_queue"))
     assert resp.status_code == 200
