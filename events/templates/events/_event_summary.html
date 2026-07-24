@@ -226,6 +226,12 @@ show_access_info.{% endcomment %}
     {% else %}
       <a href="{% url 'registrations:register' event.slug %}" id="register-cta" class="btn btn-primary btn-lg">Register →</a>
     {% endif %}
+    {% if event.open_to_guests and event.visibility != "members_only" and not user_registration %}
+    <p class="text-sm text-base-content/70 mt-2">Open to non-members. Guests are welcome to attend.</p>
+    {% if not user.is_authenticated %}
+    <p class="text-sm text-base-content/60">You'll be asked to sign in or create a free account. You don't need to be a member.</p>
+    {% endif %}
+    {% endif %}
   {% elif event.status == "draft" %}
     <p class="text-base-content/60">Registration not yet open.</p>
   {% elif event.status == "closed" %}

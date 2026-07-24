@@ -5,15 +5,17 @@ from __future__ import annotations
 import json
 import logging
 import os
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib.auth import login
+from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Prefetch
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse
+from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
@@ -143,7 +145,11 @@ def signup(request):
     return render(
         request,
         "registration/signup.html",
-        {"form": form, "next": request.GET.get("next", "")},
+        {
+            "form": form,
+            "next": request.GET.get("next", ""),
+            "register_event": _register_event_from_next(request),
+        },
     )
 
 
@@ -394,6 +400,39 @@ def _safe_next(request) -> str | None:
     if nxt and nxt.startswith("/") and not nxt.startswith("//"):
         return nxt
     return None
+
+
+def _register_event_from_next(request):
+    """Resolve a safe ``next`` URL to the public event it registers for.
+
+    Returns the Event when ``next`` points at ``registrations:register`` for
+    an event that is publicly visible; otherwise None (generic auth copy).
+    """
+    nxt = request.POST.get("next") or request.GET.get("next")
+    if not nxt or not nxt.startswith("/") or nxt.startswith("//"):
+        return None
+    try:
+        match = resolve(urlsplit(nxt).path)
+    except Resolver404:
+        return None
+    if match.view_name != "registrations:register":
+        return None
+    from events.models import Event
+
+    event = Event.objects.filter(slug=match.kwargs.get("event_slug")).first()
+    if event is None or not event.is_public_now:
+        return None
+    return event
+
+
+class LspLoginView(auth_views.LoginView):
+    """Stock LoginView + guest-friendly context when arriving from a
+    Register click (task #464)."""
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["register_event"] = _register_event_from_next(self.request)
+        return context
 
 
 @login_required

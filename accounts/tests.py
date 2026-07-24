@@ -30,6 +30,75 @@ def test_create_superuser():
 
 
 @pytest.mark.django_db
+def test_login_page_is_context_aware_for_event_registration(client):
+    from datetime import date
+
+    from events.models import Event
+
+    e = Event.objects.create(
+        title="Working with Masochism", slug="working-with-masochism",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        status=Event.Status.OPEN, published=True,
+    )
+    resp = client.get(f"/accounts/login/?next=/events/{e.slug}/register/")
+    content = resp.content.decode()
+    assert "Working with Masochism" in content
+    assert "Create a free account" in content
+
+
+@pytest.mark.django_db
+def test_login_page_generic_for_unrelated_or_bad_next(client):
+    for nxt in ["/events/", "/events/no-such-event/register/",
+                "https://evil.example/x", ""]:
+        resp = client.get("/accounts/login/", {"next": nxt} if nxt else {})
+        content = resp.content.decode()
+        assert "Sign in to the Lacanian School." in content
+        # The promoted signup button shows regardless of context.
+        assert "Create a free account" in content
+
+
+@pytest.mark.django_db
+def test_login_page_generic_for_draft_event(client):
+    from datetime import date
+
+    from events.models import Event
+
+    e = Event.objects.create(
+        title="Hidden Draft", slug="hidden-draft",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        published=False,
+    )
+    resp = client.get(f"/accounts/login/?next=/events/{e.slug}/register/")
+    assert "Hidden Draft" not in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_signup_page_is_context_aware_and_explains_membership(client):
+    from datetime import date
+
+    from events.models import Event
+
+    e = Event.objects.create(
+        title="Working with Masochism", slug="working-with-masochism",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        status=Event.Status.OPEN, published=True,
+    )
+    resp = client.get(f"/accounts/signup/?next=/events/{e.slug}/register/")
+    content = resp.content.decode()
+    assert "Working with Masochism" in content
+    assert "doesn't make you a member" in content
+
+    # No event context: still shows the explainer, generic heading.
+    resp = client.get("/accounts/signup/")
+    content = resp.content.decode()
+    assert "doesn't make you a member" in content
+    assert "Create an account" in content
+
+
+@pytest.mark.django_db
 def test_profile_created_automatically():
     user = User.objects.create_user(
         email="auto@example.com",
@@ -682,3 +751,16 @@ def test_directory_card_retired_and_deceased_shows_only_memorial(client):
     body = client.get("/directory/").content.decode()
     assert "In memoriam" in body
     assert "Retired</span>" not in body  # deceased takes precedence
+
+
+@pytest.mark.django_db
+def test_header_offers_signup_to_anonymous_visitors(client):
+    resp = client.get("/")
+    content = resp.content.decode()
+    assert 'href="/accounts/signup/"' in content
+    assert 'href="/accounts/login/"' in content
+
+    member = User.objects.create_user(email="m2@example.org", password="pw")
+    client.force_login(member)
+    content = client.get("/").content.decode()
+    assert 'href="/accounts/signup/"' not in content
