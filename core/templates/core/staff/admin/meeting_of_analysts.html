@@ -14,6 +14,9 @@
   {% url 'formation:external_analyst_queue' as external_analysts_url %}
   {% include "core/staff/admin/_section.html" with title="External control analysts" body="Authorize analysts outside the School for members' control analyses. Members request; the Meeting approves or declines." link=external_analysts_url link_label="Review requests" count=open_external_analysts count_label="open" %}
 
+  {% url 'formation:background_queue' as backgrounds_url %}
+  {% include "core/staff/admin/_section.html" with title="Formation backgrounds" body="Set each in-training student's background (clinical or academic), which determines their control-analysis requirement. Students not yet reviewed are counted here." link=backgrounds_url link_label="Review backgrounds" count=open_backgrounds count_label="unreviewed" %}
+
   {% url 'workgroups:detail' 'meeting-of-analysts' as meeting_workspace_url %}
   {% include "core/staff/admin/_section.html" with title="Meeting workspace" body="The Meeting's own roster, agenda, minutes, and decisions — its shared workspace. Every active Analyst is a member automatically." link=meeting_workspace_url link_label="Open the workspace" %}
 {% endblock %}
