@@ -120,7 +120,7 @@ def test_ensure_room_returns_none_when_disabled():
 def test_mint_token_passes_owner_flag(monkeypatch):
     captured: dict = {}
 
-    def _fake_token(*, room_name, user_name="", is_owner=False, exp=None):
+    def _fake_token(*, room_name, user_name="", is_owner=False, exp=None, **kwargs):
         captured.update(room_name=room_name, user_name=user_name, is_owner=is_owner)
         return "tok-123"
 
