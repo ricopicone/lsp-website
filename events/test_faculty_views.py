@@ -285,6 +285,58 @@ def test_member_speaker_on_an_offering_is_a_guest_not_faculty(
     assert client.get(reverse("events:edit", args=[event.slug])).status_code == 403
 
 
+# ---- Access details for whoever runs the event -------------------------
+#
+# Faculty and presenters never register (or pay) for their own event, so the
+# venue / meeting link isn't behind the registration gate for them.
+
+ZOOM = "https://zoom.example.com/j/123"
+
+
+def test_access_details_shown_to_special_event_presenter(
+    client, special_event, presenter,
+):
+    special_event.access_info = ZOOM
+    special_event.save(update_fields=["access_info"])
+    client.force_login(presenter)
+    response = client.get(reverse("events:detail", args=[special_event.slug]))
+    assert ZOOM.encode() in response.content
+
+
+def test_access_details_shown_to_offering_faculty(client, event, faculty_member):
+    event.access_info = ZOOM
+    event.save(update_fields=["access_info"])
+    client.force_login(faculty_member)
+    # The seminar page is the Workspace; both render the shared summary.
+    response = client.get(reverse("events:detail", args=[event.slug]), follow=True)
+    assert ZOOM.encode() in response.content
+
+
+def test_access_details_hidden_from_unregistered_user(
+    client, special_event, random_user,
+):
+    special_event.access_info = ZOOM
+    special_event.save(update_fields=["access_info"])
+    client.force_login(random_user)
+    response = client.get(reverse("events:detail", args=[special_event.slug]))
+    assert ZOOM.encode() not in response.content
+
+
+def test_access_details_shown_to_paid_registrant(client, special_event, random_user):
+    special_event.access_info = ZOOM
+    special_event.save(update_fields=["access_info"])
+    tier = PriceTier.objects.create(
+        event=special_event, audience=Audience.STUDENT, base_amount=Decimal("50.00")
+    )
+    Registration.objects.create(
+        user=random_user, event=special_event, price_tier=tier,
+        quoted_amount=Decimal("50.00"), status=Registration.Status.PAID,
+    )
+    client.force_login(random_user)
+    response = client.get(reverse("events:detail", args=[special_event.slug]))
+    assert ZOOM.encode() in response.content
+
+
 # ---- Pricing-code generation (PROG-8 / REG-17) -------------------------
 
 

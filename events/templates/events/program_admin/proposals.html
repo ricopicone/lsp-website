@@ -124,15 +124,32 @@
             </td>
             <td class="text-xs text-base-content/70 whitespace-nowrap">{{ e.start_date|date:"M j, Y" }}</td>
             <td>
-              {% if e.is_public_now %}
-                <span class="badge badge-success badge-sm">Live</span>
-              {% else %}
-                <span class="badge badge-ghost badge-sm">Draft</span>
-              {% endif %}
+              <div class="flex flex-wrap items-center gap-1">
+                {% if e.is_public_now %}
+                  <span class="badge badge-success badge-sm">Live</span>
+                {% else %}
+                  <span class="badge badge-ghost badge-sm">Draft</span>
+                {% endif %}
+                {% if e.status == 'open' %}
+                  <span class="badge badge-outline badge-sm">Registration open</span>
+                {% else %}
+                  <span class="badge badge-sm {% if e.is_public_now %}badge-warning{% else %}badge-ghost{% endif %}">Registration closed</span>
+                {% endif %}
+              </div>
             </td>
             <td>
               <div class="flex items-center justify-end gap-2">
                 <a href="{% url 'events:edit' e.slug %}" class="link link-primary text-sm">Edit</a>
+                <form method="post" action="{% url 'program_admin_special_event_registration' e.slug %}">
+                  {% csrf_token %}
+                  {% if e.status == 'open' %}
+                  <input type="hidden" name="action" value="close">
+                  <button type="submit" class="btn btn-ghost btn-xs">Close registration</button>
+                  {% else %}
+                  <input type="hidden" name="action" value="open">
+                  <button type="submit" class="btn btn-outline btn-xs">Open registration</button>
+                  {% endif %}
+                </form>
                 <form method="post" action="{% url 'program_admin_special_event_publish' e.slug %}">
                   {% csrf_token %}
                   {% if e.is_public_now %}

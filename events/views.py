@@ -71,6 +71,11 @@ def event_summary_context(event, user) -> dict:
     from events.permissions import can_edit_event
     from video.services import daily_enabled, presence_names, room_participant_count
 
+    # Whoever runs the event — faculty, a PC-organized event's presenters, the
+    # PC, staff — sees the access details (venue / meeting link) without a
+    # registration. They never pay for their own event, so the payment gate
+    # would withhold the meeting details from the people leading the meeting.
+    can_host = can_edit_event(user, event)
     daily_on = daily_enabled()
     # Real Daily presence in the event's room (people actually meeting now).
     # No provisioning: counts only an already-created room, else 0 (no API call).
@@ -107,7 +112,10 @@ def event_summary_context(event, user) -> dict:
         "daily_enabled": daily_on,
         "event_is_live": event.is_live(),
         "event_next_session_at": next_session.start_at if next_session else None,
-        "can_host": can_edit_event(user, event),
+        "can_host": can_host,
+        "show_access_info": bool(event.access_info) and (
+            has_paid_registration or can_host
+        ),
         "event_room_live": bool(room_participants),
         "event_room_participants": room_participants,
         "event_room_participant_names": room_participant_names,
@@ -1045,6 +1053,51 @@ def program_admin_special_event_publish(request, slug: str):
         request,
         f"{'Published' if publish else 'Unpublished'} “{event.title}”.",
     )
+    return redirect("program_admin_proposals")
+
+
+@login_required
+@require_POST
+def program_admin_special_event_registration(request, slug: str):
+    """PC opens / closes registration on a standalone special event.
+
+    ``Event.published`` (the Publish button) controls visibility; ``status``
+    controls whether members can register and pay — a live page can carry
+    closed registration. Program events get this lever from their program's
+    bulk buttons; a standalone special event had nowhere to set it but the
+    Django admin, so this is it.
+    """
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    event = get_object_or_404(
+        Event, slug=slug, event_type=Event.Type.SPECIAL_EVENT,
+    )
+    action = request.POST.get("action")
+    if action == "open":
+        event.status = Event.Status.OPEN
+    elif action == "close":
+        event.status = Event.Status.CLOSED
+    else:
+        raise Http404()
+    event.save(update_fields=["status"])
+    if action == "open":
+        messages.success(request, f"Registration is open for “{event.title}”.")
+        # Nothing to quote without a tier — flag it rather than refuse (the PC
+        # may be mid-setup), so nobody discovers it from a broken register page.
+        if not event.price_tiers.exists():
+            messages.warning(
+                request,
+                f"“{event.title}” has no price tier yet, so members can't "
+                "complete a registration. Add one on the event's edit page.",
+            )
+        if not event.published:
+            messages.warning(
+                request,
+                f"“{event.title}” is still a draft — publish it for anyone to "
+                "reach the registration page.",
+            )
+    else:
+        messages.success(request, f"Registration is closed for “{event.title}”.")
     return redirect("program_admin_proposals")
 
 

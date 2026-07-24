@@ -3,7 +3,8 @@
 access details, sessions, pricing, and the register/your-status CTA. Shared by
 the standalone event page (events/event_detail.html) and the seminar Workspace
 Overview (workgroups/_tab_overview.html) so the two never drift. Expects:
-event, sessions, price_tiers, user_registration, has_paid_registration.{% endcomment %}
+event, sessions, price_tiers, user_registration, has_paid_registration,
+show_access_info.{% endcomment %}
 
 {# ---------- Your registration status (members) ---------- #}
 {% if user_registration %}
@@ -112,11 +113,11 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
 </section>
 {% endif %}
 
-{# ---------- Access details (paid users only) ---------- #}
-{% if has_paid_registration and event.access_info %}
+{# ---------- Access details (registrants + whoever runs the event) ---------- #}
+{% if show_access_info %}
 <div role="alert" class="alert alert-success">
   <div>
-    <h3 class="font-medium mb-1">Your access details</h3>
+    <h3 class="font-medium mb-1">{% if has_paid_registration %}Your access details{% else %}Access details{% endif %}</h3>
     <p class="whitespace-pre-wrap text-sm">{{ event.access_info }}</p>
   </div>
 </div>

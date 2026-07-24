@@ -446,6 +446,90 @@ def test_special_event_publish_toggle_rejects_non_special(client, pc_member, pro
 
 
 @pytest.mark.django_db
+def test_special_event_registration_toggle(client, pc_member):
+    """A standalone special event's registration lever lives on the Proposals
+    tab — program events get theirs from the program's bulk buttons."""
+    e = Event.objects.create(
+        title="Talk", slug="talk-reg", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 11, 5), end_date=date(2030, 11, 5),
+        published=True, status=Event.Status.DRAFT,
+    )
+    client.force_login(pc_member)
+    url = reverse("program_admin_special_event_registration", args=[e.slug])
+    client.post(url, {"action": "open"})
+    e.refresh_from_db()
+    assert e.status == Event.Status.OPEN
+    client.post(url, {"action": "close"})
+    e.refresh_from_db()
+    assert e.status == Event.Status.CLOSED
+
+
+@pytest.mark.django_db
+def test_special_event_registration_toggle_rejects_non_special(
+    client, pc_member, program,
+):
+    e = Event.objects.create(
+        title="Sem", slug="sem-reg", event_type=Event.Type.SEMINAR,
+        start_date=date(2030, 9, 1), end_date=date(2031, 5, 1), program=program,
+    )
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_special_event_registration", args=[e.slug]),
+        {"action": "open"},
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_special_event_registration_toggle_forbidden_for_random_user(client):
+    e = Event.objects.create(
+        title="Talk", slug="talk-reg-2", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 11, 5), end_date=date(2030, 11, 5), published=True,
+    )
+    client.force_login(User.objects.create_user(email="rando@x.test", password="x"))
+    resp = client.post(
+        reverse("program_admin_special_event_registration", args=[e.slug]),
+        {"action": "open"},
+    )
+    assert resp.status_code == 404
+    e.refresh_from_db()
+    assert e.status == Event.Status.DRAFT
+
+
+@pytest.mark.django_db
+def test_opening_registration_without_a_price_tier_warns(client, pc_member):
+    """No price tier means the register page has nothing to quote — warn rather
+    than block (staff discretion), but still open it."""
+    e = Event.objects.create(
+        title="Talk", slug="talk-no-tier", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 11, 5), end_date=date(2030, 11, 5), published=True,
+    )
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_special_event_registration", args=[e.slug]),
+        {"action": "open"}, follow=True,
+    )
+    e.refresh_from_db()
+    assert e.status == Event.Status.OPEN
+    assert b"no price tier" in resp.content
+
+
+@pytest.mark.django_db
+def test_proposals_tab_shows_registration_state(client, pc_member):
+    Event.objects.create(
+        title="Open Talk", slug="open-talk", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 11, 5), end_date=date(2030, 11, 5),
+        published=True, status=Event.Status.DRAFT,
+    )
+    client.force_login(pc_member)
+    resp = client.get(reverse("program_admin_proposals"))
+    # Published-but-not-open must not read as simply "Live" — that ambiguity is
+    # what hid a closed registration on a live page.
+    assert b"Registration closed" in resp.content
+    assert b"Open registration" in resp.content
+
+
+@pytest.mark.django_db
 def test_proposals_tab_lists_special_events(client, pc_member):
     Event.objects.create(
         title="Standalone Talk", slug="standalone-talk",
