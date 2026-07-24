@@ -285,6 +285,57 @@ def test_member_speaker_on_an_offering_is_a_guest_not_faculty(
     assert client.get(reverse("events:edit", args=[event.slug])).status_code == 403
 
 
+# ---- Linked external speakers (task #463) ------------------------------
+
+
+def test_linked_external_speaker_gets_presenter_access(client, special_event):
+    from events.models import Speaker
+    u = User.objects.create_user(email="ext@example.com", first_name="Derek", last_name="Hook")
+    s = Speaker.objects.create(name="Derek Hook", slug="derek-hook-1", email="ext@example.com", user=u)
+    special_event.speakers.add(s)
+    assert special_event.is_presenter(u) is True
+    from events.permissions import can_edit_event
+    assert can_edit_event(u, special_event) is True
+    client.force_login(u)
+    resp = client.get(reverse("events:detail", args=[special_event.slug]))
+    assert b"Faculty view" in resp.content
+
+
+def test_linked_external_speaker_can_enter_room(db):
+    from events.models import Speaker
+    from video.services import can_enter_event, is_owner
+    e = Event.objects.create(
+        title="Talk", slug="ext-room", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 9, 1), end_date=date(2030, 9, 1),
+        published=True, status=Event.Status.OPEN,
+    )
+    u = User.objects.create_user(email="ext2@example.com")
+    s = Speaker.objects.create(name="Guest", slug="guest-1", email="ext2@example.com", user=u)
+    e.speakers.add(s)
+    assert can_enter_event(e, u) is True
+    assert is_owner(e, u) is True
+
+
+def test_linked_external_speaker_on_offering_gets_nothing(db):
+    from events.models import Speaker
+    e = Event.objects.create(
+        title="Sem", slug="ext-sem", event_type=Event.Type.SEMINAR,
+        start_date=date(2030, 9, 1), end_date=date(2031, 5, 1),
+    )
+    u = User.objects.create_user(email="ext3@example.com")
+    s = Speaker.objects.create(name="Guest", slug="guest-2", email="ext3@example.com", user=u)
+    e.speakers.add(s)
+    assert e.is_presenter(u) is False
+
+
+def test_linked_external_speaker_absent_from_directory(client, db):
+    from events.models import Speaker
+    from accounts.views import _directory_qs
+    u = User.objects.create_user(email="ext4@example.com", first_name="Derek", last_name="Hook")
+    Speaker.objects.create(name="Derek Hook", slug="derek-hook-2", email="ext4@example.com", user=u)
+    assert u not in [p.user for p in _directory_qs()]
+
+
 # ---- Access details for whoever runs the event -------------------------
 #
 # Faculty and presenters never register (or pay) for their own event, so the

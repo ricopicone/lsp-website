@@ -479,18 +479,23 @@ class Event(models.Model):
         shares the Programming Committee's workgroup, so its faculty can't be
         stored as a role there: that would put the presenter on the PC roster
         and make them faculty of every PC event. Their presenters are recorded
-        as ``member_speakers`` instead, and this is what earns them the event's
-        faculty surfaces — scoped to the one event.
+        as ``member_speakers`` (LSP members) or, for external presenters, as an
+        ``events.Speaker`` with a linked login (task #463) — either earns the
+        event's faculty surfaces, scoped to the one event.
 
         Offerings (seminar / reading group / cartel) have their own workgroup
-        where real faculty live, so a member speaker there is a guest and gets
-        nothing.
+        where real faculty live, so a member/external speaker there is a guest
+        and gets nothing.
         """
         if not getattr(user, "is_authenticated", False):
             return False
         if self.event_type in self.ANNUAL_PROGRAM_TYPES:
             return False
-        return self.member_speakers.filter(pk=user.pk).exists()
+        if self.member_speakers.filter(pk=user.pk).exists():
+            return True
+        # External presenters with a linked login (task #463) are presenters of
+        # this one event too — same per-event grant, via the Speaker.user link.
+        return self.speakers.filter(user=user).exists()
 
     def add_faculty(self, user):
         """Idempotent: give ``user`` the FACULTY role on this event's workgroup.
