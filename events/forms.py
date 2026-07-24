@@ -16,7 +16,7 @@ class EventDescriptionForm(forms.ModelForm):
         model = Event
         fields = (
             "title", "description", "readings", "schedule_note", "contact",
-            "fee_note", "record_video", "speaker_spotlight",
+            "fee_note", "record_video", "speaker_spotlight", "open_to_guests",
         )
         widgets = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
@@ -401,7 +401,7 @@ class ProgramEventForm(forms.ModelForm):
             "format", "status",
             "description", "readings", "schedule_note", "contact", "fee_note",
             "access_info",
-            "requires_faculty_approval", "record_video",
+            "requires_faculty_approval", "record_video", "open_to_guests",
         )
         widgets = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
@@ -433,6 +433,7 @@ class ProgramEventForm(forms.ModelForm):
             ),
             "requires_faculty_approval": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "record_video": forms.CheckboxInput(attrs={"class": "checkbox"}),
+            "open_to_guests": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }
 
     def __init__(self, *args, program=None, **kwargs):

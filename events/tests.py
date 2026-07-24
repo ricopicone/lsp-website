@@ -379,3 +379,40 @@ def test_speaker_spotlight_defaults_off():
         start_date=date(2030, 9, 1), end_date=date(2030, 9, 1),
     )
     assert e.speaker_spotlight is False
+
+
+def test_open_to_guests_is_on_edit_forms_and_not_reviewable():
+    from events.forms import EventDescriptionForm, ProgramEventForm
+    from events.review import REVIEWABLE_FIELDS
+
+    assert "open_to_guests" in EventDescriptionForm.Meta.fields
+    assert "open_to_guests" in ProgramEventForm.Meta.fields
+    # Non-reviewable: applies immediately, skips the change-review dialog.
+    assert "open_to_guests" not in REVIEWABLE_FIELDS
+
+
+@pytest.mark.django_db
+def test_staff_edit_toggles_open_to_guests_immediately(client):
+    staff = User.objects.create_user(
+        email="staff@example.org", password="pw", is_staff=True
+    )
+    e = Event.objects.create(
+        title="Special Evening", slug="special-evening",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        status=Event.Status.OPEN, published=True,
+    )
+    client.force_login(staff)
+    resp = client.post(f"/events/{e.slug}/edit/", {
+        "title": e.title,
+        "description": "",
+        "readings": "",
+        "schedule_note": "",
+        "contact": "",
+        "fee_note": "",
+        # record_video / speaker_spotlight / open_to_guests are checkboxes;
+        # omitting open_to_guests unchecks it.
+    })
+    assert resp.status_code == 302
+    e.refresh_from_db()
+    assert e.open_to_guests is False
