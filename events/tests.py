@@ -416,3 +416,42 @@ def test_staff_edit_toggles_open_to_guests_immediately(client):
     assert resp.status_code == 302
     e.refresh_from_db()
     assert e.open_to_guests is False
+
+
+def _special_event(**kwargs):
+    defaults = dict(
+        title="Special Evening", slug="special-evening",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        status=Event.Status.OPEN, published=True,
+    )
+    defaults.update(kwargs)
+    return Event.objects.create(**defaults)
+
+
+@pytest.mark.django_db
+def test_event_page_shows_guest_note_when_open_to_guests(client):
+    e = _special_event()
+    resp = client.get(f"/events/{e.slug}/")
+    content = resp.content.decode()
+    assert "Guests are welcome" in content
+    # Anonymous viewers also get the account hint.
+    assert "create a free account" in content
+
+
+@pytest.mark.django_db
+def test_event_page_hides_guest_note_when_flag_off(client):
+    e = _special_event(open_to_guests=False)
+    resp = client.get(f"/events/{e.slug}/")
+    assert "Guests are welcome" not in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_signed_in_viewer_gets_note_without_account_hint(client):
+    member = User.objects.create_user(email="m@example.org", password="pw")
+    client.force_login(member)
+    e = _special_event()
+    resp = client.get(f"/events/{e.slug}/")
+    content = resp.content.decode()
+    assert "Guests are welcome" in content
+    assert "create a free account" not in content
