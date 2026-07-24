@@ -4,8 +4,13 @@
 <div class="max-w-md mx-auto py-8 space-y-6">
 
   <header class="space-y-1">
+    {% if register_event %}
+    <h1 class="font-serif text-3xl text-base-content">Sign in</h1>
+    <p class="text-sm text-base-content/60">to register for {{ register_event.title }}.</p>
+    {% else %}
     <h1 class="font-serif text-3xl text-base-content">Log in</h1>
-    <p class="text-sm text-base-content/60">Member services for the Lacanian School.</p>
+    <p class="text-sm text-base-content/60">Sign in to the Lacanian School.</p>
+    {% endif %}
   </header>
 
   {% if form.errors %}
@@ -35,10 +40,10 @@
 
   <a href="{% url 'magic_link_request' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="btn btn-outline w-full">Email me a sign-in link</a>
 
-  <p class="text-sm text-base-content/60 text-center">
-    No account?
-    <a href="{% url 'signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="link link-primary">Sign up</a>.
-  </p>
+  <div class="divider text-xs text-base-content/40">New to the School?</div>
+
+  <a href="{% url 'signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="btn btn-outline btn-primary w-full">Create a free account</a>
+  <p class="text-xs text-base-content/60 text-center">Anyone can create a free account. You don't need to be a member{% if register_event %} to attend{% endif %}.</p>
 
 </div>
 {% endblock %}
