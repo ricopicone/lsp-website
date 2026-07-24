@@ -119,8 +119,18 @@ def detail(request, slug):
         video_url = presigned_private_url(work.video.name) or reverse(
             "works:video", args=[work.slug]
         )
+    # Chicago citation, external publications only. The Cite block needs at
+    # least a year or some structured data — title-only citations are noise.
+    from .citation import citation_html, citation_text, source_html
+
+    has_citation = work.kind == Work.Kind.EXTERNAL and (
+        work.has_structured_citation or work.publication_date
+    )
     return render(request, "works/detail.html", {
         "work": work,
+        "citation": citation_html(work) if has_citation else "",
+        "citation_txt": citation_text(work) if has_citation else "",
+        "source_line": source_html(work) if work.kind == Work.Kind.EXTERNAL else "",
         "can_edit": work.editable_by(request.user),
         "content_visible": work.content_visible_to(request.user),
         "video_url": video_url,

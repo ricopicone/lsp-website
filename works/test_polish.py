@@ -2,6 +2,8 @@
 form handling, detail-page presentation, sort options, grid/list toggle,
 and the backfill_citations command."""
 
+import datetime
+
 import pytest
 
 from works.models import Work, WorkAuthor
@@ -70,3 +72,39 @@ class TestWorkFormCitation:
             form = WorkForm(self._data(doi=raw), current_user=author)
             assert form.is_valid(), form.errors
             assert form.cleaned_data["doi"] == "10.1/a"
+
+
+class TestDetailCitation:
+    def test_source_line_and_cite_block(self, client):
+        w = make_work(
+            external_type=Work.ExternalType.ARTICLE,
+            container_title="Psychoanalytic Review", volume="12", pages="33–58",
+            publication_date=datetime.date(2024, 5, 1),
+            publication_info="Special issue on the gaze",
+        )
+        r = client.get(w.get_absolute_url())
+        html = r.content.decode()
+        assert "<i>Psychoanalytic Review</i>" in html
+        assert "Special issue on the gaze" in html   # note AND structured line
+        assert "2024" in html                        # date no longer suppressed
+        assert "Cite" in html
+        assert 'id="copy-citation"' in html
+
+    def test_date_shows_alongside_legacy_info(self, client):
+        w = make_work(
+            title="Legacy", slug="legacy",
+            publication_info="Journal of X, Vol 12 (2024)",
+            publication_date=datetime.date(2024, 5, 1),
+        )
+        html = client.get(w.get_absolute_url()).content.decode()
+        assert "Journal of X, Vol 12 (2024)" in html
+        assert "May 1, 2024" in html
+
+    def test_external_link_label(self, client):
+        w = make_work(title="Linked", slug="linked", url="https://ex.org/p")
+        r = client.get(w.get_absolute_url())
+        assert "View at publisher" in r.content.decode()
+        w2 = make_work(title="Palimp", slug="palimp", kind=Work.Kind.PALIMPSEST,
+                       url="https://ex.org/q")
+        r2 = client.get(w2.get_absolute_url())
+        assert "External link" in r2.content.decode()
