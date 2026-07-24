@@ -22,6 +22,9 @@
       {% for wa in work.authorships.all %}{% if not forloop.first %}, {% endif %}<a href="{% url 'directory_detail' wa.user.profile.directory_slug %}" class="hover:text-primary">{{ wa.user.first_name }} {{ wa.user.last_name }}</a>{% endfor %}
       {% if work.external_authors %}{% if work.authorships.all %}, {% endif %}{{ work.external_authors }}{% endif %}
     </p>
+    {% if work.kind == "external" %}{% if work.container_title or work.publisher %}
+    <p class="text-[11px] text-base-content/55 line-clamp-1"><i>{{ work.container_title|default:work.publisher }}</i></p>
+    {% endif %}{% endif %}
     <div class="flex flex-wrap items-center gap-2 text-[11px] text-base-content/55">
       {% if work.publication_date %}<span>{{ work.publication_date|date:"Y" }}</span>{% endif %}
       <span class="uppercase tracking-wider">{{ work.get_kind_display }}</span>
