@@ -998,6 +998,7 @@ def background_queue(request):
     _require_review(request)
     students = (
         Profile.objects.filter(role__in=Profile.IN_TRAINING_ROLES)
+        .exclude(is_persona=True)
         .select_related("user")
         .annotate(_unrev=Case(
             When(formation_background=Profile.FormationBackground.UNREVIEWED,

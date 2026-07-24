@@ -613,7 +613,7 @@ def meeting_of_analysts_admin(request):
         "open_backgrounds": Profile.objects.filter(
             role__in=Profile.IN_TRAINING_ROLES,
             formation_background=Profile.FormationBackground.UNREVIEWED,
-        ).count(),
+        ).exclude(is_persona=True).count(),
         "officers": school_officers(),
     })
 
