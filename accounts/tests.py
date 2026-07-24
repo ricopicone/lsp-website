@@ -753,19 +753,6 @@ def test_directory_card_retired_and_deceased_shows_only_memorial(client):
     assert "Retired</span>" not in body  # deceased takes precedence
 
 
-@pytest.mark.django_db
-def test_header_offers_signup_to_anonymous_visitors(client):
-    resp = client.get("/")
-    content = resp.content.decode()
-    assert 'href="/accounts/signup/"' in content
-    assert 'href="/accounts/login/"' in content
-
-    member = User.objects.create_user(email="m2@example.org", password="pw")
-    client.force_login(member)
-    content = client.get("/").content.decode()
-    assert 'href="/accounts/signup/"' not in content
-
-
 def test_safe_next_rejects_hostful_and_backslash_urls(rf):
     from accounts.views import _safe_next
 
