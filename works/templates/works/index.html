@@ -54,14 +54,29 @@
     {% if selected_kind or selected_year or has_pdf or q or selected_sort != "random" %}
     <a href="{% url 'works:index' %}" class="btn btn-ghost btn-sm">Clear</a>
     {% endif %}
+    <input type="hidden" name="view" value="{{ view_mode }}">
+    <div class="join ml-auto" role="group" aria-label="Layout">
+      <a href="{% querystring view='grid' %}" title="Grid"
+         class="btn btn-sm join-item {% if view_mode == 'grid' %}btn-active{% endif %}">▦</a>
+      <a href="{% querystring view='list' %}" title="List"
+         class="btn btn-sm join-item {% if view_mode == 'list' %}btn-active{% endif %}">≡</a>
+    </div>
   </form>
 
   {% if works %}
+  {% if view_mode == "list" %}
+  <ul class="divide-y divide-base-300/40">
+    {% for work in works %}
+      {% include "works/_row.html" %}
+    {% endfor %}
+  </ul>
+  {% else %}
   <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-8">
     {% for work in works %}
       {% include "works/_card.html" %}
     {% endfor %}
   </div>
+  {% endif %}
   {% else %}
   <div class="py-12 text-center text-base-content/60">
     <p>No works match these filters.</p>

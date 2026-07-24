@@ -141,3 +141,32 @@ class TestIndexSort:
             r = client.get("/works/", params)
             assert {w.title for w in r.context["works"]} == {"Alpha", "Beta", "Gamma"}
             assert r.context["selected_sort"] == "random"
+
+
+class TestViewToggle:
+    def test_default_grid(self, client):
+        make_work()
+        r = client.get("/works/")
+        assert r.context["view_mode"] == "grid"
+
+    def test_explicit_list_sets_cookie(self, client):
+        make_work()
+        r = client.get("/works/", {"view": "list"})
+        assert r.context["view_mode"] == "list"
+        assert r.cookies["works_view"].value == "list"
+
+    def test_cookie_remembered(self, client):
+        make_work()
+        client.cookies["works_view"] = "list"
+        r = client.get("/works/")
+        assert r.context["view_mode"] == "list"
+        assert "works_view" not in r.cookies  # not re-set on read
+
+    def test_query_beats_cookie_and_bogus_falls_back(self, client):
+        make_work()
+        client.cookies["works_view"] = "list"
+        assert client.get("/works/", {"view": "grid"}).context["view_mode"] == "grid"
+        # The explicit request above also updated the cookie; re-seed it to
+        # check that a bogus ?view= falls back to the cookie.
+        client.cookies["works_view"] = "list"
+        assert client.get("/works/", {"view": "x"}).context["view_mode"] == "list"

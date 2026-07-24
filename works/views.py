@@ -96,8 +96,19 @@ def index(request):
         .order_by("-publication_date__year")
     )
 
-    return render(request, "works/index.html", {
+    # Layout: explicit ?view= wins (and is remembered in a cookie); else the
+    # cookie; else the card grid.
+    view_param = request.GET.get("view") or ""
+    if view_param in ("grid", "list"):
+        view_mode = view_param
+    elif request.COOKIES.get("works_view") in ("grid", "list"):
+        view_mode = request.COOKIES["works_view"]
+    else:
+        view_mode = "grid"
+
+    response = render(request, "works/index.html", {
         "works": qs,
+        "view_mode": view_mode,
         "kind_choices": [(c.value, c.label) for c in Work.Kind if c != Work.Kind.CARTEL],
         "all_kind_choices": Work.Kind.choices,
         "years": list(years_qs),
@@ -113,6 +124,11 @@ def index(request):
             ("author", "Author A–Z"),
         ],
     })
+    if view_param in ("grid", "list"):
+        response.set_cookie(
+            "works_view", view_param, max_age=365 * 24 * 3600, samesite="Lax"
+        )
+    return response
 
 
 def detail(request, slug):
