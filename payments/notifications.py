@@ -78,12 +78,22 @@ def payment_reminder_inapp(reg) -> None:
     )
 
 
+def _receipt_url(payment) -> str:
+    """Where a receipt's bell row lands — the same split Stripe's success paths
+    use. ``payments:thanks`` is a public page and so deliberately 404s
+    registration payments; those belong on the registration confirmation page.
+    """
+    if payment.registration_id:
+        return reverse("registrations:confirm", args=[payment.registration_id])
+    return reverse("payments:thanks", args=[payment.id])
+
+
 def payment_receipt(payment) -> None:
     """A receipt for a succeeded payment. Email locked (always sends)."""
     if not hasattr(payment, "receipt"):
         return
     receipt = payment.receipt
-    url = reverse("payments:thanks", args=[payment.id])
+    url = _receipt_url(payment)
     if payment.user_id:
         notify(
             payment.user, Category.PAYMENT_RECEIPT,
