@@ -28,7 +28,10 @@ class WorkAdmin(admin.ModelAdmin):
         "file_count", "publication_date", "submitted_by",
     )
     list_filter = ("kind", "listing_visibility", "content_visibility")
-    search_fields = ("title", "abstract", "publication_info", "external_authors")
+    search_fields = (
+        "title", "abstract", "publication_info", "external_authors",
+        "container_title", "publisher", "doi", "isbn",
+    )
     prepopulated_fields = {"slug": ("title",)}
     autocomplete_fields = ("submitted_by",)
     inlines = [WorkAuthorInline, WorkFileInline]
@@ -36,6 +39,10 @@ class WorkAdmin(admin.ModelAdmin):
         (None, {"fields": ("title", "slug", "kind")}),
         ("Visibility", {"fields": ("listing_visibility", "content_visibility")}),
         ("Content", {"fields": ("abstract", "publication_info", "url", "publication_date")}),
+        ("Structured citation (external publications)", {"fields": (
+            "external_type", "container_title", "publisher", "edition",
+            "volume", "issue", "pages", "editors", "translators", "doi", "isbn",
+        )}),
         ("Cover", {"fields": ("cover_image",)}),
         ("Authors", {"fields": ("external_authors", "submitted_by")}),
     )
