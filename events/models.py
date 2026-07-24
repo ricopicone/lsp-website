@@ -159,6 +159,18 @@ class Speaker(models.Model):
         default=True,
         help_text="Whether to show this speaker on public event pages.",
     )
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="external_speaker",
+        help_text=(
+            "Optional login for this external presenter (task #463). Linking a "
+            "user lets them join the meeting and see the event's presenter view, "
+            "scoped to events they present. Leave blank for display-only speakers."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -182,10 +182,11 @@ class PriceTierAdmin(admin.ModelAdmin):
 
 @admin.register(Speaker)
 class SpeakerAdmin(admin.ModelAdmin):
-    list_display = ("name", "affiliation", "email", "public")
+    list_display = ("name", "affiliation", "email", "public", "user")
     list_filter = ("public",)
     search_fields = ("name", "affiliation", "email", "bio")
     prepopulated_fields = {"slug": ("name",)}
+    autocomplete_fields = ("user",)
 
 
 @admin.register(PricingCode)

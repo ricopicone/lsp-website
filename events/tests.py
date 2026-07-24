@@ -346,3 +346,15 @@ def test_event_detail_renders_member_speaker_with_event_bio(client):
     assert b"Stephanie Swales" in body
     assert b"Speaker-specific bio for talks." in body
     assert b"Generic directory bio." not in body
+
+
+@pytest.mark.django_db
+def test_speaker_can_link_a_login_user():
+    from events.models import Speaker
+    u = User.objects.create_user(email="derek@example.com")
+    s = Speaker.objects.create(name="Derek Hook", slug="derek-hook", email="derek@example.com")
+    s.user = u
+    s.save()
+    s.refresh_from_db()
+    assert s.user == u
+    assert u.external_speaker == s
