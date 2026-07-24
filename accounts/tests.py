@@ -764,3 +764,12 @@ def test_header_offers_signup_to_anonymous_visitors(client):
     client.force_login(member)
     content = client.get("/").content.decode()
     assert 'href="/accounts/signup/"' not in content
+
+
+def test_safe_next_rejects_hostful_and_backslash_urls(rf):
+    from accounts.views import _safe_next
+
+    assert _safe_next(rf.get("/", {"next": "/dues/"})) == "/dues/"
+    for evil in ("//evil.example", "/\\evil.example", "http://evil.example",
+                 "\\/evil.example", ""):
+        assert _safe_next(rf.get("/", {"next": evil})) is None, evil
