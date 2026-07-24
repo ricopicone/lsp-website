@@ -421,6 +421,14 @@ class Event(models.Model):
             "from anonymous visitors on public listings."
         ),
     )
+    open_to_guests = models.BooleanField(
+        default=True,
+        help_text=(
+            "Non-members are welcome to register for this event. Shows a "
+            "guests-welcome note on the event page. This is messaging only; "
+            "it does not restrict who can register."
+        ),
+    )
     program = models.ForeignKey(
         "events.Program",
         on_delete=models.PROTECT,

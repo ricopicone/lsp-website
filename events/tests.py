@@ -55,6 +55,17 @@ def test_event_clean_rejects_inverted_dates():
         e.full_clean()
 
 
+@pytest.mark.django_db
+def test_event_open_to_guests_defaults_true():
+    e = Event.objects.create(
+        title="Special Evening",
+        slug="special-evening",
+        start_date=date(2026, 9, 1),
+        end_date=date(2026, 9, 1),
+    )
+    assert e.open_to_guests is True
+
+
 # --- Session ------------------------------------------------------------
 
 
