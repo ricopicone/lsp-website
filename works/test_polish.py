@@ -193,6 +193,35 @@ class TestBackfillCitations:
         assert w.publisher == "Routledge"   # empty field filled
         assert w.container_title == "Kept"  # member data never overwritten
 
+    def test_fills_empty_publication_date_and_replaces_info(self, tmp_path):
+        from django.core.management import call_command
+
+        w = make_work(title="Dated", slug="dated",
+                      publication_info="Routledge, 2023")
+        mapping = [{"slug": "dated", "fields": {
+            "external_type": "book", "publisher": "Routledge",
+            "publication_date": "2023-01-01",
+        }, "set_publication_info": ""}]
+        p = tmp_path / "m.json"
+        p.write_text(json.dumps(mapping))
+        call_command("backfill_citations", str(p))
+        w.refresh_from_db()
+        assert w.publication_date == datetime.date(2023, 1, 1)
+        assert w.publication_info == ""     # fully captured → legacy line cleared
+
+    def test_existing_publication_date_never_overwritten(self, tmp_path):
+        from django.core.management import call_command
+
+        w = make_work(title="Kept Date", slug="kept-date",
+                      publication_date=datetime.date(2020, 5, 1))
+        p = tmp_path / "m.json"
+        p.write_text(json.dumps([{"slug": "kept-date", "fields": {
+            "publication_date": "1999-01-01",
+        }}]))
+        call_command("backfill_citations", str(p))
+        w.refresh_from_db()
+        assert w.publication_date == datetime.date(2020, 5, 1)
+
     def test_unknown_slug_and_field_rejected(self, tmp_path):
         from django.core.management import CommandError, call_command
 
