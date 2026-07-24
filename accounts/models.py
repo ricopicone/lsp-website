@@ -152,13 +152,19 @@ class Profile(models.Model):
         help_text="Treasurer-set: excluded from seminar group rosters until "
         "the outstanding balance is settled.",
     )
-    clinical_background = models.BooleanField(
-        default=False,
-        help_text="Clinical background requires two control analyses "
-                  "(one of at least 4 years, one of at least 2 years); "
-                  "academic requires three (one of at least 4 years, two of "
-                  "at least 2 years). Set at acceptance from the application; "
-                  "adjustable by an advisor or admin.",
+    class FormationBackground(models.TextChoices):
+        UNREVIEWED = "unreviewed", "Not yet reviewed"
+        CLINICAL = "clinical", "Clinical (one 4-year, one 2-year control analysis)"
+        ACADEMIC = "academic", "Academic (one 4-year, two 2-year control analyses)"
+
+    formation_background = models.CharField(
+        max_length=12,
+        choices=FormationBackground.choices,
+        default=FormationBackground.UNREVIEWED,
+        help_text="The student's professional background, which sets the "
+                  "control-analysis requirement. Determined by the Meeting of "
+                  "Analysts or the student's advisor. Independent of the "
+                  "formation track.",
     )
     # LSP Staff and Cartel Coordinator are now unified onto ``core.StaffRole``
     # (keys ``lsp_staff`` / ``cartel_coordinator``); manage holders there or
@@ -558,10 +564,15 @@ class Profile(models.Model):
         enr = self.current_tuition_enrollment(on_date)
         return bool(enr and enr.covers_seminars)
 
-    def control_requirement(self) -> dict:
-        """How many control analyses this member owes, by slot. Clinical
-        background: one 4-year + one 2-year. Academic: one 4-year + two 2-year."""
-        return {"four_year": 1, "two_year": 1 if self.clinical_background else 2}
+    def control_requirement(self) -> dict | None:
+        """How many control analyses this member owes, by slot, or None when the
+        Meeting of Analysts has not yet determined the background. Clinical: one
+        4-year + one 2-year. Academic: one 4-year + two 2-year."""
+        if self.formation_background == self.FormationBackground.CLINICAL:
+            return {"four_year": 1, "two_year": 1}
+        if self.formation_background == self.FormationBackground.ACADEMIC:
+            return {"four_year": 1, "two_year": 2}
+        return None
 
     @property
     def directory_slug(self) -> str:
