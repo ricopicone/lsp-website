@@ -15,7 +15,7 @@ from django.db import transaction
 from django.db.models import Prefetch
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse
+from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
@@ -408,8 +408,6 @@ def _register_event_from_next(request):
     Returns the Event when ``next`` points at ``registrations:register`` for
     an event that is publicly visible; otherwise None (generic auth copy).
     """
-    from django.urls import Resolver404, resolve
-
     nxt = request.POST.get("next") or request.GET.get("next")
     if not nxt or not nxt.startswith("/") or nxt.startswith("//"):
         return None

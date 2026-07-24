@@ -455,3 +455,10 @@ def test_signed_in_viewer_gets_note_without_account_hint(client):
     content = resp.content.decode()
     assert "Guests are welcome" in content
     assert "create a free account" not in content
+
+
+@pytest.mark.django_db
+def test_members_only_event_hides_guest_note(client):
+    e = _special_event(visibility=Event.Visibility.MEMBERS_ONLY)
+    resp = client.get(f"/events/{e.slug}/")
+    assert "Guests are welcome" not in resp.content.decode()
