@@ -523,17 +523,6 @@ class Profile(models.Model):
         return self.standing == self.Standing.RETIRED
 
     @property
-    def is_active_member(self) -> bool:
-        """Whether this profile currently counts as a member for access +
-        dashboards: a directory role, an active-enough standing, and not
-        deceased. (Directory *listing* keeps deceased — see the directory qs.)"""
-        return (
-            self.role in self.DIRECTORY_ROLES
-            and self.standing not in self.NON_MEMBER_STANDINGS
-            and not self.is_deceased
-        )
-
-    @property
     def owes_tuition(self) -> bool:
         """Whether this profile owes tuition each year — an in-training role held
         with active standing. On-leave / resigned / emeritus students are exempt

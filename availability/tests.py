@@ -207,6 +207,28 @@ def test_candidate_is_not_eligible():
     assert user.profile not in services.eligible_profiles()
 
 
+def test_is_eligible_matches_eligible_profiles_for_retired_deceased_persona():
+    """The self-service editor gate (``is_eligible``) mirrors the table
+    queryset — a retired / deceased / persona analyst is not eligible."""
+    retired = User.objects.create_user(email="e-retired@example.com")
+    retired.profile.role = Profile.Role.ANALYST
+    retired.profile.standing = Profile.Standing.RETIRED
+    retired.profile.save()
+    assert services.is_eligible(retired.profile) is False
+
+    deceased = User.objects.create_user(email="e-deceased@example.com")
+    deceased.profile.role = Profile.Role.ANALYST
+    deceased.profile.deceased_on = _dt.date(2026, 7, 23)  # is_active → False
+    deceased.profile.save()
+    assert services.is_eligible(deceased.profile) is False
+
+    persona = User.objects.create_user(email="e-persona@example.com")
+    persona.profile.role = Profile.Role.ANALYST
+    persona.profile.is_persona = True
+    persona.profile.save()
+    assert services.is_eligible(persona.profile) is False
+
+
 def test_eligible_profiles_excludes_retired_and_deceased():
     active = User.objects.create_user(email="av-active@example.com")
     active.profile.role = Profile.Role.ANALYST

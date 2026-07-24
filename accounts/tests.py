@@ -418,22 +418,6 @@ def test_clearing_deceased_on_reenables_login_on_save():
 
 
 @pytest.mark.django_db
-def test_is_active_member_predicate():
-    user = User.objects.create_user(email="m@example.com")
-    p = user.profile
-    p.role = Profile.Role.ANALYST
-    p.standing = Profile.Standing.ACTIVE
-    p.save()
-    assert p.is_active_member is True
-    p.standing = Profile.Standing.REMOVED
-    p.save()
-    assert p.is_active_member is False
-    p.standing = Profile.Standing.RETIRED
-    p.save()
-    assert p.is_active_member is True  # retired is still a member
-
-
-@pytest.mark.django_db
 def test_removed_member_is_not_lsp_member():
     from accounts.permissions import is_lsp_member
     user = User.objects.create_user(email="rm@example.com")
@@ -659,3 +643,42 @@ def test_directory_active_member_has_no_retired_marker(client):
     body = resp.content.decode()
     # The word may appear in nav/other copy; assert the marker element text isn't present.
     assert "Retired</span>" not in body and "Retired</p>" not in body
+
+
+@pytest.mark.django_db
+def test_directory_list_shows_retired_marker_on_card(client):
+    u = User.objects.create_user(email="rtcard@x.test", first_name="Rhea", last_name="Tired")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.public = True
+    u.profile.standing = Profile.Standing.RETIRED
+    u.profile.save()
+    resp = client.get("/directory/")
+    assert resp.status_code == 200
+    assert "Retired</span>" in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_directory_list_shows_memorial_marker_on_card(client):
+    from datetime import date
+    u = User.objects.create_user(email="memcard@x.test", first_name="Jane", last_name="Doe")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.public = True
+    u.profile.deceased_on = date(2026, 7, 22)
+    u.profile.save()
+    resp = client.get("/directory/")
+    assert resp.status_code == 200
+    assert "In memoriam" in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_directory_card_retired_and_deceased_shows_only_memorial(client):
+    from datetime import date
+    u = User.objects.create_user(email="both@x.test", first_name="Both", last_name="Marks")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.public = True
+    u.profile.standing = Profile.Standing.RETIRED
+    u.profile.deceased_on = date(2026, 7, 22)
+    u.profile.save()
+    body = client.get("/directory/").content.decode()
+    assert "In memoriam" in body
+    assert "Retired</span>" not in body  # deceased takes precedence

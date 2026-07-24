@@ -263,6 +263,26 @@ def test_auto_member_workgroup_excludes_retired():
     assert active in users and retired not in users
 
 
+def test_auto_member_workgroup_excludes_persona_and_deceased():
+    """The role-derived gate also drops personas and deceased analysts (whose
+    standing may still read active, but whose account is deactivated)."""
+    from datetime import date
+    wg = _wg(kind=Workgroup.Kind.COMMITTEE, auto_member_role="analyst")
+
+    persona = _user("moa-persona@x.test", role=Profile.Role.ANALYST)
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    deceased = _user("moa-deceased@x.test", role=Profile.Role.ANALYST)
+    deceased.profile.deceased_on = date(2026, 7, 23)  # standing stays active; is_active→False
+    deceased.profile.save()
+
+    assert wg.is_member(persona) is False
+    assert wg.is_member(deceased) is False
+    users = [p.user for p in wg.participants()]
+    assert persona not in users and deceased not in users
+
+
 def test_reading_group_open_join_and_leave(client):
     """A reading group is standing + open-join: any LSP member joins directly
     (stored membership), and can leave."""

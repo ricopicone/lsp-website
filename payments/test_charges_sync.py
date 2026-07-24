@@ -211,3 +211,17 @@ def test_waive_open_charges_waives_open_only():
 
     # Idempotent: a second call waives nothing.
     assert waive_open_charges(u, reason="again") == 0
+
+
+@pytest.mark.django_db
+def test_waive_open_charges_records_actor_in_note():
+    u = User.objects.create_user(email="ww@example.com")
+    by = User.objects.create_user(email="treasurer@example.com")
+    c = Charge.objects.create(
+        user=u, category=Charge.Category.DUES, amount=Decimal("100"),
+        effective_date=date(2025, 9, 1), status=Charge.Status.OPEN,
+    )
+    waive_open_charges(u, reason="Member removed", by=by)
+    c.refresh_from_db()
+    assert "Member removed" in c.notes
+    assert "waived by treasurer@example.com" in c.notes
