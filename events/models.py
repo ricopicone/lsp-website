@@ -373,6 +373,13 @@ class Event(models.Model):
         "browser starts the recording on join). Off by default; recordings are "
         "stored privately and shown per their visibility setting.",
     )
+    speaker_spotlight = models.BooleanField(
+        default=False,
+        help_text="Speaker spotlight (task #463): attendees join the online "
+        "meeting with mic and camera off, so the speaker is the focus. It's a "
+        "soft spotlight, attendees can still turn them back on, and hosts can "
+        "mute. Off by default; suited to a talk or lecture.",
+    )
 
     class RecordingMode(models.TextChoices):
         ON_DEMAND = "on_demand", "On demand — hosts can record"

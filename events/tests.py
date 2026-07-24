@@ -358,3 +358,13 @@ def test_speaker_can_link_a_login_user():
     s.refresh_from_db()
     assert s.user == u
     assert u.external_speaker == s
+
+
+@pytest.mark.django_db
+def test_speaker_spotlight_defaults_off():
+    e = Event.objects.create(
+        title="Talk", slug="spotlight-default",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 9, 1), end_date=date(2030, 9, 1),
+    )
+    assert e.speaker_spotlight is False
