@@ -1141,3 +1141,7 @@ def change_request_decide(request, pk: int):
         messages.success(request, "Change declined.")
     event_notifications.notify_change_decided(cr)
     return redirect("program_admin_changes")
+
+
+def speaker_invitation_accept(request, token):  # fleshed out in Task 6
+    raise Http404()

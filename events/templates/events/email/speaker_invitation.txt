@@ -1,0 +1,22 @@
+Dear {{ speaker.name }},
+
+{{ message }}
+
+To get set up, please activate your account and choose a password:
+
+{{ activation_url }}
+
+Joining the meeting is simple. Once you have signed in, open the event page:
+
+{{ event_url }}
+
+You will find the meeting room right there, no separate link needed. When the
+event begins, a Join button appears on that page, that is where you and the
+attendees join. Attendees join the same way, they register and the button
+appears for them when the event starts, so if anyone asks how to join you can
+point them to that page.
+
+If you have any questions, reply to this email or contact us at {{ support_email }}.
+
+Warm regards,
+The Lacanian School of Psychoanalysis
