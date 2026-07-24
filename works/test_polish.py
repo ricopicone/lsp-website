@@ -3,6 +3,7 @@ form handling, detail-page presentation, sort options, grid/list toggle,
 and the backfill_citations command."""
 
 import datetime
+import json
 
 import pytest
 
@@ -170,3 +171,37 @@ class TestViewToggle:
         # check that a bogus ?view= falls back to the cookie.
         client.cookies["works_view"] = "list"
         assert client.get("/works/", {"view": "x"}).context["view_mode"] == "list"
+
+
+class TestBackfillCitations:
+    def test_fills_only_empty_and_dry_run(self, tmp_path):
+        from django.core.management import call_command
+
+        w = make_work(title="Fill Me", slug="fill-me", container_title="Kept")
+        mapping = [{"slug": "fill-me", "fields": {
+            "container_title": "Overwritten?", "publisher": "Routledge",
+        }}]
+        p = tmp_path / "m.json"
+        p.write_text(json.dumps(mapping))
+
+        call_command("backfill_citations", str(p), "--dry-run")
+        w.refresh_from_db()
+        assert w.publisher == ""            # dry run wrote nothing
+
+        call_command("backfill_citations", str(p))
+        w.refresh_from_db()
+        assert w.publisher == "Routledge"   # empty field filled
+        assert w.container_title == "Kept"  # member data never overwritten
+
+    def test_unknown_slug_and_field_rejected(self, tmp_path):
+        from django.core.management import CommandError, call_command
+
+        p = tmp_path / "m.json"
+        p.write_text(json.dumps([{"slug": "nope", "fields": {"publisher": "X"}}]))
+        with pytest.raises(CommandError):
+            call_command("backfill_citations", str(p))
+
+        make_work(title="Fill Me", slug="fill-me")
+        p.write_text(json.dumps([{"slug": "fill-me", "fields": {"title": "hack"}}]))
+        with pytest.raises(CommandError):
+            call_command("backfill_citations", str(p))
