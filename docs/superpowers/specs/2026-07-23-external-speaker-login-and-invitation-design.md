@@ -148,10 +148,15 @@ Part 2:
 - No email → no invitation offered.
 - Anonymous and non-PC cannot prepare/confirm/send (404).
 
-## Out of scope (Part 3, deferred follow-up)
+## Part 3 — Speaker spotlight (SHIPPED 2026-07-24)
 
-Speaker spotlight (soft, per-event, off by default): `Event.speaker_spotlight`
-boolean; when on, non-owner Daily meeting tokens are minted with
-`start_audio_off` + `start_video_off` so only the speaker/hosts come in live and
-are the visual focus, while attendees can still unmute (soft) and hosts can mute.
-Uses the existing `mint_token` path. Independent of Parts 1–2; ship separately.
+Soft spotlight, per-event, off by default. `Event.speaker_spotlight` boolean
+(migration `0037`), toggled on the event edit page (`EventDescriptionForm`,
+non-reviewable so it applies immediately, like `record_video`). When on,
+`video.services.spotlight_start_off(room_owner, is_owner_flag)` returns true for
+a non-owner of a one-off Event whose flag is set; `mint_token(..., start_off=…)`
+then mints the Daily token with `start_audio_off` + `start_video_off`, so
+attendees join muted + camera-off and the speaker/hosts are the focus. Soft:
+attendees can turn A/V back on, hosts can mute. Owners (speaker/hosts, via
+`is_owner`) are never started off. Workgroup-owned rooms (offerings) are
+unaffected — spotlight is scoped to one-off Events (special events).
