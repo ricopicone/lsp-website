@@ -16,7 +16,7 @@ class EventDescriptionForm(forms.ModelForm):
         model = Event
         fields = (
             "title", "description", "readings", "schedule_note", "contact",
-            "fee_note", "record_video",
+            "fee_note", "record_video", "speaker_spotlight",
         )
         widgets = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),

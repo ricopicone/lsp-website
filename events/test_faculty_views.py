@@ -578,3 +578,25 @@ def test_check_code_wrong_event_not_recognized(
     )
     assert response.json()["ok"] is False
     assert "not recognized" in response.json()["error"].lower()
+
+
+def test_edit_toggles_speaker_spotlight(client, event, faculty_member):
+    client.force_login(faculty_member)
+    resp = client.post(
+        reverse("events:edit", args=[event.slug]),
+        {
+            "title": event.title,
+            "description": event.description or "body",
+            "speaker_spotlight": "on",
+        },
+    )
+    assert resp.status_code == 302
+    event.refresh_from_db()
+    assert event.speaker_spotlight is True
+    # Unchecking it turns it back off (checkboxes absent from POST = False).
+    client.post(
+        reverse("events:edit", args=[event.slug]),
+        {"title": event.title, "description": event.description or "body"},
+    )
+    event.refresh_from_db()
+    assert event.speaker_spotlight is False
