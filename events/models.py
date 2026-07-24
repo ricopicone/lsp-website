@@ -30,6 +30,11 @@ _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 ACADEMIC_YEAR_START_MONTH = 9
 
 
+def _speaker_invitation_token() -> str:
+    """Opaque, single-use token for an external-speaker invitation link."""
+    return secrets.token_urlsafe(32)
+
+
 def academic_year_of(d: _dt.date) -> str:
     """Return the academic-year label that a given date falls within.
 
@@ -180,6 +185,63 @@ class Speaker(models.Model):
         if self.affiliation:
             return f"{self.name} ({self.affiliation})"
         return self.name
+
+
+class SpeakerInvitation(models.Model):
+    """A pending invitation for an external speaker to activate a login.
+
+    Own token (not Django's password reset, which silently skips
+    unusable-password accounts — memory ``auth-email-scanner-and-reset-gotchas``).
+    Opaque + single-use; a generous expiry (default 30 days) so an invitation
+    sent well before the event still works. Refreshing supersedes the prior link.
+    """
+
+    DEFAULT_TTL = _dt.timedelta(days=30)
+
+    speaker = models.ForeignKey(
+        "events.Speaker", on_delete=models.CASCADE, related_name="invitations"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="speaker_invitations",
+    )
+    token = models.CharField(
+        max_length=64, unique=True, default=_speaker_invitation_token, editable=False
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        state = "used" if self.used_at else ("expired" if self.is_expired() else "pending")
+        return f"invite {self.speaker.name} ({state})"
+
+    def is_expired(self, now=None) -> bool:
+        from django.utils import timezone
+
+        return (now or timezone.now()) > self.expires_at
+
+    @property
+    def is_valid(self) -> bool:
+        return self.used_at is None and not self.is_expired()
+
+    def consume(self) -> None:
+        from django.utils import timezone
+
+        if self.used_at is None:
+            self.used_at = timezone.now()
+            self.save(update_fields=["used_at"])
+
+    def refresh(self, expires_at=None) -> None:
+        from django.utils import timezone
+
+        self.token = _speaker_invitation_token()
+        self.used_at = None
+        self.expires_at = expires_at or (timezone.now() + self.DEFAULT_TTL)
+        self.save(update_fields=["token", "used_at", "expires_at"])
 
 
 class Event(models.Model):
