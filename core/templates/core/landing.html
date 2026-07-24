@@ -177,19 +177,25 @@ sections (alerts, "Coming up") never leave an orphaned gap.
     <ul class="divide-y divide-base-300/70 border-y border-base-300/70">
       {% for e in upcoming_events %}
       <li>
+        {% comment %}
+          A pinned row (task #461) sits out of date order, so it has to look
+          chosen rather than misfiled. The distinction is carried by weight, not
+          hue: silk defines primary, secondary and accent as the *same* value and
+          abyss's accent is a dead mid-grey, so no colour token can separate
+          these rows in both themes. Instead the ordinary rows go quiet (neutral
+          base-token chip) and the pinned row takes the only saturated element in
+          the list, a solid primary chip — a pair DaisyUI guarantees is legible
+          in every theme — over an inset band with a left rule. Every class is
+          spelled out literally for the Tailwind scanner.
+        {% endcomment %}
         <a href="{% url 'events:detail' e.slug %}"
-           class="group flex items-center gap-5 py-5 hover:bg-base-200/40 -mx-3 px-3 rounded-lg transition-colors">
+           class="group flex items-center gap-5 py-5 -mx-3 px-3 rounded-lg transition-colors {% if e.pinned %}bg-base-content/5 hover:bg-base-content/10 border-l-2 border-primary pl-4{% else %}hover:bg-base-200/40{% endif %}">
           <div class="shrink-0 w-14 text-center">
             <div class="font-mono text-xs uppercase tracking-widest text-primary font-medium">{{ e.start_date|date:"M" }}</div>
             <div class="font-serif text-3xl leading-none text-base-content">{{ e.start_date|date:"j" }}</div>
           </div>
           <div class="min-w-0 flex-1">
-            {% comment %}
-              Pinned rows (a standalone event starting soon, task #461) take an
-              accent tint, so a later date sitting above an earlier one reads as
-              deliberate. Both class sets are spelled out for the Tailwind scanner.
-            {% endcomment %}
-            <span class="inline-flex items-center text-[0.65rem] leading-none font-medium uppercase tracking-wide px-1.5 py-0.5 rounded border mb-1.5 {% if e.pinned %}bg-accent/15 text-accent border-accent/25{% else %}bg-primary/15 text-primary border-primary/25{% endif %}">
+            <span class="inline-flex items-center text-[0.65rem] leading-none font-medium uppercase tracking-wide px-1.5 py-0.5 rounded border mb-1.5 {% if e.pinned %}bg-primary text-primary-content border-primary{% else %}bg-base-200 text-base-content/70 border-base-300{% endif %}">
               {{ e.get_event_type_display }}
             </span>
             <div class="font-serif text-lg text-base-content group-hover:text-primary transition-colors leading-snug">{{ e.title }}</div>

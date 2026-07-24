@@ -214,8 +214,11 @@ def test_landing_page_skips_draft_events(client, draft_event_with_sessions):
 @pytest.mark.django_db
 def test_landing_page_pins_a_special_event_above_the_seminars(client):
     """task #461: a special event buried by September's seminars comes first,
-    and its type badge takes the accent tint. Selection rules live in
-    events/test_upcoming.py; this covers the view + template wiring."""
+    and is marked out by weight (solid chip + inset band) rather than by a hue
+    token — silk defines primary/secondary/accent identically and abyss's accent
+    is a near-invisible grey, so colour alone can't separate the rows in both
+    themes. Selection rules live in events/test_upcoming.py; this covers the
+    view + template wiring."""
     today = timezone.now().date()
     for i in range(4):
         Event.objects.create(
@@ -233,7 +236,11 @@ def test_landing_page_pins_a_special_event_above_the_seminars(client):
 
     body = client.get(reverse("core:landing")).content.decode()
     assert body.index("Pinned Study Day") < body.index("Buried Seminar 0")
-    assert "bg-accent/15 text-accent border-accent/25" in body
+    # The pinned row: solid chip + inset band with a left rule.
+    assert "bg-primary text-primary-content border-primary" in body
+    assert "bg-base-content/5 hover:bg-base-content/10 border-l-2 border-primary" in body
+    # The ordinary rows go quiet so the pinned one is the only saturated element.
+    assert "bg-base-200 text-base-content/70 border-base-300" in body
 
 
 @pytest.mark.django_db
