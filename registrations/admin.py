@@ -1,7 +1,4 @@
 from django.contrib import admin, messages
-from django.utils import timezone
-
-from payments import notifications as notify_payments
 
 from .models import Registration
 
@@ -32,25 +29,17 @@ class RegistrationAdmin(admin.ModelAdmin):
     @admin.action(description="Comp selected registrations (mark COMPED + email)")
     def comp_selected_registrations(self, request, queryset):
         """Comp registrations not already paid/comped/cancelled/refunded (REG-14)."""
+        from .services import comp_registration
+
         compable = queryset.filter(status=Registration.Status.AWAITING_PAYMENT)
         skipped = queryset.exclude(
             status=Registration.Status.AWAITING_PAYMENT,
         ).count()
-        note_line = (
-            f"\n[{timezone.now().date().isoformat()}] Comped by "
-            f"{request.user.email} via admin."
-        )
         succeeded = 0
         failed = 0
         for reg in compable:
-            reg.status = Registration.Status.COMPED
-            reg.staff_notes = (reg.staff_notes or "") + note_line
-            reg.save(update_fields=("status", "staff_notes"))
-            from payments.charges import mint_comped_charge
-            mint_comped_charge(reg)
-            try:
-                notify_payments.registration_confirmed(reg)
-            except Exception:
+            _, email_ok = comp_registration(reg, request.user, via="admin")
+            if not email_ok:
                 failed += 1
             succeeded += 1
         msg = f"Comped {succeeded} registration(s)."
