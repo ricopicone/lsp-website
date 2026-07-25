@@ -2,7 +2,7 @@ import secrets
 from datetime import timedelta
 
 from django.contrib.auth.models import AbstractUser
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
@@ -91,12 +91,15 @@ class Profile(models.Model):
 
     class Standing(models.TextChoices):
         """Membership standing — orthogonal to role. Active is the default; the
-        Board records transitions (on-leave, resigned, emeritus) via Membership
-        administration."""
+        Board records transitions (on-leave, resigned, emeritus, retired,
+        removed) via Membership administration. Deceased is a separate axis
+        (``deceased_on``), not a standing."""
         ACTIVE = "active", _("Active")
         ON_LEAVE = "on_leave", _("On leave")
         RESIGNED = "resigned", _("Resigned")
         EMERITUS = "emeritus", _("Emeritus")
+        RETIRED = "retired", _("Retired")
+        REMOVED = "removed", _("Removed")
 
     class BillingMode(models.TextChoices):
         PER_CLASS = "per_class", _("Per class")
@@ -127,8 +130,9 @@ class Profile(models.Model):
         max_length=16,
         choices=Standing.choices,
         default=Standing.ACTIVE,
-        help_text="Membership standing (active / on leave / resigned / emeritus). "
-        "Live cache; the Board sets it via Membership administration.",
+        help_text="Membership standing (active / on leave / resigned / emeritus / "
+        "retired / removed). Live cache; the Board sets it via Membership "
+        "administration.",
     )
     timezone = models.CharField(
         max_length=64,
@@ -142,6 +146,25 @@ class Profile(models.Model):
     is_faculty = models.BooleanField(
         default=False,
         help_text="Faculty axis (USR-6). Orthogonal to role.",
+    )
+    seminar_access_suspended = models.BooleanField(
+        default=False,
+        help_text="Treasurer-set: excluded from seminar group rosters until "
+        "the outstanding balance is settled.",
+    )
+    class FormationBackground(models.TextChoices):
+        UNREVIEWED = "unreviewed", "Not yet reviewed"
+        CLINICAL = "clinical", "Clinical (one 4-year, one 2-year control analysis)"
+        ACADEMIC = "academic", "Academic (one 4-year, two 2-year control analyses)"
+
+    formation_background = models.CharField(
+        max_length=12,
+        choices=FormationBackground.choices,
+        default=FormationBackground.UNREVIEWED,
+        help_text="The student's professional background, which sets the "
+                  "control-analysis requirement. Determined by the Meeting of "
+                  "Analysts or the student's advisor. Independent of the "
+                  "formation track.",
     )
     # LSP Staff and Cartel Coordinator are now unified onto ``core.StaffRole``
     # (keys ``lsp_staff`` / ``cartel_coordinator``); manage holders there or
@@ -301,6 +324,16 @@ class Profile(models.Model):
             "(e.g. 2018 ⇒ 'AY 2018–2019'). Self-reported; we're harvesting it."
         ),
     )
+    deceased_on = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Date recorded as deceased. Orthogonal to standing — a member may "
+            "be Retired and Deceased. Setting this disables the account "
+            "(login off) for security; the member stays listed in the "
+            "directory with an 'In memoriam' marker."
+        ),
+    )
     default_billing_mode = models.CharField(
         max_length=16,
         choices=BillingMode.choices,
@@ -359,6 +392,17 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"{self.user.email} ({self.get_role_display()})"
+
+    def add_note(self, text: str, *, save=True) -> None:
+        """Append a dated line to the audit trail (mirrors
+        ``payments.models.Charge.add_note`` — same convention, so treasurer
+        actions read the same wherever they land)."""
+        from django.utils import timezone
+
+        line = f"[{timezone.now().date()}] {text}"
+        self.notes = (self.notes + "\n" + line) if self.notes else line
+        if save:
+            self.save(update_fields=("notes",))
 
     @property
     def display_email(self) -> str:
@@ -438,6 +482,15 @@ class Profile(models.Model):
         "member",
     })
 
+    #: Standings that are NOT members: no members-only access, off the public
+    #: directory, not counted in member dashboards. Resigned joins Removed here.
+    NON_MEMBER_STANDINGS = frozenset({"resigned", "removed"})
+
+    #: Standings dropped from the Find-an-Analyst referral distribution pool
+    #: (they are no longer taking new analysands). Deceased is excluded too, via
+    #: ``is_deceased``. Emeritus / on-leave keep their referral listing.
+    REFERRAL_EXCLUDED_STANDINGS = frozenset({"retired", "resigned", "removed"})
+
     #: Roles that owe tuition each academic year (M7.5 — see tuition_lifecycle).
     IN_TRAINING_ROLES = frozenset({
         "pre_candidate",
@@ -464,9 +517,21 @@ class Profile(models.Model):
 
     @property
     def is_listed(self) -> bool:
-        """Whether this profile is actually shown publicly — role-eligible
-        *and* not opted out (drives the directory query and nav links)."""
-        return self.is_in_directory and self.public
+        """Shown publicly: role-eligible, opted in, and not a non-member
+        standing. Deceased members stay listed (with a memorial marker)."""
+        return (
+            self.is_in_directory
+            and self.public
+            and self.standing not in self.NON_MEMBER_STANDINGS
+        )
+
+    @property
+    def is_deceased(self) -> bool:
+        return self.deceased_on is not None
+
+    @property
+    def is_retired(self) -> bool:
+        return self.standing == self.Standing.RETIRED
 
     @property
     def owes_tuition(self) -> bool:
@@ -504,6 +569,16 @@ class Profile(models.Model):
         enr = self.current_tuition_enrollment(on_date)
         return bool(enr and enr.covers_seminars)
 
+    def control_requirement(self) -> dict | None:
+        """How many control analyses this member owes, by slot, or None when the
+        Meeting of Analysts has not yet determined the background. Clinical: one
+        4-year + one 2-year. Academic: one 4-year + two 2-year."""
+        if self.formation_background == self.FormationBackground.CLINICAL:
+            return {"four_year": 1, "two_year": 1}
+        if self.formation_background == self.FormationBackground.ACADEMIC:
+            return {"four_year": 1, "two_year": 2}
+        return None
+
     @property
     def directory_slug(self) -> str:
         """URL slug for this profile's /directory/<slug>/ page."""
@@ -512,10 +587,116 @@ class Profile(models.Model):
             or str(self.user.pk)
         )
 
+    # Geocode-staling snapshot fields (see save()); ``_UNSET`` means the
+    # instance wasn't loaded from the DB, so we read the old value on demand.
+    _GEOCODE_UNSET = object()
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        for f in ("location", "location_lat", "location_lng", "deceased_on"):
+            if f in field_names:
+                setattr(instance, "_loaded_" + f, values[field_names.index(f)])
+        return instance
+
+    def _stale_geocode_snapshot(self):
+        """Return the ``(location, lat, lng)`` last read from the DB, falling
+        back to a query when this instance wasn't loaded from the DB (or had
+        those columns deferred)."""
+        loc = getattr(self, "_loaded_location", self._GEOCODE_UNSET)
+        lat = getattr(self, "_loaded_location_lat", self._GEOCODE_UNSET)
+        lng = getattr(self, "_loaded_location_lng", self._GEOCODE_UNSET)
+        if self._GEOCODE_UNSET in (loc, lat, lng):
+            if self.pk is None:
+                return None
+            row = (
+                type(self).objects.filter(pk=self.pk)
+                .values("location", "location_lat", "location_lng").first()
+            )
+            if row is None:
+                return None
+            return row["location"], row["location_lat"], row["location_lng"]
+        return loc, lat, lng
+
     def save(self, *args, **kwargs):
         if not self.is_faculty:
             self.default_billing_mode = None
-        super().save(*args, **kwargs)
+
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            update_fields = set(update_fields)
+
+        # Invalidate a stale geocode whenever ``location`` changes — at the
+        # model level so *every* save path (admin, imports, scripts) behaves
+        # like the self-service editor, not just it (task #391). Skip when the
+        # caller is also writing new coords in the same save (e.g. the
+        # geocode_profiles command, or object setup), so we don't clobber them.
+        # ``_geocode_stale`` signals interactive edit surfaces to re-geocode.
+        self._geocode_stale = False
+        location_being_saved = update_fields is None or "location" in update_fields
+        snapshot = self._stale_geocode_snapshot() if location_being_saved else None
+        if snapshot is not None:
+            old_location, old_lat, old_lng = snapshot
+            location_changed = old_location != self.location
+            coords_untouched = (
+                self.location_lat == old_lat and self.location_lng == old_lng
+            )
+            if location_changed and coords_untouched:
+                self.location_lat = None
+                self.location_lng = None
+                self.location_pins = []
+                self._geocode_stale = True
+                if update_fields is not None:
+                    update_fields |= {
+                        "location_lat", "location_lng", "location_pins"
+                    }
+                    kwargs["update_fields"] = update_fields
+
+        # Deceased ⇒ account disabled (security); cleared ⇒ re-enabled. Synced
+        # at the model level so every save path (admin, lifecycle helper,
+        # scripts) is consistent. Heavier side-effects (waive, referral) live in
+        # accounts.lifecycle, not here. NOTE: this sync fires only through
+        # Profile.save() — a bulk ``Profile.objects.update(deceased_on=...)``
+        # bypasses instance save() and won't touch ``User.is_active``.
+        #
+        # Intent (whether a sync is needed, and the desired ``want_active``)
+        # is computed here, against the pre-save snapshot, but the actual
+        # ``User`` write is deferred until after ``super().save()`` succeeds
+        # and wrapped with it in one atomic block — so the Profile's
+        # ``deceased_on`` and the User's ``is_active`` commit together, never
+        # one without the other.
+        need_user_sync = False
+        want_active = None
+        deceased_being_saved = update_fields is None or "deceased_on" in update_fields
+        if deceased_being_saved and self.user_id is not None:
+            old_deceased = getattr(self, "_loaded_deceased_on", self._GEOCODE_UNSET)
+            changed = old_deceased is self._GEOCODE_UNSET or old_deceased != self.deceased_on
+            # Creating a Profile is not a transition: there is no prior
+            # ``deceased_on`` to have moved away from. Without this, the
+            # auto-create signal would re-enable any User deliberately made
+            # inactive — which is every unverified signup (task #471). A
+            # Profile created already-deceased still disables its User.
+            if self._state.adding and self.deceased_on is None:
+                changed = False
+            if changed:
+                want_active = self.deceased_on is None
+                if self.user.is_active != want_active:
+                    need_user_sync = True
+
+        if need_user_sync:
+            with transaction.atomic():
+                super().save(*args, **kwargs)
+                self.user.is_active = want_active
+                self.user.save(update_fields=["is_active"])
+        else:
+            super().save(*args, **kwargs)
+
+        # Refresh the snapshot so a later save on the same instance compares
+        # against what's now persisted.
+        self._loaded_location = self.location
+        self._loaded_location_lat = self.location_lat
+        self._loaded_location_lng = self.location_lng
+        self._loaded_deceased_on = self.deceased_on
 
 
 class EmailChangeRequest(models.Model):
@@ -726,6 +907,7 @@ class Source(models.TextChoices):
 
     VERIFIED = "verified", _("Verified against records")
     IMPORTED = "imported", _("Imported from treasurer ledger")
+    STRIPE = "stripe", _("Imported from Stripe")
     SELF_REPORTED = "self_reported", _("Member-reported (survey)")
     ASSUMED = "assumed", _("Assumed")
     STAFF = "staff", _("Entered by staff")
@@ -873,3 +1055,50 @@ class MemberIntakeSurvey(models.Model):
     def __str__(self):
         state = "submitted" if self.submitted_at else "draft"
         return f"Intake survey: {self.user} ({state})"
+
+
+class WelcomeEmail(models.Model):
+    """One row per launch welcome email sent to a member.
+
+    ``manage.py send_welcome_emails`` skips users with a row, so the
+    one-time launch announcement can be re-run safely (new members added
+    later get welcomed on the next run, nobody gets it twice).
+    """
+
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="welcome_email",
+    )
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"welcome email to {self.user.email} ({self.sent_at:%Y-%m-%d})"
+
+
+class AnnouncementEmail(models.Model):
+    """One row per announcement email sent to a member, keyed by campaign.
+
+    ``manage.py send_announcement_emails --key <key>`` skips users with a row
+    for that key, so batch announcements (site launch, a year's program
+    opening) are safely re-runnable. Distinct from :class:`WelcomeEmail`,
+    which is the evergreen per-member onboarding email.
+    """
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="announcement_emails",
+    )
+    key = models.SlugField(max_length=64)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "key"], name="one_announcement_per_user_key",
+            ),
+        ]
+
+    def __str__(self):
+        return f"announcement {self.key} to {self.user.email} ({self.sent_at:%Y-%m-%d})"

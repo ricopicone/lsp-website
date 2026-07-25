@@ -63,6 +63,30 @@ def _hover_title(value: _dt.datetime) -> str:
 
 
 @register.filter
+def user_date(value, show_year=True):
+    """Render a datetime as a compact DATE-ONLY ``<time>`` ("Jan 10, 2026" —
+    no weekday, no time) with the full local date+time and the PT equivalent
+    in the hover title. For dense tables like the treasurer's Payments tab.
+    """
+    if value is None:
+        return ""
+    active = timezone.get_current_timezone()
+    local = value.astimezone(active)
+    display = local.strftime("%b ") + str(local.day)
+    if show_year:
+        display += f", {local.year}"
+    time_str = local.strftime("%I:%M %p").lstrip("0")
+    abbr = _tz_abbr(value, active)
+    full_local = (local.strftime("%a, %b ") + str(local.day)
+                  + f", {local.year}, {time_str} {abbr}")
+    title = f"{full_local} — {_hover_title(value)}"
+    iso = local.isoformat()
+    return format_html(
+        '<time datetime="{}" title="{}">{}</time>', iso, title, display,
+    )
+
+
+@register.filter
 def user_time(value):
     """Render a datetime as a hovered ``<time>`` showing TIME ONLY in the
     active timezone, with the PT equivalent in the title attribute.
@@ -86,19 +110,23 @@ def user_time(value):
 
 
 @register.filter
-def user_datetime(value):
+def user_datetime(value, show_year=False):
     """Render a datetime as a hovered ``<time>`` showing FULL DATE + TIME
     in the active timezone, with the PT equivalent in the title.
 
     Use this in standalone contexts (event detail headers, email bodies)
-    where the date isn't obvious from neighboring elements.
+    where the date isn't obvious from neighboring elements. Pass a truthy
+    argument (``|user_datetime:True``) to include the year — useful in
+    tables that span multiple years, like the treasurer's ledger.
     """
     if value is None:
         return ""
     active = timezone.get_current_timezone()
     local = value.astimezone(active)
-    # "Tue, Sep 15, 8:00 PM EDT"
+    # "Tue, Sep 15, 8:00 PM EDT" (or "Tue, Sep 15, 2026, …" with show_year)
     date_str = local.strftime("%a, %b ") + str(local.day)
+    if show_year:
+        date_str += f", {local.year}"
     time_str = local.strftime("%I:%M %p").lstrip("0")
     abbr = _tz_abbr(value, active)
     display = f"{date_str}, {time_str} {abbr}"

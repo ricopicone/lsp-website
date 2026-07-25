@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}Program Committee Admin — LSP{% endblock %}
+{% block title %}Program Committee Admin · LSP{% endblock %}
 {% block content %}
 <div class="space-y-6">
 
@@ -7,11 +7,16 @@
     <h1 class="font-serif text-3xl text-base-content">Program Committee Admin</h1>
     <p class="text-sm text-base-content/60 max-w-2xl">
       Plan, edit, and publish the LSP annual program (seminars, reading
-      groups, and cartels). The Treasurer admin handles dues and tuition.
+      groups, and cartels), and review member proposals, including special
+      events.
     </p>
   </header>
 
   {% include "core/_admin_tab_nav.html" %}
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
 
   <div class="pt-2">
     {% block tab_content %}{% endblock %}

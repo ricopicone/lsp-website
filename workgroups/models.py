@@ -19,7 +19,7 @@ from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models, transaction
 from django.db.models.signals import post_delete
-from django.dispatch import receiver
+from django.dispatch import Signal, receiver
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
@@ -33,6 +33,23 @@ from core.storage import private_storage
 #: request more from the web coordinator, who raises ``file_quota_bytes``).
 MAX_WORKGROUP_FILE_BYTES = 30 * 1024 * 1024        # 30 MB per file
 DEFAULT_WORKGROUP_FILE_QUOTA_BYTES = 200 * 1024 * 1024   # 200 MB per workgroup
+
+#: Sent after a roster mutation that end-dates rows via a bulk ``.update()``
+#: (``remove_member`` / ``leave``) — those bypass ``post_save``/``post_delete``,
+#: so this is how listeners (e.g. committees' school-officer sync) still learn
+#: the roster changed. Kwargs: ``workgroup`` (the mutated Workgroup). Creates and
+#: ``.save()``-based edits already fire the model signals, so they don't send it.
+roster_changed = Signal()
+
+#: Public titles some bodies give their stored leadership roles. The Board's
+#: Chair / Co-chair are the school's President / Vice President (tasks #368,
+#: #428) — a display relabel only, so the shared ``WorkgroupMembership.Role``
+#: enum every group draws on stays untouched. Keyed by the attached committee's
+#: slug, then by stored role value. Consult it through ``Workgroup.officer_titles``
+#: / ``WorkgroupMembership.role_label`` so every surface reads the same.
+OFFICER_TITLES = {
+    "board": {"chair": "President", "co_chair": "Vice President"},
+}
 
 
 def serving_membership_q(prefix: str = "", on=None):
@@ -84,12 +101,35 @@ class Participant:
     role: str
     is_lead: bool = False
     membership: object = None
+    officer_title: str | None = None
 
     def get_role_display(self) -> str:
         try:
             return WorkgroupMembership.Role(self.role).label
         except ValueError:
             return self.role.replace("_", " ").title()
+
+    @property
+    def role_label(self) -> str:
+        """Human role label with per-body officer titles applied (the Board's
+        Chair / Co-chair read President / Vice President — tasks #368, #428).
+        A derived officer row (no membership — e.g. the Meeting of Analysts'
+        President/VP) carries an explicit ``officer_title``; stored participants
+        defer to their membership's ``role_label``; other derived rows (seminar
+        registrants, auto-members) carry no officer title."""
+        if self.officer_title:
+            return self.officer_title
+        if self.membership is not None:
+            return self.membership.role_label
+        return self.get_role_display()
+
+
+def roster_rank(role) -> int:
+    """Precedence rank for a roster role — lower sorts first. Officers are
+    ranked explicitly; everyone else (member, faculty, web_coordinator, any
+    future role) shares ROSTER_DEFAULT_RANK; plus-one guests sort last.
+    See WorkgroupMembership.ROLE_RANK."""
+    return WorkgroupMembership.ROLE_RANK.get(role, WorkgroupMembership.ROSTER_DEFAULT_RANK)
 
 
 class Workgroup(models.Model):
@@ -282,14 +322,73 @@ class Workgroup(models.Model):
     def active_members(self):
         """Stored ``WorkgroupMembership`` rows (hand-managed roster). For the
         full roster including derived seminar registrants, use
-        :meth:`participants`."""
-        return self.memberships.serving().select_related(
-            "user", "user__profile"
+        :meth:`participants`.
+
+        Personas (training-sandbox accounts) are excluded: they keep their
+        memberships for impersonation fidelity but must never appear on a
+        roster — the same rule :meth:`participants` applies at the tail. Without
+        this, a seeded "Persona Board Chair" leaked onto the public Board card.
+
+        Ordered leaders-first by role precedence
+        (:attr:`WorkgroupMembership.ROLE_RANK`), then alphabetically by last
+        then first name (task #417).
+        """
+        whens = [
+            models.When(role=role, then=models.Value(rank))
+            for role, rank in WorkgroupMembership.ROLE_RANK.items()
+        ]
+        return (
+            self.memberships.serving()
+            .exclude(user__profile__is_persona=True)
+            # ``workgroup__committee`` so ``role_label`` can resolve officer
+            # titles (Board Chair → President) without a per-member query.
+            .select_related("user", "user__profile", "workgroup__committee")
+            .annotate(
+                _role_rank=models.Case(
+                    *whens,
+                    default=models.Value(WorkgroupMembership.ROSTER_DEFAULT_RANK),
+                    output_field=models.IntegerField(),
+                )
+            )
+            .order_by("_role_rank", "user__last_name", "user__first_name")
         )
 
     @staticmethod
     def _user_role(user):
         return getattr(getattr(user, "profile", None), "role", None)
+
+    def _is_auto_member(self, user) -> bool:
+        """Whether ``user`` is a role-derived member of this group: an
+        active-standing, active-account, non-persona holder of
+        ``auto_member_role``. (Retired / on-leave / resigned / removed and
+        deceased members are excluded — formation duties require active
+        standing.)"""
+        from accounts.models import Profile
+        if not self.auto_member_role:
+            return False
+        p = getattr(user, "profile", None)
+        return (
+            p is not None
+            and p.role == self.auto_member_role
+            and p.standing == Profile.Standing.ACTIVE
+            and not p.is_persona
+            and getattr(user, "is_active", False)
+        )
+
+    def _auto_member_user_qs(self):
+        """Users who are role-derived members of this group (see
+        :meth:`_is_auto_member`) as a queryset, for roster enumeration."""
+        from django.contrib.auth import get_user_model
+
+        from accounts.models import Profile
+        if not self.auto_member_role:
+            return get_user_model().objects.none()
+        return get_user_model().objects.filter(
+            profile__role=self.auto_member_role,
+            profile__standing=Profile.Standing.ACTIVE,
+            profile__is_persona=False,
+            is_active=True,
+        )
 
     def is_member(self, user) -> bool:
         """*Active* membership — the access primitive the cross-cutting apps
@@ -311,7 +410,7 @@ class Workgroup(models.Model):
             return False
         # Role-derived membership (e.g. every Analyst belongs to the Meeting of
         # Analysts) — automatic, no stored row.
-        if self.auto_member_role and self._user_role(user) == self.auto_member_role:
+        if self._is_auto_member(user):
             return True
         if self.memberships.serving().filter(user=user).exists():
             return True
@@ -355,17 +454,40 @@ class Workgroup(models.Model):
             )
         # Role-derived members (e.g. all Analysts in the Meeting of Analysts).
         if self.auto_member_role:
-            from django.contrib.auth import get_user_model
-
-            users = (get_user_model().objects
-                     .filter(profile__role=self.auto_member_role, is_active=True,
-                             profile__is_persona=False)
-                     .select_related("profile"))
+            users = self._auto_member_user_qs().select_related("profile")
             for u in users:
                 if u.pk not in seen:
                     seen[u.pk] = Participant(
                         user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
                     )
+        # The Meeting of Analysts' leaders are the school officers (President /
+        # Vice-President), synced from the Board roster (task #428). Surface them
+        # as leads here — overwriting their plain auto-member row — reusing the
+        # Chair / Co-chair role values so they rank first, with an explicit
+        # officer title for display.
+        if self.auto_member_role:
+            try:
+                is_moa = self.committee.slug == "meeting-of-analysts"
+            except ObjectDoesNotExist:
+                is_moa = False
+            if is_moa:
+                from core.models import StaffRole
+
+                officer_rows = [
+                    (StaffRole.PRESIDENT, WorkgroupMembership.Role.CHAIR, "President"),
+                    (StaffRole.VICE_PRESIDENT, WorkgroupMembership.Role.CO_CHAIR,
+                     "Vice President"),
+                ]
+                for key, role_value, title in officer_rows:
+                    sr = StaffRole.objects.filter(key=key).first()
+                    if sr is None:
+                        continue
+                    for u in sr.holders.all():
+                        seen[u.pk] = Participant(
+                            user=u, role=role_value, is_lead=True,
+                            officer_title=title,
+                        )
+
         # The ACTIVE roster of a term-based offering = the current term's
         # paid/comped registrants (past-term-only attendees are archive-only,
         # not on the active roster). A committee's organized-event registrants
@@ -382,10 +504,22 @@ class Workgroup(models.Model):
                     )
         # Personas are test accounts — keep them off every roster (they retain
         # their memberships for impersonation fidelity, just not shown here).
-        return [
+        roster = [
             p for p in seen.values()
             if not getattr(getattr(p.user, "profile", None), "is_persona", False)
         ]
+        # Leaders first by role precedence, then alphabetical by last/first name
+        # (task #417). Derived members (registrants) carry MEMBER, so they land
+        # in the everyone-else tier and interleave alphabetically here rather
+        # than being appended after the stored rows.
+        roster.sort(
+            key=lambda p: (
+                roster_rank(p.role),
+                (p.user.last_name or "").lower(),
+                (p.user.first_name or "").lower(),
+            )
+        )
+        return roster
 
     def current_term(self):
         """For a term-based offering (seminar / reading group), the active-or-
@@ -715,6 +849,7 @@ class Workgroup(models.Model):
         self.memberships.serving().filter(user=user).update(
             end_date=timezone.localdate()
         )
+        roster_changed.send(sender=Workgroup, workgroup=self)
         return True
 
     def add_member(self, user, *, role=None):
@@ -729,6 +864,8 @@ class Workgroup(models.Model):
         ended = self.memberships.serving().filter(user=user).update(
             end_date=timezone.localdate()
         )
+        if ended:
+            roster_changed.send(sender=Workgroup, workgroup=self)
         return bool(ended)
 
     def set_role(self, user, role) -> bool:
@@ -743,6 +880,16 @@ class Workgroup(models.Model):
         m.save(update_fields=["role"])
         return True
 
+    def officer_titles(self):
+        """This body's stored-role → public-title relabels, or ``{}`` if it has
+        none. The Board's Chair / Co-chair read President / Vice President
+        (see module ``OFFICER_TITLES``); every other group returns ``{}``."""
+        try:
+            slug = self.committee.slug
+        except ObjectDoesNotExist:
+            return {}
+        return OFFICER_TITLES.get(slug, {})
+
     def assignable_roles(self):
         """(value, label) roles a manager may hand-assign in the roster UI.
 
@@ -751,13 +898,15 @@ class Workgroup(models.Model):
         a member automatically, so "Member" is never assigned by hand. (The
         President / Vice-President are school-wide StaffRoles, not appointed
         per-group.) Other groups assign the leadership roles that apply to
-        them."""
+        them. Labels carry any per-body officer title (Board Chair reads
+        "President") so the picker matches the site."""
         R = WorkgroupMembership.Role
         if self.auto_member_role:
             roles = [R.APPLICATIONS_COORDINATOR]
         else:
             roles = [R.MEMBER, R.CHAIR, R.CO_CHAIR, R.SECRETARY, R.ORGANIZER, R.FACULTY]
-        return [(r.value, r.label) for r in roles]
+        titles = self.officer_titles()
+        return [(r.value, titles.get(r.value, r.label)) for r in roles]
 
     def set_member_term(self, user, *, start_date, end_date) -> bool:
         """Set an active member's term dates (committee terms; see ``has_terms``).
@@ -827,6 +976,25 @@ class WorkgroupMembership(models.Model):
     #: lead role), so PLUS_ONE is deliberately absent here.
     LEAD_ROLES = (Role.CHAIR, Role.CO_CHAIR, Role.FACULTY, Role.ORGANIZER)
 
+    #: Roster precedence (task #417). Leaders first in this fixed order, then
+    #: everyone else at ROSTER_DEFAULT_RANK (alphabetical by last name), then
+    #: plus-one guests last. President / Vice-President are the chair / co_chair
+    #: rows relabeled for display (content.views.OFFICER_TITLES); rank the
+    #: stored roles. MEMBER / FACULTY / WEB_COORDINATOR are intentionally NOT
+    #: distinct officer positions — they take the default rank.
+    ROSTER_DEFAULT_RANK = 50
+    ROLE_RANK = {
+        Role.CHAIR: 1,
+        Role.CO_CHAIR: 2,
+        Role.SECRETARY: 3,
+        Role.TREASURER: 4,
+        Role.ORGANIZER: 5,
+        Role.REFERRAL_COORDINATOR: 6,
+        Role.APPLICATIONS_COORDINATOR: 7,
+        Role.ADMIN_ASSISTANT: 8,
+        Role.PLUS_ONE: 99,
+    }
+
     workgroup = models.ForeignKey(
         Workgroup,
         on_delete=models.CASCADE,
@@ -866,6 +1034,14 @@ class WorkgroupMembership(models.Model):
     @property
     def is_active(self) -> bool:
         return self.end_date is None
+
+    @property
+    def role_label(self) -> str:
+        """Human label for this role, applying any per-body officer title — the
+        Board's Chair / Co-chair read President / Vice President (tasks #368,
+        #428). Mirrors ``get_role_display`` for every other group and role. Use
+        this, not ``get_role_display``, wherever a membership's role is shown."""
+        return self.workgroup.officer_titles().get(self.role) or self.get_role_display()
 
 
 class WorkgroupProposal(models.Model):
@@ -1094,6 +1270,14 @@ class MeetingSeries(models.Model):
     end_date = models.DateField(help_text="The series runs through this date.")
     start_time = models.TimeField()
     end_time = models.TimeField()
+    #: IANA timezone the wall-clock start/end times are anchored to, captured
+    #: from the author when the series is created. Pinning it here (rather than
+    #: relying on the request's ambient tz) keeps re-materialization
+    #: deterministic — regenerating never shifts existing occurrence times.
+    timezone = models.CharField(
+        max_length=64, default=settings.TIME_ZONE,
+        help_text="IANA timezone the meeting times are anchored to.",
+    )
     location = models.CharField(max_length=255, blank=True)
     online_url = models.URLField(blank=True)
     access_info = models.CharField(
@@ -1114,10 +1298,17 @@ class MeetingSeries(models.Model):
         return f"{self.title or 'Series'} ({self.get_frequency_display()})"
 
     def _windows(self):
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
         from events.scheduling import (
             generate_monthly_ordinal,
             generate_weekly,
         )
+
+        try:
+            tz = ZoneInfo(self.timezone) if self.timezone else None
+        except ZoneInfoNotFoundError:
+            tz = None  # fall back to the active tz rather than crash on bad data
 
         weekdays = [w.strip() for w in self.weekdays.split(",") if w.strip()]
         if self.frequency == self.Frequency.MONTHLY:
@@ -1125,12 +1316,13 @@ class MeetingSeries(models.Model):
             return generate_monthly_ordinal(
                 start_date=self.start_date, end_date=self.end_date,
                 weekdays=weekdays, week_positions=positions or [1],
-                start_time=self.start_time, end_time=self.end_time,
+                start_time=self.start_time, end_time=self.end_time, tz=tz,
             )
         interval = 2 if self.frequency == self.Frequency.BIWEEKLY else 1
         return generate_weekly(
             start_date=self.start_date, end_date=self.end_date, weekdays=weekdays,
             start_time=self.start_time, end_time=self.end_time, interval=interval,
+            tz=tz,
         )
 
     @transaction.atomic

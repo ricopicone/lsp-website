@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Prefetch, Q
+from django.db.models import F, OuterRef, Prefetch, Q, Subquery, Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import (
     FileResponse,
     Http404,
@@ -15,25 +16,29 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from core.access import gate_or_login
+
 from .forms import WorkForm
 from .models import Work, WorkAuthor, WorkFile
 
 
+def _prefetched(qs):
+    """Add authors + files prefetches (in display order) to a Work queryset."""
+    return qs.prefetch_related(
+        Prefetch(
+            "authorships",
+            queryset=WorkAuthor.objects.select_related("user").order_by("display_order"),
+        ),
+        Prefetch(
+            "files",
+            queryset=WorkFile.objects.order_by("display_order"),
+        ),
+    )
+
+
 def _annotated_qs(user):
     """Listing queryset with authors + files prefetched in order."""
-    return (
-        Work.listing_for(user)
-        .prefetch_related(
-            Prefetch(
-                "authorships",
-                queryset=WorkAuthor.objects.select_related("user").order_by("display_order"),
-            ),
-            Prefetch(
-                "files",
-                queryset=WorkFile.objects.order_by("display_order"),
-            ),
-        )
-    )
+    return _prefetched(Work.listing_for(user))
 
 
 def index(request):
@@ -59,6 +64,30 @@ def index(request):
             | Q(authors__last_name__icontains=q)
         ).distinct()
 
+    sort = request.GET.get("sort") or "random"
+    if sort not in ("random", "year", "added", "author"):
+        sort = "random"
+    if sort == "year":
+        qs = qs.order_by(F("publication_date").desc(nulls_last=True), "-created_at")
+    elif sort == "added":
+        qs = qs.order_by("-created_at")
+    elif sort == "author":
+        # First LSP author's last name, else the free-text external authors;
+        # works with neither sort last.
+        first_author = Subquery(
+            WorkAuthor.objects.filter(work=OuterRef("pk"))
+            .order_by("display_order")
+            .values("user__last_name")[:1]
+        )
+        qs = qs.annotate(
+            _author_key=Coalesce(
+                NullIf(Lower(first_author), Value("")),
+                NullIf(Lower("external_authors"), Value("")),
+            )
+        ).order_by(F("_author_key").asc(nulls_last=True), "title")
+    else:
+        qs = qs.order_by("?")
+
     years_qs = (
         _annotated_qs(request.user)
         .exclude(publication_date__isnull=True)
@@ -67,8 +96,19 @@ def index(request):
         .order_by("-publication_date__year")
     )
 
-    return render(request, "works/index.html", {
+    # Layout: explicit ?view= wins (and is remembered in a cookie); else the
+    # cookie; else the card grid.
+    view_param = request.GET.get("view") or ""
+    if view_param in ("grid", "list"):
+        view_mode = view_param
+    elif request.COOKIES.get("works_view") in ("grid", "list"):
+        view_mode = request.COOKIES["works_view"]
+    else:
+        view_mode = "grid"
+
+    response = render(request, "works/index.html", {
         "works": qs,
+        "view_mode": view_mode,
         "kind_choices": [(c.value, c.label) for c in Work.Kind if c != Work.Kind.CARTEL],
         "all_kind_choices": Work.Kind.choices,
         "years": list(years_qs),
@@ -76,13 +116,28 @@ def index(request):
         "selected_year": year,
         "has_pdf": has_pdf,
         "q": q,
+        "selected_sort": sort,
+        "sort_choices": [
+            ("random", "Random"),
+            ("year", "Publication year"),
+            ("added", "Recently added"),
+            ("author", "Author A–Z"),
+        ],
     })
+    if view_param in ("grid", "list"):
+        response.set_cookie(
+            "works_view", view_param, max_age=365 * 24 * 3600, samesite="Lax"
+        )
+    return response
 
 
 def detail(request, slug):
-    work = get_object_or_404(_annotated_qs(request.user), slug=slug)
+    # Fetch unfiltered so a members-only work still resolves — then gate, so an
+    # anonymous visitor following a shared link is sent to login (and returned
+    # here after sign-in) rather than dead-ended at a 404.
+    work = get_object_or_404(_prefetched(Work.objects.all()), slug=slug)
     if not work.listing_visible_to(request.user):
-        raise Http404()
+        return gate_or_login(request)
     # Publication revisions — the "Published" snapshots of the source draft,
     # oldest → newest, so each carries a stable revision number.
     revisions = []
@@ -112,8 +167,18 @@ def detail(request, slug):
         video_url = presigned_private_url(work.video.name) or reverse(
             "works:video", args=[work.slug]
         )
+    # Chicago citation, external publications only. The Cite block needs at
+    # least a year or some structured data — title-only citations are noise.
+    from .citation import citation_html, citation_text, source_html
+
+    has_citation = work.kind == Work.Kind.EXTERNAL and (
+        work.has_structured_citation or work.publication_date
+    )
     return render(request, "works/detail.html", {
         "work": work,
+        "citation": citation_html(work) if has_citation else "",
+        "citation_txt": citation_text(work) if has_citation else "",
+        "source_line": source_html(work) if work.kind == Work.Kind.EXTERNAL else "",
         "can_edit": work.editable_by(request.user),
         "content_visible": work.content_visible_to(request.user),
         "video_url": video_url,
@@ -174,7 +239,9 @@ def video(request, slug):
     """Stream a work's video, gated by content visibility. Redirects to a
     presigned S3 URL in prod (range-capable), or streams the local file in dev."""
     work = get_object_or_404(Work, slug=slug)
-    if not work.content_visible_to(request.user) or not work.video:
+    if not work.content_visible_to(request.user):
+        return gate_or_login(request)
+    if not work.video:
         raise Http404()
     from core.storage import presigned_private_url
 
@@ -188,7 +255,7 @@ def video(request, slug):
 def download(request, slug, file_id):
     work = get_object_or_404(Work, slug=slug)
     if not work.content_visible_to(request.user):
-        raise Http404()
+        return gate_or_login(request)
     wf = get_object_or_404(WorkFile, pk=file_id, work=work)
     filename = wf.file.name.rsplit("/", 1)[-1]
     return FileResponse(wf.file.open("rb"), as_attachment=False, filename=filename)

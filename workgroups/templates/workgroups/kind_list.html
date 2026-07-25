@@ -1,16 +1,17 @@
 {% extends "core/base.html" %}
-{% block title %}{{ kind_label_plural }} — LSP{% endblock %}
+{% block title %}{{ kind_label_plural }} · LSP{% endblock %}
 
 {% block page_hero %}{% include "core/_page_hero.html" with title=kind_label_plural %}{% endblock %}
 
 {% block content %}
 <div class="space-y-8">
   <header class="flex flex-wrap items-center justify-between gap-4">
-    <p class="text-sm">
+    <p class="text-sm flex flex-wrap gap-x-4">
+      {% if is_learning_kind %}<a href="{% url 'learning' %}" class="link link-hover text-base-content/60">← Learning</a>{% endif %}
       <a href="{% url 'workgroups:list' %}" class="link link-hover text-base-content/60">← Groups</a>
     </p>
     <div class="flex flex-wrap gap-2 shrink-0">
-      {% if can_propose_cartel %}<a href="{% url 'cartels:propose' %}" class="btn btn-primary btn-sm">Propose a cartel</a>{% endif %}
+      {% if can_propose_cartel %}<a href="{% url 'cartels:propose' %}" class="btn btn-primary btn-sm">Start a cartel</a>{% endif %}
       {% if is_cartel_coordinator %}<a href="{% url 'cartels:review_queue' %}" class="btn btn-ghost btn-sm">Review proposals</a>{% endif %}
       {% if can_create_working_group %}<a href="{% url 'workinggroups:create' %}" class="btn btn-primary btn-sm">New working group</a>{% endif %}
     </div>

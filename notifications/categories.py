@@ -40,6 +40,8 @@ class Category(models.TextChoices):
     PAYMENT_RECEIPT = "payment_receipt", _("Payment receipts")
     DUES_REMINDER = "dues_reminder", _("Dues reminders")
     TUITION_REMINDER = "tuition_reminder", _("Tuition reminders")
+    TUITION_PLAN_REVIEW = "tuition_plan_review", _("Tuition payment plans")
+    BALANCE_REMINDER = "balance_reminder", _("Balance reminders")
 
     # --- Cartels ---------------------------------------------------------
     CARTEL_INVITE = "cartel_invite", _("Cartel invitations")
@@ -51,6 +53,8 @@ class Category(models.TextChoices):
     ADMISSIONS_APPLICATION = "admissions_application", _("Admissions applications")
     ADMISSIONS_DECISION = "admissions_decision", _("Admissions decisions")
     ADMISSIONS_ADVANCEMENT = "admissions_advancement", _("Advancement (demande)")
+    EXTERNAL_CONTROL_ANALYST = "external_control_analyst", _("External control analyst review")
+    FORMATION_BACKGROUND = "formation_background", _("Formation background")
 
     # --- Groups (workgroups / cartels / committees / seminars) ----------
     GROUP_MEMBERSHIP = "group_membership", _("Added to or removed from a group")
@@ -69,6 +73,7 @@ class Category(models.TextChoices):
 
     # --- Account ---------------------------------------------------------
     ACCOUNT_ADVISOR = "account_advisor", _("Advisor assignments")
+    ACCOUNT_UPDATES = "account_updates", _("Account updates")
     ACCOUNT_SECURITY = "account_security", _("Account & security")
     AVAILABILITY_REVIEW = "availability_review", _("Availability review requests")
 
@@ -164,6 +169,16 @@ CATEGORY_META: dict[str, CategoryMeta] = {
         SECTION_PAYMENTS, _("Tuition reminders"),
         _("Periodic reminders about tuition for the year."),
     ),
+    _C.TUITION_PLAN_REVIEW: _M(
+        SECTION_PAYMENTS, _("Tuition payment plans"),
+        _("For Board members: a payment plan application to review. Also "
+          "carries the Board's decision on a plan application you filed."),
+    ),
+    _C.BALANCE_REMINDER: _M(
+        SECTION_PAYMENTS, _("Balance reminders"),
+        _("Periodic reminders when your account has an outstanding balance "
+          "(dues, tuition, or event fees)."),
+    ),
     # Cartels.
     _C.CARTEL_INVITE: _M(SECTION_CARTELS, _("Cartel invitations")),
     _C.CARTEL_APPLICATION: _M(SECTION_CARTELS, _("Applications to your cartel")),
@@ -184,6 +199,11 @@ CATEGORY_META: dict[str, CategoryMeta] = {
     _C.ADMISSIONS_ADVANCEMENT: _M(
         SECTION_ADMISSIONS, _("Advancement (demande)"),
         _("Advancement demandes you advise or present."),
+    ),
+    _C.EXTERNAL_CONTROL_ANALYST: _M(
+        SECTION_ADMISSIONS, _("External control analyst"),
+        _("Requests to authorize an analyst outside the School for control "
+          "analysis, for you to review."),
     ),
     # Groups — in-app first; email optional (default off to avoid noise).
     _C.GROUP_MEMBERSHIP: _M(
@@ -240,6 +260,19 @@ CATEGORY_META: dict[str, CategoryMeta] = {
     _C.ACCOUNT_ADVISOR: _M(
         SECTION_ACCOUNT, _("Advisor assignments"),
         _("When you're chosen as, or assigned, an advisor."),
+    ),
+    _C.FORMATION_BACKGROUND: _M(
+        SECTION_ACCOUNT, _("Formation background"),
+        _("When the Meeting of Analysts or your advisor sets your "
+          "control-analysis requirement (clinical or academic)."),
+        default_email=_E.OFF,
+    ),
+    # Outcomes on the member's own financial account — currently the
+    # treasurer's decision on a payment/fee the member reported from before
+    # the website (task #439 §3).
+    _C.ACCOUNT_UPDATES: _M(
+        SECTION_ACCOUNT, _("Account updates"),
+        _("Decisions on payments or fees you report for your account."),
     ),
     _C.ACCOUNT_SECURITY: _M(
         SECTION_ACCOUNT, _("Account & security"),

@@ -11,7 +11,7 @@ time; they don't wait on the seminar calendar.
 
 ## Forming a cartel
 
-Any member can propose one. Go to **`/cartels/propose/`** (or the "Propose a
+Any member can propose one. Go to **[Propose a cartel](/cartels/propose/)** (or the "Propose a
 cartel" button on the Cartels page) and give it a name, the guiding question it
 forms around, and—optionally—a few members you'd like to invite.
 
@@ -50,9 +50,9 @@ shared work.
 
 ## Where cartels appear
 
-- The **Program** (`/program/`) lists the cartels active in each academic year,
+- The **[Program](/program/)** lists the cartels active in each academic year,
   with their guiding questions.
-- The **Cartels** page (`/groups/cartels/`) shows the cartels you belong to and
+- The **[Cartels](/groups/cartels/)** page shows the cartels you belong to and
   lets you browse and propose.
 
 A cartel's name and guiding question are visible to members; its roster, posts,

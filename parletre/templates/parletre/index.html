@@ -1,13 +1,15 @@
 {% extends "core/base.html" %}
 {% load parletre_tags %}
-{% block title %}Parlêtre — LSP{% endblock %}
+{% block title %}Parlêtre · LSP{% endblock %}
 
 {% block page_hero %}{% include "core/_page_hero.html" with title="Parlêtre" subtitle="Forums, text chats, and video chats—offerings to the Other." %}{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
   <header class="flex flex-wrap items-center justify-end gap-2">
+    {% if private_chats_enabled %}
     <a href="{% url 'parletre:create_private_chat' %}" class="btn btn-sm btn-primary gap-1">{% icon "lock" %} New private chat</a>
+    {% endif %}
     <form method="get" action="{% url 'parletre:search' %}" class="flex gap-1">
       <input type="search" name="q" placeholder="Search…" class="input input-bordered input-sm w-44">
       <button type="submit" class="btn btn-sm">Search</button>

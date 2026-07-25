@@ -8,9 +8,9 @@ The School is sustained by its members. Two things may apply to you—**dues**
 (annual membership) and **tuition** (for members in training). Both are tied to
 **active** standing: if you're on leave, resigned, or emeritus, neither applies.
 
-You'll find everything in one place under the **Tuition & Dues** tab of
-[My Formation](/formation/?tab=tuition), and you can always pay dues directly at
-`/dues/`.
+You'll find everything in one place under the **Account** tab of
+[My Formation](/formation/?tab=account), and you can always pay dues directly at
+[the Dues page](/dues/).
 
 ## Dues
 
@@ -27,7 +27,7 @@ candidate, analyst, scholar) in active standing. Auditors don't owe dues.
 Members **in training**—pre-candidates and candidates, on either the analyst or
 scholar track—pay tuition each year, for **four years in total** (the years
 don't have to be back-to-back). Once you advance to Analyst or Scholar, you no
-longer owe tuition. The Tuition & Dues tab shows your progress toward the four
+longer owe tuition. The Account tab shows your progress toward the four
 years.
 
 ### Recording your decision
@@ -55,11 +55,12 @@ payment step. If you've chosen to **skip** the year, you pay the regular fee.
 
 ## Donations
 
-Anyone—member or not—can make a gift at `/donate/`, any amount, any time. It's
+Anyone—member or not—can make a gift on [the Donate page](/donate/), any amount, any time. It's
 always optional and separate from dues and tuition.
 
 ## Questions about your account
 
-Amounts, what you've paid, and what's outstanding all live on the Tuition & Dues
-tab. If something looks off, the treasurer can help—reach out and they'll
-reconcile it.
+Amounts, what you've paid, and what's outstanding all live on the Account tab,
+on one statement with a running balance. If something looks off, the treasurer
+can help—reach out and they'll reconcile it. You can also report a payment or
+fee from before this website there, and the treasurer will review it.

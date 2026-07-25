@@ -94,8 +94,11 @@ def test_video_view_gated_by_content_visibility(client):
         content_visibility=Work.Visibility.MEMBERS,
         video=_video(), submitted_by=owner,
     )
-    # Anonymous (not a member) → denied.
-    assert client.get(reverse("works:video", args=["v"])).status_code == 404
+    # Anonymous → bounced to login (returned to the video after sign-in).
+    url = reverse("works:video", args=["v"])
+    anon = client.get(url)
+    assert anon.status_code == 302
+    assert anon.url == f"/accounts/login/?next={url}"
     # Member → served (dev: FileResponse, no private bucket to presign).
     client.force_login(_user("member@x.test"))
     resp = client.get(reverse("works:video", args=["v"]))

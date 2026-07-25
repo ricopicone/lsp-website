@@ -81,3 +81,14 @@ def test_staff_guides_shown_to_staff(client):
     body = client.get(reverse("guides_index")).content.decode()
     assert "Your staff guides" in body
     assert reverse("treasurer_help") in body
+
+
+@pytest.mark.django_db
+def test_logging_in_guide_public_and_linked(client):
+    # Public (no login) — the audience is people who can't sign in yet.
+    body = client.get(reverse("guide_detail", args=["logging-in"])).content.decode()
+    assert "sign-in link" in body
+    assert "/accounts/login/" in body
+    assert "/accounts/password/reset/" in body
+    # Listed on the index.
+    assert "Logging in" in client.get(reverse("guides_index")).content.decode()

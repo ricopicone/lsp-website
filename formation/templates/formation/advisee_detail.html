@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}{{ advisee.get_full_name|default:advisee.email }} — Advisee record — LSP{% endblock %}
+{% block title %}{{ advisee.get_full_name|default:advisee.email }} · Advisee record · LSP{% endblock %}
 {% block content %}
 <div class="space-y-6 max-w-3xl">
   {% if messages %}{% for m in messages %}
@@ -62,10 +62,75 @@
   {# ---- Control analysis ---- #}
   <section class="rounded-xl border border-base-300 p-5 space-y-4">
     <h2 class="font-serif text-xl text-base-content">Control analysis</h2>
+
+    <form method="post" action="{% url 'formation:advisee_set_background' advisee.pk %}" class="space-y-2 text-sm">
+      {% csrf_token %}
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="flex items-center gap-1">
+          <input type="radio" name="background" value="clinical" class="radio radio-sm"
+                 {% if advisee.profile.formation_background == "clinical" %}checked{% endif %}>
+          Clinical (2: one 4-year, one 2-year)
+        </label>
+        <label class="flex items-center gap-1">
+          <input type="radio" name="background" value="academic" class="radio radio-sm"
+                 {% if advisee.profile.formation_background == "academic" %}checked{% endif %}>
+          Academic (3: one 4-year, two 2-year)
+        </label>
+      </div>
+      <input type="text" name="note" placeholder="Optional note (for the record)"
+             class="input input-bordered input-sm w-full">
+      <button class="btn btn-ghost btn-xs">Save background</button>
+    </form>
+    {% if advisee.profile.formation_background == "unreviewed" %}
+    <p class="text-xs text-warning">Not yet determined by the Meeting of Analysts.</p>
+    {% endif %}
+    {% if background_history %}
+    <details class="text-xs text-base-content/60">
+      <summary class="cursor-pointer">History</summary>
+      <ul class="mt-1 space-y-1">
+        {% for h in background_history %}
+        <li>{{ h.created_at|date:"M j, Y" }}: {{ h.background }}{% if h.set_by %}, by {{ h.set_by.get_full_name|default:h.set_by.email }}{% endif %}{% if h.note %} , {{ h.note }}{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+
+    {% if control_progress.reviewed %}
     <div class="space-y-1">
-      <progress class="progress progress-primary w-full" value="{{ control_years }}" max="{{ control_target }}"></progress>
-      <p class="text-sm text-base-content/70">{{ control_years }} of {{ control_target }} years of control analysis, or four years of ongoing dialogue with an analyst.</p>
+      <progress class="progress progress-primary w-full" value="{{ control_progress.total_years }}" max="{{ control_progress.total_target }}"></progress>
+      <p class="text-sm text-base-content/70">{{ control_progress.total_years|floatformat:1 }} of {{ control_progress.total_target }} total years across control analyses.</p>
     </div>
+
+    <div class="space-y-3">
+      {# 4-year slot #}
+      <div class="space-y-1">
+        <div class="flex items-center justify-between text-sm">
+          <span class="font-medium">4-year control analysis</span>
+          {% if control_progress.four_year.met %}<span class="badge badge-success badge-sm">met</span>{% endif %}
+        </div>
+        <progress class="progress progress-secondary w-full" value="{{ control_progress.four_year.years }}" max="{{ control_progress.four_year.target }}"></progress>
+        <p class="text-xs text-base-content/60">
+          {% if control_progress.four_year.entry %}{{ control_progress.four_year.entry.supervisor_name }}, {{ control_progress.four_year.years|floatformat:1 }} of {{ control_progress.four_year.target }} years{% else %}Not yet started.{% endif %}
+        </p>
+      </div>
+      {# 2-year slots #}
+      {% for slot in control_progress.two_year %}
+      <div class="space-y-1">
+        <div class="flex items-center justify-between text-sm">
+          <span class="font-medium">2-year control analysis{% if control_progress.two_year|length > 1 %} #{{ forloop.counter }}{% endif %}</span>
+          {% if slot.met %}<span class="badge badge-success badge-sm">met</span>{% endif %}
+        </div>
+        <progress class="progress progress-secondary w-full" value="{{ slot.years }}" max="{{ slot.target }}"></progress>
+        <p class="text-xs text-base-content/60">
+          {% if slot.entry %}{{ slot.entry.supervisor_name }}, {{ slot.years|floatformat:1 }} of {{ slot.target }} years{% else %}Not yet started.{% endif %}
+        </p>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-base-content/60">Control requirement will show once a background is set above.</p>
+    {% endif %}
+
     {% if control_entries %}
     <ul class="space-y-3">
       {% for c in control_entries %}

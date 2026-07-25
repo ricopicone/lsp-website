@@ -54,7 +54,7 @@ def resolve_price(
     if pricing_code is not None:
         return _apply_code(pricing_code, user, tier, sliding_amount)
 
-    if tier.covered_by_tuition and _is_tuition_paying(user):
+    if tier.covered_by_tuition and _is_tuition_paying(user, tier):
         return PriceResolution(
             amount=ZERO,
             explanation="Covered by tuition (tuition-paying member, REG-4).",
@@ -129,7 +129,10 @@ def _apply_code(
     return PriceResolution(amount=amount, explanation=explanation, code_redeemed=code)
 
 
-def _is_tuition_paying(user) -> bool:
-    """Whether ``user`` is tuition-current for today's academic year (M7.5)."""
+def _is_tuition_paying(user, tier: PriceTier) -> bool:
+    """Whether ``user`` is tuition-current for ``tier``'s event's academic
+    year (task #450 phase A — anchor on the event, not today's date, so a
+    covered-by-tuition seminar checks the AY it actually falls in)."""
     profile = getattr(user, "profile", None)
-    return bool(profile and profile.is_tuition_current())
+    on_date = getattr(tier.event, "start_date", None)
+    return bool(profile and profile.is_tuition_current(on_date))

@@ -64,6 +64,19 @@ def test_password_reset_completes_and_logs_in(client):
 
 
 @pytest.mark.django_db
+def test_password_reset_reaches_user_without_usable_password(client):
+    """Imported members are created with an unusable password; password reset
+    IS their onboarding path. Django's default form silently skips them, so the
+    override in ReplyToPasswordResetForm must still send the email."""
+    u = User.objects.create_user(email="imported@x.test", password=None)
+    assert not u.has_usable_password()  # exactly how import_users creates them
+    resp = client.post(reverse("password_reset"), {"email": u.email})
+    assert resp.status_code == 302
+    assert len(mail.outbox) == 1
+    assert re.search(r"/accounts/reset/[^/]+/[^/\s]+/", mail.outbox[0].body)
+
+
+@pytest.mark.django_db
 def test_password_reset_unknown_email_sends_nothing_but_succeeds(client):
     resp = client.post(reverse("password_reset"), {"email": "ghost@x.test"})
     assert resp.status_code == 302  # same "done" redirect — no enumeration
@@ -112,14 +125,23 @@ def test_magic_link_repeat_reuses_unexpired_link(client):
 def test_magic_link_consume_logs_in_and_is_single_use(client):
     u = _user("consume@x.test")
     link = MagicLoginLink.objects.create(user=u)
-    resp = client.get(reverse("magic_link_consume", args=[link.token]))
+    url = reverse("magic_link_consume", args=[link.token])
+    # A GET only shows a confirmation page — it must NOT consume or log in, so
+    # an email link-scanner that prefetches the URL can't burn the link.
+    resp = client.get(url)
+    assert resp.status_code == 200
+    assert "_auth_user_id" not in client.session
+    link.refresh_from_db()
+    assert link.used_at is None
+    # The button POST actually signs in and consumes.
+    resp = client.post(url)
     assert resp.status_code == 302
     assert "_auth_user_id" in client.session
     link.refresh_from_db()
     assert link.used_at is not None
     # Replay rejected.
     client.logout()
-    resp = client.get(reverse("magic_link_consume", args=[link.token]))
+    resp = client.post(url)
     assert resp.status_code == 410
     assert "_auth_user_id" not in client.session
 
@@ -143,16 +165,46 @@ def test_magic_link_consume_redirects_to_safe_next(client):
     u = _user("nx@x.test")
     link = MagicLoginLink.objects.create(user=u)
     dest = "/groups/board/room/"
-    resp = client.get(reverse("magic_link_consume", args=[link.token]) + f"?next={dest}")
+    resp = client.post(reverse("magic_link_consume", args=[link.token]), {"next": dest})
     assert resp.status_code == 302 and resp.url == dest
     # An off-site next is ignored — falls back to the default landing.
     u2 = _user("nx2@x.test")
     link2 = MagicLoginLink.objects.create(user=u2)
     client.logout()
-    resp = client.get(
-        reverse("magic_link_consume", args=[link2.token]) + "?next=https://evil.test/"
+    resp = client.post(
+        reverse("magic_link_consume", args=[link2.token]), {"next": "https://evil.test/"}
     )
     assert resp.status_code == 302 and resp.url != "https://evil.test/"
+
+
+@pytest.mark.django_db
+def test_magic_link_get_survives_scanner_prefetch(client):
+    """An email security scanner (e.g. Microsoft Defender Safe Links) GETs every
+    URL in inbound mail. Those GETs must not consume the single-use link."""
+    u = _user("scanned@x.test")
+    link = MagicLoginLink.objects.create(user=u)
+    url = reverse("magic_link_consume", args=[link.token])
+    for _ in range(3):  # scanner prefetches, possibly several times
+        assert client.get(url).status_code == 200
+    link.refresh_from_db()
+    assert link.used_at is None
+    # The member's real click still works.
+    resp = client.post(url)
+    assert resp.status_code == 302
+    assert "_auth_user_id" in client.session
+
+
+@pytest.mark.django_db
+def test_multi_use_link_still_one_click_on_get(client):
+    """Meeting-window links are multi-use and log in on GET (no interstitial) —
+    prefetch can't lock them out, so the one-click deep-link flow is preserved."""
+    u = _user("meeting@x.test")
+    link = MagicLoginLink.create_for_window(
+        u, expires_at=timezone.now() + timedelta(hours=1)
+    )
+    resp = client.get(reverse("magic_link_consume", args=[link.token]))
+    assert resp.status_code == 302
+    assert "_auth_user_id" in client.session
 
 
 @pytest.mark.django_db

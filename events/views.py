@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import (
@@ -19,6 +20,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from accounts.permissions import is_lsp_member
+from core.access import gate_or_login
 
 from .forms import EventDescriptionForm, PricingCodeForm
 from .models import (
@@ -70,6 +72,11 @@ def event_summary_context(event, user) -> dict:
     from events.permissions import can_edit_event
     from video.services import daily_enabled, presence_names, room_participant_count
 
+    # Whoever runs the event — faculty, a PC-organized event's presenters, the
+    # PC, staff — sees the access details (venue / meeting link) without a
+    # registration. They never pay for their own event, so the payment gate
+    # would withhold the meeting details from the people leading the meeting.
+    can_host = can_edit_event(user, event)
     daily_on = daily_enabled()
     # Real Daily presence in the event's room (people actually meeting now).
     # No provisioning: counts only an already-created room, else 0 (no API call).
@@ -106,7 +113,10 @@ def event_summary_context(event, user) -> dict:
         "daily_enabled": daily_on,
         "event_is_live": event.is_live(),
         "event_next_session_at": next_session.start_at if next_session else None,
-        "can_host": can_edit_event(user, event),
+        "can_host": can_host,
+        "show_access_info": bool(event.access_info) and (
+            has_paid_registration or can_host
+        ),
         "event_room_live": bool(room_participants),
         "event_room_participants": room_participants,
         "event_room_participant_names": room_participant_names,
@@ -143,7 +153,15 @@ def program(request):
     """
     from .models import Program
     from .permissions import is_program_committee
-    year = request.GET.get("year") or current_academic_year()
+    year = request.GET.get("year")
+    if not year:
+        # Default to the newest publicly-visible program (e.g. a fall program
+        # published in July, before its academic year begins), falling back
+        # to the calendar's current AY when nothing is published yet.
+        year = next(
+            (p.academic_year for p in Program.objects.all() if p.is_public_now),
+            None,
+        ) or current_academic_year()
     try:
         academic_year_date_range(year)
     except (ValueError, IndexError):
@@ -221,7 +239,8 @@ def program_archive(request):
 def program_archive_download(request, pk: int):
     """Serve an archived program PDF — members only (for now)."""
     if not is_lsp_member(request.user):
-        raise Http404()
+        # Anonymous → login (return here after sign-in); signed-in non-member → 404.
+        return gate_or_login(request)
     archived = get_object_or_404(ArchivedProgram, pk=pk)
     if not archived.file:
         raise Http404()
@@ -307,7 +326,11 @@ def event_edit(request, slug: str):
 
     if request.method != "POST":
         form = EventDescriptionForm(instance=event)
-        return render(request, "events/event_edit.html", {"event": event, "form": form})
+        return render(request, "events/event_edit.html", {
+            "event": event, "form": form,
+            "speaker_invites": _speaker_invite_rows(event),
+            **_schedule_editor_context(event),
+        })
 
     # Snapshot the live reviewable values *before* binding — ModelForm validation
     # mutates ``event`` in place (construct_instance), so reading them afterwards
@@ -316,7 +339,9 @@ def event_edit(request, slug: str):
 
     form = EventDescriptionForm(request.POST, instance=event)
     if not form.is_valid():
-        return render(request, "events/event_edit.html", {"event": event, "form": form})
+        return render(request, "events/event_edit.html", {
+            "event": event, "form": form, **_schedule_editor_context(event),
+        })
 
     cd = form.cleaned_data
     changed = [f for f in REVIEWABLE_FIELDS if (cd[f] or "") != original[f]]
@@ -394,6 +419,78 @@ def event_edit(request, slug: str):
     cr.save()
     messages.success(request, "Change adopted.")
     return redirect("events:detail", slug=event.slug)
+
+
+def _schedule_editor_context(event, formset=None):
+    """Context for the standalone-event schedule editor on the edit page.
+
+    The editor is shown only for standalone one-off types (special events, Days
+    of Assembly, Working Days, Scholarly Seminars); annual-program events derive
+    their sessions from a recurring meeting series managed elsewhere.
+    """
+    from .forms import SessionScheduleFormSet
+
+    show = event.event_type in Event.PC_OWNED_TYPES
+    if not show:
+        return {"show_schedule_editor": False}
+    if formset is None:
+        formset = SessionScheduleFormSet(instance=event, prefix="sessions")
+    return {"show_schedule_editor": True, "schedule_formset": formset}
+
+
+def _resequence_and_sync_dates(event):
+    """Renumber an event's sessions by start time and pull the event's
+    start/end date onto the earliest start and latest end.
+
+    The coarse ``start_date`` / ``end_date`` labels are derived in a *fixed*
+    canonical timezone (the project TIME_ZONE, Pacific) rather than the editor's
+    own tz, so an event's calendar "day" doesn't shift depending on who edited
+    it. Session wall-clock times are still entered/shown in each user's tz.
+    """
+    from zoneinfo import ZoneInfo
+
+    sessions = list(event.sessions.order_by("start_at"))
+    for i, s in enumerate(sessions, start=1):
+        if s.sequence != i:
+            s.sequence = i
+            s.save(update_fields=["sequence"])
+    if sessions:
+        tz = ZoneInfo("America/Los_Angeles")
+        event.start_date = timezone.localtime(sessions[0].start_at, tz).date()
+        latest_end = max(s.end_at for s in sessions)
+        event.end_date = timezone.localtime(latest_end, tz).date()
+        event.save(update_fields=["start_date", "end_date"])
+
+
+@login_required
+@require_POST
+def event_edit_schedule(request, slug: str):
+    """Faculty/PC/staff edit the sessions (date + start/end + location) of a
+    standalone one-off event. Isolated from the content edit form + review loop
+    (sessions are a different model). Applies immediately."""
+    from django.db import transaction
+
+    from .forms import SessionScheduleFormSet
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to edit this event.")
+    if event.event_type not in Event.PC_OWNED_TYPES:
+        raise Http404()
+
+    formset = SessionScheduleFormSet(request.POST, instance=event, prefix="sessions")
+    if formset.is_valid():
+        with transaction.atomic():
+            formset.save()
+            _resequence_and_sync_dates(event)
+        messages.success(request, "Schedule updated.")
+        return redirect("events:edit", slug=event.slug)
+
+    form = EventDescriptionForm(instance=event)
+    return render(request, "events/event_edit.html", {
+        "event": event, "form": form,
+        **_schedule_editor_context(event, formset=formset),
+    })
 
 
 def _field_label(field: str) -> str:
@@ -596,6 +693,40 @@ def program_admin_detail(request, academic_year: str):
         "offerings": offerings,
         "saved":     request.GET.get("saved") == "1",
     })
+
+
+@login_required
+def program_admin_registration_bulk(request, academic_year: str):
+    """PC admin: open or close registration for a whole program at once.
+
+    ``action=open`` flips every DRAFT event to OPEN; ``action=close`` flips
+    every OPEN event to CLOSED. Distinct from *publishing* the program, which
+    only controls public visibility — this controls whether members can
+    register (and pay).
+    """
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    from .models import Program
+    program = get_object_or_404(Program, academic_year=academic_year)
+    if request.method != "POST":
+        return redirect(reverse("program_admin_detail", args=[academic_year]))
+
+    action = request.POST.get("action")
+    if action == "open":
+        n = program.events.filter(status=Event.Status.DRAFT).update(
+            status=Event.Status.OPEN
+        )
+        flag = f"opened={n}"
+    elif action == "close":
+        n = program.events.filter(status=Event.Status.OPEN).update(
+            status=Event.Status.CLOSED
+        )
+        flag = f"closed={n}"
+    else:
+        raise Http404()
+    return redirect(
+        reverse("program_admin_detail", args=[academic_year]) + f"?{flag}"
+    )
 
 
 @login_required
@@ -809,9 +940,16 @@ def program_admin_proposals(request):
     )
     pending = [p for p in proposals if p.status == EventProposal.Status.PROPOSED]
     decided = [p for p in proposals if p.status != EventProposal.Status.PROPOSED]
+    # Standalone special events get their management home here — the PC creates,
+    # edits, and publishes them from this tab (they aren't part of any program).
+    special_events = list(
+        Event.objects.filter(event_type=Event.Type.SPECIAL_EVENT)
+        .order_by("-start_date", "title")
+    )
     return _pc_admin_render(request, "proposals", "events/program_admin/proposals.html", {
         "pending": pending,
         "decided": decided,
+        "special_events": special_events,
     })
 
 
@@ -832,6 +970,137 @@ def proposal_decide(request, pk: int):
     else:
         proposal.decline(request.user, note=request.POST.get("note", ""))
         messages.success(request, "Proposal declined.")
+    return redirect("program_admin_proposals")
+
+
+@login_required
+def program_admin_special_event_new(request):
+    """PC direct-create a special event.
+
+    Reuses the member proposal form + ``EventProposal.approve()`` pipeline so the
+    minting (price tier, first session, speakers, workgroup provenance) is never
+    duplicated. The auto-approve is a property of *this action*, not of the
+    proposer's PC membership — a PC member using the normal propose form still
+    goes through the review queue. The PC chooses to publish now or save a draft.
+    """
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    from django.db import transaction
+
+    from .forms import EventProposalForm, ProposalSpeakerFormSet
+
+    special = Event.Type.SPECIAL_EVENT
+
+    def _lock_to_special(form):
+        # Constrain the choices so only special events can be created here (both
+        # the template's type-adaptive display and POST validation honor this).
+        form.fields["event_type"].choices = [(special.value, special.label)]
+
+    if request.method == "POST":
+        publish = request.POST.get("action") == "publish"
+        form = EventProposalForm(request.POST)
+        _lock_to_special(form)
+        form.require_complete = True
+        speakers = ProposalSpeakerFormSet(request.POST, prefix="speakers")
+        if form.is_valid() and speakers.is_valid():
+            with transaction.atomic():
+                proposal = _save_proposal_form(
+                    request, form, speakers, None, is_submit=True,
+                )
+                event = proposal.approve(request.user)
+                has_real_date = bool(proposal.proposed_datetime) and not proposal.date_tbd
+                want_published = publish and has_real_date
+                if event.published != want_published:
+                    event.published = want_published
+                    event.save(update_fields=["published"])
+            if publish and not has_real_date:
+                messages.warning(
+                    request,
+                    f"“{event.title}” was created as a draft — it needs a date "
+                    "before it can be published.",
+                )
+            elif event.published:
+                messages.success(request, f"Created and published “{event.title}”.")
+            else:
+                messages.success(
+                    request,
+                    f"Saved “{event.title}” as a draft. Publish it from the "
+                    "Proposals tab when it's ready.",
+                )
+            return redirect("events:edit", slug=event.slug)
+    else:
+        form = EventProposalForm(initial={"event_type": special.value})
+        _lock_to_special(form)
+        speakers = ProposalSpeakerFormSet(prefix="speakers")
+    return render(request, "events/propose_event.html", {
+        "form": form, "speakers": speakers, "direct_create": True,
+    })
+
+
+@login_required
+@require_POST
+def program_admin_special_event_publish(request, slug: str):
+    """PC publishes / unpublishes a standalone special event (its live/draft
+    lever is ``Event.published``). Filtered to special events so a program event,
+    whose visibility cascades from its Program, can't be toggled here."""
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    event = get_object_or_404(
+        Event, slug=slug, event_type=Event.Type.SPECIAL_EVENT,
+    )
+    publish = request.POST.get("action") == "publish"
+    if event.published != publish:
+        event.published = publish
+        event.save(update_fields=["published"])
+    messages.success(
+        request,
+        f"{'Published' if publish else 'Unpublished'} “{event.title}”.",
+    )
+    return redirect("program_admin_proposals")
+
+
+@login_required
+@require_POST
+def program_admin_special_event_registration(request, slug: str):
+    """PC opens / closes registration on a standalone special event.
+
+    ``Event.published`` (the Publish button) controls visibility; ``status``
+    controls whether members can register and pay — a live page can carry
+    closed registration. Program events get this lever from their program's
+    bulk buttons; a standalone special event had nowhere to set it but the
+    Django admin, so this is it.
+    """
+    if not _is_pc_or_staff(request.user):
+        raise Http404()
+    event = get_object_or_404(
+        Event, slug=slug, event_type=Event.Type.SPECIAL_EVENT,
+    )
+    action = request.POST.get("action")
+    if action == "open":
+        event.status = Event.Status.OPEN
+    elif action == "close":
+        event.status = Event.Status.CLOSED
+    else:
+        raise Http404()
+    event.save(update_fields=["status"])
+    if action == "open":
+        messages.success(request, f"Registration is open for “{event.title}”.")
+        # Nothing to quote without a tier — flag it rather than refuse (the PC
+        # may be mid-setup), so nobody discovers it from a broken register page.
+        if not event.price_tiers.exists():
+            messages.warning(
+                request,
+                f"“{event.title}” has no price tier yet, so members can't "
+                "complete a registration. Add one on the event's edit page.",
+            )
+        if not event.published:
+            messages.warning(
+                request,
+                f"“{event.title}” is still a draft — publish it for anyone to "
+                "reach the registration page.",
+            )
+    else:
+        messages.success(request, f"Registration is closed for “{event.title}”.")
     return redirect("program_admin_proposals")
 
 
@@ -875,3 +1144,99 @@ def change_request_decide(request, pk: int):
         messages.success(request, "Change declined.")
     event_notifications.notify_change_decided(cr)
     return redirect("program_admin_changes")
+
+
+@login_required
+@require_POST
+def speaker_invite(request, slug, speaker_id):
+    """PC/staff confirm-and-send an external-speaker invitation (task #463)."""
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+
+    from .models import Speaker
+    from .speaker_invitations import send_invitation
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to invite speakers.")
+    speaker = get_object_or_404(Speaker, pk=speaker_id, events=event)
+    # An external speaker added without an email shows an inline field to add one
+    # here; set it before inviting.
+    new_email = request.POST.get("email", "").strip()
+    if new_email and not (speaker.email or "").strip():
+        try:
+            validate_email(new_email)
+        except ValidationError:
+            messages.error(request, "That doesn't look like a valid email address.")
+            return redirect("events:edit", slug=event.slug)
+        speaker.email = new_email
+        speaker.save(update_fields=["email"])
+    if not (speaker.email or "").strip():
+        messages.error(
+            request, f"Add an email address for {speaker.name} before inviting."
+        )
+        return redirect("events:edit", slug=event.slug)
+    message = request.POST.get("message", "").strip()
+    send_invitation(speaker, event, message)
+    messages.success(request, f"Invitation sent to {speaker.name} ({speaker.email}).")
+    return redirect("events:edit", slug=event.slug)
+
+
+def _speaker_invite_rows(event):
+    """Per-speaker invite state for the edit page."""
+    from .speaker_invitations import default_invitation_message
+    rows = []
+    for s in event.speakers.all().select_related("user"):
+        if not (s.email or "").strip():
+            status = "needs_email"   # shown with an inline "add an email" field
+        elif s.user_id and s.user.has_usable_password():
+            status = "active"
+        elif s.user_id:
+            status = "invited"   # provisioned; awaiting activation
+        else:
+            status = "ready"
+        rows.append({
+            "speaker": s,
+            "status": status,
+            "default_message": default_invitation_message(s, event),
+        })
+    return rows
+
+
+def speaker_invitation_accept(request, token):
+    """Activate an invited external-speaker login: set a password, sign in, and
+    land on the event page (task #463).
+
+    Consumption happens only on the POST that sets the password, so email
+    security scanners that GET-prefetch the link can't burn it
+    (memory ``auth-email-scanner-and-reset-gotchas``).
+    """
+    from django.contrib.auth import login
+    from django.contrib.auth.forms import SetPasswordForm
+
+    from .models import SpeakerInvitation
+
+    inv = (
+        SpeakerInvitation.objects
+        .filter(token=token)
+        .select_related("user", "speaker")
+        .first()
+    )
+    if inv is None or not inv.is_valid or not inv.user.is_active:
+        return render(request, "events/speaker_invitation_invalid.html", status=410)
+
+    event = inv.speaker.events.order_by("start_date").first()
+    if request.method == "POST":
+        form = SetPasswordForm(inv.user, request.POST)
+        if form.is_valid():
+            form.save()
+            inv.consume()
+            login(request, inv.user)
+            if event is not None:
+                return redirect("events:detail", slug=event.slug)
+            return redirect(settings.LOGIN_REDIRECT_URL)
+    else:
+        form = SetPasswordForm(inv.user)
+    return render(request, "events/speaker_invitation_accept.html", {
+        "form": form, "invitation": inv, "event": event,
+    })

@@ -56,15 +56,15 @@ class TuitionDecisionForm(forms.Form):
     """Student-facing tuition decision form (M7.5).
 
     Captures the three public-facing choices for an in-training student
-    each academic year: pay in full, set up a payment plan (treasurer
-    follows up to schedule installments), or skip this year. PAID_IN_FULL
-    is reached automatically once payment lands; the treasurer also has
-    inline actions on the reconciliation queue.
+    each academic year: pay in full, apply to the Board for a payment plan
+    (task #450 phase B — the Board reviews and decides), or skip this year.
+    PAID_IN_FULL is reached automatically once payment lands; the treasurer
+    also has inline actions on the reconciliation queue.
     """
 
     STATUS_CHOICES = [
         ("committed",    "I plan to pay tuition for this year."),
-        ("payment_plan", "I want to set up a payment plan."),
+        ("payment_plan", "I want to apply to the Board for a payment plan."),
         ("skipping",     (
             "I'm skipping tuition this year "
             "(I'll pay regular fees for any events I attend)."
@@ -76,6 +76,28 @@ class TuitionDecisionForm(forms.Form):
         required=True,
         label="My decision for this academic year",
     )
+    reasons = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            "class": "textarea textarea-bordered w-full", "rows": 3,
+        }),
+        label="Reasons for the Board",
+        help_text=(
+            "Required if you are applying for a payment plan, tell the "
+            "Board briefly about your circumstances."
+        ),
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        status = cleaned.get("status")
+        reasons = (cleaned.get("reasons") or "").strip()
+        if status == "payment_plan" and not reasons:
+            self.add_error(
+                "reasons",
+                "Please tell the Board briefly about your circumstances.",
+            )
+        return cleaned
 
 
 class TreasurerSettingsForm(forms.Form):

@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}{% if mode == "add" %}Add control analysis{% else %}Edit control analysis{% endif %} — LSP{% endblock %}
+{% block title %}{% if mode == "add" %}Add control analysis{% else %}Edit control analysis{% endif %} · LSP{% endblock %}
 {% block content %}
 <div class="max-w-2xl mx-auto space-y-8">
 
@@ -27,8 +27,28 @@
     {% endif %}
 
     <div class="space-y-1">
-      <label for="{{ form.supervisor_name.id_for_label }}" class="block text-sm font-medium">Supervisor</label>
+      <label for="{{ form.school_analyst.id_for_label }}" class="block text-sm font-medium">Analyst of the School</label>
+      {{ form.school_analyst }}
+      <p class="text-xs text-base-content/60">{{ form.school_analyst.help_text }}</p>
+      {% if form.school_analyst.errors %}<p class="text-error text-xs mt-1">{{ form.school_analyst.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    {% if form.external_analyst.field.queryset.exists %}
+    <div class="space-y-1">
+      <label for="{{ form.external_analyst.id_for_label }}" class="block text-sm font-medium">Approved external analyst</label>
+      {{ form.external_analyst }}
+      {% if form.external_analyst.errors %}<p class="text-error text-xs mt-1">{{ form.external_analyst.errors|join:", " }}</p>{% endif %}
+    </div>
+    {% endif %}
+
+    <p class="text-sm text-base-content/70">
+      Analyst not on either list? <a href="{% url 'formation:external_analyst_request' %}" class="link link-primary">Request authorization for an external control analyst</a>.
+    </p>
+
+    <div class="space-y-1">
+      <label for="{{ form.supervisor_name.id_for_label }}" class="block text-sm font-medium">Or type a name</label>
       {{ form.supervisor_name }}
+      <p class="text-xs text-base-content/60">{{ form.supervisor_name.help_text }}</p>
       {% if form.supervisor_name.errors %}<p class="text-error text-xs mt-1">{{ form.supervisor_name.errors|join:", " }}</p>{% endif %}
     </div>
 
@@ -36,6 +56,13 @@
       <label for="{{ form.modality.id_for_label }}" class="block text-sm font-medium">Modality</label>
       {{ form.modality }}
       {% if form.modality.errors %}<p class="text-error text-xs mt-1">{{ form.modality.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ form.requirement.id_for_label }}" class="block text-sm font-medium">Counts toward</label>
+      {{ form.requirement }}
+      <p class="text-xs text-base-content/60">{{ form.requirement.help_text }}</p>
+      {% if form.requirement.errors %}<p class="text-error text-xs mt-1">{{ form.requirement.errors|join:", " }}</p>{% endif %}
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

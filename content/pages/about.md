@@ -68,13 +68,13 @@ if you have a proposal to submit, please reach out at
 The Meeting of Analysts is a monthly 90-minute meeting and is composed
 of all the Analysts of the School. The analysts oversee all aspects of
 psychoanalytic training and transmission. They review admissions
-materials, conduct interviews, and make admission decisions. Two
-analysts oversee the process of referrals for personal analysis (a
-rotating responsibility). This meeting considers demands for palimpsests
+materials, conduct interviews, and make admission decisions. The
+School's Referral Coordinator oversees the process of referrals for
+personal analysis. This meeting considers demands for palimpsests
 and passages.
 
-The analysts formulate and revise requirements of formation in the three
-tracks: Clinical, Research, and Scholar. Working groups of analysts form
+The analysts formulate and revise requirements of formation in the two
+tracks: Clinical and Scholar. Working groups of analysts form
 for a particular purpose and dissolve as tasks are finished; any of
 these groups may consult or work with school members. If anyone cannot
 attend, that analyst agrees to read minutes of the meeting to be up to

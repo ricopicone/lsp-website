@@ -48,6 +48,7 @@
       </span>
       <form method="post" action="{% url 'core:impersonate_stop' %}" style="display:contents">
         {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
         <button class="btn btn-xs">Exit</button>
       </form>
     </div>
@@ -58,9 +59,28 @@
   <header class="border-b border-base-300/60 bg-base-100/95 backdrop-blur supports-backdrop-blur:bg-base-100/70 sticky top-0 z-20">
     <div class="mx-auto max-w-5xl px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
       <a href="{% url 'core:landing' %}"
-         class="font-serif text-base sm:text-lg leading-none text-base-content hover:text-primary transition-colors tracking-tight">
-        <span class="hidden sm:inline">Lacanian School of Psychoanalysis</span>
-        <span class="sm:hidden">LSP</span>
+         class="group flex items-center gap-2.5 font-serif text-base sm:text-lg leading-none text-base-content hover:text-primary transition-colors tracking-tight">
+        {% comment %}
+          Logo crest: a paper-white seal sized larger than the h-14 header so it bleeds
+          downward past the bar's bottom edge without making the header taller (task #386).
+          The disc stays white in both the silk (light) and abyss (dark) themes — a seal is
+          paper. On mobile it shrinks and sits inside the bar so it never overlaps content.
+        {% endcomment %}
+        <span class="relative shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-base-300/70 shadow-md
+                     size-10 sm:size-16 sm:translate-y-[10px]">
+          <img src="{% static 'img/lsp-logo-crest.png' %}" alt="Lacanian School of Psychoanalysis"
+               width="243" height="243"
+               class="size-full object-contain p-1 transition-transform duration-200 group-hover:scale-105">
+        </span>
+        {% comment %}
+          Wordmark: locked to a fixed two-line wrap so it never spills to three lines
+          as the viewport narrows (task #386). Only shown from lg where there's room for
+          two lines alongside the nav; below lg the crest stands alone.
+        {% endcomment %}
+        <span class="hidden lg:flex flex-col leading-[1.12] whitespace-nowrap">
+          <span>Lacanian School</span>
+          <span>of Psychoanalysis</span>
+        </span>
       </a>
 
       {# Center: grouped page links (hidden on mobile; mobile uses the hamburger) #}
@@ -68,21 +88,22 @@
         {% with cur=request.path %}
           <a href="{% url 'about' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/about/' in cur %}text-primary font-medium{% endif %}">About</a>
           <a href="{% url 'formation' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/about/formation/' in cur %}text-primary font-medium{% endif %}">Formation</a>
-          <a href="{% url 'guides_index' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/guides/' in cur %}text-primary font-medium{% endif %}">Guides</a>
 
           {# Learning #}
           <div class="dropdown dropdown-hover">
             <div tabindex="0" role="button"
-                 class="px-3 py-1.5 rounded-md hover:bg-base-200 cursor-pointer flex items-center gap-1 {% if '/groups/' in cur or '/cartels/' in cur %}text-primary font-medium{% endif %}">
+                 class="px-3 py-1.5 rounded-md hover:bg-base-200 cursor-pointer flex items-center gap-1 {% if '/groups/' in cur or '/cartels/' in cur or '/guides/' in cur %}text-primary font-medium{% endif %}">
               Learning
               <svg class="size-3 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
             </div>
             <ul tabindex="0" class="dropdown-content menu menu-sm z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-52">
-              <li><a href="{% url 'workgroups:list' %}">Overview</a></li>
+              <li><a href="{% url 'learning' %}">Overview</a></li>
               <li><hr class="border-base-300/60 my-1"></li>
               <li><a href="{% url 'workgroups:kind_seminars' %}">Seminars</a></li>
               <li><a href="{% url 'workgroups:kind_cartels' %}">Cartels</a></li>
               <li><a href="{% url 'workgroups:kind_reading_groups' %}">Reading Groups</a></li>
+              <li><hr class="border-base-300/60 my-1"></li>
+              <li><a href="{% url 'guides_index' %}">Website Guides</a></li>
             </ul>
           </div>
 
@@ -133,6 +154,8 @@
             </ul>
           </div>
 
+          <a href="{% url 'payments:index' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/payments/' in cur or '/dues/' in cur or '/donate/' in cur %}text-primary font-medium{% endif %}">Payments</a>
+
           {% if user|is_parletre_member %}
           <a href="{% url 'parletre:index' %}" class="px-3 py-1.5 rounded-md hover:bg-base-200 {% if '/parletre/' in cur %}text-primary font-medium{% endif %}">Parlêtre</a>
           {% endif %}
@@ -148,17 +171,17 @@
                aria-label="Menu" title="Menu">
             <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
           </div>
-          <ul tabindex="0" style="max-height:80vh"
+          <ul tabindex="0" style="max-height: calc(100dvh - 5rem)"
               class="dropdown-content menu menu-sm mt-2 z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-60 overflow-y-auto flex-nowrap">
             <li><a href="{% url 'about' %}">About</a></li>
             <li><a href="{% url 'formation' %}">Formation</a></li>
-            <li><a href="{% url 'guides_index' %}">Guides</a></li>
 
             <li class="menu-title">Learning</li>
-            <li><a href="{% url 'workgroups:list' %}">Overview</a></li>
+            <li><a href="{% url 'learning' %}">Overview</a></li>
             <li><a href="{% url 'workgroups:kind_seminars' %}">Seminars</a></li>
             <li><a href="{% url 'workgroups:kind_cartels' %}">Cartels</a></li>
             <li><a href="{% url 'workgroups:kind_reading_groups' %}">Reading Groups</a></li>
+            <li><a href="{% url 'guides_index' %}">Website Guides</a></li>
 
             <li class="menu-title">Persons</li>
             <li><a href="{% url 'directory' %}">Directory</a></li>
@@ -178,6 +201,9 @@
             <li><a href="{% url 'works:index' %}">Works</a></li>
             <li><a href="{% url 'documents:index' %}">Documents</a></li>
             <li><a href="{% url 'resources' %}">Resources</a></li>
+
+            <li><hr class="border-base-300/60 my-1"></li>
+            <li><a href="{% url 'payments:index' %}">Payments</a></li>
 
             {% if user|is_parletre_member %}
             <li><hr class="border-base-300/60 my-1"></li>
@@ -233,8 +259,8 @@
               </span>
             {% endif %}
           </div>
-          <ul tabindex="0"
-              class="dropdown-content menu menu-sm mt-2 z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-60">
+          <ul tabindex="0" style="max-height: calc(100dvh - 5rem)"
+              class="dropdown-content menu menu-sm mt-2 z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-60 overflow-y-auto flex-nowrap">
             <li class="menu-title pt-1 pb-2 px-2">
               <div class="flex flex-col gap-0.5 leading-tight">
                 <span class="text-base-content text-sm font-medium normal-case">
@@ -294,7 +320,7 @@
             {% endif %}
 
             {% if not request.impersonator and user.is_superuser %}
-            <li><a href="{% url 'core:impersonate_picker' %}">View as…</a></li>
+            <li><a href="{% url 'core:impersonate_picker' %}?next={{ request.get_full_path|urlencode }}">View as…</a></li>
             {% endif %}
 
             <li><hr class="border-base-300/60 my-1"></li>
@@ -308,7 +334,7 @@
           </ul>
         </div>
         {% else %}
-        <a href="{% url 'login' %}" class="btn btn-ghost btn-sm">Log in</a>
+        <a href="{% url 'login' %}" class="btn btn-ghost btn-sm">Sign in</a>
         {% endif %}
       </div>
     </div>
@@ -348,21 +374,8 @@
       <div class="text-xs text-base-content/60 flex flex-wrap gap-x-6 gap-y-2 items-center justify-between pt-4 border-t border-base-300/40">
         <span>© {% now "Y" %} Lacanian School of Psychoanalysis</span>
         <div class="flex items-center gap-4">
-          {% comment %}Site-theme switch (task #259): Classic (the default,
-          artwork/serif look) vs Modern (the plain skin). Current is bold, the
-          other a link that sets the cookie and returns here.{% endcomment %}
-          <span class="inline-flex items-center gap-1.5" title="Page style">
-            <span class="text-base-content/45">Style:</span>
-            {% if site_theme == "wix" %}
-            <a href="{% url 'core:set_site_theme' 'modern' %}?next={{ request.path|urlencode }}" class="hover:text-primary">Modern</a>
-            <span class="text-base-content/30">·</span>
-            <span class="font-medium text-base-content/80">Classic</span>
-            {% else %}
-            <span class="font-medium text-base-content/80">Modern</span>
-            <span class="text-base-content/30">·</span>
-            <a href="{% url 'core:set_site_theme' 'wix' %}?next={{ request.path|urlencode }}" class="hover:text-primary">Classic</a>
-            {% endif %}
-          </span>
+          {% comment %}Site-theme switch removed; the site is Classic for now
+          (the set_site_theme route stays for a future re-introduction).{% endcomment %}
           {% if show_suggestion_widget %}<a href="{% url 'suggestions:suggest' %}" class="hover:text-primary">Suggest a change</a>{% endif %}
           <a href="mailto:website@lacanschool.org" class="hover:text-primary">website@lacanschool.org</a>
         </div>
@@ -640,8 +653,13 @@
           .catch(function () {});
       }
 
-      // DaisyUI dropdowns open on focus — fetch fresh contents each time.
-      dropdown.addEventListener("focusin", loadPanel);
+      // DaisyUI dropdowns open on focus — fetch fresh contents each time the
+      // trigger is focused. Bind to the button, NOT the dropdown: focusin
+      // bubbles, so listening on the dropdown re-fires (and reloads the panel)
+      // when a notification link inside is focused on click, swapping the
+      // anchor out mid-click and killing navigation.
+      var trigger = dropdown.querySelector("button");
+      if (trigger) trigger.addEventListener("focusin", loadPanel);
 
       // Delegated clicks inside the panel.
       panel.addEventListener("click", function (e) {

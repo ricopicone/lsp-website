@@ -50,6 +50,35 @@ def _form_data(**over):
     return data
 
 
+# ---- Interaction with the deceased/is_active sync ----------------------
+
+
+@pytest.mark.django_db
+def test_creating_a_profile_does_not_reactivate_an_inactive_user():
+    """Profile.save() syncs User.is_active from deceased_on. On *creation*
+    there is no prior state to transition from, so it must not reach over and
+    re-enable a user the caller deliberately made inactive — which is every
+    unverified signup."""
+    user = User.objects.create_user(
+        email="inactive@x.test", password=PW, is_active=False
+    )
+
+    user.refresh_from_db()
+    assert user.is_active is False
+
+
+@pytest.mark.django_db
+def test_marking_a_profile_deceased_still_disables_the_account():
+    """The sync itself must keep working — this guards the fix above from
+    being over-broad."""
+    user = User.objects.create_user(email="live@x.test", password=PW)
+    user.profile.deceased_on = timezone.now().date()
+    user.profile.save(update_fields=["deceased_on"])
+
+    user.refresh_from_db()
+    assert user.is_active is False
+
+
 # ---- The rendered form ------------------------------------------------
 
 

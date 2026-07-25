@@ -14,6 +14,7 @@ from .models import (
     ProposalSpeaker,
     Session,
     Speaker,
+    SpeakerInvitation,
 )
 
 
@@ -182,10 +183,18 @@ class PriceTierAdmin(admin.ModelAdmin):
 
 @admin.register(Speaker)
 class SpeakerAdmin(admin.ModelAdmin):
-    list_display = ("name", "affiliation", "email", "public")
+    list_display = ("name", "affiliation", "email", "public", "user")
     list_filter = ("public",)
     search_fields = ("name", "affiliation", "email", "bio")
     prepopulated_fields = {"slug": ("name",)}
+    autocomplete_fields = ("user",)
+
+
+@admin.register(SpeakerInvitation)
+class SpeakerInvitationAdmin(admin.ModelAdmin):
+    list_display = ("speaker", "user", "created_at", "expires_at", "used_at")
+    readonly_fields = ("token", "created_at")
+    autocomplete_fields = ("speaker", "user")
 
 
 @admin.register(PricingCode)

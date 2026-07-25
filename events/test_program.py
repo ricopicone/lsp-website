@@ -132,6 +132,49 @@ def test_create_program_if_needed_is_idempotent(db):
     assert Program.objects.count() == after_first
 
 
+def _archived_program(year="2008-2009"):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from events.models import ArchivedProgram
+    return ArchivedProgram.objects.create(
+        academic_year=year,
+        file=SimpleUploadedFile(f"{year}.pdf", b"%PDF-1.4\n%old\n", content_type="application/pdf"),
+    )
+
+
+@pytest.mark.django_db
+def test_program_archive_download_redirects_anonymous_to_login(client):
+    ap = _archived_program()
+    url = reverse("program_archive_download", args=[ap.pk])
+    resp = client.get(url)
+    assert resp.status_code == 302
+    assert resp.url == f"/accounts/login/?next={url}"
+
+
+@pytest.mark.django_db
+def test_program_archive_download_404s_for_signed_in_non_member(client):
+    from accounts.models import Profile
+    ap = _archived_program(year="2009-2010")
+    u = User.objects.create_user(email="ext@x.test", password="x")  # role=external
+    u.profile.role = Profile.Role.EXTERNAL
+    u.profile.save()
+    client.force_login(u)
+    resp = client.get(reverse("program_archive_download", args=[ap.pk]))
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_program_archive_download_serves_file_for_member(client):
+    from accounts.models import Profile
+    ap = _archived_program(year="2010-2011")
+    u = User.objects.create_user(email="mem@x.test", password="x")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    client.force_login(u)
+    resp = client.get(reverse("program_archive_download", args=[ap.pk]))
+    assert resp.status_code == 200
+
+
 @pytest.mark.django_db
 def test_event_detail_404s_when_program_unpublished_for_anonymous(client):
     program = Program.objects.create(academic_year="2030-2031", published=False)
@@ -143,3 +186,32 @@ def test_event_detail_404s_when_program_unpublished_for_anonymous(client):
     )
     resp = client.get(reverse("events:detail", args=["hidden-event"]))
     assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_program_view_defaults_to_latest_published(client):
+    """No ?year= — the page shows the newest publicly-visible program, even
+    when its academic year hasn't started yet (fall program published in
+    July)."""
+    from events.models import current_academic_year
+
+    current = current_academic_year()
+    next_year = f"{int(current[:4]) + 1}-{int(current[:4]) + 2}"
+    Program.objects.create(academic_year=current, published=True)
+    newer = Program.objects.create(academic_year=next_year, published=True)
+    resp = client.get(reverse("program"))
+    assert resp.status_code == 200
+    assert resp.context["program"].pk == newer.pk
+
+
+@pytest.mark.django_db
+def test_program_view_default_skips_unpublished_future(client):
+    from events.models import current_academic_year
+
+    current = current_academic_year()
+    next_year = f"{int(current[:4]) + 1}-{int(current[:4]) + 2}"
+    cur = Program.objects.create(academic_year=current, published=True)
+    Program.objects.create(academic_year=next_year, published=False)
+    resp = client.get(reverse("program"))
+    assert resp.status_code == 200
+    assert resp.context["program"].pk == cur.pk

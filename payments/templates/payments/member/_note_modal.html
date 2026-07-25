@@ -1,0 +1,27 @@
+{% load parletre_tags %}
+{% comment %}
+Member's own note on a payment (task #439) — replace semantics, writes
+Payment.member_note (a note the treasurer can see, never a channel for
+staff-only notes, and never renders Payment.notes/Charge.notes/source —
+those stay treasurer-only). Include with: payment, next_url.
+{% endcomment %}
+<button type="button" class="btn btn-ghost btn-xs" title="Note" aria-label="Note"
+        onclick="document.getElementById('mynote-{{ payment.id }}').showModal()">{% icon "sticky-note" %}</button>
+<dialog id="mynote-{{ payment.id }}" class="modal">
+  <div class="modal-box max-w-sm whitespace-normal text-left">
+    <h3 class="font-serif text-lg mb-2">Note</h3>
+    <form method="post" action="{% url 'my_payment_note' payment.id %}" class="space-y-2">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <label class="text-xs text-base-content/60" for="mynote-text-{{ payment.id }}">A note for the treasurer about this payment, optional</label>
+      <textarea id="mynote-text-{{ payment.id }}" name="note" rows="3" maxlength="1000"
+                class="textarea textarea-bordered w-full text-sm">{{ payment.member_note }}</textarea>
+      <div class="modal-action mt-2">
+        <button type="submit" class="btn btn-primary btn-sm">Save note</button>
+        <button type="button" class="btn btn-ghost btn-sm"
+                onclick="document.getElementById('mynote-{{ payment.id }}').close()">Cancel</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>

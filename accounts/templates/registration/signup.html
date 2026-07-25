@@ -1,10 +1,16 @@
 {% extends "core/base.html" %}
-{% block title %}Sign up — LSP{% endblock %}
+{% block title %}Sign up · LSP{% endblock %}
 {% block content %}
 <div class="max-w-md mx-auto py-8 space-y-6">
 
-  <header>
+  <header class="space-y-1">
+    {% if register_event %}
+    <h1 class="font-serif text-3xl text-base-content">Create a free account</h1>
+    <p class="text-sm text-base-content/60">to register for {{ register_event.title }}.</p>
+    {% else %}
     <h1 class="font-serif text-3xl text-base-content">Create an account</h1>
+    {% endif %}
+    <p class="text-sm text-base-content/60">An account lets you register for events, pay online, and receive receipts. It doesn't make you a member of the School; membership is by <a href="{% url 'admissions:apply_start' %}" class="link link-primary">application</a>.</p>
   </header>
 
   <form method="post" class="space-y-4">
@@ -42,7 +48,7 @@
 
   <p class="text-sm text-base-content/60 text-center">
     Already have an account?
-    <a href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="link link-primary">Log in</a>.
+    <a href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="link link-primary">Sign in</a>.
   </p>
 
 </div>

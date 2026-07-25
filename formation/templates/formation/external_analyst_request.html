@@ -1,0 +1,63 @@
+{% extends "core/base.html" %}
+{% block title %}Request an external control analyst · LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-8">
+
+  <nav class="text-sm">
+    <a href="{% url 'formation:formation' %}?tab=formation#control" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← My formation</a>
+  </nav>
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Request an external control analyst</h1>
+    <p class="text-sm text-base-content/70">
+      If your control analyst is not an Analyst of the School, the Meeting of the
+      Analysts authorizes them first. Tell us who they are and why you're
+      requesting them, and we'll let you know their decision.
+    </p>
+  </header>
+
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="rounded-md border border-error/40 bg-error/5 p-3 text-sm text-error">
+      {{ form.non_field_errors }}
+    </div>
+    {% endif %}
+
+    <div class="space-y-1">
+      <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium">Name</label>
+      {{ form.name }}
+      {% if form.name.errors %}<p class="text-error text-xs mt-1">{{ form.name.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="space-y-1">
+        <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium">
+          Email <span class="text-base-content/50 font-normal">(optional)</span>
+        </label>
+        {{ form.email }}
+        {% if form.email.errors %}<p class="text-error text-xs mt-1">{{ form.email.errors|join:", " }}</p>{% endif %}
+      </div>
+      <div class="space-y-1">
+        <label for="{{ form.phone.id_for_label }}" class="block text-sm font-medium">
+          Phone <span class="text-base-content/50 font-normal">(optional)</span>
+        </label>
+        {{ form.phone }}
+        {% if form.phone.errors %}<p class="text-error text-xs mt-1">{{ form.phone.errors|join:", " }}</p>{% endif %}
+      </div>
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium">{{ form.description.label }}</label>
+      {{ form.description }}
+      <p class="text-xs text-base-content/60">{{ form.description.help_text }}</p>
+      {% if form.description.errors %}<p class="text-error text-xs mt-1">{{ form.description.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="flex items-center justify-between border-t border-base-300/60 pt-5">
+      <a href="{% url 'formation:formation' %}?tab=formation#control" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">Send request</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

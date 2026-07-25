@@ -55,6 +55,17 @@ def test_event_clean_rejects_inverted_dates():
         e.full_clean()
 
 
+@pytest.mark.django_db
+def test_event_open_to_guests_defaults_true():
+    e = Event.objects.create(
+        title="Special Evening",
+        slug="special-evening",
+        start_date=date(2026, 9, 1),
+        end_date=date(2026, 9, 1),
+    )
+    assert e.open_to_guests is True
+
+
 # --- Session ------------------------------------------------------------
 
 
@@ -346,3 +357,108 @@ def test_event_detail_renders_member_speaker_with_event_bio(client):
     assert b"Stephanie Swales" in body
     assert b"Speaker-specific bio for talks." in body
     assert b"Generic directory bio." not in body
+
+
+@pytest.mark.django_db
+def test_speaker_can_link_a_login_user():
+    from events.models import Speaker
+    u = User.objects.create_user(email="derek@example.com")
+    s = Speaker.objects.create(name="Derek Hook", slug="derek-hook", email="derek@example.com")
+    s.user = u
+    s.save()
+    s.refresh_from_db()
+    assert s.user == u
+    assert u.external_speaker == s
+
+
+@pytest.mark.django_db
+def test_speaker_spotlight_defaults_off():
+    e = Event.objects.create(
+        title="Talk", slug="spotlight-default",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 9, 1), end_date=date(2030, 9, 1),
+    )
+    assert e.speaker_spotlight is False
+
+
+def test_open_to_guests_is_on_edit_forms_and_not_reviewable():
+    from events.forms import EventDescriptionForm, ProgramEventForm
+    from events.review import REVIEWABLE_FIELDS
+
+    assert "open_to_guests" in EventDescriptionForm.Meta.fields
+    assert "open_to_guests" in ProgramEventForm.Meta.fields
+    # Non-reviewable: applies immediately, skips the change-review dialog.
+    assert "open_to_guests" not in REVIEWABLE_FIELDS
+
+
+@pytest.mark.django_db
+def test_staff_edit_toggles_open_to_guests_immediately(client):
+    staff = User.objects.create_user(
+        email="staff@example.org", password="pw", is_staff=True
+    )
+    e = Event.objects.create(
+        title="Special Evening", slug="special-evening",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        status=Event.Status.OPEN, published=True,
+    )
+    client.force_login(staff)
+    resp = client.post(f"/events/{e.slug}/edit/", {
+        "title": e.title,
+        "description": "",
+        "readings": "",
+        "schedule_note": "",
+        "contact": "",
+        "fee_note": "",
+        # record_video / speaker_spotlight / open_to_guests are checkboxes;
+        # omitting open_to_guests unchecks it.
+    })
+    assert resp.status_code == 302
+    e.refresh_from_db()
+    assert e.open_to_guests is False
+
+
+def _special_event(**kwargs):
+    defaults = dict(
+        title="Special Evening", slug="special-evening",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        status=Event.Status.OPEN, published=True,
+    )
+    defaults.update(kwargs)
+    return Event.objects.create(**defaults)
+
+
+@pytest.mark.django_db
+def test_event_page_shows_guest_note_when_open_to_guests(client):
+    e = _special_event()
+    resp = client.get(f"/events/{e.slug}/")
+    content = resp.content.decode()
+    assert "Guests are welcome" in content
+    # Anonymous viewers also get the account hint.
+    assert "create a free account" in content
+
+
+@pytest.mark.django_db
+def test_event_page_hides_guest_note_when_flag_off(client):
+    e = _special_event(open_to_guests=False)
+    resp = client.get(f"/events/{e.slug}/")
+    assert "Guests are welcome" not in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_signed_in_viewer_gets_note_without_account_hint(client):
+    member = User.objects.create_user(email="m@example.org", password="pw")
+    client.force_login(member)
+    e = _special_event()
+    resp = client.get(f"/events/{e.slug}/")
+    content = resp.content.decode()
+    assert "Guests are welcome" in content
+    assert "create a free account" not in content
+
+
+@pytest.mark.django_db
+def test_members_only_event_hides_guest_note(client):
+    e = _special_event(visibility=Event.Visibility.MEMBERS_ONLY)
+    resp = client.get(f"/events/{e.slug}/")
+    assert "Guests are welcome" not in resp.content.decode()

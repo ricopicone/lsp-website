@@ -1,28 +1,32 @@
-# Resuming task #272
+# Resuming task #470
 
-**Task:** Upload document to Members Only section of LSP website
+**Task:** Registration Admin?
 
 ## Description
-LSP Applications (applications@lacanschool.org) asked on 2026-06-09 to upload the attached document to the Members Only section of the website. Retrieve the attachment from the email and publish it.
-
-I'm worried that this request is going to get lost because the old members only has already been extracted for the new site. It looks like this table of analyst availability for different functions should be worked into each analyst's profile. So we need to set up the model and we need to import the data. I think this info should be gated to all members logged in. And in the directory we should be able to sort by the columns in the table (e.g., if they are available for Application Interviews) and this sortability should be linkable.
+It might be nice to have a Registration Admin to see and potentially make changes to registrations across all events. It's different than the Treasurer Admin, which is focused on accounts. We don't have a Registrar position, so I think the most natural owner of that space is the Program Committee and the Web Coordinator.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
 
 ### launch-checklist (status)
-Things deliberately gated OFF until launch is intended (set in the host `.env` / systemd on the EC2 box):
+**Cutover executed 2026-07-22 (task #450), including the URL cutover.**
 
-- **Re-enable member-facing cron timers** — `lsp-dues-cron`, `lsp-registration-reminders`, `lsp-parletre-digests` (disabled 2026-06-01 so reminders don't email real members early; purge timer stays on). **Add** a daily `send_notification_digests` timer at launch, **and** a daily `process_referrals` timer (referral auto-followups when that step is set to automatic + retention redaction; safe anytime but member-facing in auto mode), **and** a frequent (~every 5 min) `send_meeting_reminders` timer (NEW — pre-meeting reminder emails ~15 min before workgroup meetings, with a personal magic link; member-facing so keep off until launch). DJANGO_DAILY_ENABLED is now true in prod (video enabled 2026-06-14), so the meeting-reminder feature is otherwise ready; per-group toggle `Workgroup.meeting_reminders` defaults ON, members can opt out via /notifications/settings/ (GROUP_MEETING_REMINDER category).
-- **Admin 2FA enforcement** — `DJANGO_TWO_FACTOR_ENFORCED=true` (flows built, enforcement off so testers aren't blocked).
-- **Public login-email change** — `DJANGO_EMAIL_CHANGE_PUBLIC=true` (currently allowlisted to rico).
-- **SES send rate** — `DJANGO_EMAIL_MAX_SEND_RATE=14` (SES out of sandbox; default 1/s paces batches unnecessarily).
-- **Stripe live cutover** — rico's test account → LSP's (Garrett's) live account; roll the import key, `STRIPE_LIVE_ONLY` guard already in prod.
-- **Feature flags** — `DJANGO_SUGGESTIONS_ENABLED`, `SURVEY_ENABLED`. (`DJANGO_DAILY_ENABLED`/video is now ON in prod.)
+**Flags/timers (done):** `DJANGO_EMAIL_CHANGE_PUBLIC=true`, `DJANGO_EMAIL_MAX_SEND_RATE=14`; timers enabled: registration-reminders, parletre-digests + 5 new (notification-digests 15:00 UTC, process-referrals 16:00, availability-reminders 17:00, interview-reminders Mon 17:30, meeting-reminders 5-min). `lsp-dues-cron.service` gained the missing `send_tuition_reminders` ExecStart. Stripe was already on the school's live account; final import sweep committed (6 dues payments/$800; verify $0.00). Suggestions flag moot (hard-off in production.py).
 
-Data tasks before opening registration: reconcile backfilled tuition enrollments, flip `is_faculty` for seminar instructors, un-mask 19 Google-Group members, set the real Zoom link on the Masochism event.
+**URL cutover (done):** `https://lacanschool.org` is the canonical site. Wix-purchased domains CANNOT change nameservers (confirmed: Wix feature-request page) → DNS remains hosted at Wix; apex A + www CNAME were hand-edited in the Wix panel to the EIP (54.188.243.116). Host nginx: `lsp-canonical.conf` (apex proxy + old-Wix-path 301 map + www→apex); `app.lacanschool.org` 301s to apex EXCEPT `/payments/webhooks/` (Stripe's registered endpoint keeps proxying — POSTs don't follow redirects). One LE cert covers apex+www (exp 2026-10-20). Env: ALLOWED_HOSTS/CSRF = all three hosts; SITE_BASE_URL=https://lacanschool.org. S3 CORS (private + recordings buckets) includes the new origins. DMARC is now a real TXT (p=none, rua=website@). Gotcha: Wix's domain-unassign flow silently dropped the `app` A record (brief outage until re-added by hand).
 
-Note: the referral workflow itself is LIVE now (Diana appointed 2026-06-12) — only its daily timer waits for launch.
+**Reply-by-email stays on parletre.ricopic.one** — Wix's Google-Workspace MX preset blocks custom/subdomain MX records (this is WHY the test domain exists). PARLETRE_REPLY_DOMAIN was briefly flipped and reverted.
+
+**Still deliberately HELD (Rico's decisions 2026-07-22):**
+- `lsp-dues-cron.timer` disabled until the treasurer clears Accounts→Owing (assumed 24-25/25-26 dues, task #443). Enable: `systemctl enable --now lsp-dues-cron.timer`.
+- `SURVEY_ENABLED` off until the survey↔ledger charge-minting gap is closed.
+- `DJANGO_TWO_FACTOR_ENFORCED` off ~a few weeks so admins can log in first.
+
+**Future: cut Wix out entirely** — "Transfer away from Wix" registrar transfer (to Route 53 Domains, ~$15/yr, 5-7 days, zero downtime). The pre-staged Route 53 hosted zone (Z07184784MROHMIJPJLF; full mirror + parletre MX/DKIM) goes live then; unlocks subdomain MX → move reply-by-email to parletre.lacanschool.org.
+
+**Working with Masochism (special event) — DECISION 2026-07-23 (task #463):** use the **integrated in-site video meeting (Daily) NOT Zoom**. The event is format=online, daily_enabled=True on prod, access_info is empty (no Zoom link needed — the room button IS the join path). Registration was opened (status=OPEN) 2026-07-23. Speakers/faculty/PC/staff see the room + a "Join button" on the event page without registering; attendees register then get their own Join button when the event goes live (no link to send). So the old "set the real Zoom link on the Masochism event" task is DROPPED.
+
+**Data tasks before opening registration:** reconcile backfilled tuition enrollments (#443 ongoing), flip `is_faculty` for seminar instructors, un-mask 19 Google-Group members, populate year_joined (survey) before minting pre-2024 dues years.
 
 ### do-not-over-automate (decision)
 The school **explicitly asked that automation not remove human discretion** (architecture §4.1, "space for the singular"). Faculty use sliding-scale and "none turned away for lack of funds" pricing; tuition-paying members are exempt from seminar fees; some faculty bill per class.
@@ -52,6 +56,41 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **formation-control-requirement-by-clinical-background** (architecture) — Formation control requirement varies by Profile.formation_background (3-state: unreviewed/clinical/academic, task #466); MoA-owned + audited; set via /admin-tools/meeting-of-analysts/backgrounds/ or advisor page, never the old bool
+- **prod-host-access-ssm** (reference) — When ssh lsp is unresponsive, run prod commands via AWS SSM (same channel as deploy); instance i-070b087afa041f233
+- **guest-registration-ux** (architecture) — Task #464 SHIPPED: guest-friendly registration — Event.open_to_guests (messaging-only flag), guests-welcome note on event pages, context-aware login/signup ("register for [Event]" + promoted free-account button); accounts stay required, new
+- **tuition-coverage-honors-requirement-met** (decision) — REVERTED/WRONG (task #468, 2026-07-24): do NOT make seminar coverage honor 4-year-completion. Tuition covers seminars ONLY in a year the member is actively paying tuition (a covering enrollment for that AY)
+- **special-event-presenters-not-faculty** (architecture) — PC-organized events (special/assembly/work day/scholarly) share the Programming Committee's workgroup, so their presenters can't be faculty — they're member_speakers, and Event.is_presenter() is what grants them the faculty view (task #463)
+- **notification-url-denormalized** (gotcha) — Notification.url is stored on the row — fixing a link builder also needs a data migration to repair already-sent bell rows
+- **auth-email-scanner-and-reset-gotchas** (gotcha) — Email link-scanners consume single-use links (POST-gate them); Django password reset silently skips unusable-password (imported) members
+- **membership-standing-axis** (architecture) — Profile.Standing (active/on_leave/resigned/emeritus/retired/removed) is the membership axis + orthogonal Profile.deceased_on date (task #451 SHIPPED); billing keys off standing==ACTIVE; NON_MEMBER_STANDINGS={resigned,removed} gate directory
+- **deleting-an-event-with-registrations** (gotcha) — To delete an Event you must first delete its Registrations: Registration.event AND Registration.price_tier are both on_delete=PROTECT
+- **unified-member-ledger-design** (status) — Task #439 LIVE on prod (deployed + backfilled 2026-07-15): unified per-member ledger, 7-tab treasurer admin; --dues-from 2024-09-01 (year_joined mostly null made earlier minting unsafe); treasurer cleanup pass is the open item
+- **treasurer-payments-rework-2026-07** (status) — Big treasurer/payments-data cleanup + UI rework shipped Jul 13-14 2026 (tasks #435/#437); interface simplification is the next planned step
+- **tuition-cumulative-coverage-model** (architecture) — Tuition = cumulative ledger (total paid vs obligation), NOT per-payment-to-year allocation; obligation capped at 4 years; per-year status = oldest-first coverage
+- **stripe-missing-payment-import** (reference) — Import off-site (old Wix) Stripe payments via manage.py import_stripe_payments --use-settings-key; same account so no separate key; runbook in docs/stripe-payment-import.md
+- **board-officer-titles** (convention) — Board Chair/Co-chair = President/Vice President: a display relabel (role_label) AND a synced governance record (Board roster is source of truth; syncs President/VP StaffRole + MoA leadership)
+- **document-inline-html-body** (architecture) — documents.Document now supports inline-HTML bodies (markdown, file optional) with a {{ annual_tuition }} token; used to de-PDF the Tuition Assistance doc (task #427)
+- **ci-test-suite-parallelized** (decision) — Task #426: CI/deploy time is ~all pytest; parallelized with pytest-xdist -n auto (4-core public runner). --no-migrations is NOT viable.
+- **worktree-vs-main-path-trap** (gotcha) — Sessions run in a .claude-worktrees/<name> worktree; subagents often report MAIN-repo absolute paths — edit the worktree path or edits land in main
+- **rendered-markdown-docs-gotchas** (gotcha) — In-repo markdown docs (core/docs/*.md, rendered via render_doc + shown in admin Help tabs): a +/-/* starting a wrapped line inside a list item silently becomes a nested bullet
+- **control-analyses-accounting** (architecture) — Task #415 SHIPPED + deployed: structured control-analysis requirement (clinical 2 / academic 3), 4-year/2-year sub-bars, School-analyst dropdown, external-analyst Meeting-of-Analysts approval
+- **formation-tab-doc-links** (architecture) — My LSP > Formation tab shows in-training members their track's formation-guidelines doc, configured via FormationSettings FKs
+- **public-payments-gateway** (architecture) — /payments/ is now public: anon visitors get a gateway (sign in or donate anonymously), payments_index no longer @login_required (task #414)
+- **daisyui-menu-dropdown-overflow** (gotcha) — DaisyUI v5 .menu dropdowns need max-height + overflow-y-auto + flex-nowrap or they overflow off-screen on mobile (task #413)
+- **personas-off-public-rosters** (gotcha) — Training-sandbox personas must be filtered off public rosters; Workgroup.active_members() now excludes them (was leaking "Persona Board Chair")
+- **formation-two-tracks-not-three** (glossary) — LSP formation has TWO tracks — Clinical and Scholar (no separate "Research" track); referrals coordinated by the Referral Coordinator, not rotating analysts
+- **gated-page-anon-redirect-not-404** (convention) — Gated GET pages redirect anonymous users to login with ?next= (only 404 for signed-in non-members) — use the shared core.access.gate_or_login(request) helper
+- **cartel-formation-forming-first** (architecture) — Cartel formation is forming-first: members gather first, PC registration is the final step (task #392, SHIPPED + LIVE)
+- **profile-geocode-on-save** (gotcha) — Profile.location changes re-geocode via Profile.save() staling + geocode_after_edit on interactive edits (task #391); geocode_profiles skips rows that already have coords
+- **parletre-social-disabled** (status) — Task #360: Parlêtre school-wide social (Lounge/Welcome/Commons/Gaze/Purloined Letters) + private chats hidden from EVERYONE (incl. staff) via two flags (default OFF prod, ON dev/test), reversibly. Advocacy reminders #383/#384.
+- **header-logo-crest** (decision) — Task #386: header logo shown as a paper-white circular "seal" that overflows below the header; disc stays light in both themes
+- **website-review-action-items** (status) — Task #345: action items from the Annie Rogers/Diana Cuello/Garrett website review, exploded into subtasks #346–#379; being implemented on branch nimble-harbor. Key decisions: Classic default, em-dash→comma site copy, Suggest box dropped, Pa
+- **em-dash-prose-style** (convention) — Style rule: UNSPACED em dashes (word—word) in docs, emails, chat. EXCEPTION (2026-07-06): member-facing site copy uses commas instead of em dashes, per Annie/Diana + Rico
+- **admissions-interface-ownership** (architecture) — Applications Coordinator owns the application admin (full per-applicant page); Meeting of Analysts is read-only; coordinator records the Meeting's accept/reject decision
+- **admin-training-sandbox** (architecture) — Per-trainee persona sandbox (email redirected to the trainee) + guided in-app walkthroughs for training admins on the workflows without emailing real members (task #272)
+- **applications-coordinator-admissions** (architecture) — Applications Coordinator is a Meeting-of-Analysts workgroup role that facilitates admissions (console at /admin-tools/applications/); SHIPPED + LIVE (task #272)
+- **analyst-availability-feature** (architecture) — Task #272 SHIPPED + LIVE: analyst-availability woven into the directory (new `availability` app); all phases + review refinements deployed; 2026-2027 data + per-analyst notes imported on prod
 - **event-change-review-loop** (architecture) — Approved-event content edits (title/desc/readings/fee) route through a certify-or-submit dialog; EventChangeRequest is the audit row; PC queue on the program-admin Changes tab. SHIPPED to main 2026-06-22.
 - **program-archive-and-content-migration** (status) — Task #259: program archive (member-gated past-year PDFs) + old-Wix content migration mostly complete; map in docs/content-migration-map.md
 - **directory-badge-colors** (convention) — Directory profile badges: Faculty=accent, board-appointee StaffRole=secondary (LSP Staff excluded; deduped vs committee officer), committee=primary
@@ -66,7 +105,6 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **referral-coordinator** (status) — Referral Coordinator workflow (task #229) SHIPPED + LIVE 2026-06-12: referrals app at /admin-tools/referrals/ (tabbed UI + Help), Diana appointed, 36-clinician list imported, date-based references (26-0612), live-tested end-to-end
 - **devapi-mcp-server** (architecture) — Web-developer admin: token-auth /devapi/ JSON API + stdio MCP server (task #252); first slice = Suggestions triage, built to grow
 - **account-custodians** (reference) — Who holds which LSP accounts: Caroline Barensfeld = Google Workspace admin (lsp-members export); Wix = registrar for lacanschool.org; lspwixwebsite@gmail.com mystery (Typeform MFA)
-- **em-dash-prose-style** (convention) — Writing-style rule (recurring correction): use UNSPACED em dashes (word—word, never word — word) in all prose written for this project — site copy, docs, emails, chat
 - **code-memory-location** (reference) — Deep, code-level implementation memory lives IN the repo, not here: CLAUDE.md (project context + status log) + a 40+ entry file-based memory index (MEMORY.md) under the Claude Code project dir. This connector memory is the project-managemen
 - **planning-docs** (reference) — Planning docs are loose LSP-Website-*.md files in ~/LSP-Web-Coordinator (parent of the repo): Requirements-Spec (USR-/REG-/PROG- IDs), Architecture-Phase1, Phase2-Plan (M9–M17 + 10 open decisions). Edit in place, never git-commit them
 - **glossary** (glossary) — LSP/domain glossary: Parlêtre, cartel, working group, committee, seminar, formation pipeline (palimpsest/passage/traversée), Meeting of Analysts, Days of Assembly, auditor, dues vs tuition, roles
@@ -78,7 +116,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=272`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=470`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

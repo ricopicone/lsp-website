@@ -27,6 +27,52 @@ def is_parletre_member(user) -> bool:
 # plain class. Add new glyphs here, reference with {% icon "name" %}.
 
 _ICON_PATHS = {
+    # --- treasurer admin actions (task #439) ---
+    "check": '<path d="M20 6 9 17l-5-5"/>',
+    "undo": (
+        '<path d="M9 14 4 9l5-5"/>'
+        '<path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/>'
+    ),
+    "tag": (
+        '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 '
+        '2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a'
+        '2.426 2.426 0 0 0 0-3.42z"/>'
+        '<circle cx="7.5" cy="7.5" r=".5"/>'
+    ),
+    "user-plus": (
+        '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>'
+        '<circle cx="9" cy="7" r="4"/>'
+        '<line x1="19" x2="19" y1="8" y2="14"/>'
+        '<line x1="22" x2="16" y1="11" y2="11"/>'
+    ),
+    "eraser": (
+        '<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 '
+        '5.6c1 1 1 2.5 0 3.4L13 21"/>'
+        '<path d="M22 21H7"/><path d="m5 11 9 9"/>'
+    ),
+    "pencil": (
+        '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>'
+        '<path d="m15 5 4 4"/>'
+    ),
+    "rotate-ccw": (
+        '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>'
+        '<path d="M3 3v5h5"/>'
+    ),
+    "sticky-note": (
+        '<path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11l5-5V5a2 2 0 0 '
+        '0-2-2Z"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/>'
+    ),
+    # a comped admission (registrar console)
+    "ticket": (
+        '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 '
+        '2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/>'
+        '<path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>'
+    ),
+    "split": (
+        '<path d="M16 3h5v5"/><path d="M8 3H3v5"/>'
+        '<path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/>'
+        '<path d="m15 9 6-6"/>'
+    ),
     # locked / private
     "lock": (
         '<rect x="3" y="11" width="18" height="11" rx="2"/>'

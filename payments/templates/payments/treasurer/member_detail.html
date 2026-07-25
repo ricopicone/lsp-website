@@ -1,10 +1,10 @@
 {% extends "payments/treasurer/base.html" %}
-{% load treasurer_filters tz_filters %}
+{% load treasurer_filters tz_filters parletre_tags %}
 {% block tab_content %}
 <div class="space-y-8">
 
   <nav class="text-sm">
-    <a href="{% url 'treasurer_members' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Members</a>
+    <a href="{% url 'treasurer_accounts' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Accounts</a>
   </nav>
 
   <header class="space-y-1">
@@ -19,35 +19,96 @@
       <span class="text-base-content/30 mx-1">·</span>
       <span class="badge badge-accent badge-sm">Faculty</span>
       {% endif %}
+      {% if target.profile.seminar_access_suspended %}
+      <span class="text-base-content/30 mx-1">·</span>
+      <span class="badge badge-error badge-outline badge-sm">Seminar group access suspended</span>
+      {% endif %}
     </div>
   </header>
 
-  {% comment %}Tuition enrollments — most recent first.{% endcomment %}
+  {% comment %}1. Tiles row — balance, tuition-to-date, tuition years, dues this AY.{% endcomment %}
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="rounded border border-base-300 p-2.5">
+      <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Balance</div>
+      <div class="font-serif text-xl leading-tight {% if acct.owes %}text-warning{% elif acct.credit %}text-success{% endif %}">
+        {% if acct.owes %}{{ acct.owes|usd }} owed
+        {% elif acct.credit %}{{ acct.credit|usd }} credit
+        {% else %}Paid up{% endif %}
+      </div>
+    </div>
+    {% include "payments/treasurer/_money_tile.html" with label="Total tuition paid" value=acct.total_tuition_paid %}
+    <div class="rounded border border-base-300 p-2.5">
+      <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Tuition years</div>
+      <div class="font-serif text-xl leading-tight">{{ acct.tuition_years_covered }} of {{ acct.tuition_years_required }}</div>
+    </div>
+    <div class="rounded border border-base-300 p-2.5">
+      <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Dues this AY</div>
+      <div class="leading-tight pt-1">
+        {% if acct.dues_state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
+        {% elif acct.dues_state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
+        {% elif acct.dues_state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
+        {% elif acct.dues_state == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>
+        {% else %}<span class="text-base-content/40 text-xs">—</span>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% comment %}2. Conflict alert.{% endcomment %}
+  {% if acct.conflict %}
+  <div class="alert alert-warning py-2 text-sm">
+    <span>Paid {{ acct.tuition_overpaid|usd }} beyond the tuition obligation while a year is marked <strong>Skipping</strong>.
+    This usually means a skipped year was actually paid — the student's tuition decision for that year needs correcting, after which the obligation and balance will reflect it.</span>
+  </div>
+  {% endif %}
+
+  {% comment %}3. Tuition decisions.{% endcomment %}
   <section class="space-y-3">
-    <h3 class="font-serif text-lg text-base-content">Tuition enrollments</h3>
-    {% if enrollments %}
+    <h3 class="font-serif text-lg text-base-content">Tuition decisions</h3>
+    {% if acct.tuition_rows %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Academic year</th><th>Status</th><th>Installments</th><th>Recorded</th></tr>
+          <tr><th>Academic year</th><th>Decision</th><th class="text-right">Rate</th><th>Status</th><th>Actions</th></tr>
         </thead>
         <tbody>
-          {% for e in enrollments %}
+          {% for r in acct.tuition_rows %}
           <tr>
-            <td>{{ e.tuition_period.name }}</td>
-            <td>{% status_badge e.status %}</td>
-            <td class="text-xs text-base-content/70">
-              {% with insts=e.installments.all %}
-              {% if insts %}
-                {% for i in insts %}
-                  <span class="whitespace-nowrap">
-                    ${{ i.amount }} {% if i.paid %}<span class="text-success">paid</span>{% else %}<span class="text-warning">due {{ i.due_date|date:"M j" }}</span>{% endif %}
-                  </span>{% if not forloop.last %} · {% endif %}
-                {% endfor %}
-              {% else %}—{% endif %}
-              {% endwith %}
+            <td class="whitespace-nowrap">{{ r.period.name }}</td>
+            <td class="text-xs text-base-content/70">{{ r.decision_label }}</td>
+            <td class="text-right whitespace-nowrap">{{ r.rate|usd }}</td>
+            <td>
+              {% if r.pct is not None %}
+              {# Fill bar (more informative than a Paid/Partial badge): covered vs the year's charge. #}
+              <div class="min-w-[7rem] space-y-0.5" title="{{ r.covered|usd }} of {{ r.rate|usd }} covered">
+                <div class="h-2 rounded-full bg-base-300 overflow-hidden">
+                  <div class="h-full {% if r.state == 'paid' %}bg-success{% elif r.state == 'partial' %}bg-warning{% else %}bg-error/40{% endif %}" style="width: {{ r.pct }}%"></div>
+                </div>
+                <p class="text-xs text-base-content/60 whitespace-nowrap">{{ r.covered|usd }} / {{ r.rate|usd }}</p>
+              </div>
+              {% elif r.state == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>
+              {% elif r.state == "met" %}<span class="badge badge-ghost badge-sm" title="Beyond the {{ acct.tuition_years_required }}-year tuition requirement — not owed">Requirement met</span>
+              {% else %}<span class="badge badge-ghost badge-sm">Skipping</span>{% endif %}
             </td>
-            <td class="text-xs text-base-content/60 whitespace-nowrap">{{ e.decided_at|date:"M j, Y" }}</td>
+            <td>
+              <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
+                <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}" class="contents"
+                      onsubmit="return confirm('Set the {{ r.period.name }} tuition decision to Committed? The decision record is updated with an audit note and charges follow the decision.');">
+                  {% csrf_token %}
+                  <input type="hidden" name="status" value="committed">
+                  <input type="hidden" name="period" value="{{ r.period.id }}">
+                  <input type="hidden" name="next" value="{{ request.path }}">
+                  <button type="submit" class="btn btn-ghost btn-xs" {% if r.state != "skipping" %}disabled{% endif %}>Committed</button>
+                </form>
+                <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}" class="contents"
+                      onsubmit="return confirm('Set the {{ r.period.name }} tuition decision to Skipping? The year stops generating a tuition charge; the decision record is updated with an audit note.');">
+                  {% csrf_token %}
+                  <input type="hidden" name="status" value="skipping">
+                  <input type="hidden" name="period" value="{{ r.period.id }}">
+                  <input type="hidden" name="next" value="{{ request.path }}">
+                  <button type="submit" class="btn btn-ghost btn-xs" {% if r.state == "skipping" %}disabled{% endif %}>Skipping</button>
+                </form>
+              </div>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -56,39 +117,264 @@
     {% else %}
     <p class="text-sm text-base-content/60">No tuition enrollments on file.</p>
     {% endif %}
+    {% if unenrolled_tuition_periods %}
+    <form method="post" action="{% url 'treasurer_tuition_set_status' target.id %}"
+          class="flex flex-wrap items-center gap-2"
+          onsubmit="return confirm('Record this tuition decision? The decision record is updated with an audit note and charges follow the decision.');">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.path }}">
+      <span class="text-xs text-base-content/60">Add year:</span>
+      <select name="period" class="select select-bordered select-xs" required>
+        {% for tp in unenrolled_tuition_periods %}
+        <option value="{{ tp.id }}">{{ tp.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="status" class="select select-bordered select-xs">
+        <option value="committed">Committed</option>
+        <option value="skipping">Skipping</option>
+      </select>
+      <button type="submit" class="btn btn-ghost btn-xs">Add</button>
+    </form>
+    {% endif %}
   </section>
 
-  {% comment %}Payments — all categories, most recent first.{% endcomment %}
+  {% comment %}4. Statement — the unified running balance.{% endcomment %}
   <section class="space-y-3">
-    <h3 class="font-serif text-lg text-base-content">Payments <span class="text-base-content/60 text-sm font-normal">({{ payments|length }})</span></h3>
-    {% if payments %}
+    <h3 class="font-serif text-lg text-base-content">Statement</h3>
+    {% if acct.lines %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Date</th><th>Type</th><th>Amount</th><th>Method</th><th>Status</th></tr>
+          <tr>
+            <th>Date</th><th>Description</th>
+            <th class="text-right">Charge</th><th class="text-right">Payment</th>
+            <th class="text-right">Balance</th><th>Status</th><th>Actions</th>
+          </tr>
         </thead>
         <tbody>
-          {% for p in payments %}
+          {% for ln in acct.lines %}
           <tr>
-            <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.created_at|user_datetime }}</td>
+            <td class="whitespace-nowrap text-xs text-base-content/70">{{ ln.date|date:"M j, Y" }}</td>
             <td>
-              {{ p.get_payment_type_display }}
-              {% if p.registration %}
-              <div class="text-xs text-base-content/60">{{ p.registration.event.title|truncatechars:32 }}</div>
+              {% if ln.kind == "charge" %}
+                {{ ln.obj.get_category_display }} charge
+                {% if ln.obj.dues_period %}
+                <div class="text-xs text-base-content/60">{{ ln.obj.dues_period.name }}</div>
+                {% elif ln.obj.tuition_period %}
+                <div class="text-xs text-base-content/60">{{ ln.obj.tuition_period.name }}</div>
+                {% elif ln.obj.registration %}
+                <div class="text-xs text-base-content/60">{{ ln.obj.registration.event.title|truncatechars:32 }}</div>
+                {% endif %}
+                {% include "payments/treasurer/_provenance_popover.html" with source=ln.obj.source source_label=ln.obj.get_source_display notes=ln.obj.notes trigger="icon" %}
+              {% else %}
+                {{ ln.obj.get_payment_type_display }} payment
+                {% if ln.obj.is_split %}<span class="badge badge-info badge-xs ml-1" title="Part of a split payment — the entire original charge was ${{ ln.obj.split_family_total }}">split</span>{% endif %}
+                {% if ln.obj.registration %}
+                <div class="text-xs text-base-content/60">{{ ln.obj.registration.event.title|truncatechars:32 }}</div>
+                {% endif %}
+                {% include "payments/treasurer/_provenance_popover.html" with source=ln.obj.source source_label=ln.obj.get_source_display notes=ln.obj.notes member_note=ln.obj.member_note trigger="icon" %}
               {% endif %}
             </td>
-            <td class="whitespace-nowrap">${{ p.amount }}</td>
-            <td class="text-xs">{{ p.get_method_display }}</td>
-            <td>{% status_badge p.status %}</td>
+            <td class="text-right whitespace-nowrap">{% if ln.kind == "charge" %}{{ ln.delta|usd }}{% endif %}</td>
+            <td class="text-right whitespace-nowrap">{% if ln.kind == "payment" %}{{ ln.obj.amount|usd }}{% endif %}</td>
+            <td class="text-right whitespace-nowrap {% if ln.running > 0 %}text-warning{% elif ln.running < 0 %}text-success{% endif %}">{{ ln.running|usd }}</td>
+            <td>
+              {% if ln.kind == "charge" %}
+                {% if ln.obj.status == "open" %}
+                  {% if ln.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
+                  {% elif ln.state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
+                  {% else %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>{% endif %}
+                {% elif ln.obj.status == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>{% endif %}
+              {% else %}
+                {% status_badge ln.obj.status %}
+              {% endif %}
+            </td>
+            <td>
+              <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
+                {% if ln.kind == "charge" %}
+                  {% if ln.obj.status == "open" %}
+                  <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Waive this {{ ln.obj.amount|usd }} charge? It stops counting toward what is owed but stays visible for audit.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="waive">
+                    <button type="submit" class="btn btn-ghost btn-xs" title="Waive" aria-label="Waive">{% icon "eraser" %}</button>
+                  </form>
+                  <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Void this charge? It will be removed from the running balance.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="void">
+                    <button type="submit" class="btn btn-ghost btn-xs text-error" title="Void" aria-label="Void">{% icon "x" %}</button>
+                  </form>
+                  <button type="button" class="btn btn-ghost btn-xs"
+                          title="Adjust amount" aria-label="Adjust amount"
+                          onclick="document.getElementById('adjust-{{ ln.obj.id }}').showModal()">{% icon "pencil" %}</button>
+                  <dialog id="adjust-{{ ln.obj.id }}" class="modal">
+                    <div class="modal-box max-w-xs whitespace-normal text-left">
+                      <h3 class="font-serif text-lg mb-3">Adjust charge amount</h3>
+                      <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="space-y-2">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="adjust">
+                        <label class="text-xs text-base-content/60" for="adjust-amount-{{ ln.obj.id }}">New amount</label>
+                        <input id="adjust-amount-{{ ln.obj.id }}" type="number" step="0.01" min="0.01" name="amount"
+                               value="{{ ln.obj.amount }}" class="input input-bordered input-sm w-full" required>
+                        <div class="modal-action mt-4">
+                          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                          <button type="button" class="btn btn-ghost btn-sm"
+                                  onclick="document.getElementById('adjust-{{ ln.obj.id }}').close()">Cancel</button>
+                        </div>
+                      </form>
+                    </div>
+                    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                  </dialog>
+                  {% elif ln.obj.status == "waived" %}
+                  <form method="post" action="{% url 'treasurer_charge_update' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Reopen this charge? It counts toward what is owed again.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="reopen">
+                    <button type="submit" class="btn btn-ghost btn-xs" title="Reopen" aria-label="Reopen">{% icon "rotate-ccw" %}</button>
+                  </form>
+                  {% endif %}
+                  {% include "payments/treasurer/_note_modal.html" with obj=ln.obj kind="c" next_url=request.path %}
+                {% else %}
+                  {% if ln.obj.status == "pending" and ln.obj.method == "offline" %}
+                  <form method="post" action="{% url 'treasurer_payment_apply_success' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Mark this payment as paid? This sends a receipt + emails the member.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <button type="submit" class="btn btn-primary btn-xs" title="Mark paid" aria-label="Mark paid">{% icon "check" %}</button>
+                  </form>
+                  {% elif ln.obj.status == "succeeded" and ln.obj.method == "stripe" %}
+                  <form method="post" action="{% url 'treasurer_payment_refund' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('{% if ln.obj.is_split %}This payment is part of a SPLIT. Refunding refunds the ENTIRE original ${{ ln.obj.split_family_total }} charge, all parts included.\n\n{% endif %}Refund {% if ln.obj.is_split %}${{ ln.obj.split_family_total }}{% else %}{{ ln.obj.amount|usd }}{% endif %} via Stripe? This is irreversible.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <button type="submit" class="btn btn-ghost btn-xs text-error" title="Refund" aria-label="Refund">{% icon "undo" %}</button>
+                  </form>
+                  {% elif ln.obj.status == "succeeded" and ln.obj.method == "offline" %}
+                  <form method="post" action="{% url 'treasurer_payment_refund' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('{% if ln.obj.is_split %}This payment is part of a SPLIT. Refunding marks the ENTIRE original ${{ ln.obj.split_family_total }} charge refunded, all parts included.\n\n{% endif %}Mark this {% if ln.obj.is_split %}entire ${{ ln.obj.split_family_total }} split{% else %}{{ ln.obj.amount|usd }}{% endif %} offline payment as REFUNDED for accounting?\n\nThis does NOT move any money — you will need to send the refund check (or process the cash refund) manually.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <button type="submit" class="btn btn-ghost btn-xs text-error" title="Refund" aria-label="Refund">{% icon "undo" %}</button>
+                  </form>
+                  {% endif %}
+                  {% if ln.obj.status == "succeeded" and ln.obj.receipt and not ln.obj.is_split %}
+                  <form method="post" action="{% url 'treasurer_payment_resend_receipt' ln.obj.id %}" class="contents"
+                        onsubmit="return confirm('Resend the receipt email to {{ ln.obj.user.email|default:ln.obj.email }}?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <button type="submit" class="btn btn-ghost btn-xs" title="Resend receipt" aria-label="Resend receipt">{% icon "mail" %}</button>
+                  </form>
+                  {% endif %}
+                  {% if not ln.obj.registration_id %}
+                  {% include "payments/treasurer/_retype_modal.html" with payment=ln.obj type_choices=payment_categories dues_periods=dues_periods tuition_periods=tuition_periods next_url=request.path %}
+                  {% include "payments/treasurer/_assign_modal.html" with payment=ln.obj next_url=request.path %}
+                  {% if ln.obj.status == "succeeded" and ln.obj.user_id and not ln.obj.is_split %}
+                  {% include "payments/treasurer/_split_modal.html" with payment=ln.obj type_choices=payment_categories next_url=request.path %}
+                  {% endif %}
+                  {% endif %}
+                  {% include "payments/treasurer/_note_modal.html" with obj=ln.obj kind="p" next_url=request.path %}
+                {% endif %}
+              </div>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
     {% else %}
-    <p class="text-sm text-base-content/60">No payments on file.</p>
+    <p class="text-sm text-base-content/60">No charges or payments on file.</p>
     {% endif %}
   </section>
+
+  {% comment %}5. Add charge + record payment.{% endcomment %}
+  <div class="grid md:grid-cols-2 gap-4">
+    <section class="space-y-2 rounded-lg border border-base-300 p-4">
+      <h3 class="font-serif text-base text-base-content">Add a charge</h3>
+      <form method="post" action="{% url 'treasurer_charge_add' target.id %}" class="space-y-2">
+        {% csrf_token %}
+        <select name="category" class="select select-bordered select-sm w-full" required
+                onchange="var v=this.value;
+                          document.getElementById('addchg-dues').hidden=(v!=='dues');
+                          document.getElementById('addchg-tuition').hidden=(v!=='tuition');
+                          document.getElementById('addchg-date').hidden=(v==='dues'||v==='tuition');">
+          {% for value, label in charge_categories %}
+          <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input type="number" step="0.01" min="0.01" name="amount" placeholder="Amount" class="input input-bordered input-sm w-full" required>
+        <div id="addchg-dues" class="space-y-1">
+          <label class="text-xs text-base-content/60">Dues year</label>
+          <select name="dues_period" class="select select-bordered select-sm w-full">
+            <option value="">Current dues year</option>
+            {% for p in dues_periods %}
+            <option value="{{ p.id }}" {% if p.id == current_dues_period_id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div id="addchg-tuition" hidden class="space-y-1">
+          <label class="text-xs text-base-content/60">Tuition year</label>
+          <select name="tuition_period" class="select select-bordered select-sm w-full">
+            <option value="">Current tuition year</option>
+            {% for p in tuition_periods %}
+            <option value="{{ p.id }}" {% if p.id == current_tuition_period_id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div id="addchg-date" hidden class="space-y-1">
+          <label class="text-xs text-base-content/60">Effective date</label>
+          <input type="date" name="effective_date" value="{{ today|date:'Y-m-d' }}" class="input input-bordered input-sm w-full">
+        </div>
+        <input type="text" name="note" placeholder="Note (optional)" class="input input-bordered input-sm w-full">
+        <button type="submit" class="btn btn-sm btn-primary">Add charge</button>
+      </form>
+    </section>
+    <section class="space-y-2 rounded-lg border border-base-300 p-4">
+      <h3 class="font-serif text-base text-base-content">Record an offline payment</h3>
+      <form method="post" action="{% url 'treasurer_record_payment' target.id %}" class="space-y-2">
+        {% csrf_token %}
+        <select name="category" class="select select-bordered select-sm w-full" required>
+          {% for value, label in payment_categories %}
+          <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input type="number" step="0.01" min="0.01" name="amount" placeholder="Amount" class="input input-bordered input-sm w-full" required>
+        <button type="submit" class="btn btn-sm btn-primary">Record payment</button>
+      </form>
+    </section>
+  </div>
+
+  {% comment %}5b. Seminar group access — manual, audited suspend/restore (task #450 phase D).{% endcomment %}
+  <section class="space-y-2 rounded-lg border border-base-300 p-4">
+    <h3 class="font-serif text-base text-base-content">Seminar group access</h3>
+    {% if target.profile.seminar_access_suspended %}
+    <p class="text-sm text-base-content/70">
+      <span class="badge badge-error badge-outline badge-sm">Seminar group access suspended</span>
+      This member is excluded from seminar/reading-group workgroup rosters until access is restored. Faculty standing, if any, is unaffected.
+    </p>
+    <form method="post" action="{% url 'treasurer_suspend_access' target.id %}" class="space-y-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="restore">
+      <input type="text" name="reason" placeholder="Reason (required)—e.g. balance settled" class="input input-bordered input-sm w-full" required>
+      <button type="submit" class="btn btn-sm btn-success">Restore access</button>
+    </form>
+    {% else %}
+    <p class="text-sm text-base-content/70">
+      Suspending excludes this member from seminar/reading-group workgroup rosters (and the workgroup's Parlêtre channel) until restored—a manual, audited action; nothing sets this automatically. Faculty standing is unaffected.
+    </p>
+    <form method="post" action="{% url 'treasurer_suspend_access' target.id %}" class="space-y-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="suspend">
+      <input type="text" name="reason" placeholder="Reason (required)—e.g. balance past due" class="input input-bordered input-sm w-full" required>
+      <button type="submit" class="btn btn-sm btn-warning">Suspend seminar group access</button>
+    </form>
+    {% endif %}
+  </section>
+
+  {% comment %}6. Footnote.{% endcomment %}
+  <p class="text-xs text-base-content/50">
+    One account per member—charges and payments in one running balance, oldest charges covered first. Categories are labels for reporting; money is not earmarked.
+  </p>
 
   {% comment %}Event registrations.{% endcomment %}
   <section class="space-y-3">
@@ -102,7 +388,7 @@
         <tbody>
           {% for r in registrations %}
           <tr>
-            <td class="whitespace-nowrap text-xs text-base-content/70">{{ r.created_at|user_datetime }}</td>
+            <td class="whitespace-nowrap text-xs text-base-content/70">{{ r.created_at|user_datetime:True }}</td>
             <td>{{ r.event.title }}</td>
             <td class="text-xs">{% if r.price_tier %}{{ r.price_tier.get_audience_display }}{% endif %}</td>
             <td class="whitespace-nowrap">${{ r.quoted_amount }}</td>
@@ -118,4 +404,7 @@
   </section>
 
 </div>
+<datalist id="member-options">
+  {% for m in member_options %}<option value="{{ m.value }}">{% endfor %}
+</datalist>
 {% endblock %}

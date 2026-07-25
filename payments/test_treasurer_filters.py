@@ -1,0 +1,152 @@
+"""Tests for treasurer template filters (task #435 — provenance hover)."""
+
+from decimal import Decimal
+
+import pytest
+
+from payments.templatetags.treasurer_filters import provenance_lines, status_badge, usd, usd0
+
+
+@pytest.mark.parametrize(
+    "notes, expected",
+    [
+        ("", []),
+        ("   ", []),
+        (
+            "[tz-import:tuition-24-25#1] | installment: 1st | method unrecorded in ledger",
+            [
+                "Treasurer ledger ref · tuition-24-25#1",
+                "installment: 1st",
+                "method unrecorded in ledger",
+            ],
+        ),
+        (
+            "[tz-import:dues-25-26#17] | method unrecorded in ledger",
+            [
+                "Treasurer ledger ref · dues-25-26#17",
+                "method unrecorded in ledger",
+            ],
+        ),
+        (
+            "[stripe-import:ch_3TZxFRKD60xePWRa1QgWKIsY]",
+            ["Stripe charge · ch_3TZxFRKD60xePWRa1QgWKIsY"],
+        ),
+        (
+            "[stripe-import:ch_3SwnMBKD60xePWRa1oKdtQxp] (provisional — confirm via dashboard)",
+            [
+                "Stripe charge · ch_3SwnMBKD60xePWRa1oKdtQxp (provisional — confirm via dashboard)",
+            ],
+        ),
+        (
+            "[assume-skip dues-24-25]",
+            ["assume-skip dues-24-25"],
+        ),
+        (
+            "Paid by check #4021",
+            ["Paid by check #4021"],
+        ),
+    ],
+)
+def test_provenance_lines(notes, expected):
+    assert provenance_lines(notes) == expected
+
+
+from django.template.loader import render_to_string  # noqa: E402
+
+
+def _render(**ctx):
+    base = {"source": "staff", "source_label": "Entered by staff",
+            "notes": "", "member_note": "", "trigger": "icon"}
+    base.update(ctx)
+    return render_to_string("payments/treasurer/_provenance_popover.html", base)
+
+
+def test_popover_icon_shows_source_and_cleaned_notes():
+    html = _render(
+        source="imported", source_label="Imported from treasurer ledger",
+        notes="[tz-import:tuition-24-25#1] | method unrecorded in ledger",
+        trigger="icon",
+    )
+    assert "Imported from treasurer ledger" in html
+    assert "Treasurer ledger ref · tuition-24-25#1" in html
+    assert "method unrecorded in ledger" in html
+    assert "data-prov-trigger" in html
+    assert "data-prov-panel" in html
+
+
+def test_popover_icon_empty_when_no_notes():
+    html = _render(trigger="icon")
+    assert html.strip() == ""
+
+
+def test_popover_badge_always_shows_but_no_hover_without_notes():
+    html = _render(source_label="Entered by staff", trigger="badge")
+    assert "Entered by staff" in html
+    assert "data-prov-trigger" not in html
+
+
+def test_popover_badge_gets_hover_with_notes():
+    html = _render(
+        source="imported", source_label="Imported from treasurer ledger",
+        notes="[tz-import:dues-25-26#17] | method unrecorded in ledger",
+        trigger="badge",
+    )
+    assert "Imported from treasurer ledger" in html
+    assert "data-prov-trigger" in html
+    assert "Treasurer ledger ref · dues-25-26#17" in html
+
+
+def test_popover_shows_member_note():
+    html = _render(notes="", member_note="Paid at the door, will confirm.", trigger="icon")
+    assert "Paid at the door, will confirm." in html
+    assert "data-prov-trigger" in html
+
+
+# --- usd / usd0 sign placement (task #443) ------------------------------
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (Decimal("40"), "$40.00"),
+        (Decimal("-40"), "-$40.00"),
+        (Decimal("-1234.5"), "-$1,234.50"),
+        (Decimal("0"), "$0.00"),
+        (None, ""),
+        ("", ""),
+    ],
+)
+def test_usd_puts_the_sign_before_the_symbol(value, expected):
+    assert usd(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (Decimal("2500"), "$2,500"),
+        (Decimal("-2500"), "-$2,500"),
+        (None, ""),
+    ],
+)
+def test_usd0_puts_the_sign_before_the_symbol(value, expected):
+    assert usd0(value) == expected
+
+
+# --- status_badge filter (task #450) ----------------------------------------
+
+
+def test_status_badge_renders_plan_requested():
+    html = status_badge("plan_requested")
+    assert "badge-warning" in html
+    assert "Payment plan requested" in html
+
+
+def test_status_badge_handles_tuition_enrollment_statuses():
+    """Verify status_badge includes all TuitionEnrollment.Status values."""
+    from payments.models import TuitionEnrollment
+    from payments.templatetags.treasurer_filters import _STATUS_BADGE
+
+    for status in TuitionEnrollment.Status:
+        assert status in _STATUS_BADGE, (
+            f"Status {status} missing from _STATUS_BADGE map"
+        )

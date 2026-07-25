@@ -1,9 +1,12 @@
 from django.contrib import admin, messages
 
 from .models import (
+    Charge,
     DuesPeriod,
     DuesReminder,
+    LedgerSubmission,
     Payment,
+    PaymentMemberAction,
     Receipt,
     TuitionEnrollment,
     TuitionInstallment,
@@ -148,3 +151,34 @@ class TuitionReminderAdmin(admin.ModelAdmin):
     search_fields = ("user__email",)
     readonly_fields = ("user", "tuition_period", "sent_at")
     date_hierarchy = "sent_at"
+
+
+@admin.register(Charge)
+class ChargeAdmin(admin.ModelAdmin):
+    list_display = ("user", "category", "amount", "status", "effective_date",
+                    "source", "staff_adjusted")
+    list_filter = ("category", "status", "source", "staff_adjusted")
+    search_fields = ("user__email", "user__first_name", "user__last_name", "notes")
+    autocomplete_fields = ("user", "dues_period", "tuition_period", "registration")
+    date_hierarchy = "effective_date"
+
+
+@admin.register(LedgerSubmission)
+class LedgerSubmissionAdmin(admin.ModelAdmin):
+    list_display = ("user", "kind", "category", "amount", "claimed_date",
+                    "status", "decided_by", "decided_at", "created_at")
+    list_filter = ("status", "kind", "category")
+    search_fields = ("user__email", "user__first_name", "user__last_name", "details")
+    autocomplete_fields = ("user", "decided_by", "created_payment", "created_charge")
+    readonly_fields = ("created_at",)
+    date_hierarchy = "created_at"
+
+
+@admin.register(PaymentMemberAction)
+class PaymentMemberActionAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "user", "action", "summary", "payment")
+    list_filter = ("action",)
+    search_fields = ("user__email", "user__first_name", "user__last_name", "summary")
+    autocomplete_fields = ("user", "payment")
+    readonly_fields = ("created_at",)
+    date_hierarchy = "created_at"

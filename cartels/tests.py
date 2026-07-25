@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import datetime as _dt
+
 import pytest
+from django.core.exceptions import ValidationError as _ValidationError
 
 from accounts.models import Profile, User
 from cartels.models import Cartel, CartelJoinRequest
@@ -38,19 +41,22 @@ def _pc_member(email="pc@x.test"):
 
 # ---- propose ----------------------------------------------------------
 
-def test_propose_creates_proposed_cartel_with_generator_as_member():
+def test_propose_creates_forming_cartel_visible_to_school():
+    from workgroups.models import Visibility, WorkgroupProposal
     gen = _member("gen@x.test")
     invitee = _member("inv@x.test")
     cartel = Cartel.objects.propose(
         generator=gen, name="Speech and Writing",
-        guiding_question="What is a letter?", invitees=[invitee],
+        theme="What is a letter?", invitees=[invitee],
     )
-    assert cartel.status == Cartel.Status.PROPOSED
-    assert cartel.workgroup.landing_visibility == Visibility.PRIVATE   # hidden pre-approval
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+    assert cartel.proposal.status == WorkgroupProposal.Status.OPEN
+    assert cartel.workgroup.landing_visibility == Visibility.MEMBERS
+    assert cartel.workgroup.content_visibility == Visibility.PRIVATE
     assert cartel.is_member(gen) is True
     assert cartel.invitations.filter(invited_user=invitee).exists()
-    # not visible to the school yet
-    assert cartel.workgroup.landing_visible_to(_member("outsider@x.test")) is False
+    # visible to the school from the start (open call)
+    assert cartel.workgroup.landing_visible_to(_member("outsider@x.test")) is True
 
 
 # ---- coordinator review ------------------------------------------------
@@ -60,22 +66,27 @@ def test_is_cartel_coordinator_designation():
     assert is_cartel_coordinator(_coordinator()) is True
 
 
-def test_approve_publishes_open_and_records_reviewer():
-    gen = _member("gen@x.test")
-    coord = _coordinator()
-    cartel = Cartel.objects.propose(generator=gen, name="C")
+def test_approve_marks_registered_and_records_reviewer():
+    from workgroups.models import WorkgroupProposal
+    cartel = _forming_cartel_ready("appr@x.test")
+    cartel.submit_for_registration(by=cartel.generator)
+    coord = _pc_member()
     cartel.approve(coord)
-    assert cartel.status == Cartel.Status.OPEN
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
     assert cartel.reviewed_by == coord and cartel.reviewed_at is not None
-    assert cartel.workgroup.landing_visibility == Visibility.MEMBERS   # now solicitable
-    assert cartel.workgroup.landing_visible_to(_member("anymember@x.test")) is True
+    assert cartel.proposal.status == WorkgroupProposal.Status.OPEN   # stays live
 
 
-def test_decline_records_reason():
-    cartel = Cartel.objects.propose(generator=_member("g@x.test"), name="C")
-    cartel.decline(_coordinator(), note="Too close to an existing cartel.")
-    assert cartel.status == Cartel.Status.DECLINED
-    assert "existing cartel" in cartel.review_note
+def test_decline_returns_to_forming_with_note():
+    cartel = _forming_cartel_ready("dec@x.test")
+    cartel.submit_for_registration(by=cartel.generator)
+    cartel.decline(_pc_member(), note="Please tighten the theme.")
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+    assert cartel.review_note == "Please tighten the theme."
+    # a re-submit clears the note
+    cartel.submit_for_registration(by=cartel.generator)
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+    assert cartel.review_note == ""
 
 
 # ---- joining -----------------------------------------------------------
@@ -135,13 +146,15 @@ def test_propose_view_creates_cartel_and_redirects(client):
     client.force_login(gen)
     resp = client.post("/cartels/propose/", {
         "name": "Speech and Writing",
-        "guiding_question": "What is a letter?",
+        "theme": "What is a letter?",
         "description": "Reading the Écrits.",
-        "invitees": "",
     })
     assert resp.status_code == 302
     cartel = Cartel.objects.get(workgroup__name="Speech and Writing")
-    assert cartel.status == Cartel.Status.PROPOSED
+    # A proposed cartel is forming (and already live/OPEN) from the start —
+    # PC review only happens later, at submit-for-registration.
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+    assert cartel.status == Cartel.Status.OPEN
     assert cartel.is_member(gen)
 
 
@@ -150,7 +163,7 @@ def test_propose_view_blocks_non_members(client):
     # role defaults to external (not an LSP member)
     guest = User.objects.create_user(email="guest@x.test", password="x")
     client.force_login(guest)
-    resp = client.post("/cartels/propose/", {"name": "X", "guiding_question": "Q"})
+    resp = client.post("/cartels/propose/", {"name": "X", "theme": "Q"})
     assert resp.status_code == 404
     assert not Cartel.objects.filter(workgroup__name="X").exists()
 
@@ -166,8 +179,8 @@ def test_review_queue_open_to_pc_and_coordinator_not_plain(client):
 
 
 def test_pc_approves_but_coordinator_cannot(client):
-    gen = _member("gen@x.test")
-    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel = _forming_cartel_ready("gen@x.test")
+    cartel.submit_for_registration(by=cartel.generator)
 
     # The Cartel Coordinator may NOT approve (advisory only).
     client.force_login(_coordinator())
@@ -175,14 +188,94 @@ def test_pc_approves_but_coordinator_cannot(client):
         f"/cartels/review/{cartel.pk}/decide/", {"decision": "approve"}
     ).status_code == 404
     cartel.refresh_from_db()
-    assert cartel.status == Cartel.Status.PROPOSED
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
 
-    # The Program Committee approves & publishes.
+    # The Program Committee approves & registers.
     client.force_login(_pc_member())
     resp = client.post(f"/cartels/review/{cartel.pk}/decide/", {"decision": "approve"})
     assert resp.status_code == 302
     cartel.refresh_from_db()
-    assert cartel.status == Cartel.Status.OPEN
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+
+
+# ---- notifications -------------------------------------------------------
+
+def test_submit_notifies_pc(client, mailoutbox):
+    _pc_member("pcnotify@x.test")
+    cartel = _forming_cartel_ready("notif@x.test")
+    client.force_login(cartel.generator)
+    client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert any("pcnotify@x.test" in m.to for m in mailoutbox)
+
+
+def test_submit_bell_not_swallowed_by_unread_forming_bell(
+    client, django_capture_on_commit_callbacks
+):
+    """Regression: forming_started and submitted both raise an in-app bell row
+    with the same (recipient, category, target) — an unread 'forming' row must
+    not dedupe away the later 'submitted' row, or the coordinator never sees
+    that the cartel reached the PC."""
+    from cartels import notifications as notify_cartels
+    from notifications.models import Notification
+
+    coord = _coordinator("dedupe-coord@x.test")
+    cartel = _forming_cartel_ready("dedupe@x.test")
+
+    # Simulate the coordinator having an unread "forming" bell row already
+    # (as they would from the propose view calling forming_started).
+    notify_cartels.forming_started(cartel, "https://example.test/cartel/")
+    assert Notification.objects.filter(
+        recipient=coord, title__icontains="forming", read_at__isnull=True
+    ).exists()
+
+    client.force_login(cartel.generator)
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+
+    submitted_bell = Notification.objects.filter(
+        recipient=coord, title__icontains="submitted for registration",
+    )
+    assert submitted_bell.exists(), (
+        "coordinator should get a distinct 'submitted' bell row even with an "
+        "unread 'forming' row still open on the same cartel"
+    )
+
+
+def test_propose_does_not_notify_pc(client, mailoutbox):
+    _pc_member("pcquiet@x.test")
+    _coordinator("coordnotify@x.test")
+    gen = _member("proposer@x.test")
+    client.force_login(gen)
+    client.post("/cartels/propose/", {"name": "N", "theme": "Q?"})
+    # PC not emailed at propose; coordinator is
+    assert not any("pcquiet@x.test" in m.to for m in mailoutbox)
+    assert any("coordnotify@x.test" in m.to for m in mailoutbox)
+
+
+def test_decline_notifies_generator_with_revision_wording_not_approved(
+    client, mailoutbox, django_capture_on_commit_callbacks
+):
+    """Regression: generator_decision/notify_generator_of_decision must key off
+    registration_status == REGISTERED, not the (always-OPEN post-propose)
+    proposal status — otherwise a PC decline gets mislabeled as an approval."""
+    cartel = _forming_cartel_ready("declinewording@x.test")
+    cartel.submit_for_registration(by=cartel.generator)
+    client.force_login(_pc_member("pcdecline@x.test"))
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = client.post(
+            f"/cartels/review/{cartel.pk}/decide/",
+            {"decision": "decline", "note": "Please tighten the theme."},
+        )
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+
+    generator_mail = [m for m in mailoutbox if cartel.generator.email in m.to]
+    assert generator_mail, "generator should have been emailed"
+    combined = " ".join(m.subject + " " + m.body for m in generator_mail)
+    assert "returned for revision" in combined
+    assert "approved" not in combined.lower()
+    assert "registered" not in combined.lower()
 
 
 def test_coordinator_feedback_is_advisory(client):
@@ -196,7 +289,8 @@ def test_coordinator_feedback_is_advisory(client):
     assert resp.status_code == 302
     cartel.refresh_from_db()
     assert "Letter cartel" in cartel.coordinator_feedback
-    assert cartel.status == Cartel.Status.PROPOSED   # feedback does not gate
+    # feedback does not gate
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
     # a PC member can't leave coordinator feedback
     client.force_login(_pc_member())
     r = client.post(f"/cartels/review/{cartel.pk}/feedback/", {"feedback": "x"})
@@ -227,14 +321,14 @@ def test_propose_form_renders(client):
     client.force_login(_member("gen@x.test"))
     resp = client.get("/cartels/propose/")
     assert resp.status_code == 200
-    assert b"Propose a cartel" in resp.content
+    assert b"Start a cartel" in resp.content
 
 
 def test_cartel_ui_composed_into_unified_groups_detail(client):
     """The cartel UI now renders on the unified /groups/<slug>/ page — guiding
     question, member-gating, and roster — composed from the cartel partial."""
     gen = _member("gen@x.test")
-    cartel = Cartel.objects.propose(generator=gen, name="C", guiding_question="What is a letter?")
+    cartel = Cartel.objects.propose(generator=gen, name="C", theme="What is a letter?")
     cartel.approve(_coordinator())
     cartel.request_to_join(_member("appl@x.test"))
     client.force_login(gen)
@@ -266,22 +360,37 @@ def test_legacy_cartel_urls_redirect_to_groups(client):
     assert client.get(f"/cartels/{slug}/", follow=True).status_code == 200
 
 
-def test_declined_cartel_can_be_edited_and_resubmitted(client):
-    """Improvement 1: a declined proposal, edited by the generator, re-enters
-    review (PROPOSED) and re-hides until re-approved."""
-    gen = _member("gen@x.test")
-    cartel = Cartel.objects.propose(generator=gen, name="C", guiding_question="Q1")
-    cartel.decline(_coordinator(), note="Sharpen the question.")
+def test_returned_cartel_can_be_revised_and_resubmitted(client):
+    """A submitted cartel the PC returns for revision goes back to FORMING
+    (not hidden — it stays members-visible); any member may revise its
+    details, and any member may resubmit it once ready again."""
+    cartel = _forming_cartel_ready("gen@x.test")
+    gen = cartel.generator
+    cartel.submit_for_registration(by=gen)
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+
+    cartel.decline(_pc_member(), note="Sharpen the question.")
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+    assert cartel.review_note == "Sharpen the question."
+    # still visible to the school (forming, not re-hidden)
+    assert cartel.workgroup.landing_visibility == Visibility.MEMBERS
+
     client.force_login(gen)
     resp = client.post(f"/cartels/{cartel.workgroup.slug}/edit/", {
-        "name": "C", "guiding_question": "A sharper question", "invitees": "",
+        "name": cartel.workgroup.name, "theme": "A sharper question",
     })
     assert resp.status_code == 302
     cartel.refresh_from_db()
-    assert cartel.status == Cartel.Status.PROPOSED
-    assert cartel.guiding_question == "A sharper question"
-    assert cartel.workgroup.landing_visibility == Visibility.PRIVATE   # hidden again
-    # only the generator may edit
+    assert cartel.theme == "A sharper question"
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+
+    # editing is collaborative among members, but not open to non-members
     client.force_login(_member("other@x.test"))
     assert client.get(f"/cartels/{cartel.workgroup.slug}/edit/").status_code == 404
 
@@ -317,20 +426,20 @@ def test_member_can_close_and_archive(client):
 
 def test_open_cartel_details_editable_by_member(client):
     gen = _member("gen@x.test")
-    cartel = Cartel.objects.propose(generator=gen, name="C", guiding_question="Q1")
+    cartel = Cartel.objects.propose(generator=gen, name="C", theme="Q1")
     cartel.approve(_coordinator())
     member = _member("m@x.test")
     cartel.add_member(member)
     client.force_login(member)   # any member, not only the generator
     resp = client.post(f"/cartels/{cartel.workgroup.slug}/edit/", {
         "name": "Renamed cartel",
-        "guiding_question": "A sharper question",
+        "theme": "A sharper question",
         "description": "New overview.",
     })
     assert resp.status_code == 302
     cartel.refresh_from_db()
     cartel.workgroup.refresh_from_db()
-    assert cartel.guiding_question == "A sharper question"
+    assert cartel.theme == "A sharper question"
     assert cartel.workgroup.name == "Renamed cartel"
     assert cartel.workgroup.description == "New overview."
     # Editing an open cartel must NOT bounce it back into review.
@@ -339,11 +448,11 @@ def test_open_cartel_details_editable_by_member(client):
 
 def test_edit_open_cartel_blocks_non_members(client):
     gen = _member("gen@x.test")
-    cartel = Cartel.objects.propose(generator=gen, name="C", guiding_question="Q1")
+    cartel = Cartel.objects.propose(generator=gen, name="C", theme="Q1")
     cartel.approve(_coordinator())
     client.force_login(_member("outsider@x.test"))
     resp = client.post(f"/cartels/{cartel.workgroup.slug}/edit/", {
-        "name": "Hijacked", "guiding_question": "Q", "description": "",
+        "name": "Hijacked", "theme": "Q", "description": "",
     })
     assert resp.status_code == 404
 
@@ -405,14 +514,14 @@ def test_archived_cartel_can_be_reactivated_by_member(client):
 def test_my_cartels_and_status_badge_on_kind_list(client):
     gen = _member("gen@x.test")
     cartel = Cartel.objects.propose(
-        generator=gen, name="Speech and Writing", guiding_question="What is a letter?"
+        generator=gen, name="Speech and Writing", theme="What is a letter?"
     )
     cartel.approve(_coordinator())
     client.force_login(gen)            # gen is a member of this cartel
     resp = client.get("/groups/cartels/")
     assert resp.status_code == 200
     assert b"My cartels" in resp.content
-    assert b"Open \xc2\xb7 Join!" in resp.content   # status badge ("Open · Join!")
+    assert b"Registered \xc2\xb7 Open" in resp.content   # status badge ("Registered · Open")
 
 
 def test_workspace_tabs_shown_to_member(client):
@@ -737,7 +846,7 @@ def test_open_cartel_listed_publicly_on_program(client):
 
     gen = _member("gen@x.test")
     cartel = Cartel.objects.propose(
-        generator=gen, name="The Sinthome", guiding_question="What is the sinthome?",
+        generator=gen, name="The Sinthome", theme="What is the sinthome?",
     )
     cartel.approve(_pc_member())   # → OPEN, reviewed_at=now → overlaps current AY
 
@@ -807,10 +916,514 @@ def test_nested_group_links_back_to_parent_workgroup(client):
     assert b"Working Group on Cartels" in resp.content
 
 
-def test_proposed_cartel_hidden_from_other_members_on_kind_list(client):
+def test_forming_cartel_visible_to_members_on_kind_list(client):
     gen = _member("gen@x.test")
-    Cartel.objects.propose(generator=gen, name="Secret Proposal")
+    Cartel.objects.propose(generator=gen, name="Open Formation")
     other = _member("other@x.test")
     client.force_login(other)
     resp = client.get("/groups/cartels/")
-    assert b"Secret Proposal" not in resp.content   # private until approved
+    assert b"Open Formation" in resp.content   # forming cartels are visible to the school
+
+
+# ---- registration_status / CartelQuestion (task #392) ----------------
+
+
+def test_registration_status_defaults_to_forming():
+    cartel = Cartel.objects.create_with_workgroup(name="C")
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+
+
+def test_cartel_question_unique_per_member():
+    from cartels.models import CartelQuestion
+    cartel = Cartel.objects.create_with_workgroup(name="C")
+    u = _member("q@x.test")
+    CartelQuestion.objects.create(cartel=cartel, member=u, text="What is a letter?")
+    assert cartel.member_questions.get(member=u).text == "What is a letter?"
+    import pytest as _pytest
+    from django.db import IntegrityError
+    with _pytest.raises(IntegrityError):
+        CartelQuestion.objects.create(cartel=cartel, member=u, text="dup")
+
+
+# ---- submit-to-PC gate (task #392 step 3) -----------------------------
+
+
+def _forming_cartel_ready(gen_email="g@x.test", n_members=3):
+    """A forming cartel with n cartelisands + an internal plus-one + a valid
+    1-year window (ready to submit)."""
+    gen = _member(gen_email)
+    # name includes gen_email so calling this helper more than once per test
+    # (different gen_email each time) doesn't collide on Workgroup.slug.
+    cartel = Cartel.objects.propose(generator=gen, name=f"Ready ({gen_email})")
+    for i in range(1, n_members):
+        cartel.add_member(_member(f"m{i}-{gen_email}"))
+    plus = _member(f"plus-{gen_email}")
+    cartel.set_internal_plus_one(plus)
+    wg = cartel.workgroup
+    wg.start_date = _dt.date(2026, 9, 1)
+    wg.end_date = _dt.date(2027, 9, 1)   # 365 days
+    wg.save(update_fields=["start_date", "end_date"])
+    return cartel
+
+
+def test_cartelisand_count_excludes_plus_one():
+    cartel = _forming_cartel_ready(n_members=3)
+    assert cartel.cartelisand_count() == 3   # plus-one not counted
+
+
+def test_submit_blocked_without_plus_one():
+    gen = _member("g@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="C")
+    cartel.add_member(_member("m2@x.test"))
+    cartel.add_member(_member("m3@x.test"))
+    wg = cartel.workgroup
+    wg.start_date = _dt.date(2026, 9, 1)
+    wg.end_date = _dt.date(2027, 9, 1)
+    wg.save(update_fields=["start_date", "end_date"])
+    assert cartel.registration_checklist()["plus_one"] is False
+    with pytest.raises(_ValidationError):
+        cartel.submit_for_registration(by=gen)
+
+
+def test_submit_blocked_when_too_few_or_too_many():
+    small = _forming_cartel_ready("small@x.test", n_members=2)   # 2 cartelisands
+    assert small.registration_checklist()["count"] is False
+    big = _forming_cartel_ready("big@x.test", n_members=6)       # 6 cartelisands
+    assert big.registration_checklist()["count"] is False
+
+
+def test_submit_blocked_when_duration_out_of_range():
+    cartel = _forming_cartel_ready("dur@x.test")
+    wg = cartel.workgroup
+    wg.end_date = _dt.date(2029, 9, 1)   # ~3 years, too long
+    wg.save(update_fields=["end_date"])
+    assert cartel.registration_checklist()["duration"] is False
+    with pytest.raises(_ValidationError):
+        cartel.submit_for_registration(by=cartel.generator)
+
+
+def test_duration_ok_boundaries():
+    """duration_ok() is inclusive at both ends: 365 <= days <= 731."""
+    cartel = _forming_cartel_ready("durbounds@x.test")
+    wg = cartel.workgroup
+    start = _dt.date(2026, 9, 1)
+    wg.start_date = start
+
+    wg.end_date = start + _dt.timedelta(days=364)
+    wg.save(update_fields=["start_date", "end_date"])
+    assert cartel.duration_ok() is False
+
+    wg.end_date = start + _dt.timedelta(days=365)
+    wg.save(update_fields=["end_date"])
+    assert cartel.duration_ok() is True
+
+    wg.end_date = start + _dt.timedelta(days=731)
+    wg.save(update_fields=["end_date"])
+    assert cartel.duration_ok() is True
+
+    wg.end_date = start + _dt.timedelta(days=732)
+    wg.save(update_fields=["end_date"])
+    assert cartel.duration_ok() is False
+
+
+def test_submit_succeeds_when_gate_passes_questions_optional():
+    cartel = _forming_cartel_ready("ok@x.test")
+    check = cartel.registration_checklist()
+    assert check["can_submit"] is True
+    assert check["questions_done"] == 0   # no questions entered, still submittable
+    cartel.submit_for_registration(by=cartel.generator)
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+
+
+# ---- program-year listing + viewer_state key off registration_status (task #392) ----
+
+
+def test_forming_cartel_not_listed_on_program_year():
+    from events.models import current_academic_year
+    year = current_academic_year()
+    forming = _forming_cartel_ready("prog@x.test")
+    forming.workgroup.start_date = None  # falls back to created date -> current AY
+    forming.workgroup.save(update_fields=["start_date"])
+    assert forming not in Cartel.objects.in_academic_year(year)
+    # restore a valid window so the gate (duration_ok) passes for submission
+    forming.workgroup.start_date = _dt.date(2026, 9, 1)
+    forming.workgroup.save(update_fields=["start_date"])
+    forming.submit_for_registration(by=forming.generator)
+    forming.approve(_pc_member())
+    assert forming in Cartel.objects.in_academic_year(year)
+
+
+def test_viewer_state_exposes_question_and_checklist():
+    from cartels.models import CartelQuestion
+    cartel = _forming_cartel_ready("vs@x.test")
+    gen = cartel.generator
+    CartelQuestion.objects.create(cartel=cartel, member=gen, text="my angle")
+    state = cartel.viewer_state(gen)
+    assert state["my_question"] == "my angle"
+    assert state["registration"]["can_submit"] is True
+
+
+# ---- submit + question views, opened join gates (task #392 / task 7) --
+
+
+def test_member_can_submit_via_view(client):
+    cartel = _forming_cartel_ready("view@x.test")
+    client.force_login(cartel.generator)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+
+
+def test_member_edits_own_question_only(client):
+    from cartels.models import CartelQuestion
+    cartel = _forming_cartel_ready("qview@x.test")
+    gen = cartel.generator
+    other = _member("other-qview@x.test")
+    cartel.add_member(other)
+    client.force_login(gen)
+    client.post(f"/cartels/{cartel.workgroup.slug}/question/", {"text": "gen angle"})
+    assert CartelQuestion.objects.get(cartel=cartel, member=gen).text == "gen angle"
+    # a non-member cannot post a question
+    stranger = _member("stranger-qview@x.test")
+    client.force_login(stranger)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/question/", {"text": "no"})
+    assert resp.status_code == 404
+    assert not CartelQuestion.objects.filter(cartel=cartel, member=stranger).exists()
+
+
+def test_apply_works_while_forming(client):
+    cartel = _forming_cartel_ready("apply@x.test")   # forming, not yet at PC
+    applicant = _member("applicant@x.test")
+    client.force_login(applicant)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/apply/", {"message": "hi"})
+    assert resp.status_code == 302
+    assert cartel.join_requests.filter(applicant=applicant).exists()
+
+
+def test_review_queue_lists_submitted(client):
+    cartel = _forming_cartel_ready("rq@x.test")
+    cartel.submit_for_registration(by=cartel.generator)
+    pc = _pc_member()
+    client.force_login(pc)
+    resp = client.get("/cartels/review/")
+    assert resp.status_code == 200
+    assert cartel in list(resp.context["submitted"])
+
+
+def test_submit_rejected_for_non_member(client):
+    cartel = _forming_cartel_ready("nonmember@x.test")
+    stranger = _member("stranger-nonmember@x.test")
+    client.force_login(stranger)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 404
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+
+
+def test_submit_twice_does_not_resubmit_registered(client):
+    cartel = _forming_cartel_ready("resubmit@x.test")
+    gen = cartel.generator
+    client.force_login(gen)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+    cartel.approve(_pc_member())
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+    # posting submit again as a member must not flip it back to SUBMITTED
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+
+
+def test_overview_shows_submit_button_when_ready(client):
+    cartel = _forming_cartel_ready("ov@x.test")
+    client.force_login(cartel.generator)
+    resp = client.get(cartel.get_absolute_url())
+    assert b"Submit for registration" in resp.content
+
+
+def test_overview_shows_forming_badge(client):
+    cartel = _forming_cartel_ready("ovb@x.test")
+    client.force_login(cartel.generator)
+    resp = client.get(cartel.get_absolute_url())
+    assert b"Forming" in resp.content
+
+
+def test_submit_with_incomplete_checklist_shows_message(client):
+    gen = _member("incomplete@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Incomplete")
+    cartel.add_member(_member("m2-incomplete@x.test"))
+    cartel.add_member(_member("m3-incomplete@x.test"))
+    wg = cartel.workgroup
+    wg.start_date = _dt.date(2026, 9, 1)
+    wg.end_date = _dt.date(2027, 9, 1)
+    wg.save(update_fields=["start_date", "end_date"])
+    # no plus-one set -> checklist incomplete
+    client.force_login(gen)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/submit/")
+    assert resp.status_code == 302
+    cartel.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+
+
+# ---- data migration mapping (task #392 / task 6) ----
+
+
+def _legacy_cartel(name, *, proposal_status):
+    """Build a pre-migration Cartel: real proposal status, wrong-on-purpose
+    registration_status sentinel so a no-op migration is caught."""
+    cartel = Cartel.objects.create_with_workgroup(name=name)
+    proposal = cartel.workgroup.proposal
+    proposal.status = proposal_status
+    proposal.save(update_fields=["status"])
+    cartel.registration_status = "unmapped"
+    cartel.save(update_fields=["registration_status"])
+    return cartel
+
+
+def _run_migration_forward():
+    import importlib
+
+    from django.apps import apps as django_apps
+
+    mig = importlib.import_module("cartels.migrations.0009_map_registration_status")
+    mig.forward(django_apps, None)
+
+
+@pytest.mark.django_db
+def test_migration_maps_open_to_registered():
+    from workgroups.models import WorkgroupProposal
+
+    cartel = _legacy_cartel("Legacy Open", proposal_status=WorkgroupProposal.Status.OPEN)
+
+    _run_migration_forward()
+
+    cartel.refresh_from_db()
+    cartel.workgroup.proposal.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+    assert cartel.workgroup.proposal.status == WorkgroupProposal.Status.OPEN
+
+
+@pytest.mark.django_db
+def test_migration_maps_proposed_to_submitted_and_reopens_proposal():
+    from workgroups.models import WorkgroupProposal
+
+    cartel = _legacy_cartel("Legacy Proposed", proposal_status=WorkgroupProposal.Status.PROPOSED)
+
+    _run_migration_forward()
+
+    cartel.refresh_from_db()
+    proposal = cartel.workgroup.proposal
+    proposal.refresh_from_db()
+    cartel.workgroup.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.SUBMITTED
+    assert proposal.status == WorkgroupProposal.Status.OPEN
+    assert cartel.workgroup.landing_visibility == Visibility.MEMBERS
+
+
+@pytest.mark.django_db
+def test_migration_maps_declined_to_forming_and_reopens_proposal():
+    from workgroups.models import WorkgroupProposal
+
+    cartel = _legacy_cartel("Legacy Declined", proposal_status=WorkgroupProposal.Status.DECLINED)
+
+    _run_migration_forward()
+
+    cartel.refresh_from_db()
+    proposal = cartel.workgroup.proposal
+    proposal.refresh_from_db()
+    cartel.workgroup.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.FORMING
+    assert proposal.status == WorkgroupProposal.Status.OPEN
+    assert cartel.workgroup.landing_visibility == Visibility.MEMBERS
+
+
+@pytest.mark.django_db
+def test_migration_maps_archived_to_registered_and_leaves_proposal_archived():
+    from workgroups.models import WorkgroupProposal
+
+    cartel = _legacy_cartel("Legacy Archived", proposal_status=WorkgroupProposal.Status.ARCHIVED)
+
+    _run_migration_forward()
+
+    cartel.refresh_from_db()
+    proposal = cartel.workgroup.proposal
+    proposal.refresh_from_db()
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+    assert proposal.status == WorkgroupProposal.Status.ARCHIVED
+
+
+# ---- start-form refinements (theme rename, invite-only, invitee picker) ----
+
+
+def test_theme_field_renamed_from_guiding_question():
+    cartel = Cartel.objects.propose(
+        generator=_member("g@x.test"), name="C", theme="What is a letter?"
+    )
+    assert cartel.theme == "What is a letter?"
+
+
+def test_propose_closed_is_invitation_only():
+    gen = _member("g@x.test")
+    invitee = _member("inv@x.test")
+    cartel = Cartel.objects.propose(
+        generator=gen, name="Invite Only", invitees=[invitee], closed=True,
+    )
+    assert cartel.closed is True
+    # open applications are blocked while invitation-only
+    outsider = _member("outsider@x.test")
+    assert cartel.viewer_state(outsider)["can_apply"] is False
+    # but a seeded invitee can still join
+    assert cartel.accept_invitation(invitee) is not None
+    assert cartel.is_member(invitee) is True
+
+
+def test_start_form_checkbox_sets_closed(client):
+    gen = _member("g@x.test")
+    client.force_login(gen)
+    resp = client.post("/cartels/propose/", {"name": "Closed C", "theme": "T", "closed": "on"})
+    assert resp.status_code == 302
+    cartel = Cartel.objects.get(workgroup__name="Closed C")
+    assert cartel.closed is True
+
+
+def test_start_form_defaults_open(client):
+    gen = _member("g@x.test")
+    client.force_login(gen)
+    client.post("/cartels/propose/", {"name": "Open C", "theme": "T"})
+    assert Cartel.objects.get(workgroup__name="Open C").closed is False
+
+
+def test_member_search_returns_directory_members_excluding_self(client):
+    from accounts.models import User
+
+    me = _member("me@x.test")
+    target = User.objects.create_user(email="target@x.test", password="x")
+    target.first_name = "Zeb"
+    target.last_name = "Zork"
+    target.save()
+    target.profile.role = Profile.Role.ANALYST
+    target.profile.save()
+    client.force_login(me)
+    resp = client.get("/cartels/member-search/", {"q": "Zeb"})
+    assert resp.status_code == 200
+    ids = [r["id"] for r in resp.json()["results"]]
+    assert target.pk in ids
+    assert me.pk not in ids
+
+
+def test_member_search_requires_login(client):
+    resp = client.get("/cartels/member-search/", {"q": "x"})
+    assert resp.status_code in (302, 404)
+
+
+def test_propose_view_invites_by_pk(client):
+    gen = _member("g@x.test")
+    invitee = _member("inv@x.test")
+    client.force_login(gen)
+    resp = client.post("/cartels/propose/", {
+        "name": "By PK", "theme": "T", "invitees": [str(invitee.pk)],
+    })
+    assert resp.status_code == 302
+    cartel = Cartel.objects.get(workgroup__name="By PK")
+    assert cartel.invitations.filter(invited_user=invitee).exists()
+
+
+def test_start_form_renders_picker_and_theme(client):
+    client.force_login(_member("g@x.test"))
+    resp = client.get("/cartels/propose/")
+    assert resp.status_code == 200
+    assert b"people-picker" in resp.content
+    assert b"cartels/member-search/" in resp.content or b"member-search" in resp.content
+    assert b"Theme" in resp.content
+    assert b"Further description" in resp.content
+    assert b"Invitation only" in resp.content
+
+
+# ---- workspace invite interface -------------------------------------------
+
+
+def test_member_invites_from_workspace(client):
+    gen = _member("g@x.test")
+    invitee = _member("inv@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T")
+    client.force_login(gen)
+    resp = client.post(
+        f"/cartels/{cartel.workgroup.slug}/invite/", {"invitees": [str(invitee.pk)]}
+    )
+    assert resp.status_code == 302
+    assert cartel.invitations.filter(invited_user=invitee, accepted_at__isnull=True).exists()
+
+
+def test_invite_notifies_invitee(client, django_capture_on_commit_callbacks, mailoutbox):
+    gen = _member("g@x.test")
+    invitee = _member("inv@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T")
+    client.force_login(gen)
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post(f"/cartels/{cartel.workgroup.slug}/invite/", {"invitees": [str(invitee.pk)]})
+    assert any(invitee.email in m.to for m in mailoutbox)
+
+
+def test_invite_skips_existing_member(client):
+    gen = _member("g@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T")
+    client.force_login(gen)
+    # inviting the generator (already a member) creates no invitation
+    client.post(f"/cartels/{cartel.workgroup.slug}/invite/", {"invitees": [str(gen.pk)]})
+    assert not cartel.invitations.filter(invited_user=gen).exists()
+
+
+def test_non_member_cannot_invite(client):
+    gen = _member("g@x.test")
+    invitee = _member("inv@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T")
+    stranger = _member("stranger@x.test")
+    client.force_login(stranger)
+    resp = client.post(
+        f"/cartels/{cartel.workgroup.slug}/invite/", {"invitees": [str(invitee.pk)]}
+    )
+    assert resp.status_code == 404
+    assert not cartel.invitations.filter(invited_user=invitee).exists()
+
+
+def test_invite_works_on_registered_invitation_only_cartel(client):
+    """The key gap: a member can still invite people after formation, including
+    on a registered, invitation-only (closed) cartel."""
+    cartel = _forming_cartel_ready("g@x.test")
+    cartel.set_closed(True)
+    cartel.submit_for_registration(by=cartel.generator)
+    cartel.approve(_pc_member())
+    assert cartel.registration_status == Cartel.RegistrationStatus.REGISTERED
+    invitee = _member("late@x.test")
+    client.force_login(cartel.generator)
+    resp = client.post(
+        f"/cartels/{cartel.workgroup.slug}/invite/", {"invitees": [str(invitee.pk)]}
+    )
+    assert resp.status_code == 302
+    assert cartel.invitations.filter(invited_user=invitee).exists()
+
+
+def test_cancel_invitation_removes_pending(client):
+    gen = _member("g@x.test")
+    invitee = _member("inv@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T", invitees=[invitee])
+    inv = cartel.invitations.get(invited_user=invitee)
+    client.force_login(gen)
+    resp = client.post(f"/cartels/{cartel.workgroup.slug}/invitations/{inv.pk}/cancel/")
+    assert resp.status_code == 302
+    assert not cartel.invitations.filter(pk=inv.pk).exists()
+
+
+def test_workspace_shows_invite_section_to_members(client):
+    gen = _member("g@x.test")
+    cartel = Cartel.objects.propose(generator=gen, name="Grow", theme="T")
+    client.force_login(gen)
+    resp = client.get(cartel.workgroup.get_absolute_url())
+    assert resp.status_code == 200
+    assert b"Invite members" in resp.content
+    assert b"people-picker" in resp.content

@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}Appointments — Admin Tools{% endblock %}
+{% block title %}Appointments · Admin Tools{% endblock %}
 {% block content %}
 <div class="space-y-6 max-w-3xl">
   <nav class="text-sm">
@@ -78,8 +78,10 @@
   <p class="text-xs text-base-content/50">
     Committee chairs and officers are roster roles — set those in each
     committee's workspace from <a href="{% url 'board_committees' %}" class="link">Committees</a>.
-    The <strong>Applications Coordinator</strong> is one of these: appoint it on
-    the Meeting of Analysts' workspace under Settings → Members &amp; roles.
+    The <strong>President</strong> and <strong>Vice President</strong> are the Board's
+    Chair and Co-chair — set them in the Board's workspace under Settings → Members &amp; roles.
+    The <strong>Applications Coordinator</strong> is appointed on the Meeting of
+    Analysts' workspace under Settings → Members &amp; roles.
   </p>
 </div>
 {% endblock %}

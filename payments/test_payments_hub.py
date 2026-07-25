@@ -38,9 +38,11 @@ def test_non_owner_gets_404(client):
 
 
 @pytest.mark.django_db
-def test_index_requires_login(client):
+def test_index_shows_gateway_to_anonymous(client):
+    # task #414: anonymous visitors get the public gateway, not a login redirect.
     resp = client.get(reverse("payments:index"), SERVER_NAME="localhost")
-    assert resp.status_code in (301, 302)
+    assert resp.status_code == 200
+    assert "payments/gateway.html" in {t.name for t in resp.templates}
 
 
 @pytest.mark.django_db
@@ -62,7 +64,7 @@ def test_index_has_dues_tuition_donate_links(client):
     body = client.get(reverse("payments:index"), SERVER_NAME="localhost").content.decode()
     assert reverse("dues") in body
     assert reverse("donate") in body
-    assert "/formation/?tab=tuition" in body
+    assert "/formation/?tab=account" in body
 
 
 @pytest.mark.django_db

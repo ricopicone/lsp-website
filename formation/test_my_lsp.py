@@ -28,7 +28,7 @@ def test_available_tabs_candidate_full_order():
     keys = [k for k, _ in available_tabs(u)]
     assert keys == [
         "formation", "groups", "events", "works",
-        "tuition", "dues", "proposals", "profile",
+        "account", "proposals", "profile",
     ]
 
 
@@ -113,6 +113,121 @@ def test_profile_saved_redirect_fallback():
 
     req = RequestFactory().post("/accounts/profile/")
     assert _profile_saved_redirect(req) == reverse("profile_edit") + "?saved=1#saved"
+
+
+# ---- formation-doc link on the Formation tab -------------------------------
+
+def _formation_doc(slug, title):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from documents.models import Document
+
+    return Document.objects.create(
+        title=title,
+        slug=slug,
+        category=Document.Category.FORMATION,
+        summary="Guidelines.",
+        listing_visibility=Document.Visibility.MEMBERS,
+        content_visibility=Document.Visibility.MEMBERS,
+        file=SimpleUploadedFile("g.pdf", b"%PDF-1.4\n", content_type="application/pdf"),
+    )
+
+
+def _set_formation_docs(*, analyst=None, scholar=None):
+    from formation.models import FormationSettings
+
+    s = FormationSettings.load()
+    s.analyst_formation_doc = analyst
+    s.scholar_formation_doc = scholar
+    s.save()
+
+
+def test_in_training_analyst_sees_analyst_doc(client):
+    analyst_doc = _formation_doc("analyst-g", "Analyst Formation Guidelines")
+    scholar_doc = _formation_doc("scholar-g", "Scholar Formation Guidelines")
+    _set_formation_docs(analyst=analyst_doc, scholar=scholar_doc)
+    client.force_login(_user("pc@x.test", role=Profile.Role.PRE_CANDIDATE))
+    body = client.get(reverse("formation:formation")).content
+    assert analyst_doc.get_absolute_url().encode() in body
+    assert scholar_doc.get_absolute_url().encode() not in body
+
+
+def test_in_training_scholar_sees_scholar_doc(client):
+    analyst_doc = _formation_doc("analyst-g", "Analyst Formation Guidelines")
+    scholar_doc = _formation_doc("scholar-g", "Scholar Formation Guidelines")
+    _set_formation_docs(analyst=analyst_doc, scholar=scholar_doc)
+    client.force_login(_user("pcs@x.test", role=Profile.Role.PRE_CANDIDATE_SCHOLAR))
+    body = client.get(reverse("formation:formation")).content
+    assert scholar_doc.get_absolute_url().encode() in body
+    assert analyst_doc.get_absolute_url().encode() not in body
+
+
+def test_graduated_analyst_sees_no_doc(client):
+    analyst_doc = _formation_doc("analyst-g", "Analyst Formation Guidelines")
+    _set_formation_docs(analyst=analyst_doc)
+    client.force_login(_user("an2@x.test", role=Profile.Role.ANALYST))
+    resp = client.get(reverse("formation:formation"))
+    assert resp.context["formation_doc"] is None
+    assert analyst_doc.get_absolute_url().encode() not in resp.content
+
+
+def test_plain_member_sees_no_doc(client):
+    analyst_doc = _formation_doc("analyst-g", "Analyst Formation Guidelines")
+    _set_formation_docs(analyst=analyst_doc)
+    client.force_login(_user("m2@x.test", role=Profile.Role.MEMBER))
+    assert client.get(reverse("formation:formation")).context["formation_doc"] is None
+
+
+def test_link_absent_when_doc_unset(client):
+    _set_formation_docs(analyst=None, scholar=None)
+    client.force_login(_user("pc2@x.test", role=Profile.Role.PRE_CANDIDATE))
+    assert client.get(reverse("formation:formation")).context["formation_doc"] is None
+
+
+# ---- Statement ordering -----------------------------------------------------
+
+def test_statement_ordered_by_paid_at_not_created_at():
+    """The Account tab statement (``payments.ledger.member_account``) orders
+    its lines chronologically (oldest first) off each line's displayed
+    date — paid_at, falling back to created_at — not created_at alone. A
+    backfilled offline payment is entered (created) after a newer Stripe
+    payment but paid earlier, so created_at and the displayed date diverge
+    (ported from the retired My Payments table's ordering test, task #439)."""
+    from datetime import datetime
+    from datetime import timezone as tz
+
+    from django.utils import timezone
+
+    from payments import ledger
+    from payments.models import Payment
+
+    u = _user("pay@x.test", role=Profile.Role.ANALYST)
+
+    def _mk(amount, created_at, paid_at):
+        p = Payment.objects.create(
+            user=u,
+            payment_type=Payment.Type.DUES,
+            amount=amount,
+            status=Payment.Status.SUCCEEDED,
+            method=Payment.Method.OFFLINE,
+            paid_at=paid_at,
+        )
+        # created_at is auto_now_add — override it after the fact.
+        Payment.objects.filter(pk=p.pk).update(created_at=created_at)
+        return p
+
+    old_paid = datetime(2026, 1, 15, tzinfo=tz.utc)
+    new_paid = datetime(2026, 7, 1, tzinfo=tz.utc)
+    # The old charge was *entered* today (created_at newest) but paid in January.
+    backfill = _mk("50.00", created_at=timezone.now(), paid_at=old_paid)
+    # The recent charge was created earlier but paid in July.
+    recent = _mk("60.00", created_at=datetime(2026, 6, 20, tzinfo=tz.utc), paid_at=new_paid)
+
+    acct = ledger.member_account(u)
+    ids = [ln["obj"].id for ln in acct["lines"] if ln["kind"] == "payment"]
+    # Chronological order (oldest first, the statement's convention) driven
+    # by paid_at, not created_at.
+    assert ids == [backfill.id, recent.id]
 
 
 # ---- legacy redirects ------------------------------------------------------

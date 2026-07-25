@@ -1,0 +1,101 @@
+{% extends "payments/treasurer/base.html" %}
+{% load treasurer_filters tz_filters %}
+{% block tab_content %}
+<div class="space-y-6">
+
+  <header class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="font-serif text-2xl text-base-content">Member accounts</h2>
+      <p class="text-sm text-base-content/60">
+        One account per member, all charges and payments together.
+        Total outstanding: <strong>{{ total_owed|usd }}</strong>
+      </p>
+    </div>
+    <form method="post" action="{% url 'treasurer_sync_charges' %}">
+      {% csrf_token %}
+      <button class="btn btn-sm btn-outline" title="Mint any missing current-year dues charges">Sync charges</button>
+    </form>
+  </header>
+
+  {% if ledger_empty %}
+  <div class="alert alert-info text-sm">
+    <span><strong>No charges have been minted yet</strong>, so every obligation reads $0 and payments show as credit. Run the one-time history backfill (<code>manage.py backfill_charges</code>, see the Help tab), then use <strong>Sync charges</strong> above to mint the current year's dues.</span>
+  </div>
+  {% endif %}
+
+  <form method="get" class="flex flex-wrap items-end gap-2">
+    <input type="search" name="q" value="{{ q }}" placeholder="Name or email"
+           class="input input-bordered input-sm w-56" />
+    <select name="balance" class="select select-bordered select-sm">
+      <option value="">Any balance</option>
+      <option value="owing" {% if selected_balance == "owing" %}selected{% endif %}>Owing</option>
+      <option value="credit" {% if selected_balance == "credit" %}selected{% endif %}>Credit</option>
+      <option value="square" {% if selected_balance == "square" %}selected{% endif %}>Square</option>
+    </select>
+    <select name="role" class="select select-bordered select-sm">
+      <option value="">Any role</option>
+      {% for value, label in role_choices %}
+      <option value="{{ value }}" {% if selected_role == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="sort" class="select select-bordered select-sm">
+      <option value="balance" {% if selected_sort == "balance" %}selected{% endif %}>Most owed first</option>
+      <option value="name" {% if selected_sort == "name" %}selected{% endif %}>Name</option>
+      <option value="paid" {% if selected_sort == "paid" %}selected{% endif %}>Most paid</option>
+      <option value="last" {% if selected_sort == "last" %}selected{% endif %}>Latest payment</option>
+    </select>
+    <button class="btn btn-sm btn-primary">Apply</button>
+    {% if filter_qs %}<a href="{% url 'treasurer_accounts' %}" class="btn btn-sm btn-ghost">Clear</a>{% endif %}
+  </form>
+
+  <div class="overflow-x-auto rounded-lg border border-base-300">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Member</th><th>Role</th>
+          <th class="text-right">Obligation</th><th class="text-right">Paid</th>
+          <th class="text-right">Balance</th>
+          <th>Tuition</th><th>Dues (this AY)</th><th>Last payment</th>
+          <th class="text-right">Reminders</th><th>Last reminded</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="hover">
+          <td>
+            <a class="link" href="{% url 'treasurer_member_detail' r.user.id %}">
+              {{ r.user.get_full_name|default:r.user.email }}</a>
+            {% if r.conflict %}<span class="badge badge-warning badge-xs ml-1" title="Paid past the tuition obligation while a year is marked Skipping">conflict</span>{% endif %}
+          </td>
+          <td class="text-xs">{{ r.user.profile.get_role_display }}</td>
+          <td class="text-right whitespace-nowrap">{{ r.obligation|usd }}</td>
+          <td class="text-right whitespace-nowrap">{{ r.paid|usd }}</td>
+          <td class="text-right whitespace-nowrap {% if r.owes %}text-warning font-medium{% elif r.credit %}text-success{% endif %}">
+            {% if r.owes %}{{ r.owes|usd }} owed{% elif r.credit %}{{ r.credit|usd }} credit{% else %}—{% endif %}
+          </td>
+          <td class="text-xs whitespace-nowrap">{% if r.tuition_covered %}{{ r.tuition_covered }}/4 yrs{% else %}—{% endif %}</td>
+          <td>
+            {% if r.dues_state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
+            {% elif r.dues_state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
+            {% elif r.dues_state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
+            {% elif r.dues_state == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>
+            {% else %}<span class="text-base-content/40 text-xs">—</span>{% endif %}
+          </td>
+          <td class="text-xs text-base-content/70 whitespace-nowrap">
+            {% if r.last_payment %}{{ r.last_payment|user_datetime:True }}{% else %}—{% endif %}
+          </td>
+          <td class="text-right text-xs">
+            {% if r.reminder_count %}{{ r.reminder_count }}{% else %}<span class="text-base-content/40">0</span>{% endif %}
+          </td>
+          <td class="text-xs text-base-content/70 whitespace-nowrap">
+            {% if r.last_reminded %}{{ r.last_reminded|user_datetime:True }}{% else %}<span class="text-base-content/40">never</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="10" class="text-center text-base-content/60 py-6">No matching accounts.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

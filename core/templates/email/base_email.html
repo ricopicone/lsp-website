@@ -1,0 +1,52 @@
+{% comment %}
+House HTML email frame (task #450) — the site's silk identity translated to
+email constraints: inline CSS only, single 600px column, table layout, no
+webfonts (Georgia stands in for Cutive, the site's own declared fallback).
+
+Palette (converted from the live silk theme):
+  paper #f7f5f3 · wash #f3ede9 · hairline #e2ddd9 · body ink #4b4743
+  ink #1c1c29 (primary) · chartreuse #e1ff00 (primary-content, button text only)
+
+Blocks: {% block preheader %} one hidden inbox-preview line;
+{% block content %} the body — use <p style="{{ p }}"> paragraphs, and the
+CTA pattern shown in the child templates (ink button, chartreuse label).
+{% endcomment %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>{% block title %}Lacanian School of Psychoanalysis{% endblock %}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f3ede9;">
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">{% block preheader %}{% endblock %}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3ede9;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%; background-color:#f7f5f3; border:1px solid #e2ddd9; border-radius:12px;">
+        <tr>
+          <td align="center" style="padding:36px 40px 0 40px;">
+            <img src="https://lacanschool.org/static/img/lsp-logo-crest.png" width="64" height="64" alt="" style="display:block; width:64px; height:64px; border-radius:50%; background-color:#ffffff;">
+            <p style="margin:14px 0 0 0; font-family:Georgia, 'Iowan Old Style', serif; font-size:15px; letter-spacing:0.06em; color:#1c1c29;">LACANIAN SCHOOL OF PSYCHOANALYSIS</p>
+            <table role="presentation" width="72" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-bottom:1px solid #e2ddd9; font-size:0; line-height:0; padding-top:18px;">&nbsp;</td></tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:26px 40px 8px 40px; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; line-height:1.65; color:#4b4743;">
+{% block content %}{% endblock %}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 40px 32px 40px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-top:1px solid #e2ddd9; padding-top:16px; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:12px; line-height:1.6; color:#8a847e;">
+              Lacanian School of Psychoanalysis &middot; <a href="https://lacanschool.org/" style="color:#8a847e;">lacanschool.org</a><br>
+              Questions? Just reply to this message.
+            </td></tr></table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

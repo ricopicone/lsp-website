@@ -5,15 +5,17 @@ from __future__ import annotations
 import json
 import logging
 import os
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib.auth import login
+from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Prefetch
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse
+from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
@@ -25,12 +27,14 @@ from . import antibot, emails, twofactor
 from .forms import (
     EmailChangeForm,
     LightSignupForm,
+    LoginForm,
     MagicLinkRequestForm,
     ProfileEditForm,
     ReferralRequestForm,
     TOTPCodeForm,
     UserNameForm,
 )
+from .geocoding import geocode_after_edit
 from .images import MAX_UPLOAD_BYTES, InvalidImage, render_headshot_square
 from .models import (
     EmailChangeRequest,
@@ -75,6 +79,7 @@ def _directory_qs():
     return (
         Profile.objects
         .filter(role__in=Profile.DIRECTORY_ROLES, public=True)
+        .exclude(standing__in=Profile.NON_MEMBER_STANDINGS)
         .select_related("user")
         .prefetch_related(
             Prefetch(
@@ -83,12 +88,14 @@ def _directory_qs():
                 to_attr="active_public_memberships",
             ),
             # Board-appointed operational roles (Treasurer, Cartel Coordinator,
-            # …) badge the directory. LSP Staff is an internal access
-            # designation, not a public position — exclude it. StaffRole.Meta
-            # orders by name.
+            # …) badge the directory. LSP Staff and Registrar are internal
+            # access designations, not public positions — exclude them.
+            # StaffRole.Meta orders by name.
             Prefetch(
                 "user__staff_roles",
-                queryset=StaffRole.objects.exclude(key=StaffRole.LSP_STAFF),
+                queryset=StaffRole.objects.exclude(
+                    key__in=(StaffRole.LSP_STAFF, StaffRole.REGISTRAR)
+                ),
                 to_attr="public_staff_roles",
             ),
         )
@@ -107,10 +114,26 @@ def _badge_staff_roles(user):
     overlapping positions (treasurer, web_coordinator, referral_coordinator,
     admin_assistant), so a key match is a position match.
 
+    The President / Vice-President StaffRoles are the exception where the
+    position keys differ: the Board's Chair / Co-chair membership *is* the
+    school President / Vice-President (shown relabeled on the committee badge —
+    tasks #368, #428), so map those to drop the redundant standalone badge too.
+
     Relies on the ``public_staff_roles`` / ``active_public_memberships``
     prefetches set by ``_directory_qs``.
     """
-    officer_keys = {m.role for m in getattr(user, "active_public_memberships", [])}
+    from core.models import StaffRole
+
+    # The Board's stored Chair / Co-chair are the President / Vice-President.
+    BOARD_OFFICER_STAFFROLE = {
+        "chair": StaffRole.PRESIDENT,
+        "co_chair": StaffRole.VICE_PRESIDENT,
+    }
+    officer_keys = set()
+    for m in getattr(user, "active_public_memberships", []):
+        officer_keys.add(m.role)
+        if m.workgroup.committee.slug == "board":
+            officer_keys.add(BOARD_OFFICER_STAFFROLE.get(m.role, m.role))
     return [
         role for role in getattr(user, "public_staff_roles", [])
         if role.key not in officer_keys
@@ -160,6 +183,7 @@ def signup(request):
             "form": form,
             "next": request.GET.get("next", ""),
             "honeypot_field": antibot.HONEYPOT_FIELD,
+            "register_event": _register_event_from_next(request),
         },
     )
 
@@ -434,6 +458,13 @@ def find_an_analyst(request):
 def find_an_analyst_pins(request):
     """JSON feed of geocoded public directory members for the Leaflet map.
 
+    This is the referral-discovery surface (not the directory grid): it
+    excludes ``Profile.REFERRAL_EXCLUDED_STANDINGS`` (retired / resigned /
+    removed — you would not refer someone to a member who isn't taking new
+    analysands) as well as deceased members. The directory grid
+    (``_directory_qs``) is intentionally broader and still shows retired and
+    deceased members.
+
     Returns a flat ``pins`` array — one entry per geocoded *location*, not
     per profile, so members who list two places (e.g. "San Francisco &
     Palo Alto, CA") render as two markers.
@@ -441,6 +472,8 @@ def find_an_analyst_pins(request):
     qs = (
         Profile.objects
         .filter(role__in=Profile.DIRECTORY_ROLES, public=True)
+        .exclude(standing__in=Profile.REFERRAL_EXCLUDED_STANDINGS)
+        .filter(deceased_on__isnull=True)
         .exclude(location_lat__isnull=True)
         .exclude(location_lng__isnull=True)
         .select_related("user")
@@ -474,9 +507,47 @@ def find_an_analyst_pins(request):
 def _safe_next(request) -> str | None:
     """Only allow ``next`` redirects to relative URLs we control."""
     nxt = request.POST.get("next") or request.GET.get("next")
-    if nxt and nxt.startswith("/") and not nxt.startswith("//"):
+    if nxt and url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts=None, require_https=request.is_secure()
+    ):
         return nxt
     return None
+
+
+def _register_event_from_next(request):
+    """Resolve a safe ``next`` URL to the public event it registers for.
+
+    Returns the Event when ``next`` points at ``registrations:register`` for
+    an event that is publicly visible; otherwise None (generic auth copy).
+    """
+    nxt = request.POST.get("next") or request.GET.get("next")
+    if not nxt or not nxt.startswith("/") or nxt.startswith("//"):
+        return None
+    try:
+        match = resolve(urlsplit(nxt).path)
+    except Resolver404:
+        return None
+    if match.view_name != "registrations:register":
+        return None
+    from events.models import Event
+
+    event = Event.objects.filter(slug=match.kwargs.get("event_slug")).first()
+    if event is None or not event.is_public_now:
+        return None
+    return event
+
+
+class LspLoginView(auth_views.LoginView):
+    """Stock LoginView + guest-friendly context when arriving from a
+    Register click (task #464), and a form that tells an unconfirmed signup
+    apart from a wrong password (task #471)."""
+
+    authentication_form = LoginForm
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["register_event"] = _register_event_from_next(self.request)
+        return context
 
 
 @login_required
@@ -627,6 +698,7 @@ def profile_edit(request):
                 )
             uform.save()
             prof.save()
+            geocode_after_edit(prof)
             return redirect(_profile_saved_redirect(request))
         return render(
             request, "accounts/profile_edit.html",
@@ -647,7 +719,8 @@ def profile_autosave(request):
     pform = ProfileEditForm(request.POST, instance=request.user.profile)
     if uform.is_valid() and pform.is_valid():
         uform.save()
-        pform.save()
+        prof = pform.save()
+        geocode_after_edit(prof)
         return JsonResponse({"ok": True})
     return JsonResponse({"ok": False})
 
@@ -818,15 +891,29 @@ def magic_link_request(request):
 
 
 def magic_link_consume(request, token):
-    """Log in from a magic link. Single-use; admins still hit 2FA after."""
+    """Log in from a magic link. Single-use; admins still hit 2FA after.
+
+    A single-use link is only consumed on POST: a GET renders a "Sign me in"
+    interstitial instead of logging in. Email security scanners (e.g. Microsoft
+    Defender Safe Links, common at universities and orgs) prefetch every URL in
+    inbound mail with a GET — which would otherwise burn the single-use link
+    before the member ever clicks it, so they'd see "Link expired." Scanners
+    don't submit forms, so gating consumption behind the button POST defeats
+    them while keeping the link single-use. Multi-use links (meeting windows)
+    already tolerate prefetch and stay one-click on GET.
+    """
     if request.user.is_authenticated:
         return redirect(_safe_next(request) or "/")
     link = MagicLoginLink.objects.filter(token=token).select_related("user").first()
     if link is None or not link.is_valid or not link.user.is_active:
         return render(request, "accounts/magic_link_invalid.html", status=410)
-    link.consume()
-    login(request, link.user)
-    return redirect(_safe_next(request) or settings.LOGIN_REDIRECT_URL)
+    if link.multi_use or request.method == "POST":
+        link.consume()
+        login(request, link.user)
+        return redirect(_safe_next(request) or settings.LOGIN_REDIRECT_URL)
+    return render(request, "accounts/magic_link_confirm.html", {
+        "next": _safe_next(request) or "",
+    })
 
 
 # --- Two-factor authentication (TOTP) -----------------------------------

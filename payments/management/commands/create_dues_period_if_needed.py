@@ -37,6 +37,16 @@ class Command(BaseCommand):
         for start_year in (current_start, next_start):
             self._ensure_period(start_year)
 
+        # Mint this year's dues charges for the unified ledger (task #439).
+        from payments.charges import sync_dues_charges
+        from payments.models import DuesPeriod as DP
+
+        current = DP.current()
+        if current is not None:
+            n = sync_dues_charges(current)
+            if n:
+                self.stdout.write(f"Minted {n} dues charge(s) for {current.name}.")
+
     def _ensure_period(self, start_year: int):
         slug = f"ay-{start_year}-{start_year + 1}"
         existing = DuesPeriod.objects.filter(slug=slug).first()

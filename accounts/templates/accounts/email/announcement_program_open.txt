@@ -1,0 +1,24 @@
+{% autoescape off %}Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
+
+Registration for the {{ academic_year }} program is open:
+
+  {{ program_url }}
+
+Each event page shows the readings, the schedule, and the fee, and the
+Register button walks you through your price, or your covered-by-tuition
+status, before anything is charged. This guide covers how registration
+works:
+
+  {{ seminars_guide_url }}
+
+If you are in training, the site will ask you to record your
+{{ academic_year }} tuition decision before your first registration; you can
+do that ahead of time on your Account page.
+
+Questions? Just reply to this message.
+
+Warmly,
+Rico Picone
+Web Coordinator and Developer
+Lacanian School of Psychoanalysis
+{% endautoescape %}

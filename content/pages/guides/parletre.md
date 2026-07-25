@@ -5,7 +5,7 @@ checklist: parletre
 ---
 
 Parlêtre is the School's members-only commons—part forum, part live chat—for the
-ongoing conversation between gatherings. Find it at `/parletre/`.
+ongoing conversation between gatherings. Find it at [Parlêtre](/parletre/).
 
 ## Channels
 

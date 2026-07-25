@@ -120,16 +120,35 @@ def ensure_room(owner) -> DailyRoom | None:
     return room
 
 
-def mint_token(room: DailyRoom, user, *, is_owner: bool = False) -> str:
-    """A short-lived meeting token for ``user`` to join ``room``."""
+def mint_token(
+    room: DailyRoom, user, *, is_owner: bool = False, start_off: bool = False
+) -> str:
+    """A short-lived meeting token for ``user`` to join ``room``.
+
+    ``start_off`` joins the participant muted + camera-off (speaker spotlight);
+    it's soft, so they can turn them back on.
+    """
     exp = int(time.time()) + settings.DAILY_TOKEN_TTL_MINUTES * 60
     name = ""
     if user is not None:
         name = (getattr(user, "get_full_name", lambda: "")() or "").strip()
         name = name or getattr(user, "email", "") or ""
     return daily.create_meeting_token(
-        room_name=room.name, user_name=name[:255], is_owner=is_owner, exp=exp
+        room_name=room.name, user_name=name[:255], is_owner=is_owner, exp=exp,
+        start_audio_off=start_off, start_video_off=start_off,
     )
+
+
+def spotlight_start_off(room_owner, is_owner_flag: bool) -> bool:
+    """Whether this participant should join with A/V off (task #463).
+
+    Only a non-owner (an attendee) of a one-off Event whose ``speaker_spotlight``
+    is on starts muted + camera-off; the speaker/hosts (owners) never do.
+    Workgroup-owned rooms (offerings) are unaffected.
+    """
+    if is_owner_flag:
+        return False
+    return bool(_is_event(room_owner) and getattr(room_owner, "speaker_spotlight", False))
 
 
 def system_check_context(request) -> dict:

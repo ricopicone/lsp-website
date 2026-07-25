@@ -18,7 +18,11 @@ branded label with registration/live-aware messaging + a tech-check link.
   {% if event.format != 'in_person' %}
     {% if daily_enabled %}<p class="text-sm text-base-content/60">In your browser — no app to install.</p>{% endif %}
 
-    {% if has_paid_registration %}
+    {% comment %}Registrants join here; so do the people running the event
+    (faculty, a special event's speakers, the PC, staff) — they never register
+    or pay for their own event, so the registration gate must not hide the room
+    from them. can_host mirrors can_edit_event.{% endcomment %}
+    {% if has_paid_registration or can_host %}
       {% if daily_enabled %}
         {% if event_is_live or event_room_live or can_host %}
         {% if event_room_live %}
@@ -42,11 +46,26 @@ branded label with registration/live-aware messaging + a tech-check link.
         </p>
         <a href="{% url 'video:system_check' %}" class="link text-sm text-base-content/60">Test your video &amp; audio →</a>
         {% endif %}
+
+        {% if can_host %}
+        <p class="mt-2 text-xs text-base-content/60">
+          You can open the meeting room here anytime. Attendees register for the
+          event, and once it begins a Join button appears for them on this same
+          page, there's no separate meeting link to send. So if someone asks how
+          to join, point them to this page.
+        </p>
+        {% endif %}
       {% endif %}
     {% else %}
+      {% if event.status == "open" and event.published %}
       <p class="mt-1 text-sm text-base-content/70">
         <a href="{% url 'registrations:register' event.slug %}" class="link">Register for details</a> to receive joining access.
       </p>
+      {% elif event.status == "closed" %}
+      <p class="mt-1 text-sm text-base-content/70">Registration is closed. Joining details are shared with registered participants.</p>
+      {% else %}
+      <p class="mt-1 text-sm text-base-content/70">Joining details will be shared with registered participants once registration opens.</p>
+      {% endif %}
     {% endif %}
   {% endif %}
 

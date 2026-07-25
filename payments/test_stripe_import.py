@@ -93,7 +93,7 @@ def test_create_matched_by_email():
     assert p.amount == Decimal("150.00")
     assert p.status == Payment.Status.SUCCEEDED
     assert p.method == Payment.Method.STRIPE
-    assert p.source == Source.IMPORTED
+    assert p.source == Source.STRIPE
     assert p.payment_type == Payment.Type.DUES
     assert p.user is not None
     assert p.paid_at == DAY
@@ -375,3 +375,43 @@ def test_idempotent_rerun_skips():
     assert plans2[0].action == "skip_already"
     apply_plan(plans2)
     assert Payment.objects.filter(stripe_payment_intent_id="pi_1").count() == 1
+
+
+# ---- _fetch's session→payment_intent mapping (SDK-object tolerant) --------
+
+class _FakeStripeObject:
+    """Mimics a stripe-python v15 SDK object: attribute access for real fields,
+    and — crucially — NO dict-style ``.get`` method. Accessing ``.get`` falls
+    through to ``__getattr__``, which looks up a field named ``get``, finds none,
+    and raises ``AttributeError`` — exactly what broke ``_fetch`` in prod."""
+
+    def __init__(self, **data):
+        self.__dict__["_data"] = data
+
+    def __getattr__(self, key):
+        try:
+            return self.__dict__["_data"][key]
+        except KeyError as exc:
+            raise AttributeError(key) from exc
+
+
+def test_session_payment_intent_id_handles_sdk_object_and_expansion():
+    from payments.management.commands.import_stripe_payments import (
+        _session_payment_intent_id,
+    )
+
+    # Bare id string (unexpanded payment_intent) on a stripe SDK object.
+    s = _FakeStripeObject(id="cs_1", payment_intent="pi_1")
+    assert _session_payment_intent_id(s) == "pi_1"
+
+    # Expanded payment_intent object → dig out its id.
+    s2 = _FakeStripeObject(id="cs_2", payment_intent=_FakeStripeObject(id="pi_2"))
+    assert _session_payment_intent_id(s2) == "pi_2"
+
+    # Session with no payment_intent must yield "" (not raise).
+    s3 = _FakeStripeObject(id="cs_3")
+    assert _session_payment_intent_id(s3) == ""
+
+    # Plain dicts (older SDK / test doubles) still work.
+    assert _session_payment_intent_id({"payment_intent": "pi_3"}) == "pi_3"
+    assert _session_payment_intent_id({}) == ""

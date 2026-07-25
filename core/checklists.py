@@ -104,31 +104,6 @@ def _profile_done(user, request):
     return _photo_done(user, request) and _bio_done(user, request)
 
 
-def _preview_event():
-    from events.models import Event
-
-    slug = getattr(settings, "PREVIEW_TOUR_SEMINAR_SLUG", "")
-    return Event.objects.filter(slug=slug).first() if slug else None
-
-
-def _seminar_url(request):
-    event = _preview_event()
-    return _rev("events:detail", event.slug) if event else None
-
-
-def _register_done(user, request):
-    from registrations.models import Registration
-
-    event = _preview_event()
-    if event is None:
-        return False
-    return (
-        Registration.objects.filter(user=user, event=event)
-        .exclude(status__in=(Registration.Status.CANCELLED, Registration.Status.REFUNDED))
-        .exists()
-    )
-
-
 def _preview_channel():
     from parletre.models import Channel
 
@@ -184,11 +159,11 @@ def _formation_steps_url(request):
 
 
 def _tuition_tab_url(request):
-    return _rev("formation:formation", query="tab=tuition")
+    return _rev("formation:formation", query="tab=account")
 
 
 def _tuition_decision_url(request):
-    url = _rev("formation:formation", query="tab=tuition")
+    url = _rev("formation:formation", query="tab=account")
     return f"{url}#decision" if url else None
 
 
@@ -239,16 +214,15 @@ def _seminars_walkthrough() -> Checklist:
         ChecklistTask(id="sem_browse", label="Browse the program & events",
                       detail="See what's on this year.",
                       resolve_url=lambda r: _rev("program"), manual=True),
-        ChecklistTask(id="sem_register", label="Register for the preview seminar",
-                      detail="Free and instant — feel the whole flow.",
-                      resolve_url=_seminar_url, is_done=_register_done,
-                      hint_selector="#register-cta",
-                      hint_text=("<strong>Try it.</strong> This sandbox seminar is free — "
-                                 "register to see the whole flow."),
-                      hint_key="lsp-wt-hint-sem-register"),
-        ChecklistTask(id="sem_access", label="View your registration & access",
-                      detail="Your access details appear once you're registered.",
-                      resolve_url=_seminar_url, manual=True),
+        ChecklistTask(id="sem_event", label="Open a seminar page",
+                      detail="Readings, schedule, fees, and the Register "
+                             "button live on each event page.",
+                      resolve_url=lambda r: _rev("program"), manual=True),
+        ChecklistTask(id="sem_access", label="Know where access details live",
+                      detail="After you register, the Zoom link or room "
+                             "appears on the event page and in your "
+                             "confirmation email.",
+                      resolve_url=lambda r: _rev("program"), manual=True),
     ])
 
 
@@ -299,7 +273,7 @@ def _formation_walkthrough() -> Checklist:
 
 def _tuition_dues_walkthrough() -> Checklist:
     return Checklist("tuition_dues", "Sort tuition & dues", [
-        ChecklistTask(id="td_tab", label="Open the Tuition & Dues tab",
+        ChecklistTask(id="td_tab", label="Open the Account tab",
                       detail="Everything in one place.", resolve_url=_tuition_tab_url, manual=True),
         ChecklistTask(id="td_decision", label="Record your tuition decision",
                       detail="Committed, payment plan, paid in full, or skipping.",

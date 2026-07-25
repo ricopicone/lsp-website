@@ -1,26 +1,27 @@
 {% extends "core/base.html" %}
-{% block title %}Cartel proposals — LSP{% endblock %}
+{% block title %}Cartels submitted for registration · LSP{% endblock %}
 {% block content %}
 <div class="max-w-3xl space-y-6">
   <header class="space-y-1">
-    <h1 class="font-serif text-3xl text-base-content">Cartel proposals</h1>
+    <h1 class="font-serif text-3xl text-base-content">Cartels submitted for registration</h1>
     <p class="text-base-content/70">
-      The Program Committee approves &amp; publishes; the Cartel Coordinator
-      offers feedback and advocacy.
+      The Program Committee registers a cartel once it has formed, agreed a
+      plus-one and a period, and settled on its members; the Cartel
+      Coordinator offers feedback and advocacy while it forms.
     </p>
   </header>
 
-  {% for cartel in proposed %}
+  {% for cartel in submitted %}
   <article class="rounded-lg border border-base-300/60 p-5 space-y-3">
     <div>
       <h2 class="font-serif text-xl">{{ cartel.workgroup.name }}</h2>
       <p class="text-sm text-base-content/60">
-        Proposed by {{ cartel.generator.get_full_name|default:cartel.generator.email }}
+        Started by {{ cartel.generator.get_full_name|default:cartel.generator.email }}
         · {{ cartel.created_at|date:"M j, Y" }}
       </p>
     </div>
-    {% if cartel.guiding_question %}
-    <p class="text-base-content/80"><span class="text-base-content/50">Guiding question:</span> {{ cartel.guiding_question }}</p>
+    {% if cartel.theme %}
+    <p class="text-base-content/80"><span class="text-base-content/50">Theme:</span> {{ cartel.theme }}</p>
     {% endif %}
     {% if cartel.workgroup.description %}<p class="text-sm text-base-content/70">{{ cartel.workgroup.description }}</p>{% endif %}
     {% if cartel.invitations.all %}
@@ -44,13 +45,13 @@
       {% csrf_token %}
       <input type="text" name="note" placeholder="Decline reason (optional)"
              class="input input-bordered input-sm grow min-w-[12rem]">
-      <button type="submit" name="decision" value="approve" class="btn btn-primary btn-sm">Approve &amp; publish</button>
-      <button type="submit" name="decision" value="decline" class="btn btn-ghost btn-sm">Decline</button>
+      <button type="submit" name="decision" value="approve" class="btn btn-primary btn-sm">Register</button>
+      <button type="submit" name="decision" value="decline" class="btn btn-ghost btn-sm">Return for revision</button>
     </form>
     {% endif %}
   </article>
   {% empty %}
-  <p class="text-base-content/60">No proposals awaiting review.</p>
+  <p class="text-base-content/60">No cartels awaiting registration review.</p>
   {% endfor %}
 </div>
 {% endblock %}

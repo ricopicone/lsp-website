@@ -17,22 +17,31 @@
 {% endcomment %}
 {% if site_theme == "wix" %}
   {% if page_artwork and page_artwork.image %}
+  {% comment %}Legibility: a soft dark glow on the hero text itself (layered
+  text-shadows), so the white type reads over any artwork with no box and no hard
+  edges. The band scrim is kept light so the artwork shows through.{% endcomment %}
+  <style>
+    .lsp-hero-ink { text-shadow:
+        0 0 0.08em rgba(0,0,0,1), 0 0 0.18em rgba(0,0,0,1),
+        0 0 0.32em rgba(0,0,0,1), 0 0 0.55em rgba(0,0,0,0.98),
+        0 0 0.9em rgba(0,0,0,0.92), 0 0 1.5em rgba(0,0,0,0.82); }
+  </style>
   <section class="relative w-full overflow-hidden bg-neutral text-neutral-content">
-    {# Artwork layer #}
+    {# Artwork layer, cropped to the page's focal point. #}
     <div class="absolute inset-0 bg-cover bg-no-repeat"
          style="background-image:url('{% static page_artwork.image %}');background-position:{{ page_artwork.focal }};"
          aria-hidden="true"></div>
-    {# Scrim — keeps the white title legible over any artwork #}
+    {# Light band scrim; the text glow carries legibility so the artwork shows. #}
     <div class="absolute inset-0" aria-hidden="true"
-         style="background:linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.30) 48%, rgba(0,0,0,0.18) 100%);"></div>
+         style="background:linear-gradient(to top, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.12) 55%, rgba(0,0,0,0) 100%);"></div>
 
-    <div class="relative mx-auto max-w-5xl px-4 sm:px-6 h-48 sm:h-64 flex flex-col justify-end pb-7">
+    <div class="relative mx-auto max-w-5xl px-4 sm:px-6 min-h-48 sm:min-h-64 flex flex-col justify-end pt-6 pb-7 items-start">
       {% if kicker %}
-      <p class="font-mono text-xs uppercase tracking-[0.2em] text-white/70 mb-2">{{ kicker }}</p>
+      <p class="mb-2.5"><span class="lsp-hero-ink font-sans font-semibold text-xs uppercase tracking-[0.18em] text-white">{{ kicker|safe }}</span></p>
       {% endif %}
-      <h1 class="font-display text-3xl sm:text-5xl text-white tracking-tight leading-[1.1]">{{ title }}</h1>
+      <h1 class="font-display text-3xl sm:text-5xl tracking-tight leading-[1.1]"><span class="lsp-hero-ink text-white">{{ title }}{% if title_line2 %}<br>{{ title_line2 }}{% endif %}</span></h1>
       {% if subtitle %}
-      <p class="mt-3 max-w-2xl text-sm sm:text-base text-white/85 leading-relaxed">{{ subtitle }}</p>
+      <p class="mt-3.5 max-w-2xl text-sm sm:text-base leading-relaxed"><span class="lsp-hero-ink text-white/90">{{ subtitle }}</span></p>
       {% endif %}
     </div>
 

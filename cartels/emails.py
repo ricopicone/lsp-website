@@ -55,17 +55,29 @@ def _pc_emails():
     )
 
 
-def notify_proposal(cartel, url: str) -> None:
-    """Notify the Cartel Coordinator (feedback/advocacy) AND the Programming
-    Committee (publishing approval) of a new proposal — in parallel."""
+def notify_forming_started(cartel, url: str) -> None:
+    """Tell the Cartel Coordinator a new cartel is forming (advisory)."""
     who = cartel.generator.get_full_name() or cartel.generator.email
     body = (
-        f"{who} proposed a cartel.\n\n"
+        f"{who} started a cartel forming.\n\n"
         f"Name: {cartel.workgroup.name}\n"
-        f"Guiding question: {cartel.guiding_question or '(none)'}\n\n"
+        f"Theme: {cartel.theme or '(none)'}\n\n"
+        f"You can offer feedback anytime: {url}\n"
+    )
+    _send(subject=f"[LSP] Cartel forming: {cartel.workgroup.name}",
+          body=body, to=_coordinator_emails())
+
+
+def notify_submitted(cartel, url: str) -> None:
+    """Notify the PC + Coordinator that a cartel was submitted for registration."""
+    who = cartel.generator.get_full_name() or cartel.generator.email
+    body = (
+        f"{who}'s cartel was submitted for registration.\n\n"
+        f"Name: {cartel.workgroup.name}\n"
+        f"Theme: {cartel.theme or '(none)'}\n\n"
         f"Review it: {url}\n"
     )
-    _send(subject=f"[LSP] Cartel proposal: {cartel.workgroup.name}",
+    _send(subject=f"[LSP] Cartel submitted for registration: {cartel.workgroup.name}",
           body=body, to=_coordinator_emails() + _pc_emails())
 
 
@@ -85,18 +97,18 @@ def notify_coordinator_feedback(cartel, url: str) -> None:
 def notify_generator_of_decision(cartel, url: str) -> None:
     if cartel.generator is None:
         return
-    if cartel.status == cartel.Status.OPEN:
+    if cartel.registration_status == cartel.RegistrationStatus.REGISTERED:
         body = (
-            f"Your cartel '{cartel.workgroup.name}' was approved and is now open "
-            f"for membership.\n\n{url}\n"
+            f"Your cartel '{cartel.workgroup.name}' was registered by the "
+            f"Programming Committee.\n\n{url}\n"
         )
-        subject = f"[LSP] Cartel approved: {cartel.workgroup.name}"
+        subject = f"[LSP] Cartel registered: {cartel.workgroup.name}"
     else:
         body = (
-            f"Your cartel proposal '{cartel.workgroup.name}' was not approved.\n\n"
-            f"{cartel.review_note or ''}\n"
+            f"Your cartel '{cartel.workgroup.name}' was returned for revision.\n\n"
+            f"{cartel.review_note or ''}\n\nYou can revise and resubmit: {url}\n"
         )
-        subject = f"[LSP] Cartel proposal declined: {cartel.workgroup.name}"
+        subject = f"[LSP] Cartel returned for revision: {cartel.workgroup.name}"
     _send(subject=subject, body=body, to=[cartel.generator.email])
 
 
@@ -105,7 +117,7 @@ def notify_invitee(cartel, invited_user, url: str) -> None:
         subject=f"[LSP] You're invited to the cartel '{cartel.workgroup.name}'",
         body=(
             f"You were invited to join the cartel '{cartel.workgroup.name}'.\n"
-            f"Guiding question: {cartel.guiding_question or '(none)'}\n\n"
+            f"Theme: {cartel.theme or '(none)'}\n\n"
             f"Accept the invitation: {url}\n"
         ),
         to=[invited_user.email],

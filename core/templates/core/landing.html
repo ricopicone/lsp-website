@@ -44,7 +44,7 @@
 
 {% comment %}Classic site-theme only: the front-page Twombly over the school
 name (the old front door). Modern keeps the bespoke text hero below.{% endcomment %}
-{% block page_hero %}{% if site_theme == "wix" %}{% include "core/_page_hero.html" with kicker="A worldwide school · based in San Francisco" title="Lacanian School of Psychoanalysis" subtitle="A community for the practice, transmission, and study of psychoanalysis, Freud's discovery as read, and reopened, by Jacques Lacan." %}{% endif %}{% endblock %}
+{% block page_hero %}{% if site_theme == "wix" %}{% include "core/_page_hero.html" with kicker="A worldwide school <span style='font-size:1.6em;line-height:0;vertical-align:-0.05em;'>·</span> based in San Francisco" title="Lacanian School" title_line2="of Psychoanalysis" subtitle="A community for the practice, transmission, and study of psychoanalysis, Freud's discovery as read and reopened by Jacques Lacan." %}{% endif %}{% endblock %}
 
 {% block content %}
 {% comment %}
@@ -86,13 +86,12 @@ sections (alerts, "Coming up") never leave an orphaned gap.
   {% endif %}
 
   {# ===================== Member alerts (functional) ===================== #}
-  {% if dues_period_unpaid %}
+  {% if outstanding_balance %}
   <div class="space-y-3 mt-8">
     <div role="alert" class="alert alert-warning">
       <span>
-        Your <strong>{{ dues_period_unpaid.name }}</strong> dues
-        (${{ dues_amount_owed }}, due {{ dues_period_unpaid.due_date|date:"M j, Y" }})
-        haven't been paid yet, <a href="{% url 'dues' %}" class="link">pay now</a>.
+        You have an outstanding balance of ${{ outstanding_balance }}. See your
+        <a href="{% url 'payments:index' %}" class="link">account</a> for details.
       </span>
     </div>
   </div>
@@ -178,14 +177,25 @@ sections (alerts, "Coming up") never leave an orphaned gap.
     <ul class="divide-y divide-base-300/70 border-y border-base-300/70">
       {% for e in upcoming_events %}
       <li>
+        {% comment %}
+          A pinned row (task #461) sits out of date order, so it has to look
+          chosen rather than misfiled. The distinction is carried by weight, not
+          hue: silk defines primary, secondary and accent as the *same* value and
+          abyss's accent is a dead mid-grey, so no colour token can separate
+          these rows in both themes. Instead the ordinary rows go quiet (neutral
+          base-token chip) and the pinned row takes the only saturated element in
+          the list, a solid primary chip — a pair DaisyUI guarantees is legible
+          in every theme — over an inset band with a left rule. Every class is
+          spelled out literally for the Tailwind scanner.
+        {% endcomment %}
         <a href="{% url 'events:detail' e.slug %}"
-           class="group flex items-center gap-5 py-5 hover:bg-base-200/40 -mx-3 px-3 rounded-lg transition-colors">
+           class="group flex items-center gap-5 py-5 -mx-3 px-3 rounded-lg transition-colors {% if e.pinned %}bg-base-content/5 hover:bg-base-content/10 border-l-2 border-primary pl-4{% else %}hover:bg-base-200/40{% endif %}">
           <div class="shrink-0 w-14 text-center">
             <div class="font-mono text-xs uppercase tracking-widest text-primary font-medium">{{ e.start_date|date:"M" }}</div>
             <div class="font-serif text-3xl leading-none text-base-content">{{ e.start_date|date:"j" }}</div>
           </div>
           <div class="min-w-0 flex-1">
-            <span class="inline-flex items-center text-[0.65rem] leading-none font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25 mb-1.5">
+            <span class="inline-flex items-center text-[0.65rem] leading-none font-medium uppercase tracking-wide px-1.5 py-0.5 rounded border mb-1.5 {% if e.pinned %}bg-primary text-primary-content border-primary{% else %}bg-base-200 text-base-content/70 border-base-300{% endif %}">
               {{ e.get_event_type_display }}
             </span>
             <div class="font-serif text-lg text-base-content group-hover:text-primary transition-colors leading-snug">{{ e.title }}</div>
@@ -206,7 +216,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
     <div class="lsp-rule-accent pl-6 sm:pl-9 max-w-3xl">
       <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45 mb-5">How we are organized</p>
       <p class="font-serif text-3xl sm:text-5xl text-base-content leading-[1.08] tracking-tight">
-        We're all students here.
+        We are all in formation.
       </p>
       <p class="text-base sm:text-lg text-base-content/70 leading-relaxed mt-6 max-w-2xl">
         Following Lacan's founding gesture, the School belongs to those who
@@ -304,7 +314,7 @@ sections (alerts, "Coming up") never leave an orphaned gap.
           <li><a href="{% url 'treasurer' %}" class="{{ lnk }}">Treasurer</a></li>
           {% endif %}
           {% if not user.is_authenticated %}
-          <li><a href="{% url 'login' %}" class="link link-hover text-primary">Log in or sign up</a></li>
+          <li><a href="{% url 'login' %}" class="link link-hover text-primary">Sign in or sign up</a></li>
           {% endif %}
         </ul>
       </nav>

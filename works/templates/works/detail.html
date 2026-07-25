@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}{{ work.title }} — Works — LSP{% endblock %}
+{% block title %}{{ work.title }} · Works · LSP{% endblock %}
 {% block extra_head %}
 <style>
   .pm-content > * + * { margin-top: 0.85em; }
@@ -39,20 +39,29 @@
     </div>
     <div class="space-y-3">
       <p class="text-xs uppercase tracking-wider text-base-content/60">
-        {{ work.get_kind_display }}
+        {{ work.kind_label }}
       </p>
       <h1 class="font-serif text-3xl text-base-content leading-tight">{{ work.title }}</h1>
       <p class="text-base-content/80">
         {% for wa in work.authorships.all %}{% if not forloop.first %}; {% endif %}<a href="{% url 'directory_detail' wa.user.profile.directory_slug %}" class="hover:text-primary">{{ wa.user.first_name }} {{ wa.user.last_name }}</a>{% endfor %}
         {% if work.external_authors %}{% if work.authorships.all %}; {% endif %}{{ work.external_authors }}{% endif %}
       </p>
-      {% if work.publication_info or work.publication_date %}
-      <p class="text-sm text-base-content/70">
-        {% if work.publication_info %}{{ work.publication_info }}{% endif %}
-        {% if work.publication_date and not work.publication_info %}
-          {{ work.publication_date|date:"F j, Y" }}
+      {% if source_line or work.publication_info or work.publication_date or work.doi or work.isbn %}
+      <div class="text-sm text-base-content/70 space-y-0.5">
+        {% if source_line %}
+        <p>{{ source_line }}{% if work.publication_date %} <span class="text-base-content/50">·</span> {{ work.publication_date|date:"Y" }}{% endif %}</p>
+        {% elif work.publication_date %}
+        <p>{{ work.publication_date|date:"F j, Y" }}</p>
         {% endif %}
-      </p>
+        {% if work.publication_info %}<p>{{ work.publication_info }}</p>{% endif %}
+        {% if work.doi or work.isbn %}
+        <p class="text-xs text-base-content/50">
+          {% if work.doi %}DOI: <a href="{{ work.doi_url }}" target="_blank" rel="noopener" class="hover:text-primary border-b border-dotted border-base-content/40">{{ work.doi }}</a>{% endif %}
+          {% if work.doi and work.isbn %} · {% endif %}
+          {% if work.isbn %}ISBN {{ work.isbn }}{% endif %}
+        </p>
+        {% endif %}
+      </div>
       {% endif %}
       {% if work.workgroup %}
       <p class="text-sm text-base-content/70">
@@ -127,7 +136,7 @@
           </a>
           {% if work.url %}
           <a href="{{ work.url }}" target="_blank" rel="noopener" class="btn btn-outline">
-            External link →
+            {% if work.kind == "external" %}View at publisher{% else %}External link{% endif %} →
           </a>
           {% endif %}
           {% if can_edit %}
@@ -151,7 +160,7 @@
           <div class="flex flex-wrap gap-3 pt-2">
             {% if work.url %}
             <a href="{{ work.url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">
-              External link →
+              {% if work.kind == "external" %}View at publisher{% else %}External link{% endif %} →
             </a>
             {% endif %}
             {% if can_edit %}
@@ -169,7 +178,7 @@
         {% endif %}
         {% if work.url %}
         <a href="{{ work.url }}" target="_blank" rel="noopener" class="btn btn-outline">
-          External link →
+          {% if work.kind == "external" %}View at publisher{% else %}External link{% endif %} →
         </a>
         {% endif %}
         {% if can_edit %}
@@ -185,7 +194,7 @@
     <div class="flex flex-wrap gap-3">
       {% if work.url %}
       <a href="{{ work.url }}" target="_blank" rel="noopener" class="btn btn-outline">
-        External link →
+        {% if work.kind == "external" %}View at publisher{% else %}External link{% endif %} →
       </a>
       {% endif %}
       {% if can_edit %}
@@ -200,6 +209,27 @@
   <div class="prose max-w-none">
     {{ work.abstract_html }}
   </div>
+  {% endif %}
+
+  {% if citation %}
+  <section class="border-t border-base-300/50 pt-6 space-y-2">
+    <h2 class="text-xs uppercase tracking-wider text-base-content/60">Cite</h2>
+    <p class="text-sm text-base-content/80 pl-8 -indent-8">{{ citation }}</p>
+    <button type="button" class="btn btn-ghost btn-xs" id="copy-citation"
+            data-citation="{{ citation_txt }}">Copy citation</button>
+  </section>
+  <script>
+  (function () {
+    var btn = document.getElementById("copy-citation");
+    if (!btn || !navigator.clipboard) return;
+    btn.addEventListener("click", function () {
+      navigator.clipboard.writeText(btn.dataset.citation).then(function () {
+        btn.textContent = "Copied ✓";
+        setTimeout(function () { btn.textContent = "Copy citation"; }, 2000);
+      });
+    });
+  })();
+  </script>
   {% endif %}
 
   {% if work.body_html %}

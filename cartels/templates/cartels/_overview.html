@@ -1,17 +1,19 @@
 {% comment %}Cartel join-flow UI for the Overview tab. Expects: cartel,
 is_member, has_invite, already_applied, can_apply, pending_requests,
-is_generator, is_coordinator, workgroup.{% endcomment %}
+is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment %}
 <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-base-content/60">
-  {% if cartel.status == "open" and not cartel.closed %}<span class="badge badge-primary">Open · Join!</span>
-  {% elif cartel.status == "open" and cartel.closed %}<span class="badge badge-ghost">Closed · Active</span>
-  {% elif cartel.status == "archived" %}<span class="badge badge-ghost">Archived</span>
-  {% elif cartel.status != "open" %}<span class="badge badge-outline">{{ cartel.get_status_display }}</span>{% endif %}
+  {% if cartel.workgroup.is_archived %}<span class="badge badge-ghost">Archived</span>
+  {% elif cartel.registration_status == "forming" and not cartel.closed %}<span class="badge badge-primary">Forming · Join!</span>
+  {% elif cartel.registration_status == "forming" and cartel.closed %}<span class="badge badge-ghost">Invitation only</span>
+  {% elif cartel.registration_status == "submitted" %}<span class="badge badge-outline">Under PC review</span>
+  {% elif cartel.registration_status == "registered" and not cartel.closed %}<span class="badge badge-primary">Registered · Open</span>
+  {% elif cartel.registration_status == "registered" %}<span class="badge badge-ghost">Registered · Closed</span>{% endif %}
 </div>
 
-{% if cartel.guiding_question %}
+{% if cartel.theme %}
 <section class="space-y-1">
-  <h2 class="text-xs uppercase tracking-wider text-base-content/60">Guiding question</h2>
-  <p class="text-lg text-base-content/90">{{ cartel.guiding_question }}</p>
+  <h2 class="text-xs uppercase tracking-wider text-base-content/60">Theme</h2>
+  <p class="text-lg text-base-content/90">{{ cartel.theme }}</p>
 </section>
 {% endif %}
 
@@ -21,13 +23,81 @@ is_generator, is_coordinator, workgroup.{% endcomment %}
 </div>
 {% endif %}
 
-{% if is_generator and cartel.status == "declined" %}
-<div class="rounded-lg border border-base-300/60 bg-base-200/40 p-4 space-y-2">
-  <p class="text-sm text-base-content/70">The Program Committee declined this proposal{% if cartel.review_note %} — “{{ cartel.review_note }}”{% endif %}.</p>
-  <a href="{% url 'cartels:edit' workgroup.slug %}" class="btn btn-primary btn-sm">Edit &amp; resubmit</a>
-</div>
-{% elif is_generator and cartel.status == "proposed" %}
-<a href="{% url 'cartels:edit' workgroup.slug %}" class="btn btn-ghost btn-sm">Edit proposal</a>
+{% if is_member and not cartel.workgroup.is_archived and cartel.registration_status != "registered" %}
+<section class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-5">
+  {% if cartel.registration_status == "forming" and cartel.review_note %}
+  <p class="text-sm text-base-content/70">The Programming Committee returned this cartel for revision: “{{ cartel.review_note }}”. Revise the details and submit again.</p>
+  {% endif %}
+  <h3 class="font-medium">Register this cartel</h3>
+  <p class="text-xs text-base-content/50">A cartel registers with the Programming Committee once it has a plus-one, an agreed period of one to two years, and three to five cartelisands.</p>
+  <ul class="space-y-1 text-sm">
+    <li>{% if registration.plus_one %}✓{% else %}○{% endif %} Plus-one assigned</li>
+    <li>{% if registration.duration %}✓{% else %}○{% endif %} Fixed period of one to two years</li>
+    <li>{% if registration.count %}✓{% else %}○{% endif %} Three to five cartelisands (currently {{ registration.count_value }})</li>
+    <li class="text-base-content/60">{{ registration.questions_done }} of {{ registration.questions_total }} members have entered a question (recommended)</li>
+  </ul>
+  {% if cartel.registration_status == "forming" %}
+  <form method="post" action="{% url 'cartels:submit' workgroup.slug %}">
+    {% csrf_token %}
+    <button class="btn btn-primary btn-sm" {% if not registration.can_submit %}disabled{% endif %}>Submit for registration</button>
+  </form>
+  {% elif cartel.registration_status == "submitted" %}
+  <p class="text-sm text-base-content/60">Submitted to the Programming Committee, awaiting their decision.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if is_member and not cartel.workgroup.is_archived %}
+<section class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-5">
+  <h3 class="font-medium">Members' questions</h3>
+  <p class="text-xs text-base-content/50">Each cartelisand's unique question. You can revise yours as the cartel evolves.</p>
+  <ul class="space-y-2">
+    {% for q in cartel.member_questions.all %}
+    <li class="text-sm"><span class="text-base-content/60">{{ q.member.get_full_name|default:q.member.email }}:</span> {{ q.text|default:"(no question yet)" }}</li>
+    {% endfor %}
+  </ul>
+  <form method="post" action="{% url 'cartels:set_question' workgroup.slug %}" class="space-y-2 border-t border-base-300/50 pt-3">
+    {% csrf_token %}
+    <label class="block text-xs text-base-content/60">Your question</label>
+    <textarea name="text" rows="2" class="textarea textarea-bordered w-full">{{ my_question }}</textarea>
+    <button class="btn btn-ghost btn-sm">Save my question</button>
+  </form>
+</section>
+{% endif %}
+
+{% if is_member and not cartel.workgroup.is_archived %}
+<section class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-5">
+  <h3 class="font-medium">Invite members</h3>
+  <p class="text-xs text-base-content/50">Invite people directly to join the cartel. Invitees can join without applying, even when membership is invitation only.</p>
+
+  {% if pending_invitations %}
+  <div class="space-y-1">
+    <p class="text-xs text-base-content/60">Invited, not yet joined</p>
+    <ul class="flex flex-wrap gap-2">
+      {% for inv in pending_invitations %}
+      <li class="inline-flex items-center gap-1.5 rounded-md border border-base-300/50 bg-base-200/40 px-2.5 py-1 text-sm">
+        {{ inv.invited_user.get_full_name|default:inv.invited_user.email }}
+        <form method="post" action="{% url 'cartels:cancel_invitation' workgroup.slug inv.pk %}">
+          {% csrf_token %}
+          <button class="text-base-content/40 hover:text-error" aria-label="Withdraw invitation" title="Withdraw invitation">&times;</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <form method="post" action="{% url 'cartels:invite' workgroup.slug %}" class="space-y-2 border-t border-base-300/50 pt-3">
+    {% csrf_token %}
+    <label class="block text-xs text-base-content/60">Add members to invite</label>
+    <div class="people-picker" data-search-url="{% url 'cartels:member_search' %}" data-field="invitees">
+      <div class="parletre-people flex flex-wrap gap-2 mb-2" data-people-chips></div>
+      <input type="text" class="input input-bordered input-sm w-full" data-people-search
+             placeholder="Search members by name" autocomplete="off">
+    </div>
+    <button class="btn btn-primary btn-sm">Send invitations</button>
+  </form>
+</section>
 {% endif %}
 
 <section class="flex flex-wrap items-start gap-2">

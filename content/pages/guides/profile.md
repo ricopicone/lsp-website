@@ -11,7 +11,7 @@ the directory—this guide shows you how to make it yours.
 ## Editing your profile
 
 Open **Edit Profile** from the account menu (top right), or go straight to
-`/accounts/profile/`. Everything saves together when you press **Save changes**.
+[your profile editor](/accounts/profile/). Everything saves together when you press **Save changes**.
 
 ### Your photo
 

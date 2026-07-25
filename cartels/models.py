@@ -14,7 +14,9 @@ See ../LSP-Website-Cartels-Design.md and docs/design-group-governance.md.
 
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.utils import timezone
 
 from workgroups.models import (
     Workgroup,
@@ -38,25 +40,28 @@ class CartelManager(models.Manager):
         return self.create(workgroup=wg)
 
     @transaction.atomic
-    def propose(self, *, generator, name, guiding_question="", description="", invitees=()):
-        """A member proposes a cartel (CART-4 step 1).
+    def propose(self, *, generator, name, theme="", description="", invitees=(), closed=False):
+        """A member starts a cartel forming (task #392 step 1).
 
-        Creates a PROPOSED cartel (landing private until approved); the
-        Generator is its first member; any seeded ``invitees`` become
-        WorkgroupInvitations sent on approval.
+        The cartel is live among the school immediately (members-visible landing,
+        private contents); the generator is its first member; seeded ``invitees``
+        become WorkgroupInvitations. PC registration happens later, on submit.
         """
         wg = build_workgroup(
             Workgroup.Kind.CARTEL,
             name=name,
             description=description,
-            landing_visibility="private",   # hidden until the PC approves
+            landing_visibility="members",   # visible to the school while forming
             content_visibility="private",
         )
         WorkgroupProposal.objects.create(
             workgroup=wg, proposed_by=generator,
-            status=WorkgroupProposal.Status.PROPOSED,
+            status=WorkgroupProposal.Status.OPEN,
         )
-        cartel = self.create(workgroup=wg, guiding_question=guiding_question)
+        cartel = self.create(
+            workgroup=wg, theme=theme, closed=closed,
+            registration_status=self.model.RegistrationStatus.FORMING,
+        )
         cartel.add_member(generator)
         for user in invitees:
             WorkgroupInvitation.objects.get_or_create(
@@ -74,9 +79,8 @@ class CartelManager(models.Manager):
         ay_start, ay_end = academic_year_date_range(year)
         out = [
             c for c in self.filter(
-                workgroup__proposal__status__in=(
-                    WorkgroupProposal.Status.OPEN, WorkgroupProposal.Status.ARCHIVED,
-                )
+                models.Q(registration_status=self.model.RegistrationStatus.REGISTERED)
+                | models.Q(workgroup__proposal__status=WorkgroupProposal.Status.ARCHIVED)
             ).select_related("workgroup", "workgroup__proposal")
             if c._window_overlaps(ay_start, ay_end)
         ]
@@ -89,13 +93,18 @@ class Cartel(models.Model):
     #: status now lives on the workgroup's :class:`WorkgroupProposal`.
     Status = WorkgroupProposal.Status
 
+    class RegistrationStatus(models.TextChoices):
+        FORMING = "forming", "Forming — gathering members"
+        SUBMITTED = "submitted", "Submitted for PC registration"
+        REGISTERED = "registered", "Registered — approved by the PC"
+
     workgroup = models.OneToOneField(
         Workgroup,
         on_delete=models.CASCADE,
         related_name="cartel",
     )
-    guiding_question = models.TextField(
-        blank=True, help_text="The question the cartel forms around."
+    theme = models.TextField(
+        blank=True, help_text="The theme the cartel forms around."
     )
     coordinator_feedback = models.TextField(
         blank=True,
@@ -104,6 +113,12 @@ class Cartel(models.Model):
     )
     closed = models.BooleanField(
         default=False, help_text="Closed to new members (members may toggle)."
+    )
+    registration_status = models.CharField(
+        max_length=10,
+        choices=RegistrationStatus.choices,
+        default=RegistrationStatus.FORMING,
+        help_text="Where the cartel sits in the formation → PC-registration flow.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -190,12 +205,26 @@ class Cartel(models.Model):
     def viewer_state(self, user) -> dict:
         """Cartel-specific context for the (generic) detail page — composes the
         shared :meth:`Workgroup.governance_state` and layers the cartel's
-        ``closed`` gate and ``is_generator`` flag on top."""
+        ``closed`` gate and ``is_generator`` flag on top. Also adds
+        ``registration`` (the :meth:`registration_checklist` dict),
+        ``my_question`` (the viewer's own cartel question text, or ``""`` if
+        they have none or are anonymous), and ``pending_invitations`` (the
+        not-yet-accepted invitations, for members to review/withdraw)."""
         state = self.workgroup.governance_state(user)
         state["can_apply"] = state["can_apply"] and not self.closed
         authed = getattr(user, "is_authenticated", False)
         state["is_generator"] = (
             bool(authed) and self.generator_id is not None and self.generator_id == user.id
+        )
+        state["registration"] = self.registration_checklist()
+        if authed:
+            q = self.member_questions.filter(member=user).first()
+            state["my_question"] = q.text if q else ""
+        else:
+            state["my_question"] = ""
+        state["pending_invitations"] = (
+            list(self.invitations.filter(accepted_at__isnull=True).select_related("invited_user"))
+            if self.is_member(user) else []
         )
         return state
 
@@ -212,18 +241,27 @@ class Cartel(models.Model):
     # ---- CART-4 workflow (delegates to the generic proposal) ----
 
     @transaction.atomic
-    def approve(self, coordinator):
-        """Program Committee approves → publish as Open (CART-4 steps 2–3)."""
-        self.workgroup.proposal.approve(coordinator)
+    def approve(self, reviewer):
+        """The Programming Committee registers the cartel (task #392 step 5)."""
+        self.registration_status = self.RegistrationStatus.REGISTERED
+        self.save(update_fields=["registration_status"])
+        proposal = self.workgroup.proposal
+        proposal.reviewed_by = reviewer
+        proposal.reviewed_at = timezone.now()
+        proposal.review_note = ""
+        proposal.save(update_fields=["reviewed_by", "reviewed_at", "review_note"])
 
     @transaction.atomic
-    def decline(self, coordinator, note=""):
-        self.workgroup.proposal.decline(coordinator, note)
-
-    @transaction.atomic
-    def resubmit(self):
-        """A declined proposal is re-submitted (after edits) for fresh review."""
-        self.workgroup.proposal.resubmit()
+    def decline(self, reviewer, note=""):
+        """The PC returns the cartel for revision — it keeps forming and may be
+        resubmitted."""
+        self.registration_status = self.RegistrationStatus.FORMING
+        self.save(update_fields=["registration_status"])
+        proposal = self.workgroup.proposal
+        proposal.reviewed_by = reviewer
+        proposal.reviewed_at = timezone.now()
+        proposal.review_note = note
+        proposal.save(update_fields=["reviewed_by", "reviewed_at", "review_note"])
 
     def set_closed(self, value: bool):
         self.closed = bool(value)
@@ -285,6 +323,65 @@ class Cartel(models.Model):
     def decline_request(self, join_request, decided_by):
         self.workgroup.decline_request(join_request, decided_by)
 
+    # ---- Registration (submit-to-PC) gate ----
+
+    #: Cartel size bounds (cartelisands; the plus-one is extra).
+    MIN_CARTELISANDS = 3
+    MAX_CARTELISANDS = 5
+
+    def cartelisand_count(self) -> int:
+        """Active members excluding whoever holds the plus-one role."""
+        return self.workgroup.memberships.serving().exclude(
+            role=WorkgroupMembership.Role.PLUS_ONE
+        ).count()
+
+    def has_plus_one(self) -> bool:
+        internal = self.workgroup.memberships.serving().filter(
+            role=WorkgroupMembership.Role.PLUS_ONE
+        ).exists()
+        return internal or self.external_plus_ones.exists()
+
+    def duration_ok(self) -> bool:
+        start, end = self.workgroup.start_date, self.workgroup.end_date
+        if not (start and end):
+            return False
+        days = (end - start).days
+        return 365 <= days <= 731
+
+    def registration_checklist(self) -> dict:
+        count = self.cartelisand_count()
+        plus_one = self.has_plus_one()
+        duration = self.duration_ok()
+        in_range = self.MIN_CARTELISANDS <= count <= self.MAX_CARTELISANDS
+        total = count
+        done = self.member_questions.exclude(text="").count()
+        return {
+            "plus_one": plus_one,
+            "duration": duration,
+            "count": in_range,
+            "count_value": count,
+            "questions_done": done,
+            "questions_total": total,
+            "can_submit": bool(plus_one and duration and in_range),
+        }
+
+    @transaction.atomic
+    def submit_for_registration(self, by):
+        """Any cartelisand submits the cartel to the PC for registration once
+        the required gate passes (questions stay optional)."""
+        if self.registration_status != self.RegistrationStatus.FORMING:
+            raise ValidationError("Only a forming cartel can be submitted for registration.")
+        if not self.registration_checklist()["can_submit"]:
+            raise ValidationError("The cartel is not ready to submit for registration.")
+        self.registration_status = self.RegistrationStatus.SUBMITTED
+        self.save(update_fields=["registration_status"])
+        proposal = self.workgroup.proposal
+        if proposal.review_note or proposal.reviewed_by_id:
+            proposal.review_note = ""
+            proposal.reviewed_by = None
+            proposal.reviewed_at = None
+            proposal.save(update_fields=["review_note", "reviewed_by", "reviewed_at"])
+
 
 class ExternalPlusOne(models.Model):
     """An external (non-LSP) plus-one for a cartel — modeled on
@@ -301,6 +398,32 @@ class ExternalPlusOne(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} (plus-one, external) — {self.cartel}"
+
+
+class CartelQuestion(models.Model):
+    """A cartelisand's individual question — the unique angle each member takes
+    on the cartel's theme, managed by that member as the cartel evolves. Every
+    member of the cartel can read all questions; each edits only their own."""
+
+    cartel = models.ForeignKey(
+        Cartel, on_delete=models.CASCADE, related_name="member_questions"
+    )
+    member = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="cartel_questions"
+    )
+    text = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("cartel", "member"), name="cartels_one_question_per_member"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.member} — question in {self.cartel}"
 
 
 # The cartel's invitations and join-requests now live on the Workgroup layer.

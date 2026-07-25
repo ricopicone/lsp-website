@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from django.conf import settings
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMessage, EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.urls import reverse
 
@@ -100,8 +100,81 @@ def send_email_change_notice(user, old_email: str, new_email: str) -> None:
     msg.send(fail_silently=False)
 
 
+def _send_with_html(subject: str, to: str, txt_template: str, context: dict) -> None:
+    """Send text + house-styled HTML (task #450): the plain body renders from
+    ``txt_template`` and the HTML alternative from its ``.html`` sibling
+    (``…/foo.txt`` -> ``…/foo.html``), both from the same context."""
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=render_to_string(txt_template, context),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[to],
+        reply_to=[settings.SUPPORT_EMAIL],
+    )
+    msg.attach_alternative(
+        render_to_string(txt_template[:-4] + ".html", context), "text/html"
+    )
+    msg.send(fail_silently=False)
+
+
+def send_welcome(user) -> None:
+    """The one-time launch welcome: the site is live, here's how to sign in.
+
+    Sent by ``manage.py send_welcome_emails``, which records a
+    :class:`accounts.models.WelcomeEmail` per delivery so nobody is
+    welcomed twice.
+    """
+    base = settings.SITE_BASE_URL.rstrip("/")
+    _send_with_html(
+        "Welcome to the LSP Website",
+        user.email,
+        "accounts/email/welcome.txt",
+        {
+            "user": user,
+            "login_url": base + reverse("login"),
+            "guide_url": base + reverse("guide_detail", args=["logging-in"]),
+            "guides_url": base + reverse("guides_index"),
+        },
+    )
+
+
+# --- Batch announcements -------------------------------------------------
+#
+# Keyed campaigns sent by ``manage.py send_announcement_emails --key <key>``;
+# an ``AnnouncementEmail`` row per (user, key) makes re-runs safe. Add a key
+# here (subject, template, extra context) to mint a new announcement — e.g.
+# next year's program opening.
+
+ANNOUNCEMENTS: dict[str, dict] = {
+    "site-launch-2026": {
+        "subject": "The Lacanian School's New Website",
+        "template": "accounts/email/announcement_site_launch.txt",
+        "context": {},
+    },
+    "program-2026-2027": {
+        "subject": "The 2026\u20132027 Program Is Open for Registration",
+        "template": "accounts/email/announcement_program_open.txt",
+        "context": {"academic_year": "2026\u20132027"},
+    },
+}
+
+
+def send_announcement(user, key: str) -> None:
+    """Send one keyed announcement email (see ``ANNOUNCEMENTS``)."""
+    spec = ANNOUNCEMENTS[key]
+    base = settings.SITE_BASE_URL.rstrip("/")
+    context = {
+        "user": user,
+        "site_url": base + "/",
+        "program_url": base + reverse("program"),
+        "seminars_guide_url": base + reverse("guide_detail", args=["seminars"]),
+        **spec["context"],
+    }
+    _send_with_html(spec["subject"], user.email, spec["template"], context)
+
+
 def send_signup_verification(verification) -> None:
-    """Email the confirm-your-address link for a new self-signup.
+    """Email the confirm-your-address link for a new self-signup (task #471).
 
     The link lands on a page with a confirm button rather than activating on
     GET — mail scanners pre-click links, and this flow deliberately serves
@@ -110,7 +183,9 @@ def send_signup_verification(verification) -> None:
     confirm_url = settings.SITE_BASE_URL.rstrip("/") + reverse(
         "signup_verify", args=[verification.token]
     )
-    body = render_to_string(
+    _send_with_html(
+        "Confirm your Lacanian School account",
+        verification.user.email,
         "accounts/email/signup_verification.txt",
         {
             "user": verification.user,
@@ -118,11 +193,3 @@ def send_signup_verification(verification) -> None:
             "ttl_days": verification.TOKEN_TTL.days,
         },
     )
-    msg = EmailMessage(
-        subject="Confirm your Lacanian School account",
-        body=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[verification.user.email],
-        reply_to=[settings.SUPPORT_EMAIL],
-    )
-    msg.send(fail_silently=False)

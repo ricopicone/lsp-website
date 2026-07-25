@@ -19,6 +19,8 @@ urlpatterns = [
     path("formation/external/add/", views.external_add, name="external_add"),
     path("formation/external/<int:pk>/edit/", views.external_edit, name="external_edit"),
     path("formation/external/<int:pk>/delete/", views.external_delete, name="external_delete"),
+    path("formation/control/external-analyst/request/",
+         views.external_analyst_request, name="external_analyst_request"),
 
     # --- Advancement: advisor side ---
     path("formation/advise/", views.advise_queue, name="advise_queue"),
@@ -30,6 +32,8 @@ urlpatterns = [
     path("formation/advisees/<int:pk>/", views.advisee_detail, name="advisee_detail"),
     path("formation/advisees/<int:pk>/note/", views.advisee_note_add,
          name="advisee_note_add"),
+    path("formation/advisees/<int:pk>/background/", views.advisee_set_background,
+         name="advisee_set_background"),
 
     # --- Advancement review (Meeting of the Analysts) ---
     path(f"{_MOA}/advancements/", views.advancement_queue, name="advancement_queue"),
@@ -37,4 +41,17 @@ urlpatterns = [
          name="advancement_detail"),
     path(f"{_MOA}/advancements/<int:pk>/decide/", views.advancement_decide,
          name="advancement_decide"),
+
+    # --- Formation background (Meeting of the Analysts) ---
+    path(f"{_MOA}/backgrounds/", views.background_queue, name="background_queue"),
+    path(f"{_MOA}/backgrounds/<int:pk>/", views.background_detail,
+         name="background_detail"),
+
+    # --- External control analyst review (Meeting of the Analysts) ---
+    path(f"{_MOA}/external-analysts/", views.external_analyst_queue,
+         name="external_analyst_queue"),
+    path(f"{_MOA}/external-analysts/<int:pk>/", views.external_analyst_detail,
+         name="external_analyst_detail"),
+    path(f"{_MOA}/external-analysts/<int:pk>/decide/", views.external_analyst_decide,
+         name="external_analyst_decide"),
 ]

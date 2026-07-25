@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}Membership administration — Admin Tools{% endblock %}
+{% block title %}Membership administration · Admin Tools{% endblock %}
 {% block content %}
 <div class="space-y-6 max-w-3xl">
   <nav class="text-sm">
@@ -139,6 +139,47 @@
     <p class="text-sm text-base-content/60">No recorded tenure yet — the first change you record starts their timeline.</p>
     {% endif %}
   </section>
+
+  {% comment %}Deceased control + Removed waive-charges button{% endcomment %}
+  <div class="mt-6 border-t border-base-300 pt-4 space-y-4">
+    {% if member.profile.is_deceased %}
+      <form method="post" class="flex items-center gap-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="clear_deceased">
+        <input type="hidden" name="member" value="{{ member.pk }}">
+        <span class="text-sm text-base-content/70">
+          Recorded deceased on {{ member.profile.deceased_on }}. Account disabled.
+        </span>
+        <button class="btn btn-sm btn-outline">Clear deceased mark</button>
+      </form>
+    {% else %}
+      <form method="post" class="flex flex-wrap items-end gap-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="set_deceased">
+        <input type="hidden" name="member" value="{{ member.pk }}">
+        <label class="text-sm">
+          Mark deceased (date)
+          <input type="date" name="deceased_on" required
+                 class="input input-bordered input-sm ml-2">
+        </label>
+        <button class="btn btn-sm btn-warning btn-outline">Mark deceased</button>
+      </form>
+      <p class="text-xs text-base-content/60">
+        Disables the account for security, waives open charges, and removes the
+        member from referrals. The member stays listed with an In memoriam marker.
+      </p>
+    {% endif %}
+
+    {% if member.profile.standing == "removed" and open_owes %}
+      <form method="post" class="flex items-center gap-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="waive_charges">
+        <input type="hidden" name="member" value="{{ member.pk }}">
+        <span class="text-sm text-warning">Open balance: ${{ open_owes }}</span>
+        <button class="btn btn-sm btn-outline">Waive open charges</button>
+      </form>
+    {% endif %}
+  </div>
   {% endif %}
 </div>
 {% endblock %}

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -203,6 +205,16 @@ class Payment(models.Model):
         "directly (overrides the date-based attribution; e.g. an August payment "
         "the member assigns to a specific AY).",
     )
+    split_from = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="split_parts",
+        help_text="Set on the sibling rows created when a payment is split "
+        "across categories; the parent row keeps the Stripe identifiers and "
+        "the receipt. Refunding any part refunds the whole original charge.",
+    )
     notes = models.TextField(blank=True, help_text="Staff notes — e.g. for offline payments.")
     member_note = models.TextField(
         blank=True,
@@ -251,6 +263,20 @@ class Payment(models.Model):
             self.paid_at = timezone.now()
         if save:
             self.save(update_fields=("status", "paid_at"))
+
+    @property
+    def transaction_date(self):
+        """The date the payment actually happened, for display and sorting.
+
+        ``created_at`` is ``auto_now_add`` — the row-insertion time, which for
+        imported historical payments is the *import* date, not the payment
+        date. ``paid_at`` holds the real payment date (set by the Stripe
+        webhook / offline-apply, or by the ledger/Stripe imports). Fall back to
+        ``created_at`` only when a payment has no ``paid_at`` yet (pending /
+        failed). Ordering querysets should use
+        ``Coalesce("paid_at", "created_at")`` to match this. (Task #437.)
+        """
+        return self.paid_at or self.created_at
 
     @property
     def recipient_email(self) -> str | None:
@@ -340,6 +366,13 @@ class TuitionPeriod(models.Model):
             "pay in installments / skip."
         ),
     )
+    payment_due_date = models.DateField(
+        null=True, blank=True,
+        help_text=(
+            "Tuition payment due by this date (unpaid-committed reminders "
+            "escalate after it; decision reminders key off decision_due_date)."
+        ),
+    )
     end_date = models.DateField(help_text="Last day of the academic year.")
     tuition_amount = models.DecimalField(
         max_digits=8,
@@ -367,6 +400,20 @@ class TuitionPeriod(models.Model):
         on = on_date or timezone.now().date()
         return cls.objects.filter(start_date__lte=on, end_date__gte=on).first()
 
+    @classmethod
+    def upcoming(cls, on_date=None):
+        """Return the earliest period whose start_date is after ``on_date``
+        (default today), or None. Distinct from ``current()`` — a period
+        already underway is not "upcoming"."""
+        on = on_date or timezone.now().date()
+        return cls.objects.filter(start_date__gt=on).order_by("start_date").first()
+
+    def clean(self):
+        if self.payment_due_date and self.payment_due_date < self.decision_due_date:
+            raise ValidationError(
+                {"payment_due_date": "payment_due_date cannot be before decision_due_date."}
+            )
+
 
 class TuitionEnrollment(models.Model):
     """A student's per-year tuition decision and status.
@@ -385,6 +432,7 @@ class TuitionEnrollment(models.Model):
         PAYMENT_PLAN = "payment_plan", _("On payment plan")
         PAID_IN_FULL = "paid_in_full", _("Paid in full")
         SKIPPING = "skipping", _("Skipping this year")
+        PLAN_REQUESTED = "plan_requested", _("Payment plan requested")
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -431,6 +479,62 @@ class TuitionEnrollment(models.Model):
             self.Status.PAYMENT_PLAN,
             self.Status.PAID_IN_FULL,
         }
+
+
+class TuitionPlanApplication(models.Model):
+    """A student's request to the Board for a tuition payment plan
+    (task #450 phase B).
+
+    A student may have at most one PENDING application per
+    (user, tuition_period) at a time — the partial unique constraint below
+    enforces that — but a DECLINED (or APPROVED) application doesn't block a
+    later resubmission for the same period.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        APPROVED = "approved", _("Approved")
+        DECLINED = "declined", _("Declined")
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tuition_plan_applications",
+    )
+    tuition_period = models.ForeignKey(
+        TuitionPeriod,
+        on_delete=models.PROTECT,
+        related_name="plan_applications",
+    )
+    reasons = models.TextField(
+        help_text="The student's stated reasons for requesting a payment plan.",
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    note = models.TextField(blank=True, help_text="Board's decision note, if any.")
+
+    class Meta:
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "tuition_period"),
+                condition=Q(status="pending"),
+                name="one_pending_plan_application",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user} → {self.tuition_period} ({self.get_status_display()})"
 
 
 class TuitionInstallment(models.Model):
@@ -500,3 +604,222 @@ class TuitionReminder(models.Model):
 
     def __str__(self):
         return f"{self.user} ← {self.tuition_period} @ {self.sent_at.isoformat()}"
+
+
+class BalanceReminder(models.Model):
+    """One row per outstanding-balance reminder email sent (task #450 phase D).
+
+    Unlike :class:`DuesReminder`/:class:`TuitionReminder`, a balance reminder
+    isn't tied to a single period — the amount is the member's whole unified-
+    ledger balance (dues + tuition + registration fees), so the row just
+    records who and how much. Drives the weekly throttle: the send command
+    skips users reminded in the last seven days.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="balance_reminders",
+    )
+    sent_at = models.DateTimeField(auto_now_add=True)
+    balance = models.DecimalField(max_digits=8, decimal_places=2)
+
+    class Meta:
+        ordering = ("-sent_at",)
+        indexes = [models.Index(fields=("user", "-sent_at"))]
+
+    def __str__(self):
+        return f"{self.user} ← ${self.balance} @ {self.sent_at.isoformat()}"
+
+
+class Charge(models.Model):
+    """A debit line in a member's unified account (task #439).
+
+    The credit side is the existing :class:`Payment`. Balance and per-charge
+    coverage are *derived* in :mod:`payments.ledger` — one pot of money swept
+    across OPEN charges oldest-first; never a per-payment allocation.
+    """
+
+    class Category(models.TextChoices):
+        DUES = "dues", _("Dues")
+        TUITION = "tuition", _("Tuition")
+        REGISTRATION = "registration", _("Registration")
+
+    class Status(models.TextChoices):
+        OPEN = "open", _("Open")            # counts toward the obligation
+        WAIVED = "waived", _("Waived")      # treasurer forgave — audit only
+        VOID = "void", _("Void")            # cancelled/superseded — audit only
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="charges",
+    )
+    category = models.CharField(max_length=20, choices=Category.choices)
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    currency = models.CharField(max_length=3, default="usd")
+    effective_date = models.DateField(
+        help_text="Orders the oldest-first coverage sweep — AY start for "
+        "dues/tuition, settle date for registrations.",
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.OPEN, db_index=True,
+    )
+    dues_period = models.ForeignKey(
+        DuesPeriod, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="charges",
+    )
+    tuition_period = models.ForeignKey(
+        TuitionPeriod, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="charges",
+    )
+    registration = models.ForeignKey(
+        "registrations.Registration", on_delete=models.PROTECT, null=True,
+        blank=True, related_name="charges",
+    )
+    source = models.CharField(
+        max_length=20, choices=Source.choices, default=Source.STAFF,
+        db_index=True, help_text="Provenance — how this charge entered the system.",
+    )
+    staff_adjusted = models.BooleanField(
+        default=False,
+        help_text="Set when a treasurer edits this row; the minting syncs "
+        "then never touch it (disagreements surface on the Reconcile tab).",
+    )
+    notes = models.TextField(blank=True, help_text="Append-only audit trail.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("effective_date", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "dues_period"),
+                condition=models.Q(dues_period__isnull=False) & ~models.Q(status="void"),
+                name="charge_unique_user_dues_period",
+            ),
+            models.UniqueConstraint(
+                fields=("user", "tuition_period"),
+                condition=models.Q(tuition_period__isnull=False) & ~models.Q(status="void"),
+                name="charge_unique_user_tuition_period",
+            ),
+            models.UniqueConstraint(
+                fields=("registration",),
+                condition=models.Q(registration__isnull=False) & ~models.Q(status="void"),
+                name="charge_unique_registration",
+            ),
+        ]
+        indexes = [models.Index(fields=("user", "status"))]
+
+    def __str__(self):
+        return (
+            f"${self.amount} {self.get_category_display().lower()} charge "
+            f"({self.get_status_display()}, {self.user})"
+        )
+
+    def add_note(self, text: str, *, save=True) -> None:
+        """Append a dated line to the audit trail."""
+        line = f"[{timezone.now().date()}] {text}"
+        self.notes = (self.notes + "\n" + line) if self.notes else line
+        if save:
+            self.save(update_fields=("notes",))
+
+
+class LedgerSubmission(models.Model):
+    """A member's claim of a missing historical payment or charge (task #439).
+
+    Crucial for students who started before the site's records begin — a
+    member reports "I paid $2,000 tuition in 2019" and the treasurer approves
+    (minting the matching :class:`Payment`/:class:`Charge`, honor-system era,
+    ``source=SELF_REPORTED``) or declines it from the Reconcile queue's
+    Member submissions section. See docs/superpowers/specs/
+    2026-07-16-member-account-v2-design.md §3.
+    """
+
+    class Kind(models.TextChoices):
+        PAYMENT = "payment", _("Payment (I paid this)")
+        CHARGE = "charge", _("Charge (I owed this)")
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        APPROVED = "approved", _("Approved")
+        DECLINED = "declined", _("Declined")
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ledger_submissions",
+    )
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    category = models.CharField(
+        max_length=20,
+        choices=Payment.Type.choices,
+        help_text="Payment.Type values for a payment claim; dues/tuition/"
+        "registration (Charge.Category) for a charge claim.",
+    )
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    claimed_date = models.DateField(help_text="When the member says this happened.")
+    details = models.TextField(help_text="The member's account of what this was.")
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True,
+    )
+    decision_note = models.TextField(blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ledger_submissions_decided",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    created_payment = models.ForeignKey(
+        Payment, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    created_charge = models.ForeignKey(
+        Charge, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return (f"{self.get_kind_display()} claim: ${self.amount} "
+                f"({self.get_status_display()}, {self.user})")
+
+
+class PaymentMemberAction(models.Model):
+    """One statement action a member took on their *own* payment (task #443).
+
+    Members have full treasurer parity on their own payments — re-categorize,
+    split (donation flips included, which can raise ``tuition_years_covered``
+    and self-clear the promotion gate), and note. Those changes are visible in
+    the provenance hover but otherwise passive; this row is the treasurer's
+    active surface for them, driving a "member-changed payments" review queue
+    on the Reconcile tab. It's an append-only audit log — never edited, never
+    read back into ledger math — so no cross-references beyond the FK.
+    """
+
+    class Action(models.TextChoices):
+        RETYPE = "retype", _("Re-categorized")
+        SPLIT = "split", _("Split")
+        NOTE = "note", _("Note")
+
+    payment = models.ForeignKey(
+        Payment, on_delete=models.CASCADE, related_name="member_actions",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="payment_member_actions",
+    )
+    action = models.CharField(max_length=10, choices=Action.choices)
+    summary = models.CharField(
+        max_length=200,
+        help_text="Human-readable one-liner, e.g. 'Tuition → Donation'.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.get_action_display()} ${self.payment_id} by {self.user}"

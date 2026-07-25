@@ -53,6 +53,45 @@
       </div>
       <button type="submit" class="btn btn-primary btn-sm">Save</button>
     </form>
+    <p class="text-xs text-base-content/60">
+      Publishing controls <strong>visibility</strong> only: the program and its
+      events appear on the public program page, but nobody can register until
+      an event is opened for registration below.
+    </p>
+  </section>
+
+  {% comment %}Bulk registration controls{% endcomment %}
+  <section class="rounded-lg border border-base-300 p-5 max-w-xl space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Registration</h3>
+    <p class="text-xs text-base-content/60">
+      Separate from publishing: opening registration is what lets members
+      register and pay. Each event carries its own status (Draft, Open for
+      registration, Closed), editable on the event page — or in bulk here.
+    </p>
+    {% if request.GET.opened %}
+    <div role="alert" class="alert alert-success text-sm py-2">
+      Opened registration for {{ request.GET.opened }} draft event{{ request.GET.opened|pluralize }}.
+    </div>
+    {% endif %}
+    {% if request.GET.closed %}
+    <div role="alert" class="alert alert-success text-sm py-2">
+      Closed registration for {{ request.GET.closed }} event{{ request.GET.closed|pluralize }}.
+    </div>
+    {% endif %}
+    <div class="flex flex-wrap gap-2">
+      <form method="post" action="{% url 'program_admin_registration_bulk' program.academic_year %}"
+            onsubmit="return confirm('Open registration for every draft event in this program?');">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="open">
+        <button type="submit" class="btn btn-primary btn-sm">Open registration for all draft events</button>
+      </form>
+      <form method="post" action="{% url 'program_admin_registration_bulk' program.academic_year %}"
+            onsubmit="return confirm('Close registration for every open event in this program?');">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="close">
+        <button type="submit" class="btn btn-outline btn-sm">Close all open registrations</button>
+      </form>
+    </div>
   </section>
 
   {% comment %}Events list — by category{% endcomment %}
@@ -69,7 +108,7 @@
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Title</th><th>Faculty</th><th>Dates</th><th></th></tr>
+          <tr><th>Title</th><th>Faculty</th><th>Dates</th><th>Registration</th><th></th></tr>
         </thead>
         <tbody>
           {% for e in seminars %}
@@ -77,6 +116,9 @@
             <td>{{ e.title }}</td>
             <td class="text-xs text-base-content/70">{% for f in e.faculty_members %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
             <td class="text-xs text-base-content/70 whitespace-nowrap">{{ e.start_date|date:"M j" }} – {{ e.end_date|date:"M j, Y" }}</td>
+            <td>
+              <span class="badge badge-sm {% if e.status == 'open' %}badge-success{% elif e.status == 'closed' %}badge-neutral{% else %}badge-ghost{% endif %}">{{ e.get_status_display }}</span>
+            </td>
             <td>
               <a href="{% url 'program_admin_event_edit' program.academic_year e.slug %}" class="link link-primary text-sm">Edit →</a>
             </td>
@@ -92,7 +134,7 @@
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Title</th><th>Type</th><th>Faculty</th><th>Dates</th><th></th></tr>
+          <tr><th>Title</th><th>Type</th><th>Faculty</th><th>Dates</th><th>Registration</th><th></th></tr>
         </thead>
         <tbody>
           {% for e in offerings %}
@@ -101,6 +143,9 @@
             <td class="text-xs">{{ e.get_event_type_display }}</td>
             <td class="text-xs text-base-content/70">{% for f in e.faculty_members %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
             <td class="text-xs text-base-content/70 whitespace-nowrap">{{ e.start_date|date:"M j" }} – {{ e.end_date|date:"M j, Y" }}</td>
+            <td>
+              <span class="badge badge-sm {% if e.status == 'open' %}badge-success{% elif e.status == 'closed' %}badge-neutral{% else %}badge-ghost{% endif %}">{{ e.get_status_display }}</span>
+            </td>
             <td>
               <a href="{% url 'program_admin_event_edit' program.academic_year e.slug %}" class="link link-primary text-sm">Edit →</a>
             </td>

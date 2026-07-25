@@ -8,8 +8,11 @@ gating uses the Workgroup roster; coordinator gating uses
 from __future__ import annotations
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
+from django.core.exceptions import ValidationError
+from django.db.models import Q
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -19,13 +22,45 @@ from accounts.permissions import is_lsp_member
 from events.permissions import is_program_committee
 
 from . import notifications as notify_cartels
-from .forms import CartelProposalForm
-from .models import Cartel, CartelJoinRequest, ExternalPlusOne
+from .forms import CartelProposalForm, CartelStartForm
+from .models import Cartel, CartelJoinRequest, CartelQuestion, ExternalPlusOne
 from .permissions import is_cartel_coordinator
 
 
 def _abs(request, obj):
     return request.build_absolute_uri(obj.get_absolute_url())
+
+
+def _selected_invitees(form):
+    """The invitee Users to preload as picker chips: from a bound form's
+    submitted PKs (so an invalid POST keeps the chosen list), else empty."""
+    if not form.is_bound:
+        return []
+    ids = form.data.getlist("invitees")
+    return list(get_user_model().objects.filter(pk__in=ids)) if ids else []
+
+
+@login_required
+def member_search(request):
+    """Directory-member autocomplete for the invitee picker. Returns id + name."""
+    if not is_lsp_member(request.user):
+        raise Http404
+    q = (request.GET.get("q") or "").strip()
+    if not q:
+        return JsonResponse({"results": []})
+    from accounts.models import Profile
+
+    User = get_user_model()
+    qs = User.objects.filter(
+        profile__role__in=Profile.DIRECTORY_ROLES
+    ).exclude(pk=request.user.pk)
+    for term in q.split()[:3]:
+        qs = qs.filter(Q(first_name__icontains=term) | Q(last_name__icontains=term))
+    results = [
+        {"id": u.pk, "name": u.get_full_name() or u.email}
+        for u in qs.order_by("first_name", "last_name")[:8]
+    ]
+    return JsonResponse({"results": results})
 
 
 def index(request):
@@ -44,25 +79,76 @@ def propose(request):
     if not is_lsp_member(request.user):
         raise Http404
     if request.method == "POST":
-        form = CartelProposalForm(request.POST)
+        form = CartelStartForm(request.POST)
         if form.is_valid():
             cartel = Cartel.objects.propose(
                 generator=request.user,
                 name=form.cleaned_data["name"],
-                guiding_question=form.cleaned_data["guiding_question"],
+                theme=form.cleaned_data["theme"],
                 description=form.cleaned_data["description"],
                 invitees=form.cleaned_data["invitees"],
+                closed=form.cleaned_data["closed"],
             )
-            notify_cartels.proposal(cartel, _abs(request, cartel))
+            notify_cartels.forming_started(cartel, _abs(request, cartel))
+            for inv in cartel.invitations.all():
+                notify_cartels.invitee(cartel, inv.invited_user, _abs(request, cartel))
             messages.success(
                 request,
-                "Cartel proposed. The Cartel Coordinator (for feedback) and the "
-                "Program Committee (for approval) have been notified.",
+                "Your cartel is now forming and visible to the school. Invite "
+                "members, then submit it to the Programming Committee to register.",
             )
             return redirect(cartel.get_absolute_url())
     else:
-        form = CartelProposalForm()
-    return render(request, "cartels/propose.html", {"form": form})
+        form = CartelStartForm()
+    return render(request, "cartels/propose.html", {
+        "form": form, "selected_invitees": _selected_invitees(form),
+    })
+
+
+@login_required
+@require_POST
+def submit(request, slug):
+    """Any cartelisand submits the cartel to the PC for registration."""
+    cartel = get_object_or_404(Cartel, workgroup__slug=slug)
+    if not cartel.is_member(request.user):
+        raise Http404
+    if cartel.registration_status != Cartel.RegistrationStatus.FORMING:
+        messages.info(
+            request,
+            "This cartel has already been submitted or registered.",
+        )
+        return redirect(cartel.get_absolute_url())
+    try:
+        cartel.submit_for_registration(by=request.user)
+    except ValidationError:
+        messages.error(
+            request,
+            "This cartel isn't ready to register yet. Check the formation "
+            "checklist: a plus-one, a fixed period of 1 to 2 years, and 3 to 5 "
+            "cartelisands are required.",
+        )
+        return redirect(cartel.get_absolute_url())
+    notify_cartels.submitted(cartel, _abs(request, cartel))
+    messages.success(
+        request,
+        "Submitted to the Programming Committee for registration. They have been notified.",
+    )
+    return redirect(cartel.get_absolute_url())
+
+
+@login_required
+@require_POST
+def set_question(request, slug):
+    """A cartelisand records or updates their own question."""
+    cartel = get_object_or_404(Cartel, workgroup__slug=slug)
+    if not cartel.is_member(request.user):
+        raise Http404
+    CartelQuestion.objects.update_or_create(
+        cartel=cartel, member=request.user,
+        defaults={"text": (request.POST.get("text") or "").strip()},
+    )
+    messages.success(request, "Your question has been saved.")
+    return redirect(cartel.get_absolute_url())
 
 
 @login_required
@@ -73,13 +159,13 @@ def review_queue(request):
     can_feedback = is_cartel_coordinator(request.user)
     if not (can_approve or can_feedback):
         raise Http404
-    proposed = (
-        Cartel.objects.filter(workgroup__proposal__status=Cartel.Status.PROPOSED)
+    submitted = (
+        Cartel.objects.filter(registration_status=Cartel.RegistrationStatus.SUBMITTED)
         .select_related("workgroup", "workgroup__proposal", "workgroup__proposal__proposed_by")
         .order_by("created_at")
     )
     return render(request, "cartels/review_queue.html", {
-        "proposed": proposed,
+        "submitted": submitted,
         "can_approve": can_approve,
         "can_feedback": can_feedback,
     })
@@ -88,22 +174,21 @@ def review_queue(request):
 @login_required
 @require_POST
 def review_decide(request, pk):
-    """The Program Committee approves (publishes) or declines a proposal."""
+    """The Program Committee registers (approve) or returns a submitted cartel
+    for revision (decline)."""
     if not is_program_committee(request.user):
         raise Http404
     cartel = get_object_or_404(
-        Cartel, pk=pk, workgroup__proposal__status=Cartel.Status.PROPOSED
+        Cartel, pk=pk, registration_status=Cartel.RegistrationStatus.SUBMITTED
     )
     if request.POST.get("decision") == "approve":
         cartel.approve(request.user)
         notify_cartels.generator_decision(cartel, _abs(request, cartel))
-        for inv in cartel.invitations.all():
-            notify_cartels.invitee(cartel, inv.invited_user, _abs(request, cartel))
-        messages.success(request, f"Approved '{cartel.workgroup.name}'.")
+        messages.success(request, f"Registered '{cartel.workgroup.name}'.")
     else:
         cartel.decline(request.user, note=request.POST.get("note", ""))
         notify_cartels.generator_decision(cartel, _abs(request, cartel))
-        messages.success(request, f"Declined '{cartel.workgroup.name}'.")
+        messages.success(request, f"Returned '{cartel.workgroup.name}' for revision.")
     return redirect("cartels:review_queue")
 
 
@@ -126,11 +211,15 @@ def coordinator_feedback(request, pk):
 @login_required
 @require_POST
 def apply(request, slug):
-    """A member applies to join an open cartel (CART-4 step 5), with a note."""
-    cartel = get_object_or_404(
-        Cartel, workgroup__slug=slug, workgroup__proposal__status=Cartel.Status.OPEN
-    )
-    if not is_lsp_member(request.user) or cartel.closed or cartel.is_member(request.user):
+    """A member applies to join a forming/registered cartel (CART-4 step 5),
+    with a note. Cartels are joinable from the moment they start forming
+    (PC registration is a separate, later gate — see ``submit``)."""
+    cartel = get_object_or_404(Cartel, workgroup__slug=slug)
+    live = (Cartel.RegistrationStatus.FORMING, Cartel.RegistrationStatus.REGISTERED,
+            Cartel.RegistrationStatus.SUBMITTED)
+    if (cartel.registration_status not in live or cartel.workgroup.is_archived
+            or not is_lsp_member(request.user) or cartel.closed
+            or cartel.is_member(request.user)):
         raise Http404
     cartel.request_to_join(request.user, message=(request.POST.get("message") or "").strip())
     notify_cartels.members_of_application(cartel, request.user, _abs(request, cartel))
@@ -140,22 +229,13 @@ def apply(request, slug):
 
 @login_required
 def edit(request, slug):
-    """Edit a cartel's details (name, guiding question, overview).
+    """Edit a cartel's details (name, theme, overview, invitees).
 
-    While *proposed/declined* only the Generator may edit (it's their proposal
-    under review), and saving a declined one re-submits it for fresh Coordinator
-    review. Once *open*, a cartel is run collectively, so any member may edit its
-    details (no resubmission — it's already live)."""
+    A cartel is run collectively from the moment it starts forming, so any
+    active member may edit its details — there's no separate proposal/review
+    gate on the details themselves (PC review happens later, at submit)."""
     cartel = get_object_or_404(Cartel, workgroup__slug=slug)
-    is_proposal = cartel.status in (Cartel.Status.PROPOSED, Cartel.Status.DECLINED)
-    is_open = cartel.status == Cartel.Status.OPEN
-    if is_proposal:
-        if request.user != cartel.generator:
-            raise Http404
-    elif is_open:
-        if not cartel.is_member(request.user):
-            raise Http404
-    else:
+    if not cartel.is_member(request.user):
         raise Http404
     if request.method == "POST":
         form = CartelProposalForm(request.POST)
@@ -164,29 +244,81 @@ def edit(request, slug):
             wg.name = form.cleaned_data["name"]
             wg.description = form.cleaned_data["description"]
             wg.save(update_fields=["name", "description"])
-            cartel.guiding_question = form.cleaned_data["guiding_question"]
-            cartel.save(update_fields=["guiding_question"])
-            if is_proposal:
-                for user in form.cleaned_data["invitees"]:
-                    cartel.invitations.get_or_create(
-                        invited_user=user, defaults={"created_by": request.user}
-                    )
-                if cartel.status == Cartel.Status.DECLINED:
-                    cartel.resubmit()
-                    notify_cartels.proposal(cartel, _abs(request, cartel))
-                    messages.success(request, "Edited and resubmitted for review.")
-                else:
-                    messages.success(request, "Proposal updated.")
-                return redirect(cartel.get_absolute_url())
+            cartel.theme = form.cleaned_data["theme"]
+            cartel.save(update_fields=["theme"])
+            for user in form.cleaned_data["invitees"]:
+                cartel.invitations.get_or_create(
+                    invited_user=user, defaults={"created_by": request.user}
+                )
             messages.success(request, "Cartel details updated.")
             return redirect(f"{cartel.get_absolute_url()}?tab=settings")
+        selected = _selected_invitees(form)
     else:
         form = CartelProposalForm(initial={
             "name": cartel.workgroup.name,
-            "guiding_question": cartel.guiding_question,
+            "theme": cartel.theme,
             "description": cartel.workgroup.description,
         })
-    return render(request, "cartels/edit.html", {"cartel": cartel, "form": form})
+        selected = [
+            inv.invited_user for inv in
+            cartel.invitations.filter(accepted_at__isnull=True).select_related("invited_user")
+        ]
+    return render(request, "cartels/edit.html", {
+        "cartel": cartel, "form": form, "selected_invitees": selected,
+    })
+
+
+@login_required
+@require_POST
+def invite(request, slug):
+    """Any active cartelisand invites more members from the workspace. Creates
+    a WorkgroupInvitation per selected directory member (skipping existing
+    members / already-invited) and notifies each new invitee."""
+    cartel = get_object_or_404(Cartel, workgroup__slug=slug)
+    if not cartel.is_member(request.user) or cartel.workgroup.is_archived:
+        raise Http404
+    from accounts.models import Profile
+
+    User = get_user_model()
+    users = User.objects.filter(
+        pk__in=request.POST.getlist("invitees"),
+        profile__role__in=Profile.DIRECTORY_ROLES,
+    )
+    sent = 0
+    for user in users:
+        if cartel.is_member(user):
+            continue
+        inv, created = cartel.invitations.get_or_create(
+            invited_user=user, defaults={"created_by": request.user}
+        )
+        if created:
+            notify_cartels.invitee(cartel, user, _abs(request, cartel))
+            sent += 1
+    if sent:
+        messages.success(
+            request, f"Sent {sent} invitation{'' if sent == 1 else 's'}."
+        )
+    else:
+        messages.info(
+            request, "No new invitations to send (already members or invited)."
+        )
+    return redirect(cartel.get_absolute_url())
+
+
+@login_required
+@require_POST
+def cancel_invitation(request, slug, pk):
+    """Withdraw a pending (not-yet-accepted) invitation."""
+    cartel = get_object_or_404(Cartel, workgroup__slug=slug)
+    if not cartel.is_member(request.user):
+        raise Http404
+    inv = get_object_or_404(
+        cartel.invitations.filter(accepted_at__isnull=True), pk=pk
+    )
+    who = inv.invited_user.get_full_name() or inv.invited_user.email
+    inv.delete()
+    messages.success(request, f"Invitation to {who} withdrawn.")
+    return redirect(cartel.get_absolute_url())
 
 
 @login_required
@@ -303,10 +435,9 @@ def remove_external_plus_one(request, slug, pk):
 @login_required
 @require_POST
 def accept_invitation(request, slug):
-    """A seeded invitee accepts and joins directly."""
-    cartel = get_object_or_404(
-        Cartel, workgroup__slug=slug, workgroup__proposal__status=Cartel.Status.OPEN
-    )
+    """A seeded invitee accepts and joins directly (the invitation itself is
+    the gate — no separate proposal-status check needed)."""
+    cartel = get_object_or_404(Cartel, workgroup__slug=slug)
     if cartel.accept_invitation(request.user) is None:
         raise Http404
     messages.success(request, f"You've joined '{cartel.workgroup.name}'.")

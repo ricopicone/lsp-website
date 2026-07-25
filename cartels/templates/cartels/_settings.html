@@ -2,7 +2,7 @@
 Expects: cartel, workgroup, members (active roster).{% endcomment %}
 
 {# ── Cartel details (name / guiding question / overview) ──────── #}
-{% if cartel.status == "open" %}
+{% if not cartel.workgroup.is_archived %}
 <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
   <div class="space-y-0.5">
     <h3 class="font-medium text-base-content">Cartel details</h3>
@@ -16,9 +16,9 @@ Expects: cartel, workgroup, members (active roster).{% endcomment %}
              value="{{ workgroup.name }}" class="input input-bordered input-sm w-full">
     </div>
     <div class="space-y-1">
-      <label for="cartel-gq" class="block text-xs text-base-content/60">Guiding question</label>
-      <textarea id="cartel-gq" name="guiding_question" rows="2" required
-                class="textarea textarea-bordered w-full">{{ cartel.guiding_question }}</textarea>
+      <label for="cartel-gq" class="block text-xs text-base-content/60">Theme</label>
+      <textarea id="cartel-gq" name="theme" rows="2" required
+                class="textarea textarea-bordered w-full">{{ cartel.theme }}</textarea>
     </div>
     <div class="space-y-1">
       <label for="cartel-desc" class="block text-xs text-base-content/60">Overview</label>
@@ -32,7 +32,7 @@ Expects: cartel, workgroup, members (active roster).{% endcomment %}
 {% endif %}
 
 {# ── Plus-one ────────────────────────────────────────────────── #}
-{% if cartel.status == "open" %}
+{% if not cartel.workgroup.is_archived %}
 <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
   <div class="space-y-0.5">
     <h3 class="font-medium text-base-content">Plus-one</h3>
@@ -103,7 +103,7 @@ Expects: cartel, workgroup, members (active roster).{% endcomment %}
     <p class="text-xs text-base-content/50">Control whether new members may apply, and archive the cartel when its work is complete.</p>
   </div>
 
-  {% if cartel.status == "archived" %}
+  {% if cartel.workgroup.is_archived %}
   <div class="rounded-md border border-base-300/50 bg-base-200/30 px-3 py-2 text-sm text-base-content/70">
     This cartel is <strong>archived</strong> — read-only. Reactivating it reopens
     the workspace and lets members post and apply again.

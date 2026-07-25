@@ -14,10 +14,11 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db.models import Case, IntegerField, Value, When
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from accounts.membership import current_academic_year_start
+from accounts.membership import GATED_ROLES, current_academic_year_start
 from accounts.models import Profile
 from admissions.views import _can_review, _require_review
 
@@ -29,13 +30,21 @@ from .advancement import (
     step_label_for_member,
     withdraw_advancement,
 )
+from .control import control_progress
 from .forms import (
     AdvancementForm,
     ControlAnalysisForm,
     ExternalActivityForm,
+    ExternalControlAnalystForm,
     RecommendationForm,
 )
-from .models import Advancement, ControlAnalysis, ExternalActivity, FormationSettings
+from .models import (
+    Advancement,
+    ControlAnalysis,
+    ExternalActivity,
+    ExternalControlAnalyst,
+    FormationSettings,
+)
 from .tabs import available_tabs
 
 # ==========================================================================
@@ -59,9 +68,27 @@ def _formation_url(tab="formation", **params):
 def formation(request):
     """The member's personal formation hub — a tabbed surface that gathers
     everything about their place in the School: their Advisor and advancement
-    demandes (Formation), their tuition decision + payments (Tuition), and the
-    groups they belong to now and in the past (Groups)."""
+    demandes (Formation), their tuition decision, dues, and payments
+    (Account), and the groups they belong to now and in the past (Groups)."""
     return render(request, "formation/formation.html", _formation_context(request))
+
+
+def _formation_doc_for(user, formation_settings):
+    """The track-appropriate formation guidelines Document for an in-training
+    member, or None. In-training only (Precandidates/Candidates); respects the
+    document's listing visibility."""
+    profile = getattr(user, "profile", None)
+    if profile is None or profile.role not in Profile.IN_TRAINING_ROLES:
+        return None
+    if profile.role in Profile.ANALYST_TRACK_ROLES:
+        doc = formation_settings.analyst_formation_doc
+    elif profile.role in Profile.SCHOLAR_TRACK_ROLES:
+        doc = formation_settings.scholar_formation_doc
+    else:  # defensive: IN_TRAINING_ROLES is a subset of the two tracks
+        doc = None
+    if doc is not None and doc.listing_visible_to(user):
+        return doc
+    return None
 
 
 def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict:
@@ -78,7 +105,10 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     if advisor_form is None and profile.needs_advisor:
         advisor_form = AdvisorSelectForm(advisee=user)
 
+    formation_settings = FormationSettings.load()
+
     ctx = {
+        "formation_doc": _formation_doc_for(user, formation_settings),
         "advisor": advisor,
         "needs_advisor": profile.needs_advisor,
         "advisor_form": advisor_form,
@@ -91,10 +121,10 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
         "demande_form": demande_form if demande_form is not None else AdvancementForm(),
         "is_in_training": profile.role in Profile.IN_TRAINING_ROLES,
         "control_entries": ControlAnalysis.objects.filter(member=user),
-        "control_years": ControlAnalysis.years_for(user),
-        "control_target": FormationSettings.load().control_years_target,
+        "control_progress": control_progress(user),
         "external_entries": ExternalActivity.objects.filter(member=user)
         .order_by("kind", "-start_date"),
+        "external_requests": ExternalControlAnalyst.objects.filter(member=user),
     }
 
     # The page tab bar shows Tuition/Dues on obligation OR payment history; the
@@ -106,9 +136,14 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     )
     ctx["show_money_tab"] = show_money_tab
 
-    tabs = available_tabs(user, tuition=show_money_tab, dues=show_money_tab)
+    tabs = available_tabs(user, account=show_money_tab)
     keys = {k for k, _ in tabs}
     active = request.GET.get("tab") or "formation"
+    if active == "tuition":
+        # Old bookmarked/emailed ?tab=tuition links — Tuition folded into
+        # Account (task #439); land there rather than falling through to
+        # the default tab.
+        active = "account"
     if active not in keys:
         active = "formation"
     ctx["formation_tabs"] = tabs
@@ -118,7 +153,7 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     # Formation tab's advisor/steps above are always built: it's the default.)
     if active in ("groups", "events"):
         ctx.update(_formation_groups_events_context(request))
-    elif active in ("tuition", "dues"):
+    elif active == "account":
         ctx.update(_formation_money_context(request))
     elif active == "works":
         from works.queries import my_works_qs
@@ -246,34 +281,89 @@ def _formation_steps(user):
 
 
 def _formation_money_context(request) -> dict:
-    """Tuition + dues + the member's own payment history (all on one tab).
+    """The Account tab (task #439): the unified ledger statement/balance,
+    tuition (four-year progress, this year's decision/installments, folded
+    in from the old Tuition tab) and dues, all on one tab. Statement rows
+    carry the member's own retype/split/note actions (full treasurer parity
+    on their own payments — ``payments.views.my_payment_retype`` etc.)."""
+    from django.utils import timezone
 
-    Tuition: the four-year progress, this year's decision/installments. Dues:
-    this year's obligation + status. Payments: full history (editable type/note,
-    and academic year for tuition) from the My Payments table."""
-    from payments.dues import is_dues_obligated, user_paid_for_period
+    from payments import ledger
+    from payments.dues import is_dues_obligated
     from payments.forms import TuitionDecisionForm
     from payments.models import (
         DuesPeriod,
+        LedgerSubmission,
         Payment,
         TuitionEnrollment,
         TuitionPeriod,
+        TuitionPlanApplication,
     )
+    from payments.views import _attach_split_info
 
     user = request.user
     profile = user.profile
+
+    # --- The unified account — computed once, everything below derives from it. ---
+    acct = ledger.member_account(user)
+    # The statement's retype/split buttons need each payment line's split
+    # state (gates the Split button — a split row can't be re-split).
+    _attach_split_info([ln["obj"] for ln in acct["lines"] if ln["kind"] == "payment"])
+    # "Requirement met" (the member-facing badge) means the four years are
+    # actually *paid* — payment-based, not enrollment-based. Keep this
+    # separate from decision-exemption (below): a member can have four
+    # non-skipping enrollments on record with money still owed, in which
+    # case they're exempt from a fifth-year decision but have NOT met the
+    # requirement (task #439 / Rico, 2026-07-16).
+    requirement_met = acct["tuition_years_covered"] >= acct["tuition_years_required"]
+    # Decision-exemption: four non-skipping years on record — no further
+    # annual tuition decision is asked for, regardless of payment status.
+    decision_exempt = ledger.tuition_decision_exempt(user)
 
     # --- Tuition (current year) ---
     period = TuitionPeriod.current()
     enrollment = None
     installments = []
+    tuition_plan_application = None
     if period is not None:
         enrollment = TuitionEnrollment.objects.filter(
             user=user, tuition_period=period,
         ).first()
         if enrollment is not None:
             installments = list(enrollment.installments.order_by("sequence"))
+        if enrollment is not None and (
+            enrollment.status == TuitionEnrollment.Status.PLAN_REQUESTED
+        ):
+            tuition_plan_application = TuitionPlanApplication.objects.filter(
+                user=user, tuition_period=period,
+                status=TuitionPlanApplication.Status.PENDING,
+            ).first()
     progress = _tuition_progress(user)
+
+    # --- Tuition (upcoming year, task #450 phase A) — the next-by-start_date
+    # future period, so a member can record next year's decision ahead of
+    # time rather than waiting for it to become current. ---
+    upcoming_period = TuitionPeriod.upcoming()
+    upcoming_enrollment = None
+    upcoming_installments = []
+    upcoming_tuition_plan_application = None
+    if upcoming_period is not None:
+        upcoming_enrollment = TuitionEnrollment.objects.filter(
+            user=user, tuition_period=upcoming_period,
+        ).first()
+        if upcoming_enrollment is not None:
+            upcoming_installments = list(
+                upcoming_enrollment.installments.order_by("sequence")
+            )
+        if upcoming_enrollment is not None and (
+            upcoming_enrollment.status == TuitionEnrollment.Status.PLAN_REQUESTED
+        ):
+            upcoming_tuition_plan_application = (
+                TuitionPlanApplication.objects.filter(
+                    user=user, tuition_period=upcoming_period,
+                    status=TuitionPlanApplication.Status.PENDING,
+                ).first()
+            )
 
     # --- Dues (current year) ---
     dues_period = DuesPeriod.current()
@@ -281,54 +371,73 @@ def _formation_money_context(request) -> dict:
     dues_amount = (
         dues_period.amount_for_role(profile.role) if dues_period is not None else None
     )
-    dues_paid = user_paid_for_period(user, dues_period)
+    dues_paid = acct["dues_state"] in ("paid", "waived")
 
-    # --- Payments (all) — one editable table (type + note + tuition AY) ---
-    payments = list(
-        Payment.objects.filter(user=user)
-        .select_related("registration__event", "dues_period", "tuition_period")
-        .order_by("-created_at", "-id")
-    )
-
-    # For tuition rows, pre-select the assigned AY, else the AY the payment date
-    # falls in (so the "For" column's year picker starts on the right guess).
-    from accounts.membership import current_academic_year_start as ay_of
+    # --- Period lists for the statement's re-categorize modal (dues/tuition
+    # year selectors) — the modal itself defaults to "Auto (from payment
+    # date)", so these are just the option lists, no per-payment preselection.
     tuition_periods = list(TuitionPeriod.objects.order_by("-start_date"))
-    period_id_by_ay = {ay_of(tp.start_date): tp.id for tp in tuition_periods}
-    for p in payments:
-        if p.payment_type != Payment.Type.TUITION:
-            continue
-        when = p.paid_at or p.created_at
-        p.selected_period_id = p.tuition_period_id or (
-            period_id_by_ay.get(ay_of(when.date())) if when else None
-        )
+    dues_periods = list(DuesPeriod.objects.order_by("-start_date"))
 
+    # Payment history comes off the statement we already built rather than a
+    # second Payment.exists() query (task #443).
+    has_payments = any(ln["kind"] == "payment" for ln in acct["lines"])
     show_money_tab = (
-        profile.owes_tuition or dues_obligated or bool(payments)
+        profile.owes_tuition or dues_obligated
+        or has_payments
         or progress["tuition_years_started"] > 0
     )
 
     return {
         "show_money_tab": show_money_tab,
+        # unified account (task #439) — statement/balance/tuition-years tile
+        "acct": acct,
+        "requirement_met": requirement_met,
+        "decision_exempt": decision_exempt,
         # tuition
         "owes_tuition": profile.owes_tuition,
         "tuition_period": period,
         "tuition_enrollment": enrollment,
+        # A fully covered year reads as its outcome, not the recorded
+        # decision ("Committed" that is actually paid shows "Paid").
+        "tuition_decision_label": next(
+            (r["decision_label"] for r in acct["tuition_rows"]
+             if enrollment and r["enrollment"].pk == enrollment.pk), None),
         "tuition_installments": installments,
         "tuition_form": TuitionDecisionForm(
             initial={"status": enrollment.status} if enrollment else {}
         ),
+        # pending Board payment-plan application, current period
+        # (task #450 phase B)
+        "tuition_plan_application": tuition_plan_application,
         "tuition_stripe_status": request.GET.get("stripe"),
+        # upcoming year's decision (task #450 phase A)
+        "upcoming_period": upcoming_period,
+        "upcoming_enrollment": upcoming_enrollment,
+        "upcoming_installments": upcoming_installments,
+        "upcoming_tuition_form": TuitionDecisionForm(
+            initial={"status": upcoming_enrollment.status}
+            if upcoming_enrollment else {},
+            auto_id="id_upcoming_%s",
+        ),
+        # pending Board payment-plan application, upcoming period
+        # (task #450 phase B)
+        "upcoming_tuition_plan_application": upcoming_tuition_plan_application,
         **progress,
         # dues
         "dues_period": dues_period,
         "dues_obligated": dues_obligated,
         "dues_amount": dues_amount,
         "dues_paid": dues_paid,
-        # payments
-        "my_payments": payments,
+        # statement actions (retype/split/note modals)
         "tuition_periods": tuition_periods,
+        "dues_periods": dues_periods,
         "payment_type_choices": Payment.Type.choices,
+        # history submissions (task #439 §3) — "Report missing history"
+        "submission_kind_choices": LedgerSubmission.Kind.choices,
+        "my_submissions": list(
+            LedgerSubmission.objects.filter(user=user).order_by("-created_at")),
+        "today": timezone.now().date(),
     }
 
 
@@ -395,20 +504,26 @@ def _tuition_progress(user) -> dict:
     )
     rate = (current.tuition_amount if current else None) or Decimal("0")
 
+    # One cumulative pot of tuition money, swept oldest-first: each started
+    # year fills to its goal before the remainder overflows into the next
+    # (task #468 follow-up). This mirrors the ledger's oldest-first coverage
+    # sweep, so an uneven payment history — a lump sum, or one year overpaid
+    # and another underpaid — fills the bars consecutively instead of trapping
+    # (and losing) money inside the academic year it was dated to.
+    pot = sum(paid_by_ay.values(), Decimal("0"))
     slots = []
-    total_paid = Decimal("0")
     total_goal = Decimal("0")
     for ay in sorted(paid_by_ay)[:required]:
         period = period_by_ay.get(ay)
         goal = (period.tuition_amount if period else rate) or Decimal("0")
-        paid = min(paid_by_ay[ay], goal) if goal else paid_by_ay[ay]
+        paid = min(goal, pot) if goal else pot
+        pot -= paid
         pct = int(paid / goal * 100) if goal else 0
         slots.append({
             "label": period.name if period else f"{ay}–{ay + 1}",
             "goal": goal, "paid": paid, "remaining": max(goal - paid, Decimal("0")),
             "pct": pct, "projected": False,
         })
-        total_paid += paid
         total_goal += goal
 
     started = len(slots)
@@ -419,14 +534,9 @@ def _tuition_progress(user) -> dict:
         })
         total_goal += rate
 
-    total_pct = int(total_paid / total_goal * 100) if total_goal else 0
     return {
         "tuition_slots": slots,
-        "tuition_total_paid": total_paid,
-        "tuition_total_goal": total_goal,
-        "tuition_total_pct": total_pct,
         "tuition_years_started": started,
-        "tuition_required_years": required,
     }
 
 
@@ -535,7 +645,7 @@ def control_add(request):
     """Add a control (supervisory) analysis entry — a self-reported record, no
     approval required."""
     if request.method == "POST":
-        form = ControlAnalysisForm(request.POST)
+        form = ControlAnalysisForm(request.POST, user=request.user)
         if form.is_valid():
             obj = form.save(commit=False)
             obj.member = request.user
@@ -543,7 +653,7 @@ def control_add(request):
             messages.success(request, "Control analysis added.")
             return redirect(_formation_url("formation"))
     else:
-        form = ControlAnalysisForm()
+        form = ControlAnalysisForm(user=request.user)
     return render(request, "formation/_control_form.html", {"form": form, "mode": "add"})
 
 
@@ -553,13 +663,13 @@ def control_edit(request, pk):
     a 404 (no signal that the entry exists at all)."""
     obj = get_object_or_404(ControlAnalysis, pk=pk, member=request.user)
     if request.method == "POST":
-        form = ControlAnalysisForm(request.POST, instance=obj)
+        form = ControlAnalysisForm(request.POST, instance=obj, user=request.user)
         if form.is_valid():
             form.save()
             messages.success(request, "Control analysis updated.")
             return redirect(_formation_url("formation"))
     else:
-        form = ControlAnalysisForm(instance=obj)
+        form = ControlAnalysisForm(instance=obj, user=request.user)
     return render(request, "formation/_control_form.html",
                   {"form": form, "mode": "edit", "entry": obj})
 
@@ -616,6 +726,28 @@ def external_delete(request, pk):
     obj.delete()
     messages.success(request, "External activity removed.")
     return redirect(_formation_url("formation"))
+
+
+@login_required
+def external_analyst_request(request):
+    """A member requests authorization to use an external control analyst."""
+    from . import notifications as notify_formation
+
+    if request.method == "POST":
+        form = ExternalControlAnalystForm(request.POST)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.member = request.user
+            obj.save()
+            notify_formation.external_analyst_requested(obj)
+            messages.success(
+                request,
+                "Request sent to the Meeting of the Analysts, you'll be "
+                "notified when they decide.")
+            return redirect(_formation_url("formation") + "#control")
+    else:
+        form = ExternalControlAnalystForm()
+    return render(request, "formation/external_analyst_request.html", {"form": form})
 
 
 # ---- Advisor side ---------------------------------------------------------
@@ -685,11 +817,11 @@ def advisee_detail(request, pk):
         "advancements": Advancement.objects.filter(member=advisee)
         .select_related("advisor").order_by("-requested_at"),
         "control_entries": ControlAnalysis.objects.filter(member=advisee),
-        "control_years": ControlAnalysis.years_for(advisee),
-        "control_target": FormationSettings.load().control_years_target,
+        "control_progress": control_progress(advisee),
         "external_entries": ExternalActivity.objects.filter(member=advisee)
         .order_by("kind", "-start_date"),
         "notes": AdvisorNote.objects.filter(advisee=advisee).select_related("author"),
+        "background_history": advisee.background_determinations.select_related("set_by")[:5],
     }
     return render(request, "formation/advisee_detail.html", ctx)
 
@@ -715,16 +847,48 @@ def advisee_note_add(request, pk):
     return redirect(reverse("formation:advisee_detail", args=[advisee.pk]))
 
 
+@login_required
+@require_POST
+def advisee_set_background(request, pk):
+    """Advisor (or staff) sets an advisee's formation background - audited."""
+    from accounts.models import Profile, User
+
+    from .background import set_background
+    from .permissions import can_view_advisee
+
+    advisee = get_object_or_404(User.objects.select_related("profile"), pk=pk)
+    if not can_view_advisee(request.user, advisee):
+        raise PermissionDenied
+    value = request.POST.get("background")
+    valid = {Profile.FormationBackground.CLINICAL, Profile.FormationBackground.ACADEMIC}
+    if value not in valid:
+        messages.error(request, "Choose clinical or academic.")
+        return redirect("formation:advisee_detail", pk=advisee.pk)
+    if set_background(advisee, value, by=request.user,
+                      note=request.POST.get("note", "")):
+        messages.success(request, "Background updated.")
+    else:
+        messages.info(request, "No change.")
+    return redirect("formation:advisee_detail", pk=advisee.pk)
+
+
 # ---- Meeting of the Analysts review side ----------------------------------
 
 @login_required
 def advancement_queue(request):
     _require_review(request)
+    from payments.ledger import tuition_clearance
+
     advancements = list(
         Advancement.objects.select_related(
             "member", "member__profile", "advisor"
         ).order_by("status", "-requested_at")
     )
+    for a in advancements:
+        a.tuition_blocked = bool(
+            a.is_open and a.advance_role in GATED_ROLES
+            and tuition_clearance(a.member)
+        )
     return render(request, "formation/advancement_queue.html", {
         "advancements": advancements,
         "open_statuses": Advancement.OPEN_STATUSES,
@@ -738,9 +902,14 @@ def advancement_detail(request, pk):
         Advancement.objects.select_related("member", "member__profile", "advisor"),
         pk=pk,
     )
+    tuition_reasons = None
+    if adv.advance_role in GATED_ROLES and adv.is_open:
+        from payments.ledger import tuition_clearance
+        tuition_reasons = tuition_clearance(adv.member)
     return render(request, "formation/advancement_detail.html", {
         "adv": adv,
         "default_ay": current_academic_year_start(),
+        "tuition_reasons": tuition_reasons,
     })
 
 
@@ -755,10 +924,17 @@ def advancement_decide(request, pk):
     decision = request.POST.get("decision")
     note = (request.POST.get("note") or "").strip()
     if decision == "approve":
+        from django.core.exceptions import ValidationError
+
         ay = request.POST.get("effective_ay")
         effective_ay = int(ay) if ay and ay.isdigit() else current_academic_year_start()
-        decide_advancement(adv, approve=True, by=request.user,
-                            effective_ay=effective_ay, note=note)
+        try:
+            decide_advancement(adv, approve=True, by=request.user,
+                                effective_ay=effective_ay, note=note)
+        except ValidationError as exc:
+            messages.error(
+                request, "Cannot approve — " + " ".join(exc.messages))
+            return redirect("formation:advancement_detail", pk=pk)
         name = adv.member.get_full_name() or adv.member.email
         role_label = dict(Profile.Role.choices).get(adv.advance_role, "the next step")
         messages.success(request, f"Approved — {name} advances to {role_label}.")
@@ -768,3 +944,101 @@ def advancement_decide(request, pk):
     else:
         messages.error(request, "Choose approve or decline.")
     return redirect("formation:advancement_detail", pk=pk)
+
+
+# ---- External control analyst review (Meeting of the Analysts) -----------
+
+@login_required
+def external_analyst_queue(request):
+    _require_review(request)
+    requests_ = (ExternalControlAnalyst.objects
+                 .select_related("member", "member__profile", "decided_by")
+                 .annotate(_open=Case(
+                     When(status=ExternalControlAnalyst.Status.REQUESTED, then=Value(0)),
+                     default=Value(1), output_field=IntegerField(),
+                 ))
+                 .order_by("_open", "-requested_at"))
+    return render(request, "formation/external_analyst_queue.html", {
+        "requests": requests_,
+        "open_statuses": ExternalControlAnalyst.OPEN_STATUSES,
+    })
+
+
+@login_required
+def external_analyst_detail(request, pk):
+    _require_review(request)
+    obj = get_object_or_404(
+        ExternalControlAnalyst.objects.select_related("member", "member__profile"),
+        pk=pk)
+    return render(request, "formation/external_analyst_detail.html", {"obj": obj})
+
+
+@login_required
+@require_POST
+def external_analyst_decide(request, pk):
+    _require_review(request)
+    from .control import decide_external
+    obj = get_object_or_404(ExternalControlAnalyst, pk=pk)
+    if not obj.is_open:
+        messages.error(request, "This request has already been decided.")
+        return redirect("formation:external_analyst_detail", pk=pk)
+    decision = request.POST.get("decision")
+    note = (request.POST.get("note") or "").strip()
+    if decision == "approve":
+        decide_external(obj, approve=True, by=request.user, note=note)
+        messages.success(request, f"Approved {obj.name}; the member has been notified.")
+    elif decision == "decline":
+        decide_external(obj, approve=False, by=request.user, note=note)
+        messages.success(request, "Recorded as not approved; the member has been notified.")
+    else:
+        messages.error(request, "Choose approve or decline.")
+    return redirect("formation:external_analyst_detail", pk=pk)
+
+
+# ---- Formation background (Meeting of the Analysts) -----------------------
+
+@login_required
+def background_queue(request):
+    """Meeting of Analysts: in-training students and their formation
+    background, unreviewed first."""
+    _require_review(request)
+    students = (
+        Profile.objects.filter(role__in=Profile.IN_TRAINING_ROLES)
+        .exclude(is_persona=True)
+        .select_related("user")
+        .annotate(_unrev=Case(
+            When(formation_background=Profile.FormationBackground.UNREVIEWED,
+                 then=Value(0)),
+            default=Value(1), output_field=IntegerField(),
+        ))
+        .order_by("_unrev", "user__last_name", "user__first_name", "user__email")
+    )
+    return render(request, "formation/background_queue.html", {
+        "students": students,
+        "unreviewed_value": Profile.FormationBackground.UNREVIEWED,
+    })
+
+
+@login_required
+@require_POST
+def background_detail(request, pk):
+    """Meeting of Analysts sets one student's background (audited)."""
+    _require_review(request)
+    from accounts.models import User
+
+    from .background import set_background
+
+    student = get_object_or_404(User.objects.select_related("profile"), pk=pk)
+    value = request.POST.get("background")
+    valid = {Profile.FormationBackground.CLINICAL, Profile.FormationBackground.ACADEMIC}
+    if value not in valid:
+        messages.error(request, "Choose clinical or academic.")
+    elif set_background(student, value, by=request.user,
+                        note=request.POST.get("note", "")):
+        messages.success(
+            request,
+            f"Set {student.get_full_name() or student.email} to {value}.",
+        )
+    else:
+        messages.info(request, "No change.")
+    return redirect("formation:background_queue")

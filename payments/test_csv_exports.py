@@ -261,3 +261,22 @@ def test_transactions_csv_includes_receipt_number(
     matching = [r for r in rows[1:] if r[receipt_col].startswith("LSP-")]
     assert matching
     assert matching[0][event_col] == "Seminar"
+
+
+# ---- Member Balances CSV (payments.balances_csv) ----------------------------
+
+
+@pytest.mark.django_db
+def test_balances_csv(client):
+    from payments.models import Charge
+
+    staff = User.objects.create_user(email="csv@x.test", password="x", is_staff=True)
+    client.force_login(staff)
+    u = User.objects.create_user(email="bal@x.test", password="x")
+    Charge.objects.create(user=u, category=Charge.Category.DUES,
+                          amount=Decimal("100"), effective_date=date(2026, 9, 1))
+    resp = client.get("/treasurer/exports/balances.csv")
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "bal@x.test" in body
+    assert "100" in body

@@ -3,7 +3,8 @@
 access details, sessions, pricing, and the register/your-status CTA. Shared by
 the standalone event page (events/event_detail.html) and the seminar Workspace
 Overview (workgroups/_tab_overview.html) so the two never drift. Expects:
-event, sessions, price_tiers, user_registration, has_paid_registration.{% endcomment %}
+event, sessions, price_tiers, user_registration, has_paid_registration,
+show_access_info.{% endcomment %}
 
 {# ---------- Your registration status (members) ---------- #}
 {% if user_registration %}
@@ -112,11 +113,11 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
 </section>
 {% endif %}
 
-{# ---------- Access details (paid users only) ---------- #}
-{% if has_paid_registration and event.access_info %}
+{# ---------- Access details (registrants + whoever runs the event) ---------- #}
+{% if show_access_info %}
 <div role="alert" class="alert alert-success">
   <div>
-    <h3 class="font-medium mb-1">Your access details</h3>
+    <h3 class="font-medium mb-1">{% if has_paid_registration %}Your access details{% else %}Access details{% endif %}</h3>
     <p class="whitespace-pre-wrap text-sm">{{ event.access_info }}</p>
   </div>
 </div>
@@ -224,6 +225,12 @@ event, sessions, price_tiers, user_registration, has_paid_registration.{% endcom
       <a href="{% url 'registrations:confirm' user_registration.id %}" class="btn btn-primary btn-lg">View your registration →</a>
     {% else %}
       <a href="{% url 'registrations:register' event.slug %}" id="register-cta" class="btn btn-primary btn-lg">Register →</a>
+    {% endif %}
+    {% if event.open_to_guests and event.visibility != "members_only" and not user_registration %}
+    <p class="text-sm text-base-content/70 mt-2">Open to non-members. Guests are welcome to attend.</p>
+    {% if not user.is_authenticated %}
+    <p class="text-sm text-base-content/60">You'll be asked to sign in or create a free account. You don't need to be a member.</p>
+    {% endif %}
     {% endif %}
   {% elif event.status == "draft" %}
     <p class="text-base-content/60">Registration not yet open.</p>

@@ -34,6 +34,7 @@ PANEL_ROLES = (
     StaffRole.ADMIN_ASSISTANT,
     StaffRole.WEB_DEVELOPER,
     StaffRole.REFERRAL_COORDINATOR,
+    StaffRole.REGISTRAR,
 )
 
 
@@ -59,6 +60,11 @@ def _can_meeting_of_analysts(user) -> bool:
 def _can_cartel_coordinator(user) -> bool:
     from cartels.permissions import is_cartel_coordinator
     return user.is_superuser or user.is_staff or is_cartel_coordinator(user)
+
+
+def _can_registrar(user) -> bool:
+    from registrations.permissions import can_administer_registrations
+    return can_administer_registrations(user)
 
 
 def _can_applications_coordinator(user) -> bool:
@@ -102,6 +108,18 @@ def _panels_for(user) -> list[dict]:
             "title": "Program Committee Admin",
             "blurb": "Solicit and review proposals; mint events into a program.",
             "url": reverse("program_admin_programs"),
+        })
+    if _can_registrar(user):
+        from registrations.models import Registration
+        panels.append({
+            "title": "Registration Admin",
+            "blurb": "Registrations across all events: approve, comp, and "
+                     "open or close registration.",
+            "url": reverse("registrations:registrar"),
+            "count": Registration.objects.filter(
+                status=Registration.Status.PENDING_APPROVAL
+            ).count(),
+            "count_label": "pending",
         })
     if _can_meeting_of_analysts(user):
         from admissions.models import Application
@@ -238,6 +256,14 @@ STAFF_DOCS = [
             "runs, and ends each, with step-by-step recipes."
         ),
     },
+    {
+        "slug": "registrar-guide",
+        "title": "Registration Admin — a guide",
+        "blurb": (
+            "Managing registrations across all events: approvals, comps, "
+            "notes, CSV export, and opening or closing registration."
+        ),
+    },
 ]
 _STAFF_DOCS_BY_SLUG = {d["slug"]: d for d in STAFF_DOCS}
 
@@ -296,6 +322,7 @@ def board_admin(request):
     if not _can_board(request.user):
         raise PermissionDenied
     from committees.models import Committee
+    from payments.models import TuitionPlanApplication
     board = (
         Committee.objects.filter(slug="board").select_related("workgroup").first()
     )
@@ -307,6 +334,9 @@ def board_admin(request):
     return render(request, "core/staff/admin/board.html", {
         "workspace_url": workspace_url,
         "officers": school_officers(),
+        "pending_plan_count": TuitionPlanApplication.objects.filter(
+            status=TuitionPlanApplication.Status.PENDING
+        ).count(),
     })
 
 
@@ -330,23 +360,62 @@ def board_membership_admin(request):
     member = None
     form = None
     if request.method == "POST":
+        action = request.POST.get("action")
         member = get_object_or_404(User, pk=request.POST.get("member"))
-        form = MembershipChangeForm(request.POST)
-        if form.is_valid():
-            record_membership_change(
-                member,
-                role=form.cleaned_data["role"],
-                standing=form.cleaned_data["standing"],
-                effective_ay=form.cleaned_data["effective_ay"],
-                notes=form.cleaned_data["notes"],
-                by=request.user,
-            )
-            messages.success(
-                request,
-                f"Recorded a membership change for "
-                f"{member.get_full_name() or member.email}.",
-            )
+        if action in {"set_deceased", "clear_deceased", "waive_charges"}:
+            from accounts.lifecycle import clear_deceased, set_deceased
+            from payments.charges import waive_open_charges
+
+            if action == "set_deceased":
+                from datetime import date as _date
+                raw = request.POST.get("deceased_on") or ""
+                try:
+                    d = _date.fromisoformat(raw)
+                except ValueError:
+                    messages.error(request, "Enter a valid date (YYYY-MM-DD).")
+                else:
+                    set_deceased(member, d, by=request.user)
+                    messages.success(
+                        request,
+                        f"Recorded {member.get_full_name() or member.email} "
+                        "as deceased. The account is disabled and open charges "
+                        "were waived.",
+                    )
+            elif action == "clear_deceased":
+                clear_deceased(member, by=request.user)
+                messages.success(
+                    request, "Cleared the deceased mark; the account is re-enabled."
+                )
+            elif action == "waive_charges":
+                n = waive_open_charges(
+                    member, reason="Waived — member removed", by=request.user,
+                )
+                messages.success(request, f"Waived {n} open charge(s).")
             return redirect(f"{reverse('board_membership_admin')}?member={member.pk}")
+        form = MembershipChangeForm(request.POST, member=member)
+        if form.is_valid():
+            from django.core.exceptions import ValidationError
+
+            try:
+                record_membership_change(
+                    member,
+                    role=form.cleaned_data["role"],
+                    standing=form.cleaned_data["standing"],
+                    effective_ay=form.cleaned_data["effective_ay"],
+                    notes=form.cleaned_data["notes"],
+                    by=request.user,
+                )
+            except ValidationError as exc:
+                messages.error(request, " ".join(exc.messages))
+            else:
+                messages.success(
+                    request,
+                    f"Recorded a membership change for "
+                    f"{member.get_full_name() or member.email}.",
+                )
+                return redirect(
+                    f"{reverse('board_membership_admin')}?member={member.pk}"
+                )
     else:
         member_id = request.GET.get("member")
         if member_id:
@@ -368,20 +437,26 @@ def board_membership_admin(request):
         )
 
     timeline = []
+    open_owes = None
     if member is not None:
         timeline = list(
             MembershipTenure.objects.filter(user=member).order_by("-start_ay")
         )
         if form is None:
-            form = MembershipChangeForm(initial={
-                "role": member.profile.role,
-                "standing": member.profile.standing,
-                "effective_ay": current_academic_year_start(),
-            })
+            form = MembershipChangeForm(
+                initial={
+                    "role": member.profile.role,
+                    "standing": member.profile.standing,
+                    "effective_ay": current_academic_year_start(),
+                },
+                member=member,
+            )
+        from payments.ledger import member_account
+        open_owes = member_account(member)["owes"]  # Decimal; 0 if nothing owed
 
     return render(request, "core/staff/admin/board_membership.html", {
         "q": q, "results": results, "member": member,
-        "timeline": timeline, "form": form,
+        "timeline": timeline, "form": form, "open_owes": open_owes,
     })
 
 
@@ -396,12 +471,21 @@ def board_appointments(request):
     """
     if not _can_board(request.user):
         raise PermissionDenied
-    from accounts.models import User
+    from accounts.models import Profile, User
 
     if request.method == "POST":
         action = request.POST.get("action")
         role = StaffRole.objects.filter(key=request.POST.get("role")).first()
         member = User.objects.filter(pk=request.POST.get("user")).first()
+        if role is not None and role.key in (
+            StaffRole.PRESIDENT, StaffRole.VICE_PRESIDENT
+        ):
+            messages.error(
+                request,
+                "President and Vice President are set in the Board's Settings "
+                "roster (Chair and Co-chair).",
+            )
+            return redirect("board_appointments")
         if role is None or member is None:
             messages.error(request, "Couldn't find that role or member.")
         elif action == "appoint":
@@ -419,10 +503,14 @@ def board_appointments(request):
         return redirect("board_appointments")
 
     roles = list(
-        StaffRole.objects.prefetch_related("holders").order_by("name")
+        StaffRole.objects
+        .exclude(key__in=[StaffRole.PRESIDENT, StaffRole.VICE_PRESIDENT])
+        .prefetch_related("holders")
+        .order_by("name")
     )
     appointable = list(
         User.objects.filter(is_active=True, profile__is_persona=False)
+        .exclude(profile__standing__in=Profile.NON_MEMBER_STANDINGS)
         .select_related("profile")
         .order_by("last_name", "first_name", "email")
     )
@@ -481,7 +569,7 @@ def board_governance(request):
 
     member_qs = Profile.objects.filter(
         role__in=Profile.DIRECTORY_ROLES, is_persona=False, user__is_active=True,
-    )
+    ).exclude(standing__in=Profile.NON_MEMBER_STANDINGS)
     by_standing = {
         row["standing"]: row["n"]
         for row in member_qs.values("standing").annotate(n=Count("pk"))
@@ -536,8 +624,9 @@ def meeting_of_analysts_admin(request):
     """
     if not _can_meeting_of_analysts(request.user):
         raise PermissionDenied
+    from accounts.models import Profile
     from admissions.models import Application
-    from formation.models import Advancement
+    from formation.models import Advancement, ExternalControlAnalyst
     return render(request, "core/staff/admin/meeting_of_analysts.html", {
         "open_applications": Application.objects.filter(
             status__in=Application.OPEN_STATUSES
@@ -545,6 +634,12 @@ def meeting_of_analysts_admin(request):
         "open_advancements": Advancement.objects.filter(
             status__in=Advancement.OPEN_STATUSES
         ).count(),
+        "open_external_analysts": ExternalControlAnalyst.objects.filter(
+            status__in=ExternalControlAnalyst.OPEN_STATUSES).count(),
+        "open_backgrounds": Profile.objects.filter(
+            role__in=Profile.IN_TRAINING_ROLES,
+            formation_background=Profile.FormationBackground.UNREVIEWED,
+        ).exclude(is_persona=True).count(),
         "officers": school_officers(),
     })
 

@@ -173,6 +173,144 @@ def test_location_unchanged_keeps_geocode(client):
     assert u.profile.location_lat == 37.2
 
 
+# ---- Model: universal geocode staling (task #391) ---------------------
+
+
+@pytest.mark.django_db
+def test_model_save_stales_geocode_on_location_change():
+    """Nulling coords on a real location change is enforced at the model
+    level, so *every* save path (admin, imports, scripts) behaves alike —
+    not just the self-service form."""
+    u = User.objects.create_user(email="m1@x.test", password="x")
+    p = u.profile
+    p.location = "Dallas, TX"
+    p.location_lat = 32.7
+    p.location_lng = -96.8
+    p.location_pins = [{"lat": 32.7, "lng": -96.8, "label": "Dallas, TX"}]
+    p.save()
+
+    p.location = "Berlin, Germany"
+    p.save()
+    p.refresh_from_db()
+    assert p.location_lat is None
+    assert p.location_lng is None
+    assert p.location_pins == []
+
+
+@pytest.mark.django_db
+def test_model_save_stales_even_with_update_fields():
+    """Staling must persist even when the caller passes ``update_fields``
+    that omits the coord columns (as ``import_users`` does)."""
+    u = User.objects.create_user(email="m2@x.test", password="x")
+    p = u.profile
+    p.location = "Dallas, TX"
+    p.location_lat = 32.7
+    p.location_lng = -96.8
+    p.save()
+
+    p.location = "Paris, France"
+    p.save(update_fields=["location"])
+    p.refresh_from_db()
+    assert p.location_lat is None
+    assert p.location_lng is None
+
+
+@pytest.mark.django_db
+def test_model_save_keeps_coords_when_location_unchanged():
+    u = User.objects.create_user(email="m3@x.test", password="x")
+    p = u.profile
+    p.location = "Dallas, TX"
+    p.location_lat = 32.7
+    p.location_lng = -96.8
+    p.save()
+
+    p.bio = "changed something unrelated"
+    p.save()
+    p.refresh_from_db()
+    assert p.location_lat == 32.7
+
+
+# ---- Admin: editing location re-geocodes (task #391) ------------------
+
+
+@pytest.mark.django_db
+def test_admin_location_edit_regeocodes(settings, monkeypatch):
+    """The reported bug: an admin edits Profile.location but the pin stays at
+    the old place. With sync-geocode on, ProfileAdmin.save_model updates the
+    coords to the new place."""
+    from django.contrib.admin.sites import AdminSite
+    from django.test import RequestFactory
+
+    from accounts import geocoding
+    from accounts.admin import ProfileAdmin
+
+    settings.PROFILE_GEOCODE_ON_SAVE = True
+    u = User.objects.create_user(email="swales@x.test", password="x")
+    p = u.profile
+    p.location = "Dallas, TX"
+    p.location_lat = 32.7
+    p.location_lng = -96.8
+    p.location_pins = [{"lat": 32.7, "lng": -96.8, "label": "Dallas, TX"}]
+    p.save()
+
+    monkeypatch.setattr(
+        geocoding, "geocode",
+        lambda loc: geocoding.GeocodeResult(48.85, 2.35, "Paris, France"),
+    )
+
+    # Simulate the admin change form: the object is reloaded, edited, saved.
+    obj = Profile.objects.get(pk=p.pk)
+    obj.location = "Paris, France"
+    ProfileAdmin(Profile, AdminSite()).save_model(
+        RequestFactory().post("/"), obj, form=None, change=True
+    )
+
+    p.refresh_from_db()
+    assert p.location == "Paris, France"
+    assert p.location_lat == pytest.approx(48.85)
+    assert p.location_lng == pytest.approx(2.35)
+    assert p.location_pins == [{"lat": 48.85, "lng": 2.35, "label": "Paris, France"}]
+
+
+@pytest.mark.django_db
+def test_view_location_edit_regeocodes(client, settings, monkeypatch):
+    from accounts import geocoding
+
+    settings.PROFILE_GEOCODE_ON_SAVE = True
+    u = User.objects.create_user(email="loc3@x.test", password="x")
+    u.profile.location = "Dallas, TX"
+    u.profile.location_lat = 32.7
+    u.profile.location_lng = -96.8
+    u.profile.save()
+
+    monkeypatch.setattr(
+        geocoding, "geocode",
+        lambda loc: geocoding.GeocodeResult(48.85, 2.35, "Paris"),
+    )
+    client.force_login(u)
+    client.post(reverse("profile_edit"), {"location": "Paris, France"})
+    u.profile.refresh_from_db()
+    assert u.profile.location_lat == pytest.approx(48.85)
+
+
+@pytest.mark.django_db
+def test_geocode_profile_best_effort_miss_leaves_null():
+    """A geocoder miss leaves coords null (for the batch command to retry)
+    rather than raising."""
+    from accounts import geocoding
+
+    u = User.objects.create_user(email="miss@x.test", password="x")
+    p = u.profile
+    p.location = "Nowhere at all"
+    p.save()
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(geocoding, "geocode", lambda loc: None)
+        hit = geocoding.geocode_profile(p)
+    assert hit is False
+    p.refresh_from_db()
+    assert p.location_lat is None
+
+
 # ---- View: headshot pipeline ------------------------------------------
 
 

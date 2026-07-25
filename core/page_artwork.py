@@ -42,23 +42,45 @@ class Artwork:
 # works are likely under copyright; see the ``image-rights`` note (task #259).
 # This map is the one place to swap, recrop (``focal``), or clear any banner.
 PAGE_ARTWORK: dict[str, Artwork] = {
+    # Most heroes use public-domain modern masters (Kandinsky / Matisse /
+    # Mondrian, via rawpixel; verified attributions below). We keep a few works
+    # by artists who gave the School permission: Annie Rogers (Works) and her
+    # friends Liz Chalfin (About) and Joyce Silverstone (Guides). See task
+    # #349/#347 (image rights).
     "core:landing": Artwork(
-        "img/artwork/front.jpg", artist="Cy Twombly", title="Untitled"
-    ),
-    "about": Artwork(
-        "img/artwork/about.jpg", artist="Paul Klee", title="White Framed Polyphonically"
-    ),
-    "the_school": Artwork("img/artwork/the-school.jpg", artist="Wassily Kandinsky"),
-    "program": Artwork("img/artwork/program.jpg"),
-    "events:list": Artwork("img/artwork/events.jpg"),
-    "directory": Artwork("img/artwork/directory.jpg"),
-    "works:index": Artwork("img/artwork/works.jpg", artist="Louise Nevelson", title="Cascade VII"),
-    "documents:index": Artwork("img/artwork/documents.jpg"),
-    "core:calendar": Artwork("img/artwork/calendar.jpg", artist="George Peabody Library"),
-    "workgroups:list": Artwork("img/artwork/groups.jpg", artist="Bibliothèque Mazarine, Paris"),
-    "guides_index": Artwork("img/artwork/guides.jpg", artist="Beinecke Library, Yale"),
+        "img/artwork/front.jpg", artist="Wassily Kandinsky",
+        title="Small Worlds VII (1922)", focal="50% 0%"),
+    "learning": Artwork(
+        "img/artwork/learning.jpg", artist="Wassily Kandinsky",
+        title="Strings of Characters (1931)"),
+    "about": Artwork("img/artwork/about.jpg", artist="Liz Chalfin", title="Book of Days"),
+    "the_school": Artwork(
+        "img/artwork/the-school.jpg", artist="Piet Mondrian",
+        title="Broadway Boogie Woogie (1942–1943)"),
+    "formation": Artwork(
+        "img/artwork/formation.jpg", artist="Wassily Kandinsky",
+        title="La Flèche (1943)"),
+    "program": Artwork(
+        "img/artwork/program.jpg", artist="Piet Mondrian", title="Composition A (1920)"),
+    "events:list": Artwork(
+        "img/artwork/events.jpg", artist="Piet Mondrian", title="Composition (1921)"),
+    "directory": Artwork(
+        "img/artwork/directory.jpg", artist="Henri Matisse",
+        title="Woman with a Hat (1905)"),
+    "works:index": Artwork("img/artwork/works.jpg", artist="Annie Rogers"),
+    "documents:index": Artwork(
+        "img/artwork/documents.jpg", artist="Wassily Kandinsky",
+        title="Dull Gray (1930)"),
+    "core:calendar": Artwork(
+        "img/artwork/calendar.jpg", artist="Wassily Kandinsky",
+        title="Yellow-Red-Blue (1925)"),
+    "workgroups:list": Artwork(
+        "img/artwork/groups.jpg", artist="Wassily Kandinsky",
+        title="Inner Alliance (1929)"),
+    "guides_index": Artwork("img/artwork/guides.jpg", artist="Joyce Silverstone", title="Leaf"),
     "parletre:index": Artwork(
-        "img/artwork/parletre.jpg", artist="Bibliothèque Sainte-Geneviève, Paris"
+        "img/artwork/parletre.jpg", artist="Piet Mondrian",
+        title="Composition with Red, Yellow, Blue and Black (1921)",
     ),
 }
 

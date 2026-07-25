@@ -30,6 +30,11 @@ _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 ACADEMIC_YEAR_START_MONTH = 9
 
 
+def _speaker_invitation_token() -> str:
+    """Opaque, single-use token for an external-speaker invitation link."""
+    return secrets.token_urlsafe(32)
+
+
 def academic_year_of(d: _dt.date) -> str:
     """Return the academic-year label that a given date falls within.
 
@@ -159,6 +164,18 @@ class Speaker(models.Model):
         default=True,
         help_text="Whether to show this speaker on public event pages.",
     )
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="external_speaker",
+        help_text=(
+            "Optional login for this external presenter (task #463). Linking a "
+            "user lets them join the meeting and see the event's presenter view, "
+            "scoped to events they present. Leave blank for display-only speakers."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -168,6 +185,63 @@ class Speaker(models.Model):
         if self.affiliation:
             return f"{self.name} ({self.affiliation})"
         return self.name
+
+
+class SpeakerInvitation(models.Model):
+    """A pending invitation for an external speaker to activate a login.
+
+    Own token (not Django's password reset, which silently skips
+    unusable-password accounts — memory ``auth-email-scanner-and-reset-gotchas``).
+    Opaque + single-use; a generous expiry (default 30 days) so an invitation
+    sent well before the event still works. Refreshing supersedes the prior link.
+    """
+
+    DEFAULT_TTL = _dt.timedelta(days=30)
+
+    speaker = models.ForeignKey(
+        "events.Speaker", on_delete=models.CASCADE, related_name="invitations"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="speaker_invitations",
+    )
+    token = models.CharField(
+        max_length=64, unique=True, default=_speaker_invitation_token, editable=False
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        state = "used" if self.used_at else ("expired" if self.is_expired() else "pending")
+        return f"invite {self.speaker.name} ({state})"
+
+    def is_expired(self, now=None) -> bool:
+        from django.utils import timezone
+
+        return (now or timezone.now()) > self.expires_at
+
+    @property
+    def is_valid(self) -> bool:
+        return self.used_at is None and not self.is_expired()
+
+    def consume(self) -> None:
+        from django.utils import timezone
+
+        if self.used_at is None:
+            self.used_at = timezone.now()
+            self.save(update_fields=["used_at"])
+
+    def refresh(self, expires_at=None) -> None:
+        from django.utils import timezone
+
+        self.token = _speaker_invitation_token()
+        self.used_at = None
+        self.expires_at = expires_at or (timezone.now() + self.DEFAULT_TTL)
+        self.save(update_fields=["token", "used_at", "expires_at"])
 
 
 class Event(models.Model):
@@ -299,6 +373,13 @@ class Event(models.Model):
         "browser starts the recording on join). Off by default; recordings are "
         "stored privately and shown per their visibility setting.",
     )
+    speaker_spotlight = models.BooleanField(
+        default=False,
+        help_text="Speaker spotlight (task #463): attendees join the online "
+        "meeting with mic and camera off, so the speaker is the focus. It's a "
+        "soft spotlight, attendees can still turn them back on, and hosts can "
+        "mute. Off by default; suited to a talk or lecture.",
+    )
 
     class RecordingMode(models.TextChoices):
         ON_DEMAND = "on_demand", "On demand — hosts can record"
@@ -338,6 +419,14 @@ class Event(models.Model):
         help_text=(
             "Members-only events (e.g. Scholarly Seminar Series) are hidden "
             "from anonymous visitors on public listings."
+        ),
+    )
+    open_to_guests = models.BooleanField(
+        default=True,
+        help_text=(
+            "Non-members are welcome to register for this event. Shows a "
+            "guests-welcome note on the event page. This is messaging only; "
+            "it does not restrict who can register."
         ),
     )
     program = models.ForeignKey(
@@ -459,6 +548,32 @@ class Event(models.Model):
             return False
         return self._faculty_memberships().filter(user=user).exists()
 
+    def is_presenter(self, user) -> bool:
+        """True if ``user`` presents at this *PC-organized* event as a listed
+        member speaker (task #463).
+
+        A PC-organized event (special event, assembly, work day, scholarly)
+        shares the Programming Committee's workgroup, so its faculty can't be
+        stored as a role there: that would put the presenter on the PC roster
+        and make them faculty of every PC event. Their presenters are recorded
+        as ``member_speakers`` (LSP members) or, for external presenters, as an
+        ``events.Speaker`` with a linked login (task #463) — either earns the
+        event's faculty surfaces, scoped to the one event.
+
+        Offerings (seminar / reading group / cartel) have their own workgroup
+        where real faculty live, so a member/external speaker there is a guest
+        and gets nothing.
+        """
+        if not getattr(user, "is_authenticated", False):
+            return False
+        if self.event_type in self.ANNUAL_PROGRAM_TYPES:
+            return False
+        if self.member_speakers.filter(pk=user.pk).exists():
+            return True
+        # External presenters with a linked login (task #463) are presenters of
+        # this one event too — same per-event grant, via the Speaker.user link.
+        return self.speakers.filter(user=user).exists()
+
     def add_faculty(self, user):
         """Idempotent: give ``user`` the FACULTY role on this event's workgroup.
 
@@ -514,8 +629,16 @@ class Event(models.Model):
     def has_access_registrant(self, user) -> bool:
         """True if ``user`` has a paid/comped Registration for this event — the
         *derived* portion of the workspace roster (kept out of the workgroup's
-        stored memberships; see ``Workgroup.is_member``)."""
+        stored memberships; see ``Workgroup.is_member``).
+
+        A treasurer-suspended member (``Profile.seminar_access_suspended``,
+        task #450 phase D) never counts here — the ONLY way this flag is set
+        is a manual, audited treasurer action (do-not-over-automate); this
+        check is what makes that flip actually cut access. Faculty are stored
+        memberships, not registrants, so they are unaffected."""
         if not getattr(user, "is_authenticated", False):
+            return False
+        if getattr(getattr(user, "profile", None), "seminar_access_suspended", False):
             return False
         from registrations.models import Registration
 
@@ -526,14 +649,17 @@ class Event(models.Model):
 
     def access_registrant_users(self):
         """Users with a paid/comped Registration — the derived participants for
-        ``Workgroup.participants()``."""
+        ``Workgroup.participants()``. Excludes treasurer-suspended members
+        (see ``has_access_registrant``)."""
         from registrations.models import Registration
 
         return [
             r.user for r in self.registrations.filter(
                 status__in=(Registration.Status.PAID, Registration.Status.COMPED),
-            ).select_related("user")
+            ).select_related("user", "user__profile")
             if r.user_id
+            and not getattr(getattr(r.user, "profile", None),
+                             "seminar_access_suspended", False)
         ]
 
     def is_workgroup_member(self, user) -> bool:

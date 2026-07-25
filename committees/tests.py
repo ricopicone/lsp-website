@@ -105,6 +105,26 @@ def test_add_member_and_active_members_excludes_ended():
 
 
 @pytest.mark.django_db
+def test_active_members_excludes_personas():
+    """Training-sandbox personas keep their memberships for impersonation
+    fidelity but must never surface on a public roster (the About-page Board
+    card reads its roster from ``active_members``). Regression: a seeded
+    "Persona Board Chair" leaked onto the public Board of Directors list.
+    """
+    committee = Committee.objects.get(slug="board")
+    real = User.objects.create_user(email="real@example.com")
+    persona = User.objects.create_user(email="persona+board-chair@example.com")
+    persona.profile.is_persona = True
+    persona.profile.save(update_fields=["is_persona"])
+    committee.add_member(real, role=WorkgroupMembership.Role.CHAIR)
+    committee.add_member(persona, role=WorkgroupMembership.Role.MEMBER)
+
+    roster = [m.user for m in committee.active_members()]
+    assert real in roster
+    assert persona not in roster
+
+
+@pytest.mark.django_db
 def test_one_active_membership_per_user_committee():
     committee = Committee.objects.get(slug="programming-committee")
     user = User.objects.create_user(email="dup@example.com")
@@ -216,3 +236,45 @@ def test_meeting_of_analysts_schedule_is_chair_managed(client):
     assert client.post(reverse("workgroups:meeting_add", args=[wg.slug]),
                        {"starts_at": "2099-01-15T18:00"}).status_code == 302
     assert WorkgroupMeeting.objects.filter(workgroup=wg).exists()
+
+
+@pytest.mark.django_db
+def test_board_chair_syncs_president_staffrole():
+    """Task #428 follow-on: setting the Board's Chair/Co-chair drives the
+    President / Vice-President StaffRole holders (single source of truth)."""
+    from core.models import StaffRole
+
+    board = Committee.objects.get(slug="board")
+    pres = User.objects.create_user(email="p@x.test", first_name="Pat", last_name="Prez")
+    veep = User.objects.create_user(email="v@x.test", first_name="Val", last_name="Veep")
+
+    board.add_member(pres, role=WorkgroupMembership.Role.CHAIR, start_date=date(2026, 1, 1))
+    board.add_member(veep, role=WorkgroupMembership.Role.CO_CHAIR, start_date=date(2026, 1, 1))
+
+    assert set(StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.all()) == {pres}
+    assert set(StaffRole.objects.get(key=StaffRole.VICE_PRESIDENT).holders.all()) == {veep}
+
+
+@pytest.mark.django_db
+def test_removing_board_chair_clears_president_and_pc_chair_ignored():
+    """Ending the Chair membership empties President; a Programming Committee
+    Chair never touches the officer StaffRoles."""
+    from core.models import StaffRole
+
+    board = Committee.objects.get(slug="board")
+    pc = Committee.objects.get(slug="programming-committee")
+    pres = User.objects.create_user(email="p2@x.test", first_name="Pat", last_name="Prez")
+    veep = User.objects.create_user(email="v2@x.test", first_name="Val", last_name="Veep")
+    conv = User.objects.create_user(email="c@x.test", first_name="Con", last_name="Vener")
+
+    # Two leads so removing the Chair doesn't hit the sole-lead orphan guard.
+    board.add_member(pres, role=WorkgroupMembership.Role.CHAIR, start_date=date(2026, 1, 1))
+    board.add_member(veep, role=WorkgroupMembership.Role.CO_CHAIR, start_date=date(2026, 1, 1))
+    pc.add_member(conv, role=WorkgroupMembership.Role.CHAIR, start_date=date(2026, 1, 1))
+    assert set(StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.all()) == {pres}
+
+    assert board.workgroup.remove_member(pres) is True  # end-dates the row
+    assert StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.count() == 0
+    # Co-chair (Vice President) untouched; the PC chair was never an officer.
+    assert set(StaffRole.objects.get(key=StaffRole.VICE_PRESIDENT).holders.all()) == {veep}
+    assert conv not in StaffRole.objects.get(key=StaffRole.VICE_PRESIDENT).holders.all()

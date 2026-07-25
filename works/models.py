@@ -46,6 +46,13 @@ class Work(models.Model):
         MEMBERS = "members", _("Members only")
         GROUP   = "group",   _("Workgroup members only")
 
+    class ExternalType(models.TextChoices):
+        ARTICLE       = "article",       _("Journal article")
+        BOOK          = "book",          _("Book")
+        CHAPTER       = "chapter",       _("Book chapter")
+        EDITED_VOLUME = "edited_volume", _("Edited volume")
+        OTHER         = "other",         _("Other")
+
     title = models.CharField(max_length=200)
     slug = models.SlugField(max_length=220, unique=True)
     kind = models.CharField(max_length=16, choices=Kind.choices)
@@ -96,6 +103,30 @@ class Work(models.Model):
         help_text="Link to publisher / DOI / external page.",
     )
     publication_date = models.DateField(null=True, blank=True)
+
+    # ---- Structured citation (external publications; all optional) ----
+    external_type = models.CharField(
+        max_length=16, choices=ExternalType.choices, blank=True, default="",
+        verbose_name="publication type",
+    )
+    container_title = models.CharField(
+        max_length=255, blank=True,
+        help_text="Journal name, or the book's title for a chapter.",
+    )
+    publisher = models.CharField(max_length=255, blank=True)
+    edition = models.CharField(max_length=50, blank=True, help_text='E.g. "2nd ed."')
+    volume = models.CharField(max_length=50, blank=True)
+    issue = models.CharField(max_length=50, blank=True)
+    pages = models.CharField(max_length=50, blank=True, help_text='E.g. "33–58".')
+    editors = models.CharField(
+        max_length=255, blank=True, help_text='Names only, e.g. "Jane Doe and John Roe".',
+    )
+    translators = models.CharField(max_length=255, blank=True, help_text="Names only.")
+    doi = models.CharField(
+        max_length=255, blank=True, verbose_name="DOI",
+        help_text='Bare DOI, e.g. "10.1234/xyz". A pasted doi.org URL is accepted.',
+    )
+    isbn = models.CharField(max_length=32, blank=True, verbose_name="ISBN")
 
     cover_image = models.ImageField(
         upload_to="works/covers/%Y/",
@@ -235,6 +266,31 @@ class Work(models.Model):
         return self.authors.filter(pk=user.pk).exists()
 
     # ---- Display helpers ----
+
+    STRUCTURED_CITATION_FIELDS = (
+        "external_type", "container_title", "publisher", "edition", "volume",
+        "issue", "pages", "editors", "translators", "doi", "isbn",
+    )
+
+    @property
+    def has_structured_citation(self) -> bool:
+        return any(getattr(self, f) for f in self.STRUCTURED_CITATION_FIELDS)
+
+    @property
+    def doi_url(self) -> str:
+        return f"https://doi.org/{self.doi}" if self.doi else ""
+
+    @property
+    def kind_label(self) -> str:
+        """Catalog label: the specific publication type when known ("Book",
+        "Journal article"); the generic kind for Other/unset and non-external."""
+        if (
+            self.kind == self.Kind.EXTERNAL
+            and self.external_type
+            and self.external_type != self.ExternalType.OTHER
+        ):
+            return self.get_external_type_display()
+        return self.get_kind_display()
 
     @property
     def abstract_html(self) -> str:

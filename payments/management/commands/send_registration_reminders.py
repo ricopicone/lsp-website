@@ -67,12 +67,17 @@ class Command(BaseCommand):
             faculty_sent += 1
 
         # --- Student payment reminders (approved but unpaid) ---
+        from accounts.models import Profile
+
         awaiting = (
             Registration.objects.filter(
                 status=Registration.Status.AWAITING_PAYMENT,
                 decided_at__isnull=False,       # came through approval
                 quoted_amount__gt=0,
-            ).filter(due).select_related("event", "user")
+            )
+            .filter(user__is_active=True)
+            .exclude(user__profile__standing__in=Profile.NON_MEMBER_STANDINGS)
+            .filter(due).select_related("event", "user")
         )
         student_sent = 0
         for reg in awaiting:

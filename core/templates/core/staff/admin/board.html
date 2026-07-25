@@ -23,4 +23,6 @@
   {% include "core/staff/admin/_section.html" with title="Committees" body="Create and oversee committees and their charge — each gets a workspace for its own roster, minutes, and discussion." link=committees_url link_label="Manage committees" %}
   {% url 'board_governance' as governance_url %}
   {% include "core/staff/admin/_section.html" with title="Governance overview" body="Membership by standing, pending decisions across the school, and a link through to the Treasurer's finances — the Board's at-a-glance dashboard." link=governance_url link_label="Open governance overview" %}
+  {% url 'tuition_plan_queue' as tuition_plans_url %}
+  {% include "core/staff/admin/_section.html" with title="Tuition payment plans" body="Review members' requests for a Board-approved payment plan. Approving moves them onto the plan; declining returns them to a decision." link=tuition_plans_url link_label="Review requests" count=pending_plan_count count_label="pending" %}
 {% endblock %}

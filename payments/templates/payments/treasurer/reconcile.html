@@ -2,6 +2,99 @@
 {% load treasurer_filters %}
 {% block tab_content %}
 <div class="space-y-6">
+  {% if submissions %}
+  <section class="space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Member submissions
+      <span class="text-base-content/60 text-sm font-normal">({{ submissions|length }})</span></h3>
+    <p class="text-sm text-base-content/60">
+      Members reporting a payment or fee from before the site's records begin. Approve
+      mints the matching entry on their account (honor-system era, member-reported); decline
+      just records your note.
+    </p>
+    <ul class="rounded-xl border border-base-300 divide-y divide-base-300">
+      {% for s in submissions %}
+      <li class="p-4 space-y-3">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <a class="link font-medium text-sm" href="{% url 'treasurer_member_detail' s.user.id %}">{{ s.user.get_full_name|default:s.user.email }}</a>
+          <span class="text-xs text-base-content/55">Filed {{ s.created_at|date:"M j, Y" }}</span>
+        </div>
+        <p class="text-sm">
+          {{ s.get_kind_display }} · {{ s.get_category_display }} ·
+          <strong>{{ s.amount|usd }}</strong> · dated {{ s.claimed_date|date:"M j, Y" }}
+        </p>
+        <p class="text-sm text-base-content/70 whitespace-pre-wrap">{{ s.details }}</p>
+        {% if s.warnings %}
+        <ul class="space-y-1">
+          {% for w in s.warnings %}
+          <li class="text-xs text-warning flex items-start gap-1.5">
+            <span aria-hidden="true">⚠</span><span>{{ w }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <form method="post" action="{% url 'treasurer_submission_decide' s.id %}"
+              class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
+          {% csrf_token %}
+          <div class="space-y-1 grow min-w-48">
+            <label class="block text-xs text-base-content/60" for="subnote-{{ s.id }}">Note (optional)</label>
+            <input id="subnote-{{ s.id }}" name="note" type="text" autocomplete="off"
+                   class="input input-bordered input-sm w-full" placeholder="Reason, reference, etc.">
+          </div>
+          <button type="submit" name="decision" value="approve" class="btn btn-primary btn-sm"
+                  onclick="return confirm('Approve this claim? This adds a ${{ s.amount }} {{ s.get_category_display|lower }} {{ s.kind }} to {{ s.user.email }}\'s account.');">
+            Approve
+          </button>
+          <button type="submit" name="decision" value="decline" class="btn btn-ghost btn-sm"
+                  onclick="return confirm('Decline this claim? Nothing will be added to the account.');">
+            Decline
+          </button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if member_actions %}
+  <section class="space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Member-changed payments
+      <span class="text-base-content/60 text-sm font-normal">({{ member_actions|length }})</span></h3>
+    <p class="text-sm text-base-content/60">
+      Changes members made to their own payments in the last {{ member_actions_days }} days —
+      re-categorizing, splitting, or annotating. These are already applied (members have full
+      parity on their own account); this is a heads-up for review, not a queue to act on. A
+      donation flip can raise a member's covered tuition years and clear their promotion gate,
+      so it's worth a look. Open the account to inspect or correct anything.
+    </p>
+    <ul class="rounded-lg border border-base-300 divide-y divide-base-300">
+      {% for a in member_actions %}
+      <li class="p-3 text-sm flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span class="text-xs text-base-content/55 whitespace-nowrap">{{ a.created_at|date:"M j" }}</span>
+        <a class="link font-medium" href="{% url 'treasurer_member_detail' a.user.id %}">{{ a.user.get_full_name|default:a.user.email }}</a>
+        <span class="text-base-content/70">{{ a.get_action_display }}:</span>
+        <span>{{ a.summary }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if charge_conflicts %}
+  <section class="space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Charge conflicts
+      <span class="text-base-content/60 text-sm font-normal">({{ charge_conflicts|length }})</span></h3>
+    <p class="text-sm text-base-content/60">The minting sync never edits a charge a treasurer has touched — disagreements land here instead.</p>
+    <ul class="rounded-lg border border-base-300 divide-y divide-base-300">
+      {% for item in charge_conflicts %}
+      <li class="p-3 text-sm flex flex-wrap items-baseline gap-2">
+        <a class="link" href="{% url 'treasurer_member_detail' item.user.id %}">{{ item.user.get_full_name|default:item.user.email }}</a>
+        <span>{{ item.problem }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   <header class="space-y-1">
     <h2 class="font-serif text-xl text-base-content">Reconcile provisional payments</h2>
     <p class="text-sm text-base-content/70">
@@ -23,7 +116,7 @@
       <div>
         <h3 class="font-medium text-base-content">
           {{ g.who }}
-          {% if not g.matched %}<span class="badge badge-warning badge-sm">unmatched</span>{% endif %}
+          {% if not g.matched %}<span class="badge badge-warning badge-sm">unmatched payer</span>{% endif %}
         </h3>
         <p class="text-xs text-base-content/55">
           {{ g.payments|length }} charge{{ g.payments|length|pluralize }} ·
@@ -39,6 +132,7 @@
 
     <form method="post" class="space-y-3">
       {% csrf_token %}
+      <input type="hidden" name="form" value="reconcile">
       {% comment %}One checkbox per charge — uncheck any you want to leave for later.{% endcomment %}
       <div class="flex flex-wrap gap-1.5">
         {% for p in g.payments %}
@@ -51,17 +145,18 @@
 
       <div class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
         <div class="space-y-1">
-          <label class="block text-xs text-base-content/60">Reclassify selected as</label>
+          <label class="block text-xs text-base-content/60">Confirm or reclassify selected as</label>
           <select name="payment_type" class="select select-bordered select-sm">
             {% for value, label in type_choices %}
-            <option value="{{ value }}">{{ label }}</option>
+            <option value="{{ value }}"{% if value == g.current_type %} selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </div>
         {% if not g.matched %}
         <div class="space-y-1">
-          <label class="block text-xs text-base-content/60">Link to member (email or id)</label>
-          <input name="assign_user" class="input input-bordered input-sm" placeholder="optional">
+          <label class="block text-xs text-base-content/60">Link to member</label>
+          <input name="assign_user" list="reconcile-members" autocomplete="off"
+                 class="input input-bordered input-sm" placeholder="start typing a name…">
         </div>
         {% endif %}
         <button class="btn btn-primary btn-sm">Reconcile selected</button>
@@ -74,6 +169,80 @@
   </div>
   {% endfor %}
 </div>
+
+{% if no_payer_groups %}
+<div class="space-y-6 pt-8 mt-8 border-t-2 border-base-300">
+  <header class="space-y-1">
+    <h2 class="font-serif text-xl text-base-content">No payer</h2>
+    <p class="text-sm text-base-content/70">
+      {{ no_payer_count }} Stripe charge{{ no_payer_count|pluralize }} ({{ no_payer_total|usd0 }})
+      are categorized but linked to no member — so they never show up in a member's
+      history. Link each to a member, keep it under a payer name, or mark it an
+      anonymous donation. Grouped by the payer name on the charge.
+    </p>
+  </header>
+
+  {% for g in no_payer_groups %}
+  <section class="rounded-xl border border-base-300 p-4 space-y-3" data-recon-group>
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <div>
+        <h3 class="font-medium text-base-content">{{ g.who }}</h3>
+        <p class="text-xs text-base-content/55">
+          {{ g.payments|length }} charge{{ g.payments|length|pluralize }} ·
+          {{ g.total|usd0 }} · currently {{ g.types|join:", " }}
+        </p>
+      </div>
+      <label class="flex items-center gap-1.5 text-xs text-base-content/60 cursor-pointer">
+        <input type="checkbox" class="checkbox checkbox-xs" data-recon-all checked>
+        Select all
+      </label>
+    </div>
+
+    <form method="post" class="space-y-3">
+      {% csrf_token %}
+      <input type="hidden" name="form" value="no_payer">
+      <div class="flex flex-wrap gap-1.5">
+        {% for p in g.payments %}
+        <label class="inline-flex items-center gap-1.5 rounded-md border border-base-300/70 px-2 py-1 text-xs cursor-pointer has-[:checked]:bg-primary/10 has-[:checked]:border-primary/40">
+          <input type="checkbox" name="payment_ids" value="{{ p.pk }}" class="checkbox checkbox-xs" data-recon-item checked>
+          {{ p.amount|usd0 }} · {{ p.paid_at|date:"M j, Y" }}
+        </label>
+        {% endfor %}
+      </div>
+
+      <div class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">Category</label>
+          <select name="payment_type" class="select select-bordered select-sm">
+            {% for value, label in type_choices %}
+            <option value="{{ value }}"{% if value == g.current_type %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">Link to member</label>
+          <input name="assign_user" list="reconcile-members" autocomplete="off"
+                 class="input input-bordered input-sm" placeholder="start typing a name…">
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs text-base-content/60">or payer name</label>
+          <input name="payer_name" value="{{ g.payer_name }}" autocomplete="off"
+                 class="input input-bordered input-sm" placeholder="named payer">
+        </div>
+        <button name="action" value="save" class="btn btn-primary btn-sm">Save selected</button>
+        <button name="action" value="anonymous" class="btn btn-ghost btn-sm">Anonymous donation</button>
+      </div>
+    </form>
+  </section>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if member_options %}
+<datalist id="reconcile-members">
+  {% for opt in member_options %}<option value="{{ opt.value }}"></option>{% endfor %}
+</datalist>
+{% endif %}
 
 <script>
   // Per-group "select all" toggles that group's charge checkboxes; the group

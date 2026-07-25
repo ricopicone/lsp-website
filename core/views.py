@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -16,7 +16,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from core.context_processors import DEFAULT_SITE_THEME, SITE_THEME_COOKIE, SITE_THEMES
-from events.models import Event, Session
+from events.models import Session
+from events.upcoming import landing_events
 
 
 def set_site_theme(request, theme):
@@ -61,32 +62,22 @@ def landing(request):
     from workgroups.models import Visibility, Workgroup
 
     today = timezone.now().date()
-    # "Coming up" shows events that haven't started yet — with one exception:
-    # seminars (year-long) that started within the last month and aren't over,
-    # so a freshly-begun seminar still surfaces for late registration.
-    a_month_ago = today - timedelta(days=31)
-    seminar_types = [Event.Type.SEMINAR, Event.Type.SCHOLARLY_SEMINAR]
-    upcoming = (
-        Event.objects.filter(published=True)
-        .filter(
-            models.Q(start_date__gte=today)
-            | models.Q(
-                event_type__in=seminar_types,
-                start_date__gte=a_month_ago,
-                start_date__lt=today,
-                end_date__gte=today,
-            )
-        )
-        .order_by("start_date", "title")[:4]
-    )
+    upcoming = landing_events(request.user)
 
     # Grounded figures woven into the page (each rendered only when positive).
-    directory_count = Profile.objects.filter(
-        role__in=Profile.DIRECTORY_ROLES, public=True
-    ).count()
-    analyst_count = Profile.objects.filter(
-        role=Profile.Role.ANALYST, public=True
-    ).count()
+    # Matches accounts.views._directory_qs's standing exclusion — removed/
+    # resigned members don't inflate a public count they're not shown in
+    # (deceased members stay counted; the grid still shows them).
+    directory_count = (
+        Profile.objects.filter(role__in=Profile.DIRECTORY_ROLES, public=True)
+        .exclude(standing__in=Profile.NON_MEMBER_STANDINGS)
+        .count()
+    )
+    analyst_count = (
+        Profile.objects.filter(role=Profile.Role.ANALYST, public=True)
+        .exclude(standing__in=Profile.NON_MEMBER_STANDINGS)
+        .count()
+    )
     seminar_count = (
         Workgroup.objects.filter(
             kind=Workgroup.Kind.SEMINAR, landing_visibility=Visibility.PUBLIC
@@ -95,23 +86,13 @@ def landing(request):
         .count()
     )
 
-    dues_period_unpaid = None
-    dues_amount_owed = None
+    outstanding_balance = None
     if request.user.is_authenticated:
-        from payments.dues import is_dues_obligated, user_paid_for_period
-        from payments.models import DuesPeriod
+        from payments import ledger
 
-        # Dues banner for obligated unpaid members.
-        current_period = DuesPeriod.current()
-        if (
-            current_period is not None
-            and is_dues_obligated(request.user)
-            and not user_paid_for_period(request.user, current_period)
-        ):
-            dues_period_unpaid = current_period
-            dues_amount_owed = current_period.amount_for_role(
-                request.user.profile.role
-            )
+        acct = ledger.member_account(request.user)
+        if acct["owes"] > 0:
+            outstanding_balance = acct["owes"]
 
     return render(
         request,
@@ -121,8 +102,7 @@ def landing(request):
             "directory_count": directory_count,
             "analyst_count": analyst_count,
             "seminar_count": seminar_count,
-            "dues_period_unpaid": dues_period_unpaid,
-            "dues_amount_owed": dues_amount_owed,
+            "outstanding_balance": outstanding_balance,
         },
     )
 
@@ -269,6 +249,16 @@ def _real_superuser(request):
     return real if (real.is_authenticated and real.is_superuser) else None
 
 
+def _safe_next(request, raw):
+    """Return ``raw`` if it's a safe same-host path, else ``/``."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+    if raw and url_has_allowed_host_and_scheme(
+        raw, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return raw
+    return "/"
+
+
 def impersonate_picker(request):
     """Pick a persona (or search a real member) to view the site as."""
     if _real_superuser(request) is None:
@@ -276,6 +266,7 @@ def impersonate_picker(request):
     from accounts.models import Profile
 
     User = get_user_model()
+    nxt = _safe_next(request, request.GET.get("next"))
     personas = (
         User.objects.filter(profile__is_persona=True, is_active=True)
         .select_related("profile").order_by("first_name", "last_name", "email")
@@ -292,6 +283,7 @@ def impersonate_picker(request):
         )
     return render(request, "core/impersonate.html", {
         "personas": personas, "matches": matches, "q": q,
+        "next": nxt,
         "directory_roles": Profile.DIRECTORY_ROLES,
     })
 
@@ -312,12 +304,7 @@ def impersonate_start(request, user_id: int):
     ImpersonationLog.objects.create(
         impersonator=real, target=target, read_only=read_only
     )
-    from django.utils.http import url_has_allowed_host_and_scheme
-    nxt = request.GET.get("next") or "/"
-    if not url_has_allowed_host_and_scheme(
-        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
-        nxt = "/"
+    nxt = _safe_next(request, request.POST.get("next") or request.GET.get("next"))
     return redirect(nxt)
 
 
@@ -331,4 +318,5 @@ def impersonate_stop(request):
         (ImpersonationLog.objects
          .filter(impersonator=impersonator, ended_at__isnull=True)
          .order_by("-started_at").update(ended_at=timezone.now()))
-    return redirect("/")
+    nxt = _safe_next(request, request.POST.get("next") or request.GET.get("next"))
+    return redirect(nxt)

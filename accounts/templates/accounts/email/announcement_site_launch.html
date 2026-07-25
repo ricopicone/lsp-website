@@ -1,0 +1,19 @@
+{% extends "email/base_email.html" %}
+{% block title %}The Lacanian School's New Website{% endblock %}
+{% block preheader %}The School's new home online, at the same address as always.{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 16px 0; font-family:Georgia, 'Iowan Old Style', serif; font-weight:normal; font-size:24px; line-height:1.3; color:#1c1c29;">A new website for the School</h1>
+<p style="margin:0 0 16px 0;">Hello{% if user.first_name %} {{ user.first_name }}{% endif %},</p>
+<p style="margin:0 0 16px 0;">We are excited to unveil the School's new website, at the same address as always. The site is now the home of the School online: member accounts, the annual program, event registration, payments, the member directory, and more.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+  <tr><td style="background-color:#1c1c29; border-radius:8px;">
+    <a href="{{ site_url }}" style="display:inline-block; padding:12px 26px; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; font-weight:600; color:#e1ff00; text-decoration:none;">Visit the new site</a>
+  </td></tr>
+</table>
+<p style="margin:0 0 16px 0;">Two more emails follow this one. The first shows you how to sign in to your member account, which is already set up. The second announces the 2026&ndash;2027 program, now open for registration.</p>
+<p style="margin:0 0 16px 0;">And there is much more to the new site than fits in a few messages. Over the coming weeks you will receive occasional emails introducing its other features.</p>
+<p style="margin:24px 0 0 0;">Warmly,<br>
+Rico Picone<br>
+<span style="color:#8a847e;">Web Coordinator and Developer<br>
+Lacanian School of Psychoanalysis</span></p>
+{% endblock %}

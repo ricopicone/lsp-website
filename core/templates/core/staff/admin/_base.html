@@ -4,7 +4,7 @@ Shared base for the per-body / per-role admin landing pages under /admin-tools/.
 Child templates fill: admin_heading, admin_kicker, admin_intro, admin_sections.
 Section cards use the markup in _section.html.
 {% endcomment %}
-{% block title %}{% block admin_heading_title %}Admin{% endblock %} — Admin Tools{% endblock %}
+{% block title %}{% block admin_heading_title %}Admin{% endblock %} · Admin Tools{% endblock %}
 {% block content %}
 <div class="space-y-6">
   <nav class="text-sm"><a href="{% url 'admin_tools' %}" class="link link-hover text-base-content/60">← Admin Tools</a></nav>

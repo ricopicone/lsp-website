@@ -1,0 +1,26 @@
+{% extends "core/base.html" %}
+{% block title %}Activate your account · LSP{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto space-y-6">
+  <header class="space-y-1">
+    <h1 class="font-serif text-2xl text-base-content">Welcome{% if invitation %}, {{ invitation.speaker.name }}{% endif %}</h1>
+    <p class="text-sm text-base-content/70">
+      Choose a password to activate your account{% if event %} for {{ event.title }}{% endif %}.
+      After signing in you'll land on the event page, where you can open the
+      meeting room when the event begins.
+    </p>
+  </header>
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="form-control space-y-1">
+      <label class="label-text" for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {% if field.errors %}<p class="text-xs text-error">{{ field.errors|join:", " }}</p>{% endif %}
+      {% if field.help_text %}<p class="text-xs text-base-content/50">{{ field.help_text|safe }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary">Set password &amp; sign in</button>
+  </form>
+</div>
+{% endblock %}

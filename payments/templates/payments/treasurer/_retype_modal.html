@@ -1,0 +1,57 @@
+{% load parletre_tags %}
+{% comment %}
+Re-categorize modal for one payment. Native <dialog> renders in the browser's
+top layer, so it can live inside an overflow-x-auto table without clipping.
+Include with: payment, type_choices, dues_periods, tuition_periods, next_url.
+{% endcomment %}
+<button type="button" class="btn btn-ghost btn-xs" title="Re-categorize" aria-label="Re-categorize"
+        onclick="document.getElementById('retype-{{ payment.id }}').showModal()">{% icon "tag" %}</button>
+<dialog id="retype-{{ payment.id }}" class="modal">
+  <div class="modal-box max-w-sm whitespace-normal text-left">
+    <h3 class="font-serif text-lg mb-3">Re-categorize payment</h3>
+    <p class="text-sm text-base-content/70 mb-3">${{ payment.amount }} · currently {{ payment.get_payment_type_display }}</p>
+    <form method="post" action="{% url 'treasurer_payment_retype' payment.id %}" class="space-y-2">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <label class="text-xs text-base-content/60" for="retype-type-{{ payment.id }}">New category</label>
+      <select id="retype-type-{{ payment.id }}" name="payment_type" class="select select-bordered select-sm w-full" required
+              onchange="var v=this.value;
+                        document.getElementById('retype-dues-wrap-{{ payment.id }}').hidden=(v!=='dues');
+                        document.getElementById('retype-tuition-wrap-{{ payment.id }}').hidden=(v!=='tuition');
+                        document.getElementById('retype-settle-wrap-{{ payment.id }}').hidden=(v!=='registration');">
+        {# Registration keeps its option selectable so the treasurer can re-submit it purely to insert the matching charge; every other current category stays disabled (same category = no-op). #}
+        {% for value, label in type_choices %}
+        <option value="{{ value }}" {% if value == payment.payment_type %}selected{% if value != 'registration' %} disabled{% endif %}{% endif %}>{{ label }}{% if value == payment.payment_type %} (current){% endif %}</option>
+        {% endfor %}
+      </select>
+      <div id="retype-dues-wrap-{{ payment.id }}" hidden class="space-y-1">
+        <label class="text-xs text-base-content/60" for="retype-dues-{{ payment.id }}">Dues year</label>
+        <select id="retype-dues-{{ payment.id }}" name="dues_period" class="select select-bordered select-sm w-full">
+          <option value="">Auto (from payment date)</option>
+          {% for period in dues_periods %}
+          <option value="{{ period.id }}">{{ period.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="retype-tuition-wrap-{{ payment.id }}" hidden class="space-y-1">
+        <label class="text-xs text-base-content/60" for="retype-tuition-{{ payment.id }}">Tuition year</label>
+        <select id="retype-tuition-{{ payment.id }}" name="tuition_period" class="select select-bordered select-sm w-full">
+          <option value="">Auto (from payment date)</option>
+          {% for period in tuition_periods %}
+          <option value="{{ period.id }}">{{ period.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <label id="retype-settle-wrap-{{ payment.id }}" {% if payment.payment_type != 'registration' %}hidden{% endif %} class="flex items-start gap-2 text-xs text-base-content/70 pt-1">
+        <input type="checkbox" name="settle_charge" value="1" class="checkbox checkbox-xs mt-0.5">
+        <span>Also insert a matching <strong>Registration charge</strong> dated with the payment. Use when the original event fee was never recorded, so the pair nets to zero instead of showing as credit.</span>
+      </label>
+      <div class="modal-action mt-4">
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+        <button type="button" class="btn btn-ghost btn-sm"
+                onclick="document.getElementById('retype-{{ payment.id }}').close()">Cancel</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>

@@ -1,9 +1,31 @@
 {# Formation tab — Advisor + formation-step trace (Palimpsest/Passage/Traversée). #}
   <div class="space-y-6">
 
+    {# ---- Formation guidelines for the member's track (in-training only) ---- #}
+    {% if formation_doc %}
+    <a href="{{ formation_doc.get_absolute_url }}"
+       class="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5 hover:bg-primary/10 transition-colors scroll-mt-24">
+      <span class="min-w-0">
+        <span class="block font-serif text-lg text-base-content">{{ formation_doc.title }}</span>
+        <span class="block text-sm text-base-content/70">
+          {% if formation_doc.summary %}{{ formation_doc.summary }} {% endif %}Read the guidelines for your formation pathway. &rarr;
+        </span>
+      </span>
+    </a>
+    {% endif %}
+
     {# ---- Advisor ---- #}
     <section id="advisor" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">My Advisor</h2>
+      {% if needs_advisor %}
+      <p class="text-sm text-base-content/70">
+        Your Advisor supports you through your formation and presents your demandes
+        to the Meeting of the Analysts. You can choose or change your Advisor here,
+        and they're notified when you do. The School encourages you to speak with a
+        prospective Advisor first, and, if you decide to change Advisors, to talk
+        through your reasons for the change.
+      </p>
+      {% endif %}
       {% if advisor %}
       <div>
         <p class="font-medium text-base-content">{{ advisor.get_full_name|default:advisor.email }}</p>
@@ -11,25 +33,26 @@
       </div>
       {% endif %}
       {% if needs_advisor %}
-      <form method="post" action="{% url 'advisor_select' %}" class="space-y-3">
-        {% csrf_token %}
-        <label class="block text-sm font-medium text-base-content">
+      <details {% if advisor_form.advisor.errors %}open{% endif %}>
+        <summary class="btn btn-primary btn-sm list-none [&::-webkit-details-marker]:hidden">
           {% if advisor %}Change my Advisor{% else %}Choose my Advisor{% endif %}
-        </label>
-        {{ advisor_form.advisor }}
-        {% if advisor_form.advisor.errors %}<p class="text-error text-xs">{{ advisor_form.advisor.errors|striptags }}</p>{% endif %}
-        <p class="text-xs text-base-content/50">
+        </summary>
+        <form method="post" action="{% url 'advisor_select' %}" class="space-y-3 mt-3">
+          {% csrf_token %}
+          {{ advisor_form.advisor }}
+          {% if advisor_form.advisor.errors %}<p class="text-error text-xs">{{ advisor_form.advisor.errors|striptags }}</p>{% endif %}
+          <p class="text-xs text-base-content/50">
+            {% if advisor_form.advisor.field.queryset.exists %}
+              Your Advisor will be notified of your choice.
+            {% else %}
+              No eligible advisors are listed yet. Please contact the School.
+            {% endif %}
+          </p>
           {% if advisor_form.advisor.field.queryset.exists %}
-            My Advisor supports me through my training and presents my demandes
-            to the Meeting of the Analysts. They'll be notified of my choice.
-          {% else %}
-            No eligible advisors are listed yet. Please contact the School.
+          <button class="btn btn-primary btn-sm">Save Advisor</button>
           {% endif %}
-        </p>
-        {% if advisor_form.advisor.field.queryset.exists %}
-        <button class="btn btn-primary btn-sm">Save Advisor</button>
-        {% endif %}
-      </form>
+        </form>
+      </details>
       {% elif not advisor %}
       <p class="text-sm text-base-content/60">
         Advisors are chosen by members in formation (Precandidates and Candidates).
@@ -41,33 +64,36 @@
     <section id="steps" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">My formation steps</h2>
       <p class="text-sm text-base-content/70">
-        A demande is my request to present my Palimpsest or Passage / Traversée
-        to the entire School at the next Days of Assembly — sent to my Advisor in
-        lieu of an email. My Advisor presents it, with a recommendation, to the
+        A demande is your request to present your Palimpsest or Passage / Traversée
+        to the entire School at the next Days of Assembly, sent to your Advisor in
+        lieu of an email. Your Advisor presents it, with a recommendation, to the
         Meeting of the Analysts, who decide.
       </p>
 
       {# Open a new demande #}
       {% if can_open %}
       {% if advisor %}
-      <form method="post" action="{% url 'formation:advancement' %}" class="space-y-3 rounded-lg border border-base-300 bg-base-200/40 p-4">
-        {% csrf_token %}
-        <p class="text-sm text-base-content/70">
-          Request to present my <strong>{{ step_label }}</strong> at the next Days of
-          Assembly. {{ advisor.get_full_name|default:advisor.email }} will be asked
-          to present it on my behalf.
-        </p>
-        <div class="space-y-1">
-          <label class="block text-sm text-base-content/70">{{ demande_form.statement.label }}</label>
-          {{ demande_form.statement }}
-          <p class="text-xs text-base-content/50">{{ demande_form.statement.help_text }}</p>
-          {% if demande_form.statement.errors %}<p class="text-error text-xs">{{ demande_form.statement.errors|striptags }}</p>{% endif %}
-        </div>
-        <button class="btn btn-primary btn-sm">Demande my {{ step_label }}</button>
-      </form>
+      <details {% if demande_form.statement.errors %}open{% endif %}>
+        <summary class="btn btn-primary btn-sm list-none [&::-webkit-details-marker]:hidden">Demande my {{ step_label }}</summary>
+        <form method="post" action="{% url 'formation:advancement' %}" class="space-y-3 rounded-lg border border-base-300 bg-base-200/40 p-4 mt-3">
+          {% csrf_token %}
+          <p class="text-sm text-base-content/70">
+            Request to present your <strong>{{ step_label }}</strong> at the next Days of
+            Assembly. {{ advisor.get_full_name|default:advisor.email }} will be asked
+            to present it on your behalf.
+          </p>
+          <div class="space-y-1">
+            <label class="block text-sm text-base-content/70">{{ demande_form.statement.label }}</label>
+            {{ demande_form.statement }}
+            <p class="text-xs text-base-content/50">{{ demande_form.statement.help_text }}</p>
+            {% if demande_form.statement.errors %}<p class="text-error text-xs">{{ demande_form.statement.errors|striptags }}</p>{% endif %}
+          </div>
+          <button class="btn btn-primary btn-sm">Send my demande</button>
+        </form>
+      </details>
       {% else %}
       <div class="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm">
-        <p class="text-base-content/80">Choose my Advisor (above) before sending a demande — they present it to the Meeting on my behalf.</p>
+        <p class="text-base-content/80">Choose your Advisor (above) before sending a demande, so they can present it to the Meeting on your behalf.</p>
       </div>
       {% endif %}
       {% endif %}
@@ -94,7 +120,7 @@
             {% if a %}
               <li>Requested {{ a.requested_at|date:"M j, Y" }}</li>
               {% if a.presented_at %}<li>Presented to the Meeting {{ a.presented_at|date:"M j, Y" }}{% if a.advisor %} by {{ a.advisor.get_full_name|default:a.advisor.email }}{% endif %}</li>{% endif %}
-              {% if a.decided_at %}<li>Decision {{ a.decided_at|date:"M j, Y" }}{% if a.decision_note %} — {{ a.decision_note }}{% endif %}</li>{% endif %}
+              {% if a.decided_at %}<li>Decision {{ a.decided_at|date:"M j, Y" }}{% if a.decision_note %}: {{ a.decision_note }}{% endif %}</li>{% endif %}
             {% elif s.when_ay %}
               <li>Completed in AY {{ s.when_ay }}–{{ s.when_ay|add:1 }}</li>
             {% else %}
@@ -142,21 +168,55 @@
     <section id="control" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">Control analysis</h2>
       <p class="text-sm text-base-content/70">
-        A self-reported log of my supervisory (control) analyses, in person or
+        A self-reported log of your supervisory (control) analyses, in person or
         remote, toward the years shown below. There's no approval step here.
       </p>
 
+      {% if control_progress.reviewed %}
       <div class="space-y-1">
-        <progress class="progress progress-primary w-full" value="{{ control_years }}" max="{{ control_target }}"></progress>
-        <p class="text-sm text-base-content/70">{{ control_years }} of {{ control_target }} years of control analysis, or four years of ongoing dialogue with an analyst.</p>
+        <progress class="progress progress-primary w-full" value="{{ control_progress.total_years }}" max="{{ control_progress.total_target }}"></progress>
+        <p class="text-sm text-base-content/70">{{ control_progress.total_years|floatformat:1 }} of {{ control_progress.total_target }} total years across your control analyses.</p>
       </div>
+
+      <div class="space-y-3">
+        {# 4-year slot #}
+        <div class="space-y-1">
+          <div class="flex items-center justify-between text-sm">
+            <span class="font-medium">4-year control analysis</span>
+            {% if control_progress.four_year.met %}<span class="badge badge-success badge-sm">met</span>{% endif %}
+          </div>
+          <progress class="progress progress-secondary w-full" value="{{ control_progress.four_year.years }}" max="{{ control_progress.four_year.target }}"></progress>
+          <p class="text-xs text-base-content/60">
+            {% if control_progress.four_year.entry %}{{ control_progress.four_year.entry.supervisor_name }}, {{ control_progress.four_year.years|floatformat:1 }} of {{ control_progress.four_year.target }} years{% else %}Not yet started.{% endif %}
+          </p>
+        </div>
+        {# 2-year slots #}
+        {% for slot in control_progress.two_year %}
+        <div class="space-y-1">
+          <div class="flex items-center justify-between text-sm">
+            <span class="font-medium">2-year control analysis{% if control_progress.two_year|length > 1 %} #{{ forloop.counter }}{% endif %}</span>
+            {% if slot.met %}<span class="badge badge-success badge-sm">met</span>{% endif %}
+          </div>
+          <progress class="progress progress-secondary w-full" value="{{ slot.years }}" max="{{ slot.target }}"></progress>
+          <p class="text-xs text-base-content/60">
+            {% if slot.entry %}{{ slot.entry.supervisor_name }}, {{ slot.years|floatformat:1 }} of {{ slot.target }} years{% else %}Not yet started.{% endif %}
+          </p>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/70">Your control-analysis requirement will be set by the Meeting of Analysts. You can still log your control analyses below.</p>
+      {% endif %}
 
       {% if control_entries %}
       <ul class="space-y-3">
         {% for c in control_entries %}
         <li class="rounded-lg border border-base-300 p-4 flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <p class="font-medium text-base-content">{{ c.supervisor_name }}</p>
+            <p class="font-medium text-base-content flex items-center gap-2 flex-wrap">
+              {{ c.supervisor_name }}
+              <span class="badge badge-outline badge-sm">{{ c.get_requirement_display }} control</span>
+            </p>
             <p class="text-sm text-base-content/60">
               {{ c.get_modality_display }} · {{ c.start_date|date:"M j, Y" }}
               {% if c.end_date %} – {{ c.end_date|date:"M j, Y" }}{% else %} – ongoing{% endif %}
@@ -179,6 +239,17 @@
       <p class="text-sm text-base-content/60">No control analysis entries yet.</p>
       {% endif %}
 
+      {% if external_requests %}
+      <div class="space-y-2">
+        <h3 class="text-sm font-medium">External control analyst requests</h3>
+        <ul class="space-y-1 text-sm text-base-content/70">
+          {% for r in external_requests %}
+          <li>{{ r.name }}, <span class="badge badge-sm">{{ r.get_status_display }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
       <a href="{% url 'formation:control_add' %}" class="btn btn-primary btn-sm">Add a control analysis</a>
     </section>
 
@@ -186,8 +257,8 @@
     <section id="external" class="rounded-xl border border-base-300 p-5 space-y-4 scroll-mt-24">
       <h2 class="font-serif text-xl text-base-content">External activities</h2>
       <p class="text-sm text-base-content/70">
-        A self-reported log of courses I've taken or taught, presentations, and
-        publications related to my formation, outside the School. There's no
+        A self-reported log of courses you've taken or taught, presentations, and
+        publications related to your formation, outside the School. There's no
         approval step here.
       </p>
 

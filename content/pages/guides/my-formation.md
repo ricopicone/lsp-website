@@ -4,22 +4,24 @@ summary: Your personal hub—advisor, formation steps, tuition, and the groups y
 checklist: my_formation
 ---
 
-**My Formation** (`/formation/`) is your own place in the School, gathered on one
+**[My Formation](/formation/)** is your own place in the School, gathered on one
 page. It has up to three tabs, each with its own link you can return to or share:
 
 - **Formation**—your advisor and your advancement steps.
-- **Tuition & Dues**—your decision, payments, and progress (shown when it
-  applies to you). See the [Tuition & dues](/guides/tuition-dues/) guide.
+- **Account**—your tuition decision, dues, and a statement of every charge
+  and payment (shown when it applies to you). See the
+  [Tuition & dues](/guides/tuition-dues/) guide.
 - **Groups**—the cartels, seminars, and other groups you belong to now and have
   in the past.
 
 ## Your advisor
 
-If you're in training, you choose an **Advisor**—an Analyst (for the analyst
-track) or a Scholar or Analyst (for the scholar track). Your advisor supports you
-through your formation and **presents your demandes to the Meeting of the
-Analysts**. You can choose or change your advisor from the Formation tab; they're
-notified when you do.
+When you're accepted into LSP you enter as a **Pre-Candidate** and choose an
+**Advisor**. Your advisor supports you through your formation and **presents your
+demandes to the Meeting of the Analysts**. You can choose or change your advisor
+from the Formation tab; they're notified when you do. The School encourages you to
+speak with a prospective advisor first, and, if you decide to change advisors, to
+talk through your reasons for the change.
 
 ## The steps of formation
 

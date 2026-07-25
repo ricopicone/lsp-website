@@ -59,12 +59,25 @@ def eligible_profiles():
     """
     from accounts.models import Profile
 
-    return Profile.objects.filter(role__in=AVAILABILITY_ROLES)
+    return Profile.objects.filter(
+        role__in=AVAILABILITY_ROLES,
+        standing=Profile.Standing.ACTIVE,
+        is_persona=False,
+        user__is_active=True,
+    )
 
 
 def is_eligible(profile) -> bool:
-    """Whether ``profile``'s role makes it part of the availability table."""
-    return profile.role in AVAILABILITY_ROLES
+    """Whether ``profile`` is part of the availability table: an active-standing,
+    active-account, non-persona holder of an availability role. Mirrors the
+    ``eligible_profiles()`` queryset so the self-service editor gate and the
+    table always agree (retired / inactive / persona analysts are excluded)."""
+    return (
+        profile.role in AVAILABILITY_ROLES
+        and profile.standing == profile.Standing.ACTIVE
+        and not profile.is_persona
+        and profile.user.is_active
+    )
 
 
 @transaction.atomic

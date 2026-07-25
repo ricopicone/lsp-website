@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}Donate — LSP{% endblock %}
+{% block title %}Donate · LSP{% endblock %}
 {% block content %}
 <div class="max-w-xl mx-auto space-y-6">
 
@@ -10,6 +10,16 @@
 
   <form method="post" class="space-y-4">
     {% csrf_token %}
+
+    {% if not user.is_authenticated %}
+    <div role="note" class="alert bg-base-200/60 border border-base-300 text-sm">
+      <span>
+        Have an LSP account?
+        <a href="{% url 'login' %}?next={% url 'donate' %}" class="link link-primary">Sign in</a>
+        to track your donations and receipts. You can also give anonymously below.
+      </span>
+    </div>
+    {% endif %}
 
     <div class="form-control space-y-1">
       <label for="id_amount" class="label-text text-sm">Amount (USD)</label>

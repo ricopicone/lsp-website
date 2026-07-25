@@ -12,6 +12,7 @@ from django.contrib.auth.forms import (
     AuthenticationForm,
     BaseUserCreationForm,
     PasswordResetForm,
+    _unicode_ci_compare,
 )
 from django.contrib.auth.forms import UserChangeForm as BaseUserChangeForm
 from django.core.mail import EmailMultiAlternatives
@@ -419,13 +420,10 @@ class ProfileEditForm(forms.ModelForm):
                       or Profile.Visibility.PUBLIC)
                 for key in self._vis_keys
             }
-        # If the member edited their location, stale the geocode so the next
-        # `geocode_profiles` run (which only touches rows with no coords)
-        # re-resolves pins. See accounts/management/commands/geocode_profiles.py.
-        if "location" in self.changed_data:
-            profile.location_lat = None
-            profile.location_lng = None
-            profile.location_pins = []
+        # Geocode invalidation on a location change now lives in
+        # Profile.save() (task #391) so every save path behaves alike — the
+        # form no longer stales coords itself. Interactive re-geocoding is
+        # kicked off by the view via geocoding.geocode_after_edit().
         if commit:
             profile.save()
         return profile
@@ -457,6 +455,23 @@ class MembershipChangeForm(forms.Form):
         }),
     )
 
+    def __init__(self, *args, member=None, **kwargs):
+        self.member = member
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned = super().clean()
+        role = cleaned.get("role")
+        if self.member is not None and role:
+            from django.core.exceptions import ValidationError
+
+            from .membership import validate_role_transition
+            try:
+                validate_role_transition(self.member, role)
+            except ValidationError as exc:
+                raise forms.ValidationError(exc.messages)
+        return cleaned
+
 
 class AdvisorSelectForm(forms.Form):
     """An in-training member picks their Advisor from the eligible pool."""
@@ -470,12 +485,29 @@ class AdvisorSelectForm(forms.Form):
     def __init__(self, *args, advisee=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.advisee = advisee
-        if advisee is not None:
-            from .advisor import eligible_advisors
-            self.fields["advisor"].queryset = eligible_advisors(advisee)
-        self.fields["advisor"].label_from_instance = lambda u: (
-            f"{u.get_full_name() or u.email} — {u.profile.get_role_display()}"
-        )
+        field = self.fields["advisor"]
+
+        def _label(u):
+            return f"{u.get_full_name() or u.email} — {u.profile.get_role_display()}"
+
+        field.label_from_instance = _label
+        if advisee is None:
+            return
+
+        from .advisor import advisor_availability_split, eligible_advisors
+
+        # The queryset backs validation (any eligible, i.e. not "No", advisor).
+        field.queryset = eligible_advisors(advisee)
+        # The rendered choices group unreported analysts into their own section,
+        # so those who declared they're available appear first.
+        available, unknown = advisor_availability_split(advisee)
+        choices = [("", "Select an advisor…")]
+        choices += [(u.pk, _label(u)) for u in available]
+        if unknown:
+            choices.append(
+                ("Unknown availability", [(u.pk, _label(u)) for u in unknown])
+            )
+        field.choices = choices
 
 
 class ReplyToPasswordResetForm(PasswordResetForm):
@@ -484,7 +516,22 @@ class ReplyToPasswordResetForm(PasswordResetForm):
     Matches the rest of the app's transactional mail (see
     ``accounts.emails``) so a member who replies to the reset email reaches
     support, not the no-reply sending address.
+
+    It also includes members who have no *usable* password, which Django's
+    default form deliberately skips. Imported members are created with an
+    unusable password (``import_users``) and password reset is their intended
+    onboarding path — without this override they'd silently receive nothing.
     """
+
+    def get_users(self, email):
+        active_users = User._default_manager.filter(
+            email__iexact=email, is_active=True,
+        )
+        # Same as Django's default, minus the ``has_usable_password()`` filter.
+        return (
+            u for u in active_users
+            if _unicode_ci_compare(email, u.email)
+        )
 
     def send_mail(self, subject_template_name, email_template_name, context,
                   from_email, to_email, html_email_template_name=None):

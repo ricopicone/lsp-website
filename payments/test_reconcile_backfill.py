@@ -97,6 +97,13 @@ def test_backfill_upgrades_but_does_not_downgrade():
     assert e.status == TuitionEnrollment.Status.PAID_IN_FULL
 
 
+@pytest.mark.parametrize("status", TuitionEnrollment.Status)
+def test_backfill_rank_map_covers_all_statuses(status):
+    """Verify the rank map includes all TuitionEnrollment.Status values."""
+    from payments.management.commands.backfill_tuition_status import _RANK
+    assert status in _RANK, f"Status {status} missing from _RANK map"
+
+
 # ---- reconcile view -------------------------------------------------------
 
 def _treasurer(client):
@@ -119,6 +126,18 @@ def test_reconcile_lists_assumed_grouped(client):
     resp = client.get(reverse("treasurer_reconcile"))
     assert resp.status_code == 200
     assert b"karen@x.test" in resp.content
+
+
+def test_reconcile_preselects_current_assumed_type(client):
+    """The reclassify dropdown defaults to the group's prevailing assumed
+    type, so confirming a correct guess is one click (task #434)."""
+    _treasurer(client)
+    u = _student("karen@x.test")
+    _tuition_payment(u, "60.00", datetime(2025, 10, 1, 12), source=Source.ASSUMED)
+    resp = client.get(reverse("treasurer_reconcile"))
+    ctx_group = resp.context["groups"][0]
+    assert ctx_group["current_type"] == Payment.Type.TUITION
+    assert b'value="tuition" selected' in resp.content
 
 
 def test_reconcile_retypes_selected_payments(client):
@@ -176,6 +195,64 @@ def test_reconcile_links_unmatched_payer(client):
     assert resp.status_code == 302
     p.refresh_from_db()
     assert p.user == member and p.payment_type == "registration"
+
+
+def test_reconcile_links_via_autocomplete_value(client):
+    """The member-link datalist submits "Name (email)"; the email is parsed
+    back out so the link still resolves (task #434)."""
+    _treasurer(client)
+    member = _student("realmember@x.test")
+    member.first_name, member.last_name = "Real", "Member"
+    member.save()
+    p = Payment.objects.create(
+        payment_type=Payment.Type.TUITION, amount=Decimal("60.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        source=Source.ASSUMED, email="karen@x.test",
+        paid_at=timezone.make_aware(datetime(2025, 10, 1, 12)),
+    )
+    resp = client.post(reverse("treasurer_reconcile"), {
+        "payment_ids": [p.pk], "payment_type": "registration",
+        "assign_user": "Real Member (realmember@x.test)",
+    })
+    assert resp.status_code == 302
+    p.refresh_from_db()
+    assert p.user == member
+
+
+def test_reconcile_member_options_exclude_personas(client):
+    """The autocomplete lists active members but not test personas."""
+    _treasurer(client)
+    real = _student("real@x.test")
+    real.first_name = "Real"
+    real.save()
+    persona = _student("persona@x.test")
+    persona.profile.is_persona = True
+    persona.profile.save()
+    # An unmatched payer group is needed for the datalist to render.
+    Payment.objects.create(
+        payment_type=Payment.Type.TUITION, amount=Decimal("60.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        source=Source.ASSUMED, email="unknown@x.test",
+        paid_at=timezone.make_aware(datetime(2025, 10, 1, 12)),
+    )
+    resp = client.get(reverse("treasurer_reconcile"))
+    values = [o["value"] for o in resp.context["member_options"]]
+    assert any("real@x.test" in v for v in values)
+    assert not any("persona@x.test" in v for v in values)
+
+
+def test_reconcile_orders_by_most_recent_payment(client):
+    """Payer groups sort by their newest charge, so the list reads roughly
+    chronologically despite the grouping (task #434)."""
+    _treasurer(client)
+    older = _student("older@x.test")
+    newer = _student("newer@x.test")
+    # Big total but old → must sort below a small-total newer group.
+    _tuition_payment(older, "9000.00", datetime(2025, 1, 1, 12), source=Source.ASSUMED)
+    _tuition_payment(newer, "10.00", datetime(2025, 12, 1, 12), source=Source.ASSUMED)
+    resp = client.get(reverse("treasurer_reconcile"))
+    top = resp.context["groups"][0]
+    assert top["payments"][0].user.email == "newer@x.test"
 
 
 # ---- audit_finances (read-only diagnostic) --------------------------------

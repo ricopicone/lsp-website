@@ -1,11 +1,12 @@
 {% extends "events/program_admin/base.html" %}
 {% block tab_content %}
 <div class="space-y-8">
-  <p class="text-sm text-base-content/60">
-    Event proposals from members. Approving a seminar or reading group mints it
-    into the proposed academic year's program (you still publish the program
-    separately); approving a special event mints the event — published when it
-    has a date, otherwise held until you set one.
+  <p class="max-w-2xl text-sm text-base-content/60">
+    Event proposals from members, whether a seminar, reading group, or special
+    event. Approving a seminar or reading group mints it into the proposed
+    academic year's program (you still publish the program separately);
+    approving a special event mints the event — published when it has a date,
+    otherwise held until you set one.
   </p>
 
   <section class="space-y-3">
@@ -101,5 +102,74 @@
     </div>
   </section>
   {% endif %}
+
+  <section class="space-y-3">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="font-serif text-xl text-base-content">Special events</h2>
+      <a href="{% url 'program_admin_special_event_new' %}" class="btn btn-primary btn-sm whitespace-nowrap">+ New special event</a>
+    </div>
+    <p class="max-w-2xl text-sm text-base-content/60">
+      Standalone events the PC organizes (not part of any program). Create one,
+      edit its content, and publish it when it's ready.
+    </p>
+    {% if special_events %}
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead><tr><th>Title</th><th>Date</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {% for e in special_events %}
+          <tr>
+            <td class="font-medium">
+              <a href="{% url 'events:detail' e.slug %}" class="link link-hover">{{ e.title }}</a>
+            </td>
+            <td class="text-xs text-base-content/70 whitespace-nowrap">{{ e.start_date|date:"M j, Y" }}</td>
+            <td>
+              <div class="flex flex-wrap items-center gap-1">
+                {% if e.is_public_now %}
+                  <span class="badge badge-success badge-sm">Live</span>
+                {% else %}
+                  <span class="badge badge-ghost badge-sm">Draft</span>
+                {% endif %}
+                {% if e.status == 'open' %}
+                  <span class="badge badge-outline badge-sm">Registration open</span>
+                {% else %}
+                  <span class="badge badge-sm {% if e.is_public_now %}badge-warning{% else %}badge-ghost{% endif %}">Registration closed</span>
+                {% endif %}
+              </div>
+            </td>
+            <td>
+              <div class="flex items-center justify-end gap-2">
+                <a href="{% url 'events:edit' e.slug %}" class="link link-primary text-sm">Edit</a>
+                <form method="post" action="{% url 'program_admin_special_event_registration' e.slug %}">
+                  {% csrf_token %}
+                  {% if e.status == 'open' %}
+                  <input type="hidden" name="action" value="close">
+                  <button type="submit" class="btn btn-ghost btn-xs">Close registration</button>
+                  {% else %}
+                  <input type="hidden" name="action" value="open">
+                  <button type="submit" class="btn btn-outline btn-xs">Open registration</button>
+                  {% endif %}
+                </form>
+                <form method="post" action="{% url 'program_admin_special_event_publish' e.slug %}">
+                  {% csrf_token %}
+                  {% if e.is_public_now %}
+                  <input type="hidden" name="action" value="unpublish">
+                  <button type="submit" class="btn btn-ghost btn-xs">Unpublish</button>
+                  {% else %}
+                  <input type="hidden" name="action" value="publish">
+                  <button type="submit" class="btn btn-outline btn-xs">Publish</button>
+                  {% endif %}
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="py-2 text-sm text-base-content/55">No special events yet.</p>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

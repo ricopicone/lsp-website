@@ -1,0 +1,110 @@
+{% extends "registrations/registrar/base.html" %}
+{% block tab_content %}
+<div class="space-y-6">
+
+  {% if pending %}
+  <section class="rounded-box border border-warning/40 bg-warning/5 p-4 space-y-2">
+    <h2 class="font-medium text-base-content">Needs attention
+      <span class="badge badge-warning badge-sm align-middle">{{ pending|length }}</span>
+    </h2>
+    <p class="text-sm text-base-content/70">Registrations awaiting an approval decision.</p>
+    <ul class="text-sm space-y-1">
+      {% for r in pending %}
+      <li class="flex flex-wrap items-center gap-2">
+        <span>{{ r.user.get_full_name|default:r.user.email }}</span>
+        <span class="text-base-content/60">→ {{ r.event.title }}</span>
+        <span class="text-base-content/50">{{ r.created_at|date:"M j" }}</span>
+        {% include "registrations/registrar/_row_actions.html" with r=r idp="strip" next_url=request.get_full_path %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <form method="get" class="flex flex-wrap items-end gap-2 text-sm">
+    <label class="form-control">
+      <span class="label-text text-xs">Event</span>
+      <select name="event" class="select select-bordered select-sm">
+        <option value="">All events</option>
+        {% for e in event_choices %}
+        <option value="{{ e.pk }}" {% if filters.event == e.pk|stringformat:"s" %}selected{% endif %}>{{ e.title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="form-control">
+      <span class="label-text text-xs">Status</span>
+      <select name="status" class="select select-bordered select-sm">
+        <option value="active" {% if filters.status == "active" %}selected{% endif %}>Active</option>
+        <option value="all" {% if filters.status == "all" %}selected{% endif %}>All</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="form-control">
+      <span class="label-text text-xs">From</span>
+      <input type="date" name="since" value="{{ filters.since }}" class="input input-bordered input-sm">
+    </label>
+    <label class="form-control">
+      <span class="label-text text-xs">To</span>
+      <input type="date" name="until" value="{{ filters.until }}" class="input input-bordered input-sm">
+    </label>
+    <label class="form-control grow max-w-xs">
+      <span class="label-text text-xs">Search member</span>
+      <input type="text" name="q" value="{{ filters.q }}" placeholder="Name or email"
+             class="input input-bordered input-sm w-full">
+    </label>
+    <button class="btn btn-sm btn-primary">Filter</button>
+    <a href="{% url 'registrations:registrar' %}" class="btn btn-sm btn-ghost">Reset</a>
+    <a href="{% url 'registrations:registrar_csv' %}?{{ querystring }}" class="btn btn-sm btn-outline">Export CSV</a>
+  </form>
+
+  <div class="overflow-x-auto rounded-lg border border-base-300">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Member</th><th>Event</th><th>Tier</th><th class="text-right">Amount</th>
+          <th>Status</th><th>Registered</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in page %}
+        <tr>
+          <td>
+            <div>{{ r.user.get_full_name|default:r.user.email }}</div>
+            <div class="text-xs text-base-content/60">{{ r.user.email }}</div>
+          </td>
+          <td><a href="{% url 'events:detail' r.event.slug %}" class="link link-hover">{{ r.event.title }}</a></td>
+          <td class="text-xs">{{ r.price_tier.get_audience_display }}</td>
+          <td class="text-right whitespace-nowrap">${{ r.quoted_amount }}</td>
+          <td><span class="badge badge-sm
+            {% if r.status == 'paid' or r.status == 'comped' %}badge-success
+            {% elif r.status == 'pending_approval' %}badge-warning
+            {% elif r.status == 'awaiting_payment' %}badge-info
+            {% else %}badge-ghost{% endif %}">{{ r.get_status_display }}</span></td>
+          <td class="whitespace-nowrap text-xs">{{ r.created_at|date:"M j, Y" }}</td>
+          <td class="text-right">
+            {% include "registrations/registrar/_row_actions.html" with r=r idp="row" next_url=request.get_full_path %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-base-content/60 py-6">No registrations match.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page.paginator.num_pages > 1 %}
+  <div class="join">
+    {% if page.has_previous %}
+    <a class="join-item btn btn-sm" href="?{{ querystring }}&page={{ page.previous_page_number }}">«</a>
+    {% endif %}
+    <span class="join-item btn btn-sm btn-disabled">Page {{ page.number }} / {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}
+    <a class="join-item btn btn-sm" href="?{{ querystring }}&page={{ page.next_page_number }}">»</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

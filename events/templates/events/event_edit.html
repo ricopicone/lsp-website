@@ -1,5 +1,6 @@
 {% extends "core/base.html" %}
-{% block title %}Edit — {{ event.title }} — LSP{% endblock %}
+{% load tz_filters %}
+{% block title %}Edit · {{ event.title }} · LSP{% endblock %}
 {% block content %}
 <div class="max-w-2xl mx-auto space-y-6">
 
@@ -14,7 +15,7 @@
   <div class="rounded-lg border border-base-300/60 bg-base-200/40 p-3 text-sm text-base-content/70">
     This event has been approved by the Programming Committee. Small edits to the
     title, description, readings, or fee note can be adopted right away; a
-    substantial change can be sent to the committee for review — you'll choose
+    substantial change can be sent to the committee for review—you'll choose
     when you save.
   </div>
   {% endif %}
@@ -47,7 +48,7 @@
         <h2 class="font-serif text-lg text-base-content">Readings</h2>
       </label>
       {{ form.readings }}
-      <p class="text-xs text-base-content/60">One citation per line — each renders as its own entry. Wrap book and journal titles in *asterisks* to italicize them. Notes ("Further readings will be added…") and sub-headings may be lines too.</p>
+      <p class="text-xs text-base-content/60">One citation per line—each renders as its own entry. Wrap book and journal titles in *asterisks* to italicize them. Notes ("Further readings will be added…") and sub-headings may be lines too.</p>
       {% if form.readings.errors %}
       <p class="text-xs text-error">{{ form.readings.errors|join:", " }}</p>
       {% endif %}
@@ -91,8 +92,176 @@
       <span class="label-text">Record this event's online meetings</span>
     </label>
 
+    <label class="flex items-start gap-2 cursor-pointer">
+      {{ form.speaker_spotlight }}
+      <span class="label-text">
+        Speaker spotlight
+        <span class="block text-xs text-base-content/60">Attendees join with mic and camera off so the speaker is the focus. It's soft, they can turn them back on, and hosts can mute. Best for a talk or lecture.</span>
+      </span>
+    </label>
+
+    <label class="flex items-start gap-2 cursor-pointer">
+      {{ form.open_to_guests }}
+      <span class="label-text">
+        Open to guests
+        <span class="block text-xs text-base-content/60">Show a note on the event page that non-members are welcome to register. Messaging only, it doesn't restrict who can register.</span>
+      </span>
+    </label>
+
     <button type="submit" class="btn btn-primary">Save</button>
   </form>
+
+  {% if show_schedule_editor %}
+  <section class="space-y-4 border-t border-base-300/60 pt-6">
+    <div class="space-y-1">
+      <h2 class="font-serif text-lg text-base-content">Schedule</h2>
+      <p class="text-xs text-base-content/60">
+        The event's session date(s) and times, in your timezone
+        (<span class="font-medium">{% user_tz_name %}</span>). Add or remove
+        sessions, then Save schedule. Scheduling a not-yet-dated event lets it
+        be published.
+      </p>
+    </div>
+
+    <form method="post" action="{% url 'events:edit_schedule' event.slug %}" class="space-y-3">
+      {% csrf_token %}
+      {{ schedule_formset.management_form }}
+      {% if schedule_formset.non_form_errors %}
+      <div class="alert alert-error text-sm">{{ schedule_formset.non_form_errors|join:", " }}</div>
+      {% endif %}
+
+      <div id="session-cards" class="space-y-3">
+        {% for sform in schedule_formset %}
+        <div class="session-card rounded-lg border border-base-300/60 bg-base-100 p-3 space-y-3">
+          {% for hidden in sform.hidden_fields %}{{ hidden }}{% endfor %}
+          <div class="flex items-center justify-between">
+            <span class="text-xs uppercase tracking-wider text-base-content/60">Session {{ forloop.counter }}</span>
+            <button type="button" class="remove-session btn btn-ghost btn-xs text-error">Remove</button>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label for="{{ sform.start_at.id_for_label }}" class="block text-xs text-base-content/60 mb-1">Start</label>
+              {{ sform.start_at }}
+              {% if sform.start_at.errors %}<p class="text-error text-xs mt-1">{{ sform.start_at.errors|join:", " }}</p>{% endif %}
+            </div>
+            <div>
+              <label for="{{ sform.end_at.id_for_label }}" class="block text-xs text-base-content/60 mb-1">End</label>
+              {{ sform.end_at }}
+              {% if sform.end_at.errors %}<p class="text-error text-xs mt-1">{{ sform.end_at.errors|join:", " }}</p>{% endif %}
+            </div>
+          </div>
+          <div>
+            <label for="{{ sform.location.id_for_label }}" class="block text-xs text-base-content/60 mb-1">Location <span class="text-base-content/40">(optional)</span></label>
+            {{ sform.location }}
+          </div>
+          {% if sform.non_field_errors %}<p class="text-error text-xs">{{ sform.non_field_errors|join:", " }}</p>{% endif %}
+          <label class="hidden">{{ sform.DELETE }}</label>
+        </div>
+        {% endfor %}
+      </div>
+
+      <template id="session-empty">
+        <div class="session-card rounded-lg border border-base-300/60 bg-base-100 p-3 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs uppercase tracking-wider text-base-content/60">New session</span>
+            <button type="button" class="remove-session btn btn-ghost btn-xs text-error">Remove</button>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-base-content/60 mb-1">Start</label>
+              {{ schedule_formset.empty_form.start_at }}
+            </div>
+            <div>
+              <label class="block text-xs text-base-content/60 mb-1">End</label>
+              {{ schedule_formset.empty_form.end_at }}
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-base-content/60 mb-1">Location <span class="text-base-content/40">(optional)</span></label>
+            {{ schedule_formset.empty_form.location }}
+          </div>
+          <label class="hidden">{{ schedule_formset.empty_form.DELETE }}</label>
+        </div>
+      </template>
+
+      <div class="flex items-center justify-between gap-2">
+        <button type="button" id="add-session" class="btn btn-ghost btn-sm">+ Add session</button>
+        <button type="submit" class="btn btn-primary btn-sm">Save schedule</button>
+      </div>
+    </form>
+  </section>
+
+  <script>
+  (function () {
+    var addBtn = document.getElementById("add-session");
+    var cards = document.getElementById("session-cards");
+    var tmpl = document.getElementById("session-empty");
+    var total = document.getElementById("id_sessions-TOTAL_FORMS");
+    if (addBtn && cards && tmpl && total) {
+      addBtn.addEventListener("click", function () {
+        var i = parseInt(total.value, 10);
+        var wrap = document.createElement("div");
+        wrap.innerHTML = tmpl.innerHTML.replace(/__prefix__/g, i);
+        cards.appendChild(wrap.firstElementChild);
+        total.value = i + 1;
+      });
+    }
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest(".remove-session") : null;
+      if (!btn) { return; }
+      var card = btn.closest(".session-card");
+      if (!card) { return; }
+      var del = card.querySelector("input[type=checkbox][name$='-DELETE']");
+      if (del) { del.checked = true; card.style.display = "none"; }
+      else { card.remove(); }
+    });
+  })();
+  </script>
+  {% endif %}
+
+  {% if speaker_invites %}
+  <section class="space-y-3 border-t border-base-300/60 pt-6">
+    <h2 class="font-serif text-lg text-base-content">External speakers</h2>
+    <p class="text-xs text-base-content/60">
+      Invite an external speaker to log in so they can join the meeting and see
+      the presenter view. Review the message, then confirm to send.
+    </p>
+    {% for row in speaker_invites %}
+    <div class="rounded-lg border border-base-300 p-3 space-y-2">
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-medium text-base-content">{{ row.speaker.name }}</span>
+        {% if row.status == "ready" %}
+        <span class="badge badge-warning badge-sm">Ready to invite</span>
+        {% elif row.status == "needs_email" %}
+        <span class="badge badge-ghost badge-sm">No email on file</span>
+        {% elif row.status == "invited" %}
+        <span class="badge badge-outline badge-sm">Invited, awaiting sign-in</span>
+        {% else %}
+        <span class="badge badge-success badge-sm">Active</span>
+        {% endif %}
+      </div>
+      {% if row.speaker.email %}<p class="text-xs text-base-content/60">{{ row.speaker.email }}</p>{% endif %}
+      {% if row.status != "active" %}
+      <form method="post" action="{% url 'events:speaker_invite' event.slug row.speaker.pk %}" class="space-y-2">
+        {% csrf_token %}
+        {% if row.status == "needs_email" %}
+        <div class="form-control space-y-1">
+          <label class="label-text text-xs" for="email-{{ row.speaker.pk }}">Email address (needed to invite)</label>
+          <input type="email" name="email" id="email-{{ row.speaker.pk }}" required
+                 placeholder="speaker@example.com"
+                 class="input input-bordered input-sm w-full">
+        </div>
+        {% endif %}
+        <textarea name="message" rows="3" class="textarea textarea-bordered w-full text-sm">{{ row.default_message }}</textarea>
+        <button type="submit" class="btn btn-primary btn-sm">
+          {% if row.status == "invited" %}Resend invitation{% elif row.status == "needs_email" %}Add email &amp; send invitation{% else %}Confirm &amp; send invitation{% endif %}
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
 
 </div>
 {% endblock %}

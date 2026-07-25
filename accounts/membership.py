@@ -10,10 +10,11 @@ the change), a new open tenure (the new role + standing), and the live
 
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from .models import MembershipTenure, Source
+from .models import MembershipTenure, Profile, Source
 
 
 def current_academic_year_start(on_date=None) -> int:
@@ -37,6 +38,33 @@ def academic_year_choices(start: int = 1992) -> list[tuple[int, str]]:
     return [(y, academic_year_label(y)) for y in range(current, start - 1, -1)]
 
 
+GATED_ROLES = frozenset({"analyst", "scholar"})
+
+FIX_PATH = ("Resolve on the member's treasurer account page (record payment, "
+            "adjust, waive, or void), then retry.")
+
+
+def validate_role_transition(user, new_role) -> None:
+    """Refuse promotion out of training while tuition is unsettled.
+
+    Necessary but insufficient — the Passage/Traversée decision stays with
+    the Meeting of Analysts. No override flag: the ledger is the override
+    (spec 2026-07-16).
+    """
+    if new_role not in GATED_ROLES:
+        return
+    profile = getattr(user, "profile", None)
+    if profile is None or profile.role not in Profile.IN_TRAINING_ROLES:
+        return  # not a promotion out of training (bootstrap/external records)
+    # payments.ledger imports accounts models, so this import stays lazy —
+    # importing it at module top would create an accounts↔payments cycle.
+    from payments.ledger import tuition_clearance
+
+    reasons = tuition_clearance(user)
+    if reasons:
+        raise ValidationError(reasons + [FIX_PATH])
+
+
 @transaction.atomic
 def record_membership_change(
     member, *, role, standing, effective_ay, notes="", by=None,
@@ -51,6 +79,7 @@ def record_membership_change(
     same-year correction doesn't create a zero-length stub). Returns the
     resulting open ``MembershipTenure``.
     """
+    validate_role_transition(member, role)
     if by is not None:
         stamp = f"[{timezone.localdate()} by {by.email}]"
         notes = f"{stamp} {notes}".strip() if notes else stamp
@@ -82,4 +111,10 @@ def record_membership_change(
     profile.role = role
     profile.standing = standing
     profile.save(update_fields=["role", "standing"])
+
+    # Non-member / non-practicing standings drop the member from the referral
+    # pool (kept lazy — referrals imports accounts).
+    from accounts.lifecycle import sync_referral_listing
+    sync_referral_listing(member)
+
     return tenure

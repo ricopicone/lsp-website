@@ -1,0 +1,71 @@
+{% extends "core/base.html" %}
+{% block title %}Tuition payment plans · Admin Tools{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-4xl">
+  <nav class="text-sm"><a href="{% url 'board_admin' %}" class="link link-hover text-base-content/60">← Board Admin</a></nav>
+
+  {% if messages %}{% for m in messages %}
+  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
+  {% endfor %}{% endif %}
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Tuition payment plans</h1>
+    <p class="text-base-content/70">Members' requests for a Board-approved payment plan. Approving moves their enrollment to "on payment plan", declining returns it to no decision so they can choose to pay in full or skip the year.</p>
+  </header>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-lg text-base-content tracking-tight">Pending ({{ pending|length }})</h2>
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead><tr><th>Member</th><th>Period</th><th>Reasons</th><th>Requested</th><th class="min-w-52">Decide</th></tr></thead>
+        <tbody>
+          {% for app in pending %}
+          <tr>
+            <td>{{ app.user.get_full_name|default:app.user.email }}</td>
+            <td>{{ app.tuition_period.name }}</td>
+            <td class="whitespace-pre-wrap text-sm max-w-sm">{{ app.reasons }}</td>
+            <td class="text-sm text-base-content/60">{{ app.created_at|date:"M j, Y" }}</td>
+            <td>
+              <form method="post" action="{% url 'tuition_plan_decide' app.pk %}" class="space-y-2">
+                {% csrf_token %}
+                <textarea name="note" rows="2" placeholder="Note (optional, included in the email)" class="textarea textarea-bordered textarea-xs w-full"></textarea>
+                <div class="flex gap-2">
+                  <button name="action" value="approve" class="btn btn-primary btn-xs"
+                          onclick="return confirm('Approve this payment-plan request?');">Approve</button>
+                  <button name="action" value="decline" class="btn btn-ghost btn-xs text-error"
+                          onclick="return confirm('Decline this payment-plan request?');">Decline</button>
+                </div>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center text-base-content/50 py-6">No pending requests.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-lg text-base-content tracking-tight">Decided</h2>
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead><tr><th>Member</th><th>Period</th><th>Outcome</th><th>Decided</th><th>Note</th></tr></thead>
+        <tbody>
+          {% for app in decided %}
+          <tr class="text-base-content/70">
+            <td>{{ app.user.get_full_name|default:app.user.email }}</td>
+            <td>{{ app.tuition_period.name }}</td>
+            <td><span class="badge badge-sm {% if app.status == 'approved' %}badge-success{% else %}badge-ghost{% endif %}">{{ app.get_status_display }}</span></td>
+            <td class="text-sm">{{ app.decided_at|date:"M j, Y" }}{% if app.decided_by %} by {{ app.decided_by.get_full_name|default:app.decided_by.email }}{% endif %}</td>
+            <td class="text-sm">{{ app.note|default:"—" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center text-base-content/50 py-6">No decisions yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

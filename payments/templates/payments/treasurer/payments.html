@@ -1,12 +1,12 @@
 {% extends "payments/treasurer/base.html" %}
-{% load treasurer_filters tz_filters %}
+{% load treasurer_filters tz_filters parletre_tags %}
 {% block tab_content %}
 <div class="space-y-6">
 
   <p class="text-sm text-base-content/60">
     Recent payments across all categories — registrations, dues, tuition,
-    donations. Use the filters to narrow. For routine reconciliation, use
-    the Tuition and Dues tabs instead.
+    donations. Use the filters to narrow; member-by-member work lives on
+    the Accounts tab.
   </p>
 
   <form method="get" class="flex flex-wrap items-end gap-3">
@@ -35,8 +35,12 @@
   </form>
 
   <p class="text-xs text-base-content/60">
-    Showing {{ payments|length }} of {{ total_count }} matching payment{{ total_count|pluralize }}.
-    {% if total_count > 100 %}(Capped at 100 — use filters to narrow.){% endif %}
+    {% if total_count %}
+    Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of
+    {{ total_count }} matching payment{{ total_count|pluralize }}.
+    {% else %}
+    No matching payments.
+    {% endif %}
   </p>
 
   <div class="overflow-x-auto rounded-lg border border-base-300">
@@ -44,81 +48,121 @@
       <thead>
         <tr>
           <th>Date</th>
-          <th>User</th>
+          <th>Payer</th>
           <th>Type</th>
           <th>Amount</th>
           <th>Method</th>
           <th>Status</th>
           <th>Actions</th>
+          <th class="w-8"></th>
         </tr>
       </thead>
       <tbody>
         {% for p in payments %}
         <tr>
-          <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.created_at|user_datetime }}</td>
+          <td class="whitespace-nowrap text-xs text-base-content/70">{{ p.transaction_date|user_date }}</td>
           <td>
             {% if p.user %}
-              <div>{{ p.user.first_name }} {{ p.user.last_name }}</div>
-              <div class="text-xs text-base-content/60">{{ p.user.email }}</div>
+              <a class="link link-hover" href="{% url 'treasurer_member_detail' p.user.id %}">{{ p.payer_label }}</a>
             {% else %}
-              <span class="text-base-content/60 text-xs italic">anonymous</span>
-              {% if p.email %}<div class="text-xs text-base-content/60">{{ p.email }}</div>{% endif %}
+              <div class="text-base-content/80">{{ p.payer_label }}</div>
+              {% if p.payer_detail %}<div class="text-xs text-base-content/60">{{ p.payer_detail }}</div>{% endif %}
+              <span class="badge badge-ghost badge-xs" title="Not linked to a member account — use Assign">unlinked</span>
             {% endif %}
           </td>
           <td>
-            {{ p.get_payment_type_display }}
+            {{ p.get_payment_type_display }}{% if p.source == assumed_source %}<sup class="text-warning font-semibold" title="Assumed type — provisional, pending reconciliation">*</sup>{% endif %}
+            {% if p.is_split %}<span class="badge badge-info badge-xs ml-1" title="Part of a split payment — the entire original charge was ${{ p.split_family_total }}">split</span>{% endif %}
             {% if p.registration %}
             <div class="text-xs text-base-content/60">{{ p.registration.event.title|truncatechars:32 }}</div>
             {% endif %}
             {% if p.tuition_period_id %}
             <div class="text-xs text-base-content/60">→ {{ p.tuition_period.name }}</div>
             {% endif %}
-            {% if p.member_note %}
-            <div class="text-xs text-info/80 italic" title="Member note">“{{ p.member_note|truncatechars:60 }}”</div>
-            {% endif %}
           </td>
           <td class="whitespace-nowrap">${{ p.amount }}</td>
           <td class="text-xs">{{ p.get_method_display }}</td>
           <td>{% status_badge p.status %}</td>
           <td>
-            <div class="flex flex-wrap gap-1">
+            <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
               {% if p.status == "pending" %}
               <form method="post" action="{% url 'treasurer_payment_apply_success' p.id %}" class="contents"
                     onsubmit="return confirm('Mark this payment as paid? This sends a receipt + emails the member.');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-primary btn-xs">Mark paid</button>
+                <button type="submit" class="btn btn-primary btn-xs" title="Mark paid" aria-label="Mark paid">{% icon "check" %}</button>
               </form>
               {% elif p.status == "succeeded" and p.method == "stripe" %}
               <form method="post" action="{% url 'treasurer_payment_refund' p.id %}" class="contents"
-                    onsubmit="return confirm('Refund ${{ p.amount }} via Stripe? This is irreversible.');">
+                    onsubmit="return confirm('{% if p.is_split %}This payment is part of a SPLIT. Refunding refunds the ENTIRE original ${{ p.split_family_total }} charge, all parts included.\n\n{% endif %}Refund {% if p.is_split %}${{ p.split_family_total }}{% else %}${{ p.amount }}{% endif %} via Stripe? This is irreversible.');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
+                <button type="submit" class="btn btn-ghost btn-xs text-error" title="Refund" aria-label="Refund">{% icon "undo" %}</button>
               </form>
               {% elif p.status == "succeeded" and p.method == "offline" %}
               <form method="post" action="{% url 'treasurer_payment_refund' p.id %}" class="contents"
-                    onsubmit="return confirm('Mark this ${{ p.amount }} offline payment as REFUNDED for accounting?\n\nThis does NOT move any money — you will need to send the refund check (or process the cash refund) manually.');">
+                    onsubmit="return confirm('{% if p.is_split %}This payment is part of a SPLIT. Refunding marks the ENTIRE original ${{ p.split_family_total }} charge refunded, all parts included.\n\n{% endif %}Mark this {% if p.is_split %}entire ${{ p.split_family_total }} split{% else %}${{ p.amount }}{% endif %} offline payment as REFUNDED for accounting?\n\nThis does NOT move any money — you will need to send the refund check (or process the cash refund) manually.');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs text-error">Refund</button>
+                <button type="submit" class="btn btn-ghost btn-xs text-error" title="Refund" aria-label="Refund">{% icon "undo" %}</button>
               </form>
               {% endif %}
-              {% if p.status == "succeeded" and p.receipt %}
+              {% if p.status == "succeeded" and p.receipt and not p.is_split %}
               <form method="post" action="{% url 'treasurer_payment_resend_receipt' p.id %}" class="contents"
                     onsubmit="return confirm('Resend the receipt email to {{ p.user.email|default:p.email }}?');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs">Resend receipt</button>
+                <button type="submit" class="btn btn-ghost btn-xs" title="Resend receipt" aria-label="Resend receipt">{% icon "mail" %}</button>
               </form>
               {% endif %}
+              {% if not p.registration_id %}
+              {% include "payments/treasurer/_retype_modal.html" with payment=p type_choices=type_choices dues_periods=dues_periods tuition_periods=tuition_periods next_url=request.get_full_path %}
+              {% include "payments/treasurer/_assign_modal.html" with payment=p next_url=request.get_full_path %}
+              {% if p.status == "succeeded" and p.user_id and not p.is_split %}
+              {% include "payments/treasurer/_split_modal.html" with payment=p type_choices=type_choices next_url=request.get_full_path %}
+              {% endif %}
+              {% endif %}
+              {% include "payments/treasurer/_note_modal.html" with obj=p kind="p" next_url=request.get_full_path %}
             </div>
+          </td>
+          <td class="text-right">
+            {% include "payments/treasurer/_provenance_popover.html" with source=p.source source_label=p.get_source_display notes=p.notes member_note=p.member_note trigger="icon" %}
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center text-base-content/60 py-6">No matching payments.</td>
+          <td colspan="8" class="text-center text-base-content/60 py-6">No matching payments.</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    <datalist id="member-options">
+      {% for m in member_options %}<option value="{{ m.value }}">{% endfor %}
+    </datalist>
   </div>
+
+  {% if has_assumed %}
+  <p class="text-xs text-base-content/60">
+    <sup class="text-warning font-semibold">*</sup>
+    Assumed type — provisionally categorized (mostly recurring charges booked
+    as tuition pending the member survey). Confirm these on the
+    <a href="{% url 'treasurer_reconcile' %}" class="link link-hover">Reconcile</a> tab.
+  </p>
+  {% endif %}
+
+  {% if page_obj.paginator.num_pages > 1 %}
+  <nav class="flex items-center justify-between gap-2" aria-label="Payments pages">
+    {% if page_obj.has_previous %}
+    <a class="btn btn-sm btn-ghost" href="?page={{ page_obj.previous_page_number }}{% if filter_qs %}&{{ filter_qs }}{% endif %}">← Previous</a>
+    {% else %}
+    <span class="btn btn-sm btn-ghost btn-disabled">← Previous</span>
+    {% endif %}
+    <span class="text-xs text-base-content/60">
+      Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </span>
+    {% if page_obj.has_next %}
+    <a class="btn btn-sm btn-ghost" href="?page={{ page_obj.next_page_number }}{% if filter_qs %}&{{ filter_qs }}{% endif %}">Next →</a>
+    {% else %}
+    <span class="btn btn-sm btn-ghost btn-disabled">Next →</span>
+    {% endif %}
+  </nav>
+  {% endif %}
 
 </div>
 {% endblock %}

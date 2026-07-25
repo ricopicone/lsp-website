@@ -1,0 +1,25 @@
+{% autoescape off %}Hello{% if user.first_name %} {{ user.first_name }}{% endif %},
+
+Welcome to the Lacanian School's website. Your member account is already set
+up, and it uses this email address.
+
+Signing in is easy, and there is no password to remember unless you want
+one: on the log in page, choose "Email me a sign-in link" and we will send
+you a link that signs you in with one click.
+
+  Log in: {{ login_url }}
+  How logging in works: {{ guide_url }}
+
+Once you are in, a good first stop is your profile: add a photo and check
+your details for the member directory. The Guides page walks you through
+everything else, from seminars to dues:
+
+  {{ guides_url }}
+
+Questions, or trouble signing in? Just reply to this message.
+
+Warmly,
+Rico Picone
+Web Coordinator and Developer
+Lacanian School of Psychoanalysis
+{% endautoescape %}

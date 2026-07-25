@@ -4,14 +4,10 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from . import views
-from .forms import LoginForm, ReplyToPasswordResetForm
+from .forms import ReplyToPasswordResetForm
 
 urlpatterns = [
-    path(
-        "login/",
-        auth_views.LoginView.as_view(authentication_form=LoginForm),
-        name="login",
-    ),
+    path("login/", views.LspLoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("signup/", views.signup, name="signup"),
     # Confirm-your-address for a new signup. POST-gated (see the view).

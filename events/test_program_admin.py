@@ -202,6 +202,90 @@ def test_program_admin_event_edit_updates_existing(client, pc_member, program):
 
 
 @pytest.mark.django_db
+def test_program_admin_event_edit_exposes_structured_content_fields(
+    client, pc_member, program,
+):
+    """The PC admin event form must offer the same structured-content fields as
+    the faculty edit form — readings, schedule note, contact, fee note."""
+    e = Event.objects.create(
+        title="Seminar", slug="seminar-x",
+        event_type=Event.Type.SEMINAR,
+        start_date=date(2030, 9, 1), end_date=date(2031, 5, 1),
+        program=program,
+    )
+    client.force_login(pc_member)
+    url = reverse("program_admin_event_edit", args=[program.academic_year, e.slug])
+    get = client.get(url)
+    assert get.status_code == 200
+    for name in (b"readings", b"schedule_note", b"contact", b"fee_note"):
+        assert name in get.content
+
+
+@pytest.mark.django_db
+def test_program_admin_event_edit_saves_structured_content(
+    client, pc_member, program,
+):
+    e = Event.objects.create(
+        title="Seminar", slug="seminar-y",
+        event_type=Event.Type.SEMINAR,
+        start_date=date(2030, 9, 1), end_date=date(2031, 5, 1),
+        program=program,
+    )
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_event_edit", args=[program.academic_year, e.slug]),
+        {
+            "title": "Seminar",
+            "slug":  "seminar-y",
+            "event_type": "seminar",
+            "start_date": "2030-09-01",
+            "end_date":   "2031-05-01",
+            "format":     "online",
+            "status":     "draft",
+            "description": "body",
+            "readings":    "Lacan, *Écrits*.\nFreud, *The Interpretation of Dreams*.",
+            "schedule_note": "1st and 3rd Saturdays",
+            "contact":     "seminar@x.test",
+            "fee_note":    "$100 donation encouraged, none turned away",
+            "access_info": "",
+            "faculty":     [],
+        },
+    )
+    assert resp.status_code == 302
+    e.refresh_from_db()
+    assert "Écrits" in e.readings
+    assert e.schedule_note == "1st and 3rd Saturdays"
+    assert e.contact == "seminar@x.test"
+    assert "none turned away" in e.fee_note
+
+
+@pytest.mark.django_db
+def test_program_admin_event_edit_saves_faculty_selection(client, pc_member, program):
+    """The faculty checkbox picker round-trips a selection onto the workgroup."""
+    fac = User.objects.create_user(
+        email="fac@x.test", password="x", first_name="Jane", last_name="Doe",
+    )
+    fac.profile.is_faculty = True
+    fac.profile.save()
+    e = Event.objects.create(
+        title="Sem", slug="sem-fac", event_type=Event.Type.SEMINAR,
+        start_date=date(2030, 9, 1), end_date=date(2031, 5, 1), program=program,
+    )
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_event_edit", args=[program.academic_year, e.slug]),
+        {
+            "title": "Sem", "slug": "sem-fac", "event_type": "seminar",
+            "start_date": "2030-09-01", "end_date": "2031-05-01",
+            "format": "online", "status": "draft", "description": "x",
+            "access_info": "", "faculty": [str(fac.pk)],
+        },
+    )
+    assert resp.status_code == 302
+    assert fac in list(Event.objects.get(pk=e.pk).faculty_members())
+
+
+@pytest.mark.django_db
 def test_program_admin_help_renders(client, pc_member):
     """Help tab renders the PC admin guide markdown."""
     client.force_login(pc_member)
@@ -237,3 +321,223 @@ def test_program_admin_event_edit_404s_when_event_not_in_this_program(
         reverse("program_admin_event_edit", args=[program.academic_year, e.slug])
     )
     assert resp.status_code == 404
+
+
+# --- Direct special-event create ----------------------------------------
+
+
+def _special_event_payload(**overrides):
+    """A complete special-event proposal POST (free, dated, no speakers)."""
+    data = {
+        "event_type": "special_event",
+        "title": "Guest Lecture",
+        "description": "An evening talk.",
+        "proposed_datetime": "2030-11-05T18:00",
+        "location_kind": "online_insite",
+        "fee_type": "free",
+        "speakers-TOTAL_FORMS": "0",
+        "speakers-INITIAL_FORMS": "0",
+        "speakers-MIN_NUM_FORMS": "0",
+        "speakers-MAX_NUM_FORMS": "1000",
+        "action": "publish",
+    }
+    data.update(overrides)
+    return data
+
+
+@pytest.mark.django_db
+def test_special_event_new_requires_pc(client):
+    u = User.objects.create_user(email="nope@x.test", password="x")
+    client.force_login(u)
+    assert client.get(reverse("program_admin_special_event_new")).status_code == 404
+
+
+@pytest.mark.django_db
+def test_special_event_new_get_renders_locked_to_special(client, pc_member):
+    client.force_login(pc_member)
+    resp = client.get(reverse("program_admin_special_event_new"))
+    assert resp.status_code == 200
+    # Direct-create framing + the special type present; other types not offered.
+    assert b"special_event" in resp.content
+    assert b'value="seminar"' not in resp.content
+
+
+@pytest.mark.django_db
+def test_special_event_publish_mints_wired_published_event(client, pc_member):
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(action="publish", fee_type="fixed", fee_amount="25"),
+    )
+    assert resp.status_code == 302
+    e = Event.objects.get(event_type=Event.Type.SPECIAL_EVENT)
+    assert e.published is True
+    assert e.sessions.exists()        # first Session from the date/time
+    assert e.price_tiers.exists()     # price tier from the fee
+    # Backed by an approved proposal, proposer = reviewer = the PC member.
+    from events.models import EventProposal
+    p = EventProposal.objects.get(minted_event=e)
+    assert p.status == EventProposal.Status.APPROVED
+    assert p.proposed_by == pc_member
+
+
+@pytest.mark.django_db
+def test_special_event_draft_action_creates_unpublished(client, pc_member):
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(action="draft"),
+    )
+    assert resp.status_code == 302
+    e = Event.objects.get(event_type=Event.Type.SPECIAL_EVENT)
+    assert e.published is False
+
+
+@pytest.mark.django_db
+def test_special_event_publish_on_tbd_stays_draft(client, pc_member):
+    client.force_login(pc_member)
+    payload = _special_event_payload(action="publish", date_tbd="on")
+    payload.pop("proposed_datetime")
+    resp = client.post(reverse("program_admin_special_event_new"), payload)
+    assert resp.status_code == 302
+    e = Event.objects.get(event_type=Event.Type.SPECIAL_EVENT)
+    assert e.published is False
+
+
+@pytest.mark.django_db
+def test_special_event_new_rejects_non_special_type(client, pc_member):
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(event_type="seminar"),
+    )
+    assert resp.status_code == 200  # invalid choice → re-render
+    assert not Event.objects.exists()
+
+
+@pytest.mark.django_db
+def test_special_event_publish_toggle(client, pc_member):
+    e = Event.objects.create(
+        title="Talk", slug="talk-x", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 11, 5), end_date=date(2030, 11, 5), published=False,
+    )
+    client.force_login(pc_member)
+    url = reverse("program_admin_special_event_publish", args=[e.slug])
+    client.post(url, {"action": "publish"})
+    e.refresh_from_db()
+    assert e.published is True
+    client.post(url, {"action": "unpublish"})
+    e.refresh_from_db()
+    assert e.published is False
+
+
+@pytest.mark.django_db
+def test_special_event_publish_toggle_rejects_non_special(client, pc_member, program):
+    e = Event.objects.create(
+        title="Sem", slug="sem-toggle", event_type=Event.Type.SEMINAR,
+        start_date=date(2030, 9, 1), end_date=date(2031, 5, 1), program=program,
+    )
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_special_event_publish", args=[e.slug]),
+        {"action": "publish"},
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_special_event_registration_toggle(client, pc_member):
+    """A standalone special event's registration lever lives on the Proposals
+    tab — program events get theirs from the program's bulk buttons."""
+    e = Event.objects.create(
+        title="Talk", slug="talk-reg", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 11, 5), end_date=date(2030, 11, 5),
+        published=True, status=Event.Status.DRAFT,
+    )
+    client.force_login(pc_member)
+    url = reverse("program_admin_special_event_registration", args=[e.slug])
+    client.post(url, {"action": "open"})
+    e.refresh_from_db()
+    assert e.status == Event.Status.OPEN
+    client.post(url, {"action": "close"})
+    e.refresh_from_db()
+    assert e.status == Event.Status.CLOSED
+
+
+@pytest.mark.django_db
+def test_special_event_registration_toggle_rejects_non_special(
+    client, pc_member, program,
+):
+    e = Event.objects.create(
+        title="Sem", slug="sem-reg", event_type=Event.Type.SEMINAR,
+        start_date=date(2030, 9, 1), end_date=date(2031, 5, 1), program=program,
+    )
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_special_event_registration", args=[e.slug]),
+        {"action": "open"},
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_special_event_registration_toggle_forbidden_for_random_user(client):
+    e = Event.objects.create(
+        title="Talk", slug="talk-reg-2", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 11, 5), end_date=date(2030, 11, 5), published=True,
+    )
+    client.force_login(User.objects.create_user(email="rando@x.test", password="x"))
+    resp = client.post(
+        reverse("program_admin_special_event_registration", args=[e.slug]),
+        {"action": "open"},
+    )
+    assert resp.status_code == 404
+    e.refresh_from_db()
+    assert e.status == Event.Status.DRAFT
+
+
+@pytest.mark.django_db
+def test_opening_registration_without_a_price_tier_warns(client, pc_member):
+    """No price tier means the register page has nothing to quote — warn rather
+    than block (staff discretion), but still open it."""
+    e = Event.objects.create(
+        title="Talk", slug="talk-no-tier", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 11, 5), end_date=date(2030, 11, 5), published=True,
+    )
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_special_event_registration", args=[e.slug]),
+        {"action": "open"}, follow=True,
+    )
+    e.refresh_from_db()
+    assert e.status == Event.Status.OPEN
+    assert b"no price tier" in resp.content
+
+
+@pytest.mark.django_db
+def test_proposals_tab_shows_registration_state(client, pc_member):
+    Event.objects.create(
+        title="Open Talk", slug="open-talk", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 11, 5), end_date=date(2030, 11, 5),
+        published=True, status=Event.Status.DRAFT,
+    )
+    client.force_login(pc_member)
+    resp = client.get(reverse("program_admin_proposals"))
+    # Published-but-not-open must not read as simply "Live" — that ambiguity is
+    # what hid a closed registration on a live page.
+    assert b"Registration closed" in resp.content
+    assert b"Open registration" in resp.content
+
+
+@pytest.mark.django_db
+def test_proposals_tab_lists_special_events(client, pc_member):
+    Event.objects.create(
+        title="Standalone Talk", slug="standalone-talk",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2030, 11, 5), end_date=date(2030, 11, 5), published=False,
+    )
+    client.force_login(pc_member)
+    resp = client.get(reverse("program_admin_proposals"))
+    assert resp.status_code == 200
+    assert b"Standalone Talk" in resp.content
+    assert b"New special event" in resp.content

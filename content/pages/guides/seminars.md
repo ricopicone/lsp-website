@@ -9,12 +9,12 @@ public, some members-only. This guide walks through finding one and registering.
 
 ## Finding what's on
 
-- **Program** (`/program/`) is the academic year's offerings—the teaching
+- **[Program](/program/)** is the academic year's offerings—the teaching
   **seminars**, the **cartels** that have formed, and the standing **reading
   groups**.
-- **Events** (`/events/`) lists standalone, one-off events—**special events**,
+- **[Events](/events/)** lists standalone, one-off events—**special events**,
   **Days of Assembly**, **Working Days**, and scholarly seminar series.
-- **Calendar** (`/calendar/`) shows everything together on a month grid.
+- **[Calendar](/calendar/)** shows everything together on a month grid.
 
 Each seminar or event has its own page with the description, faculty, sessions,
 and pricing.
@@ -42,5 +42,9 @@ automatically.
 
 ## Try it now
 
-There's a free **Preview Seminar** set up for exactly this—register for it to see
-the whole flow end to end, then cancel if you like. Nothing is charged.
+Browse [this year's program](/program/) and open any seminar that interests
+you. Each event page shows the readings, the schedule, the fee, and the
+Register button, and registering always shows you your price (or your
+covered-by-tuition status) before anything is charged. If you change your
+mind after registering, you can cancel from the confirmation page and any
+payment is refunded automatically.

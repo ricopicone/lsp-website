@@ -25,6 +25,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.core.validators import validate_email
 from django.db import transaction
 
+from accounts.membership import GATED_ROLES, validate_role_transition
 from accounts.models import Profile, User
 
 REQUIRED_COLUMNS = {"email"}
@@ -233,6 +234,20 @@ class Command(BaseCommand):
             if user_fields:
                 existing.save(update_fields=list(user_fields))
             if profile_fields:
+                # Check if role is being elevated to analyst or scholar
+                new_role = profile_fields.get("role")
+                if new_role and new_role in GATED_ROLES:
+                    if new_role != existing.profile.role:
+                        # Role is changing to a gated role; validate the transition
+                        try:
+                            validate_role_transition(existing, new_role)
+                        except ValidationError as exc:
+                            # Skip the role change, but warn and apply remaining fields
+                            profile_fields.pop("role")
+                            self.stderr.write(self.style.WARNING(
+                                f"  warning: {email}: role elevation to {new_role} skipped — "
+                                f"tuition not settled: {' '.join(exc.messages)}"
+                            ))
                 Profile.objects.filter(user=existing).update(**profile_fields)
             return (0, 1, 0)
 

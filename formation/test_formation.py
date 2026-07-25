@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.advisor import set_advisor
-from accounts.models import Profile, Source, User
+from accounts.models import Profile, User
 from formation.advancement import step_label_for_member
 from formation.models import Advancement, step_label_for
 from payments.models import TuitionEnrollment, TuitionPeriod
@@ -88,9 +88,10 @@ def test_formation_page_shows_tabs_for_candidate(client):
     client.force_login(member)
     body = client.get(reverse("formation:formation")).content
     assert b"My LSP" in body
-    # A candidate owes tuition + dues, so those tabs appear alongside the
-    # always-on ones. Tabs are real, shareable ?tab= links.
-    for key in (b"groups", b"events", b"works", b"tuition", b"dues", b"profile"):
+    # A candidate owes tuition + dues, so the Account tab appears alongside
+    # the always-on ones — tuition and dues live on the one unified Account
+    # tab (task #439). Tabs are real, shareable ?tab= links.
+    for key in (b"groups", b"events", b"works", b"account", b"profile"):
         assert b'href="?tab=' + key + b'"' in body
 
 
@@ -118,40 +119,19 @@ def test_groups_tab_lists_current_and_past(client):
     assert b">Current<" in body and b">Past<" in body
 
 
-# ---- editable My Payments table (type / note / AY) -------------------------
+# ---- Account tab statement --------------------------------------------------
+#
+# The editable "My Payments" table (type_<id>/note_<id>/period_<id> POSTed to
+# the retired my_payments_update endpoint) was removed in task #439; its
+# type/note/AY editing intent is now covered by the member statement actions
+# (payments/test_my_payment_actions.py::my_payment_retype/my_payment_note,
+# including cross-user 404 protection). Donation<->non-donation retypes,
+# blocked by the old table, are now full parity — see
+# payments/test_my_payment_actions.py::test_retype_donation_to_dues_....
 
-def test_member_edits_type_and_note_on_own_payment(client):
-    from payments.models import Payment
-
-    member = _user("r@x.test", role=Profile.Role.CANDIDATE)
-    other = _user("other@x.test", role=Profile.Role.CANDIDATE)
-    mine = Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=member, amount=Decimal("100"),
-        status=Payment.Status.SUCCEEDED, source=Source.ASSUMED,
-    )
-    theirs = Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=other, amount=Decimal("100"),
-        status=Payment.Status.SUCCEEDED, source=Source.ASSUMED,
-    )
-    client.force_login(member)
-    resp = client.post(reverse("my_payments_update"), {
-        f"type_{mine.id}": "donation",
-        f"note_{mine.id}": "Actually a donation.",
-        # An attempt to edit someone else's payment is ignored (not in the qs).
-        f"type_{theirs.id}": "donation",
-    })
-    assert resp.status_code == 302
-    mine.refresh_from_db()
-    theirs.refresh_from_db()
-    assert mine.payment_type == "donation"
-    assert mine.source == Source.SELF_REPORTED
-    assert mine.member_note == "Actually a donation."
-    assert theirs.payment_type == "tuition"  # untouched
-    assert theirs.source == Source.ASSUMED
-
-
-def test_my_payments_shows_event_for_registration(client):
-    """The 'For' column links to the event a registration payment is for."""
+def test_statement_shows_event_for_registration(client):
+    """The statement's payment description links to the event a
+    registration payment is for."""
     from datetime import date as _date
 
     from events.models import Audience, Event, PriceTier
@@ -176,7 +156,7 @@ def test_my_payments_shows_event_for_registration(client):
         amount=Decimal("50.00"), status=Payment.Status.SUCCEEDED,
     )
     client.force_login(member)
-    body = client.get(reverse("formation:formation") + "?tab=tuition").content.decode()
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
     assert "Working with Masochism" in body
     assert reverse("events:detail", args=[event.slug]) in body
 
@@ -284,9 +264,9 @@ def test_tuition_progress_counts_paid_and_projects_to_four_years(current_period)
     ctx = _tuition_progress(member)
     assert ctx["tuition_years_started"] == 1
     assert len(ctx["tuition_slots"]) == 4          # one started + three projected
-    assert ctx["tuition_total_paid"] == half
+    assert sum(sl["paid"] for sl in ctx["tuition_slots"]) == half
     # Goal = this year's amount + 3 projected years at the current rate.
-    assert ctx["tuition_total_goal"] == full * 4
+    assert sum(sl["goal"] for sl in ctx["tuition_slots"]) == full * 4
 
 
 def test_tuition_progress_counts_payments_without_installments(current_period):
@@ -307,8 +287,51 @@ def test_tuition_progress_counts_payments_without_installments(current_period):
     )
     ctx = _tuition_progress(member)
     assert ctx["tuition_years_started"] == 1
-    assert ctx["tuition_total_paid"] == current_period.tuition_amount
+    assert (sum(sl["paid"] for sl in ctx["tuition_slots"])
+            == current_period.tuition_amount)
     assert sum(1 for s in ctx["tuition_slots"] if s["projected"]) == 3
+
+
+def test_tuition_progress_fills_cumulatively_not_per_year(db):
+    """Tuition progress is a single cumulative pot swept oldest-first, not a
+    per-AY bar fill (task #468 follow-up). Four enrolled years, each $800, with
+    an uneven payment history that still totals the full four-year goal, must
+    show every year fully covered — the overpayment on one year flows into the
+    year that was underpaid, instead of being lost."""
+    from formation.views import _tuition_progress
+    from payments.models import Payment
+
+    member = _user("cumul@x.test", role=Profile.Role.CANDIDATE)
+    periods = []
+    for start_year in (2021, 2022, 2023, 2024):
+        p = TuitionPeriod.objects.create(
+            name=f"AY {start_year}-{start_year + 1} cumul",
+            slug=f"cumul-{start_year}",
+            start_date=date(start_year, 9, 1),
+            decision_due_date=date(start_year, 8, 31),
+            end_date=date(start_year + 1, 8, 31),
+            tuition_amount=Decimal("800"))
+        periods.append(p)
+        TuitionEnrollment.objects.create(
+            user=member, tuition_period=p,
+            status=TuitionEnrollment.Status.PAID_IN_FULL)
+
+    # Uneven: first year double-paid, second year unpaid, last two exact.
+    # Total = 3200 = four years of $800.
+    for period, amount in zip(periods, ["1600", "0", "800", "800"]):
+        if amount == "0":
+            continue
+        Payment.objects.create(
+            payment_type=Payment.Type.TUITION, user=member,
+            amount=Decimal(amount), status=Payment.Status.SUCCEEDED,
+            tuition_period=period)
+
+    ctx = _tuition_progress(member)
+    slots = ctx["tuition_slots"]
+    assert len(slots) == 4
+    assert sum(sl["paid"] for sl in slots) == Decimal("3200")
+    assert all(sl["pct"] == 100 for sl in slots)       # every year fully covered
+    assert all(sl["paid"] == Decimal("800") for sl in slots)
 
 
 def test_skipping_year_is_not_one_of_the_four(current_period):
@@ -323,13 +346,13 @@ def test_skipping_year_is_not_one_of_the_four(current_period):
     assert ctx["tuition_years_started"] == 0
 
 
-# ---- dues section ----------------------------------------------------------
+# ---- dues section (now on the unified "My account" tab, task #439) --------
 
 def test_dues_section_offers_payment_when_unpaid(client, current_period):
     member = _user("dues@x.test", role=Profile.Role.CANDIDATE)
     client.force_login(member)
-    # Dues now have their own tab (split from Tuition).
-    body = client.get(reverse("formation:formation") + "?tab=dues").content
+    # Dues now live on the unified account tab, alongside the statement.
+    body = client.get(reverse("formation:formation") + "?tab=account").content
     assert b"Membership dues" in body
     # An obligated, unpaid member is offered a pay action.
     assert b"dues" in body.lower()

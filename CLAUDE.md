@@ -338,6 +338,64 @@ Done (see `git log` for specifics):
   `change_request_decide`); notifications via the new
   `EVENT_CHANGE_REVIEW` category (PC on submit, proposer on decision). `title`
   is now editable on the faculty edit form.
+- **Shared school officers — President / Vice President** (task #428). The
+  Board's Chair / Co-chair are the school's President / Vice President — a
+  display relabel (`workgroups.OFFICER_TITLES` / `role_label`, tasks #368/#428)
+  *and* now a synced governance record. The Board's Chair/Co-chair
+  `WorkgroupMembership`s are the **single source of truth**:
+  `committees.officers.sync_school_officers()` recomputes the President /
+  Vice-President `StaffRole` holders from the Board's serving roster, fired by a
+  `post_save`/`post_delete` signal on `WorkgroupMembership` **and** a new
+  `workgroups.roster_changed` signal (for the bulk-`.update()` `remove_member` /
+  `leave` paths that bypass model signals). The **Meeting of Analysts** roster
+  derives its President / Vice President leader chips from those synced roles
+  (`Workgroup.participants()`; `Participant.officer_title` override). Board →
+  Appointments no longer manages the two officer roles (set them in the Board's
+  Settings roster). One-time reconcile migration
+  (`committees.0010_reconcile_school_officers`). See the `board-officer-titles`
+  memory + `docs/superpowers/specs/2026-07-12-shared-school-officers-design.md`.
+- **Tuition clearance gate + treasurer payment re-categorize** (task #439).
+  Promotion to Analyst/Scholar is blocked while tuition is unsettled (any
+  uncovered tuition charge, or fewer than four covered years) —
+  `payments.ledger.tuition_clearance()` enforced at the membership
+  chokepoint (`accounts.membership.validate_role_transition`), the Meeting
+  of Analysts' advancement approval, the Board membership form, the Django
+  admin role field, and the CSV importer (skips + warns); no override
+  switch — settling the member's ledger *is* the override. The treasurer's
+  Payments tab and member statement gained **Re-categorize**, an audited
+  action that re-types a payment (with a bound dues/tuition period) and
+  allows donation flips; retyping away from tuition unwinds an unbacked
+  installment and leaves a review note rather than auto-changing the
+  enrollment decision.
+- **Member Account v2** (task #439). The member's Tuition + "My account"
+  tabs are now one **Account tab**, with a "Requirement met" (payment-based,
+  `tuition_years_covered` ≥ 4) vs. the enrollment-based **decision
+  exemption** (`tuition_decision_exempt`, ≥4 non-skipping years — only
+  silences the annual-decision nag, doesn't imply paid) kept as two
+  explicitly distinct predicates. Members get full statement-action parity
+  with the treasurer on their **own** payments — re-categorize, split
+  (donation flips included), and note — via `my_payment_retype`/
+  `my_payment_split`/`my_payment_note`, all stamped `source=SELF_REPORTED`
+  ("Member-reported") and audit-noted by email so the treasurer's
+  provenance hover always shows who acted. The retired My-payments table is
+  gone. A new **history-submission queue** (`payments.LedgerSubmission`)
+  lets a member report a pre-website payment or fee; the treasurer's
+  Reconcile tab reviews each (approve mints a member-reported Payment/Charge
+  bound to the right AY period with a duplicate-charge guard; decline just
+  notes it), and the member is notified either way.
+- **Registration Admin console** (task #470) at `/admin-tools/registrations/`
+  (`registrations/views_admin.py`, referrals-console tab pattern). Cross-event
+  registration table (filters/search/CSV, "Needs attention" pending strip) with
+  approve / decline / comp / add-note row actions, an Events tab with
+  per-status counts and an open↔close registration toggle (open flips
+  DRAFT/CLOSED→OPEN, matching the PC bulk view; publishing stays separate),
+  and a Help tab (`core/docs/registrar-guide.md`). Gated by
+  `registrations.permissions.can_administer_registrations`: the new **unheld
+  `registrar` StaffRole** (a placeholder for a future position — excluded from
+  directory badges like LSP Staff), Web Coordinator, serving Programming
+  Committee (live roster check), or Django staff/superusers. The admin comp
+  action's side-effect chain moved to
+  `registrations/services.py::comp_registration` so console + admin share it.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
@@ -455,6 +513,18 @@ Phase 2 plan for milestone IDs):**
   timer at launch) sends due auto-followups + redacts requests
   `retention_months` after reply/close. `DJANGO_REFERRALS_EMAIL` now a real
   setting. See `referral-workflow` memory.
+- **Unified member ledger** (task #439) — replaced the per-category
+  (dues/tuition/registration) treasurer views with one account per member:
+  `payments.Charge` (debits) swept against `Payment` (credits) in
+  `payments/ledger.py`, minted by `payments/charges.py`. The treasurer admin
+  is now 7 tabs — Overview (AY tiles + one needs-attention queue), **Accounts**
+  (every member's balance, linkable filters), Payments, Reconcile (provisional
+  payments + no-payer + charge conflicts), Settings, Exports (+ a balances
+  CSV), Help — with a per-member account page (statement, running balance,
+  add/adjust/waive/void charge, record any-category offline payment). History
+  minted via `manage.py backfill_charges`; `manage.py audit_ledger` is the
+  read-only parity check. `user_paid_for_period` is retired. See
+  `tuition-cumulative-ledger` memory.
 
 ## Open items (M7 wrap-up)
 

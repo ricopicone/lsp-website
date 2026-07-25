@@ -177,6 +177,15 @@ def accept_application(application: Application, *, by, effective_ay=None, note=
         notes=f"Admitted via application ({application.get_track_display()}). {note}".strip(),
         by=by,
     )
+    from formation.background import set_background
+
+    background = (
+        Profile.FormationBackground.CLINICAL
+        if application.background == Application.Background.CLINICAL
+        else Profile.FormationBackground.ACADEMIC
+    )
+    set_background(application.applicant, background, by=by,
+                   note="Set at acceptance from the application.")
     application.status = Application.Status.ACCEPTED
     application.decided_at = timezone.now()
     application.decided_by = by

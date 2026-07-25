@@ -149,7 +149,9 @@ def my_groups(user) -> list[MyGroup]:
     for m in (
         WorkgroupMembership.objects
         .filter(user=user)
-        .select_related("workgroup")
+        # ``workgroup__committee`` so ``role_label`` resolves officer titles
+        # (Board Chair → President) without a per-row query.
+        .select_related("workgroup", "workgroup__committee")
     ):
         cur = stored.get(m.workgroup_id)
         stored[m.workgroup_id] = m if cur is None else _better_membership(m, cur)
@@ -192,7 +194,7 @@ def my_groups(user) -> list[MyGroup]:
         if m is None and not is_current and not wg.has_archive_access(user):
             continue
         if m is not None:
-            role_label = m.get_role_display()
+            role_label = m.role_label
             is_lead = m.role in WorkgroupMembership.LEAD_ROLES
             ended_on = m.end_date
             via_registration = False

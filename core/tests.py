@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import Profile, User
 from events.models import Event, Session
@@ -208,6 +209,70 @@ def test_landing_page_lists_upcoming_events(client, event_with_sessions):
 def test_landing_page_skips_draft_events(client, draft_event_with_sessions):
     response = client.get(reverse("core:landing"))
     assert b"Draft Event" not in response.content
+
+
+@pytest.mark.django_db
+def test_landing_page_pins_a_special_event_above_the_seminars(client):
+    """task #461: a special event buried by September's seminars comes first,
+    and is marked out by weight (solid chip + inset band) rather than by a hue
+    token — silk defines primary/secondary/accent identically and abyss's accent
+    is a near-invisible grey, so colour alone can't separate the rows in both
+    themes. Selection rules live in events/test_upcoming.py; this covers the
+    view + template wiring."""
+    today = timezone.now().date()
+    for i in range(4):
+        Event.objects.create(
+            title=f"Buried Seminar {i}", slug=f"buried-seminar-{i}",
+            event_type=Event.Type.SEMINAR,
+            start_date=today + timedelta(days=10 + i),
+            end_date=today + timedelta(days=200), published=True,
+        )
+    Event.objects.create(
+        title="Pinned Study Day", slug="pinned-study-day",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=today + timedelta(days=40),
+        end_date=today + timedelta(days=40), published=True,
+    )
+
+    body = client.get(reverse("core:landing")).content.decode()
+    assert body.index("Pinned Study Day") < body.index("Buried Seminar 0")
+    # The pinned row: solid chip + inset band with a left rule.
+    assert "bg-primary text-primary-content border-primary" in body
+    assert "bg-base-content/5 hover:bg-base-content/10 border-l-2 border-primary" in body
+    # The ordinary rows go quiet so the pinned one is the only saturated element.
+    assert "bg-base-200 text-base-content/70 border-base-300" in body
+
+
+@pytest.mark.django_db
+def test_landing_counts_exclude_removed_and_resigned(client):
+    """task #451: the landing-page directory/analyst counts must match
+    accounts.views._directory_qs's standing exclusion — a removed or
+    resigned member is gone from the public directory grid and must not
+    still inflate the count. Deceased members stay counted (the grid still
+    shows them)."""
+    from datetime import date as _date
+
+    def _make(email, role, standing, public=True, deceased_on=None):
+        u = User.objects.create_user(email=email)
+        u.profile.role = role
+        u.profile.standing = standing
+        u.profile.public = public
+        u.profile.deceased_on = deceased_on
+        u.profile.save()
+        return u
+
+    _make("active451@x.test", Profile.Role.ANALYST, Profile.Standing.ACTIVE)
+    _make("removed451@x.test", Profile.Role.ANALYST, Profile.Standing.REMOVED)
+    _make("resigned451@x.test", Profile.Role.ANALYST, Profile.Standing.RESIGNED)
+    _make(
+        "deceased451@x.test", Profile.Role.ANALYST, Profile.Standing.ACTIVE,
+        deceased_on=_date(2026, 7, 22),
+    )
+
+    response = client.get(reverse("core:landing"))
+    # active + deceased count; removed + resigned excluded.
+    assert response.context["directory_count"] == 2
+    assert response.context["analyst_count"] == 2
 
 
 
@@ -577,6 +642,74 @@ def test_superuser_impersonates_persona_and_exits(client):
 
 
 @pytest.mark.django_db
+def test_start_impersonation_returns_to_origin_page(client):
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    persona = User.objects.create_user(email="persona@x.test", first_name="P")
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    client.force_login(su)
+
+    # The picker carries the origin page into the start form's next field.
+    picker = client.get(reverse("core:impersonate_picker"), {"next": "/directory/"})
+    assert b'name="next" value="/directory/"' in picker.content
+
+    # Starting with that next lands on the origin page, not home.
+    resp = client.post(reverse("core:impersonate_start", args=[persona.id]),
+                       {"next": "/directory/"})
+    assert resp.status_code == 302
+    assert resp.url == "/directory/"
+
+
+@pytest.mark.django_db
+def test_start_impersonation_ignores_unsafe_next(client):
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    persona = User.objects.create_user(email="persona@x.test", first_name="P")
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    client.force_login(su)
+    resp = client.post(reverse("core:impersonate_start", args=[persona.id]),
+                       {"next": "https://evil.example/"})
+    assert resp.status_code == 302
+    assert resp.url == "/"
+
+
+@pytest.mark.django_db
+def test_exit_impersonation_returns_to_current_page(client):
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    persona = User.objects.create_user(email="persona@x.test",
+                                       first_name="Test", last_name="Persona")
+    persona.profile.is_persona = True
+    persona.profile.role = Profile.Role.ANALYST
+    persona.profile.save()
+
+    client.force_login(su)
+    client.post(reverse("core:impersonate_start", args=[persona.id]))
+
+    # Exiting with a next= carries the user back to the page they were on.
+    resp = client.post(reverse("core:impersonate_stop"), {"next": "/directory/"})
+    assert resp.status_code == 302
+    assert resp.url == "/directory/"
+
+
+@pytest.mark.django_db
+def test_exit_impersonation_ignores_unsafe_next(client):
+    su = User.objects.create_superuser(email="su@x.test", password="x")
+    persona = User.objects.create_user(email="persona@x.test", first_name="P")
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    client.force_login(su)
+    client.post(reverse("core:impersonate_start", args=[persona.id]))
+
+    resp = client.post(reverse("core:impersonate_stop"),
+                       {"next": "https://evil.example/"})
+    assert resp.status_code == 302
+    assert resp.url == "/"
+
+
+@pytest.mark.django_db
 def test_non_superuser_cannot_impersonate(client):
     u = User.objects.create_user(email="u@x.test", password="x")
     other = User.objects.create_user(email="o@x.test")
@@ -797,6 +930,24 @@ def test_board_pages_render_for_board(db, client, name):
     assert client.get(reverse(name)).status_code == 200
 
 
+@pytest.mark.django_db
+def test_board_governance_excludes_removed_members(client):
+    admin = User.objects.create_superuser(email="gov@example.com", password="pw")
+    client.force_login(admin)
+    active = User.objects.create_user(email="ga@example.com")
+    active.profile.role = Profile.Role.ANALYST
+    active.profile.save()
+    removed = User.objects.create_user(email="gr@example.com")
+    removed.profile.role = Profile.Role.ANALYST
+    removed.profile.standing = Profile.Standing.REMOVED
+    removed.profile.save()
+
+    resp = client.get("/admin-tools/board/governance/")  # name: board_governance
+    assert resp.status_code == 200
+    # total_members counts active but not removed
+    assert resp.context["total_members"] == 1
+
+
 def test_appoint_and_remove_staff_role(db, client):
     from core.access import has_staff_role
     from core.models import StaffRole
@@ -814,6 +965,29 @@ def test_appoint_and_remove_staff_role(db, client):
         "action": "remove", "role": StaffRole.TREASURER, "user": target.pk,
     })
     assert not has_staff_role(target, StaffRole.TREASURER)
+
+
+def test_gate_or_login_redirects_anonymous(db):
+    from django.contrib.auth.models import AnonymousUser
+    from django.test import RequestFactory
+
+    from core.access import gate_or_login
+    req = RequestFactory().get("/groups/secret/")
+    req.user = AnonymousUser()
+    resp = gate_or_login(req)
+    assert resp.status_code == 302
+    assert resp.url == "/accounts/login/?next=/groups/secret/"
+
+
+def test_gate_or_login_404s_signed_in_non_member(db):
+    from django.http import Http404
+    from django.test import RequestFactory
+
+    from core.access import gate_or_login
+    req = RequestFactory().get("/groups/secret/")
+    req.user = User.objects.create_user(email="gate@example.com", password="x")
+    with pytest.raises(Http404):
+        gate_or_login(req)
 
 
 def test_create_committee_provisions_workgroup(db, client):
@@ -883,3 +1057,42 @@ def test_persona_safe_backend_redirects_owned_drops_orphan_keeps_real():
     assert not any(s.startswith("[SANDBOX") and "Orphan" in s for s in subjects)
     # real recipient → kept untouched
     assert any(m.to == ["real@x.test"] and m.subject == "Real" for m in _mail.outbox)
+
+
+@pytest.mark.django_db
+def test_appointments_omits_president_and_vice_president(client):
+    """Task #428 follow-on: President / Vice President are set via the Board
+    Settings roster, so Appointments no longer lists them, and posting those
+    keys is rejected."""
+    from core.models import StaffRole
+
+    boss = User.objects.create_user(email="boss@x.test", is_staff=True, is_superuser=True)
+    client.force_login(boss)
+
+    body = client.get(reverse("board_appointments")).content.decode()
+    assert "Treasurer" in body            # other roles still listed
+    # President / Vice President are no longer appointable options here
+    # (the note paragraph may mention them, so assert on the form values).
+    assert 'value="president"' not in body
+    assert 'value="vice_president"' not in body
+
+    target = User.objects.create_user(email="t@x.test")
+    resp = client.post(reverse("board_appointments"), {
+        "action": "appoint", "role": StaffRole.PRESIDENT, "user": target.pk,
+    })
+    assert resp.status_code in (200, 302)
+    assert target not in StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.all()
+
+
+@pytest.mark.django_db
+def test_appointments_excludes_removed_member(client):
+    """task #451: a removed member shouldn't be an appointable option."""
+    boss = User.objects.create_user(email="boss2@x.test", is_staff=True, is_superuser=True)
+    client.force_login(boss)
+    removed = User.objects.create_user(email="removed-appt@x.test")
+    removed.profile.standing = Profile.Standing.REMOVED
+    removed.profile.save()
+
+    resp = client.get(reverse("board_appointments"))
+    assert resp.status_code == 200
+    assert removed not in resp.context["appointable"]

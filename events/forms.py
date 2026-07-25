@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import Event, EventProposal, PricingCode, Program
+from .models import Event, EventProposal, PricingCode, Program, Session
 
 
 class EventDescriptionForm(forms.ModelForm):
@@ -16,7 +16,7 @@ class EventDescriptionForm(forms.ModelForm):
         model = Event
         fields = (
             "title", "description", "readings", "schedule_note", "contact",
-            "fee_note", "record_video",
+            "fee_note", "record_video", "speaker_spotlight", "open_to_guests",
         )
         widgets = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
@@ -155,7 +155,11 @@ class EventProposalForm(forms.ModelForm):
         self.fields["event_type"].label = "Type of event"
         # datetime-local needs the value in this exact format to prefill on edit.
         self.fields["proposed_datetime"].input_formats = ["%Y-%m-%dT%H:%M"]
-        self.fields["proposed_datetime"].label = "Proposed date & time (Pacific)"
+        self.fields["proposed_datetime"].label = "Proposed date & time"
+        from django.utils import timezone as _tz
+        self.fields["proposed_datetime"].help_text = (
+            f"In your timezone ({_tz.get_current_timezone()})."
+        )
 
         self.fields["description"].help_text = ""  # guidance shown above the field
 
@@ -227,11 +231,11 @@ class EventProposalForm(forms.ModelForm):
                     r.citation for r in existing
                 )
             if self.instance.proposed_datetime:
-                from zoneinfo import ZoneInfo
-
                 from django.utils import timezone
+                # Prefill in the editor's own timezone (localtime uses the
+                # request's active tz), matching how the input is interpreted.
                 self.initial["proposed_datetime"] = timezone.localtime(
-                    self.instance.proposed_datetime, ZoneInfo("America/Los_Angeles")
+                    self.instance.proposed_datetime
                 ).strftime("%Y-%m-%dT%H:%M")
             if not self.is_bound:
                 self.initial["schedule_choice"] = (
@@ -245,13 +249,13 @@ class EventProposalForm(forms.ModelForm):
                     )
 
     def clean_proposed_datetime(self):
-        """Interpret the naive datetime-local input as Pacific time."""
-        from zoneinfo import ZoneInfo
-
+        """Interpret the naive datetime-local input in the editor's own timezone
+        (the request's active tz = their Profile.timezone), like the rest of the
+        app. Django usually localizes this already; the guard is defensive."""
         from django.utils import timezone
         dt = self.cleaned_data.get("proposed_datetime")
         if dt and timezone.is_naive(dt):
-            dt = timezone.make_aware(dt, ZoneInfo("America/Los_Angeles"))
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
         return dt
 
     def clean(self):
@@ -371,6 +375,7 @@ class ProgramEventForm(forms.ModelForm):
     #: via ``Event.set_faculty`` on save.
     faculty = forms.ModelMultipleChoiceField(
         queryset=None, required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-sm"}),
         help_text="LSP-affiliated instructors (can edit the event and mint pricing codes).",
     )
 
@@ -380,6 +385,7 @@ class ProgramEventForm(forms.ModelForm):
     continues_seminar = forms.ModelChoiceField(
         queryset=None, required=False,
         label="Continue an existing seminar",
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
         help_text=(
             "Optional. Make this a new yearly term of an existing seminar — its "
             "workspace, channel, and past members carry over (they renew by "
@@ -393,14 +399,41 @@ class ProgramEventForm(forms.ModelForm):
             "title", "slug", "event_type",
             "start_date", "end_date",
             "format", "status",
-            "description", "access_info",
-            "requires_faculty_approval", "record_video",
+            "description", "readings", "schedule_note", "contact", "fee_note",
+            "access_info",
+            "requires_faculty_approval", "record_video", "open_to_guests",
         )
         widgets = {
-            "start_date": forms.DateInput(attrs={"type": "date"}),
-            "end_date":   forms.DateInput(attrs={"type": "date"}),
-            "description": forms.Textarea(attrs={"rows": 8}),
-            "access_info": forms.Textarea(attrs={"rows": 2}),
+            "title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "slug": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "event_type": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "start_date": forms.DateInput(
+                attrs={"type": "date", "class": "input input-bordered w-full"},
+            ),
+            "end_date": forms.DateInput(
+                attrs={"type": "date", "class": "input input-bordered w-full"},
+            ),
+            "format": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "status": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "description": forms.Textarea(
+                attrs={"rows": 10, "class": "textarea textarea-bordered w-full"},
+            ),
+            "readings": forms.Textarea(
+                attrs={"rows": 8, "class": "textarea textarea-bordered w-full"},
+            ),
+            "schedule_note": forms.Textarea(
+                attrs={"rows": 2, "class": "textarea textarea-bordered w-full"},
+            ),
+            "contact": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "fee_note": forms.Textarea(
+                attrs={"rows": 2, "class": "textarea textarea-bordered w-full"},
+            ),
+            "access_info": forms.Textarea(
+                attrs={"rows": 3, "class": "textarea textarea-bordered w-full"},
+            ),
+            "requires_faculty_approval": forms.CheckboxInput(attrs={"class": "checkbox"}),
+            "record_video": forms.CheckboxInput(attrs={"class": "checkbox"}),
+            "open_to_guests": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }
 
     def __init__(self, *args, program=None, **kwargs):
@@ -444,3 +477,58 @@ class ProgramEventForm(forms.ModelForm):
             self.save_m2m()
             instance.set_faculty(self.cleaned_data.get("faculty", []))
         return instance
+
+
+# --- Standalone-event schedule (session) editor -------------------------
+
+_DT_ATTRS = {"type": "datetime-local", "class": "input input-bordered w-full"}
+
+
+class SessionScheduleForm(forms.ModelForm):
+    """One session in the standalone-event schedule editor.
+
+    Start and end are independent ``datetime-local`` inputs (not a shared date +
+    two times) — in the editor's own timezone, a session's start and end can
+    fall on different calendar dates, so each carries its own date. Django
+    localizes the naive input to the request's active timezone (the user's
+    ``Profile.timezone``), matching the workgroup meeting forms and the rest of
+    the app's per-user display.
+    """
+
+    class Meta:
+        model = Session
+        fields = ("start_at", "end_at", "location")
+        widgets = {
+            "start_at": forms.DateTimeInput(attrs=_DT_ATTRS, format="%Y-%m-%dT%H:%M"),
+            "end_at": forms.DateTimeInput(attrs=_DT_ATTRS, format="%Y-%m-%dT%H:%M"),
+            "location": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for f in ("start_at", "end_at"):
+            self.fields[f].input_formats = ["%Y-%m-%dT%H:%M"]
+            self.fields[f].required = False
+        self.fields["location"].required = False
+
+    def clean(self):
+        cd = super().clean()
+        start, end = cd.get("start_at"), cd.get("end_at")
+        # A blank extra row is dropped by the formset; a partial one is an error.
+        if not start and not end and not cd.get("location"):
+            return cd
+        if not start or not end:
+            raise forms.ValidationError("Give both a start and an end date/time.")
+        if end <= start:
+            self.add_error("end_at", "The end must be after the start.")
+        return cd
+
+
+def _build_schedule_formset():
+    return forms.inlineformset_factory(
+        Event, Session, form=SessionScheduleForm, extra=1, can_delete=True,
+    )
+
+
+#: Session formset for the standalone-event schedule editor (start/end datetimes + location).
+SessionScheduleFormSet = _build_schedule_formset()

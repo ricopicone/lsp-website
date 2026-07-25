@@ -82,6 +82,17 @@ class WorkForm(forms.ModelForm):
             "kind",
             "abstract",
             "publication_info",
+            "external_type",
+            "container_title",
+            "publisher",
+            "edition",
+            "volume",
+            "issue",
+            "pages",
+            "editors",
+            "translators",
+            "doi",
+            "isbn",
             "url",
             "publication_date",
             "cover_image",
@@ -104,6 +115,25 @@ class WorkForm(forms.ModelForm):
                 "class": "input input-bordered w-full",
                 "placeholder": "Journal of X, Vol 12 (2024), pp. 33–58",
             }),
+            "external_type": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "container_title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "publisher": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "edition": forms.TextInput(attrs={
+                "class": "input input-bordered w-full", "placeholder": "2nd ed.",
+            }),
+            "volume": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "issue": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "pages": forms.TextInput(attrs={
+                "class": "input input-bordered w-full", "placeholder": "33–58",
+            }),
+            "editors": forms.TextInput(attrs={
+                "class": "input input-bordered w-full", "placeholder": "Jane Doe and John Roe",
+            }),
+            "translators": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "doi": forms.TextInput(attrs={
+                "class": "input input-bordered w-full", "placeholder": "10.1234/xyz",
+            }),
+            "isbn": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
             "url": forms.URLInput(attrs={
                 "class": "input input-bordered w-full",
                 "placeholder": "https://…",
@@ -127,11 +157,16 @@ class WorkForm(forms.ModelForm):
         }
         labels = {
             "content_visibility": "Contents (PDFs, HTML & video)",
+            "publication_info": "Citation note",
         }
         help_texts = {
             "content_visibility": (
                 "Who can open the contents — attached PDFs, the published HTML "
                 "body, and any video. Can't be more public than the listing."
+            ),
+            "publication_info": (
+                "Free-form citation line. Shown after the formatted citation, "
+                "or alone if the publication details are empty."
             ),
         }
 
@@ -198,6 +233,18 @@ class WorkForm(forms.ModelForm):
             yield files[pk], self[f"file_{pk}_label"], self[f"file_{pk}_remove"]
 
     # ---- Field-level cleaning ----
+
+    def clean_doi(self):
+        """Normalize a pasted doi.org URL or "doi:" prefix to the bare DOI."""
+        doi = (self.cleaned_data.get("doi") or "").strip()
+        for prefix in (
+            "https://doi.org/", "http://doi.org/",
+            "https://dx.doi.org/", "http://dx.doi.org/", "doi:",
+        ):
+            if doi.lower().startswith(prefix):
+                doi = doi[len(prefix):]
+                break
+        return doi
 
     def clean_lsp_authors(self):
         raw = (self.cleaned_data.get("lsp_authors") or "").strip()

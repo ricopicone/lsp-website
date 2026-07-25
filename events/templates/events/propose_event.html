@@ -1,8 +1,19 @@
 {% extends "core/base.html" %}
-{% block title %}{% if editing %}Edit proposal{% else %}Propose an event: a seminar, reading group, or special event{% endif %} — LSP{% endblock %}
+{% block title %}{% if editing %}Edit proposal{% else %}Propose an event: a seminar, reading group, or special event{% endif %} · LSP{% endblock %}
 {% block content %}
 <div class="max-w-2xl space-y-8">
   <header class="space-y-2">
+    {% if direct_create %}
+    <p class="text-sm">
+      <a href="{% url 'program_admin_proposals' %}" class="link link-hover text-base-content/60">← Proposals</a>
+    </p>
+    <h1 class="font-serif text-3xl text-base-content">New special event</h1>
+    <p class="text-base-content/70">
+      Create a special event directly. Save it as a draft, or publish it now —
+      publishing makes it live on the site immediately (a date/time TBD event
+      stays a draft until it has a date).
+    </p>
+    {% else %}
     <p class="flex items-center justify-between text-sm">
       <a href="{% url 'program' %}" class="link link-hover text-base-content/60">← Program</a>
       <a href="{% url 'my_proposals' %}" class="link link-hover text-base-content/60">My proposals →</a>
@@ -17,10 +28,11 @@
       special events are set up by the committee before publishing. The form adapts
       to the type you pick.
     </p>
+    {% endif %}
   </header>
 
   <form method="post"
-        action="{% if editing %}{% url 'proposal_edit' editing.pk %}{% else %}{% url 'propose_event' %}{% endif %}"
+        action="{% if direct_create %}{% url 'program_admin_special_event_new' %}{% elif editing %}{% url 'proposal_edit' editing.pk %}{% else %}{% url 'propose_event' %}{% endif %}"
         class="space-y-5">
     {% csrf_token %}
     {% if form.non_field_errors %}
@@ -190,6 +202,13 @@
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-2 border-t border-base-300/60 pt-5">
+      {% if direct_create %}
+      <a href="{% url 'program_admin_proposals' %}" class="btn btn-ghost btn-sm">Cancel</a>
+      <div class="flex gap-2">
+        <button type="submit" name="action" value="draft" class="btn btn-ghost btn-sm">Save as draft</button>
+        <button type="submit" name="action" value="publish" class="btn btn-primary btn-sm">Create &amp; publish</button>
+      </div>
+      {% else %}
       <a href="{% url 'my_proposals' %}" class="btn btn-ghost btn-sm">Cancel</a>
       <div class="flex gap-2">
         <button type="submit" name="action" value="save" class="btn btn-ghost btn-sm">Save for later</button>
@@ -197,6 +216,7 @@
           {% if editing and editing.status == "declined" %}Resubmit for review{% else %}Submit for review{% endif %}
         </button>
       </div>
+      {% endif %}
     </div>
   </form>
 

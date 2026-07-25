@@ -133,9 +133,20 @@ def test_slug_autopopulated_from_name():
 
 # ---- Workspace surface (views) ----------------------------------------
 
-def test_detail_404_when_landing_not_visible(client):
+def test_detail_redirects_anonymous_to_login_with_next(client):
+    # An anonymous visitor (e.g. an invitee following a link to a forming
+    # cartel) is bounced to login with ?next=, not shown a 404. After signing
+    # in they land back on the group page.
+    wg = _wg(landing_visibility=Visibility.MEMBERS, content_visibility=Visibility.PRIVATE)
+    resp = client.get(wg.get_absolute_url())
+    assert resp.status_code == 302
+    assert resp.url == f"/accounts/login/?next={wg.get_absolute_url()}"
+
+
+def test_detail_404_for_signed_in_non_member_when_not_visible(client):
+    # A signed-in user who still can't see the group must not learn it exists.
     wg = _wg(landing_visibility=Visibility.PRIVATE, content_visibility=Visibility.PRIVATE)
-    # anonymous user: a private-landing group must not even reveal it exists
+    client.force_login(_user("outsider@x.test"))
     resp = client.get(wg.get_absolute_url())
     assert resp.status_code == 404
 
@@ -163,6 +174,45 @@ def test_detail_shows_roster_to_group_member(client):
     resp = client.get(wg.get_absolute_url())
     assert resp.status_code == 200
     assert b"Vera" in resp.content
+
+
+@pytest.mark.django_db
+def test_detail_roster_renders_leader_role_chip(client):
+    """Regression (task #428): the detail Members section shows each leader's
+    role as a chip. The roster iterates ``Participant`` objects, so the label
+    must resolve on them — swapping to a bare ``role_label`` that Participant
+    lacked once blanked the role entirely."""
+    wg = _wg(kind=Workgroup.Kind.WORKING_GROUP, landing_visibility=Visibility.PUBLIC)
+    lead = _user("lead@x.test", role=Profile.Role.ANALYST, first="Cora", last="Chan")
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=lead, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    resp = client.get(wg.get_absolute_url())  # working-group roster is public
+    assert resp.status_code == 200
+    assert b"Cora" in resp.content
+    assert b"badge" in resp.content and b"Chair" in resp.content
+
+
+@pytest.mark.django_db
+def test_board_detail_roster_styles_chair_as_president(client):
+    """Task #428: on the Board's own workspace the Chair reads President /
+    the Co-chair Vice President — the same relabel as the About page and
+    directory, applied through the roster's Participant rows."""
+    from committees.models import Committee
+
+    board = Committee.objects.get(slug="board")
+    wg = board.workgroup
+    wg.landing_visibility = Visibility.PUBLIC
+    wg.save(update_fields=["landing_visibility"])
+    pres = _user("prez@x.test", role=Profile.Role.ANALYST, first="Prez", last="Ident")
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=pres, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    body = client.get(wg.get_absolute_url()).content.decode()
+    assert "President" in body
+    assert "Chair" not in body
 
 
 @pytest.mark.parametrize("kind,public,members_only", [
@@ -195,6 +245,42 @@ def test_auto_member_role_derives_membership():
     users = [p.user for p in wg.participants()]
     assert analyst in users and other not in users
     assert not WorkgroupMembership.objects.filter(workgroup=wg, user=analyst).exists()
+
+
+def test_auto_member_workgroup_excludes_retired():
+    """Role-derived membership requires *active* standing (task #451) — a
+    retired analyst still holds the Analyst role but is no longer a member
+    of a role-derived group (e.g. the Meeting of Analysts)."""
+    wg = _wg(kind=Workgroup.Kind.COMMITTEE, auto_member_role="analyst")
+    active = _user("moa-active@x.test", role=Profile.Role.ANALYST)
+    retired = _user("moa-retired@x.test", role=Profile.Role.ANALYST)
+    retired.profile.standing = Profile.Standing.RETIRED
+    retired.profile.save()
+
+    assert wg.is_member(active) is True
+    assert wg.is_member(retired) is False
+    users = [p.user for p in wg.participants()]
+    assert active in users and retired not in users
+
+
+def test_auto_member_workgroup_excludes_persona_and_deceased():
+    """The role-derived gate also drops personas and deceased analysts (whose
+    standing may still read active, but whose account is deactivated)."""
+    from datetime import date
+    wg = _wg(kind=Workgroup.Kind.COMMITTEE, auto_member_role="analyst")
+
+    persona = _user("moa-persona@x.test", role=Profile.Role.ANALYST)
+    persona.profile.is_persona = True
+    persona.profile.save()
+
+    deceased = _user("moa-deceased@x.test", role=Profile.Role.ANALYST)
+    deceased.profile.deceased_on = date(2026, 7, 23)  # standing stays active; is_active→False
+    deceased.profile.save()
+
+    assert wg.is_member(persona) is False
+    assert wg.is_member(deceased) is False
+    users = [p.user for p in wg.participants()]
+    assert persona not in users and deceased not in users
 
 
 def test_reading_group_open_join_and_leave(client):
@@ -465,13 +551,27 @@ def test_personas_have_membership_but_are_hidden_from_roster():
     assert persona not in [p.user for p in wg.participants()]   # hidden from roster
 
 
-def test_groups_overview_shows_a_card_per_kind(client):
-    """The /groups/ overview lists the kinds, not individual groups."""
+def test_learning_overview_shows_a_card_per_learning_kind(client):
+    """The /learning/ overview (the nav Learning tab) covers the learning kinds
+    only. Committees and Working Groups moved under the Persons nav tab, so they
+    no longer get a card here."""
+    resp = client.get("/learning/")
+    assert resp.status_code == 200
+    assert b"Learning" in resp.content
+    card_labels = {k["label"] for k in resp.context["kinds"]}
+    assert card_labels == {"Seminars", "Cartels", "Reading Groups"}
+
+
+def test_groups_overview_shows_all_kinds(client):
+    """The /groups/ overview stays the full all-kinds directory (linked as
+    'All groups' from the landing/footer); it was not scoped to learning."""
     resp = client.get("/groups/")
     assert resp.status_code == 200
-    for label in (b"Seminars", b"Cartels", b"Committees",
-                  b"Working Groups", b"Reading Groups"):
-        assert label in resp.content
+    assert b"Groups" in resp.content
+    card_labels = {k["label"] for k in resp.context["kinds"]}
+    assert card_labels == {
+        "Seminars", "Cartels", "Reading Groups", "Committees", "Working Groups",
+    }
 
 
 def test_kind_list_shows_visible_groups_of_that_kind(client):
@@ -610,6 +710,31 @@ def test_assignable_roles_auto_membership_is_coordinator_only():
     assert [v for v, _ in wg.assignable_roles()] == [
         WorkgroupMembership.Role.APPLICATIONS_COORDINATOR
     ]
+
+
+def test_meeting_of_analysts_members_includes_analysts_excludes_others():
+    from workgroups.permissions import meeting_of_analysts_members
+
+    analyst = _user("moa-members-analyst@x.test", role=Profile.Role.ANALYST)
+    other = _user("moa-members-other@x.test", role=Profile.Role.MEMBER)
+    members = meeting_of_analysts_members()
+    assert analyst in members
+    assert other not in members
+
+
+def test_meeting_of_analysts_members_excludes_retired():
+    """A retired analyst is no longer counted in the Meeting of Analysts
+    (task #451) — active standing is required, not just the Analyst role."""
+    from workgroups.permissions import meeting_of_analysts_members
+
+    active = _user("moa-mem-active@x.test", role=Profile.Role.ANALYST)
+    retired = _user("moa-mem-retired@x.test", role=Profile.Role.ANALYST)
+    retired.profile.standing = Profile.Standing.RETIRED
+    retired.profile.save()
+
+    members = meeting_of_analysts_members()
+    assert active in members
+    assert retired not in members
 
 
 @pytest.mark.parametrize("key", ["president", "vice_president"])
@@ -765,6 +890,63 @@ def test_series_monthly_multiple_occurrences(client):
     assert series.week_positions == "1,3"
     # 2 occurrences/month × 3 months = 6.
     assert WorkgroupMeeting.objects.filter(series=series).count() == 6
+
+
+def _add_weekly_series(client, wg):
+    client.post(reverse("workgroups:series_add", args=[wg.slug]), {
+        "title": "Weekly", "frequency": "weekly", "weekdays": ["TH"],
+        "week_positions": ["1"], "start_date": "2099-01-01", "end_date": "2099-01-31",
+        "start_time": "18:00", "end_time": "19:30", "location": "", "description": "",
+    })
+
+
+def test_series_pins_authors_timezone(client):
+    """Occurrences anchor to the author's own timezone, not the project default."""
+    from zoneinfo import ZoneInfo
+
+    from django.utils import timezone as _tz
+
+    from workgroups.models import MeetingSeries, WorkgroupMeeting
+    wg, lead = _scheduler_wg_and_lead()
+    lead.profile.timezone = "Europe/Berlin"
+    lead.profile.save()
+    client.force_login(lead)
+    _add_weekly_series(client, wg)
+    series = MeetingSeries.objects.get(workgroup=wg)
+    assert series.timezone == "Europe/Berlin"
+    m = WorkgroupMeeting.objects.filter(series=series).order_by("starts_at").first()
+    assert _tz.localtime(m.starts_at, ZoneInfo("Europe/Berlin")).strftime("%H:%M") == "18:00"
+    assert _tz.localtime(m.starts_at, ZoneInfo("America/Los_Angeles")).strftime("%H:%M") == "09:00"
+
+
+def test_series_regeneration_is_deterministic_across_tz(client):
+    """Re-materializing under a different ambient tz must not shift the times —
+    the series' own pinned timezone wins."""
+    from zoneinfo import ZoneInfo
+
+    from django.utils import timezone as _tz
+
+    from workgroups.models import MeetingSeries, WorkgroupMeeting
+    wg, lead = _scheduler_wg_and_lead()
+    lead.profile.timezone = "Europe/Berlin"
+    lead.profile.save()
+    client.force_login(lead)
+    _add_weekly_series(client, wg)
+    series = MeetingSeries.objects.get(workgroup=wg)
+    before = list(
+        WorkgroupMeeting.objects.filter(series=series)
+        .order_by("starts_at").values_list("starts_at", flat=True)
+    )
+    _tz.activate(ZoneInfo("America/Los_Angeles"))
+    try:
+        series.generate()
+    finally:
+        _tz.deactivate()
+    after = list(
+        WorkgroupMeeting.objects.filter(series=series)
+        .order_by("starts_at").values_list("starts_at", flat=True)
+    )
+    assert before == after and len(before) >= 4
 
 
 def test_meeting_cancel_reschedule_minutes(client):
@@ -1936,3 +2118,102 @@ def test_cartels_page_shows_intro_and_coordinator():
     assert "A cartel is a small working group" in body
     assert "Coordinator" in body
     assert "Casey" in body and "mailto:casey@example.com" in body
+
+
+def test_learning_kinds_get_a_learning_back_link(client):
+    """Seminars/Cartels/Reading Groups are reached from the Learning nav tab, so
+    they show a '← Learning' back link alongside '← Groups'; Committees and
+    Working Groups (under Persons) show only '← Groups'. (task #385)"""
+    sem = client.get("/groups/seminars/").content.decode()
+    assert "← Learning" in sem and "← Groups" in sem
+    com = client.get("/groups/committees/").content.decode()
+    assert "← Learning" not in com and "← Groups" in com
+
+
+# ---- Roster ordering (task #417) ---------------------------------------
+
+def _board():
+    return _wg(kind=Workgroup.Kind.COMMITTEE, name="Ordering Test Board 417")
+
+
+def _add(wg, email, role, last, first="A"):
+    u = _user(email, first=first, last=last)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=u, role=role, start_date=datetime.date(2026, 1, 1)
+    )
+    return u
+
+
+def test_active_members_orders_officers_then_alphabetical():
+    wg = _board()
+    Role = WorkgroupMembership.Role
+    # Added in deliberately scrambled order.
+    _add(wg, "m2@x.test", Role.MEMBER, "Young")
+    _add(wg, "treas@x.test", Role.TREASURER, "Nkosi")
+    _add(wg, "chair@x.test", Role.CHAIR, "Zimmer")
+    _add(wg, "m1@x.test", Role.MEMBER, "Adams")
+    _add(wg, "sec@x.test", Role.SECRETARY, "Baker")
+    _add(wg, "vice@x.test", Role.CO_CHAIR, "Owens")
+    order = [m.user.last_name for m in wg.active_members()]
+    assert order == ["Zimmer", "Owens", "Baker", "Nkosi", "Adams", "Young"]
+
+
+def test_active_members_same_role_alphabetical():
+    wg = _board()
+    Role = WorkgroupMembership.Role
+    _add(wg, "cc2@x.test", Role.CO_CHAIR, "Vance")
+    _add(wg, "cc1@x.test", Role.CO_CHAIR, "Ng")
+    order = [m.user.last_name for m in wg.active_members()]
+    assert order == ["Ng", "Vance"]
+
+
+def test_active_members_plus_one_last_faculty_is_everyone_else():
+    wg = _board()
+    Role = WorkgroupMembership.Role
+    _add(wg, "guest@x.test", Role.PLUS_ONE, "Zeta")
+    _add(wg, "fac@x.test", Role.FACULTY, "Mensah")
+    _add(wg, "chair@x.test", Role.CHAIR, "Roth")
+    _add(wg, "mem@x.test", Role.MEMBER, "Bell")
+    order = [m.user.last_name for m in wg.active_members()]
+    # Chair first; faculty sorts among everyone-else (Bell, Mensah); plus-one last.
+    assert order == ["Roth", "Bell", "Mensah", "Zeta"]
+
+
+def test_participants_ordered_officers_then_alphabetical():
+    wg = _board()
+    Role = WorkgroupMembership.Role
+    _add(wg, "m2@x.test", Role.MEMBER, "Young")
+    _add(wg, "chair@x.test", Role.CHAIR, "Zimmer")
+    _add(wg, "m1@x.test", Role.MEMBER, "Adams")
+    _add(wg, "sec@x.test", Role.SECRETARY, "Baker")
+    order = [p.user.last_name for p in wg.participants()]
+    assert order == ["Zimmer", "Baker", "Adams", "Young"]
+
+
+@pytest.mark.django_db
+def test_moa_roster_shows_president_and_vp_as_leaders(client):
+    """Task #428 follow-on: the Meeting of Analysts workspace roster surfaces
+    the synced President / Vice President as leaders, derived from the shared
+    appointment; a plain analyst stays a Member."""
+    from committees.models import Committee
+    from core.models import StaffRole
+
+    moa = Committee.objects.get(slug="meeting-of-analysts")
+    wg = moa.workgroup
+    wg.landing_visibility = Visibility.PUBLIC
+    wg.save(update_fields=["landing_visibility"])
+
+    pres = _user("pres@x.test", role=Profile.Role.ANALYST, first="Pat", last="Prez")
+    # Created for its side effect: a plain analyst joins the derived MoA roster
+    # (asserted below via by_email["plain@x.test"]).
+    _user("plain@x.test", role=Profile.Role.ANALYST, first="Ana", last="Lyst")
+    StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.add(pres)
+
+    roster = wg.participants()
+    by_email = {p.user.email: p for p in roster}
+    assert by_email["pres@x.test"].is_lead is True
+    assert by_email["pres@x.test"].role_label == "President"
+    assert by_email["plain@x.test"].is_lead is False
+
+    body = client.get(wg.get_absolute_url()).content.decode()
+    assert "President" in body

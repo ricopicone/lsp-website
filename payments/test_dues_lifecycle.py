@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import Profile, User
-from payments.dues import is_dues_obligated, user_paid_for_period
+from payments.dues import is_dues_obligated
 from payments.models import DuesPeriod, DuesReminder, Payment
 
 
@@ -85,7 +85,7 @@ def test_current_returns_none_when_no_period_covers_date():
     assert DuesPeriod.current(on_date=long_after) is None
 
 
-# ---- is_dues_obligated + user_paid_for_period -------------------------
+# ---- is_dues_obligated --------------------------------------------------
 
 
 def test_candidate_role_is_obligated(member):
@@ -101,35 +101,6 @@ def test_external_role_not_obligated(external_user):
 def test_anonymous_not_obligated():
     from django.contrib.auth.models import AnonymousUser
     assert is_dues_obligated(AnonymousUser()) is False
-
-
-@pytest.mark.django_db
-def test_user_paid_for_period_false_when_no_payment(member, current_period):
-    assert user_paid_for_period(member, current_period) is False
-
-
-@pytest.mark.django_db
-def test_user_paid_for_period_true_after_succeeded_payment(member, current_period):
-    Payment.objects.create(
-        payment_type=Payment.Type.DUES,
-        user=member,
-        amount=current_period.amount_for_role("candidate"),
-        status=Payment.Status.SUCCEEDED,
-        dues_period=current_period,
-    )
-    assert user_paid_for_period(member, current_period) is True
-
-
-@pytest.mark.django_db
-def test_user_paid_for_period_false_for_pending_payment(member, current_period):
-    Payment.objects.create(
-        payment_type=Payment.Type.DUES,
-        user=member,
-        amount=current_period.amount_for_role("candidate"),
-        status=Payment.Status.PENDING,
-        dues_period=current_period,
-    )
-    assert user_paid_for_period(member, current_period) is False
 
 
 # ---- /dues/ view uses current period ----------------------------------
@@ -155,6 +126,9 @@ def test_dues_post_attaches_period_to_payment(client, member, current_period):
 def test_dues_page_shows_already_paid_when_user_has_succeeded_payment(
     client, member, current_period,
 ):
+    """The real production sequence — a SUCCEEDED dues payment exists but NO
+    charge has been minted (ledger dues_state is None). The double-payment
+    guard must still show the already-paid panel (task #439 review)."""
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
@@ -170,26 +144,64 @@ def test_dues_page_shows_already_paid_when_user_has_succeeded_payment(
     assert b"Continue to payment" not in response.content
 
 
+def test_dues_page_already_paid_despite_older_backfilled_debt(
+    client, member, current_period,
+):
+    """A backfilled older charge eats the pot, so the oldest-first sweep
+    leaves this year's dues charge "unpaid" — but the member literally made
+    this period's dues payment. The FK-bound guard must still show the
+    already-paid panel, never re-offer payment (task #439 review)."""
+    from payments.charges import sync_dues_charges
+    from payments.models import Charge
+
+    sync_dues_charges(current_period)  # this year's dues charge for member
+    Charge.objects.create(  # backfilled historical debt, older than this AY
+        user=member,
+        category=Charge.Category.TUITION,
+        amount=Decimal("5000"),
+        effective_date=current_period.start_date - timedelta(days=365),
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES,
+        user=member,
+        amount=current_period.amount_for_role("candidate"),
+        status=Payment.Status.SUCCEEDED,
+        dues_period=current_period,
+    )
+    # Sanity: the sweep really does mark this year's dues unpaid.
+    from payments import ledger
+    assert ledger.member_account(member)["dues_state"] == "unpaid"
+    client.force_login(member)
+    response = client.get(reverse("dues"))
+    assert response.status_code == 200
+    assert b"paid up" in response.content
+    assert b"Continue to payment" not in response.content
+
+
 # ---- Landing banner ---------------------------------------------------
 
 
 def test_landing_shows_banner_for_obligated_unpaid_member(
     client, member, current_period,
 ):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     client.force_login(member)
     response = client.get(reverse("core:landing"))
-    assert b"dues" in response.content.lower()
-    assert b"pay now" in response.content.lower()
+    assert b"outstanding balance" in response.content.lower()
 
 
 def test_landing_no_banner_for_external_user(client, external_user, current_period):
     client.force_login(external_user)
     response = client.get(reverse("core:landing"))
-    assert b"haven&#x27;t been paid" not in response.content
-    assert b"pay now" not in response.content.lower()
+    assert b"outstanding balance" not in response.content.lower()
 
 
 def test_landing_no_banner_when_paid(client, member, current_period):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
@@ -199,7 +211,7 @@ def test_landing_no_banner_when_paid(client, member, current_period):
     )
     client.force_login(member)
     response = client.get(reverse("core:landing"))
-    assert b"pay now" not in response.content.lower()
+    assert b"outstanding balance" not in response.content.lower()
 
 
 # ---- send_dues_reminders command --------------------------------------
@@ -224,6 +236,9 @@ def test_reminders_skipped_before_due_date(member, current_period):
 
 @pytest.mark.django_db
 def test_reminders_sent_to_obligated_unpaid_member(member, current_period):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     _set_period_due_in_past(current_period)
     out = StringIO()
     call_command("send_dues_reminders", stdout=out)
@@ -235,6 +250,9 @@ def test_reminders_sent_to_obligated_unpaid_member(member, current_period):
 
 @pytest.mark.django_db
 def test_reminders_skip_user_with_recent_reminder(member, current_period):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     _set_period_due_in_past(current_period)
     DuesReminder.objects.create(user=member, dues_period=current_period)
     call_command("send_dues_reminders", stdout=StringIO())
@@ -245,6 +263,9 @@ def test_reminders_skip_user_with_recent_reminder(member, current_period):
 
 @pytest.mark.django_db
 def test_reminders_skip_paid_user(member, current_period):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     _set_period_due_in_past(current_period)
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
@@ -259,6 +280,16 @@ def test_reminders_skip_paid_user(member, current_period):
 
 
 @pytest.mark.django_db
+def test_reminders_skip_unminted_charge(member, current_period):
+    """No dues charge minted for the member yet → dues_state is None →
+    nothing to chase, even though the member is obligated (task #439)."""
+    _set_period_due_in_past(current_period)
+    call_command("send_dues_reminders", stdout=StringIO())
+    assert len(mail.outbox) == 0
+    assert DuesReminder.objects.filter(user=member).count() == 0
+
+
+@pytest.mark.django_db
 def test_reminders_skip_non_obligated_roles(external_user, current_period):
     _set_period_due_in_past(current_period)
     call_command("send_dues_reminders", stdout=StringIO())
@@ -267,6 +298,9 @@ def test_reminders_skip_non_obligated_roles(external_user, current_period):
 
 @pytest.mark.django_db
 def test_reminders_dry_run_sends_nothing_and_logs_nothing(member, current_period):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     _set_period_due_in_past(current_period)
     call_command("send_dues_reminders", "--dry-run", stdout=StringIO())
     assert len(mail.outbox) == 0
@@ -276,6 +310,9 @@ def test_reminders_dry_run_sends_nothing_and_logs_nothing(member, current_period
 @pytest.mark.django_db
 def test_reminder_resumes_after_seven_days(member, current_period):
     """A reminder older than 7 days no longer blocks a fresh send."""
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)  # mint the ledger charge for member
     _set_period_due_in_past(current_period)
     old = DuesReminder.objects.create(user=member, dues_period=current_period)
     DuesReminder.objects.filter(pk=old.pk).update(
@@ -375,18 +412,26 @@ def test_treasurer_dashboard_renders_for_staff(
     assert b"$100.00" in response.content
 
 
-def test_treasurer_dashboard_lists_unpaid_obligated_members(
+def test_treasurer_accounts_lists_unpaid_obligated_members_after_sync(
     client, staff_user, current_period, member,
 ):
-    """member is obligated but hasn't paid → appears in dues unpaid section."""
+    """member is obligated but hasn't paid → the synced dues charge shows them
+    owing on the unified Accounts tab (task #439 — obligation now flows
+    through a materialized Charge, not a role projection)."""
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)
     client.force_login(staff_user)
-    response = client.get(reverse("treasurer_dues"))
+    response = client.get(reverse("treasurer_accounts") + "?balance=owing")
     assert b"member@example.com" in response.content
 
 
-def test_treasurer_dashboard_excludes_paid_from_unpaid_list(
+def test_treasurer_accounts_excludes_paid_from_owing_filter(
     client, staff_user, current_period, member,
 ):
+    from payments.charges import sync_dues_charges
+
+    sync_dues_charges(current_period)
     Payment.objects.create(
         payment_type=Payment.Type.DUES,
         user=member,
@@ -395,10 +440,12 @@ def test_treasurer_dashboard_excludes_paid_from_unpaid_list(
         dues_period=current_period,
     )
     client.force_login(staff_user)
-    response = client.get(reverse("treasurer_dues"))
-    # member paid → not in the dues unpaid section.
+    response = client.get(reverse("treasurer_accounts") + "?balance=owing")
+    # member paid → not in the owing filter.
     assert b"member@example.com" not in response.content
-    assert b"Unpaid members" not in response.content
+    # Still visible on the full roster, just squared up.
+    full = client.get(reverse("treasurer_accounts"))
+    assert b"member@example.com" in full.content
 
 
 def test_treasurer_dashboard_excludes_external_users_from_obligated_count(
@@ -410,36 +457,11 @@ def test_treasurer_dashboard_excludes_external_users_from_obligated_count(
     assert b"external@example.com" not in response.content
 
 
-def test_dues_context_headlines_current_not_future_period(current_period, member):
-    """Regression: with a future period present (the cron provisions next year
-    ahead), the dashboard headline must reflect the *current* period, not the
-    newest/empty one. Previously the overview used period_stats[0]."""
-    from payments.views import _treasurer_dues_context
-
-    # A future period, newer start_date than current → sorts to period_stats[0].
-    nxt = current_period.start_date.year + 1
-    DuesPeriod.objects.create(
-        name=f"AY {nxt}-{nxt + 1}", slug=f"ay-{nxt}-{nxt + 1}",
-        start_date=date(nxt, 9, 1), due_date=date(nxt, 10, 1),
-        end_date=date(nxt + 1, 8, 31),
-        dues_amount_pre_candidate=Decimal("50"),
-        dues_amount_candidate=Decimal("100"),
-        dues_amount_analyst=Decimal("150"),
-    )
-    Payment.objects.create(
-        payment_type=Payment.Type.DUES, user=member,
-        amount=current_period.amount_for_role("candidate"),
-        status=Payment.Status.SUCCEEDED, dues_period=current_period,
-    )
-    ctx = _treasurer_dues_context()
-    assert ctx["current_dues_stats"]["period"].id == current_period.id
-    assert ctx["current_dues_stats"]["paid_count"] == 1
-    assert ctx["dues_collected"] == Decimal("100")
-
-
-def test_dues_context_outstanding_sums_unpaid_at_tier(current_period):
-    """dues_outstanding = unpaid obligated members × their tier rate."""
-    from payments.views import _treasurer_dues_context
+def test_dues_sync_then_accounts_outstanding_sums_unpaid_at_tier(current_period):
+    """dues_outstanding (on the unified Accounts total) = unpaid obligated
+    members × their tier rate, once their dues charges are synced."""
+    from payments import ledger
+    from payments.charges import sync_dues_charges
 
     cand = User.objects.create_user(email="c1@example.com")
     cand.profile.role = Profile.Role.CANDIDATE  # $100 tier
@@ -447,83 +469,32 @@ def test_dues_context_outstanding_sums_unpaid_at_tier(current_period):
     analyst = User.objects.create_user(email="a1@example.com")
     analyst.profile.role = Profile.Role.ANALYST  # $150 tier
     analyst.profile.save()
+    sync_dues_charges(current_period)
     # Nobody paid → outstanding should include both at their tiers.
-    ctx = _treasurer_dues_context()
-    assert ctx["dues_collected"] == Decimal("0")
-    assert ctx["dues_outstanding"] >= Decimal("250")  # 100 + 150 (+ any other obligated)
+    rows = ledger.accounts_overview()
+    total_owed = sum((r["owes"] for r in rows), Decimal("0"))
+    assert total_owed >= Decimal("250")  # 100 + 150 (+ any other obligated)
 
 
 @override_settings(DUES_OBLIGATED_ROLES=["analyst"])
-def test_treasurer_dashboard_respects_obligated_roles_setting(
+def test_dues_sync_respects_obligated_roles_setting(
     client, staff_user, current_period, external_user,
 ):
-    """With DUES_OBLIGATED_ROLES=[analyst], only analysts appear in the dues
-    tab's unpaid list. (Candidates appear in the tuition tab — different
-    obligation.)"""
+    """With DUES_OBLIGATED_ROLES=[analyst], only analysts get a synced dues
+    charge — and so only they appear owing on Accounts."""
+    from payments.charges import sync_dues_charges
+
     analyst = User.objects.create_user(email="analyst-x@example.com")
     analyst.profile.role = Profile.Role.ANALYST
     analyst.profile.save()
     candidate = User.objects.create_user(email="cand@example.com")
     candidate.profile.role = Profile.Role.CANDIDATE
     candidate.profile.save()
+    sync_dues_charges(current_period)
     client.force_login(staff_user)
-    response = client.get(reverse("treasurer_dues"))
+    response = client.get(reverse("treasurer_accounts") + "?balance=owing")
     assert b"analyst-x@example.com" in response.content
     assert b"cand@example.com" not in response.content
-
-
-def test_dues_context_past_year_drilldown(current_period, member):
-    """Selecting a past dues period shows the paid-members list and hides the
-    forward-looking unpaid/role sections; historical unpaid is None."""
-    from payments.views import _treasurer_dues_context
-
-    past = DuesPeriod.objects.create(
-        name="AY 2000-2001", slug="ay-2000-2001",
-        start_date=date(2000, 9, 1), due_date=date(2000, 10, 1),
-        end_date=date(2001, 8, 31),
-        dues_amount_pre_candidate=Decimal("50"),
-        dues_amount_candidate=Decimal("100"),
-        dues_amount_analyst=Decimal("150"),
-    )
-    Payment.objects.create(
-        payment_type=Payment.Type.DUES, user=member, amount=Decimal("100"),
-        status=Payment.Status.SUCCEEDED, dues_period=past,
-    )
-    ctx = _treasurer_dues_context(past)
-    assert ctx["dues_is_current"] is False
-    assert ctx["role_breakdown"] == []
-    assert ctx["unpaid_users"] == []
-    assert len(ctx["paid_members"]) == 1
-    assert ctx["dues_collected"] == Decimal("100")
-    assert ctx["selected_dues_stats"]["paid_count"] == 1
-    # Historical row's unpaid is not meaningful → None.
-    past_row = next(s for s in ctx["period_stats"] if s["period"].id == past.id)
-    assert past_row["unpaid_count"] is None
-    assert past_row["is_current"] is False
-
-
-def test_dues_context_has_participation_chart(current_period):
-    import json as _json
-
-    from payments.views import _treasurer_dues_context
-    ctx = _treasurer_dues_context()
-    data = _json.loads(ctx["chart_participation_json"])
-    assert "labels" in data and "counts" in data
-
-
-def test_treasurer_dues_year_selector_loads_past(client, staff_user, current_period):
-    DuesPeriod.objects.create(
-        name="AY 1998-1999", slug="ay-1998-1999",
-        start_date=date(1998, 9, 1), due_date=date(1998, 10, 1),
-        end_date=date(1999, 8, 31),
-        dues_amount_pre_candidate=Decimal("50"),
-        dues_amount_candidate=Decimal("100"),
-        dues_amount_analyst=Decimal("150"),
-    )
-    client.force_login(staff_user)
-    resp = client.get(reverse("treasurer_dues") + "?year=ay-1998-1999")
-    assert resp.status_code == 200
-    assert b"AY 1998-1999" in resp.content
 
 
 # ---- Standing exempts from dues obligation -----------------------------
@@ -543,9 +514,11 @@ def test_on_leave_member_not_dues_obligated(member):
     assert is_dues_obligated(member) is False
 
 
-def test_obligated_count_excludes_on_leave(current_period):
-    """The treasurer dues counts/lists exclude on-leave members."""
-    from payments.views import _treasurer_dues_context
+def test_dues_sync_excludes_on_leave(current_period):
+    """The dues-charge sync (and so the treasurer's owing lists) excludes
+    on-leave members — ``obligated_users_qs`` filters on ACTIVE standing."""
+    from payments.charges import sync_dues_charges
+    from payments.models import Charge
 
     active = User.objects.create_user(email="active@x.test")
     active.profile.role = Profile.Role.CANDIDATE
@@ -555,12 +528,9 @@ def test_obligated_count_excludes_on_leave(current_period):
     leave.profile.standing = Profile.Standing.ON_LEAVE
     leave.profile.save()
 
-    ctx = _treasurer_dues_context()
-    unpaid_emails = {u.email for u in ctx["unpaid_users"]}
-    assert "active@x.test" in unpaid_emails
-    assert "leave@x.test" not in unpaid_emails
-    # on-leave doesn't inflate the obligated headcount or outstanding $.
-    assert leave not in ctx["unpaid_users"]
+    sync_dues_charges(current_period)
+    assert Charge.objects.filter(user=active, category=Charge.Category.DUES).exists()
+    assert not Charge.objects.filter(user=leave, category=Charge.Category.DUES).exists()
 
 
 def test_landing_banner_hidden_for_on_leave(client, member, current_period):
@@ -568,4 +538,4 @@ def test_landing_banner_hidden_for_on_leave(client, member, current_period):
     member.profile.save()
     client.force_login(member)
     response = client.get(reverse("core:landing"))
-    assert b"pay now" not in response.content.lower()
+    assert b"outstanding balance" not in response.content.lower()

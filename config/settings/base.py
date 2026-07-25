@@ -275,6 +275,16 @@ PARLETRE_REPLY_SECRET = env("PARLETRE_REPLY_SECRET", default=SECRET_KEY)
 # follow-up. Set to the receiving topic's ARN to reject other senders.
 PARLETRE_SNS_TOPIC_ARN = env("PARLETRE_SNS_TOPIC_ARN", default="")
 
+# Reversibly hide Parlêtre's school-wide social channels + private chats (task
+# #360). Both default off; flip the env var to true (host .env) to restore the
+# spaces intact. See docs/parletre-disabled-features.md.
+PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED = env.bool(
+    "DJANGO_PARLETRE_SCHOOLWIDE_SOCIAL_ENABLED", default=False
+)
+PARLETRE_PRIVATE_CHATS_ENABLED = env.bool(
+    "DJANGO_PARLETRE_PRIVATE_CHATS_ENABLED", default=False
+)
+
 # --- Stripe -------------------------------------------------------------
 # Test-mode keys for development; production keys swapped via env in
 # production.py. STRIPE_WEBHOOK_SECRET is the signing secret for the
@@ -413,6 +423,14 @@ LOGGING = {
         "registrations": {"handlers": ["console"], "level": "INFO"},
     },
 }
+
+# --- Find-an-Analyst map --------------------------------------------------
+# When a member's location changes through an interactive edit (Django admin
+# or the self-service profile editor), re-geocode it synchronously in the
+# request so the map pin updates immediately. Off by default (dev/CI stay
+# offline and bulk imports rely on the `geocode_profiles` batch command);
+# production overrides it to True. One best-effort Nominatim call per edit.
+PROFILE_GEOCODE_ON_SAVE = env.bool("DJANGO_PROFILE_GEOCODE_ON_SAVE", default=False)
 
 # --- Defaults -----------------------------------------------------------
 

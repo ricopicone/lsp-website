@@ -1,0 +1,449 @@
+{% load treasurer_filters tz_filters %}
+{% comment %}
+Account tab (task #439) — the member-facing view onto the unified ledger
+(payments.ledger.member_account). One tab now covers what used to be split
+across "Tuition" and "My account": a balance tile, a two-column Tuition/Dues
+summary (tuition progress + this year's decision/installments, folded in
+verbatim from the retired Tuition tab; dues status + pay flow), the
+member-safe statement with per-row statement actions (re-categorize / split
+/ note — full treasurer parity on the member's OWN payments), and the
+running-balance footnote. Never renders Charge.notes, Payment.notes, or
+source/provenance — those are treasurer-only (see
+payments/treasurer/member_detail.html for the full picture with actions).
+{% endcomment %}
+  <div class="space-y-8">
+
+    {% if tuition_stripe_status == "cancelled" %}
+    <div class="rounded-lg border border-warning/40 bg-warning/10 px-5 py-3 text-sm">
+      Payment cancelled. No charge was made, you can try again whenever you're ready.
+    </div>
+    {% elif tuition_stripe_status == "success" %}
+    <div class="rounded-lg border border-success/40 bg-success/10 px-5 py-3 text-sm">
+      Thank you, your payment was received. It may take a moment to appear below.
+    </div>
+    {% endif %}
+
+    {# ---- Balance ---- #}
+    <div class="rounded border border-base-300 p-2.5 inline-block min-w-40">
+      <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Balance</div>
+      <div class="font-serif text-xl leading-tight {% if acct.owes %}text-warning{% elif acct.credit %}text-success{% endif %}">
+        {% if acct.owes %}{{ acct.owes|usd }} owed
+        {% elif acct.credit %}{{ acct.credit|usd }} credit
+        {% else %}Paid up{% endif %}
+      </div>
+    </div>
+
+    {# ---- Tuition / Dues summary ---- #}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      {# -------- Tuition -------- #}
+      <section id="decision" class="space-y-5 scroll-mt-24">
+        <h2 class="font-serif text-2xl text-base-content">Tuition</h2>
+
+        {% if owes_tuition or tuition_years_started %}
+        {# Four-year progress #}
+        <div class="rounded-lg border border-base-300 p-5 space-y-3">
+          <div class="flex items-baseline justify-between gap-3 flex-wrap">
+            <h3 class="font-medium text-base-content">Tuition progress</h3>
+            <p class="text-sm text-base-content/70">
+              {% if requirement_met %}
+              <span class="badge badge-success badge-sm">Requirement met</span>
+              {% else %}
+              {{ acct.tuition_years_covered }} of {{ acct.tuition_years_required }} years covered
+              {% endif %}
+            </p>
+          </div>
+          <p class="text-xs text-base-content/60">
+            Four years of tuition (not necessarily consecutive) is one requirement
+            on the way to full Analyst or Scholar standing. It is necessary but not
+            sufficient on its own, standing also depends on the other work of
+            formation. Years you haven't started yet are projected at the current
+            rate, a partially paid year counts its remainder as still owed.
+          </p>
+          <div class="grid grid-cols-2 gap-3">
+            {% for s in tuition_slots %}
+            <div class="space-y-1">
+              <p class="text-xs font-medium text-base-content truncate">
+                {{ s.label }}{% if s.projected %} <span class="text-base-content/50">(projected)</span>{% endif %}
+              </p>
+              <div class="h-2.5 rounded-full bg-base-300 overflow-hidden">
+                <div class="h-full {% if s.projected %}bg-base-content/20{% else %}bg-primary{% endif %}" style="width: {{ s.pct }}%"></div>
+              </div>
+              <p class="text-xs text-base-content/60">${{ s.paid }} / ${{ s.goal }}</p>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if not owes_tuition %}
+        <p class="text-sm text-base-content/70">
+          You're not in a tuition-paying role right now, so there's no decision to record.
+        </p>
+        {% elif not tuition_period %}
+        <p class="text-sm text-base-content/70">No academic year is currently open for tuition.</p>
+        {% else %}
+        <div class="rounded-lg border border-base-300 bg-base-200/40 p-5 text-sm leading-relaxed">
+          <p>Tuition-paying students receive "covered by tuition" pricing on seminars.
+            Students skipping a year still pay the regular per-event fee.</p>
+        </div>
+
+        {% if tuition_enrollment and not decision_exempt %}
+        <div class="rounded-lg border border-primary/30 bg-primary/5 px-5 py-4 text-sm">
+          <p>Current decision for {{ tuition_period.name }}:
+            <strong>{% if tuition_decision_label %}{{ tuition_decision_label }}{% else %}{{ tuition_enrollment.get_status_display }}{% endif %}</strong>
+            <span class="text-base-content/60">(recorded {{ tuition_enrollment.decided_at|user_datetime }})</span>
+          </p>
+        </div>
+        {% endif %}
+
+        {% if requirement_met %}
+        <div class="rounded-lg border border-success/30 bg-success/5 px-5 py-4 text-sm">
+          Your tuition requirement is met, four years are paid in full. No further annual decision is needed.
+        </div>
+        {% elif decision_exempt %}
+        <div class="rounded-lg border border-base-300 bg-base-200/40 px-5 py-4 text-sm text-base-content/70">
+          No annual tuition decision is needed, four years are on record.
+        </div>
+        {% endif %}
+
+        {% if tuition_enrollment %}
+        {% if tuition_enrollment.status == "committed" and not tuition_installments %}
+        <div class="rounded-lg border border-base-300 p-5 space-y-3">
+          <h3 class="font-serif text-lg text-base-content">Pay tuition</h3>
+          <form method="post" action="{% url 'tuition_pay_in_full' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary">Pay ${{ tuition_period.tuition_amount }} now →</button>
+          </form>
+          <p class="text-xs text-base-content/60">Prefer to spread it out? Switch to "payment plan" below.</p>
+        </div>
+        {% endif %}
+
+        {% if tuition_enrollment.status == "payment_plan" and not tuition_installments %}
+        <div class="rounded-lg border border-base-300 p-5 space-y-4">
+          <h3 class="font-serif text-lg text-base-content">Choose a payment plan</h3>
+          <div class="grid grid-cols-1 gap-3">
+            <form method="post" action="{% url 'tuition_setup_plan' %}" class="contents">
+              {% csrf_token %}
+              <input type="hidden" name="installment_count" value="2">
+              <button type="submit" class="btn btn-outline justify-start text-left h-auto py-4">
+                <span class="block"><span class="font-medium block">Two installments</span>
+                <span class="text-xs text-base-content/60 block mt-0.5">September + February</span></span>
+              </button>
+            </form>
+            <form method="post" action="{% url 'tuition_setup_plan' %}" class="contents">
+              {% csrf_token %}
+              <input type="hidden" name="installment_count" value="9">
+              <button type="submit" class="btn btn-outline justify-start text-left h-auto py-4">
+                <span class="block"><span class="font-medium block">Monthly (9 installments)</span>
+                <span class="text-xs text-base-content/60 block mt-0.5">September through May</span></span>
+              </button>
+            </form>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if tuition_installments %}
+        <div class="rounded-lg border border-base-300 p-5 space-y-3">
+          <h3 class="font-serif text-lg text-base-content">My installments — {{ tuition_period.name }}</h3>
+          <table class="table table-sm">
+            <thead><tr><th>#</th><th>Due</th><th class="text-right">Amount</th><th></th></tr></thead>
+            <tbody>
+              {% for inst in tuition_installments %}
+              <tr>
+                <td>{{ inst.sequence }}</td>
+                <td class="whitespace-nowrap">{{ inst.due_date|date:"M j, Y" }}</td>
+                <td class="text-right whitespace-nowrap">${{ inst.amount }}</td>
+                <td class="text-right">
+                  {% if inst.paid %}
+                    <span class="badge badge-success badge-sm">Paid {{ inst.paid_at|date:"M j" }}</span>
+                  {% else %}
+                    <form method="post" action="{% url 'tuition_pay_installment' inst.id %}" class="contents">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-primary btn-xs">Pay →</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        {% if not decision_exempt %}
+        {% if tuition_enrollment.status == "plan_requested" %}
+        <div class="rounded-lg border border-base-300 bg-base-200/40 px-5 py-4 text-sm">
+          Your payment plan application is with the Board.
+        </div>
+        {% else %}
+        <form method="post" action="{% url 'tuition' %}" class="space-y-4 rounded-lg border border-base-300 p-5">
+          {% csrf_token %}
+          <fieldset class="space-y-2">
+            <legend class="font-serif text-lg text-base-content mb-2">{{ tuition_form.status.label }}</legend>
+            {% for radio in tuition_form.status %}
+            <label class="flex items-start gap-3 cursor-pointer">
+              {{ radio.tag }}
+              <span class="text-sm">{{ radio.choice_label }}</span>
+            </label>
+            {% endfor %}
+            {% if tuition_form.status.errors %}<p class="text-error text-sm">{{ tuition_form.status.errors|join:", " }}</p>{% endif %}
+          </fieldset>
+          <div class="space-y-1">
+            <label for="{{ tuition_form.reasons.id_for_label }}" class="text-sm text-base-content">{{ tuition_form.reasons.label }}</label>
+            {{ tuition_form.reasons }}
+            <p class="text-xs text-base-content/60">{{ tuition_form.reasons.help_text }}</p>
+            {% if tuition_form.reasons.errors %}<p class="text-error text-sm">{{ tuition_form.reasons.errors|join:", " }}</p>{% endif %}
+          </div>
+          <button type="submit" class="btn btn-primary">Record decision</button>
+        </form>
+        {% endif %}
+        {% endif %}
+        {% endif %}
+
+        {% if owes_tuition and upcoming_period and not decision_exempt %}
+        {# Next academic year's decision (task #450 phase A) — recorded ahead of time, mirroring the current-period block above. #}
+        <div class="rounded-lg border border-base-300 bg-base-200/30 p-5 space-y-4">
+          <h3 class="font-serif text-lg text-base-content">Your {{ upcoming_period.name }} tuition decision</h3>
+
+          {% if upcoming_enrollment %}
+          <p class="text-sm">Current decision for {{ upcoming_period.name }}:
+            <strong>{{ upcoming_enrollment.get_status_display }}</strong>
+            <span class="text-base-content/60">(recorded {{ upcoming_enrollment.decided_at|user_datetime }})</span>
+          </p>
+          {% endif %}
+
+          {% if upcoming_enrollment.status == "committed" and not upcoming_installments %}
+          <div class="rounded-lg border border-base-300 p-5 space-y-3">
+            <h3 class="font-serif text-lg text-base-content">Pay tuition</h3>
+            <form method="post" action="{% url 'tuition_pay_in_full' %}">
+              {% csrf_token %}
+              <input type="hidden" name="period" value="{{ upcoming_period.slug }}">
+              <button type="submit" class="btn btn-primary">Pay ${{ upcoming_period.tuition_amount }} now →</button>
+            </form>
+            <p class="text-xs text-base-content/60">You can pay ahead of {{ upcoming_period.name }}, no need to wait for it to start.</p>
+          </div>
+          {% endif %}
+
+          {% if not decision_exempt %}
+          {% if upcoming_enrollment.status == "plan_requested" %}
+          <div class="rounded-lg border border-base-300 bg-base-200/40 px-5 py-4 text-sm">
+            Your payment plan application is with the Board.
+          </div>
+          {% else %}
+          <form method="post" action="{% url 'tuition' %}" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="period" value="{{ upcoming_period.slug }}">
+            <fieldset class="space-y-2">
+              <legend class="font-serif text-base text-base-content mb-2">{{ upcoming_tuition_form.status.label }}</legend>
+              {% for radio in upcoming_tuition_form.status %}
+              <label class="flex items-start gap-3 cursor-pointer">
+                {{ radio.tag }}
+                <span class="text-sm">{{ radio.choice_label }}</span>
+              </label>
+              {% endfor %}
+              {% if upcoming_tuition_form.status.errors %}<p class="text-error text-sm">{{ upcoming_tuition_form.status.errors|join:", " }}</p>{% endif %}
+            </fieldset>
+            <div class="space-y-1">
+              <label for="{{ upcoming_tuition_form.reasons.id_for_label }}" class="text-sm text-base-content">{{ upcoming_tuition_form.reasons.label }}</label>
+              {{ upcoming_tuition_form.reasons }}
+              <p class="text-xs text-base-content/60">{{ upcoming_tuition_form.reasons.help_text }}</p>
+              {% if upcoming_tuition_form.reasons.errors %}<p class="text-error text-sm">{{ upcoming_tuition_form.reasons.errors|join:", " }}</p>{% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary">Record decision</button>
+          </form>
+          {% endif %}
+          {% endif %}
+        </div>
+        {% endif %}
+      </section>
+
+      {# -------- Dues -------- #}
+      <section class="space-y-3">
+        <h2 class="font-serif text-2xl text-base-content">Membership dues</h2>
+        {% if dues_obligated %}
+          {% if not dues_period %}
+          <p class="text-sm text-base-content/70">No dues year is currently configured.</p>
+          {% elif dues_paid %}
+          <div class="rounded-lg border border-success/30 bg-success/5 px-5 py-4 text-sm">
+            Dues paid for {{ dues_period.name }} <span class="text-success">✓</span>
+          </div>
+          {% else %}
+          <div class="rounded-lg border border-base-300 p-5 space-y-3">
+            <p class="text-sm">My dues for {{ dues_period.name }}: <strong>${{ dues_amount }}</strong>.</p>
+            <form method="post" action="{% url 'dues' %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-primary">Pay ${{ dues_amount }} dues →</button>
+            </form>
+          </div>
+          {% endif %}
+        {% else %}
+        <p class="text-sm text-base-content/60">You don't owe membership dues right now.</p>
+        {% endif %}
+      </section>
+    </div>
+
+    {# ---- Statement — the member-safe rendering of acct.lines, with actions ---- #}
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-base-content">Statement</h2>
+      {% if acct.lines %}
+      <p class="text-sm text-base-content/70">
+        Not sure a payment is categorized right? Use the tag icon to re-categorize it, or the split
+        icon if one payment actually covered more than one thing. The note icon leaves a note for
+        the treasurer.
+      </p>
+      <div class="overflow-x-auto rounded-lg border border-base-300">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Date</th><th>Description</th>
+              <th class="text-right">Charge</th><th class="text-right">Payment</th>
+              <th class="text-right">Balance</th><th>Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ln in acct.lines %}
+            <tr>
+              <td class="whitespace-nowrap text-xs text-base-content/70">{{ ln.date|date:"M j, Y" }}</td>
+              <td>
+                {% if ln.kind == "charge" %}
+                  {{ ln.obj.get_category_display }} charge
+                  {% if ln.obj.dues_period %}
+                  <div class="text-xs text-base-content/60">{{ ln.obj.dues_period.name }}</div>
+                  {% elif ln.obj.tuition_period %}
+                  <div class="text-xs text-base-content/60">{{ ln.obj.tuition_period.name }}</div>
+                  {% elif ln.obj.registration %}
+                  <div class="text-xs text-base-content/60">{{ ln.obj.registration.event.title|truncatechars:32 }}</div>
+                  {% endif %}
+                {% else %}
+                  {{ ln.obj.get_payment_type_display }} payment
+                  {% if ln.obj.is_split %}<span class="badge badge-info badge-xs ml-1">split</span>{% endif %}
+                  {% if ln.obj.registration %}
+                  <div class="text-xs text-base-content/60">
+                    <a href="{% url 'events:detail' ln.obj.registration.event.slug %}" class="link link-hover">{{ ln.obj.registration.event.title|truncatechars:32 }}</a>
+                  </div>
+                  {% endif %}
+                {% endif %}
+              </td>
+              <td class="text-right whitespace-nowrap">{% if ln.kind == "charge" %}{{ ln.delta|usd }}{% endif %}</td>
+              <td class="text-right whitespace-nowrap">{% if ln.kind == "payment" %}{{ ln.obj.amount|usd }}{% endif %}</td>
+              <td class="text-right whitespace-nowrap {% if ln.running > 0 %}text-warning{% elif ln.running < 0 %}text-success{% endif %}">{{ ln.running|usd }}</td>
+              <td>
+                {% if ln.kind == "charge" %}
+                  {% if ln.obj.status == "open" %}
+                    {% if ln.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
+                    {% elif ln.state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
+                    {% else %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>{% endif %}
+                  {% elif ln.obj.status == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>{% endif %}
+                {% else %}
+                  {% status_badge ln.obj.status %}
+                {% endif %}
+              </td>
+              <td>
+                {% if ln.kind == "payment" %}
+                <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
+                  {% if not ln.obj.registration_id %}
+                  {% include "payments/member/_retype_modal.html" with payment=ln.obj type_choices=payment_type_choices dues_periods=dues_periods tuition_periods=tuition_periods next_url=request.get_full_path %}
+                  {% if ln.obj.status == "succeeded" and not ln.obj.is_split %}
+                  {% include "payments/member/_split_modal.html" with payment=ln.obj type_choices=payment_type_choices next_url=request.get_full_path %}
+                  {% endif %}
+                  {% endif %}
+                  {% include "payments/member/_note_modal.html" with payment=ln.obj next_url=request.get_full_path %}
+                </div>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/60">No charges or payments on file yet.</p>
+      {% endif %}
+    </section>
+
+    {# ---- Report missing history (task #439 §3) ---- #}
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-base-content">Report missing history</h2>
+      <details class="rounded-lg border border-base-300 p-4">
+        <summary class="cursor-pointer text-sm font-medium">Report a payment or fee from before the website's records begin</summary>
+        <p class="text-sm text-base-content/70 mt-3">
+          If you paid dues or tuition, or owed a fee, before this website tracked your
+          account, tell us about it here. The treasurer reviews each report and either
+          adds it to your account or follows up with you.
+        </p>
+        <form method="post" action="{% url 'my_ledger_submission_create' %}" class="mt-4 space-y-3">
+          {% csrf_token %}
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="block space-y-1 text-sm">
+              <span class="text-base-content/60">What was it</span>
+              <select name="kind" class="select select-bordered select-sm w-full">
+                {% for value, label in submission_kind_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="block space-y-1 text-sm">
+              <span class="text-base-content/60">Category</span>
+              <select name="category" class="select select-bordered select-sm w-full">
+                {% for value, label in payment_type_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+              <span class="block text-xs text-base-content/50">Donations can only be reported as payments.</span>
+            </label>
+            <label class="block space-y-1 text-sm">
+              <span class="text-base-content/60">Amount</span>
+              <input type="text" name="amount" inputmode="decimal" placeholder="0.00"
+                     class="input input-bordered input-sm w-full">
+            </label>
+            <label class="block space-y-1 text-sm">
+              <span class="text-base-content/60">Date</span>
+              <input type="date" name="claimed_date" max="{{ today|date:'Y-m-d' }}"
+                     class="input input-bordered input-sm w-full">
+            </label>
+          </div>
+          <label class="block space-y-1 text-sm">
+            <span class="text-base-content/60">Tell us about it</span>
+            <textarea name="details" rows="3" maxlength="2000"
+                      class="textarea textarea-bordered textarea-sm w-full"
+                      placeholder="e.g. I paid $2,000 tuition in fall 2019, by check to the treasurer at the time."></textarea>
+          </label>
+          <button type="submit" class="btn btn-primary btn-sm">Submit report</button>
+        </form>
+      </details>
+
+      {% if my_submissions %}
+      <div class="overflow-x-auto rounded-lg border border-base-300">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Date</th><th>Kind</th><th>Category</th>
+              <th class="text-right">Amount</th><th>Status</th><th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in my_submissions %}
+            <tr>
+              <td class="whitespace-nowrap text-xs text-base-content/70">{{ s.claimed_date|date:"M j, Y" }}</td>
+              <td>{{ s.get_kind_display }}</td>
+              <td>{{ s.get_category_display }}</td>
+              <td class="text-right whitespace-nowrap">{{ s.amount|usd }}</td>
+              <td>{% status_badge s.status %}</td>
+              <td class="text-xs text-base-content/70">
+                {% if s.status == "declined" %}{{ s.decision_note }}{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </section>
+
+    <p class="text-xs text-base-content/50">
+      Your charges and payments sit on one running balance, oldest charges are covered first.
+      Categories are labels for reporting, your money is not split into separate pots.
+    </p>
+  </div>
