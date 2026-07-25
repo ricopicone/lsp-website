@@ -1,9 +1,9 @@
-# Resuming task #461
+# Resuming task #470
 
-**Task:** Coming Up: Pin Upcoming Special Events to the Top
+**Task:** Registration Admin?
 
 ## Description
-We have a special event in September that's getting buried by seminars all starting then. I think we should pin upcoming special events to the top. Maybe a good rule to start with: Pin upcoming special events to the top if they occur within the next two months. Design, plan, build, commit, merge into main locally, push to deploy
+It might be nice to have a Registration Admin to see and potentially make changes to registrations across all events. It's different than the Treasurer Admin, which is focused on accounts. We don't have a Registrar position, so I think the most natural owner of that space is the Program Committee and the Web Coordinator.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -24,7 +24,9 @@ _Durable, shared context for this project. Read a full entry with `get_project_m
 
 **Future: cut Wix out entirely** — "Transfer away from Wix" registrar transfer (to Route 53 Domains, ~$15/yr, 5-7 days, zero downtime). The pre-staged Route 53 hosted zone (Z07184784MROHMIJPJLF; full mirror + parletre MX/DKIM) goes live then; unlocks subdomain MX → move reply-by-email to parletre.lacanschool.org.
 
-**Data tasks before opening registration:** reconcile backfilled tuition enrollments (#443 ongoing), flip `is_faculty` for seminar instructors, un-mask 19 Google-Group members, set the real Zoom link on the Masochism event, populate year_joined (survey) before minting pre-2024 dues years.
+**Working with Masochism (special event) — DECISION 2026-07-23 (task #463):** use the **integrated in-site video meeting (Daily) NOT Zoom**. The event is format=online, daily_enabled=True on prod, access_info is empty (no Zoom link needed — the room button IS the join path). Registration was opened (status=OPEN) 2026-07-23. Speakers/faculty/PC/staff see the room + a "Join button" on the event page without registering; attendees register then get their own Join button when the event goes live (no link to send). So the old "set the real Zoom link on the Masochism event" task is DROPPED.
+
+**Data tasks before opening registration:** reconcile backfilled tuition enrollments (#443 ongoing), flip `is_faculty` for seminar instructors, un-mask 19 Google-Group members, populate year_joined (survey) before minting pre-2024 dues years.
 
 ### do-not-over-automate (decision)
 The school **explicitly asked that automation not remove human discretion** (architecture §4.1, "space for the singular"). Faculty use sliding-scale and "none turned away for lack of funds" pricing; tuition-paying members are exempt from seminar fees; some faculty bill per class.
@@ -54,11 +56,16 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **formation-control-requirement-by-clinical-background** (architecture) — Formation control requirement varies by Profile.formation_background (3-state: unreviewed/clinical/academic, task #466); MoA-owned + audited; set via /admin-tools/meeting-of-analysts/backgrounds/ or advisor page, never the old bool
+- **prod-host-access-ssm** (reference) — When ssh lsp is unresponsive, run prod commands via AWS SSM (same channel as deploy); instance i-070b087afa041f233
+- **guest-registration-ux** (architecture) — Task #464 SHIPPED: guest-friendly registration — Event.open_to_guests (messaging-only flag), guests-welcome note on event pages, context-aware login/signup ("register for [Event]" + promoted free-account button); accounts stay required, new
+- **tuition-coverage-honors-requirement-met** (decision) — REVERTED/WRONG (task #468, 2026-07-24): do NOT make seminar coverage honor 4-year-completion. Tuition covers seminars ONLY in a year the member is actively paying tuition (a covering enrollment for that AY)
+- **special-event-presenters-not-faculty** (architecture) — PC-organized events (special/assembly/work day/scholarly) share the Programming Committee's workgroup, so their presenters can't be faculty — they're member_speakers, and Event.is_presenter() is what grants them the faculty view (task #463)
+- **notification-url-denormalized** (gotcha) — Notification.url is stored on the row — fixing a link builder also needs a data migration to repair already-sent bell rows
 - **auth-email-scanner-and-reset-gotchas** (gotcha) — Email link-scanners consume single-use links (POST-gate them); Django password reset silently skips unusable-password (imported) members
 - **membership-standing-axis** (architecture) — Profile.Standing (active/on_leave/resigned/emeritus/retired/removed) is the membership axis + orthogonal Profile.deceased_on date (task #451 SHIPPED); billing keys off standing==ACTIVE; NON_MEMBER_STANDINGS={resigned,removed} gate directory
 - **deleting-an-event-with-registrations** (gotcha) — To delete an Event you must first delete its Registrations: Registration.event AND Registration.price_tier are both on_delete=PROTECT
 - **unified-member-ledger-design** (status) — Task #439 LIVE on prod (deployed + backfilled 2026-07-15): unified per-member ledger, 7-tab treasurer admin; --dues-from 2024-09-01 (year_joined mostly null made earlier minting unsafe); treasurer cleanup pass is the open item
-- **prod-host-access-ssm** (reference) — When ssh lsp is unresponsive, run prod commands via AWS SSM (same channel as deploy); instance i-070b087afa041f233
 - **treasurer-payments-rework-2026-07** (status) — Big treasurer/payments-data cleanup + UI rework shipped Jul 13-14 2026 (tasks #435/#437); interface simplification is the next planned step
 - **tuition-cumulative-coverage-model** (architecture) — Tuition = cumulative ledger (total paid vs obligation), NOT per-payment-to-year allocation; obligation capped at 4 years; per-year status = oldest-first coverage
 - **stripe-missing-payment-import** (reference) — Import off-site (old Wix) Stripe payments via manage.py import_stripe_payments --use-settings-key; same account so no separate key; runbook in docs/stripe-payment-import.md
@@ -109,7 +116,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=461`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=470`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

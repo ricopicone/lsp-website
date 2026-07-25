@@ -63,9 +63,14 @@ Cross-event table: member, event, tier, quoted amount, status, created date.
 
 One row per event (current + upcoming academic year): status
 (Draft/Open/Closed), registration counts by status, links to the event page /
-roster, and an **Open registration / Close registration** toggle. The toggle
-flips `Event.status` between OPEN and CLOSED only — Draft remains a
-publishing decision made elsewhere.
+roster, and an **Open registration / Close registration** toggle.
+
+*Amended during planning:* `Event.status` DRAFT means "registration not yet
+open" — it is distinct from the `Event.published` visibility flag, and the
+existing PC bulk view (`program_admin_registration_bulk`) already flips
+DRAFT→OPEN. The console toggle follows the same convention: **open =
+DRAFT/CLOSED → OPEN; close = OPEN → CLOSED.** Publishing (`published`)
+remains a decision made elsewhere.
 
 ### Tab 3 — Help
 
@@ -107,6 +112,6 @@ pytest-django coverage for:
   non-`AWAITING_PAYMENT` rows.
 - Registrations tab: filters, search, pagination, CSV columns + filter
   honoring.
-- Events tab: open/close toggle flips only OPEN↔CLOSED; Draft rows get no
-  open toggle side effects.
+- Events tab: open flips DRAFT/CLOSED→OPEN; close flips only OPEN→CLOSED
+  (a close on a DRAFT event is a no-op).
 - Directory: a registrar holder shows no registrar badge.
