@@ -67,6 +67,7 @@
     </label>
     <button class="btn btn-sm btn-primary">Filter</button>
     <a href="{% url 'registrations:registrar' %}" class="btn btn-sm btn-ghost">Reset</a>
+    <a href="{% url 'registrations:registrar_csv' %}?{{ querystring }}" class="btn btn-sm btn-outline">Export CSV</a>
   </form>
 
   <div class="overflow-x-auto">

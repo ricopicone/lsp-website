@@ -11,6 +11,8 @@ _ADMIN = "admin-tools/registrations"
 urlpatterns = [
     path(f"{_ADMIN}/", views_admin.registrar_registrations, name="registrar"),
     path(f"{_ADMIN}/help/", views_admin.registrar_help, name="registrar_help"),
+    path(f"{_ADMIN}/export.csv", views_admin.registrar_registrations_csv,
+         name="registrar_csv"),
     path(f"{_ADMIN}/<int:reg_id>/approve/", views_admin.registrar_approve,
          name="registrar_approve"),
     path(f"{_ADMIN}/<int:reg_id>/decline/", views_admin.registrar_decline,

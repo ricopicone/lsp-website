@@ -7,6 +7,7 @@ tab pattern; the denied-user convention is Http404 (like the PC admin).
 
 from __future__ import annotations
 
+import csv
 import datetime as _dt
 from functools import wraps
 
@@ -14,7 +15,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -146,6 +147,33 @@ def registrar_registrations(request):
             registrations__isnull=False
         ).distinct().order_by("-start_date", "title"),
     })
+
+
+@registrar_required
+def registrar_registrations_csv(request):
+    """CSV of the Registrations tab under the current filters (REG-15 sibling)."""
+    qs, _filters = _filtered_registrations(request)
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="registrations.csv"'
+    writer = csv.writer(response)
+    writer.writerow([
+        "event", "first_name", "last_name", "email", "role",
+        "tier", "amount", "status", "pricing_code", "registered_at",
+    ])
+    for r in qs:
+        writer.writerow([
+            r.event.title,
+            r.user.first_name,
+            r.user.last_name,
+            r.user.email,
+            getattr(getattr(r.user, "profile", None), "role", ""),
+            r.price_tier.get_audience_display(),
+            r.quoted_amount,
+            r.status,
+            r.pricing_code.code if r.pricing_code else "",
+            r.created_at.isoformat(),
+        ])
+    return response
 
 
 def _back(request):

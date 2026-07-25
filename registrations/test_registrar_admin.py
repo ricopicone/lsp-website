@@ -238,6 +238,21 @@ class TestRowActions:
         assert reg.status == Registration.Status.AWAITING_PAYMENT
 
 
+def test_csv_export_honors_filters(client):
+    e1, e2 = _event("csv-a"), _event("csv-b")
+    _reg(e1, _member("csva@x.test"))
+    _reg(e2, _member("csvb@x.test"))
+    client.force_login(_registrar("rcsv@x.test"))
+
+    resp = client.get(reverse("registrations:registrar_csv"), {"event": e1.pk})
+    body = resp.content.decode()
+    assert resp["Content-Type"].startswith("text/csv")
+    assert "csva@x.test" in body and "csvb@x.test" not in body
+    header = body.splitlines()[0]
+    assert header == ("event,first_name,last_name,email,role,tier,amount,"
+                      "status,pricing_code,registered_at")
+
+
 def test_help_tab_renders(client):
     client.force_login(_registrar("r3@x.test"))
     resp = client.get(reverse("registrations:registrar_help"))
