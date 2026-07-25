@@ -252,7 +252,9 @@ def registrar_events(request):
     from django.db.models import Count
 
     from events.models import (
-        Event, academic_year_date_range, current_academic_year,
+        Event,
+        academic_year_date_range,
+        current_academic_year,
     )
 
     ay_start, _ = academic_year_date_range(current_academic_year())

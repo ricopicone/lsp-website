@@ -383,6 +383,19 @@ Done (see `git log` for specifics):
   Reconcile tab reviews each (approve mints a member-reported Payment/Charge
   bound to the right AY period with a duplicate-charge guard; decline just
   notes it), and the member is notified either way.
+- **Registration Admin console** (task #470) at `/admin-tools/registrations/`
+  (`registrations/views_admin.py`, referrals-console tab pattern). Cross-event
+  registration table (filters/search/CSV, "Needs attention" pending strip) with
+  approve / decline / comp / add-note row actions, an Events tab with
+  per-status counts and an open↔close registration toggle (open flips
+  DRAFT/CLOSED→OPEN, matching the PC bulk view; publishing stays separate),
+  and a Help tab (`core/docs/registrar-guide.md`). Gated by
+  `registrations.permissions.can_administer_registrations`: the new **unheld
+  `registrar` StaffRole** (a placeholder for a future position — excluded from
+  directory badges like LSP Staff), Web Coordinator, serving Programming
+  Committee (live roster check), or Django staff/superusers. The admin comp
+  action's side-effect chain moved to
+  `registrations/services.py::comp_registration` so console + admin share it.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
