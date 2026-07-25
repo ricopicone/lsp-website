@@ -4,8 +4,9 @@
   <p class="text-sm text-base-content/70">
     Events in the current and upcoming academic year. Opening registration lets
     members register and pay; it is separate from publishing the event page.
+    Counts link to the filtered registration list.
   </p>
-  <div class="overflow-x-auto">
+  <div class="overflow-x-auto rounded-lg border border-base-300">
     <table class="table table-sm">
       <thead>
         <tr>
@@ -21,22 +22,28 @@
           <td>
             <a href="{% url 'events:detail' e.slug %}" class="link link-hover">{{ e.title }}</a>
             {% if not e.published %}<span class="badge badge-warning badge-xs align-middle ml-1">Unpublished</span>{% endif %}
+            <div class="text-xs text-base-content/60">{{ e.get_event_type_display }}</div>
           </td>
-          <td class="text-xs">{{ e.start_date|date:"M j, Y" }}</td>
+          <td class="whitespace-nowrap text-xs">{{ e.start_date|date:"M j, Y" }}</td>
           <td><span class="badge badge-sm {{ e.registration_badge.css }}">{{ e.registration_badge.label }}</span></td>
-          <td class="text-right">{{ e.n_pending }}</td>
-          <td class="text-right">{{ e.n_awaiting }}</td>
-          <td class="text-right">{{ e.n_paid }}</td>
-          <td class="text-right">{{ e.n_comped }}</td>
+          <td class="text-right">{% if e.n_pending %}<a class="link link-hover" href="{% url 'registrations:registrar' %}?event={{ e.pk }}&status=pending_approval">{{ e.n_pending }}</a>{% else %}<span class="text-base-content/40">0</span>{% endif %}</td>
+          <td class="text-right">{% if e.n_awaiting %}<a class="link link-hover" href="{% url 'registrations:registrar' %}?event={{ e.pk }}&status=awaiting_payment">{{ e.n_awaiting }}</a>{% else %}<span class="text-base-content/40">0</span>{% endif %}</td>
+          <td class="text-right">{% if e.n_paid %}<a class="link link-hover" href="{% url 'registrations:registrar' %}?event={{ e.pk }}&status=paid">{{ e.n_paid }}</a>{% else %}<span class="text-base-content/40">0</span>{% endif %}</td>
+          <td class="text-right">{% if e.n_comped %}<a class="link link-hover" href="{% url 'registrations:registrar' %}?event={{ e.pk }}&status=comped">{{ e.n_comped }}</a>{% else %}<span class="text-base-content/40">0</span>{% endif %}</td>
           <td class="text-right">
-            <form method="post" action="{% url 'registrations:registrar_event_toggle' e.pk %}">
+            <form method="post" action="{% url 'registrations:registrar_event_toggle' e.pk %}" class="inline"
+                  {% if e.status == 'open' %}
+                  onsubmit="return confirm('Close registration for {{ e.title|escapejs }}? Members will no longer be able to register; existing registrations are untouched.');"
+                  {% else %}
+                  onsubmit="return confirm('Open registration for {{ e.title|escapejs }}?{% if not e.published %} Note: the event page is still unpublished.{% endif %}');"
+                  {% endif %}>
               {% csrf_token %}
               {% if e.status == 'open' %}
               <input type="hidden" name="action" value="close">
-              <button class="btn btn-outline btn-xs">Close registration</button>
+              <button class="btn btn-outline btn-xs whitespace-nowrap">Close registration</button>
               {% else %}
               <input type="hidden" name="action" value="open">
-              <button class="btn btn-primary btn-xs">Open registration</button>
+              <button class="btn btn-primary btn-xs whitespace-nowrap">Open registration</button>
               {% endif %}
             </form>
           </td>

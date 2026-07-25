@@ -1,0 +1,78 @@
+{% load parletre_tags %}
+{% comment %}
+Per-registration action buttons (treasurer-style icon row). Include with:
+r (Registration), idp (unique dialog-id prefix per surface, e.g. "row"/"strip"),
+next_url (where the POST redirects back to).
+{% endcomment %}
+<div class="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
+
+  {% if r.status == 'pending_approval' %}
+  <form method="post" action="{% url 'registrations:registrar_approve' r.id %}" class="contents"
+        onsubmit="return confirm('Approve {{ r.user.email|escapejs }} for {{ r.event.title|escapejs }}? This emails the member{% if r.quoted_amount > 0 %} a payment link{% else %} their confirmation{% endif %}.');">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <button type="submit" class="btn btn-primary btn-xs" title="Approve" aria-label="Approve">{% icon "check" %}</button>
+  </form>
+  <button type="button" class="btn btn-ghost btn-xs text-error" title="Decline" aria-label="Decline"
+          onclick="document.getElementById('decline-{{ idp }}-{{ r.id }}').showModal()">{% icon "x" %}</button>
+  <dialog id="decline-{{ idp }}-{{ r.id }}" class="modal">
+    <div class="modal-box max-w-sm whitespace-normal text-left">
+      <h3 class="font-serif text-lg mb-2">Decline registration</h3>
+      <p class="text-sm text-base-content/70 mb-3">
+        Decline {{ r.user.get_full_name|default:r.user.email }} for
+        {{ r.event.title }}? The member is emailed; the reason, if given, is
+        included.
+      </p>
+      <form method="post" action="{% url 'registrations:registrar_decline' r.id %}" class="space-y-2">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <textarea name="reason" rows="2" maxlength="500"
+                  class="textarea textarea-bordered w-full text-sm"
+                  placeholder="Reason (optional)"></textarea>
+        <div class="modal-action mt-2">
+          <button type="submit" class="btn btn-error btn-sm">Decline</button>
+          <button type="button" class="btn btn-ghost btn-sm"
+                  onclick="document.getElementById('decline-{{ idp }}-{{ r.id }}').close()">Cancel</button>
+        </div>
+      </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+  {% endif %}
+
+  {% if r.status == 'awaiting_payment' %}
+  <form method="post" action="{% url 'registrations:registrar_comp' r.id %}" class="contents"
+        onsubmit="return confirm('Comp {{ r.user.email|escapejs }} for {{ r.event.title|escapejs }}? Waives the ${{ r.quoted_amount }} fee and emails the confirmation with access info.');">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <button type="submit" class="btn btn-ghost btn-xs" title="Comp (no charge)" aria-label="Comp (no charge)">{% icon "tag" %}</button>
+  </form>
+  {% endif %}
+
+  <button type="button" class="btn btn-ghost btn-xs {% if r.staff_notes %}text-info{% endif %}"
+          title="{% if r.staff_notes %}Staff notes (has notes){% else %}Add staff note{% endif %}"
+          aria-label="Staff notes"
+          onclick="document.getElementById('note-{{ idp }}-{{ r.id }}').showModal()">{% icon "sticky-note" %}</button>
+  <dialog id="note-{{ idp }}-{{ r.id }}" class="modal">
+    <div class="modal-box max-w-sm whitespace-normal text-left">
+      <h3 class="font-serif text-lg mb-2">Staff notes</h3>
+      {% if r.staff_notes %}
+      <div class="text-xs text-base-content/60 bg-base-200 rounded p-2 mb-3 max-h-32 overflow-y-auto whitespace-pre-line">{{ r.staff_notes }}</div>
+      {% endif %}
+      <form method="post" action="{% url 'registrations:registrar_note' r.id %}" class="space-y-2">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <textarea name="note" rows="3" maxlength="2000" required
+                  class="textarea textarea-bordered w-full text-sm"
+                  placeholder="Visible to staff only, never to the member."></textarea>
+        <div class="modal-action mt-2">
+          <button type="submit" class="btn btn-primary btn-sm">Save note</button>
+          <button type="button" class="btn btn-ghost btn-sm"
+                  onclick="document.getElementById('note-{{ idp }}-{{ r.id }}').close()">Cancel</button>
+        </div>
+      </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
+</div>

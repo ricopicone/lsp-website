@@ -14,18 +14,7 @@
         <span>{{ r.user.get_full_name|default:r.user.email }}</span>
         <span class="text-base-content/60">→ {{ r.event.title }}</span>
         <span class="text-base-content/50">{{ r.created_at|date:"M j" }}</span>
-        <form method="post" action="{% url 'registrations:registrar_approve' r.id %}" class="inline">
-          {% csrf_token %}
-          <input type="hidden" name="next" value="{{ request.get_full_path }}">
-          <button class="btn btn-success btn-xs">Approve</button>
-        </form>
-        <form method="post" action="{% url 'registrations:registrar_decline' r.id %}" class="inline-flex items-center gap-1">
-          {% csrf_token %}
-          <input type="hidden" name="next" value="{{ request.get_full_path }}">
-          <input type="text" name="reason" placeholder="Reason (optional)"
-                 class="input input-bordered input-xs w-40">
-          <button class="btn btn-error btn-xs">Decline</button>
-        </form>
+        {% include "registrations/registrar/_row_actions.html" with r=r idp="strip" next_url=request.get_full_path %}
       </li>
       {% endfor %}
     </ul>
@@ -70,7 +59,7 @@
     <a href="{% url 'registrations:registrar_csv' %}?{{ querystring }}" class="btn btn-sm btn-outline">Export CSV</a>
   </form>
 
-  <div class="overflow-x-auto">
+  <div class="overflow-x-auto rounded-lg border border-base-300">
     <table class="table table-sm">
       <thead>
         <tr>
@@ -87,50 +76,15 @@
           </td>
           <td><a href="{% url 'events:detail' r.event.slug %}" class="link link-hover">{{ r.event.title }}</a></td>
           <td class="text-xs">{{ r.price_tier.get_audience_display }}</td>
-          <td class="text-right">${{ r.quoted_amount }}</td>
+          <td class="text-right whitespace-nowrap">${{ r.quoted_amount }}</td>
           <td><span class="badge badge-sm
             {% if r.status == 'paid' or r.status == 'comped' %}badge-success
             {% elif r.status == 'pending_approval' %}badge-warning
             {% elif r.status == 'awaiting_payment' %}badge-info
             {% else %}badge-ghost{% endif %}">{{ r.get_status_display }}</span></td>
-          <td class="text-xs">{{ r.created_at|date:"M j, Y" }}</td>
+          <td class="whitespace-nowrap text-xs">{{ r.created_at|date:"M j, Y" }}</td>
           <td class="text-right">
-            <div class="dropdown dropdown-end">
-              <button tabindex="0" class="btn btn-ghost btn-xs">Actions ▾</button>
-              <div tabindex="0" class="dropdown-content z-20 w-64 rounded-box border border-base-300 bg-base-100 p-3 shadow space-y-3 text-left">
-                {% if r.status == 'pending_approval' %}
-                <form method="post" action="{% url 'registrations:registrar_approve' r.id %}">
-                  {% csrf_token %}
-                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <button class="btn btn-success btn-xs w-full">Approve</button>
-                </form>
-                <form method="post" action="{% url 'registrations:registrar_decline' r.id %}" class="space-y-1">
-                  {% csrf_token %}
-                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <input type="text" name="reason" placeholder="Reason (optional)"
-                         class="input input-bordered input-xs w-full">
-                  <button class="btn btn-error btn-xs w-full">Decline</button>
-                </form>
-                {% endif %}
-                {% if r.status == 'awaiting_payment' %}
-                <form method="post" action="{% url 'registrations:registrar_comp' r.id %}">
-                  {% csrf_token %}
-                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <button class="btn btn-outline btn-xs w-full">Comp (no charge)</button>
-                </form>
-                {% endif %}
-                <form method="post" action="{% url 'registrations:registrar_note' r.id %}" class="space-y-1">
-                  {% csrf_token %}
-                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                  <input type="text" name="note" placeholder="Add a staff note"
-                         class="input input-bordered input-xs w-full">
-                  <button class="btn btn-ghost btn-xs w-full">Add note</button>
-                </form>
-                {% if r.staff_notes %}
-                <div class="text-xs text-base-content/60 whitespace-pre-line border-t border-base-300 pt-2">{{ r.staff_notes }}</div>
-                {% endif %}
-              </div>
-            </div>
+            {% include "registrations/registrar/_row_actions.html" with r=r idp="row" next_url=request.get_full_path %}
           </td>
         </tr>
         {% empty %}

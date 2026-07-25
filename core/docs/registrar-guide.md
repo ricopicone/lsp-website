@@ -31,9 +31,10 @@ approval decision, wherever they are in the list.
 
 ### Row actions
 
-Each row's **Actions** menu offers what applies to its status. Every action
-records a dated line in the registration's staff notes, so the override trail
-stays auditable (REG-14).
+Each row ends with action buttons for what applies to its status (hover for
+labels). Every action records a dated line in the registration's staff notes,
+so the override trail stays auditable (REG-14); the sticky-note button shows
+existing notes and adds new ones.
 
 - **Approve** (pending approval only) — runs the normal approval: the member
   is emailed, and the registration moves to *awaiting payment* (or straight
