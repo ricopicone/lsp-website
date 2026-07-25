@@ -158,6 +158,33 @@ def test_tuition_rows_carry_enrollment_decisions(member):
     assert by_slug["t-2026"] == "unpaid"
 
 
+def test_tuition_rows_carry_coverage_for_the_progress_bar(member):
+    """Each charge-backed tuition row exposes covered + pct so the treasurer
+    table can draw a fill bar instead of a bare Paid/Partial badge."""
+    _tuition_period(2026, "2000")
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=TuitionPeriod.objects.get(slug="t-2026"),
+        status=TuitionEnrollment.Status.COMMITTED, source="staff")
+    _pay(member, Payment.Type.TUITION, "500", WHEN)
+    acct = ledger.member_account(member)
+    row = next(r for r in acct["tuition_rows"] if r["period"].slug == "t-2026")
+    assert row["state"] == "partial"
+    assert row["covered"] == Decimal("500")
+    assert row["pct"] == 25
+
+
+def test_skipping_row_has_no_progress_bar(member):
+    """A skipping year carries no charge, so no fill bar (pct is None)."""
+    _tuition_period(2026, "2000")
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=TuitionPeriod.objects.get(slug="t-2026"),
+        status=TuitionEnrollment.Status.SKIPPING, source="staff")
+    acct = ledger.member_account(member)
+    row = next(r for r in acct["tuition_rows"] if r["period"].slug == "t-2026")
+    assert row["state"] == "skipping"
+    assert row["pct"] is None
+
+
 def test_enrollment_beyond_cap_reads_met(member):
     periods = [_tuition_period(2021 + i, "2000") for i in range(5)]
     for tp in periods:

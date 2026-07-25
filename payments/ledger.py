@@ -143,6 +143,7 @@ def member_account(user) -> dict:
     tuition_rows = []
     skipping = []
     for e in enrollments:
+        charge = None
         if e.status == TuitionEnrollment.Status.SKIPPING:
             state = "skipping"
             skipping.append(e.tuition_period)
@@ -154,6 +155,7 @@ def member_account(user) -> dict:
                 state = "waived"
             else:
                 state = states.get(c.id, "unpaid")
+                charge = c
         # The Decision column shows the recorded decision — except that a
         # fully covered year reads as its outcome: "Paid" (the record itself
         # is never auto-flipped; sweep coverage can shift as history firms up).
@@ -164,9 +166,17 @@ def member_account(user) -> dict:
             decision_label = "Paid"
         else:
             decision_label = e.get_status_display()
+        rate = e.tuition_period.tuition_amount or Decimal("0")
+        # ``covered``/``pct`` drive the treasurer table's fill bar; only a
+        # charge-backed year (paid/partial/unpaid) has one — a skipping,
+        # requirement-met, or waived year shows a label instead (pct is None).
+        covered = (covered_by_id.get(charge.id, Decimal("0"))
+                   if charge is not None else None)
+        pct = (int(min(covered, rate) / rate * 100)
+               if charge is not None and rate else None)
         tuition_rows.append({
             "enrollment": e, "period": e.tuition_period,
-            "rate": e.tuition_period.tuition_amount or Decimal("0"),
+            "rate": rate, "covered": covered, "pct": pct,
             "state": state, "decision_label": decision_label,
         })
 

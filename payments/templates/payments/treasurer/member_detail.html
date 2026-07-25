@@ -77,9 +77,14 @@
             <td class="text-xs text-base-content/70">{{ r.decision_label }}</td>
             <td class="text-right whitespace-nowrap">{{ r.rate|usd }}</td>
             <td>
-              {% if r.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
-              {% elif r.state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
-              {% elif r.state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
+              {% if r.pct is not None %}
+              {# Fill bar (more informative than a Paid/Partial badge): covered vs the year's charge. #}
+              <div class="min-w-[7rem] space-y-0.5" title="{{ r.covered|usd }} of {{ r.rate|usd }} covered">
+                <div class="h-2 rounded-full bg-base-300 overflow-hidden">
+                  <div class="h-full {% if r.state == 'paid' %}bg-success{% elif r.state == 'partial' %}bg-warning{% else %}bg-error/40{% endif %}" style="width: {{ r.pct }}%"></div>
+                </div>
+                <p class="text-xs text-base-content/60 whitespace-nowrap">{{ r.covered|usd }} / {{ r.rate|usd }}</p>
+              </div>
               {% elif r.state == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>
               {% elif r.state == "met" %}<span class="badge badge-ghost badge-sm" title="Beyond the {{ acct.tuition_years_required }}-year tuition requirement — not owed">Requirement met</span>
               {% else %}<span class="badge badge-ghost badge-sm">Skipping</span>{% endif %}

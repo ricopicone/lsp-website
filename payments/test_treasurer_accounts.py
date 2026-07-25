@@ -118,6 +118,33 @@ def test_help_tab_renders_rewritten_guide(client, roster):
     assert b"Member submissions" in resp.content
 
 
+def test_member_detail_tuition_table_shows_fill_bar(client, treasurer):
+    """The Tuition decisions table draws a fill bar (covered vs the year's
+    charge) instead of a bare Paid/Partial badge."""
+    from payments.models import Payment, TuitionEnrollment, TuitionPeriod
+
+    tp = TuitionPeriod.objects.create(
+        name="AY 2026-2027 T", slug="t-2026-bar",
+        start_date=date(2026, 9, 1), decision_due_date=date(2026, 8, 31),
+        end_date=date(2027, 8, 31), tuition_amount=Decimal("2000"))
+    member = _member("bar@x.test")
+    TuitionEnrollment.objects.create(          # mints the $2000 charge
+        user=member, tuition_period=tp,
+        status=TuitionEnrollment.Status.COMMITTED, source="staff")
+    Payment.objects.create(
+        user=member, payment_type=Payment.Type.TUITION, amount=Decimal("500"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE)
+
+    resp = client.get(reverse("treasurer_member_detail",
+                              kwargs={"user_id": member.id}))
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "width: 25%" in body                # 500 of 2000, drawn as a bar
+    row = next(r for r in resp.context["acct"]["tuition_rows"]
+               if r["period"].slug == "t-2026-bar")
+    assert row["pct"] == 25 and row["covered"] == Decimal("500")
+
+
 def test_owing_row_shows_reminder_history(client, roster):
     from payments.models import BalanceReminder
 
