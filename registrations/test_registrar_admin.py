@@ -297,3 +297,16 @@ def test_help_tab_renders(client):
     resp = client.get(reverse("registrations:registrar_help"))
     assert resp.status_code == 200
     assert "Registration Admin" in resp.content.decode()
+
+
+class TestHub:
+    def test_registrar_holder_reaches_hub_and_sees_card(self, client):
+        client.force_login(_registrar("hub@x.test"))
+        resp = client.get(reverse("admin_tools"))
+        assert resp.status_code == 200
+        assert "Registration Admin" in resp.content.decode()
+
+    def test_pc_member_sees_card(self, client):
+        client.force_login(_pc_member("hubpc@x.test"))
+        resp = client.get(reverse("admin_tools"))
+        assert "Registration Admin" in resp.content.decode()

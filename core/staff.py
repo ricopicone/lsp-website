@@ -34,6 +34,7 @@ PANEL_ROLES = (
     StaffRole.ADMIN_ASSISTANT,
     StaffRole.WEB_DEVELOPER,
     StaffRole.REFERRAL_COORDINATOR,
+    StaffRole.REGISTRAR,
 )
 
 
@@ -59,6 +60,11 @@ def _can_meeting_of_analysts(user) -> bool:
 def _can_cartel_coordinator(user) -> bool:
     from cartels.permissions import is_cartel_coordinator
     return user.is_superuser or user.is_staff or is_cartel_coordinator(user)
+
+
+def _can_registrar(user) -> bool:
+    from registrations.permissions import can_administer_registrations
+    return can_administer_registrations(user)
 
 
 def _can_applications_coordinator(user) -> bool:
@@ -102,6 +108,18 @@ def _panels_for(user) -> list[dict]:
             "title": "Program Committee Admin",
             "blurb": "Solicit and review proposals; mint events into a program.",
             "url": reverse("program_admin_programs"),
+        })
+    if _can_registrar(user):
+        from registrations.models import Registration
+        panels.append({
+            "title": "Registration Admin",
+            "blurb": "Registrations across all events: approve, comp, and "
+                     "open or close registration.",
+            "url": reverse("registrations:registrar"),
+            "count": Registration.objects.filter(
+                status=Registration.Status.PENDING_APPROVAL
+            ).count(),
+            "count_label": "pending",
         })
     if _can_meeting_of_analysts(user):
         from admissions.models import Application
@@ -236,6 +254,14 @@ STAFF_DOCS = [
             "How cartels, working groups, committees, seminars, reading groups, "
             "and the Meeting of Analysts work — who creates, approves, joins, "
             "runs, and ends each, with step-by-step recipes."
+        ),
+    },
+    {
+        "slug": "registrar-guide",
+        "title": "Registration Admin — a guide",
+        "blurb": (
+            "Managing registrations across all events: approvals, comps, "
+            "notes, CSV export, and opening or closing registration."
         ),
     },
 ]
