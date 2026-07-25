@@ -417,6 +417,56 @@ def test_settle_refused_without_member(client, treasurer):
     assert Charge.objects.count() == 0
 
 
+def test_settle_only_on_registration_payment_mints_charge(client, treasurer):
+    """A payment already categorized as Registration can get its matching
+    settlement charge inserted without changing category first — the treasurer
+    keeps Registration selected and checks the settle box (no clunky
+    re-categorize-away-and-back)."""
+    from payments import ledger
+    from payments.models import Charge
+
+    m = _settle_member("regsettle@x.test")
+    p = _settle_payment(m, Payment.Type.REGISTRATION, "180")
+    resp = client.post(
+        reverse("treasurer_payment_retype", args=[p.id]),
+        {"payment_type": "registration", "settle_charge": "1"})
+    assert resp.status_code == 302
+    p.refresh_from_db()
+    assert p.payment_type == Payment.Type.REGISTRATION   # unchanged
+    c = Charge.objects.get(user=m, category=Charge.Category.REGISTRATION)
+    assert c.amount == Decimal("180")
+    assert c.effective_date == p.paid_at.date()
+    assert c.staff_adjusted is True
+    assert ledger.member_account(m)["balance"] == Decimal("0")  # nets to zero
+
+
+def test_same_category_without_settle_still_errors(client, treasurer):
+    """Selecting the current category with no settle box is still a no-op
+    error — nothing to do, no charge minted."""
+    from payments.models import Charge
+
+    m = _settle_member("noop@x.test")
+    p = _settle_payment(m, Payment.Type.REGISTRATION, "180")
+    client.post(reverse("treasurer_payment_retype", args=[p.id]),
+                {"payment_type": "registration"})
+    p.refresh_from_db()
+    assert p.payment_type == Payment.Type.REGISTRATION
+    assert Charge.objects.filter(user=m).count() == 0
+
+
+def test_registration_payment_modal_exposes_settle_box(client, treasurer):
+    """An already-Registration payment shows the settle checkbox on open (not
+    hidden) so the matching charge can be inserted without re-categorizing."""
+    m = _settle_member("regmodal@x.test")
+    _settle_payment(m, Payment.Type.REGISTRATION, "180")
+    content = client.get(reverse("treasurer_payments")).content.decode()
+    marker = 'id="retype-settle-wrap-'
+    assert marker in content
+    i = content.index(marker)
+    label_tag = content[i:content.index(">", i)]   # the <label ...> open tag only
+    assert "hidden" not in label_tag
+
+
 def test_retype_modal_fields_are_conditional(client, treasurer):
     """Year selectors and the settle checkbox start hidden and are toggled by
     the category select (only the matching category's fields show)."""

@@ -504,20 +504,26 @@ def _tuition_progress(user) -> dict:
     )
     rate = (current.tuition_amount if current else None) or Decimal("0")
 
+    # One cumulative pot of tuition money, swept oldest-first: each started
+    # year fills to its goal before the remainder overflows into the next
+    # (task #468 follow-up). This mirrors the ledger's oldest-first coverage
+    # sweep, so an uneven payment history — a lump sum, or one year overpaid
+    # and another underpaid — fills the bars consecutively instead of trapping
+    # (and losing) money inside the academic year it was dated to.
+    pot = sum(paid_by_ay.values(), Decimal("0"))
     slots = []
-    total_paid = Decimal("0")
     total_goal = Decimal("0")
     for ay in sorted(paid_by_ay)[:required]:
         period = period_by_ay.get(ay)
         goal = (period.tuition_amount if period else rate) or Decimal("0")
-        paid = min(paid_by_ay[ay], goal) if goal else paid_by_ay[ay]
+        paid = min(goal, pot) if goal else pot
+        pot -= paid
         pct = int(paid / goal * 100) if goal else 0
         slots.append({
             "label": period.name if period else f"{ay}–{ay + 1}",
             "goal": goal, "paid": paid, "remaining": max(goal - paid, Decimal("0")),
             "pct": pct, "projected": False,
         })
-        total_paid += paid
         total_goal += goal
 
     started = len(slots)

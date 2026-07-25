@@ -21,8 +21,9 @@ tuition_periods, next_url. Callers gate the button on: no registration link.
                         document.getElementById('myretype-dues-wrap-{{ payment.id }}').hidden=(v!=='dues');
                         document.getElementById('myretype-tuition-wrap-{{ payment.id }}').hidden=(v!=='tuition');
                         document.getElementById('myretype-settle-wrap-{{ payment.id }}').hidden=(v!=='registration');">
+        {# Registration keeps its option selectable so you can re-submit it purely to insert the matching charge; every other current category stays disabled (same category = no-op). #}
         {% for value, label in type_choices %}
-        <option value="{{ value }}" {% if value == payment.payment_type %}disabled selected{% endif %}>{{ label }}{% if value == payment.payment_type %} (current){% endif %}</option>
+        <option value="{{ value }}" {% if value == payment.payment_type %}selected{% if value != 'registration' %} disabled{% endif %}{% endif %}>{{ label }}{% if value == payment.payment_type %} (current){% endif %}</option>
         {% endfor %}
       </select>
       <div id="myretype-dues-wrap-{{ payment.id }}" hidden class="space-y-1">
@@ -43,7 +44,7 @@ tuition_periods, next_url. Callers gate the button on: no registration link.
           {% endfor %}
         </select>
       </div>
-      <label id="myretype-settle-wrap-{{ payment.id }}" hidden class="flex items-start gap-2 text-xs text-base-content/70 pt-1">
+      <label id="myretype-settle-wrap-{{ payment.id }}" {% if payment.payment_type != 'registration' %}hidden{% endif %} class="flex items-start gap-2 text-xs text-base-content/70 pt-1">
         <input type="checkbox" name="settle_charge" value="1" class="checkbox checkbox-xs mt-0.5">
         <span>Also add a matching <strong>Registration charge</strong> dated with this payment, use this if the
           original event fee was never recorded, so the two net to zero instead of showing as a credit.</span>
