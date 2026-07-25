@@ -396,6 +396,34 @@ Done (see `git log` for specifics):
   Committee (live roster check), or Django staff/superusers. The admin comp
   action's side-effect chain moved to
   `registrations/services.py::comp_registration` so console + admin share it.
+- **Signup email verification + bot defenses** (task #471). After the URL
+  cutover made `lacanschool.org` canonical, 11 of 16 new accounts were
+  drive-by bots. The exposure wasn't the junk rows (new accounts are
+  `role=external`, already gated by `is_lsp_member`) but **email reputation** —
+  some bots registered real people's harvested addresses, and with no
+  verification any address could be bound to an account, putting the SES
+  identity that carries dues, receipts, and referrals behind unsolicited mail.
+  Signup now creates the user `is_active=False` and does **not** log them in;
+  `accounts.EmailVerification` (mirrors `EmailChangeRequest`, 3-day TTL)
+  carries `next_url` **on the row** so the task #464 guest event funnel
+  survives opening the link on another device. **The verify view is
+  POST-gated** — GET only renders a confirm button — because mail scanners on
+  exactly these corporate/`.gov` addresses pre-click links; note neither
+  `email_change_confirm` nor `magic_link_consume` does this.
+  `Profile.email_verified_at` is the durable record, grandfathered onto every
+  pre-existing account by `accounts/0042`, so a null now means "self-signup
+  that never confirmed" and nothing else — which is what lets
+  `manage.py purge_unverified_signups` (host timer `lsp-signups-purge`, daily
+  18:00 UTC) delete stale bot rows without ever reaching a deactivated member.
+  `accounts/antibot.py` adds a honeypot, a 2s minimum fill time, and a per-IP
+  cap; **the honeypot and rate limit reject before the mail sends**, or a bot
+  using a stranger's address still makes us mail that stranger. Its `.hp-wrap`
+  rule is plain CSS in `assets/css/input.css`, not a Tailwind utility (the
+  class is set in Python — see the tailwind-classes-set-in-python gotcha). The
+  login page distinguishes an unconfirmed account from bad credentials and
+  offers a resend. Fixed en route: `Profile.save()`'s `deceased_on` →
+  `is_active` sync treated Profile *creation* as a transition, so the
+  auto-create signal re-enabled **any** user created inactive.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
