@@ -138,10 +138,14 @@ def registrar_registrations(request):
     )
     querydict = request.GET.copy()
     querydict.pop("page", None)
+    unfiltered = filters == {"status": "active", "event": "", "since": "",
+                             "until": "", "q": ""}
     return _render(request, "registrations",
                    "registrations/registrar/registrations.html", {
         "page": page,
-        "pending": pending,
+        # The needs-attention strip is a landing-view alert; filtered views
+        # are targeted work, so it hides rather than leak unmatched rows.
+        "pending": pending if unfiltered else [],
         "filters": filters,
         "querystring": querydict.urlencode(),
         "status_choices": Registration.Status.choices,
