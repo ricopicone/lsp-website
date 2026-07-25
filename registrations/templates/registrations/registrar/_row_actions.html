@@ -45,7 +45,7 @@ next_url (where the POST redirects back to).
         onsubmit="return confirm('Comp {{ r.user.email|escapejs }} for {{ r.event.title|escapejs }}? Waives the ${{ r.quoted_amount }} fee and emails the confirmation with access info.');">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ next_url }}">
-    <button type="submit" class="btn btn-ghost btn-xs" title="Comp (no charge)" aria-label="Comp (no charge)">{% icon "tag" %}</button>
+    <button type="submit" class="btn btn-ghost btn-xs" title="Comp (no charge)" aria-label="Comp (no charge)">{% icon "ticket" %}</button>
   </form>
   {% endif %}
 
