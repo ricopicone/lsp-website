@@ -1383,6 +1383,48 @@ def _mint_settlement_charge(payment, amount, when, *, source, actor_label,
     )
 
 
+def _settle_registration_charge_only(request, payment):
+    """Insert the matching settlement Charge for a payment that is *already*
+    categorized as Registration, without changing its category (task #468
+    follow-up). Same honor-system rationale as the re-categorize-and-settle
+    path — it just spares the treasurer the re-categorize-away-and-back dance
+    when the category is already right."""
+    from accounts.models import Source
+
+    if payment.registration_id:
+        messages.error(
+            request,
+            "This payment settles an event registration, which already has "
+            "its charge. Use the refund or comp flows instead.",
+        )
+        return _safe_next(request, "treasurer_payments")
+    if payment.user_id is None:
+        messages.error(
+            request,
+            "This payment has no member attached. Link it to a member on the "
+            "Reconcile tab first.",
+        )
+        return _safe_next(request, "treasurer_payments")
+
+    with transaction.atomic():
+        when = (payment.paid_at or payment.created_at).date()
+        _mint_settlement_charge(
+            payment, payment.amount, when,
+            source=Source.STAFF,
+            actor_label=f"treasurer {request.user.email}",
+            cause=f"payment #{payment.pk}",
+        )
+        audit = (f"[{timezone.now().date()}] Inserted a matching Registration "
+                 f"charge by treasurer {request.user.email}.")
+        payment.notes = (
+            (payment.notes + "\n" + audit) if payment.notes else audit)
+        payment.save(update_fields=["notes"])
+    messages.success(
+        request,
+        "Inserted a matching Registration charge dated with the payment.")
+    return _safe_next(request, "treasurer_payments")
+
+
 def _create_split_child(parent, part_type, amount, when, *, source,
                         actor_label, original):
     """Create one sibling Payment row of a split: copies method/email/
@@ -1630,7 +1672,14 @@ def treasurer_payment_retype(request, payment_id: int):
     if new_type not in Payment.Type.values:
         messages.error(request, "Choose a valid category.")
         return _safe_next(request, "treasurer_payments")
+    settle = bool(request.POST.get("settle_charge"))
     if new_type == payment.payment_type:
+        # Same category is normally a no-op — EXCEPT inserting the matching
+        # settlement charge for an already-Registration payment, so the
+        # treasurer needn't re-categorize away and back just to reach the
+        # settle box (task #468 follow-up).
+        if settle and new_type == Payment.Type.REGISTRATION:
+            return _settle_registration_charge_only(request, payment)
         messages.error(request, "That payment already has that category.")
         return _safe_next(request, "treasurer_payments")
     if payment.registration_id:
@@ -1650,7 +1699,6 @@ def treasurer_payment_retype(request, payment_id: int):
             "the Reconcile tab first.",
         )
         return _safe_next(request, "treasurer_payments")
-    settle = bool(request.POST.get("settle_charge"))
     if settle and new_type != Payment.Type.REGISTRATION:
         messages.error(
             request,
