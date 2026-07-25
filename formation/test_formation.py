@@ -292,6 +292,48 @@ def test_tuition_progress_counts_payments_without_installments(current_period):
     assert sum(1 for s in ctx["tuition_slots"] if s["projected"]) == 3
 
 
+def test_tuition_progress_fills_cumulatively_not_per_year(db):
+    """Tuition progress is a single cumulative pot swept oldest-first, not a
+    per-AY bar fill (task #468 follow-up). Four enrolled years, each $800, with
+    an uneven payment history that still totals the full four-year goal, must
+    show every year fully covered — the overpayment on one year flows into the
+    year that was underpaid, instead of being lost."""
+    from formation.views import _tuition_progress
+    from payments.models import Payment
+
+    member = _user("cumul@x.test", role=Profile.Role.CANDIDATE)
+    periods = []
+    for start_year in (2021, 2022, 2023, 2024):
+        p = TuitionPeriod.objects.create(
+            name=f"AY {start_year}-{start_year + 1} cumul",
+            slug=f"cumul-{start_year}",
+            start_date=date(start_year, 9, 1),
+            decision_due_date=date(start_year, 8, 31),
+            end_date=date(start_year + 1, 8, 31),
+            tuition_amount=Decimal("800"))
+        periods.append(p)
+        TuitionEnrollment.objects.create(
+            user=member, tuition_period=p,
+            status=TuitionEnrollment.Status.PAID_IN_FULL)
+
+    # Uneven: first year double-paid, second year unpaid, last two exact.
+    # Total = 3200 = four years of $800.
+    for period, amount in zip(periods, ["1600", "0", "800", "800"]):
+        if amount == "0":
+            continue
+        Payment.objects.create(
+            payment_type=Payment.Type.TUITION, user=member,
+            amount=Decimal(amount), status=Payment.Status.SUCCEEDED,
+            tuition_period=period)
+
+    ctx = _tuition_progress(member)
+    slots = ctx["tuition_slots"]
+    assert len(slots) == 4
+    assert sum(sl["paid"] for sl in slots) == Decimal("3200")
+    assert all(sl["pct"] == 100 for sl in slots)       # every year fully covered
+    assert all(sl["paid"] == Decimal("800") for sl in slots)
+
+
 def test_skipping_year_is_not_one_of_the_four(current_period):
     from formation.views import _tuition_progress
 
