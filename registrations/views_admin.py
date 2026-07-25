@@ -10,15 +10,22 @@ from __future__ import annotations
 import datetime as _dt
 from functools import wraps
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import Http404
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
+
+from payments import notifications as notify_payments
 
 from .models import Registration
 from .permissions import can_administer_registrations
+from .services import comp_registration
 
 PAGE_SIZE = 50
 
@@ -139,6 +146,72 @@ def registrar_registrations(request):
             registrations__isnull=False
         ).distinct().order_by("-start_date", "title"),
     })
+
+
+def _back(request):
+    """Redirect target preserving the list's filters (posted as ``next``)."""
+    nxt = request.POST.get("next") or ""
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts=None):
+        return redirect(nxt)
+    return redirect("registrations:registrar")
+
+
+@registrar_required
+@require_POST
+def registrar_approve(request, reg_id: int):
+    reg = get_object_or_404(Registration, pk=reg_id)
+    if reg.approve(request.user):
+        if reg.needs_payment:
+            notify_payments.registration_approved(reg)
+        else:
+            notify_payments.registration_confirmed(reg)
+        messages.success(request, f"Approved {reg.user.email} for {reg.event.title}.")
+    else:
+        messages.warning(request, "That registration wasn't pending approval.")
+    return _back(request)
+
+
+@registrar_required
+@require_POST
+def registrar_decline(request, reg_id: int):
+    reg = get_object_or_404(Registration, pk=reg_id)
+    if reg.decline(request.user, (request.POST.get("reason") or "").strip()):
+        notify_payments.registration_declined(reg)
+        messages.success(request, f"Declined {reg.user.email} for {reg.event.title}.")
+    else:
+        messages.warning(request, "That registration wasn't pending approval.")
+    return _back(request)
+
+
+@registrar_required
+@require_POST
+def registrar_comp(request, reg_id: int):
+    reg = get_object_or_404(Registration, pk=reg_id)
+    comped, email_ok = comp_registration(
+        reg, request.user, via="registration admin",
+    )
+    if comped and email_ok:
+        messages.success(request, f"Comped {reg.user.email} for {reg.event.title}.")
+    elif comped:
+        messages.warning(request, "Comped, but the confirmation email failed.")
+    else:
+        messages.warning(request, "Only awaiting-payment registrations can be comped.")
+    return _back(request)
+
+
+@registrar_required
+@require_POST
+def registrar_note(request, reg_id: int):
+    reg = get_object_or_404(Registration, pk=reg_id)
+    note = (request.POST.get("note") or "").strip()
+    if note:
+        reg.staff_notes = (reg.staff_notes or "") + (
+            f"\n[{timezone.now().date().isoformat()}] {note} "
+            f"— {request.user.email} via registration admin."
+        )
+        reg.save(update_fields=("staff_notes",))
+        messages.success(request, "Note added.")
+    return _back(request)
 
 
 @registrar_required

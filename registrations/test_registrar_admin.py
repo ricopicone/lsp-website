@@ -174,6 +174,70 @@ def test_bad_date_filter_does_not_500(client):
     assert resp.status_code == 200
 
 
+class TestRowActions:
+    def _login_registrar(self, client, email):
+        u = _registrar(email)
+        client.force_login(u)
+        return u
+
+    def test_approve(self, client, django_capture_on_commit_callbacks):
+        reg = _reg(_event("act-a"), _member("aa@x.test"),
+                   status=Registration.Status.PENDING_APPROVAL)
+        u = self._login_registrar(client, "ra@x.test")
+        with django_capture_on_commit_callbacks(execute=True):
+            resp = client.post(
+                reverse("registrations:registrar_approve", args=[reg.id]))
+        reg.refresh_from_db()
+        assert resp.status_code == 302
+        assert reg.status == Registration.Status.AWAITING_PAYMENT
+        assert reg.approved_by == u
+
+    def test_decline_with_reason(self, client, django_capture_on_commit_callbacks):
+        reg = _reg(_event("act-b"), _member("bb@x.test"),
+                   status=Registration.Status.PENDING_APPROVAL)
+        self._login_registrar(client, "rb@x.test")
+        with django_capture_on_commit_callbacks(execute=True):
+            client.post(reverse("registrations:registrar_decline", args=[reg.id]),
+                        {"reason": "Full"})
+        reg.refresh_from_db()
+        assert reg.status == Registration.Status.DECLINED
+        assert reg.decline_reason == "Full"
+
+    def test_comp(self, client, django_capture_on_commit_callbacks):
+        reg = _reg(_event("act-c"), _member("cc@x.test"))
+        self._login_registrar(client, "rc@x.test")
+        with django_capture_on_commit_callbacks(execute=True):
+            client.post(reverse("registrations:registrar_comp", args=[reg.id]))
+        reg.refresh_from_db()
+        assert reg.status == Registration.Status.COMPED
+        assert "via registration admin." in reg.staff_notes
+
+    def test_comp_wrong_status_refused(self, client):
+        reg = _reg(_event("act-d"), _member("dd@x.test"),
+                   status=Registration.Status.PAID)
+        self._login_registrar(client, "rd@x.test")
+        client.post(reverse("registrations:registrar_comp", args=[reg.id]))
+        reg.refresh_from_db()
+        assert reg.status == Registration.Status.PAID
+
+    def test_note_appends_dated_line(self, client):
+        reg = _reg(_event("act-e"), _member("ee@x.test"))
+        self._login_registrar(client, "re@x.test")
+        client.post(reverse("registrations:registrar_note", args=[reg.id]),
+                    {"note": "Spoke by phone; paying by check."})
+        reg.refresh_from_db()
+        assert "Spoke by phone; paying by check." in reg.staff_notes
+        assert "re@x.test" in reg.staff_notes
+
+    def test_actions_gated(self, client):
+        reg = _reg(_event("act-f"), _member("ff@x.test"))
+        client.force_login(_member("intruder@x.test"))
+        resp = client.post(reverse("registrations:registrar_comp", args=[reg.id]))
+        assert resp.status_code == 404
+        reg.refresh_from_db()
+        assert reg.status == Registration.Status.AWAITING_PAYMENT
+
+
 def test_help_tab_renders(client):
     client.force_login(_registrar("r3@x.test"))
     resp = client.get(reverse("registrations:registrar_help"))
