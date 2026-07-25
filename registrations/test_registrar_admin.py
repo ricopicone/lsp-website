@@ -90,3 +90,92 @@ def test_comp_registration_service_refuses_non_awaiting():
     comped, _ = comp_registration(reg, staff)
     reg.refresh_from_db()
     assert not comped and reg.status == Registration.Status.PAID
+
+
+# ---- console gate --------------------------------------------------------
+
+from committees.models import Committee  # noqa: E402
+
+
+def _registrar(email="registrar@x.test"):
+    u = User.objects.create_user(email=email, password="x")
+    StaffRole.objects.get(key=StaffRole.REGISTRAR).holders.add(u)
+    return u
+
+
+def _web_coordinator(email="wc@x.test"):
+    u = User.objects.create_user(email=email, password="x")
+    StaffRole.objects.get(key=StaffRole.WEB_COORDINATOR).holders.add(u)
+    return u
+
+
+def _pc_member(email="pc@x.test"):
+    u = User.objects.create_user(email=email, password="x")
+    committee, _ = Committee.objects.get_or_create(
+        slug="programming-committee",
+        defaults={"name": "Programming Committee"},
+    )
+    committee.add_member(u, start_date=date(2026, 1, 1))
+    return u
+
+
+class TestGate:
+    URL = "/admin-tools/registrations/"
+
+    @pytest.mark.parametrize("maker", [_registrar, _web_coordinator, _pc_member])
+    def test_admitted_roles(self, client, maker):
+        client.force_login(maker())
+        assert client.get(self.URL).status_code == 200
+
+    def test_django_staff_admitted(self, client):
+        u = User.objects.create_user(email="st@x.test", password="x", is_staff=True)
+        client.force_login(u)
+        assert client.get(self.URL).status_code == 200
+
+    def test_plain_member_404(self, client):
+        client.force_login(_member("plain@x.test"))
+        assert client.get(self.URL).status_code == 404
+
+    def test_anonymous_redirects_to_login(self, client):
+        resp = client.get(self.URL)
+        assert resp.status_code == 302 and "login" in resp.url
+
+
+def test_registrations_tab_lists_and_filters(client):
+    e1, e2 = _event("list-a"), _event("list-b")
+    m1, m2 = _member("a@x.test"), _member("b@x.test")
+    _reg(e1, m1)
+    _reg(e2, m2, status=Registration.Status.PENDING_APPROVAL)
+    client.force_login(_registrar("r2@x.test"))
+
+    resp = client.get(reverse("registrations:registrar"))
+    body = resp.content.decode()
+    assert "a@x.test" in body and "b@x.test" in body
+    assert "Needs attention" in body  # pending strip
+
+    resp = client.get(reverse("registrations:registrar"), {"event": e1.pk})
+    body = resp.content.decode()
+    assert "a@x.test" in body and "b@x.test" not in body
+
+    resp = client.get(reverse("registrations:registrar"),
+                      {"status": Registration.Status.PENDING_APPROVAL})
+    body = resp.content.decode()
+    assert "b@x.test" in body and "a@x.test" not in body
+
+    resp = client.get(reverse("registrations:registrar"), {"q": "a@x.test"})
+    body = resp.content.decode()
+    assert "a@x.test" in body and "b@x.test" not in body
+
+
+def test_bad_date_filter_does_not_500(client):
+    _reg(_event("bad-date"), _member("bd@x.test"))
+    client.force_login(_registrar("rbd@x.test"))
+    resp = client.get(reverse("registrations:registrar"), {"since": "not-a-date"})
+    assert resp.status_code == 200
+
+
+def test_help_tab_renders(client):
+    client.force_login(_registrar("r3@x.test"))
+    resp = client.get(reverse("registrations:registrar_help"))
+    assert resp.status_code == 200
+    assert "Registration Admin" in resp.content.decode()
