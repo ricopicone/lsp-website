@@ -62,6 +62,12 @@ _ICON_PATHS = {
         '<path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11l5-5V5a2 2 0 0 '
         '0-2-2Z"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/>'
     ),
+    # a comped admission (registrar console)
+    "ticket": (
+        '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 '
+        '2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/>'
+        '<path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>'
+    ),
     "split": (
         '<path d="M16 3h5v5"/><path d="M8 3H3v5"/>'
         '<path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/>'
