@@ -253,6 +253,45 @@ def test_csv_export_honors_filters(client):
                       "status,pricing_code,registered_at")
 
 
+class TestEventsTab:
+    def test_lists_current_and_upcoming_events_with_counts(self, client):
+        e = _event("tab-a")
+        _reg(e, _member("ta@x.test"), status=Registration.Status.PAID)
+        _reg(e, _member("tb@x.test"))
+        client.force_login(_registrar("rev@x.test"))
+        resp = client.get(reverse("registrations:registrar_events"))
+        body = resp.content.decode()
+        assert "Event tab-a" in body
+        assert "Close registration" in body  # e is OPEN
+
+    def test_toggle_open_close(self, client):
+        e = _event("tab-b", status=Event.Status.DRAFT)
+        client.force_login(_registrar("rev2@x.test"))
+        client.post(reverse("registrations:registrar_event_toggle", args=[e.pk]),
+                    {"action": "open"})
+        e.refresh_from_db()
+        assert e.status == Event.Status.OPEN
+
+        client.post(reverse("registrations:registrar_event_toggle", args=[e.pk]),
+                    {"action": "close"})
+        e.refresh_from_db()
+        assert e.status == Event.Status.CLOSED
+
+        # Reopen after close.
+        client.post(reverse("registrations:registrar_event_toggle", args=[e.pk]),
+                    {"action": "open"})
+        e.refresh_from_db()
+        assert e.status == Event.Status.OPEN
+
+    def test_close_only_applies_to_open(self, client):
+        e = _event("tab-c", status=Event.Status.DRAFT)
+        client.force_login(_registrar("rev3@x.test"))
+        client.post(reverse("registrations:registrar_event_toggle", args=[e.pk]),
+                    {"action": "close"})
+        e.refresh_from_db()
+        assert e.status == Event.Status.DRAFT
+
+
 def test_help_tab_renders(client):
     client.force_login(_registrar("r3@x.test"))
     resp = client.get(reverse("registrations:registrar_help"))

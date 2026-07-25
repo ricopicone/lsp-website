@@ -44,6 +44,7 @@ def registrar_required(view):
 #: (key, label) for the console's tabs, in display order.
 TABS = [
     ("registrations", "Registrations"),
+    ("events",        "Events"),
     ("help",          "Help"),
 ]
 
@@ -52,6 +53,7 @@ def _tab_links() -> list[tuple[str, str, str]]:
     """[(key, label, url), ...] for core/_admin_tab_nav.html."""
     name_to_url = {
         "registrations": reverse("registrations:registrar"),
+        "events":        reverse("registrations:registrar_events"),
         "help":          reverse("registrations:registrar_help"),
     }
     return [(key, label, name_to_url[key]) for key, label in TABS]
@@ -240,6 +242,67 @@ def registrar_note(request, reg_id: int):
         reg.save(update_fields=("staff_notes",))
         messages.success(request, "Note added.")
     return _back(request)
+
+
+@registrar_required
+def registrar_events(request):
+    """One row per current/upcoming-AY event: status + registration counts +
+    the open/close toggle. 'Current' = events whose start_date falls on or
+    after the start of the current academic year."""
+    from django.db.models import Count
+
+    from events.models import (
+        Event, academic_year_date_range, current_academic_year,
+    )
+
+    ay_start, _ = academic_year_date_range(current_academic_year())
+    events = (
+        Event.objects.filter(start_date__gte=ay_start)
+        .annotate(
+            n_pending=Count("registrations", filter=Q(
+                registrations__status=Registration.Status.PENDING_APPROVAL)),
+            n_awaiting=Count("registrations", filter=Q(
+                registrations__status=Registration.Status.AWAITING_PAYMENT)),
+            n_paid=Count("registrations", filter=Q(
+                registrations__status=Registration.Status.PAID)),
+            n_comped=Count("registrations", filter=Q(
+                registrations__status=Registration.Status.COMPED)),
+        )
+        .order_by("start_date", "title")
+    )
+    return _render(request, "events", "registrations/registrar/events.html", {
+        "events": events,
+    })
+
+
+@registrar_required
+@require_POST
+def registrar_event_toggle(request, pk: int):
+    """Open or close registration for one event. Mirrors the PC bulk view's
+    convention (events/views.py program_admin_registration_bulk): open flips
+    DRAFT or CLOSED → OPEN; close flips OPEN → CLOSED. Publishing
+    (Event.published) is a separate decision made elsewhere."""
+    from events.models import Event
+
+    event = get_object_or_404(Event, pk=pk)
+    action = request.POST.get("action")
+    if action == "open" and event.status in (
+        Event.Status.DRAFT, Event.Status.CLOSED,
+    ):
+        event.status = Event.Status.OPEN
+        event.save(update_fields=("status",))
+        messages.success(request, f"Registration opened for {event.title}.")
+    elif action == "close" and event.status == Event.Status.OPEN:
+        event.status = Event.Status.CLOSED
+        event.save(update_fields=("status",))
+        messages.success(request, f"Registration closed for {event.title}.")
+    else:
+        messages.warning(
+            request,
+            f"No change — {event.title} is "
+            f"{event.get_status_display().lower()}.",
+        )
+    return redirect("registrations:registrar_events")
 
 
 @registrar_required
