@@ -190,6 +190,29 @@ def test_retype_to_registration_with_settle_mints_member_charge_nets_zero(client
     assert acct["balance"] == Decimal("0")
 
 
+def test_settle_only_on_own_registration_payment_mints_charge(client, member):
+    """A member can insert the matching settlement charge on their own
+    already-Registration payment without re-categorizing first (task #468
+    follow-up) — mirrors the treasurer capability."""
+    from payments.models import PaymentMemberAction
+
+    payment = _payment(member, ptype=Payment.Type.REGISTRATION, amount="120")
+    resp = client.post(
+        reverse("my_payment_retype", args=[payment.id]),
+        {"payment_type": "registration", "settle_charge": "1"})
+    assert resp.status_code == 302
+    payment.refresh_from_db()
+    assert payment.payment_type == Payment.Type.REGISTRATION   # unchanged
+
+    charge = Charge.objects.get(user=member, category=Charge.Category.REGISTRATION)
+    assert charge.amount == Decimal("120")
+    assert charge.source == Source.SELF_REPORTED
+    assert f"by member {member.email}" in charge.notes
+    assert ledger.member_account(member)["balance"] == Decimal("0")
+    assert PaymentMemberAction.objects.filter(
+        payment=payment, action=PaymentMemberAction.Action.RETYPE).exists()
+
+
 def test_retype_ay_binding_posted_tuition_period(client, member):
     period_a = _tuition_period(name="AY A", slug="t-my-a")
     period_b = _tuition_period(

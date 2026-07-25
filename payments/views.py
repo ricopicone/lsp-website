@@ -1383,46 +1383,51 @@ def _mint_settlement_charge(payment, amount, when, *, source, actor_label,
     )
 
 
-def _settle_registration_charge_only(request, payment):
+def _settle_registration_charge_only(request, payment, *, source, actor_label,
+                                     redirect_url, member_log=False):
     """Insert the matching settlement Charge for a payment that is *already*
     categorized as Registration, without changing its category (task #468
     follow-up). Same honor-system rationale as the re-categorize-and-settle
-    path — it just spares the treasurer the re-categorize-away-and-back dance
-    when the category is already right."""
-    from accounts.models import Source
-
+    path — it just spares the re-categorize-away-and-back dance when the
+    category is already right. Shared by the treasurer and member statement
+    actions: ``source``/``actor_label`` carry each side's provenance and
+    attribution; ``member_log`` records a member statement action for the
+    treasurer's Reconcile queue."""
     if payment.registration_id:
         messages.error(
             request,
             "This payment settles an event registration, which already has "
             "its charge. Use the refund or comp flows instead.",
         )
-        return _safe_next(request, "treasurer_payments")
+        return _safe_next(request, redirect_url)
     if payment.user_id is None:
         messages.error(
             request,
             "This payment has no member attached. Link it to a member on the "
             "Reconcile tab first.",
         )
-        return _safe_next(request, "treasurer_payments")
+        return _safe_next(request, redirect_url)
 
     with transaction.atomic():
         when = (payment.paid_at or payment.created_at).date()
         _mint_settlement_charge(
             payment, payment.amount, when,
-            source=Source.STAFF,
-            actor_label=f"treasurer {request.user.email}",
+            source=source, actor_label=actor_label,
             cause=f"payment #{payment.pk}",
         )
         audit = (f"[{timezone.now().date()}] Inserted a matching Registration "
-                 f"charge by treasurer {request.user.email}.")
+                 f"charge by {actor_label}.")
         payment.notes = (
             (payment.notes + "\n" + audit) if payment.notes else audit)
         payment.save(update_fields=["notes"])
+        if member_log:
+            _log_member_action(
+                payment, request.user, PaymentMemberAction.Action.RETYPE,
+                "inserted matching Registration charge")
     messages.success(
         request,
         "Inserted a matching Registration charge dated with the payment.")
-    return _safe_next(request, "treasurer_payments")
+    return _safe_next(request, redirect_url)
 
 
 def _create_split_child(parent, part_type, amount, when, *, source,
@@ -1679,7 +1684,11 @@ def treasurer_payment_retype(request, payment_id: int):
         # treasurer needn't re-categorize away and back just to reach the
         # settle box (task #468 follow-up).
         if settle and new_type == Payment.Type.REGISTRATION:
-            return _settle_registration_charge_only(request, payment)
+            from accounts.models import Source
+            return _settle_registration_charge_only(
+                request, payment, source=Source.STAFF,
+                actor_label=f"treasurer {request.user.email}",
+                redirect_url="treasurer_payments")
         messages.error(request, "That payment already has that category.")
         return _safe_next(request, "treasurer_payments")
     if payment.registration_id:
@@ -2527,7 +2536,15 @@ def my_payment_retype(request, payment_id: int):
     if new_type not in Payment.Type.values:
         messages.error(request, "Choose a valid category.")
         return _safe_next(request, _account_tab_url())
+    settle = bool(request.POST.get("settle_charge"))
     if new_type == payment.payment_type:
+        # Same category is a no-op EXCEPT inserting the matching settlement
+        # charge for an already-Registration payment (task #468 follow-up).
+        if settle and new_type == Payment.Type.REGISTRATION:
+            return _settle_registration_charge_only(
+                request, payment, source=Source.SELF_REPORTED,
+                actor_label=f"member {request.user.email}",
+                redirect_url=_account_tab_url(), member_log=True)
         messages.error(request, "That payment already has that category.")
         return _safe_next(request, _account_tab_url())
     if payment.registration_id:
@@ -2537,7 +2554,6 @@ def my_payment_retype(request, payment_id: int):
             "treasurer to correct the registration link.",
         )
         return _safe_next(request, _account_tab_url())
-    settle = bool(request.POST.get("settle_charge"))
     if settle and new_type != Payment.Type.REGISTRATION:
         messages.error(
             request,
