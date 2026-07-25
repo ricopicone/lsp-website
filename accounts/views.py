@@ -80,12 +80,14 @@ def _directory_qs():
                 to_attr="active_public_memberships",
             ),
             # Board-appointed operational roles (Treasurer, Cartel Coordinator,
-            # …) badge the directory. LSP Staff is an internal access
-            # designation, not a public position — exclude it. StaffRole.Meta
-            # orders by name.
+            # …) badge the directory. LSP Staff and Registrar are internal
+            # access designations, not public positions — exclude them.
+            # StaffRole.Meta orders by name.
             Prefetch(
                 "user__staff_roles",
-                queryset=StaffRole.objects.exclude(key=StaffRole.LSP_STAFF),
+                queryset=StaffRole.objects.exclude(
+                    key__in=(StaffRole.LSP_STAFF, StaffRole.REGISTRAR)
+                ),
                 to_attr="public_staff_roles",
             ),
         )

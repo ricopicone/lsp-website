@@ -72,6 +72,9 @@ class StaffRole(models.Model):
     ADMIN_ASSISTANT = "admin_assistant"
     WEB_DEVELOPER = "web_developer"
     REFERRAL_COORDINATOR = "referral_coordinator"
+    # Registrar — placeholder for a future position (task #470): owns the
+    # Registration Admin console. Deliberately never publicly badged.
+    REGISTRAR = "registrar"
     # School officers — one appointment governs the Board AND the Meeting of
     # Analysts (and the school at large). The Vice-President is sometimes styled
     # "Co-President": that's just this role's editable display ``name`` (the
