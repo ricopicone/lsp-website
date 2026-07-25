@@ -1,0 +1,24 @@
+{% extends "core/base.html" %}
+{% block title %}Confirm your account — LSP{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto py-8 space-y-6">
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">Confirm your account</h1>
+    <p class="text-base-content/70">
+      One more step, and the account for
+      <span class="font-medium">{{ verification.user.email }}</span> is ready.
+    </p>
+  </header>
+
+  {% comment %}
+  POST-gated on purpose: mail scanners pre-click links and would otherwise
+  consume this token before the member ever opened it.
+  {% endcomment %}
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary w-full">Confirm my email</button>
+  </form>
+
+</div>
+{% endblock %}

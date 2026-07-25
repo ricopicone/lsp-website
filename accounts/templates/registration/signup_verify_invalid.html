@@ -1,0 +1,28 @@
+{% extends "core/base.html" %}
+{% block title %}Link expired — LSP{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto py-8 space-y-6">
+
+  <header class="space-y-2">
+    <h1 class="font-serif text-3xl text-base-content">That link no longer works</h1>
+    <p class="text-base-content/70">
+      Confirmation links last three days and can only be used once. If yours
+      has expired, or you have already confirmed, you can request a new link
+      or simply sign in.
+    </p>
+  </header>
+
+  <form method="post" action="{% url 'signup_resend' %}" class="space-y-3">
+    {% csrf_token %}
+    <label for="resend-email" class="label-text text-sm">Your email address</label>
+    <input type="email" name="email" id="resend-email" required
+           class="input input-bordered w-full">
+    <button type="submit" class="btn btn-primary w-full">Send a new link</button>
+  </form>
+
+  <p class="text-sm text-base-content/60 text-center">
+    <a href="{% url 'login' %}" class="link link-primary">Sign in instead</a>
+  </p>
+
+</div>
+{% endblock %}

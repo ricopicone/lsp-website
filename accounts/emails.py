@@ -98,3 +98,31 @@ def send_email_change_notice(user, old_email: str, new_email: str) -> None:
         reply_to=[settings.SUPPORT_EMAIL],
     )
     msg.send(fail_silently=False)
+
+
+def send_signup_verification(verification) -> None:
+    """Email the confirm-your-address link for a new self-signup.
+
+    The link lands on a page with a confirm button rather than activating on
+    GET — mail scanners pre-click links, and this flow deliberately serves
+    the kind of corporate/.gov addresses whose filters do so.
+    """
+    confirm_url = settings.SITE_BASE_URL.rstrip("/") + reverse(
+        "signup_verify", args=[verification.token]
+    )
+    body = render_to_string(
+        "accounts/email/signup_verification.txt",
+        {
+            "user": verification.user,
+            "confirm_url": confirm_url,
+            "ttl_days": verification.TOKEN_TTL.days,
+        },
+    )
+    msg = EmailMessage(
+        subject="Confirm your Lacanian School account",
+        body=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[verification.user.email],
+        reply_to=[settings.SUPPORT_EMAIL],
+    )
+    msg.send(fail_silently=False)

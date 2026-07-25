@@ -8,11 +8,16 @@ of the flow").
 
 from django import forms
 from django.conf import settings
-from django.contrib.auth.forms import BaseUserCreationForm, PasswordResetForm
+from django.contrib.auth.forms import (
+    AuthenticationForm,
+    BaseUserCreationForm,
+    PasswordResetForm,
+)
 from django.contrib.auth.forms import UserChangeForm as BaseUserChangeForm
 from django.core.mail import EmailMultiAlternatives
 from django.template import loader
 
+from . import antibot
 from .models import Profile, User
 
 
@@ -33,7 +38,13 @@ class UserChangeForm(BaseUserChangeForm):
 
 
 class LightSignupForm(BaseUserCreationForm):
-    """Public signup form: email, optional name, password."""
+    """Public signup form: email, optional name, password.
+
+    Carries two invisible bot deterrents (task #471) — a honeypot field and a
+    signed render-time stamp. The honeypot is inspected by the view rather
+    than raised as an error here, so a caught bot sees the ordinary success
+    page and learns nothing.
+    """
 
     first_name = forms.CharField(required=False, max_length=150)
     last_name = forms.CharField(required=False, max_length=150)
@@ -41,6 +52,66 @@ class LightSignupForm(BaseUserCreationForm):
     class Meta(BaseUserCreationForm.Meta):
         model = User
         fields = ("email", "first_name", "last_name")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields[antibot.HONEYPOT_FIELD] = forms.CharField(
+            required=False,
+            label="Website",
+            widget=forms.TextInput(attrs={
+                "autocomplete": "off",
+                "tabindex": "-1",
+                "class": "hp-field",
+            }),
+        )
+        self.fields[antibot.TIMESTAMP_FIELD] = forms.CharField(
+            required=False,
+            widget=forms.HiddenInput(),
+            initial=antibot.sign_timestamp,
+        )
+
+    @property
+    def honeypot_tripped(self) -> bool:
+        """Whether a hidden field a human never sees came back filled."""
+        return bool(self.data.get(antibot.HONEYPOT_FIELD, "").strip())
+
+    def clean(self):
+        cleaned = super().clean()
+        if antibot.looks_too_fast(self.data.get(antibot.TIMESTAMP_FIELD, "")):
+            raise forms.ValidationError(
+                "That was submitted a little too quickly for us to be sure "
+                "you are human. Please try again."
+            )
+        return cleaned
+
+
+class LoginForm(AuthenticationForm):
+    """Login form that recognises a not-yet-confirmed signup.
+
+    Django's default answer for an inactive user is "invalid credentials",
+    which is misleading for someone who simply has not clicked their
+    verification link yet, and generates support mail. When the address
+    belongs to an unconfirmed signup we say so and let the template offer a
+    resend (task #471).
+
+    This leaks nothing an attacker could not already learn: the signup form
+    rejects duplicate addresses, so account existence is discoverable there.
+    """
+
+    def get_invalid_login_error(self):
+        email = (self.data.get("username") or "").strip()
+        if email and User.objects.filter(
+            email__iexact=email,
+            is_active=False,
+            profile__email_verified_at__isnull=True,
+        ).exists():
+            self.unverified_email = email
+            return forms.ValidationError(
+                "This account still needs its email address confirmed. "
+                "Check your inbox for the link we sent.",
+                code="unverified",
+            )
+        return super().get_invalid_login_error()
 
 
 class ReferralRequestForm(forms.Form):

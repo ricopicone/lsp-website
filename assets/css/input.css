@@ -814,3 +814,15 @@
 .no-flourish .lsp-overtype-new {
   display: none;
 }
+
+/* Signup honeypot (task #471). Plain CSS, not a Tailwind utility: the class
+   is attached to a widget in Python, and the Tailwind v4 build only scans
+   templates, so a utility class here would be stripped from the prod build.
+   Off-screen rather than display:none — some bots skip undisplayed fields. */
+.hp-wrap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

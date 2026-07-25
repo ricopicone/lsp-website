@@ -8,7 +8,20 @@
     <p class="text-sm text-base-content/60">Member services for the Lacanian School.</p>
   </header>
 
-  {% if form.errors %}
+  {% if form.unverified_email %}
+  {# Not a credentials problem: the account exists but was never confirmed. #}
+  <div role="alert" class="alert alert-warning flex-col items-start gap-2">
+    <span>
+      This account still needs its email address confirmed. Check your inbox
+      for the link we sent.
+    </span>
+    <form method="post" action="{% url 'signup_resend' %}">
+      {% csrf_token %}
+      <input type="hidden" name="email" value="{{ form.unverified_email }}">
+      <button type="submit" class="btn btn-sm">Resend the link</button>
+    </form>
+  </div>
+  {% elif form.errors %}
   <div role="alert" class="alert alert-error">
     <span>Email or password didn't match. Try again.</span>
   </div>

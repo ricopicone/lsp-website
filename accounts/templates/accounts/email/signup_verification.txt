@@ -1,0 +1,14 @@
+{% if user.first_name %}Hello {{ user.first_name }},{% else %}Hello,{% endif %}
+
+Someone, we hope you, created an account at the Lacanian School of
+Psychoanalysis with this address. Confirm it to finish setting up:
+
+{{ confirm_url }}
+
+You will land on a page with a button to press, which keeps automated mail
+scanners from using up your link before you do.
+
+This link is good for {{ ttl_days }} days. If you did not create this account,
+you can ignore this message, nothing further will happen.
+
+The Lacanian School of Psychoanalysis

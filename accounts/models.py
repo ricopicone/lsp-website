@@ -330,6 +330,11 @@ class Profile(models.Model):
     notes = models.TextField(blank=True)
     #: Opaque token for the member's private iCal feed (generated on first use).
     calendar_token = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    #: When this address was proven under our control (task #471). Null means a
+    #: self-signup that never confirmed. Durable — outlives the one-shot
+    #: EmailVerification row, and distinguishes "never verified" from
+    #: "deactivated by an admin", which the purge command depends on.
+    email_verified_at = models.DateTimeField(null=True, blank=True)
     is_persona = models.BooleanField(
         default=False,
         help_text=(
@@ -542,6 +547,49 @@ class EmailChangeRequest(models.Model):
     def __str__(self):
         state = "confirmed" if self.confirmed_at else "pending"
         return f"{self.user.email} → {self.new_email} ({state})"
+
+    def is_expired(self, now=None) -> bool:
+        return (now or timezone.now()) - self.created_at > self.TOKEN_TTL
+
+    @property
+    def is_pending(self) -> bool:
+        return self.confirmed_at is None and not self.is_expired()
+
+
+class EmailVerification(models.Model):
+    """Proof that a self-signup controls the address it registered with.
+
+    Mirrors :class:`EmailChangeRequest`, with two deliberate differences.
+
+    The TTL is longer (3 days vs 24h): there is no account-takeover vector
+    before the account exists, and a wider window means fewer expired-link
+    support requests.
+
+    ``next_url`` is carried on the row rather than only in the link, so the
+    guest event-registration funnel survives the mail round-trip even when
+    the member opens the link on a different device.
+    """
+
+    TOKEN_TTL = timedelta(days=3)
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="email_verifications",
+    )
+    token = models.CharField(
+        max_length=64, unique=True, default=_email_change_token, editable=False
+    )
+    next_url = models.CharField(max_length=500, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        state = "confirmed" if self.confirmed_at else "pending"
+        return f"{self.user.email} ({state})"
 
     def is_expired(self, now=None) -> bool:
         return (now or timezone.now()) - self.created_at > self.TOKEN_TTL

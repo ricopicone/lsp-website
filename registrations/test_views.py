@@ -2,16 +2,36 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
-from accounts.models import User
+from accounts import antibot
+from accounts.models import EmailVerification, User
 from events.models import Audience, Event, PriceTier, PricingCode
 from registrations.models import Registration
+
+
+def _signup_post(email="newperson@example.com", **over):
+    """A signup POST carrying the antibot fields a real browser would send."""
+    data = {
+        "email": email,
+        "password1": "very-strong-pass-xyz",
+        "password2": "very-strong-pass-xyz",
+        "first_name": "New",
+        "last_name": "Person",
+        antibot.HONEYPOT_FIELD: "",
+        antibot.TIMESTAMP_FIELD: antibot.sign_timestamp(
+            when=timezone.now() - timedelta(seconds=30)
+        ),
+    }
+    data.update(over)
+    return data
+
 
 
 @pytest.fixture(autouse=True)
@@ -485,36 +505,29 @@ def test_login_page_renders(client):
 
 
 @pytest.mark.django_db
-def test_signup_creates_user_and_logs_in(client):
-    response = client.post(
-        reverse("signup"),
-        {
-            "email": "newperson@example.com",
-            "password1": "very-strong-pass-xyz",
-            "password2": "very-strong-pass-xyz",
-            "first_name": "New",
-            "last_name": "Person",
-        },
-    )
-    assert response.status_code == 302
+def test_signup_creates_user_pending_verification(client):
+    """Signup no longer logs anyone in — the account waits on the emailed
+    confirmation link (task #471)."""
+    response = client.post(reverse("signup"), _signup_post())
+
+    assert response.status_code == 200
     u = User.objects.get(email="newperson@example.com")
     assert u.first_name == "New"
+    assert u.is_active is False
     assert hasattr(u, "profile")  # auto-created via signal
 
 
 @pytest.mark.django_db
-def test_signup_safe_next_redirect_only_relative(client):
-    """The ?next= param must be a relative path; absolute URLs are rejected."""
-    response = client.post(
+def test_signup_safe_next_is_only_stored_when_relative(client):
+    """An absolute ?next= must not survive onto the verification row, or it
+    would become an open redirect once the member confirms."""
+    client.post(
         reverse("signup") + "?next=https://evil.example.com",
-        {
-            "email": "safenext@example.com",
-            "password1": "very-strong-pass-xyz",
-            "password2": "very-strong-pass-xyz",
-        },
+        _signup_post(email="safenext@example.com"),
     )
-    assert response.status_code == 302
-    assert not response.url.startswith("https://evil.example.com")
+
+    verification = EmailVerification.objects.get(user__email="safenext@example.com")
+    assert verification.next_url == ""
 
 
 # --- Tuition gating (M7.5) ---------------------------------------------

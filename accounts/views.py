@@ -21,7 +21,7 @@ from django.views.decorators.http import require_POST
 from core.models import StaffRole
 from workgroups.models import Workgroup, WorkgroupMembership
 
-from . import emails, twofactor
+from . import antibot, emails, twofactor
 from .forms import (
     EmailChangeForm,
     LightSignupForm,
@@ -32,7 +32,14 @@ from .forms import (
     UserNameForm,
 )
 from .images import MAX_UPLOAD_BYTES, InvalidImage, render_headshot_square
-from .models import EmailChangeRequest, MagicLoginLink, Profile, TOTPDevice, User
+from .models import (
+    EmailChangeRequest,
+    EmailVerification,
+    MagicLoginLink,
+    Profile,
+    TOTPDevice,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -111,22 +118,125 @@ def _badge_staff_roles(user):
 
 
 def signup(request):
-    """Lightweight account creation. Logs the user in on success."""
+    """Lightweight account creation, gated on proving control of the address.
+
+    The account is created inactive and the user is *not* logged in — they
+    become usable only by confirming the emailed link (task #471). Bot
+    deterrents run before the account is created so a bot registering a
+    stranger's address never causes us to mail that stranger.
+    """
     if request.user.is_authenticated:
         return redirect(_safe_next(request) or "/")
+
     if request.method == "POST":
         form = LightSignupForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            login(request, user)
-            return redirect(_safe_next(request) or "/")
+        ip = antibot.client_ip(request)
+
+        # A tripped honeypot gets the ordinary success page and nothing else,
+        # so the bot has no signal to adapt to.
+        if form.honeypot_tripped:
+            logger.info("signup honeypot tripped from %s", ip)
+            return render(request, "registration/signup_check_email.html",
+                          {"email": request.POST.get("email", "")})
+
+        if antibot.over_rate_limit(ip):
+            logger.info("signup rate limit hit from %s", ip)
+            form.add_error(None, "Too many accounts have been created from "
+                                 "this connection recently. Please try again "
+                                 "later, or write to us for help.")
+        else:
+            antibot.record_attempt(ip)
+            if form.is_valid():
+                user = _create_unverified_user(form, _safe_next(request) or "")
+                return render(request, "registration/signup_check_email.html",
+                              {"email": user.email})
     else:
         form = LightSignupForm()
+
     return render(
         request,
         "registration/signup.html",
-        {"form": form, "next": request.GET.get("next", "")},
+        {
+            "form": form,
+            "next": request.GET.get("next", ""),
+            "honeypot_field": antibot.HONEYPOT_FIELD,
+        },
     )
+
+
+def _create_unverified_user(form, next_url: str):
+    """Persist the new account inactive and email its verification link."""
+    with transaction.atomic():
+        user = form.save(commit=False)
+        user.is_active = False
+        user.save()
+        verification = EmailVerification.objects.create(
+            user=user, next_url=next_url,
+        )
+    try:
+        emails.send_signup_verification(verification)
+    except Exception:
+        # The row stands; the member can ask for a fresh link from the
+        # login page rather than losing the account to a transient SES error.
+        logger.exception("signup verification mail to %s failed", user.email)
+    return user
+
+
+def signup_verify(request, token):
+    """Confirm a new account from the emailed link.
+
+    GET only *renders* a confirm button; the POST does the work. Link
+    scanners on corporate, AOL, and .gov mail pre-click links, and this flow
+    exists precisely because bots register those addresses — a GET-activated
+    token would be consumed before the member ever saw it.
+    """
+    verification = (
+        EmailVerification.objects.filter(token=token).select_related("user").first()
+    )
+    if verification is None or not verification.is_pending:
+        return render(request, "registration/signup_verify_invalid.html", status=410)
+
+    if request.method != "POST":
+        return render(request, "registration/signup_verify.html",
+                      {"verification": verification})
+
+    with transaction.atomic():
+        user = verification.user
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+        profile = user.profile
+        profile.email_verified_at = timezone.now()
+        profile.save(update_fields=["email_verified_at"])
+        verification.confirmed_at = timezone.now()
+        verification.save(update_fields=["confirmed_at"])
+
+    login(request, user)
+    destination = verification.next_url
+    if not (destination.startswith("/") and not destination.startswith("//")):
+        destination = settings.LOGIN_REDIRECT_URL
+    return redirect(destination)
+
+
+def signup_resend(request):
+    """Send a fresh verification link to an unverified account.
+
+    Rate-limited and silent about whether the address exists, so this cannot
+    be used to enumerate accounts or to pester a third party.
+    """
+    email = (request.POST.get("email") or "").strip()
+    ip = antibot.client_ip(request)
+    if email and not antibot.over_rate_limit(ip):
+        antibot.record_attempt(ip)
+        user = User.objects.filter(
+            email__iexact=email, is_active=False, profile__email_verified_at=None,
+        ).first()
+        if user is not None:
+            verification = EmailVerification.objects.create(user=user)
+            try:
+                emails.send_signup_verification(verification)
+            except Exception:
+                logger.exception("resent verification to %s failed", email)
+    return render(request, "registration/signup_check_email.html", {"email": email})
 
 
 def directory(request):

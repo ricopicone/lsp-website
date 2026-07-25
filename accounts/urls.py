@@ -4,12 +4,20 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from . import views
-from .forms import ReplyToPasswordResetForm
+from .forms import LoginForm, ReplyToPasswordResetForm
 
 urlpatterns = [
-    path("login/", auth_views.LoginView.as_view(), name="login"),
+    path(
+        "login/",
+        auth_views.LoginView.as_view(authentication_form=LoginForm),
+        name="login",
+    ),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("signup/", views.signup, name="signup"),
+    # Confirm-your-address for a new signup. POST-gated (see the view).
+    # `resend` must precede the token pattern or it is swallowed as a token.
+    path("verify/resend/", views.signup_resend, name="signup_resend"),
+    path("verify/<str:token>/", views.signup_verify, name="signup_verify"),
 
     # Password reset (Django built-in flow). Template names are passed
     # explicitly under the accounts/ namespace because django.contrib.admin
