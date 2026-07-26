@@ -171,6 +171,47 @@ def test_ensure_room_reconciles_every_drifted_property(monkeypatch):
     assert updates == [{"enable_people_ui": True, "enable_chat": True}]
 
 
+@daily_on
+def test_new_rooms_get_qa_affordances(monkeypatch):
+    # A talk with Q&A needs raise-hand and reactions; the Daily domain defaults
+    # have them off, so the room properties must turn them on.
+    calls: list = []
+    monkeypatch.setattr("video.daily.get_room", _missing)
+    monkeypatch.setattr("video.daily.create_room", _fake_create_room(calls))
+    wg = seminar().ensure_workgroup()
+    services.ensure_room(wg)
+    props = calls[0]["properties"]
+    assert props["enable_hand_raising"] is True
+    assert props["enable_emoji_reactions"] is True
+    assert props["enable_network_ui"] is True
+
+
+@daily_on
+def test_existing_room_is_upgraded_with_qa_affordances(monkeypatch):
+    # The rooms already on the account predate these properties; reconciliation
+    # must push them out rather than waiting for a room to be recreated.
+    wg = seminar().ensure_workgroup()
+    config = dict(services._desired_properties(wg))
+    for key in ("enable_hand_raising", "enable_emoji_reactions", "enable_network_ui"):
+        config.pop(key)
+    monkeypatch.setattr(
+        "video.daily.get_room",
+        lambda name: {"name": name, "url": f"https://x/{name}", "config": config},
+    )
+    updates: list = []
+    monkeypatch.setattr(
+        "video.daily.update_room",
+        lambda name, props: updates.append(props)
+        or {"name": name, "url": f"https://x/{name}"},
+    )
+    services.ensure_room(wg)
+    assert updates == [{
+        "enable_hand_raising": True,
+        "enable_emoji_reactions": True,
+        "enable_network_ui": True,
+    }]
+
+
 def test_the_daily_api_is_blocked_in_tests():
     # The conftest guard must actually bite. Without it an unstubbed call goes
     # out to api.daily.co for real, 401s on the fake key, and several call sites

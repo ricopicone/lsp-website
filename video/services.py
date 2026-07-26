@@ -91,6 +91,9 @@ def _desired_properties(owner) -> dict:
         "enable_knocking": False,    # token-gated, not knock-to-enter
         "enable_chat": True,         # everyone can use text chat
         "enable_people_ui": True,    # participants panel + host mute/remove
+        "enable_hand_raising": True,     # Q&A affordance; domain default is off
+        "enable_emoji_reactions": True,  # silent acknowledgement during a talk
+        "enable_network_ui": True,       # participants can see their own connection
     }
     if settings.DAILY_MAX_PARTICIPANTS:
         props["max_participants"] = settings.DAILY_MAX_PARTICIPANTS
