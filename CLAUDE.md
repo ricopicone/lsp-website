@@ -424,6 +424,43 @@ Done (see `git log` for specifics):
   offers a resend. Fixed en route: `Profile.save()`'s `deceased_on` →
   `is_active` sync treated Profile *creation* as a transition, so the
   auto-create signal re-enabled **any** user created inactive.
+- **Category-scoped coverage + dues bucket** (task #473). **The single
+  account ledger is the ground truth and is unchanged** — one obligation,
+  one paid total, one net balance, one running statement, across every
+  category, exactly as #439 specified. What changed is the *meta accounting*
+  read off it. The #439 sweep swept one pot of *all* non-donation payments
+  across *all* OPEN charges oldest-first, category ignored, so registration
+  and dues money got retro-credited to older tuition years. Symptom: an
+  account showing three tuition years paid plus "$1,870 / $2,000" on a
+  fourth against $6,000 of tuition payments (the $1,870 was exactly that
+  member's non-tuition money minus the one dues charge sorting ahead of the
+  last tuition year), while four registration fees paid in full on the day
+  read as **unpaid**. Not merely cosmetic: `tuition_years_covered` gates
+  promotion (`ledger.tuition_clearance`, the "Requirement met" badge,
+  `tuition_decision_exempt`). `_charge_states` now covers each category's
+  charges oldest-first **from that category's payments only — no
+  cross-category coverage at all, not even for a surplus**. A miscategorized
+  payment surfaces as an unpaid charge in the short category, which is the
+  point: the fix is to re-categorize it, not to let the wrong bucket read as
+  paid. (An intermediate category-scoped-*then*-spill design was built and
+  rejected — spillover is fungibility.) **Dues gains the bucket treatment
+  tuition had**: `dues_obligation` / `total_dues_paid` / `dues_balance` /
+  `dues_owed` / `dues_credit` / `dues_rows` on `member_account`, the same
+  figures on `accounts_overview`, a "Dues, all years" tile + "Dues by year"
+  table on the treasurer member page, a Dues (all yrs) column on Accounts,
+  two new balances-CSV columns, and an all-years dues summary on the
+  member's own Account tab. Balances cannot move (they're computed
+  independently of coverage) — verified on prod across all 81 members with
+  ledger activity: 0 balance mismatches, 18 members re-attributed, 6
+  tuition-year counts (all upward, none crossing the 4-year gate).
+  Read-time only: no migration, no backfill. Amends decision 1 of the #439
+  spec; see
+  `docs/superpowers/specs/2026-07-25-category-scoped-coverage-sweep-design.md`.
+  **Note for the treasurer's Owing pass:** members whose dues charge was
+  being silently covered by tuition money now correctly read as owing dues
+  (and vice versa) — same dollars, real shortfalls no longer hidden.
+  `send_dues_reminders` keys off `dues_state`, so those members will be
+  reminded once `lsp-dues-cron.timer` is enabled.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

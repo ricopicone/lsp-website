@@ -147,17 +147,23 @@ def test_dues_page_shows_already_paid_when_user_has_succeeded_payment(
 def test_dues_page_already_paid_despite_older_backfilled_debt(
     client, member, current_period,
 ):
-    """A backfilled older charge eats the pot, so the oldest-first sweep
+    """A backfilled older dues charge eats the pot, so the oldest-first sweep
     leaves this year's dues charge "unpaid" — but the member literally made
     this period's dues payment. The FK-bound guard must still show the
-    already-paid panel, never re-offer payment (task #439 review)."""
+    already-paid panel, never re-offer payment (task #439 review).
+
+    The older debt is *dues* deliberately: since task #473 the sweep settles
+    each category with its own money first, so only a same-category backlog
+    (the un-reconciled ``assumed`` dues charges on the launch checklist) can
+    still strand a current-year dues payment this way.
+    """
     from payments.charges import sync_dues_charges
     from payments.models import Charge
 
     sync_dues_charges(current_period)  # this year's dues charge for member
     Charge.objects.create(  # backfilled historical debt, older than this AY
         user=member,
-        category=Charge.Category.TUITION,
+        category=Charge.Category.DUES,
         amount=Decimal("5000"),
         effective_date=current_period.start_date - timedelta(days=365),
     )

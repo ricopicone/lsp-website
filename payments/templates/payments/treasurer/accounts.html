@@ -55,7 +55,7 @@
           <th>Member</th><th>Role</th>
           <th class="text-right">Obligation</th><th class="text-right">Paid</th>
           <th class="text-right">Balance</th>
-          <th>Tuition</th><th>Dues (this AY)</th><th>Last payment</th>
+          <th>Tuition</th><th>Dues (this AY)</th><th class="text-right">Dues (all yrs)</th><th>Last payment</th>
           <th class="text-right">Reminders</th><th>Last reminded</th>
         </tr>
       </thead>
@@ -80,6 +80,9 @@
             {% elif r.dues_state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
             {% elif r.dues_state == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>
             {% else %}<span class="text-base-content/40 text-xs">—</span>{% endif %}
+          </td>
+          <td class="text-right text-xs whitespace-nowrap {% if r.dues_owed %}text-warning font-medium{% elif r.dues_credit %}text-success{% endif %}">
+            {% if r.dues_owed %}{{ r.dues_owed|usd }} owed{% elif r.dues_credit %}{{ r.dues_credit|usd }} credit{% else %}—{% endif %}
           </td>
           <td class="text-xs text-base-content/70 whitespace-nowrap">
             {% if r.last_payment %}{{ r.last_payment|user_datetime:True }}{% else %}—{% endif %}

@@ -636,8 +636,9 @@ class Charge(models.Model):
     """A debit line in a member's unified account (task #439).
 
     The credit side is the existing :class:`Payment`. Balance and per-charge
-    coverage are *derived* in :mod:`payments.ledger` — one pot of money swept
-    across OPEN charges oldest-first; never a per-payment allocation.
+    coverage are *derived* in :mod:`payments.ledger` — money swept across OPEN
+    charges oldest-first within each category, surplus spilling to the rest
+    (task #473); never a per-payment allocation.
     """
 
     class Category(models.TextChoices):
@@ -657,8 +658,9 @@ class Charge(models.Model):
     amount = models.DecimalField(max_digits=8, decimal_places=2)
     currency = models.CharField(max_length=3, default="usd")
     effective_date = models.DateField(
-        help_text="Orders the oldest-first coverage sweep — AY start for "
-        "dues/tuition, settle date for registrations.",
+        help_text="Orders the oldest-first coverage sweep (within a category, "
+        "then across) — AY start for dues/tuition, settle date for "
+        "registrations.",
     )
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.OPEN, db_index=True,

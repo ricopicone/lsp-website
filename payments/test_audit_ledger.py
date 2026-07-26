@@ -35,10 +35,12 @@ def test_reports_owing_member_and_dues_disagreement():
     Charge.objects.create(
         user=u, category=Charge.Category.DUES, amount=Decimal("100"),
         effective_date=p.start_date, dues_period=p)
-    # Paid via a TUITION-typed payment → ledger covers the dues charge
-    # (fungible) but the old FK-bound dues check says unpaid → disagreement.
+    # Paid with dues money that carries no dues_period FK → the ledger's dues
+    # bucket covers the charge, but the old FK-bound check can't see it →
+    # disagreement. (Since #473 a *tuition* payment would no longer cover a
+    # dues charge, so it can't produce this disagreement any more.)
     pay = Payment.objects.create(
-        user=u, payment_type=Payment.Type.TUITION, amount=Decimal("100"),
+        user=u, payment_type=Payment.Type.DUES, amount=Decimal("100"),
         status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE)
     Payment.objects.filter(pk=pay.pk).update(
         paid_at=datetime(2024, 10, 1, tzinfo=tz.utc))

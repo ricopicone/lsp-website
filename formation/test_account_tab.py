@@ -55,6 +55,44 @@ def test_account_tab_shows_balance_and_statement(client):
     assert "$60.00" in body                 # payment running balance
 
 
+def test_account_tab_shows_cumulative_dues_bucket(client):
+    """Task #473: dues gets its own all-years summary, counted from dues
+    payments only — tuition money on the account never reads as dues paid."""
+    member = _user("duesbucket@x.test")
+    for year in (2030, 2031):  # future years: no seeded period to collide with
+        p = DuesPeriod.objects.create(
+            name=f"AY {year}-{year + 1}", slug=f"ay-{year}-{year + 1}",
+            start_date=date(year, 9, 1), due_date=date(year, 9, 30),
+            end_date=date(year + 1, 8, 31),
+            dues_amount_pre_candidate=Decimal("50"),
+            dues_amount_candidate=Decimal("100"),
+            dues_amount_analyst=Decimal("150"),
+        )
+        Charge.objects.create(
+            user=member, category=Charge.Category.DUES,
+            amount=Decimal("100.00"), effective_date=p.start_date,
+            dues_period=p,
+        )
+    Payment.objects.create(
+        user=member, payment_type=Payment.Type.DUES, amount=Decimal("100.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        paid_at=timezone.now(),
+    )
+    Payment.objects.create(  # tuition money must not settle a dues year
+        user=member, payment_type=Payment.Type.TUITION, amount=Decimal("500.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        paid_at=timezone.now(),
+    )
+    client.force_login(member)
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+
+    squashed = " ".join(body.split())
+    assert "Dues, all years" in squashed
+    assert "$100.00 owed" in squashed                 # 200 charged, 100 dues paid
+    assert "$100.00 in dues payments against $200.00 charged" in squashed
+    assert "$100.00 unpaid" in squashed               # the newer year's row
+
+
 # ---- 2. Member-safety: treasurer notes never leak ---------------------------
 
 def test_member_safety_hides_treasurer_notes(client):

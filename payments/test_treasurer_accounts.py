@@ -177,3 +177,41 @@ def test_empty_ledger_notice_shown_and_hidden(client, treasurer, roster):
     Charge.objects.all().delete()
     resp = client.get(reverse("treasurer_accounts"))
     assert b"No charges have been minted yet" in resp.content
+
+
+def test_accounts_table_and_member_page_show_the_dues_bucket(client, treasurer):
+    """Task #473: dues is its own bucket with a tracked balance, on both the
+    roster column and the member page tile. Tuition money on the account must
+    not read as dues paid."""
+    from django.utils import timezone
+
+    from payments.models import Payment
+
+    DuesPeriod.objects.all().delete()
+    p = DuesPeriod.objects.create(
+        name="AY 2026-2027", slug="ay-2026-2027-dues-bucket",
+        start_date=date(2026, 9, 1), due_date=date(2026, 9, 30),
+        end_date=date(2027, 8, 31),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"),
+    )
+    m = _member("duesbucket-tr@x.test")
+    Charge.objects.create(user=m, category=Charge.Category.DUES,
+                          amount=Decimal("100"), effective_date=p.start_date,
+                          dues_period=p)
+    Payment.objects.create(
+        user=m, payment_type=Payment.Type.TUITION, amount=Decimal("900"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        paid_at=timezone.now())
+
+    roster = client.get(reverse("treasurer_accounts")).content.decode()
+    assert "Dues (all yrs)" in roster
+    assert "$100.00 owed" in roster      # dues column: tuition money is not dues
+    assert "$800.00 credit" in roster    # ...while the account itself nets it
+
+    page = " ".join(client.get(
+        reverse("treasurer_member_detail", args=[m.id])).content.decode().split())
+    assert "Dues, all years" in page
+    assert "$0.00 paid of $100.00" in page
+    assert "Dues by year" in page

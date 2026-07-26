@@ -26,8 +26,10 @@
     </div>
   </header>
 
-  {% comment %}1. Tiles row — balance, tuition-to-date, tuition years, dues this AY.{% endcomment %}
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+  {% comment %}1. Tiles row — balance, tuition-to-date, tuition years, dues this AY,
+  dues across all years. The balance tile is the account (fungible, every
+  category); the tuition and dues tiles are per-bucket meta accounting.{% endcomment %}
+  <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
     <div class="rounded border border-base-300 p-2.5">
       <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Balance</div>
       <div class="font-serif text-xl leading-tight {% if acct.owes %}text-warning{% elif acct.credit %}text-success{% endif %}">
@@ -49,6 +51,17 @@
         {% elif acct.dues_state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
         {% elif acct.dues_state == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>
         {% else %}<span class="text-base-content/40 text-xs">—</span>{% endif %}
+      </div>
+    </div>
+    <div class="rounded border border-base-300 p-2.5">
+      <div class="text-[0.65rem] uppercase tracking-wider text-base-content/60">Dues, all years</div>
+      <div class="font-serif text-xl leading-tight {% if acct.dues_owed %}text-warning{% elif acct.dues_credit %}text-success{% endif %}">
+        {% if acct.dues_owed %}{{ acct.dues_owed|usd }} owed
+        {% elif acct.dues_credit %}{{ acct.dues_credit|usd }} credit
+        {% else %}Paid up{% endif %}
+      </div>
+      <div class="text-[0.65rem] text-base-content/60 mt-0.5">
+        {{ acct.total_dues_paid|usd }} paid of {{ acct.dues_obligation|usd }}
       </div>
     </div>
   </div>
@@ -137,6 +150,42 @@
     </form>
     {% endif %}
   </section>
+
+  {% comment %}3b. Dues by year — the dues bucket, read-only. Dues has no
+  per-year decision to set (every active member owes them); the charges
+  themselves are actionable on the statement below.{% endcomment %}
+  {% if acct.dues_rows %}
+  <section class="space-y-3">
+    <h3 class="font-serif text-lg text-base-content">Dues by year</h3>
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Academic year</th><th class="text-right">Charged</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for r in acct.dues_rows %}
+          <tr>
+            <td class="whitespace-nowrap">{% if r.period %}{{ r.period.name }}{% else %}<span class="text-base-content/50">Unassigned</span>{% endif %}</td>
+            <td class="text-right whitespace-nowrap">{{ r.amount|usd }}</td>
+            <td>
+              {% if r.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
+              {% elif r.state == "partial" %}<span class="badge badge-warning badge-outline badge-sm" title="{{ r.covered|usd }} of {{ r.amount|usd }} covered">{{ r.covered|usd }} of {{ r.amount|usd }}</span>
+              {% elif r.state == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>
+              {% else %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-xs text-base-content/60">
+      Dues coverage counts dues payments only, oldest year first. Money paid in
+      another category is still on the account (see the balance above), but it
+      does not settle a dues charge, re-categorize the payment if it was
+      recorded under the wrong heading.
+    </p>
+  </section>
+  {% endif %}
 
   {% comment %}4. Statement — the unified running balance.{% endcomment %}
   <section class="space-y-3">
@@ -373,7 +422,7 @@
 
   {% comment %}6. Footnote.{% endcomment %}
   <p class="text-xs text-base-content/50">
-    One account per member—charges and payments in one running balance, oldest charges covered first. Categories are labels for reporting; money is not earmarked.
+    One account per member—every charge and payment in one running balance, whatever the category. Whether an individual charge reads paid is a narrower question: each category's charges are covered by that category's payments, oldest first. So a member can be square overall and still show an unpaid dues year, that means the money came in under another heading.
   </p>
 
   {% comment %}Event registrations.{% endcomment %}

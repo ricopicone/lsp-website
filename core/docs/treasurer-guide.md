@@ -47,13 +47,34 @@ traditional way — one account per member, with two kinds of entries:
   you as an offline cash/check/arrangement.
 
 All of a member's charges and payments sit together on **one running
-balance**. When a payment lands, it covers the **oldest open charge
-first**, then the next-oldest, and so on. Money is **not earmarked** — a
-category (dues, tuition, registration) is a label for reporting, not a
-separate pot. That's a deliberate change: a member who overpaid one thing
-and underpaid another now shows their *true net position* — one number —
-rather than a confusing mix of "behind on dues, ahead on tuition" that
-never quite made sense.
+balance**, so a member who overpaid one thing and underpaid another shows
+their *true net position* — one number — rather than a confusing mix of
+"behind on dues, ahead on tuition" that never quite made sense.
+
+Whether an **individual charge** reads paid is a narrower question, and
+it's answered per category. Tuition coverage counts tuition payments only;
+dues coverage counts dues payments only; registration the same. Within a
+category the oldest charge is covered first. Money paid under one heading
+never settles a charge under another.
+
+The two ideas work together: the balance tells you what the member owes
+the school all told, and the per-category coverage tells you what that
+money was for. A member can be square overall and still show an unpaid
+dues year, which means the money came in under a different heading, and
+the fix is to **re-categorize the payment**, not to read the dues as paid.
+
+This matters most for the per-year tuition table and the four-year
+requirement, which are read off tuition coverage. Money that was never
+tuition can no longer make a tuition year look part-paid.
+
+### Dues, all years
+
+Dues is tracked as its own running bucket, the way tuition is: total dues
+charged against total dues paid, with a **dues balance**. You'll see it on
+the member's account page (a "Dues, all years" tile plus a **Dues by
+year** table), as a column on the Accounts roster, and in the balances
+CSV. The older "Dues this AY" badge is still there for the current year's
+status. Members see the same all-years summary on their own account tab.
 
 Categories still matter for two things the school tracks closely:
 
@@ -252,9 +273,10 @@ row is a best guess awaiting your review.
   undoes it if you change your mind.
 - **"Why does this member show as owing?"** → open their account page and
   read the statement top to bottom: it's their obligation (every open
-  charge) minus what's come in, with the oldest charges covered first. A
-  member can look "behind" on one category while actually ahead overall —
-  the running balance at the bottom of the statement is the real answer.
+  charge) minus what's come in, across every category. A member can look
+  "behind" on one category while actually ahead overall — the running
+  balance at the bottom of the statement is the real answer, and the
+  per-category coverage tells you which heading the money came in under.
 
 Members can't accidentally pay dues twice — the `/dues/` page checks
 whether a real payment already exists for the current period before

@@ -2,10 +2,12 @@
 
 One account per member: :class:`~payments.models.Charge` rows are the debits,
 succeeded non-donation :class:`~payments.models.Payment` rows the credits.
-Everything here is a *read-time derivation* from those two sets — one pot of
-money swept across OPEN charges oldest-first. There are deliberately no
-allocation rows and no stored per-charge paid flags (the #437 lesson:
-per-payment-to-year attribution is untenable for this data).
+Everything here is a *read-time derivation* from those two sets — money swept
+across OPEN charges oldest-first, each category settling its own charges
+before any surplus spills to the rest (see :func:`_charge_states`; the
+category scoping is task #473). There are deliberately no allocation rows and
+no stored per-charge paid flags (the #437 lesson: per-payment-to-year
+attribution is untenable for this data).
 """
 
 from __future__ import annotations
@@ -45,23 +47,60 @@ def _counts(payment: Payment) -> bool:
     )
 
 
-def _charge_states(open_charges, paid: Decimal) -> tuple[dict[int, str], dict[int, Decimal]]:
-    """Sweep the pot across OPEN charges (pre-sorted oldest-first).
+def _paid_by_category(payments) -> dict[str, Decimal]:
+    """Counting payments summed by category (``Payment.Type`` minus donation,
+    which is the same vocabulary as ``Charge.Category``)."""
+    out: dict[str, Decimal] = {}
+    for p in payments:
+        if _counts(p):
+            out[p.payment_type] = out.get(p.payment_type, Decimal("0")) + p.amount
+    return out
+
+
+def _charge_states(open_charges, paid_by_category: dict[str, Decimal],
+                   ) -> tuple[dict[int, str], dict[int, Decimal]]:
+    """Per-charge coverage: each category's money over its own charges,
+    oldest-first (pre-sorted). **This is meta accounting, not the account.**
+
+    Coverage answers "is *this* charge settled" — which drives the per-year
+    tuition table, ``tuition_years_covered`` (and so the promotion gate), and
+    the dues state. Those are all category questions, so they are computed
+    strictly from that category's charges and payments: **no fungibility
+    here** (task #473). Tuition coverage never sees a dollar that wasn't paid
+    as tuition; dues coverage never sees a dollar that wasn't paid as dues.
+
+    The member's *account* is untouched by this function and stays fully
+    fungible: ``balance = obligation − paid`` over every category, one running
+    statement, as designed in #439. Money left over in a category simply
+    doesn't settle another category's charge — it is still on the ledger, in
+    the balance, as credit.
+
+    The original #439 rule swept one category-blind pot across every charge,
+    so registration and dues money was retro-credited to older tuition years:
+    a member's tuition table claimed more coverage than there was tuition
+    money, and registration fees paid in full on the day read as unpaid.
 
     Returns ``({charge_id: "paid" | "partial" | "unpaid"}, {charge_id:
     covered_amount})`` — the covered amounts let callers report the
     *uncovered* slice of a charge without replaying the sweep themselves.
     """
-    remaining = paid
-    states, covered_by_id = {}, {}
-    for c in open_charges:
-        covered = min(c.amount, remaining)
-        remaining -= covered
-        covered_by_id[c.id] = covered
-        states[c.id] = (
-            "paid" if covered >= c.amount
-            else "partial" if covered > 0 else "unpaid"
-        )
+    covered_by_id = {c.id: Decimal("0") for c in open_charges}
+    # Order-independent: each category only ever touches its own charges.
+    for category, pot in paid_by_category.items():
+        for c in open_charges:
+            if pot <= 0:
+                break
+            if c.category != category:
+                continue
+            take = min(c.amount, pot)
+            covered_by_id[c.id] = take
+            pot -= take
+
+    states = {
+        c.id: ("paid" if covered_by_id[c.id] >= c.amount
+               else "partial" if covered_by_id[c.id] > 0 else "unpaid")
+        for c in open_charges
+    }
     return states, covered_by_id
 
 
@@ -79,9 +118,10 @@ def member_account(user) -> dict:
         .select_related("registration__event")
         .order_by(Coalesce("paid_at", "created_at").asc(), "id")
     )
-    paid = sum((p.amount for p in payments if _counts(p)), Decimal("0"))
+    paid_by_category = _paid_by_category(payments)
+    paid = sum(paid_by_category.values(), Decimal("0"))
     obligation = sum((c.amount for c in open_charges), Decimal("0"))
-    states, covered_by_id = _charge_states(open_charges, paid)
+    states, covered_by_id = _charge_states(open_charges, paid_by_category)
 
     # Statement: charges and payments merged chronologically with a running
     # balance. WAIVED charges and non-counting payments appear with delta 0.
@@ -111,11 +151,8 @@ def member_account(user) -> dict:
         running += ln["delta"]
         ln["running"] = running
 
-    total_tuition_paid = sum(
-        (p.amount for p in payments
-         if _counts(p) and p.payment_type == Payment.Type.TUITION),
-        Decimal("0"),
-    )
+    total_tuition_paid = paid_by_category.get(
+        Payment.Type.TUITION, Decimal("0"))
     tuition_years_covered = sum(
         1 for c in open_charges
         if c.category == Charge.Category.TUITION and states[c.id] == "paid"
@@ -180,6 +217,32 @@ def member_account(user) -> dict:
             "state": state, "decision_label": decision_label,
         })
 
+    # Dues meta accounting — the same bucket treatment tuition gets: one
+    # cumulative dues obligation against dues money only, plus the per-year
+    # rows the sweep already resolved (task #473). Like tuition, this is a
+    # reading of the account, not a second account.
+    total_dues_paid = paid_by_category.get(Payment.Type.DUES, Decimal("0"))
+    dues_obligation = sum(
+        (c.amount for c in open_charges
+         if c.category == Charge.Category.DUES),
+        Decimal("0"),
+    )
+    dues_balance = dues_obligation - total_dues_paid
+    dues_rows = [
+        {
+            "period": c.dues_period,
+            "charge": c,
+            "amount": c.amount,
+            "covered": covered_by_id.get(c.id),
+            "state": ("waived" if c.status == Charge.Status.WAIVED
+                      else states.get(c.id, "unpaid")),
+        }
+        for c in sorted(
+            (c for c in charges if c.category == Charge.Category.DUES),
+            key=lambda c: c.effective_date, reverse=True,
+        )
+    ]
+
     current_dues = DuesPeriod.current()
     dues_state = None
     if current_dues is not None:
@@ -199,10 +262,17 @@ def member_account(user) -> dict:
         "owes": max(balance, Decimal("0")),
         "credit": max(-balance, Decimal("0")),
         "total_tuition_paid": total_tuition_paid,
+        "tuition_obligation": tuition_obligation,
         "tuition_years_covered": tuition_years_covered,
         "tuition_years_required": TUITION_YEARS_REQUIRED,
         "tuition_overpaid": tuition_overpaid,
         "tuition_rows": tuition_rows,
+        "total_dues_paid": total_dues_paid,
+        "dues_obligation": dues_obligation,
+        "dues_balance": dues_balance,
+        "dues_owed": max(dues_balance, Decimal("0")),
+        "dues_credit": max(-dues_balance, Decimal("0")),
+        "dues_rows": dues_rows,
         "dues_state": dues_state,
         "current_dues_period": current_dues,
         "charge_states": states,
@@ -229,28 +299,28 @@ def accounts_overview() -> list[dict]:
     ):
         charges_by_user[c.user_id].append(c)
 
+    # Per-category sums in one pass: the sweep is category-scoped (#473), the
+    # totals are what it adds up to, and the tuition-only slice drives the
+    # skipping-conflict heuristic (tuition-scoped, never the cross-category
+    # balance — see member_account).
+    paid_by_user_category: dict[int, dict[str, Decimal]] = defaultdict(dict)
     paid_by_user: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    tuition_paid_by_user: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
     last_by_user: dict[int, object] = {}
     for row in (
         Payment.objects.filter(COUNTING_PAYMENTS, user__isnull=False)
-        .values("user")
+        .values("user", "payment_type")
         .annotate(s=Sum("amount"), last=Max(Coalesce("paid_at", "created_at")))
     ):
-        paid_by_user[row["user"]] = row["s"] or Decimal("0")
-        last_by_user[row["user"]] = row["last"]
-
-    # Tuition-only paid sums — the skipping-conflict heuristic is tuition-
-    # scoped (see member_account), never the cross-category balance.
-    tuition_paid_by_user: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
-    for row in (
-        Payment.objects.filter(
-            status=Payment.Status.SUCCEEDED, user__isnull=False,
-            payment_type=Payment.Type.TUITION,
-        )
-        .values("user")
-        .annotate(s=Sum("amount"))
-    ):
-        tuition_paid_by_user[row["user"]] = row["s"] or Decimal("0")
+        uid, amount = row["user"], row["s"] or Decimal("0")
+        paid_by_user_category[uid][row["payment_type"]] = amount
+        paid_by_user[uid] += amount
+        if row["payment_type"] == Payment.Type.TUITION:
+            tuition_paid_by_user[uid] = amount
+        if row["last"] is not None and (
+            uid not in last_by_user or row["last"] > last_by_user[uid]
+        ):
+            last_by_user[uid] = row["last"]
 
     skipping_users = set(
         TuitionEnrollment.objects.filter(
@@ -288,7 +358,8 @@ def accounts_overview() -> list[dict]:
         open_charges = [c for c in charges if c.status == Charge.Status.OPEN]
         paid = paid_by_user.get(uid, Decimal("0"))
         obligation = sum((c.amount for c in open_charges), Decimal("0"))
-        states, _covered = _charge_states(open_charges, paid)
+        states, _covered = _charge_states(
+            open_charges, paid_by_user_category.get(uid, {}))
         balance = obligation - paid
         tuition_obligation = sum(
             (c.amount for c in open_charges
@@ -299,6 +370,14 @@ def accounts_overview() -> list[dict]:
             tuition_paid_by_user.get(uid, Decimal("0")) - tuition_obligation,
             Decimal("0"),
         )
+        # Dues bucket, same meta accounting as member_account.
+        dues_obligation = sum(
+            (c.amount for c in open_charges
+             if c.category == Charge.Category.DUES),
+            Decimal("0"),
+        )
+        dues_balance = dues_obligation - paid_by_user_category.get(
+            uid, {}).get(Payment.Type.DUES, Decimal("0"))
         dues_state = None
         if current_dues is not None:
             dc = next((c for c in charges
@@ -319,6 +398,10 @@ def accounts_overview() -> list[dict]:
                 if c.category == Charge.Category.TUITION and states[c.id] == "paid"
             ),
             "dues_state": dues_state,
+            "dues_obligation": dues_obligation,
+            "dues_balance": dues_balance,
+            "dues_owed": max(dues_balance, Decimal("0")),
+            "dues_credit": max(-dues_balance, Decimal("0")),
             "last_payment": last_by_user.get(uid),
             "tuition_overpaid": tuition_overpaid,
             "conflict": tuition_overpaid > 0 and uid in skipping_users,

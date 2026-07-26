@@ -1,4 +1,5 @@
-"""Unified-ledger math: one fungible pot swept oldest-first (task #439)."""
+"""Unified-ledger math: money swept oldest-first, category-scoped then
+spilling across categories (task #439, re-scoped by task #473)."""
 
 from datetime import date, datetime
 from datetime import timezone as tz
@@ -73,7 +74,9 @@ WHEN = datetime(2026, 9, 14, 12, tzinfo=tz.utc)
 
 
 def test_fungible_net_balance_across_categories(member):
-    """A dues overpayment covers tuition — one pot, one balance."""
+    """The *account* stays fully fungible: one obligation, one paid total, one
+    balance across every category. Only the per-category coverage read off it
+    is bucketed (task #473)."""
     _charge(member, Charge.Category.DUES, "100", date(2026, 9, 1))
     _charge(member, Charge.Category.TUITION, "1500", date(2026, 9, 1))
     _pay(member, Payment.Type.DUES, "150", WHEN)
@@ -83,6 +86,185 @@ def test_fungible_net_balance_across_categories(member):
     assert acct["paid"] == Decimal("1600")
     assert acct["balance"] == Decimal("0")
     assert acct["owes"] == Decimal("0") and acct["credit"] == Decimal("0")
+
+
+def test_registration_money_never_covers_an_older_tuition_year(member):
+    """Task #473: the sweep is category-scoped first.
+
+    A registration fee paid in full at the time must settle *its own* charge,
+    not get retro-credited to an older unpaid tuition year — which is what a
+    category-blind oldest-first sweep did (Rico's account read
+    "$1,870 / $2,000" on a tuition year with only $6,000 of tuition payments
+    on the ledger).
+    """
+    tuition = _charge(member, Charge.Category.TUITION, "2000", date(2023, 9, 1))
+    reg = _charge(member, Charge.Category.REGISTRATION, "560", date(2026, 1, 20))
+    _pay(member, Payment.Type.REGISTRATION, "560", WHEN)
+    acct = ledger.member_account(member)
+    assert acct["charge_states"][reg.id] == "paid"
+    assert acct["charge_states"][tuition.id] == "unpaid"
+    assert acct["charge_covered"][tuition.id] == Decimal("0")
+    # Net balance is unchanged by the re-attribution.
+    assert acct["balance"] == Decimal("2000")
+
+
+def test_tuition_years_covered_ignores_settled_other_category_money(member):
+    """The promotion gate / "requirement met" count must not be advanced by
+    registration money that is doing its own job — paying a registration fee.
+    """
+    for year in (2022, 2023):
+        tp = _tuition_period(year, "2000")
+        _charge(member, Charge.Category.TUITION, "2000", tp.start_date,
+                tuition_period=tp)
+    _charge(member, Charge.Category.REGISTRATION, "2000", date(2026, 1, 20))
+    _pay(member, Payment.Type.TUITION, "2000", WHEN)
+    _pay(member, Payment.Type.REGISTRATION, "2000", WHEN)
+    acct = ledger.member_account(member)
+    assert acct["tuition_years_covered"] == 1
+
+
+def test_surplus_in_another_category_never_advances_tuition_years(member):
+    """No fungibility in the meta accounting, even for a genuine surplus: a
+    registration payment with no registration charge is real credit on the
+    account — it shows in the balance — but it is not tuition money and must
+    never cover a tuition year."""
+    for year in (2022, 2023):
+        tp = _tuition_period(year, "2000")
+        _charge(member, Charge.Category.TUITION, "2000", tp.start_date,
+                tuition_period=tp)
+    _pay(member, Payment.Type.TUITION, "2000", WHEN)
+    _pay(member, Payment.Type.REGISTRATION, "2000", WHEN)  # no reg charge
+    acct = ledger.member_account(member)
+    assert acct["tuition_years_covered"] == 1
+    # The ledger — the ground truth — still nets it: $4,000 owed, $4,000 paid.
+    assert acct["balance"] == Decimal("0")
+
+
+def test_task_473_reported_account_shape(member):
+    """The account that surfaced this (task #473), replayed from prod.
+
+    Reported symptom: three tuition years fully paid *plus* "$1,870.00 /
+    $2,000.00" on a fourth, against only $6,000 of tuition payments on the
+    ledger. The $1,870 was precisely the member's non-tuition money ($400
+    dues + $1,570 registration) minus the one dues charge that happened to
+    sort ahead of the last tuition year.
+    """
+    tuition_years = [(2020, "2000"), (2021, "2000"), (2022, "2000"),
+                     (2023, "2000")]
+    charges = {}
+    for year, amount in tuition_years:
+        tp = _tuition_period(year, amount)
+        charges[year] = _charge(member, Charge.Category.TUITION, amount,
+                                tp.start_date, tuition_period=tp)
+    for year in (2022, 2023, 2024, 2025):
+        _charge(member, Charge.Category.DUES, "100", date(year, 9, 1))
+    for amount, eff in [("350", date(2024, 12, 4)), ("560", date(2026, 1, 20)),
+                        ("560", date(2026, 7, 23)), ("100", date(2026, 7, 24))]:
+        _charge(member, Charge.Category.REGISTRATION, amount, eff)
+
+    for amount, when in [("2000", datetime(2021, 8, 19, tzinfo=tz.utc)),
+                         ("2000", datetime(2022, 9, 8, tzinfo=tz.utc)),
+                         ("1000", datetime(2023, 9, 25, tzinfo=tz.utc)),
+                         ("1000", datetime(2024, 5, 9, tzinfo=tz.utc))]:
+        _pay(member, Payment.Type.TUITION, amount, when)
+    for when in [datetime(2022, 9, 29, tzinfo=tz.utc),
+                 datetime(2023, 9, 25, tzinfo=tz.utc),
+                 datetime(2024, 12, 3, tzinfo=tz.utc),
+                 datetime(2026, 1, 20, tzinfo=tz.utc)]:
+        _pay(member, Payment.Type.DUES, "100", when)
+    for amount, when in [("350", datetime(2024, 12, 4, tzinfo=tz.utc)),
+                         ("560", datetime(2026, 1, 20, tzinfo=tz.utc)),
+                         ("560", datetime(2026, 7, 23, tzinfo=tz.utc)),
+                         ("100", datetime(2026, 7, 24, tzinfo=tz.utc))]:
+        _pay(member, Payment.Type.REGISTRATION, amount, when)
+
+    acct = ledger.member_account(member)
+    # Unchanged by the fix, and correct all along: one unpaid tuition year.
+    assert acct["paid"] == Decimal("7970")
+    assert acct["obligation"] == Decimal("9970")
+    assert acct["balance"] == Decimal("2000")
+    # Three tuition years covered by $6,000 of tuition money — no leak.
+    assert acct["total_tuition_paid"] == Decimal("6000")
+    assert acct["tuition_years_covered"] == 3
+    assert acct["charge_covered"][charges[2023].id] == Decimal("0")
+    assert acct["charge_states"][charges[2023].id] == "unpaid"
+    # Every dues and registration charge reads paid — they were, at the time.
+    assert all(
+        acct["charge_states"][c.id] == "paid"
+        for c in Charge.objects.filter(user=member).exclude(
+            category=Charge.Category.TUITION)
+    )
+
+
+def test_dues_surplus_never_covers_tuition(member):
+    """A dues overpayment stays dues credit. It shows on the account (the
+    balance drops) but it does not settle a tuition charge."""
+    tuition = _charge(member, Charge.Category.TUITION, "2000", date(2024, 9, 1))
+    dues = _charge(member, Charge.Category.DUES, "100", date(2026, 9, 1))
+    _pay(member, Payment.Type.DUES, "600", WHEN)  # $500 over on dues
+    acct = ledger.member_account(member)
+    assert acct["charge_states"][dues.id] == "paid"
+    assert acct["charge_covered"][tuition.id] == Decimal("0")
+    assert acct["charge_states"][tuition.id] == "unpaid"
+    # Ground truth is unchanged: $2,100 owed less $600 paid.
+    assert acct["balance"] == Decimal("1500")
+    assert acct["dues_credit"] == Decimal("500")
+
+
+def test_payment_in_a_category_with_no_charges_covers_nothing(member):
+    """Money in a category the member has no charges in settles nothing —
+    it is simply credit on the account."""
+    tuition = _charge(member, Charge.Category.TUITION, "2000", date(2024, 9, 1))
+    _pay(member, Payment.Type.DUES, "300", WHEN)
+    acct = ledger.member_account(member)
+    assert acct["charge_covered"][tuition.id] == Decimal("0")
+    assert acct["balance"] == Decimal("1700")
+
+
+def test_dues_bucket_totals_and_rows(member):
+    """Dues gets the same bucket treatment as tuition: a cumulative dues
+    obligation against dues money only, plus per-year rows."""
+    for year in (2024, 2025, 2026):
+        p = _dues_period(year)
+        _charge(member, Charge.Category.DUES, "100", p.start_date,
+                dues_period=p)
+    _pay(member, Payment.Type.DUES, "250", WHEN)
+    _pay(member, Payment.Type.TUITION, "5000", WHEN)  # never touches dues
+    acct = ledger.member_account(member)
+    assert acct["dues_obligation"] == Decimal("300")
+    assert acct["total_dues_paid"] == Decimal("250")
+    assert acct["dues_balance"] == Decimal("50")
+    assert acct["dues_owed"] == Decimal("50")
+    assert acct["dues_credit"] == Decimal("0")
+    # Newest-first rows, oldest-first coverage within the bucket.
+    assert [r["state"] for r in acct["dues_rows"]] == ["partial", "paid", "paid"]
+    assert [r["period"].start_date.year for r in acct["dues_rows"]] == [
+        2026, 2025, 2024]
+
+
+def test_dues_bucket_on_accounts_overview(member):
+    """The batched roster carries the same dues bucket figures."""
+    today = timezone.now().date()
+    p = _dues_period(today.year if today.month >= 9 else today.year - 1)
+    _charge(member, Charge.Category.DUES, "100", p.start_date, dues_period=p)
+    _pay(member, Payment.Type.TUITION, "5000", WHEN)
+    row = next(r for r in ledger.accounts_overview()
+               if r["user"].id == member.id)
+    assert row["dues_obligation"] == Decimal("100")
+    assert row["dues_owed"] == Decimal("100")   # tuition money doesn't pay dues
+    assert row["dues_state"] == "unpaid"
+    assert row["credit"] == Decimal("4900")     # ...but the account nets it
+
+
+def test_accounts_overview_sweep_is_category_scoped(member):
+    """The batched roster sweep matches the per-member one (task #473)."""
+    _charge(member, Charge.Category.TUITION, "2000", date(2023, 9, 1))
+    _charge(member, Charge.Category.REGISTRATION, "2500", date(2026, 1, 20))
+    _pay(member, Payment.Type.REGISTRATION, "2500", WHEN)
+    row = next(r for r in ledger.accounts_overview()
+               if r["user"].id == member.id)
+    assert row["tuition_covered"] == 0  # category-blind sweep counted it as 1
+    assert row["balance"] == Decimal("2000")
 
 
 def test_sweep_covers_oldest_charge_first(member):

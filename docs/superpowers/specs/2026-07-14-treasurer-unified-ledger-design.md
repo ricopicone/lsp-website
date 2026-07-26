@@ -17,6 +17,7 @@ Historical data is too weak to keep the categories' books separate—money orpha
 ## Decisions (settled with Rico, 2026-07-14)
 
 1. **Fungibility: one net balance.** All charges and payments roll into one running balance per member; coverage sweeps oldest-charge-first regardless of category. A dues overpayment can cover tuition. Category tags stay on every line for filtering and sums.
+   > **Amended 2026-07-25 (task #473).** The *account* stays exactly as specified here — one obligation, one paid total, one net balance across every category; the single ledger is the ground truth and is untouched. What is no longer fungible is the **per-category coverage** read off it: tuition coverage counts tuition payments only, dues coverage dues payments only, registration the same, each oldest-first within its own category. Money paid under one heading never settles a charge under another (not even a surplus). See `docs/superpowers/specs/2026-07-25-category-scoped-coverage-sweep-design.md`.
 2. **Charge scope: dues + tuition + individual event registrations** (when not covered by tuition). Donations never mint charges.
 3. **Dues history: backfill to the first full AY with decent records** (20–21 or 21–22—pick by inspecting the imported payment data during implementation). Backfilled charges carry `assumed` provenance and are waivable/adjustable.
 4. **Tabs: collapse Dues/Tuition into Accounts.** Linkable filtered views replace the per-category rosters.
@@ -48,7 +49,7 @@ Uniqueness: at most one non-VOID charge per `(user, category, dues_period)` and 
 - **Obligation** = sum of OPEN charges.
 - **Paid** = sum of SUCCEEDED payments of type dues/tuition/registration. Donations are listed in the statement but never offset obligations. Refunded payments don't count.
 - **Balance** = obligation − paid (positive = owes, negative = paid-ahead credit).
-- **Per-charge coverage** = sweep the one pot across OPEN charges ordered by `effective_date` oldest-first → Paid / Partial / Unpaid per charge. Derived at read time; never stored.
+- **Per-charge coverage** = sweep the pot across OPEN charges ordered by `effective_date` oldest-first → Paid / Partial / Unpaid per charge. Derived at read time; never stored. *(Amended by #473: the sweep runs strictly within a category — no cross-category coverage at all. See decision 1.)*
 - **Total tuition paid** = sum of tuition-categorized succeeded payments (a reporting sum, not a settlement mechanism).
 - **Tuition requirement progress** = count of tuition charges the sweep has fully covered, out of `TUITION_YEARS_REQUIRED` (4).
 

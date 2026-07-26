@@ -2150,12 +2150,14 @@ def balances_csv(request):
     response["Content-Disposition"] = 'attachment; filename="lsp-balances.csv"'
     writer = csv.writer(response)
     writer.writerow(["name", "email", "role", "obligation", "paid", "balance",
-                     "owes", "credit", "tuition_years_covered", "dues_state"])
+                     "owes", "credit", "tuition_years_covered", "dues_state",
+                     "dues_obligation", "dues_balance"])
     for r in ledger.accounts_overview():
         writer.writerow([
             r["user"].get_full_name(), r["user"].email,
             r["user"].profile.role, r["obligation"], r["paid"], r["balance"],
-            r["owes"], r["credit"], r["tuition_covered"], r["dues_state"] or ""])
+            r["owes"], r["credit"], r["tuition_covered"], r["dues_state"] or "",
+            r["dues_obligation"], r["dues_balance"]])
     return response
 
 
