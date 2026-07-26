@@ -366,6 +366,39 @@ def test_dues_overlap_by_member_and_ay():
     assert "academic year" in plans[0].reason
 
 
+def test_amount_only_dues_guess_is_dropped_not_swallowed():
+    """A dues *guess* from the amount alone must not suppress a real charge.
+
+    Task #474: two off-site charges ($50 and $100) went unrecorded because
+    those amounts happen to match dues tiers, and each payer had already paid
+    dues that year — so the guess made itself into its own duplicate proof. A
+    second same-year payment is more likely a seminar fee than dues paid
+    twice, so the weak guess is what gives way, and the charge surfaces as
+    unknown for a human to classify.
+    """
+    u = _user("ann@x.test")
+    Payment.objects.create(
+        payment_type=Payment.Type.DUES, user=u, amount=Decimal("150.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        source=Source.IMPORTED, paid_at=DAY,
+    )
+    # $100 matches a dues tier, but nothing *says* dues — no description, no
+    # session metadata.
+    plans = _plan([_charge(amount=10000, description="")])
+
+    assert plans[0].action == "needs_type"
+    assert plans[0].user_id == u.id
+
+
+def test_amount_only_dues_guess_still_imports_when_no_dues_that_year():
+    """The amount guess is still good when it isn't contradicted."""
+    _user("ann@x.test")
+    plans = _plan([_charge(amount=10000, description="")])
+
+    assert plans[0].action == "create"
+    assert plans[0].payment_type == "dues"
+
+
 def test_idempotent_rerun_skips():
     _user("ann@x.test")
     plans = _plan([_charge(description="dues")])
