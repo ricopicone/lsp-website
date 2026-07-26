@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from datetime import timezone as dt_timezone
 from decimal import Decimal
 
@@ -388,6 +388,47 @@ def test_amount_only_dues_guess_is_dropped_not_swallowed():
 
     assert plans[0].action == "needs_type"
     assert plans[0].user_id == u.id
+
+
+def test_a_deceased_members_payment_still_matches_them():
+    """Deceased members go ``is_active=False``, which used to hide them from
+    the matcher entirely (task #474).
+
+    The consequence wasn't a missed match, it was a *wrong* one: with no
+    user_id the duplicate check can't run at all, so two payments already on
+    the deceased member's account were reported as unrecorded money waiting
+    to be imported. Committing that would have doubled them.
+    """
+    u = _user("gone@x.test", first="Ann", last="Lee")
+    u.profile.deceased_on = date(2026, 7, 8)
+    u.profile.save()
+    u.refresh_from_db()
+    assert u.is_active is False        # the sync that caused the problem
+    Payment.objects.create(            # already on her account
+        payment_type=Payment.Type.DUES, user=u, amount=Decimal("100.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        source=Source.IMPORTED, paid_at=DAY,
+    )
+
+    plans = _plan([_charge(amount=10000, email="", description="")])
+
+    assert plans[0].user_id == u.id
+    assert plans[0].action == "overlap"
+
+
+def test_never_verified_signups_stay_out_of_the_matcher():
+    """Inactive-and-unverified is the bot-signup marker (task #471) — those
+    must not be able to catch a payment by name."""
+    bot = User.objects.create_user(
+        email="bot@x.test", password="x", first_name="Ann", last_name="Lee",
+        is_active=False,
+    )
+    bot.profile.email_verified_at = None
+    bot.profile.save()
+
+    plans = _plan([_charge(email="", description="dues")])
+
+    assert plans[0].user_id != bot.pk
 
 
 def test_ledger_twin_of_a_stripe_dues_charge_is_still_a_duplicate():
