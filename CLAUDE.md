@@ -461,6 +461,33 @@ Done (see `git log` for specifics):
   (and vice versa) — same dollars, real shortfalls no longer hidden.
   `send_dues_reminders` keys off `dues_state`, so those members will be
   reminded once `lsp-dues-cron.timer` is enabled.
+- **Abandoned checkouts + treasurer clarity** (task #474). A `Payment` row
+  is minted the moment a member is *sent* to Stripe Checkout, so PENDING
+  has only ever meant "we asked" — and nothing told the site when a session
+  expired unpaid (~24h TTL), so stale PENDING rows accumulated (one per
+  attempt: `pay_registration` mints a fresh row on every retry) reading to
+  the treasurer as "this might have gone through". Two prod rows were
+  exactly that, confirmed against Stripe (`status=expired`,
+  `payment_status=unpaid`, no `payment_intent`).
+  **`Payment.Status.ABANDONED`** is the new terminal state — deliberately
+  distinct from FAILED, since a declined card is an attempt to pay and a
+  closed tab isn't; the ledger already counts only SUCCEEDED, so neither
+  moves money. Settled by two paths sharing `payments/stripe_sync.py`: the
+  new **`checkout.session.expired`** webhook branch (seconds; **the Stripe
+  endpoint's `enabled_events` must list it** — it was
+  completed+refunded only), and **`manage.py reconcile_stripe_pending`**
+  (nightly host timer), which re-asks Stripe about every PENDING stripe row
+  older than 25h. The sweep is the part that earns its keep: a session
+  Stripe reports as *paid* runs the normal `complete_payment` chain, so a
+  **missed completion webhook can no longer silently cost the school a
+  registration**. Abandoning never touches the Registration — it stays
+  AWAITING_PAYMENT so the member can still pay and reminders keep nudging.
+  Also: `Payment.add_note` (mirrors `Charge.add_note`), an "Abandoned"
+  ghost badge + status filter, the **Dues (this AY)** column dropped from
+  the Accounts roster (display only — `dues_state` still drives reminders
+  and the double-payment guard), and treasurer-guide sections spelling out
+  that **Sync charges mints obligations and never fetches payments** (the
+  question that started the task) and what Pending vs Abandoned means.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

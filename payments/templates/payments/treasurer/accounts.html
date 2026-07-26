@@ -13,7 +13,8 @@
     </div>
     <form method="post" action="{% url 'treasurer_sync_charges' %}">
       {% csrf_token %}
-      <button class="btn btn-sm btn-outline" title="Mint any missing current-year dues charges">Sync charges</button>
+      <button class="btn btn-sm btn-outline"
+              title="Mints any missing current-year dues charges (what members owe). Does not fetch payments — those arrive from Stripe on their own.">Sync charges</button>
     </form>
   </header>
 
@@ -55,7 +56,7 @@
           <th>Member</th><th>Role</th>
           <th class="text-right">Obligation</th><th class="text-right">Paid</th>
           <th class="text-right">Balance</th>
-          <th>Tuition</th><th>Dues (this AY)</th><th class="text-right">Dues (all yrs)</th><th>Last payment</th>
+          <th>Tuition</th><th class="text-right">Dues (all yrs)</th><th>Last payment</th>
           <th class="text-right">Reminders</th><th>Last reminded</th>
         </tr>
       </thead>
@@ -74,13 +75,6 @@
             {% if r.owes %}{{ r.owes|usd }} owed{% elif r.credit %}{{ r.credit|usd }} credit{% else %}—{% endif %}
           </td>
           <td class="text-xs whitespace-nowrap">{% if r.tuition_covered %}{{ r.tuition_covered }}/4 yrs{% else %}—{% endif %}</td>
-          <td>
-            {% if r.dues_state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
-            {% elif r.dues_state == "partial" %}<span class="badge badge-warning badge-outline badge-sm">Partial</span>
-            {% elif r.dues_state == "unpaid" %}<span class="badge badge-error badge-outline badge-sm">Unpaid</span>
-            {% elif r.dues_state == "waived" %}<span class="badge badge-ghost badge-sm">Waived</span>
-            {% else %}<span class="text-base-content/40 text-xs">—</span>{% endif %}
-          </td>
           <td class="text-right text-xs whitespace-nowrap {% if r.dues_owed %}text-warning font-medium{% elif r.dues_credit %}text-success{% endif %}">
             {% if r.dues_owed %}{{ r.dues_owed|usd }} owed{% elif r.dues_credit %}{{ r.dues_credit|usd }} credit{% else %}—{% endif %}
           </td>

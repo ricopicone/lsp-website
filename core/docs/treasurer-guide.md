@@ -169,10 +169,15 @@ If the queue is empty, there's nothing waiting on you today.
 ## Accounts tab
 
 The full member roster, one row per account: obligation, paid, balance,
-tuition-years progress (n of 4), a dues badge for the current year, and
-the date of the last payment. A **Sync charges** button mints any missing
+tuition-years progress (n of 4), dues across all years, and the date of
+the last payment. A **Sync charges** button mints any missing
 current-year dues charges — use it if a new member joined mid-year or a
 role change wasn't picked up automatically.
+
+**Sync charges is about what members owe, not what they've paid.** It
+mints obligations from the dues tier table; it never contacts Stripe and
+never pulls in payments. Payments arrive on their own (see *What happens
+automatically* below), so there is nothing to press to fetch them.
 
 Filters sit above the table and **live in the page's URL**:
 
@@ -342,7 +347,7 @@ where required.
 For inspecting or correcting individual payments.
 
 - **Filters**: payment type (registration / dues / donation / tuition) and
-  status (succeeded / pending / refunded / failed).
+  status (succeeded / pending / refunded / failed / abandoned).
 - **Each row** shows date, payer, type (+ event for registrations),
   amount, method (Stripe / Offline), status, and actions. The **Payer**
   column shows the member's name when the payment is linked to an
@@ -402,6 +407,20 @@ For inspecting or correcting individual payments.
     charges — follow up with a manual **Adjust** or **Void** on the
     relevant charge from their account page so the statement still adds
     up.
+
+**"Pending" doesn't mean money is on the way.** A payment row is created
+the moment a member is sent to Stripe's checkout page, before they type a
+card number, so **Pending means only that we asked**. Most pending rows
+you'll ever see are people who closed the tab. Stripe closes an unfinished
+checkout after about a day, and the site then marks that row
+**Abandoned** — no money was taken, nothing is owed to anyone, and the
+member's registration stays open so they can still pay (the reminders keep
+nudging them). Abandoned rows are kept rather than deleted so the record
+of the attempt survives; filter them out with the status filter. If a row
+sits at Pending for more than a day or two, that's worth mentioning to the
+web coordinator — every Stripe payment is checked nightly, so a stale
+Pending row shouldn't persist. Offline pending rows are different: those
+are your own manual records, waiting for **Mark paid**.
 
 This tab, and everything on it besides Re-categorize, is unchanged by the
 ledger rework — it's still the place to inspect or correct one payment at
@@ -551,6 +570,13 @@ CSV" link).
 
 ## Things you don't have to do (the system handles them)
 
+- **Recording Stripe payments** — a payment made on the site lands on the
+  Payments tab within seconds of Stripe taking the money; you never fetch
+  or import anything. Overnight, every payment still sitting at Pending is
+  re-checked against Stripe and settled either way, so a payment can't go
+  missing just because a message from Stripe went astray. (Payments taken
+  **outside** the site — the old Typeform links — are the exception: those
+  are imported by the web coordinator on request.)
 - **Issuing receipts** — automatic when a Stripe payment succeeds (or when
   you click **Record an offline payment** / **Mark paid**).
 - **Sending payment-success emails** — same.
