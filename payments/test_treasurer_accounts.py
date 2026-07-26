@@ -215,3 +215,15 @@ def test_accounts_table_and_member_page_show_the_dues_bucket(client, treasurer):
     assert "Dues, all years" in page
     assert "$0.00 paid of $100.00" in page
     assert "Dues by year" in page
+
+
+def test_accounts_roster_drops_the_current_year_dues_column(client, roster):
+    """Task #474: the per-AY dues badge went; the all-years column stays.
+
+    The underlying ``dues_state`` is still computed — reminders and the
+    double-payment guard key off it — this is display only.
+    """
+    page = client.get(reverse("treasurer_accounts")).content.decode()
+
+    assert "Dues (this AY)" not in page
+    assert "Dues (all yrs)" in page

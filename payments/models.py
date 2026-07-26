@@ -134,6 +134,12 @@ class Payment(models.Model):
         SUCCEEDED = "succeeded", _("Succeeded")
         FAILED = "failed", _("Failed")
         REFUNDED = "refunded", _("Refunded")
+        #: The member started Stripe Checkout and never finished; the session
+        #: expired unpaid (task #474). Deliberately distinct from FAILED — a
+        #: declined card is a payment attempt, an abandoned checkout is not,
+        #: and only the latter is normal enough to ignore. No money moved
+        #: either way, so the ledger treats both as non-events.
+        ABANDONED = "abandoned", _("Abandoned")
 
     class Method(models.TextChoices):
         STRIPE = "stripe", _("Stripe")
@@ -253,6 +259,13 @@ class Payment(models.Model):
             else self.get_payment_type_display().lower()
         )
         return f"${self.amount} {self.currency.upper()} ({self.get_status_display()}, {target})"
+
+    def add_note(self, text: str, *, save=True) -> None:
+        """Append a dated line to the staff notes (mirrors ``Charge.add_note``)."""
+        line = f"[{timezone.now().date()}] {text}"
+        self.notes = (self.notes + "\n" + line) if self.notes else line
+        if save:
+            self.save(update_fields=("notes",))
 
     def mark_succeeded(self, *, save=True) -> None:
         """Idempotent: mark payment as succeeded and timestamp paid_at."""

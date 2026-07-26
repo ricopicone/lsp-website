@@ -1903,6 +1903,8 @@ def stripe_webhook(request):
     try:
         if event_type == "checkout.session.completed":
             _handle_checkout_completed(event["data"]["object"])
+        elif event_type == "checkout.session.expired":
+            _handle_checkout_expired(event["data"]["object"])
         elif event_type == "charge.refunded":
             _handle_charge_refunded(event["data"]["object"])
         else:
@@ -1960,6 +1962,36 @@ def _handle_checkout_completed(session) -> None:
 
     # Run the shared success side-effects (idempotent across paths).
     complete_payment(payment)
+
+
+def _handle_checkout_expired(session) -> None:
+    """The member never finished Checkout and Stripe closed the session.
+
+    No money moved, so this only retires the PENDING Payment row (task #474) —
+    the Registration stays AWAITING_PAYMENT so the member can still pay and the
+    registration reminders keep nudging them.
+    """
+    from .stripe_sync import abandon_payment
+
+    session_id = session["id"] if "id" in session else None
+    if not session_id:
+        logger.warning("checkout.session.expired without id; ignoring")
+        return
+
+    with transaction.atomic():
+        try:
+            payment = Payment.objects.select_for_update().get(
+                stripe_checkout_session_id=session_id
+            )
+        except Payment.DoesNotExist:
+            logger.info(
+                "No Payment for expired session %s; ignoring", session_id
+            )
+            return
+        abandon_payment(
+            payment,
+            reason="Stripe checkout expired unpaid — no payment was taken.",
+        )
 
 
 @login_required
