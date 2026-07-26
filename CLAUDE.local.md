@@ -1,9 +1,9 @@
-# Resuming task #470
+# Resuming task #473
 
-**Task:** Registration Admin?
+**Task:** Tuition accounting off
 
 ## Description
-It might be nice to have a Registration Admin to see and potentially make changes to registrations across all events. It's different than the Treasurer Admin, which is focused on accounts. We don't have a Registrar position, so I think the most natural owner of that space is the Program Committee and the Web Coordinator.
+For my account (Rico Picone) I noticed something is still off with the Tuition decisions table. On the ledger are $2k + $2k + $1k + $1k = $6k in payments (3 years). And yet in the table I have 3 years fully paid plus "$1,870.00 / $2,000.00" for a fourth year. That's clearly wrong because it implies I've paid $1.87k more than is on the ledger. I have submitted a request to the Treasurer's queue to acknowledge a $2k payment in 2021 before the records start, but it's still in his queue. Even if it was counting the requested payment (which it shouldn't yet, not until it's approved), it would still be off $130. What's going on here? Be very careful. Tuition accounting has caused a lot of confusion in this system design and I thought we had it wrangled.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -56,6 +56,10 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **imported-registration-payments-have-no-charge** (gotcha) — Stripe-imported REGISTRATION payments never mint a Charge (mint_registration_charge requires a registration FK), so they read as phantom credit — the #439 backfill closed this hole for dues only
+- **signup-email-verification** (architecture) — Task #471 SHIPPED+LIVE 2026-07-25: signups require email verification (inactive until confirmed, POST-gated link) + honeypot/timing/IP-cap; purge runs on lsp-signups-purge.timer daily 18:00 UTC
+- **works-structured-citations** (architecture) — Task #465 SHIPPED + prod-backfilled: structured Chicago author-date citations on Work (11 fields, works/citation.py), specific type labels, random-default /works/ ordering + sort options, grid/list toggle
+- **registrar-role-and-console** (decision) — SHIPPED+LIVE (task #470, deployed 2026-07-25): Registration Admin console at /admin-tools/registrations/ owned by placeholder `registrar` StaffRole (unheld, never publicly badged); PC + Web Coordinator get access via the gate predicate, not
 - **formation-control-requirement-by-clinical-background** (architecture) — Formation control requirement varies by Profile.formation_background (3-state: unreviewed/clinical/academic, task #466); MoA-owned + audited; set via /admin-tools/meeting-of-analysts/backgrounds/ or advisor page, never the old bool
 - **prod-host-access-ssm** (reference) — When ssh lsp is unresponsive, run prod commands via AWS SSM (same channel as deploy); instance i-070b087afa041f233
 - **guest-registration-ux** (architecture) — Task #464 SHIPPED: guest-friendly registration — Event.open_to_guests (messaging-only flag), guests-welcome note on event pages, context-aware login/signup ("register for [Event]" + promoted free-account button); accounts stay required, new
@@ -116,7 +120,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=470`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=473`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.
