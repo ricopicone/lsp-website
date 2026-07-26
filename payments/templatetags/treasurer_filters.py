@@ -56,6 +56,8 @@ _STATUS_BADGE = {
     "succeeded":    ("success", "Succeeded"),
     "failed":       ("error",   "Failed"),
     "refunded":     ("info",    "Refunded"),
+    # Not an error: the member simply never finished checkout (task #474).
+    "abandoned":    ("ghost",   "Abandoned"),
     # TuitionEnrollment.Status
     "paid_in_full": ("success", "Paid in full"),
     "payment_plan": ("info",    "Payment plan"),

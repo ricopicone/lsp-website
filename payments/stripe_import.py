@@ -311,8 +311,20 @@ def plan_charge(row: StripeChargeRow, ctx: PlanContext, *, allow_overlaps=False)
     overlap_pk = None
     reason = "likely duplicate of an existing imported payment"
     if ptype == "dues" and user_id is not None:
-        overlap_pk = ctx.existing_dues_ay.get((user_id, ay))
-        if overlap_pk is not None:
+        dupe_pk = ctx.existing_dues_ay.get((user_id, ay))
+        if dupe_pk is not None and how == "amount":
+            # The only evidence for "dues" was the amount matching a tier —
+            # and the member has already paid dues this year, which argues
+            # *against* the guess rather than for a duplicate. A second
+            # same-year payment is far more often a seminar fee. Drop the
+            # guess, not the charge: it surfaces as unknown for a human to
+            # classify (task #474, where exactly this silently swallowed
+            # $150 of real money).
+            ptype, type_inferred, how = None, False, ""
+        elif dupe_pk is not None:
+            # Something actually *said* dues (session metadata or the charge
+            # description), so a same-AY row is a genuine duplicate.
+            overlap_pk = dupe_pk
             reason = "member already has dues recorded for this academic year"
     if overlap_pk is None:
         overlap_pk = _find_overlap(ctx, user_id, row)
