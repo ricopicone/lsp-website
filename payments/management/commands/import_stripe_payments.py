@@ -145,9 +145,15 @@ class Command(BaseCommand):
             # is recognised as a duplicate.
             if p.payment_type == Payment.Type.DUES and p.paid_at:
                 existing_dues_ay.setdefault((p.user_id, ay_of(p.paid_at.date())), p.pk)
-            # Amount+date overlap candidates: succeeded offline ledger rows.
+            # Amount+date overlap candidates: succeeded ledger rows that carry
+            # **no payment_intent**, so an id match is impossible and amount +
+            # date is the only way to recognise the same money. Method is
+            # deliberately not part of the test (task #474): the treasurer's
+            # spreadsheet recorded the 2024 dues season as `method=stripe,
+            # source=imported` rows with no intent, and skipping those left ~60
+            # genuine duplicates looking like unrecorded charges.
             if (
-                p.paid_at and p.method == Payment.Method.OFFLINE
+                p.paid_at and not p.stripe_payment_intent_id
                 and p.source in (Source.IMPORTED, Source.VERIFIED)
             ):
                 overlaps_by_user.setdefault(p.user_id, []).append(
@@ -265,6 +271,20 @@ class Command(BaseCommand):
         plans = plan_charges(rows, ctx, allow_overlaps=opts["allow_overlaps"])
 
         self._report(plans, committing=opts["commit"])
+
+        if opts["verbose_rows"]:
+            # Every charge and what's planned for it — the only way to see why
+            # a specific charge is being skipped (the flag existed but was
+            # never read until task #474, which is how a wrong "duplicate"
+            # verdict stayed invisible).
+            self.stdout.write(f"\nAll {len(plans)} charges:")
+            for p in sorted(plans, key=lambda p: p.row.created):
+                r = p.row
+                who = r.name or r.email or "?"
+                self.stdout.write(
+                    f"  [{p.action:<17}] {r.charge_id}  ${r.amount:>9}  "
+                    f"{r.created:%Y-%m-%d}  {who:<28.28}  {p.reason}"
+                )
 
         if opts["dump_unknown"]:
             unknown = [p for p in plans if p.action == "needs_type"]

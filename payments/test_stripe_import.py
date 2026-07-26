@@ -390,6 +390,25 @@ def test_amount_only_dues_guess_is_dropped_not_swallowed():
     assert plans[0].user_id == u.id
 
 
+def test_ledger_twin_of_a_stripe_dues_charge_is_still_a_duplicate():
+    """The other half of #474: don't re-import money the ledger already has.
+
+    The treasurer's spreadsheet import recorded ~60 of the 2024 dues-season
+    Stripe payments as ``method=stripe, source=imported`` rows carrying **no
+    payment_intent** — so they can't be matched by id, only by amount + date.
+    They are the same money and must stay suppressed.
+    """
+    u = _user("ann@x.test")
+    Payment.objects.create(              # the spreadsheet twin: same day, same amount
+        payment_type=Payment.Type.DUES, user=u, amount=Decimal("100.00"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.STRIPE,
+        source=Source.IMPORTED, paid_at=DAY,
+    )
+    plans = _plan([_charge(amount=10000, description="")])
+
+    assert plans[0].action == "overlap"
+
+
 def test_amount_only_dues_guess_still_imports_when_no_dues_that_year():
     """The amount guess is still good when it isn't contradicted."""
     _user("ann@x.test")
