@@ -186,7 +186,8 @@ def _render_room(request, room_owner, *, event=None, back_url="/"):
     start_off = services.spotlight_start_off(room_owner, owner)
     try:
         token = services.mint_token(
-            room, request.user, is_owner=owner, start_off=start_off
+            room, request.user, is_owner=owner, start_off=start_off,
+            exp=services.token_exp_for(event),
         )
     except Exception:  # noqa: BLE001 — degrade to the fallback page
         logger.exception("Daily token mint failed for %s", room_owner.slug)

@@ -95,6 +95,34 @@ def test_workgroup_room_back_link_returns_to_meet_tab(client):
     assert f'{wg.get_absolute_url()}?tab=meet'.encode() in resp.content
 
 
+@daily_on
+def test_event_room_token_covers_the_whole_joinable_window(client, monkeypatch):
+    # A three-hour session outlives the flat 180-minute TTL, so a late rejoin
+    # would otherwise present an expired token.
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from events.models import Event, Session
+
+    from .factories import special_event
+
+    seen: dict = {}
+    monkeypatch.setattr(
+        "video.daily.create_meeting_token", lambda **kw: seen.update(kw) or "tok"
+    )
+    ev = special_event(slug="window")
+    start = timezone.now() - timedelta(minutes=10)
+    session = Session.objects.create(
+        event=ev, sequence=1, start_at=start, end_at=start + timedelta(hours=3)
+    )
+    attendee = user("w@x.test")
+    register(attendee, ev)
+    client.force_login(attendee)
+    assert client.get(f"/events/{ev.slug}/room/").status_code == 200
+    assert seen["exp"] >= int((session.end_at + Event.JOIN_GRACE).timestamp())
+
+
 def test_disabled_renders_fallback(client):
     # Feature flag off (default) -> graceful "unavailable" page, not a crash.
     event = seminar()

@@ -156,15 +156,38 @@ def ensure_room(owner) -> DailyRoom | None:
     return room
 
 
+def token_exp_for(event, now=None) -> int | None:
+    """Unix expiry covering the rest of ``event``'s current joinable window, or
+    None when there isn't one — a host opening the room days early, or a
+    workgroup/channel room with no event context. The caller then falls back to
+    the flat ``DAILY_TOKEN_TTL_MINUTES``.
+
+    The flat TTL (180 min) is shorter than a long event's joinable window
+    (``JOIN_PREOPEN`` + session + ``JOIN_GRACE``), so without this a participant
+    rejoining after a network blip late in a three-hour event presents an
+    expired token. Daily does not eject at ``exp`` (``eject_at_token_exp``
+    defaults false), so the failure mode is rejoin only.
+    """
+    if event is None:
+        return None
+    session = event.live_session(now)
+    if session is None:
+        return None
+    return int((session.end_at + type(event).JOIN_GRACE).timestamp())
+
+
 def mint_token(
-    room: DailyRoom, user, *, is_owner: bool = False, start_off: bool = False
+    room: DailyRoom, user, *, is_owner: bool = False, start_off: bool = False,
+    exp: int | None = None,
 ) -> str:
     """A short-lived meeting token for ``user`` to join ``room``.
 
     ``start_off`` joins the participant muted + camera-off (speaker spotlight);
-    it's soft, so they can turn them back on.
+    it's soft, so they can turn them back on. ``exp`` extends the token to cover
+    an event's joinable window; it never shortens it below the flat default.
     """
-    exp = int(time.time()) + settings.DAILY_TOKEN_TTL_MINUTES * 60
+    default_exp = int(time.time()) + settings.DAILY_TOKEN_TTL_MINUTES * 60
+    exp = max(default_exp, exp) if exp else default_exp
     name = ""
     if user is not None:
         name = (getattr(user, "get_full_name", lambda: "")() or "").strip()

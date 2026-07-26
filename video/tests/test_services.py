@@ -5,7 +5,7 @@ import pytest
 from video import services
 from video.models import DailyRoom
 
-from .factories import daily_on, seminar, user
+from .factories import daily_on, seminar, special_event, user
 
 pytestmark = pytest.mark.django_db
 
@@ -210,6 +210,57 @@ def test_existing_room_is_upgraded_with_qa_affordances(monkeypatch):
         "enable_emoji_reactions": True,
         "enable_network_ui": True,
     }]
+
+
+def test_token_exp_for_covers_session_end_plus_grace():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from events.models import Event, Session
+
+    ev = special_event(slug="ttl-live")
+    start = timezone.now() - timedelta(minutes=5)
+    session = Session.objects.create(
+        event=ev, sequence=1, start_at=start, end_at=start + timedelta(hours=3)
+    )
+    exp = services.token_exp_for(ev)
+    assert exp == int((session.end_at + Event.JOIN_GRACE).timestamp())
+
+
+def test_token_exp_for_is_none_outside_the_live_window():
+    # A host opening the room days early gets the flat default, not a huge TTL.
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from events.models import Session
+
+    ev = special_event(slug="ttl-early")
+    start = timezone.now() + timedelta(days=3)
+    Session.objects.create(
+        event=ev, sequence=1, start_at=start, end_at=start + timedelta(hours=3)
+    )
+    assert services.token_exp_for(ev) is None
+    assert services.token_exp_for(None) is None
+
+
+@daily_on
+def test_mint_token_never_shortens_below_the_default_ttl(monkeypatch):
+    import time as _time
+
+    seen: dict = {}
+    monkeypatch.setattr(
+        "video.daily.create_meeting_token", lambda **kw: seen.update(kw) or "tok"
+    )
+    room = DailyRoom.objects.create(
+        name="lsp-ttl", url="https://x/lsp-ttl", provider_created=True,
+        workgroup=seminar(slug="ttl-wg").ensure_workgroup(),
+    )
+    u = user("ttl@x.test")
+    # An exp already in the past must not shrink the token's life.
+    services.mint_token(room, u, exp=int(_time.time()) - 10)
+    assert seen["exp"] >= int(_time.time()) + 170 * 60
 
 
 def test_the_daily_api_is_blocked_in_tests():
