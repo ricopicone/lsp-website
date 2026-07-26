@@ -10,8 +10,10 @@
   {% comment %}
     One source of truth (content/the_school.py) drives this grid and the entry
     sections below. Each block is a real <a> anchor-jumping to its entry, so the
-    graphic is keyboard-navigable and reflows on small screens—the row label
-    sits left on desktop and stacks above its blocks on mobile.
+    graphic is keyboard-navigable. A row is one grid line of equal columns that
+    narrows with the screen instead of wrapping (see .school-map-row in
+    assets/css/input.css); only the row label moves, sitting left on desktop and
+    stacking above its blocks on a narrow screen.
   {% endcomment %}
   <section id="map" aria-labelledby="map-heading" class="scroll-mt-24">
     <h2 id="map-heading" class="sr-only">Map of the School</h2>
@@ -21,13 +23,13 @@
         <div class="font-serif text-lg sm:text-right text-base-content/70 leading-tight sm:pt-3">
           {{ row.label }}
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="school-map-row" style="--cols: {{ row.entries|length }}">
           {% for entry in row.entries %}
           <a href="#{{ entry.slug }}"
-             class="group flex-1 min-w-[8.5rem] flex items-center justify-center text-center
-                    rounded-2xl border-2 border-base-content/25 bg-base-100 px-5 py-5
+             class="school-map-block group flex items-center justify-center text-center
+                    border-2 border-base-content/25 bg-base-100
                     hover:border-primary hover:bg-primary/5 transition-colors">
-            <span class="font-serif text-lg text-base-content group-hover:text-primary leading-tight transition-colors">
+            <span class="font-serif text-base-content group-hover:text-primary transition-colors">
               {{ entry.title }}
             </span>
           </a>
