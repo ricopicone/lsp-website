@@ -488,6 +488,32 @@ Done (see `git log` for specifics):
   and the double-payment guard), and treasurer-guide sections spelling out
   that **Sync charges mints obligations and never fetches payments** (the
   question that started the task) and what Pending vs Abandoned means.
+- **Stripe-importer duplicate matching** (task #474, found while auditing the
+  above). Two defects in `payments/stripe_import.py`, fixed in sequence.
+  (1) A **dues type inferred from the amount alone** then used "member
+  already has dues this AY" as duplicate proof — the guess proving itself,
+  which silently dropped four real off-site Typeform charges ($350; all four
+  payers had already paid dues that year, so the second payment was almost
+  certainly a seminar fee). Now an amount-only guess contradicted that way is
+  *dropped* and the charge surfaces as unknown; metadata/description-typed
+  dues still use the once-per-year rule. (2) That fix over-fired, because the
+  **amount+date overlap check required `method=offline`** — the treasurer's
+  spreadsheet recorded the whole 2024 dues season as `method=stripe,
+  source=imported` rows with **no payment_intent**, identical date and
+  amount, so ~60 genuine duplicates suddenly read as unrecorded. Overlap
+  candidates are now succeeded IMPORTED/VERIFIED rows carrying **no
+  payment_intent** (an id match is impossible for those; method is
+  irrelevant), which also killed a **latent $800 tuition double-count** that
+  a full-history `--commit` would have created. **`--verbose-rows` was a dead
+  flag** — declared, never read — which is exactly how a wrong "likely ledger
+  duplicate" verdict stayed invisible; it now prints every charge's action
+  and reason. Full history is 858 charges: 607 already imported, 188
+  duplicates, 48 unpaid, and off the ledger — **$200 Barbara Freeman** (no
+  member account, `create_unmatched`), **$250 unclassified** (Wittenberg,
+  Barnwell, Barensfeld, Meyer), **$55** of $1–$20 card tests. The $350 above
+  was imported provisionally (source=ASSUMED) and **awaits the Reconcile
+  tab**; re-checked against the corrected rule, none of the four has a
+  same-amount payment within ±10 days, so they are additional money.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
