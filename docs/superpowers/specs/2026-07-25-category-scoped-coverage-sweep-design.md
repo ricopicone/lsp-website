@@ -110,16 +110,22 @@ badge is unchanged and stays.
 
 ## Verification
 
-Prod, read-only, both algorithms side by side over all 81 members with ledger
-activity (via SSM — `ssh lsp` was timing out):
+Prod, read-only, old and new coverage side by side over all 81 members with
+ledger activity (via SSM — `ssh lsp` was timing out):
 
-- **0 total-covered mismatches under the earlier spill variant**, confirming
-  the balance invariant. Under the final no-spill rule, covered totals *do*
-  drop for members holding cross-category surplus — by design — while
-  `obligation`, `paid` and `balance` are computed independently of coverage
-  and so are untouched for everyone.
-- 14 members have at least one charge re-attributed; 6 tuition-year counts
+- **0 balance mismatches**, asserted from the raw inputs rather than from the
+  sweep: `obligation` and `paid` are computed independently of coverage, so no
+  coverage rule can move a balance. (Covered *totals* do drop for members
+  holding cross-category surplus — that surplus now settles nothing — but that
+  is the meta accounting, not the account.)
+- 18 members have at least one charge re-attributed; 6 tuition-year counts
   change, all upward, none crossing the 4-year promotion gate.
+- Post-deploy spot check on the reporting member's live account: balance
+  $2,000 owed (unchanged), tuition 3 of 4 years, AY 2023–24 at $0/$2,000, all
+  four dues years and all four registration charges reading paid.
+
+**Shipped:** merged to `main` and deployed 2026-07-25 (`cd99279`); Deploy run
+green.
 
 ## Tests
 

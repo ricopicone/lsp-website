@@ -67,16 +67,7 @@ This matters most for the per-year tuition table and the four-year
 requirement, which are read off tuition coverage. Money that was never
 tuition can no longer make a tuition year look part-paid.
 
-### Dues, all years
-
-Dues is tracked as its own running bucket, the way tuition is: total dues
-charged against total dues paid, with a **dues balance**. You'll see it on
-the member's account page (a "Dues, all years" tile plus a **Dues by
-year** table), as a column on the Accounts roster, and in the balances
-CSV. The older "Dues this AY" badge is still there for the current year's
-status. Members see the same all-years summary on their own account tab.
-
-Categories still matter for two things the school tracks closely:
+Two tuition figures the school tracks closely follow from that:
 
 - **Total tuition paid** — the running sum of tuition payments, shown on
   every member's account page.
@@ -130,6 +121,15 @@ year settles the money owed but does **not** count as one of the four
 covered years; if the school means to credit a year without collecting
 payment for it, that's a decision for the tuition-years count itself, not
 something a waiver does as a side effect.
+
+### Dues, all years
+
+Dues is tracked as its own running bucket, the way tuition is: total dues
+charged against total dues paid, with a **dues balance**. You'll see it on
+the member's account page (a "Dues, all years" tile plus a **Dues by
+year** table), as a column on the Accounts roster, and in the balances
+CSV. The older "Dues this AY" badge is still there for the current year's
+status. Members see the same all-years summary on their own account tab.
 
 ---
 
