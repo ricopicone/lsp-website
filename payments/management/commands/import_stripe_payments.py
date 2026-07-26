@@ -160,9 +160,28 @@ class Command(BaseCommand):
                     (p.amount, p.paid_at.date(), p.pk)
                 )
 
-        users = list(
-            User.objects.filter(is_active=True).select_related("profile")
-        )
+        # Matcher pool. Deliberately NOT `is_active=True` (task #474): a
+        # deceased member is deactivated by the Profile.deceased_on sync, and
+        # excluding them doesn't merely miss a match — with no user_id the
+        # duplicate check can't run at all, so payments already on their
+        # account get reported as unrecorded money. Two of Barbara Freeman's
+        # were, and committing would have doubled them.
+        #
+        # What must stay out is the never-verified signup — `is_active=False`
+        # with no `email_verified_at`, the same pair `purge_unverified_signups`
+        # treats as a bot row — so junk can't capture a real payment by name.
+        # `deceased_on` re-admits regardless: only a staff action sets it, and
+        # a member imported after the 0042 grandfather migration has no
+        # `email_verified_at` to vouch for them.
+        def _matchable(u):
+            p = getattr(u, "profile", None)
+            return bool(
+                u.is_active
+                or getattr(p, "email_verified_at", None)
+                or getattr(p, "deceased_on", None)
+            )
+
+        users = [u for u in User.objects.select_related("profile") if _matchable(u)]
         email_to_user = {}
         for u in users:
             if u.email:
