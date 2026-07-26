@@ -44,14 +44,7 @@ def workgroup_room(request, slug):
 @login_required
 def event_room(request, slug):
     event = get_object_or_404(Event, slug=slug)
-    # Offering events (seminar/reading_group/cartel) *are* their workgroup, so
-    # they meet in the workgroup's room. One-off events (special events, Days of
-    # Assembly, Working Days, Scholarly Seminars) own their own room instead of
-    # sharing the Programming Committee's, so the Event itself is the room owner.
-    if event.event_type in Event.ANNUAL_PROGRAM_TYPES:
-        owner = event.workgroup or event.ensure_workgroup()
-    else:
-        owner = event
+    owner = services.room_owner_for_event(event, create=True)
     if owner is None:
         raise Http404("This event has no meeting room.")
     return _render_room(
@@ -186,7 +179,8 @@ def _render_room(request, room_owner, *, event=None, back_url="/"):
     start_off = services.spotlight_start_off(room_owner, owner)
     try:
         token = services.mint_token(
-            room, request.user, is_owner=owner, start_off=start_off
+            room, request.user, is_owner=owner, start_off=start_off,
+            exp=services.token_exp_for(event),
         )
     except Exception:  # noqa: BLE001 — degrade to the fallback page
         logger.exception("Daily token mint failed for %s", room_owner.slug)

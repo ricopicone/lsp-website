@@ -5,7 +5,7 @@ import pytest
 from video import services
 from video.models import DailyRoom
 
-from .factories import daily_on, seminar, user
+from .factories import daily_on, seminar, special_event, user
 
 pytestmark = pytest.mark.django_db
 
@@ -38,13 +38,13 @@ def test_ensure_room_creates_when_missing(monkeypatch):
 @daily_on
 def test_ensure_room_reuses_existing_daily_room(monkeypatch):
     create_calls: list = []
+    wg = seminar().ensure_workgroup()
     monkeypatch.setattr(
         "video.daily.get_room",
         lambda name: {"name": name, "url": f"https://lsp.daily.co/{name}",
-                      "config": {"enable_recording": "cloud"}},
+                      "config": dict(services._desired_properties(wg))},
     )
     monkeypatch.setattr("video.daily.create_room", _fake_create_room(create_calls))
-    wg = seminar().ensure_workgroup()
     room = services.ensure_room(wg)
     again = services.ensure_room(wg)
     assert again.pk == room.pk
@@ -108,6 +108,169 @@ def test_ensure_room_reconciles_recording_toggle(monkeypatch):
     wg.save(update_fields=["recording_mode"])
     services.ensure_room(wg)
     assert updates and updates[0]["enable_recording"] is False
+
+
+@daily_on
+def test_ensure_room_does_not_update_when_config_matches(monkeypatch):
+    # No drift -> no write. Guards against an update call on every single join.
+    wg = seminar().ensure_workgroup()
+    config = dict(services._desired_properties(wg))
+    monkeypatch.setattr(
+        "video.daily.get_room",
+        lambda name: {"name": name, "url": f"https://x/{name}", "config": config},
+    )
+    updates: list = []
+    monkeypatch.setattr(
+        "video.daily.update_room", lambda name, props: updates.append(props) or {}
+    )
+    services.ensure_room(wg)
+    assert updates == []
+
+
+@daily_on
+def test_ensure_room_tolerates_daily_string_zero_for_recording(monkeypatch):
+    # Daily stores a falsy enable_recording as the STRING "0". A naive equality
+    # check reads that as permanent drift and rewrites the room on every join.
+    wg = seminar().ensure_workgroup()
+    wg.recording_mode = "off"
+    wg.save(update_fields=["recording_mode"])
+    config = dict(services._desired_properties(wg))
+    assert config["enable_recording"] is False
+    config["enable_recording"] = "0"  # what Daily actually returns
+    monkeypatch.setattr(
+        "video.daily.get_room",
+        lambda name: {"name": name, "url": f"https://x/{name}", "config": config},
+    )
+    updates: list = []
+    monkeypatch.setattr(
+        "video.daily.update_room", lambda name, props: updates.append(props) or {}
+    )
+    services.ensure_room(wg)
+    assert updates == []
+
+
+@daily_on
+def test_ensure_room_reconciles_every_drifted_property(monkeypatch):
+    # R1: a room created before a property existed must receive it — the old
+    # code only ever reconciled enable_recording.
+    wg = seminar().ensure_workgroup()
+    config = dict(services._desired_properties(wg))
+    config.pop("enable_people_ui")   # room predates the property
+    config["enable_chat"] = False    # and one drifted underneath us
+    monkeypatch.setattr(
+        "video.daily.get_room",
+        lambda name: {"name": name, "url": f"https://x/{name}", "config": config},
+    )
+    updates: list = []
+    monkeypatch.setattr(
+        "video.daily.update_room",
+        lambda name, props: updates.append(props)
+        or {"name": name, "url": f"https://x/{name}"},
+    )
+    services.ensure_room(wg)
+    assert updates == [{"enable_people_ui": True, "enable_chat": True}]
+
+
+@daily_on
+def test_new_rooms_get_qa_affordances(monkeypatch):
+    # A talk with Q&A needs raise-hand and reactions; the Daily domain defaults
+    # have them off, so the room properties must turn them on.
+    calls: list = []
+    monkeypatch.setattr("video.daily.get_room", _missing)
+    monkeypatch.setattr("video.daily.create_room", _fake_create_room(calls))
+    wg = seminar().ensure_workgroup()
+    services.ensure_room(wg)
+    props = calls[0]["properties"]
+    assert props["enable_hand_raising"] is True
+    assert props["enable_emoji_reactions"] is True
+    assert props["enable_network_ui"] is True
+
+
+@daily_on
+def test_existing_room_is_upgraded_with_qa_affordances(monkeypatch):
+    # The rooms already on the account predate these properties; reconciliation
+    # must push them out rather than waiting for a room to be recreated.
+    wg = seminar().ensure_workgroup()
+    config = dict(services._desired_properties(wg))
+    for key in ("enable_hand_raising", "enable_emoji_reactions", "enable_network_ui"):
+        config.pop(key)
+    monkeypatch.setattr(
+        "video.daily.get_room",
+        lambda name: {"name": name, "url": f"https://x/{name}", "config": config},
+    )
+    updates: list = []
+    monkeypatch.setattr(
+        "video.daily.update_room",
+        lambda name, props: updates.append(props)
+        or {"name": name, "url": f"https://x/{name}"},
+    )
+    services.ensure_room(wg)
+    assert updates == [{
+        "enable_hand_raising": True,
+        "enable_emoji_reactions": True,
+        "enable_network_ui": True,
+    }]
+
+
+def test_token_exp_for_covers_session_end_plus_grace():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from events.models import Event, Session
+
+    ev = special_event(slug="ttl-live")
+    start = timezone.now() - timedelta(minutes=5)
+    session = Session.objects.create(
+        event=ev, sequence=1, start_at=start, end_at=start + timedelta(hours=3)
+    )
+    exp = services.token_exp_for(ev)
+    assert exp == int((session.end_at + Event.JOIN_GRACE).timestamp())
+
+
+def test_token_exp_for_is_none_outside_the_live_window():
+    # A host opening the room days early gets the flat default, not a huge TTL.
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from events.models import Session
+
+    ev = special_event(slug="ttl-early")
+    start = timezone.now() + timedelta(days=3)
+    Session.objects.create(
+        event=ev, sequence=1, start_at=start, end_at=start + timedelta(hours=3)
+    )
+    assert services.token_exp_for(ev) is None
+    assert services.token_exp_for(None) is None
+
+
+@daily_on
+def test_mint_token_never_shortens_below_the_default_ttl(monkeypatch):
+    import time as _time
+
+    seen: dict = {}
+    monkeypatch.setattr(
+        "video.daily.create_meeting_token", lambda **kw: seen.update(kw) or "tok"
+    )
+    room = DailyRoom.objects.create(
+        name="lsp-ttl", url="https://x/lsp-ttl", provider_created=True,
+        workgroup=seminar(slug="ttl-wg").ensure_workgroup(),
+    )
+    u = user("ttl@x.test")
+    # An exp already in the past must not shrink the token's life.
+    services.mint_token(room, u, exp=int(_time.time()) - 10)
+    assert seen["exp"] >= int(_time.time()) + 170 * 60
+
+
+def test_the_daily_api_is_blocked_in_tests():
+    # The conftest guard must actually bite. Without it an unstubbed call goes
+    # out to api.daily.co for real, 401s on the fake key, and several call sites
+    # swallow that — so the suite stays green while doing network I/O.
+    from video import daily
+
+    with pytest.raises(AssertionError, match="must not call the Daily API"):
+        daily.get_room("anything")
 
 
 def test_ensure_room_returns_none_when_disabled():
