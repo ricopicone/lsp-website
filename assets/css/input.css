@@ -815,6 +815,37 @@
   display: none;
 }
 
+/* "The School" map blocks (content/templates/content/the_school.html, task
+   #449). A category row is always exactly as many equal columns as it has
+   blocks: on a narrow screen it *shrinks* rather than wrapping, so no block is
+   ever singled out by being stretched across a line of its own (which read as
+   emphasis it wasn't meant to carry). Plain CSS, not utilities — `--cols`
+   comes from the taxonomy row length, and each block sizes its type from its
+   own width (`cqw`), so a four-block row is automatically tighter than a
+   two-block one at the same viewport with no breakpoints involved. */
+.school-map-row {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: clamp(0.375rem, 1.2vw, 0.75rem);
+}
+.school-map-block {
+  container-type: inline-size;
+  /* Radius is on vw, not cqw, on purpose: an element cannot query *itself*,
+     so container units in the block's own properties resolve against some
+     ancestor container instead — a constant, not the block's width. Every
+     cqw-sized property therefore lives on the span below. */
+  border-radius: clamp(0.5rem, 1.6vw, 1rem);
+}
+.school-map-block > span {
+  display: block;
+  width: 100%;
+  padding: clamp(0.35rem, 7cqw, 1.25rem);
+  font-size: clamp(0.65rem, 13cqw, 1.125rem);
+  line-height: 1.2;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+
 /* Signup honeypot (task #471). Plain CSS, not a Tailwind utility: the class
    is attached to a widget in Python, and the Tailwind v4 build only scans
    templates, so a utility class here would be stripped from the prod build.
