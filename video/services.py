@@ -100,6 +100,26 @@ def _desired_properties(owner) -> dict:
     return props
 
 
+def room_owner_for_event(event, *, create: bool = False):
+    """Who owns the Daily room an event meets in.
+
+    Offering events (seminar / reading group / cartel) *are* their workgroup, so
+    they meet in the workgroup's room. One-off events (special events, Days of
+    Assembly, Working Days, Scholarly Seminars) own their own room rather than
+    sharing the Programming Committee's — see task #463.
+
+    ``create=True`` provisions the workgroup for an offering that lacks one;
+    read-only callers leave it False and get None.
+    """
+    from events.models import Event
+
+    if event.event_type not in Event.ANNUAL_PROGRAM_TYPES:
+        return event
+    if event.workgroup is not None:
+        return event.workgroup
+    return event.ensure_workgroup() if create else None
+
+
 def ensure_room(owner) -> DailyRoom | None:
     """Return the owner's Daily room, reconciling our DB row against Daily.
 

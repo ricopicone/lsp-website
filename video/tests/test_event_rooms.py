@@ -69,6 +69,20 @@ def test_can_enter_event_registrant_yes_outsider_no():
     assert services.can_enter_event(ev, outsider) is False
 
 
+def test_room_owner_for_event_splits_offerings_from_one_offs():
+    sem = seminar(slug="owner-sem")
+    wg = sem.ensure_workgroup()
+    assert services.room_owner_for_event(sem) == wg
+    ev = special_event(slug="owner-special")
+    assert services.room_owner_for_event(ev) == ev
+
+
+def test_room_owner_for_event_does_not_create_a_workgroup_by_default():
+    sem = seminar(slug="owner-nocreate")
+    assert services.room_owner_for_event(sem) is None
+    assert services.room_owner_for_event(sem, create=True) == sem.workgroup
+
+
 def test_pending_and_cancelled_registrations_are_denied():
     # Only PAID/COMPED grant access. An unpaid or cancelled row must not.
     from registrations.models import Registration
