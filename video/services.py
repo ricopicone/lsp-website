@@ -62,6 +62,41 @@ def _room_name(owner) -> str:
     return f"{prefix}{owner.slug}"[:128]
 
 
+#: Values Daily may hand back for a property we set to False. It stores a falsy
+#: ``enable_recording`` as the string ``"0"``, so a raw ``==`` comparison would
+#: see permanent drift and rewrite the room on every join.
+_FALSEY = (False, 0, "0", "false", "", None)
+
+
+def _norm(value):
+    """Normalize a Daily room-config value so it compares equal to what we sent."""
+    if value in _FALSEY:
+        return False
+    if value is True or value == "true":
+        return True
+    return value
+
+
+def _desired_properties(owner) -> dict:
+    """The room config ``owner`` should have. Single source of truth: ``ensure_room``
+    applies it, and ``event_video_preflight`` checks the live room against it."""
+    # Recording availability is per-owner (Workgroup/Channel/Event recording_mode);
+    # "cloud" = hosts get a Record button (off until started), False = no button.
+    recording = (
+        "cloud" if getattr(owner, "recording_mode", "on_demand") != "off" else False
+    )
+    props = {
+        "enable_recording": recording,
+        "enable_prejoin_ui": True,   # device/mic/camera check before joining
+        "enable_knocking": False,    # token-gated, not knock-to-enter
+        "enable_chat": True,         # everyone can use text chat
+        "enable_people_ui": True,    # participants panel + host mute/remove
+    }
+    if settings.DAILY_MAX_PARTICIPANTS:
+        props["max_participants"] = settings.DAILY_MAX_PARTICIPANTS
+    return props
+
+
 def ensure_room(owner) -> DailyRoom | None:
     """Return the owner's Daily room, reconciling our DB row against Daily.
 
@@ -76,28 +111,26 @@ def ensure_room(owner) -> DailyRoom | None:
 
     room = getattr(owner, "video_room", None)
     name = room.name if room is not None else _room_name(owner)
-    # Recording availability is per-owner (Workgroup/Channel recording_mode); "cloud"
-    # = hosts get a Record button (off until started), False = no Record button.
-    recording = "cloud" if getattr(owner, "recording_mode", "on_demand") != "off" else False
-    properties = {
-        "enable_recording": recording,
-        "enable_prejoin_ui": True,  # device/mic/camera check before joining
-        "enable_knocking": False,  # token-gated, not knock-to-enter
-        "enable_chat": True,  # everyone can use text chat
-        "enable_people_ui": True,  # participants panel + host mute/remove controls
-    }
-    if settings.DAILY_MAX_PARTICIPANTS:
-        properties["max_participants"] = settings.DAILY_MAX_PARTICIPANTS
+    properties = _desired_properties(owner)
 
     try:
         data = daily.get_room(name)  # None if it was deleted on Daily's side
         if data is None:
             data = daily.create_room(name, properties=properties)
         else:
-            # Reconcile the recording toggle if the owner's mode changed.
-            cur = (data.get("config") or {}).get("enable_recording")
-            if (cur == "cloud") != (recording == "cloud"):
-                daily.update_room(name, {"enable_recording": recording})
+            # Reconcile every property we own, not just recording — a room created
+            # before a property was added would otherwise never receive it.
+            config = data.get("config") or {}
+            drift = {
+                key: value
+                for key, value in properties.items()
+                if _norm(config.get(key)) != _norm(value)
+            }
+            if drift:
+                logger.info(
+                    "Daily room %s config drifted, reconciling %s", name, sorted(drift)
+                )
+                data = daily.update_room(name, drift) or data
     except daily.DailyError:
         logger.exception("Daily ensure_room failed for %s", name)
         return None

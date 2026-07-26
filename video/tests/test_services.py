@@ -38,13 +38,13 @@ def test_ensure_room_creates_when_missing(monkeypatch):
 @daily_on
 def test_ensure_room_reuses_existing_daily_room(monkeypatch):
     create_calls: list = []
+    wg = seminar().ensure_workgroup()
     monkeypatch.setattr(
         "video.daily.get_room",
         lambda name: {"name": name, "url": f"https://lsp.daily.co/{name}",
-                      "config": {"enable_recording": "cloud"}},
+                      "config": dict(services._desired_properties(wg))},
     )
     monkeypatch.setattr("video.daily.create_room", _fake_create_room(create_calls))
-    wg = seminar().ensure_workgroup()
     room = services.ensure_room(wg)
     again = services.ensure_room(wg)
     assert again.pk == room.pk
@@ -108,6 +108,77 @@ def test_ensure_room_reconciles_recording_toggle(monkeypatch):
     wg.save(update_fields=["recording_mode"])
     services.ensure_room(wg)
     assert updates and updates[0]["enable_recording"] is False
+
+
+@daily_on
+def test_ensure_room_does_not_update_when_config_matches(monkeypatch):
+    # No drift -> no write. Guards against an update call on every single join.
+    wg = seminar().ensure_workgroup()
+    config = dict(services._desired_properties(wg))
+    monkeypatch.setattr(
+        "video.daily.get_room",
+        lambda name: {"name": name, "url": f"https://x/{name}", "config": config},
+    )
+    updates: list = []
+    monkeypatch.setattr(
+        "video.daily.update_room", lambda name, props: updates.append(props) or {}
+    )
+    services.ensure_room(wg)
+    assert updates == []
+
+
+@daily_on
+def test_ensure_room_tolerates_daily_string_zero_for_recording(monkeypatch):
+    # Daily stores a falsy enable_recording as the STRING "0". A naive equality
+    # check reads that as permanent drift and rewrites the room on every join.
+    wg = seminar().ensure_workgroup()
+    wg.recording_mode = "off"
+    wg.save(update_fields=["recording_mode"])
+    config = dict(services._desired_properties(wg))
+    assert config["enable_recording"] is False
+    config["enable_recording"] = "0"  # what Daily actually returns
+    monkeypatch.setattr(
+        "video.daily.get_room",
+        lambda name: {"name": name, "url": f"https://x/{name}", "config": config},
+    )
+    updates: list = []
+    monkeypatch.setattr(
+        "video.daily.update_room", lambda name, props: updates.append(props) or {}
+    )
+    services.ensure_room(wg)
+    assert updates == []
+
+
+@daily_on
+def test_ensure_room_reconciles_every_drifted_property(monkeypatch):
+    # R1: a room created before a property existed must receive it — the old
+    # code only ever reconciled enable_recording.
+    wg = seminar().ensure_workgroup()
+    config = dict(services._desired_properties(wg))
+    config.pop("enable_people_ui")   # room predates the property
+    config["enable_chat"] = False    # and one drifted underneath us
+    monkeypatch.setattr(
+        "video.daily.get_room",
+        lambda name: {"name": name, "url": f"https://x/{name}", "config": config},
+    )
+    updates: list = []
+    monkeypatch.setattr(
+        "video.daily.update_room",
+        lambda name, props: updates.append(props)
+        or {"name": name, "url": f"https://x/{name}"},
+    )
+    services.ensure_room(wg)
+    assert updates == [{"enable_people_ui": True, "enable_chat": True}]
+
+
+def test_the_daily_api_is_blocked_in_tests():
+    # The conftest guard must actually bite. Without it an unstubbed call goes
+    # out to api.daily.co for real, 401s on the fake key, and several call sites
+    # swallow that — so the suite stays green while doing network I/O.
+    from video import daily
+
+    with pytest.raises(AssertionError, match="must not call the Daily API"):
+        daily.get_room("anything")
 
 
 def test_ensure_room_returns_none_when_disabled():
