@@ -3,6 +3,8 @@ the invitation email (task #463). Kept separate from the event views so the
 provisioning logic is testable in isolation."""
 from __future__ import annotations
 
+import datetime as _dt
+
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
@@ -12,6 +14,39 @@ from django.utils import timezone
 from accounts.models import Profile, User
 
 from .models import Speaker, SpeakerInvitation
+
+#: Floor for an invitation's life. "The day after the event" alone would hand
+#: someone invited on the morning of a same-day event a window of hours, and
+#: someone invited *after* an event a token that was already dead.
+MIN_INVITATION_WINDOW = _dt.timedelta(days=7)
+
+
+def invitation_expiry(event, now=None):
+    """When a speaker invitation for ``event`` should stop working.
+
+    The end of the day *after* the event, so an invitation can never lapse
+    before the speaker needs it. The old fixed 30-day TTL could: Derek Hook was
+    invited 2026-07-27 for the 2026-09-06 event and his link expired 2026-08-26,
+    eleven days early. A lapsed invitation is not self-recoverable — the account
+    has no usable password, so Django's password reset silently skips it (see
+    the ``auth-email-scanner-and-reset-gotchas`` memory) and staff must reissue.
+
+    Falls back to ``SpeakerInvitation.DEFAULT_TTL`` when there's no date to work
+    from, and is floored at ``MIN_INVITATION_WINDOW``.
+    """
+    now = now or timezone.now()
+    final_date = None
+    if event is not None:
+        last = event.sessions.order_by("start_at").last()
+        if last is not None:
+            final_date = timezone.localtime(last.end_at).date()
+        elif event.end_date:
+            final_date = event.end_date
+    if final_date is None:
+        return now + SpeakerInvitation.DEFAULT_TTL
+    day_after = _dt.datetime.combine(final_date + _dt.timedelta(days=1), _dt.time.max)
+    expiry = timezone.make_aware(day_after, timezone.get_current_timezone())
+    return max(expiry, now + MIN_INVITATION_WINDOW)
 
 
 def _split_name(name: str) -> tuple[str, str]:
@@ -64,14 +99,16 @@ def provision_login(speaker: Speaker) -> User:
 def send_invitation(speaker: Speaker, event, message: str) -> SpeakerInvitation:
     """Provision-or-link the login, mint/refresh the token, send the email."""
     user = provision_login(speaker)
+    expires_at = invitation_expiry(event)
     inv = SpeakerInvitation.objects.filter(speaker=speaker, user=user).first()
     if inv is None:
         inv = SpeakerInvitation.objects.create(
-            speaker=speaker, user=user,
-            expires_at=timezone.now() + SpeakerInvitation.DEFAULT_TTL,
+            speaker=speaker, user=user, expires_at=expires_at,
         )
     else:
-        inv.refresh()
+        # Re-derive on every resend — refresh() would otherwise fall back to the
+        # fixed default and quietly reintroduce the too-short window.
+        inv.refresh(expires_at=expires_at)
     base = settings.SITE_BASE_URL.rstrip("/")
     activation_url = base + reverse("events:speaker_invitation_accept", args=[inv.token])
     event_url = base + reverse("events:detail", args=[event.slug])

@@ -64,6 +64,94 @@ def _special_event(slug="inv-talk"):
     )
 
 
+def test_invitation_expires_the_day_after_the_event():
+    # Not a fixed 30 days: an invitation must never lapse before the speaker
+    # needs it, however far out the event is.
+    from events.speaker_invitations import invitation_expiry
+
+    e = _special_event("exp-day-after")  # 2030-09-06
+    exp = invitation_expiry(e)
+    assert timezone.localtime(exp).date() == date(2030, 9, 7)
+
+
+def test_invitation_outlives_an_event_further_out_than_the_old_30_day_ttl():
+    # The regression this fixes: Derek Hook was invited 2026-07-27 for an event
+    # on 2026-09-06, and the 30-day TTL expired 2026-08-26 — eleven days early.
+    from events.speaker_invitations import invitation_expiry
+
+    e = _special_event("exp-regression")
+    exp = invitation_expiry(e)
+    assert exp > timezone.now() + SpeakerInvitation.DEFAULT_TTL
+
+
+def test_invitation_prefers_the_last_session_over_end_date():
+    from events.models import Session
+    from events.speaker_invitations import invitation_expiry
+
+    e = _special_event("exp-sessions")
+    start = timezone.now() + timedelta(days=100)
+    Session.objects.create(
+        event=e, sequence=1, start_at=start, end_at=start + timedelta(hours=3)
+    )
+    exp = invitation_expiry(e)
+    expected = (timezone.localtime(start).date() + timedelta(days=1))
+    assert timezone.localtime(exp).date() == expected
+
+
+def test_invitation_for_an_imminent_event_still_gets_a_usable_window():
+    # "Day after the event" alone would hand someone invited the morning of a
+    # same-day event a window of hours. Floored so it stays usable.
+    from events.speaker_invitations import MIN_INVITATION_WINDOW, invitation_expiry
+
+    e = Event.objects.create(
+        title="Tomorrow", slug="exp-imminent", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=timezone.localdate(), end_date=timezone.localdate(),
+    )
+    assert invitation_expiry(e) >= timezone.now() + MIN_INVITATION_WINDOW - timedelta(minutes=1)
+
+
+def test_invitation_for_a_past_event_is_not_born_dead():
+    # Inviting someone after their event (recording access, a re-run) must not
+    # mint an already-expired token.
+    from events.speaker_invitations import invitation_expiry
+
+    e = Event.objects.create(
+        title="Last year", slug="exp-past", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2020, 1, 1), end_date=date(2020, 1, 1),
+    )
+    assert invitation_expiry(e) > timezone.now()
+
+
+def test_invitation_falls_back_to_the_default_ttl_without_a_date():
+    from events.speaker_invitations import invitation_expiry
+
+    floor = timezone.now() + SpeakerInvitation.DEFAULT_TTL - timedelta(minutes=1)
+    assert invitation_expiry(None) > floor
+
+
+def test_send_invitation_applies_the_event_derived_expiry():
+    from events.speaker_invitations import invitation_expiry, send_invitation
+
+    e = _special_event("exp-send")
+    s = Speaker.objects.create(name="Derek Hook", slug="dh-exp", email="derek@x.test")
+    e.speakers.add(s)
+    inv = send_invitation(s, e, message="hello")
+    assert timezone.localtime(inv.expires_at).date() == date(2030, 9, 7)
+    assert inv.expires_at == invitation_expiry(e)
+
+
+def test_resending_an_invitation_re_derives_the_expiry():
+    # A resend must not quietly fall back to the 30-day default via refresh().
+    from events.speaker_invitations import send_invitation
+
+    e = _special_event("exp-resend")
+    s = Speaker.objects.create(name="Derek Hook", slug="dh-exp2", email="derek@x.test")
+    e.speakers.add(s)
+    send_invitation(s, e, message="first")
+    inv = send_invitation(s, e, message="second")
+    assert timezone.localtime(inv.expires_at).date() == date(2030, 9, 7)
+
+
 def test_provision_login_creates_external_user():
     from events.speaker_invitations import provision_login
     s = Speaker.objects.create(name="Derek Hook", slug="dh-prov", email="derek@x.test")
