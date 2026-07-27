@@ -81,8 +81,14 @@ how each member came in.
 ### 3. The form
 
 Fields: email, first name, last name, track (Analyst / Scholar formation),
-background (clinical / academic), effective AY (defaults to the current AY),
-optional note, and the send choice (§4).
+background (clinical / academic, or left unreviewed), effective AY (defaults to
+the current AY), optional note, and the send choice (§4).
+
+**Amended during implementation:** the AY choices run one year *past* the
+current AY. `accounts.membership.academic_year_choices` stops at the current
+one, but someone admitted over the summer — which is exactly the case at hand,
+in July — is joining for the year about to start, and would otherwise be
+recordable only as joining the year that just ended.
 
 On submit it creates the `User` with an **unusable password** — `import_users`'
 convention, and password reset is the intended way in, since
@@ -109,11 +115,19 @@ grandfathered every pre-existing account in `accounts/0042`.
 
 ### 4. The email
 
-A new `account_ready` `MessageTemplate` key, seeded alongside the existing
-admissions messages, so it appears in the coordinator's Messages tab and is
-editable in place like every other admissions message. It says: your account is
-ready, set your password here, then choose an advisor, read the guidelines,
-build your profile, and here is My LSP.
+A new account-ready invitation, sent by `accounts.emails.send_account_ready` from
+plain templates in `accounts/templates/accounts/email/account_ready.{txt,html}`.
+It says: your account is ready, set your password here, then choose an advisor,
+read the guidelines, build your profile, and here is My LSP.
+
+**Amended during planning:** the spec originally made this an
+`admissions.MessageTemplate` key so the coordinator could reword it in place.
+That would have defeated the placement decision — `coordinator.messages_list`
+iterates `MessageTemplate.Key.values`, so the key would appear in the
+Applications Coordinator's Messages tab, putting a direct-admission artifact
+back in the console we deliberately kept it out of. The full acceptance letter
+option still uses the shared `decision_accept` template, which belongs to
+admissions either way.
 
 The link is Django's own `password_reset_confirm` token — no new model and no new
 expiry machinery. It is valid for **3 days** (Django's default
