@@ -1,9 +1,11 @@
-# Resuming task #473
+# Resuming task #474
 
-**Task:** Tuition accounting off
+**Task:** Treasurer admin issues
 
 ## Description
-For my account (Rico Picone) I noticed something is still off with the Tuition decisions table. On the ledger are $2k + $2k + $1k + $1k = $6k in payments (3 years). And yet in the table I have 3 years fully paid plus "$1,870.00 / $2,000.00" for a fourth year. That's clearly wrong because it implies I've paid $1.87k more than is on the ledger. I have submitted a request to the Treasurer's queue to acknowledge a $2k payment in 2021 before the records start, but it's still in his queue. Even if it was counting the requested payment (which it shouldn't yet, not until it's approved), it would still be off $130. What's going on here? Be very careful. Tuition accounting has caused a lot of confusion in this system design and I thought we had it wrangled.
+* I don't know if this is an issue or not, but I want to check that we're automatically syncing new payments. We don't have any new ones since 3 days ago. Related: What does the "Sync changes" button in the Accounts tab do?
+* Under Payments two recent payments are listed "Pending" but I think they might have gone through or been cancelled. This could be related to the automatic updating question above.
+* Remove the "Dues (this AY)" column on the Accounts tab table
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -56,7 +58,9 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
-- **imported-registration-payments-have-no-charge** (gotcha) — Stripe-imported REGISTRATION payments never mint a Charge (mint_registration_charge requires a registration FK), so they read as phantom credit — the #439 backfill closed this hole for dues only
+- **imported-registration-payments-have-no-charge** (gotcha) — Stripe-imported REGISTRATION payments never mint a Charge (mint_registration_charge requires a registration FK), so they read as phantom credit on the balance — the #439 backfill closed this hole for dues only
+- **tuition-cumulative-coverage-model** (architecture) — Tuition + dues each accounted as their OWN bucket (category's charges vs category's payments, oldest-first, no fungibility); the single account ledger stays fungible ground truth
+- **container-query-units-self-reference** (architecture) — CSS gotcha: an element with container-type can't query itself — cqw in its OWN padding/radius resolves against an ancestor container; put cqw sizing on a child
 - **signup-email-verification** (architecture) — Task #471 SHIPPED+LIVE 2026-07-25: signups require email verification (inactive until confirmed, POST-gated link) + honeypot/timing/IP-cap; purge runs on lsp-signups-purge.timer daily 18:00 UTC
 - **works-structured-citations** (architecture) — Task #465 SHIPPED + prod-backfilled: structured Chicago author-date citations on Work (11 fields, works/citation.py), specific type labels, random-default /works/ ordering + sort options, grid/list toggle
 - **registrar-role-and-console** (decision) — SHIPPED+LIVE (task #470, deployed 2026-07-25): Registration Admin console at /admin-tools/registrations/ owned by placeholder `registrar` StaffRole (unheld, never publicly badged); PC + Web Coordinator get access via the gate predicate, not
@@ -71,7 +75,6 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **deleting-an-event-with-registrations** (gotcha) — To delete an Event you must first delete its Registrations: Registration.event AND Registration.price_tier are both on_delete=PROTECT
 - **unified-member-ledger-design** (status) — Task #439 LIVE on prod (deployed + backfilled 2026-07-15): unified per-member ledger, 7-tab treasurer admin; --dues-from 2024-09-01 (year_joined mostly null made earlier minting unsafe); treasurer cleanup pass is the open item
 - **treasurer-payments-rework-2026-07** (status) — Big treasurer/payments-data cleanup + UI rework shipped Jul 13-14 2026 (tasks #435/#437); interface simplification is the next planned step
-- **tuition-cumulative-coverage-model** (architecture) — Tuition = cumulative ledger (total paid vs obligation), NOT per-payment-to-year allocation; obligation capped at 4 years; per-year status = oldest-first coverage
 - **stripe-missing-payment-import** (reference) — Import off-site (old Wix) Stripe payments via manage.py import_stripe_payments --use-settings-key; same account so no separate key; runbook in docs/stripe-payment-import.md
 - **board-officer-titles** (convention) — Board Chair/Co-chair = President/Vice President: a display relabel (role_label) AND a synced governance record (Board roster is source of truth; syncs President/VP StaffRole + MoA leadership)
 - **document-inline-html-body** (architecture) — documents.Document now supports inline-HTML bodies (markdown, file optional) with a {{ annual_tuition }} token; used to de-PDF the Tuition Assistance doc (task #427)
@@ -120,7 +123,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=473`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=474`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.
