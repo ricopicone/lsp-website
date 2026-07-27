@@ -507,13 +507,60 @@ Done (see `git log` for specifics):
   a full-history `--commit` would have created. **`--verbose-rows` was a dead
   flag** — declared, never read — which is exactly how a wrong "likely ledger
   duplicate" verdict stayed invisible; it now prints every charge's action
-  and reason. Full history is 858 charges: 607 already imported, 188
-  duplicates, 48 unpaid, and off the ledger — **$200 Barbara Freeman** (no
-  member account, `create_unmatched`), **$250 unclassified** (Wittenberg,
-  Barnwell, Barensfeld, Meyer), **$55** of $1–$20 card tests. The $350 above
-  was imported provisionally (source=ASSUMED) and **awaits the Reconcile
-  tab**; re-checked against the corrected rule, none of the four has a
-  same-amount payment within ±10 days, so they are additional money.
+  and reason. (3) A third defect the first two exposed: the matcher pool was
+  `User.objects.filter(is_active=True)`, and **`Profile.deceased_on`
+  deactivates a deceased member** — so their payments matched no one, and
+  with no `user_id` the duplicate check can't run *at all*. Barbara Freeman's
+  $100 (2024-10-14) and $100 (2025-09-22), both already on her ledger, were
+  offered as $200 of new money; committing would have doubled them on a
+  deceased member's account. The pool now excludes only never-verified
+  signups (`is_active=False` + no `email_verified_at` — what
+  `purge_unverified_signups` treats as a bot row), with `deceased_on`
+  re-admitting regardless.
+  **End state (verified on prod 2026-07-26):** full history = 858 charges,
+  611 already imported, 190 ledger duplicates, 48 unpaid, **$0.00 of new
+  money**, and 9 leftover unknowns that are all $1–$20 card tests. Eight
+  charges were imported provisionally along the way (source=ASSUMED, **on the
+  Reconcile tab awaiting real categories**): Dopchiz $150, Cicolli $50,
+  McCann $100, Rivera Rodriguez $50, Wittenberg $50, Barnwell $50,
+  Barensfeld $50, Meyer $100 — $600. **No tuition-year count moved**, so the
+  promotion gate is untouched, and no `audit_ledger` disagreement is
+  attributable to them (the dues ones are the pre-existing #473
+  category-scoped shortfalls awaiting the treasurer's Owing pass). Worth a
+  look: Rivera Rodriguez's dues shortfall is exactly $50 and her provisional
+  row is a $50 typed as tuition — plausibly the same money, one re-type away.
+- **Direct admission** (task #476). A member admitted outside the site had no
+  path in: `Application` is a `OneToOne` on a `User` requiring a letter of
+  intent, so the coordinator couldn't retro-create one, and admitting by hand
+  meant four surfaces (Django admin for the account, Board membership admin for
+  role/standing, the MoA backgrounds page, the profile editor) with **no letter
+  at the end**. Now one form at `/admin-tools/web-coordinator/admit/`
+  (`admissions/direct_admit.py`, `StaffRole.WEB_COORDINATOR`-gated) creates the
+  account and admits them. The admission itself is **not** reimplemented:
+  `admissions.services.admit_member()` is the shared chokepoint (membership
+  change + formation background) that `accept_application()` was refactored
+  onto, so the two routes can't drift; the tenure note records which one was
+  used. The form is in the **Web Coordinator's** admin on purpose, not the
+  Applications Coordinator's console: a second admission button inside the
+  application process invites reaching for the shortcut. The structural half of
+  that is the form's guard, which refuses any email with an `Application` row in
+  **any** status, with no override, and links to that application instead; an
+  account with no application (a self-signup at `role=external`) is promoted in
+  place. New accounts get an unusable password (password reset is the way in,
+  and `ReplyToPasswordResetForm` deliberately reaches unusable-password rows)
+  plus a stamped `email_verified_at`, since a null there means "self-signup that
+  never confirmed" and would make a staff-vouched account look like a bot row to
+  `purge_unverified_signups`. Send is a choice of the full `decision_accept`
+  letter (rendered without an application via the new `_member_context`), a new
+  **account-ready invitation** for someone already welcomed off-site
+  (`accounts.emails.send_account_ready`, a 3-day `password_reset_confirm` link
+  with the magic-link fallback), or nothing — and **all three write a
+  `WelcomeEmail` row**, or the next `send_welcome_emails` run would mail the new
+  member a second, contradictory sign-in letter. The effective-AY choices run one
+  year past the current AY (`academic_year_choices` stops at the current one, but
+  a member admitted over the summer is joining for the year about to start).
+  Dues charges stay with the treasurer's Sync charges; the success message says
+  so.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
