@@ -1,0 +1,287 @@
+"""Direct admission — admitting a member who never applied on the site (#476)."""
+
+from __future__ import annotations
+
+import pytest
+from django.urls import reverse
+
+from accounts.membership import current_academic_year_start
+from accounts.models import MembershipTenure, Profile, User
+from admissions.models import Application
+from admissions.services import admit_member
+from core.models import StaffRole
+
+pytestmark = pytest.mark.django_db
+
+
+def _user(email, **kw):
+    return User.objects.create_user(email=email, password="x", **kw)
+
+
+@pytest.fixture
+def actor():
+    return _user("wc@x.test", first_name="Web", last_name="Coordinator")
+
+
+def test_admit_member_sets_role_standing_and_tenure(actor):
+    member = _user("new@x.test", first_name="Nadia", last_name="New")
+
+    admit_member(
+        member, track=Application.Track.ANALYST,
+        formation_background=Profile.FormationBackground.CLINICAL,
+        effective_ay=2026, by=actor, tenure_note="Admitted directly.",
+        background_note="Set at direct admission.",
+    )
+
+    member.refresh_from_db()
+    assert member.profile.role == Profile.Role.PRE_CANDIDATE
+    assert member.profile.standing == Profile.Standing.ACTIVE
+    assert member.profile.formation_background == Profile.FormationBackground.CLINICAL
+    tenure = MembershipTenure.open_for(member)
+    assert tenure.start_ay == 2026
+    assert "Admitted directly." in tenure.notes
+
+
+def test_admit_member_scholar_track_admits_as_scholar_precandidate(actor):
+    member = _user("scholar@x.test")
+
+    admit_member(member, track=Application.Track.SCHOLAR, by=actor)
+
+    member.refresh_from_db()
+    assert member.profile.role == Profile.Role.PRE_CANDIDATE_SCHOLAR
+
+
+def test_admit_member_leaves_background_unreviewed_when_blank(actor):
+    member = _user("unknown-bg@x.test")
+
+    admit_member(member, track=Application.Track.ANALYST,
+                 formation_background="", by=actor)
+
+    member.refresh_from_db()
+    assert (member.profile.formation_background
+            == Profile.FormationBackground.UNREVIEWED)
+
+
+def test_both_routes_produce_the_same_membership_state(actor):
+    """The whole point of the shared service: a member admitted directly and an
+    applicant accepted through the site land in identical state."""
+    from admissions.services import accept_application
+
+    direct = _user("direct@x.test")
+    admit_member(
+        direct, track=Application.Track.ANALYST,
+        formation_background=Profile.FormationBackground.CLINICAL,
+        effective_ay=2026, by=actor,
+    )
+
+    applicant = _user("applied@x.test")
+    application = Application.objects.create(
+        applicant=applicant, track=Application.Track.ANALYST,
+        background=Application.Background.CLINICAL,
+        letter_of_intent="I would like to join.",
+    )
+    accept_application(application, by=actor, effective_ay=2026)
+
+    for user in (direct, applicant):
+        user.refresh_from_db()
+    assert direct.profile.role == applicant.profile.role
+    assert direct.profile.standing == applicant.profile.standing
+    assert direct.profile.formation_background == applicant.profile.formation_background
+    assert (MembershipTenure.open_for(direct).start_ay
+            == MembershipTenure.open_for(applicant).start_ay)
+
+
+def test_direct_acceptance_letter_renders_without_an_application():
+    from django.core import mail
+
+    from admissions.emails import send_direct_acceptance
+
+    member = _user("cold@x.test", first_name="Cold", last_name="Admit")
+    send_direct_acceptance(
+        member, track=Application.Track.ANALYST,
+        background=Application.Background.CLINICAL, note="Welcome aboard.",
+    )
+
+    assert len(mail.outbox) == 1
+    body = mail.outbox[0].body
+    assert "Cold" in body
+    assert "Analyst formation, Clinical" in body
+    assert "Welcome aboard." in body
+    # No leftover placeholders, and no fabricated application-status link.
+    assert "{" not in body
+    assert "/apply/status" not in body
+
+
+def test_account_ready_link_lets_the_member_set_a_password(client):
+    from django.core import mail
+
+    from accounts.emails import send_account_ready
+
+    member = _user("ready@x.test", first_name="Ready")
+    member.set_unusable_password()
+    member.save(update_fields=["password"])
+
+    send_account_ready(member, track=Application.Track.ANALYST)
+
+    assert len(mail.outbox) == 1
+    body = mail.outbox[0].body
+    assert "Ready" in body
+    # The set-password link is a real, working password-reset confirm URL.
+    url = next(
+        line.strip() for line in body.splitlines()
+        if "/accounts/reset/" in line
+    )
+    path = url[url.index("/accounts/"):]
+    resp = client.get(path, follow=True)
+    resp = client.post(resp.request["PATH_INFO"], {
+        "new_password1": "a-real-passphrase-42",
+        "new_password2": "a-real-passphrase-42",
+    })
+    member.refresh_from_db()
+    assert member.check_password("a-real-passphrase-42")
+
+
+# ---- The form ------------------------------------------------------------
+
+
+def _form_data(**over):
+    data = {
+        "email": "new@x.test", "first_name": "Nadia", "last_name": "New",
+        "track": Application.Track.ANALYST,
+        "formation_background": Profile.FormationBackground.CLINICAL,
+        "effective_ay": current_academic_year_start(), "note": "",
+        "send": "account",
+    }
+    data.update(over)
+    return data
+
+
+def test_form_offers_the_upcoming_academic_year():
+    """Someone admitted over the summer is joining for the year about to
+    start, so the choices run one year past the current AY."""
+    from admissions.forms import DirectAdmitForm
+
+    form = DirectAdmitForm(_form_data(
+        effective_ay=current_academic_year_start() + 1,
+    ))
+    assert form.is_valid(), form.errors
+
+
+def test_form_accepts_a_brand_new_email():
+    from admissions.forms import DirectAdmitForm
+
+    form = DirectAdmitForm(_form_data())
+    assert form.is_valid(), form.errors
+    assert form.existing_user is None
+
+
+def test_form_promotes_an_existing_account_with_no_application():
+    from admissions.forms import DirectAdmitForm
+
+    existing = _user("selfsignup@x.test")
+    form = DirectAdmitForm(_form_data(email="SelfSignup@x.test"))
+    assert form.is_valid(), form.errors
+    assert form.existing_user == existing
+
+
+@pytest.mark.parametrize("status", [
+    Application.Status.SUBMITTED,
+    Application.Status.INTERVIEWING,
+    Application.Status.ACCEPTED,
+    Application.Status.REJECTED,
+])
+def test_form_refuses_someone_who_applied_on_the_site(status):
+    from admissions.forms import DirectAdmitForm
+
+    applicant = _user("applied@x.test")
+    Application.objects.create(
+        applicant=applicant, track=Application.Track.ANALYST,
+        letter_of_intent="x", status=status,
+    )
+    form = DirectAdmitForm(_form_data(email="applied@x.test"))
+    assert not form.is_valid()
+    assert "application" in " ".join(form.errors["email"]).lower()
+
+
+def test_form_allows_an_unreviewed_background():
+    from admissions.forms import DirectAdmitForm
+
+    form = DirectAdmitForm(_form_data(formation_background=""))
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["formation_background"] == ""
+
+
+# ---- The page ------------------------------------------------------------
+
+
+@pytest.fixture
+def wc(client):
+    user = _user("webcoord@x.test", first_name="Web", last_name="Coordinator")
+    role, _ = StaffRole.objects.get_or_create(
+        key=StaffRole.WEB_COORDINATOR, defaults={"name": "Web Coordinator"},
+    )
+    role.holders.add(user)
+    client.force_login(user)
+    return user
+
+
+def test_page_is_gated_to_the_web_coordinator(client):
+    url = reverse("admissions:direct_admit")
+    assert client.get(url).status_code in (302, 403)  # anonymous
+
+    client.force_login(_user("nobody@x.test"))
+    assert client.get(url).status_code == 403
+
+
+def test_admit_creates_the_account_and_sends_the_invitation(client, wc):
+    from django.core import mail
+
+    from accounts.models import WelcomeEmail
+
+    resp = client.post(reverse("admissions:direct_admit"), _form_data(), follow=True)
+    assert resp.status_code == 200
+
+    member = User.objects.get(email="new@x.test")
+    assert member.profile.role == Profile.Role.PRE_CANDIDATE
+    assert member.profile.standing == Profile.Standing.ACTIVE
+    assert member.profile.year_joined == current_academic_year_start()
+    # Staff-vouched, so it must not read as an unconfirmed signup: the
+    # purge sweeps is_active=False accounts with a null email_verified_at.
+    assert member.profile.email_verified_at is not None
+    assert not member.has_usable_password()
+    # The launch welcome sweep must not mail them a second sign-in letter.
+    assert WelcomeEmail.objects.filter(user=member).exists()
+    assert len(mail.outbox) == 1
+    assert "account is ready" in mail.outbox[0].subject.lower()
+
+
+def test_admit_can_send_the_full_acceptance_letter(client, wc):
+    from django.core import mail
+
+    client.post(reverse("admissions:direct_admit"), _form_data(send="letter"))
+
+    assert len(mail.outbox) == 1
+    assert "accepted" in mail.outbox[0].subject.lower()
+
+
+def test_admit_can_send_nothing_and_still_suppresses_the_launch_welcome(client, wc):
+    from django.core import mail
+
+    from accounts.models import WelcomeEmail
+
+    client.post(reverse("admissions:direct_admit"), _form_data(send="none"))
+
+    assert mail.outbox == []
+    assert WelcomeEmail.objects.filter(user__email="new@x.test").exists()
+
+
+def test_admit_promotes_an_existing_self_signup(client, wc):
+    existing = _user("selfsignup@x.test")
+    assert existing.profile.role == Profile.Role.EXTERNAL
+
+    client.post(reverse("admissions:direct_admit"),
+                _form_data(email="selfsignup@x.test", send="none"))
+
+    existing.refresh_from_db()
+    assert existing.profile.role == Profile.Role.PRE_CANDIDATE
+    assert User.objects.filter(email__iexact="selfsignup@x.test").count() == 1

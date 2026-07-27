@@ -138,6 +138,48 @@ def send_welcome(user) -> None:
     )
 
 
+def send_account_ready(user, *, track) -> None:
+    """Tell a directly-admitted member their account exists and how to get in.
+
+    Sent by the Web Coordinator's direct-admission form to someone who was
+    already welcomed to the school off-site, so it opens the account rather
+    than announcing the decision (the full acceptance letter is
+    ``admissions.emails.send_direct_acceptance``). The set-password link is
+    Django's own password-reset token, so there's no second expiry mechanism
+    to maintain; a lapsed link falls back to the magic sign-in link.
+    """
+    from django.contrib.auth.tokens import default_token_generator
+    from django.utils.encoding import force_bytes
+    from django.utils.http import urlsafe_base64_encode
+
+    from admissions.emails import _guidelines_url
+
+    base = settings.SITE_BASE_URL.rstrip("/")
+    set_password_url = base + reverse(
+        "password_reset_confirm",
+        kwargs={
+            "uidb64": urlsafe_base64_encode(force_bytes(user.pk)),
+            "token": default_token_generator.make_token(user),
+        },
+    )
+    _send_with_html(
+        "Your LSP member account is ready",
+        user.email,
+        "accounts/email/account_ready.txt",
+        {
+            "user": user,
+            "set_password_url": set_password_url,
+            "ttl_days": settings.PASSWORD_RESET_TIMEOUT // 86400,
+            "login_url": base + reverse("login"),
+            "availability_url": base + reverse("directory_availability") + "?only=advisor",
+            "guidelines_url": _guidelines_url(track),
+            "documents_url": base + reverse("documents:index"),
+            "profile_url": base + reverse("profile_edit"),
+            "mylsp_url": base + reverse("formation:formation"),
+        },
+    )
+
+
 # --- Batch announcements -------------------------------------------------
 #
 # Keyed campaigns sent by ``manage.py send_announcement_emails --key <key>``;

@@ -529,6 +529,38 @@ Done (see `git log` for specifics):
   category-scoped shortfalls awaiting the treasurer's Owing pass). Worth a
   look: Rivera Rodriguez's dues shortfall is exactly $50 and her provisional
   row is a $50 typed as tuition — plausibly the same money, one re-type away.
+- **Direct admission** (task #476). A member admitted outside the site had no
+  path in: `Application` is a `OneToOne` on a `User` requiring a letter of
+  intent, so the coordinator couldn't retro-create one, and admitting by hand
+  meant four surfaces (Django admin for the account, Board membership admin for
+  role/standing, the MoA backgrounds page, the profile editor) with **no letter
+  at the end**. Now one form at `/admin-tools/web-coordinator/admit/`
+  (`admissions/direct_admit.py`, `StaffRole.WEB_COORDINATOR`-gated) creates the
+  account and admits them. The admission itself is **not** reimplemented:
+  `admissions.services.admit_member()` is the shared chokepoint (membership
+  change + formation background) that `accept_application()` was refactored
+  onto, so the two routes can't drift; the tenure note records which one was
+  used. The form is in the **Web Coordinator's** admin on purpose, not the
+  Applications Coordinator's console: a second admission button inside the
+  application process invites reaching for the shortcut. The structural half of
+  that is the form's guard, which refuses any email with an `Application` row in
+  **any** status, with no override, and links to that application instead; an
+  account with no application (a self-signup at `role=external`) is promoted in
+  place. New accounts get an unusable password (password reset is the way in,
+  and `ReplyToPasswordResetForm` deliberately reaches unusable-password rows)
+  plus a stamped `email_verified_at`, since a null there means "self-signup that
+  never confirmed" and would make a staff-vouched account look like a bot row to
+  `purge_unverified_signups`. Send is a choice of the full `decision_accept`
+  letter (rendered without an application via the new `_member_context`), a new
+  **account-ready invitation** for someone already welcomed off-site
+  (`accounts.emails.send_account_ready`, a 3-day `password_reset_confirm` link
+  with the magic-link fallback), or nothing — and **all three write a
+  `WelcomeEmail` row**, or the next `send_welcome_emails` run would mail the new
+  member a second, contradictory sign-in letter. The effective-AY choices run one
+  year past the current AY (`academic_year_choices` stops at the current one, but
+  a member admitted over the summer is joining for the year about to start).
+  Dues charges stay with the treasurer's Sync charges; the success message says
+  so.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

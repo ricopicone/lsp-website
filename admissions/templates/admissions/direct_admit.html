@@ -1,0 +1,51 @@
+{% extends "core/base.html" %}
+{% block title %}Admit a member · Web Coordinator · Lacanian School of Psychoanalysis{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-2xl">
+  <nav class="text-sm"><a href="{% url 'web_coordinator_admin' %}" class="link link-hover text-base-content/60">← Web Coordinator Admin</a></nav>
+
+  <header class="space-y-2">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">Staff · Web Coordinator</p>
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Admit a member without an application</h1>
+    <p class="text-base-content/70">Creates the account, records the membership, and sends the member their way in.</p>
+  </header>
+
+  <div role="note" class="rounded-lg border border-base-300 bg-base-200/50 p-4 text-sm text-base-content/80">
+    <p class="font-medium text-base-content">Only for members admitted outside the site.</p>
+    <p class="mt-1">Someone accepted by the Meeting of the Analysts before the application process moved here, or admitted by another route. Anyone who applied on the site is admitted from their application, in the Applications Coordinator's console.</p>
+  </div>
+
+  {% if messages %}
+    {% for m in messages %}
+    <div role="alert" class="alert {% if m.tags %}alert-{{ m.tags }}{% endif %}"><span>{{ m }}</span></div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post" class="space-y-5">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div role="alert" class="alert alert-error"><span>{{ form.non_field_errors }}</span></div>
+    {% endif %}
+    {% for field in form %}
+      <div class="space-y-1">
+        <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-base-content">{{ field.label }}</label>
+        {% if field.name == 'send' %}
+          <div class="space-y-2">
+            {% for choice in field %}
+            <label class="flex items-start gap-2 text-sm text-base-content/80">
+              {{ choice.tag }}<span>{{ choice.choice_label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        {% else %}
+          {{ field }}
+        {% endif %}
+        {% if field.help_text %}<p class="text-xs text-base-content/60">{{ field.help_text }}</p>{% endif %}
+        {% for error in field.errors %}<p class="text-xs text-error">{{ error }}</p>{% endfor %}
+      </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary">Admit member</button>
+  </form>
+</div>
+{% endblock %}

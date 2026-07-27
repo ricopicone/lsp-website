@@ -4,6 +4,8 @@
 {% block admin_heading %}Web Coordinator Admin{% endblock %}
 {% block admin_intro %}Editable site content. More content tools land here as they're built.{% endblock %}
 {% block admin_sections %}
+  {% url 'admissions:direct_admit' as admit_url %}
+  {% include "core/staff/admin/_section.html" with title="Admit a member" body="Create an account and record the membership for a member admitted outside the site, then send them their way in." link_label="Admit a member" link=admit_url %}
   {% url 'staff_aphorisms' as aphorisms_url %}
   {% include "core/staff/admin/_section.html" with title="Aphorisms" body="The Lacanian aphorisms that rotate in the site footer." link_label="Manage aphorisms" link=aphorisms_url count=active_aphorisms count_label="active" %}
   {% include "core/staff/admin/_section.html" with title="Landing & about content" status="Planned" body="Edit the public landing copy and About pages." %}
