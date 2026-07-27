@@ -171,6 +171,19 @@
     clone.style.letterSpacing = hostStyle.letterSpacing;
     clone.style.color       = hostStyle.color;
     clone.style.lineHeight  = hostStyle.lineHeight;
+    // The clone is drawn from <body>, so it inherits nothing from the heading —
+    // including text-transform. A heading capitalized by CSS rather than typed
+    // that way (the Classic theme's all-caps h1/h2) would otherwise drop a
+    // lowercase glyph out of an all-caps line. `capitalize` is resolved by hand
+    // instead of copied: to CSS the lone cloned character always looks
+    // word-initial, so it would capitalize a mid-word letter too.
+    if (hostStyle.textTransform === "capitalize") {
+      clone.style.textTransform = "none";
+      var prevChar = before.slice(-1);
+      if (!prevChar || /\s/.test(prevChar)) clone.textContent = letter.toUpperCase();
+    } else {
+      clone.style.textTransform = hostStyle.textTransform;
+    }
     document.body.appendChild(clone);
 
     // Pass the host's computed text color through as a CSS variable, so the

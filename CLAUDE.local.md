@@ -1,11 +1,9 @@
-# Resuming task #474
+# Resuming task #477
 
-**Task:** Treasurer admin issues
+**Task:** Styled as Capitalized Falling Letters fall as lowercase
 
 ## Description
-* I don't know if this is an issue or not, but I want to check that we're automatically syncing new payments. We don't have any new ones since 3 days ago. Related: What does the "Sync changes" button in the Accounts tab do?
-* Under Payments two recent payments are listed "Pending" but I think they might have gone through or been cancelled. This could be related to the automatic updating question above.
-* Remove the "Dues (this AY)" column on the Accounts tab table
+All appear capitalized in headers, but when they fall some are lowercase (presumably the ones that are styled capitalized instead of typed that way)
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -58,6 +56,11 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **direct-admission-web-coordinator** (architecture) — Members admitted outside the site are admitted at /admin-tools/web-coordinator/admit/ (Web Coordinator, NOT the Applications Coordinator); admissions.services.admit_member() is the shared chokepoint both routes go through
+- **amount-only-dues-guess-swallowed-charges** (gotcha) — Stripe importer duplicate-matching: three defects fixed in #474 (circular dues guess, method-blind overlap, deceased members hidden from the matcher); full history now reconciles to $0.00 new money
+- **daily-room-config-freezes-at-first-open** (architecture) — FIXED (task #475, deployed 2026-07-26): ensure_room now reconciles its full property set against the live Daily room. Comparisons must normalize — Daily stores a falsy enable_recording as the string "0". Reconciliation fires on next join, n
+- **sync-charges-mints-obligations-not-payments** (glossary) — The treasurer Accounts tab's "Sync charges" button mints missing current-year DUES CHARGES (what members owe) — it never contacts Stripe and never fetches payments
+- **pending-payment-is-not-money** (architecture) — A PENDING Payment only means "we sent them to Stripe" — expired checkouts now settle to the new ABANDONED status via the expired webhook + a nightly reconcile timer (task #474)
 - **imported-registration-payments-have-no-charge** (gotcha) — Stripe-imported REGISTRATION payments never mint a Charge (mint_registration_charge requires a registration FK), so they read as phantom credit on the balance — the #439 backfill closed this hole for dues only
 - **tuition-cumulative-coverage-model** (architecture) — Tuition + dues each accounted as their OWN bucket (category's charges vs category's payments, oldest-first, no fungibility); the single account ledger stays fungible ground truth
 - **container-query-units-self-reference** (architecture) — CSS gotcha: an element with container-type can't query itself — cqw in its OWN padding/radius resolves against an ancestor container; put cqw sizing on a child
@@ -123,7 +126,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=474`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=477`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.
