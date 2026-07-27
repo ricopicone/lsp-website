@@ -107,3 +107,32 @@ def test_direct_acceptance_letter_renders_without_an_application():
     # No leftover placeholders, and no fabricated application-status link.
     assert "{" not in body
     assert "/apply/status" not in body
+
+
+def test_account_ready_link_lets_the_member_set_a_password(client):
+    from django.core import mail
+
+    from accounts.emails import send_account_ready
+
+    member = _user("ready@x.test", first_name="Ready")
+    member.set_unusable_password()
+    member.save(update_fields=["password"])
+
+    send_account_ready(member, track=Application.Track.ANALYST)
+
+    assert len(mail.outbox) == 1
+    body = mail.outbox[0].body
+    assert "Ready" in body
+    # The set-password link is a real, working password-reset confirm URL.
+    url = next(
+        line.strip() for line in body.splitlines()
+        if "/accounts/reset/" in line
+    )
+    path = url[url.index("/accounts/"):]
+    resp = client.get(path, follow=True)
+    resp = client.post(resp.request["PATH_INFO"], {
+        "new_password1": "a-real-passphrase-42",
+        "new_password2": "a-real-passphrase-42",
+    })
+    member.refresh_from_db()
+    assert member.check_password("a-real-passphrase-42")

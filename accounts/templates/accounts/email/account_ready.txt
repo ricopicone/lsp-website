@@ -1,0 +1,46 @@
+{% autoescape off %}Dear{% if user.first_name %} {{ user.first_name }}{% endif %},
+
+Welcome to the Lacanian School of Psychoanalysis. Your member account on the
+school's website is set up and waiting for you, and it uses this email address.
+
+Choose a password to get in:
+
+  {{ set_password_url }}
+
+That link is good for {{ ttl_days }} days. If it has expired by the time you
+reach it, go to the log in page and choose "Email me a sign-in link", which
+signs you in with one click and no password at all:
+
+  {{ login_url }}
+
+Once you are in, there are three things worth doing:
+
+1. Choose an advisor. It is up to you to contact the analyst you select and
+   ask them. These analysts are currently available to advise:
+
+     {{ availability_url }}
+
+   The Formation Guidelines explain what advisor and advisee owe each other:
+
+     {{ guidelines_url }}
+
+2. Build your member profile, a photo, a short bio, and your contact details:
+
+     {{ profile_url }}
+
+3. Visit My LSP, your member home, where your formation record lives:
+
+     {{ mylsp_url }}
+
+In the members-only documents area you will also find the checklist of what is
+needed before you present your Passage:
+
+  {{ documents_url }}
+
+Questions, or trouble signing in? Just reply to this message.
+
+Warmly,
+Rico Picone
+Web Coordinator and Developer
+Lacanian School of Psychoanalysis
+{% endautoescape %}
