@@ -164,28 +164,62 @@ def simulate_interviews(application: Application) -> int:
     return application.interviews.count()
 
 
+# ---- Admission: the shared chokepoint -----------------------------------
+
+
+@transaction.atomic
+def admit_member(
+    member, *, track, formation_background="", effective_ay=None, by,
+    tenure_note="", background_note="",
+):
+    """Admit ``member`` as ``track``'s Precandidate — the membership change plus
+    the formation background, and nothing route-specific.
+
+    Shared by both admission routes: acceptance of a site application
+    (:func:`accept_application`) and direct admission by the Web Coordinator
+    (``admissions.direct_admit``). Keeping one function means the two cannot
+    drift — a member admitted either way lands in the same state.
+
+    ``formation_background`` is a ``Profile.FormationBackground`` value, or ""
+    to leave the member unreviewed (the Meeting of Analysts determines it
+    later). Returns the open ``MembershipTenure``.
+    """
+    effective_ay = effective_ay or current_academic_year_start()
+    tenure = record_membership_change(
+        member,
+        role=Application.ADMIT_ROLE[track],
+        standing=Profile.Standing.ACTIVE,
+        effective_ay=effective_ay,
+        notes=tenure_note,
+        by=by,
+    )
+    if formation_background:
+        from formation.background import set_background
+
+        set_background(member, formation_background, by=by, note=background_note)
+    return tenure
+
+
 @transaction.atomic
 def accept_application(application: Application, *, by, effective_ay=None, note=""):
     """Accept an application: admit the applicant as the track's Precandidate
     (active standing) and mark the application accepted. Emails the applicant."""
-    effective_ay = effective_ay or current_academic_year_start()
-    record_membership_change(
-        application.applicant,
-        role=application.admit_role,
-        standing=Profile.Standing.ACTIVE,
-        effective_ay=effective_ay,
-        notes=f"Admitted via application ({application.get_track_display()}). {note}".strip(),
-        by=by,
-    )
-    from formation.background import set_background
-
     background = (
         Profile.FormationBackground.CLINICAL
         if application.background == Application.Background.CLINICAL
         else Profile.FormationBackground.ACADEMIC
     )
-    set_background(application.applicant, background, by=by,
-                   note="Set at acceptance from the application.")
+    admit_member(
+        application.applicant,
+        track=application.track,
+        formation_background=background,
+        effective_ay=effective_ay,
+        by=by,
+        tenure_note=(
+            f"Admitted via application ({application.get_track_display()}). {note}"
+        ).strip(),
+        background_note="Set at acceptance from the application.",
+    )
     application.status = Application.Status.ACCEPTED
     application.decided_at = timezone.now()
     application.decided_by = by
