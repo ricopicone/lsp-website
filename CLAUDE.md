@@ -507,13 +507,28 @@ Done (see `git log` for specifics):
   a full-history `--commit` would have created. **`--verbose-rows` was a dead
   flag** — declared, never read — which is exactly how a wrong "likely ledger
   duplicate" verdict stayed invisible; it now prints every charge's action
-  and reason. Full history is 858 charges: 607 already imported, 188
-  duplicates, 48 unpaid, and off the ledger — **$200 Barbara Freeman** (no
-  member account, `create_unmatched`), **$250 unclassified** (Wittenberg,
-  Barnwell, Barensfeld, Meyer), **$55** of $1–$20 card tests. The $350 above
-  was imported provisionally (source=ASSUMED) and **awaits the Reconcile
-  tab**; re-checked against the corrected rule, none of the four has a
-  same-amount payment within ±10 days, so they are additional money.
+  and reason. (3) A third defect the first two exposed: the matcher pool was
+  `User.objects.filter(is_active=True)`, and **`Profile.deceased_on`
+  deactivates a deceased member** — so their payments matched no one, and
+  with no `user_id` the duplicate check can't run *at all*. Barbara Freeman's
+  $100 (2024-10-14) and $100 (2025-09-22), both already on her ledger, were
+  offered as $200 of new money; committing would have doubled them on a
+  deceased member's account. The pool now excludes only never-verified
+  signups (`is_active=False` + no `email_verified_at` — what
+  `purge_unverified_signups` treats as a bot row), with `deceased_on`
+  re-admitting regardless.
+  **End state (verified on prod 2026-07-26):** full history = 858 charges,
+  611 already imported, 190 ledger duplicates, 48 unpaid, **$0.00 of new
+  money**, and 9 leftover unknowns that are all $1–$20 card tests. Eight
+  charges were imported provisionally along the way (source=ASSUMED, **on the
+  Reconcile tab awaiting real categories**): Dopchiz $150, Cicolli $50,
+  McCann $100, Rivera Rodriguez $50, Wittenberg $50, Barnwell $50,
+  Barensfeld $50, Meyer $100 — $600. **No tuition-year count moved**, so the
+  promotion gate is untouched, and no `audit_ledger` disagreement is
+  attributable to them (the dues ones are the pre-existing #473
+  category-scoped shortfalls awaiting the treasurer's Owing pass). Worth a
+  look: Rivera Rodriguez's dues shortfall is exactly $50 and her provisional
+  row is a $50 typed as tuition — plausibly the same money, one re-type away.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
