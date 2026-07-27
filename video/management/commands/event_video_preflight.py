@@ -171,24 +171,64 @@ class Command(BaseCommand):
 
         out = []
         for u in hosts:
-            problems = []
+            problems, notes = [], []
             if not u.is_active:
                 problems.append("inactive account")
-            if not getattr(getattr(u, "profile", None), "email_verified_at", None):
-                problems.append("email unverified")
-            if not u.has_usable_password():
-                problems.append("no usable password (password reset silently skips them)")
             if owner is not None and not services.can_enter(owner, u):
                 problems.append("CANNOT ENTER THE ROOM")
             elif owner is not None and not services.is_owner(owner, u):
                 problems.append("not a moderator")
-            out.append((
-                FAIL if problems else OK,
-                "host",
-                f"{u.email}: " + (", ".join(problems) if problems
-                                  else "active, can enter, moderator"),
-            ))
+
+            if u.has_usable_password():
+                if not getattr(getattr(u, "profile", None), "email_verified_at", None):
+                    notes.append("email unverified")
+            else:
+                # An invited external presenter who hasn't activated yet is the
+                # *expected* state, not a broken one — but the invitation has to
+                # outlive the event, and a lapsed one is unrecoverable: with no
+                # usable password, Django's password reset silently skips them.
+                problems_, notes_ = self._invitation_state(event, u)
+                problems.extend(problems_)
+                notes.extend(notes_)
+
+            if problems:
+                detail = ", ".join(problems + notes)
+                status = FAIL
+            elif notes:
+                detail = ", ".join(notes)
+                status = WARN
+            else:
+                detail = "active, can enter, moderator"
+                status = OK
+            out.append((status, "host", f"{u.email}: {detail}"))
         return out
+
+    def _invitation_state(self, event, user):
+        """(problems, notes) for a host who has never set a password."""
+        from events.models import SpeakerInvitation
+
+        invitation = (
+            SpeakerInvitation.objects.filter(user=user, speaker__events=event)
+            .order_by("-created_at")
+            .first()
+        )
+        if invitation is None or not invitation.is_valid:
+            return (
+                ["never activated and no valid invitation "
+                 "(password reset silently skips them)"],
+                [],
+            )
+        # The invitation must still be usable when the event happens.
+        last = event.sessions.order_by("start_at").last()
+        happens_at = last.end_at if last else None
+        expires = invitation.expires_at.date().isoformat()
+        if happens_at is not None and invitation.expires_at < happens_at:
+            return (
+                [f"invitation expires {expires}, BEFORE the event on "
+                 f"{happens_at.date().isoformat()} — refresh it or they are locked out"],
+                [],
+            )
+        return ([], [f"not activated yet, invitation pending (expires {expires})"])
 
     def _check_registrants(self, event):
         from registrations.models import Registration
