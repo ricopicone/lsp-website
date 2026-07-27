@@ -86,3 +86,24 @@ def test_both_routes_produce_the_same_membership_state(actor):
     assert direct.profile.formation_background == applicant.profile.formation_background
     assert (MembershipTenure.open_for(direct).start_ay
             == MembershipTenure.open_for(applicant).start_ay)
+
+
+def test_direct_acceptance_letter_renders_without_an_application():
+    from django.core import mail
+
+    from admissions.emails import send_direct_acceptance
+
+    member = _user("cold@x.test", first_name="Cold", last_name="Admit")
+    send_direct_acceptance(
+        member, track=Application.Track.ANALYST,
+        background=Application.Background.CLINICAL, note="Welcome aboard.",
+    )
+
+    assert len(mail.outbox) == 1
+    body = mail.outbox[0].body
+    assert "Cold" in body
+    assert "Analyst formation, Clinical" in body
+    assert "Welcome aboard." in body
+    # No leftover placeholders, and no fabricated application-status link.
+    assert "{" not in body
+    assert "/apply/status" not in body

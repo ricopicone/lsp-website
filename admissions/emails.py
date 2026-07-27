@@ -52,7 +52,7 @@ def send_interview_invitation(user, application: Application) -> None:
     ctx = {
         "interviewer": user.get_full_name() or user.email,
         "applicant": application.applicant.get_full_name() or application.applicant.email,
-        "formation": _formation_label(application),
+        "formation": _formation_label(application.track, application.background),
         "agree_url": _absolute("admissions:analyst_interview", application.pk),
         "applications_coordinator": _coordinator_name(),
     }
@@ -104,42 +104,56 @@ def _absolute(name, *args) -> str:
     return settings.SITE_BASE_URL.rstrip("/") + reverse(name, args=args)
 
 
-def _formation_label(application: Application) -> str:
+def _formation_label(track: str, background: str = "") -> str:
     """e.g. 'Analyst formation, Clinical' — track plus background where given."""
-    label = application.get_track_display()
-    if application.background:
+    label = Application.Track(track).label
+    if background:
         # "Clinical background" -> "Clinical"
-        label += f", {application.get_background_display().replace(' background', '')}"
+        label += f", {Application.Background(background).label.replace(' background', '')}"
     return label
 
 
-def _guidelines_url(application: Application) -> str:
+def _guidelines_url(track: str) -> str:
     """The track's Formation Guidelines document (advisor/advisee
     responsibilities) — Scholar for the scholar track, else Analyst. Falls back
     to the documents index if the document isn't found."""
     from documents.models import Document
 
-    label = "Scholar" if application.track == Application.Track.SCHOLAR else "Analyst"
+    label = "Scholar" if track == Application.Track.SCHOLAR else "Analyst"
     doc = Document.objects.filter(
         title__icontains=f"{label} Formation Guidelines"
     ).first()
     return _absolute("documents:detail", doc.slug) if doc else _absolute("documents:index")
 
 
-def _applicant_context(application: Application) -> dict:
+def _member_context(member, *, track: str, background: str = "") -> dict:
+    """Letter context for someone being admitted, keyed on the person and their
+    track rather than on an ``Application`` — so the same acceptance letter
+    renders for a direct admission, which has no application row."""
     from availability.emails import applications_coordinator_name
     return {
-        "name": application.applicant.get_full_name() or application.applicant.email,
-        "track": application.get_track_display(),
-        "formation": _formation_label(application),
+        "name": member.get_full_name() or member.email,
+        "track": Application.Track(track).label,
+        "formation": _formation_label(track, background),
         # Pre-sorted to analysts available to advise.
         "availability_url": _absolute("directory_availability") + "?only=advisor",
-        "guidelines_url": _guidelines_url(application),
+        "guidelines_url": _guidelines_url(track),
         "documents_url": _absolute("documents:index"),
         "profile_url": _absolute("profile_edit"),
         "mylsp_url": _absolute("formation:formation"),
-        "status_url": _absolute("admissions:status"),
         "applications_coordinator": applications_coordinator_name(),
+    }
+
+
+def _applicant_context(application: Application) -> dict:
+    """``_member_context`` plus the application-only status link."""
+    return {
+        **_member_context(
+            application.applicant,
+            track=application.track,
+            background=application.background,
+        ),
+        "status_url": _absolute("admissions:status"),
     }
 
 
@@ -174,6 +188,30 @@ def send_application_decision(application: Application) -> None:
         subject=render_template(t.subject, ctx),
         body=render_template(t.body, ctx),
         to=[application.applicant.email],
+        reply_to=settings.APPLICATIONS_EMAIL,
+        from_email=_applications_from(),
+    )
+
+
+def send_direct_acceptance(member, *, track, background="", note="") -> None:
+    """Send the acceptance letter to a member admitted with no site application.
+
+    Deliberately the *same* ``decision_accept`` template the application route
+    sends: however someone was admitted, the welcome they read is identical.
+    """
+    from .models import MessageTemplate
+    from .services import render_template
+
+    t = MessageTemplate.get(MessageTemplate.Key.DECISION_ACCEPT)
+    note = (note or "").strip()
+    ctx = {
+        **_member_context(member, track=track, background=background),
+        "note": f"{note}\n\n" if note else "",
+    }
+    _send(
+        subject=render_template(t.subject, ctx),
+        body=render_template(t.body, ctx),
+        to=[member.email],
         reply_to=settings.APPLICATIONS_EMAIL,
         from_email=_applications_from(),
     )
