@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import BaseUserManager
 
+from accounts.membership import academic_year_label, current_academic_year_start
 from accounts.models import Profile
 
 from .models import (
@@ -192,3 +194,92 @@ class MessageTemplateForm(forms.ModelForm):
             "subject": forms.TextInput(attrs={"class": _INPUT}),
             "body": forms.Textarea(attrs={"class": _TEXTAREA, "rows": 12}),
         }
+
+
+class DirectAdmitForm(forms.Form):
+    """Admit a member who never applied on the site (task #476).
+
+    Lives in the Web Coordinator's admin, not the Applications Coordinator's
+    console: someone who applied here is admitted from their application, and
+    the two surfaces are deliberately kept apart. The guard below is the
+    structural half of that — an email belonging to any application, in any
+    status, is refused outright rather than offered an override.
+    """
+
+    SEND_LETTER = "letter"
+    SEND_ACCOUNT = "account"
+    SEND_NONE = "none"
+    SEND_CHOICES = [
+        (SEND_ACCOUNT, "Account-ready invitation, they've already been welcomed"),
+        (SEND_LETTER, "Full acceptance letter, they've heard nothing yet"),
+        (SEND_NONE, "Nothing, I'll write to them myself"),
+    ]
+
+    email = forms.EmailField(
+        label="Email", widget=forms.EmailInput(attrs={"class": _INPUT}),
+    )
+    first_name = forms.CharField(
+        label="First name", max_length=150,
+        widget=forms.TextInput(attrs={"class": _INPUT}),
+    )
+    last_name = forms.CharField(
+        label="Last name", max_length=150,
+        widget=forms.TextInput(attrs={"class": _INPUT}),
+    )
+    track = forms.ChoiceField(
+        label="Formation", choices=Application.Track.choices,
+        widget=forms.Select(attrs={"class": _SELECT}),
+    )
+    formation_background = forms.ChoiceField(
+        label="Background", required=False,
+        choices=[("", "Not yet reviewed")] + [
+            (v, label) for v, label in Profile.FormationBackground.choices
+            if v != Profile.FormationBackground.UNREVIEWED
+        ],
+        widget=forms.Select(attrs={"class": _SELECT}),
+        help_text="Determines the control-analysis requirement. Leave unreviewed "
+                  "if the Meeting of Analysts hasn't determined it.",
+    )
+    effective_ay = forms.TypedChoiceField(
+        label="Effective academic year", coerce=int, choices=[],
+        widget=forms.Select(attrs={"class": _SELECT}),
+        help_text="The year their membership starts.",
+    )
+    note = forms.CharField(
+        label="Note", required=False,
+        widget=forms.Textarea(attrs={"class": _TEXTAREA, "rows": 3}),
+        help_text="Recorded on the membership timeline, and included in the "
+                  "acceptance letter if you send one.",
+    )
+    send = forms.ChoiceField(
+        label="Send", choices=SEND_CHOICES, initial=SEND_ACCOUNT,
+        widget=forms.RadioSelect(attrs={"class": "radio radio-sm"}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.existing_user = None
+        current = current_academic_year_start()
+        # The upcoming AY is offered as well: someone admitted over the summer
+        # is usually joining for the year about to start, and
+        # ``academic_year_choices`` stops at the current one.
+        self.fields["effective_ay"].choices = [
+            (y, academic_year_label(y)) for y in range(current + 1, current - 6, -1)
+        ]
+        self.fields["effective_ay"].initial = current
+
+    def clean_email(self) -> str:
+        email = BaseUserManager.normalize_email(self.cleaned_data["email"]).strip()
+        user = User.objects.filter(email__iexact=email).first()
+        if user is None:
+            return email
+        application = Application.objects.filter(applicant=user).first()
+        if application is not None:
+            raise forms.ValidationError(
+                f"{email} applied through the site "
+                f"({application.get_status_display().lower()}). Admit them from "
+                "their application in the Applications Coordinator's console, "
+                "not here."
+            )
+        self.existing_user = user
+        return email

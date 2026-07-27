@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from accounts.membership import current_academic_year_start
 from accounts.models import MembershipTenure, Profile, User
 from admissions.models import Application
 from admissions.services import admit_member
@@ -136,3 +137,73 @@ def test_account_ready_link_lets_the_member_set_a_password(client):
     })
     member.refresh_from_db()
     assert member.check_password("a-real-passphrase-42")
+
+
+# ---- The form ------------------------------------------------------------
+
+
+def _form_data(**over):
+    data = {
+        "email": "new@x.test", "first_name": "Nadia", "last_name": "New",
+        "track": Application.Track.ANALYST,
+        "formation_background": Profile.FormationBackground.CLINICAL,
+        "effective_ay": current_academic_year_start(), "note": "",
+        "send": "account",
+    }
+    data.update(over)
+    return data
+
+
+def test_form_offers_the_upcoming_academic_year():
+    """Someone admitted over the summer is joining for the year about to
+    start, so the choices run one year past the current AY."""
+    from admissions.forms import DirectAdmitForm
+
+    form = DirectAdmitForm(_form_data(
+        effective_ay=current_academic_year_start() + 1,
+    ))
+    assert form.is_valid(), form.errors
+
+
+def test_form_accepts_a_brand_new_email():
+    from admissions.forms import DirectAdmitForm
+
+    form = DirectAdmitForm(_form_data())
+    assert form.is_valid(), form.errors
+    assert form.existing_user is None
+
+
+def test_form_promotes_an_existing_account_with_no_application():
+    from admissions.forms import DirectAdmitForm
+
+    existing = _user("selfsignup@x.test")
+    form = DirectAdmitForm(_form_data(email="SelfSignup@x.test"))
+    assert form.is_valid(), form.errors
+    assert form.existing_user == existing
+
+
+@pytest.mark.parametrize("status", [
+    Application.Status.SUBMITTED,
+    Application.Status.INTERVIEWING,
+    Application.Status.ACCEPTED,
+    Application.Status.REJECTED,
+])
+def test_form_refuses_someone_who_applied_on_the_site(status):
+    from admissions.forms import DirectAdmitForm
+
+    applicant = _user("applied@x.test")
+    Application.objects.create(
+        applicant=applicant, track=Application.Track.ANALYST,
+        letter_of_intent="x", status=status,
+    )
+    form = DirectAdmitForm(_form_data(email="applied@x.test"))
+    assert not form.is_valid()
+    assert "application" in " ".join(form.errors["email"]).lower()
+
+
+def test_form_allows_an_unreviewed_background():
+    from admissions.forms import DirectAdmitForm
+
+    form = DirectAdmitForm(_form_data(formation_background=""))
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["formation_background"] == ""
