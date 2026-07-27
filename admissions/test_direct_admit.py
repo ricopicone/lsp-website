@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import pytest
+from django.urls import reverse
 
 from accounts.membership import current_academic_year_start
 from accounts.models import MembershipTenure, Profile, User
 from admissions.models import Application
 from admissions.services import admit_member
+from core.models import StaffRole
 
 pytestmark = pytest.mark.django_db
 
@@ -207,3 +209,79 @@ def test_form_allows_an_unreviewed_background():
     form = DirectAdmitForm(_form_data(formation_background=""))
     assert form.is_valid(), form.errors
     assert form.cleaned_data["formation_background"] == ""
+
+
+# ---- The page ------------------------------------------------------------
+
+
+@pytest.fixture
+def wc(client):
+    user = _user("webcoord@x.test", first_name="Web", last_name="Coordinator")
+    role, _ = StaffRole.objects.get_or_create(
+        key=StaffRole.WEB_COORDINATOR, defaults={"name": "Web Coordinator"},
+    )
+    role.holders.add(user)
+    client.force_login(user)
+    return user
+
+
+def test_page_is_gated_to_the_web_coordinator(client):
+    url = reverse("admissions:direct_admit")
+    assert client.get(url).status_code in (302, 403)  # anonymous
+
+    client.force_login(_user("nobody@x.test"))
+    assert client.get(url).status_code == 403
+
+
+def test_admit_creates_the_account_and_sends_the_invitation(client, wc):
+    from django.core import mail
+
+    from accounts.models import WelcomeEmail
+
+    resp = client.post(reverse("admissions:direct_admit"), _form_data(), follow=True)
+    assert resp.status_code == 200
+
+    member = User.objects.get(email="new@x.test")
+    assert member.profile.role == Profile.Role.PRE_CANDIDATE
+    assert member.profile.standing == Profile.Standing.ACTIVE
+    assert member.profile.year_joined == current_academic_year_start()
+    # Staff-vouched, so it must not read as an unconfirmed signup: the
+    # purge sweeps is_active=False accounts with a null email_verified_at.
+    assert member.profile.email_verified_at is not None
+    assert not member.has_usable_password()
+    # The launch welcome sweep must not mail them a second sign-in letter.
+    assert WelcomeEmail.objects.filter(user=member).exists()
+    assert len(mail.outbox) == 1
+    assert "account is ready" in mail.outbox[0].subject.lower()
+
+
+def test_admit_can_send_the_full_acceptance_letter(client, wc):
+    from django.core import mail
+
+    client.post(reverse("admissions:direct_admit"), _form_data(send="letter"))
+
+    assert len(mail.outbox) == 1
+    assert "accepted" in mail.outbox[0].subject.lower()
+
+
+def test_admit_can_send_nothing_and_still_suppresses_the_launch_welcome(client, wc):
+    from django.core import mail
+
+    from accounts.models import WelcomeEmail
+
+    client.post(reverse("admissions:direct_admit"), _form_data(send="none"))
+
+    assert mail.outbox == []
+    assert WelcomeEmail.objects.filter(user__email="new@x.test").exists()
+
+
+def test_admit_promotes_an_existing_self_signup(client, wc):
+    existing = _user("selfsignup@x.test")
+    assert existing.profile.role == Profile.Role.EXTERNAL
+
+    client.post(reverse("admissions:direct_admit"),
+                _form_data(email="selfsignup@x.test", send="none"))
+
+    existing.refresh_from_db()
+    assert existing.profile.role == Profile.Role.PRE_CANDIDATE
+    assert User.objects.filter(email__iexact="selfsignup@x.test").count() == 1

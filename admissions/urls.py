@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import analyst, coordinator, views
+from . import direct_admit as direct_admit_views
 
 app_name = "admissions"
 
@@ -21,6 +22,11 @@ urlpatterns = [
     # --- Applications: read-only review (Meeting of the Analysts) ---
     path(f"{_MOA}/applications/", views.review_queue, name="review_queue"),
     path(f"{_MOA}/applications/<int:pk>/", views.review_detail, name="review_detail"),
+
+    # --- Direct admission (Web Coordinator, NOT the Applications Coordinator:
+    #     someone who applied on the site is admitted from their application) ---
+    path("admin-tools/web-coordinator/admit/", direct_admit_views.direct_admit,
+         name="direct_admit"),
 
     # --- Applications Coordinator console ---
     path(f"{_APPS}/", coordinator.dashboard, name="coordinator_dashboard"),
