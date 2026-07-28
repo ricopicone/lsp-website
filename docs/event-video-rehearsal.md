@@ -169,6 +169,7 @@ One line per beat. Fill it in live.
 | 9 | Host mutes the disruptor successfully | | |
 | 10 | Muted attendee can unmute themselves again | | |
 | 11 | Recording starts and stops | | |
+| 11a | An ordinary attendee has **no** Record button (host-only) | | |
 | 12 | Latecomer joins cleanly at +20 min | | |
 | 13 | Force-quit participant rejoins on the first try | | |
 | 14 | Leave returns everyone to the event page | | |
