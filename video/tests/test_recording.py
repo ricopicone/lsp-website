@@ -1,3 +1,4 @@
+"""Recording lifecycle: webhook ingestion, visibility, retention, deletion."""
 from __future__ import annotations
 
 import base64
@@ -86,6 +87,89 @@ def test_webhook_ready_creates_recording_idempotently(client):
     rec = recs.get()
     assert rec.status == Recording.Status.READY
     assert rec.duration_seconds == 120 and rec.s3_key == "k/rec-1.mp4"
+
+
+# --- retention ---
+
+def _ingest(event, room_name="lsp-event-keep", rec_id="rec-keep"):
+    from video.services import ingest_recording_event
+
+    DailyRoom.objects.create(
+        event=event, name=room_name, url=f"https://x/{room_name}",
+        provider_created=True,
+    )
+    return ingest_recording_event(
+        "recording.ready-to-download",
+        {"recording_id": rec_id, "room_name": room_name, "duration": 60},
+    )
+
+
+def test_special_event_recordings_are_kept_forever():
+    # A special event is a one-off with an outside speaker; its recording is the
+    # only record that the event happened. Never sweep it.
+    from .factories import special_event
+
+    rec = _ingest(special_event(slug="keep-special"))
+    assert rec.keep is True
+
+
+def test_one_off_event_recordings_are_kept_forever():
+    # Days of Assembly, Working Days and Scholarly Seminars are equally
+    # unrepeatable — the same reasoning applies.
+    from events.models import Event
+
+    from .factories import special_event
+
+    for etype in (
+        Event.Type.DAY_OF_ASSEMBLY,
+        Event.Type.WORKING_DAY,
+        Event.Type.SCHOLARLY_SEMINAR,
+    ):
+        e = special_event(slug=f"keep-{etype}")
+        e.event_type = etype
+        e.save(update_fields=["event_type"])
+        rec = _ingest(e, room_name=f"lsp-event-{etype}", rec_id=f"rec-{etype}")
+        assert rec.keep is True, etype
+
+
+def test_recurring_offering_recordings_still_expire():
+    # Seminars and reading groups run every year; their recordings stay on the
+    # ordinary 1-year retention so storage doesn't grow without bound.
+    wg = seminar(slug="keep-sem").ensure_workgroup()
+    DailyRoom.objects.create(
+        workgroup=wg, name="lsp-keep-sem", url="https://x/lsp-keep-sem",
+        provider_created=True,
+    )
+    from video.services import ingest_recording_event
+
+    rec = ingest_recording_event(
+        "recording.ready-to-download",
+        {"recording_id": "rec-sem", "room_name": "lsp-keep-sem", "duration": 60},
+    )
+    assert rec.keep is False
+
+
+def test_purge_leaves_kept_recordings_alone():
+    # The retention sweep must honour the flag, or "never delete" means nothing.
+    from datetime import timedelta
+
+    from django.core.management import call_command
+    from django.utils import timezone
+
+    from .factories import special_event
+
+    rec = _ingest(special_event(slug="keep-purge"))
+    assert rec.keep is True
+    Recording.objects.filter(pk=rec.pk).update(
+        created_at=timezone.now() - timedelta(days=800)
+    )
+    from io import StringIO
+
+    out = StringIO()
+    call_command("purge_old_recordings", "--dry-run", stdout=out)
+    assert rec.daily_recording_id not in out.getvalue()
+    rec.refresh_from_db()
+    assert rec.status != Recording.Status.DELETED
 
 
 # --- visibility ---

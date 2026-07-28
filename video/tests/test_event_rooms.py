@@ -69,6 +69,47 @@ def test_can_enter_event_registrant_yes_outsider_no():
     assert services.can_enter_event(ev, outsider) is False
 
 
+def _with_staff_role(email, key):
+    """A user holding a core.StaffRole (the site-technical roles)."""
+    from core.models import StaffRole
+
+    u = user(email)
+    role, _ = StaffRole.objects.get_or_create(key=key, defaults={"name": key})
+    role.holders.add(u)
+    return u
+
+
+def test_web_roles_moderate_every_room():
+    # The people who run the site must be able to help in any meeting — an event
+    # room, an offering's workgroup room, or a channel room — without being
+    # rostered on each group.
+    from core.models import StaffRole
+
+    ev = special_event(slug="web-roles-event")
+    wg = seminar(slug="web-roles-sem").ensure_workgroup()
+    for key in (StaffRole.WEB_COORDINATOR, StaffRole.WEB_DEVELOPER):
+        u = _with_staff_role(f"{key}@x.test", key)
+        assert services.is_owner(ev, u) is True, f"{key} on an event room"
+        assert services.is_owner(wg, u) is True, f"{key} on a workgroup room"
+
+
+def test_web_roles_can_enter_a_room_they_do_not_belong_to():
+    # Moderating is useless without being able to get in.
+    from core.models import StaffRole
+
+    ev = special_event(slug="web-roles-enter")
+    u = _with_staff_role("wc-enter@x.test", StaffRole.WEB_COORDINATOR)
+    assert services.can_enter(ev, u) is True
+
+
+def test_an_ordinary_member_is_still_not_a_moderator():
+    # Guard the widening: holding no site role must not confer owner rights.
+    ev = special_event(slug="web-roles-control")
+    plain = user("plain@x.test")
+    register(plain, ev)
+    assert services.is_owner(ev, plain) is False
+
+
 def test_room_owner_for_event_splits_offerings_from_one_offs():
     sem = seminar(slug="owner-sem")
     wg = sem.ensure_workgroup()

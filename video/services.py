@@ -300,6 +300,18 @@ def ingest_recording_event(event_type: str, payload: dict):
         rec.listing_visibility = Recording.Visibility.MEMBERS
         rec.content_visibility = Recording.Visibility.MEMBERS
 
+    if created and event is not None:
+        from events.models import Event as _Event
+
+        # One-off events (special events, Days of Assembly, Working Days,
+        # Scholarly Seminars) happen once, often with an outside speaker, and the
+        # recording is the only record that they happened — exempt it from the
+        # retention sweep. Recurring offerings (seminars, reading groups, cartels)
+        # run every year and stay on the ordinary 1-year retention so storage
+        # doesn't grow without bound.
+        if event.event_type not in _Event.ANNUAL_PROGRAM_TYPES:
+            rec.keep = True
+
     start_ts = payload.get("start_ts")
     if start_ts and not rec.started_at:
         rec.started_at = datetime.fromtimestamp(int(start_ts), tz=_tz.utc)
@@ -330,6 +342,8 @@ def ingest_recording_event(event_type: str, payload: dict):
 def can_enter(owner, user) -> bool:
     """Whether ``user`` may join the room (the access primitive). ``owner`` is a
     Workgroup or a one-off Event that owns its own room."""
+    if is_site_technical(user):
+        return True
     if _is_event(owner):
         return can_enter_event(owner, user)
     return owner.is_member(user)
@@ -347,8 +361,26 @@ def can_enter_event(event, user) -> bool:
     return can_edit_event(user, event)
 
 
+def is_site_technical(user) -> bool:
+    """The two roles that run the site itself: Web Coordinator and Web Developer.
+
+    They enter and moderate any meeting so they can help when something goes
+    wrong mid-event, without being rostered on every group.
+
+    Deliberately **not** applied to Parlêtre channel rooms (``can_enter_channel``
+    / ``is_channel_owner``): a private channel is private even from staff
+    (task #360), and widening entry there would break a separate promise.
+    """
+    from core.access import has_staff_role
+    from core.models import StaffRole
+
+    return has_staff_role(user, StaffRole.WEB_COORDINATOR, StaffRole.WEB_DEVELOPER)
+
+
 def is_owner(owner, user) -> bool:
     """Whether ``user`` should join as a moderator (owner controls)."""
+    if is_site_technical(user):
+        return True
     if _is_event(owner):
         from events.permissions import can_edit_event
 
