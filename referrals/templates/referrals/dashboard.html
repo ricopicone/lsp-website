@@ -5,6 +5,24 @@
     Find-an-Analyst requests, tracked from intake to reply. {{ open_count }} open.
   </p>
 
+  {# Spam screening (task #479): held requests need a decision; the blocked
+     count is how you can tell the screen is still working. #}
+  {% if held_count or blocked_30d %}
+  <div class="flex flex-wrap items-center gap-3">
+    {% if held_count %}
+    <a href="?status=held" class="badge badge-warning gap-1">
+      {{ held_count }} held for review
+    </a>
+    {% endif %}
+    {% if blocked_30d %}
+    <span class="text-xs text-base-content/60">
+      {{ blocked_30d }} automated submission{{ blocked_30d|pluralize }} blocked
+      in the last 30 days
+    </span>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <form method="get" class="flex flex-wrap items-end gap-3">
     <label class="space-y-1">
       <span class="block text-xs font-medium text-base-content/60">Status</span>

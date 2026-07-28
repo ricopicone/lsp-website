@@ -31,6 +31,36 @@
     </div>
   </section>
 
+  {# --- Held / junk banner (task #479) -------------------------------- #}
+  {% if req.status == "held" %}
+  <section role="alert" class="rounded-xl border border-warning/60 bg-warning/10 p-5 space-y-3">
+    <div>
+      <h2 class="font-serif text-xl text-base-content">Held for review</h2>
+      <p class="text-sm mt-1">{{ req.held_reason }}</p>
+      <p class="text-xs text-base-content/60 mt-2">
+        Nothing has been sent. The requester has had no acknowledgment and the
+        referral list has not been contacted. Release it to resume the normal
+        workflow, or mark it junk.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <form method="post" action="{% url 'referrals:release' req.reference %}">{% csrf_token %}
+        <button class="btn btn-primary btn-sm">Release</button>
+      </form>
+      <form method="post" action="{% url 'referrals:mark_junk' req.reference %}">{% csrf_token %}
+        <button class="btn btn-outline btn-sm">Mark as junk</button>
+      </form>
+    </div>
+  </section>
+  {% elif req.status == "junk" %}
+  <section role="alert" class="rounded-xl border border-base-300/60 bg-base-200 p-5 flex flex-wrap items-center justify-between gap-3">
+    <p class="text-sm text-base-content/70">Marked as junk. It is hidden from the open list.</p>
+    <form method="post" action="{% url 'referrals:unmark_junk' req.reference %}">{% csrf_token %}
+      <button class="btn btn-outline btn-sm">Not junk</button>
+    </form>
+  </section>
+  {% endif %}
+
   {# --- Steps / actions ----------------------------------------------- #}
   <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
     <h2 class="font-serif text-xl text-base-content">Steps</h2>
@@ -93,6 +123,12 @@
       {% else %}
       <form method="post" action="{% url 'referrals:reopen' req.reference %}">{% csrf_token %}
         <button class="btn btn-outline btn-sm">Reopen</button>
+      </form>
+      {% endif %}
+      {# The escape hatch for a coherent-but-fake request no screen can catch. #}
+      {% if req.status != "held" and req.status != "junk" %}
+      <form method="post" action="{% url 'referrals:mark_junk' req.reference %}">{% csrf_token %}
+        <button class="btn btn-ghost btn-sm">Mark as junk</button>
       </form>
       {% endif %}
     </div>
