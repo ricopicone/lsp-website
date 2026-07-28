@@ -153,23 +153,33 @@ This is the do-not-over-automate requirement: the automatic path can only ever
 Each check yields a reason string; any hit holds. Thresholds are module-level
 constants documented with the real payloads that motivated them.
 
-- **Gibberish token** in `name`, `location`, `language`, `pronouns_other`. A
-  field qualifies only if it is whitespace-free and at least 8 characters —
-  that floor is what keeps short and non-English names out of it. It is then
-  gibberish if **either** signal fires:
-  - **vowel ratio** strictly below 0.25 (`aeiou`, case-insensitive, over total
-    characters), or
-  - **at least 4 case transitions** (adjacent letters changing upper↔lower).
+- **Gibberish token** in `name`, `location`, `language`, `pronouns` (the last
+  already resolved through `pronouns_display()` at intake). A field is a
+  *candidate* only if it is at least 8 characters and `isalpha()` — letters
+  only, so anything with a space, digit, slash, comma, or hyphen is never
+  screened. A candidate is gibberish on one signal: **at least 4 case
+  transitions** (adjacent letters changing upper↔lower).
 
-  Two signals because one is not enough, verified against the real tokens.
-  Vowel ratio alone catches `lfNxcMPRAZNciaxtfNPOMQK` (0.17) and
-  `IzNydkEnQFrKxxKl` (0.13) but *misses* `LEIAZKMKtfUBswyJuaS` (0.32) and
-  `iIcIlrhZIIwEImoxJld` (0.42). Case transitions catch both of those (6 and 12).
+  **Vowel ratio was evaluated and rejected.** It looks reasonable and is a
+  liability. At the obvious threshold of 0.25 it flags `Pittsburgh` (0.20 — an
+  actually-submitted location), `Frankfurt` (0.22), `Bydgoszcz` (0.11), and
+  `they/them` (0.22). Lowering the threshold to clear those drops it below the
+  junk tokens it was meant to catch. There is no setting that separates the two
+  populations, so the signal is not used.
 
-  Checked against false positives: `Edmonton` scores 1 transition, `MacDonald`
-  3 — both under the threshold of 4. `McCann` would score 3 but is below the
-  8-character floor anyway. Anything with a space (`Edmonton, Alberta, Canada`,
-  `San Antonio Texas`) never qualifies in the first place.
+  Case transitions separate them cleanly. All five junk tokens score well over
+  the threshold — `lfNxcMPRAZNciaxtfNPOMQK` 5, `LEIAZKMKtfUBswyJuaS` 6,
+  `IzNydkEnQFrKxxKl` 11, `iIcIlrhZIIwEImoxJld` 12, `GtDlqAgHoujeYbXggDwPs` 15 —
+  while every real value we hold scores 1: `Pittsburgh`, `Edmonton`, `English`,
+  `Frankfurt`, `Bydgoszcz`. The nearest real-world miss is `MacDonald` at 3,
+  under the threshold; `McCann` scores 3 but is below the 8-character floor
+  anyway. The `isalpha()` gate is what keeps `they/them` and `she/her` out.
+
+  **Known limit:** an all-lowercase gibberish bot (`qwrtplkjhg`) scores 0
+  transitions and is not caught here. That is accepted rather than patched with
+  a consonant-run heuristic — the transport checks in §2 are the first line, and
+  this bot's narrative would still trip the length rule below. Revisit only if
+  a lowercase variant actually appears.
 - **Narrative too short**: `additional_information` under 40 characters.
   `26-0727` was 21; Tina's was ~900 and Maloney's ~700.
 - **URLs or markup** in any field — `http`, `www.`, `[url=`, `<a `. Near-zero
@@ -209,8 +219,10 @@ The regression bar is the real data:
   four of the five signals silently broke.
 - The actual Tina and Maloney payloads screen **clean**. This is the test that
   matters most — over-blocking a genuine request is worse than the incident.
-- `MacDonald`, `Edmonton`, `English`, and `San Antonio Texas` screen clean, so
-  the false-positive margin is pinned rather than assumed.
+- `MacDonald`, `Edmonton`, `English`, `Pittsburgh`, `Frankfurt`, `Bydgoszcz`,
+  `they/them`, and `San Antonio Texas` screen clean, so the false-positive
+  margin is pinned rather than assumed. `Pittsburgh` and `they/them` are there
+  specifically because the rejected vowel-ratio rule flagged both.
 
 Beyond that:
 
