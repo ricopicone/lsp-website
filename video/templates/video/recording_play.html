@@ -20,6 +20,43 @@
     <a href="?download=1" class="link">Download</a>
   </div>
 
+  {# ---- Availability ---- #}
+  {% if can_manage %}
+  <form method="post" action="{% url 'video:recording_availability' recording.pk %}"
+        class="rounded-lg border border-base-300 bg-base-100 p-3 space-y-3">
+    {% csrf_token %}
+    <h3 class="text-sm font-medium text-base-content">Availability</h3>
+    <div class="grid gap-3 sm:grid-cols-2">
+      <label class="space-y-1">
+        <span class="text-sm text-base-content/70">Who can see it exists</span>
+        <select name="listing_visibility" class="select select-bordered select-sm w-full">
+          {% for value, label in availability_choices %}
+          <option value="{{ value }}" {% if value == recording.listing_visibility %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="text-sm text-base-content/70">Who can watch it</span>
+        <select name="content_visibility" class="select select-bordered select-sm w-full">
+          {% for value, label in availability_choices %}
+          <option value="{{ value }}" {% if value == recording.content_visibility %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <p class="text-xs text-base-content/60">
+      Who can watch has to be contained in who can see it exists. Note that
+      "Registered group members" and "LSP Members" are different groups, neither
+      inside the other, so they can't be paired.
+    </p>
+    <button class="btn btn-sm">Save availability</button>
+  </form>
+  {% else %}
+  <p class="text-sm text-base-content/60">
+    Available to: {{ recording.get_content_visibility_display }}.
+  </p>
+  {% endif %}
+
   {# ---- Notes / annotation ---- #}
   {% if can_manage %}
   <form method="post" action="{% url 'video:recording_annotate' recording.pk %}" class="space-y-2">

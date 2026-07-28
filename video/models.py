@@ -92,11 +92,22 @@ class Recording(models.Model):
         DELETED = "deleted", "Deleted"
 
     class Visibility(models.TextChoices):
+        """Who a recording is available to (task #475).
+
+        Two independent dimensions — *registration* (on the roster or not) and
+        *membership* (an LSP member or merely an account holder) — so these do
+        NOT form a ladder: ``ROSTER`` and ``MEMBERS`` are incomparable, since a
+        registered external attendee is in one and an unregistered member in the
+        other. ``_CONTAINS`` below is the real containment relation; don't
+        reintroduce an integer rank.
+        """
+
+        OWNERS = "owners", "Unavailable (owners only)"
+        ROSTER_MEMBERS = "roster_members", "Registered group members who are LSP Members"
+        ROSTER = "roster", "Registered group members"
+        MEMBERS = "members", "LSP Members"
+        ACCOUNTS = "accounts", "LSP Members and Auditors"
         PUBLIC = "public", "Public"
-        MEMBERS = "members", "Members (all LSP)"
-        REGISTRANTS = "registrants", "Registrants only"
-        GROUP = "group", "Group members only"
-        STAFF = "staff", "Staff only (private)"
 
     room = models.ForeignKey(
         DailyRoom, null=True, blank=True, on_delete=models.SET_NULL,
@@ -121,12 +132,12 @@ class Recording(models.Model):
     duration_seconds = models.PositiveIntegerField(null=True, blank=True)
 
     listing_visibility = models.CharField(
-        max_length=12, choices=Visibility.choices, default=Visibility.STAFF,
+        max_length=16, choices=Visibility.choices, default=Visibility.OWNERS,
         help_text="Who sees that this recording exists (e.g. on the event page).",
     )
     content_visibility = models.CharField(
-        max_length=12, choices=Visibility.choices, default=Visibility.STAFF,
-        help_text="Who can watch it. Cannot be more public than the listing.",
+        max_length=16, choices=Visibility.choices, default=Visibility.OWNERS,
+        help_text="Who can watch it. Must be contained in the listing audience.",
     )
     keep = models.BooleanField(
         default=False, help_text="Exempt from automatic retention deletion.",
@@ -141,50 +152,77 @@ class Recording(models.Model):
 
     # ---- visibility (mirrors works.Work) ----
 
-    _VISIBILITY_RANK = {
-        Visibility.PUBLIC: 4,
-        Visibility.MEMBERS: 3,
-        Visibility.REGISTRANTS: 2,
-        Visibility.GROUP: 1,
-        Visibility.STAFF: 0,
+    #: Which settings each setting's audience contains. NOT a rank: MEMBERS and
+    #: ROSTER are incomparable (a registered external is in one, an unregistered
+    #: member in the other), so ``content <= listing`` is a subset test.
+    _CONTAINS = {
+        Visibility.OWNERS: frozenset({Visibility.OWNERS}),
+        Visibility.ROSTER_MEMBERS: frozenset({
+            Visibility.OWNERS, Visibility.ROSTER_MEMBERS,
+        }),
+        Visibility.ROSTER: frozenset({
+            Visibility.OWNERS, Visibility.ROSTER_MEMBERS, Visibility.ROSTER,
+        }),
+        Visibility.MEMBERS: frozenset({
+            Visibility.OWNERS, Visibility.ROSTER_MEMBERS, Visibility.MEMBERS,
+        }),
+        Visibility.ACCOUNTS: frozenset({
+            Visibility.OWNERS, Visibility.ROSTER_MEMBERS, Visibility.ROSTER,
+            Visibility.MEMBERS, Visibility.ACCOUNTS,
+        }),
+        Visibility.PUBLIC: frozenset(Visibility.values),
     }
 
     def _workgroup(self):
         return self.room.workgroup if self.room_id else None
 
     def _can_host(self, user) -> bool:
+        """Who runs this recording's meeting — the single definition, shared with
+        the room's moderator flag, so "can moderate" and "can manage the
+        recording" can't drift apart."""
+        from . import services
+
+        if getattr(user, "is_staff", False):
+            return True
         if self.event_id:
-            from events.permissions import can_edit_event
-            return can_edit_event(user, self.event)
+            owner = services.room_owner_for_event(self.event) or self.event
+            return services.is_owner(owner, user)
         wg = self._workgroup()
         if wg is None:
-            return getattr(user, "is_staff", False)
-        from workgroups.models import WorkgroupMembership
-        return (
-            getattr(user, "is_staff", False)
-            or wg.memberships.serving().filter(
-                user=user, role__in=WorkgroupMembership.LEAD_ROLES
-            ).exists()
-        )
+            return services.is_site_technical(user)
+        return services.is_owner(wg, user)
+
+    def _in_roster(self, user) -> bool:
+        """On this recording's roster: an event's paid/comped registrants, or a
+        group's members (``Workgroup.is_member`` already means the right thing
+        for both — derived registrants for an offering, the stored roster for a
+        cartel or committee)."""
+        if self.event_id and self.event.has_access_registrant(user):
+            return True
+        wg = self._workgroup()
+        return bool(wg and (wg.is_member(user) or wg.has_archive_access(user)))
 
     def _visible_at(self, level, user) -> bool:
         if level == self.Visibility.PUBLIC:
             return True
         if not getattr(user, "is_authenticated", False):
             return False
-        if level == self.Visibility.STAFF:
-            return self._can_host(user)
-        if level == self.Visibility.GROUP:
-            wg = self._workgroup()
-            in_group = bool(wg and (wg.is_member(user) or wg.has_archive_access(user)))
-            return in_group or self._can_host(user)
-        if level == self.Visibility.REGISTRANTS:
-            return (
-                bool(self.event_id and self.event.has_access_registrant(user))
-                or self._can_host(user)
-            )
+        # Whoever runs the meeting sees its recording at every level — including
+        # MEMBERS, which used to have no host fallback and so hid an external
+        # speaker's own talk from them.
+        if self._can_host(user):
+            return True
+        if level == self.Visibility.ACCOUNTS:
+            return True
         from accounts.permissions import is_lsp_member
-        return is_lsp_member(user)  # MEMBERS
+
+        if level == self.Visibility.MEMBERS:
+            return is_lsp_member(user)
+        if level == self.Visibility.ROSTER:
+            return self._in_roster(user)
+        if level == self.Visibility.ROSTER_MEMBERS:
+            return self._in_roster(user) and is_lsp_member(user)
+        return False  # OWNERS
 
     def listing_visible_to(self, user) -> bool:
         return self._visible_at(self.listing_visibility, user)
@@ -217,11 +255,15 @@ class Recording(models.Model):
     def clean(self):
         from django.core.exceptions import ValidationError
 
-        rank = self._VISIBILITY_RANK
-        if rank[self.content_visibility] > rank[self.listing_visibility]:
-            raise ValidationError(
-                {"content_visibility": "The recording can't be more watchable than it is listed."}
-            )
+        allowed = self._CONTAINS.get(self.listing_visibility, frozenset())
+        if self.content_visibility not in allowed:
+            listed = self.Visibility(self.listing_visibility).label
+            watch = self.Visibility(self.content_visibility).label
+            raise ValidationError({"content_visibility": (
+                f"“{watch}” isn't contained in “{listed}”, so the recording would "
+                f"be watchable by people who can't see that it exists. Choose a "
+                f"narrower audience for who can watch, or widen who can see it."
+            )})
 
     # ---- playback ----
 

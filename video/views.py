@@ -82,6 +82,7 @@ def recording_play(request, pk):
             "recording": rec, "play_url": url, "back_url": back,
             "can_manage": rec.can_manage(request.user),
             "expires_on": expires_on,
+            "availability_choices": Recording.Visibility.choices,
         },
     )
 
@@ -109,6 +110,40 @@ def recording_annotate(request, pk):
     rec.note = (request.POST.get("note") or "").strip()[:5000]
     rec.save(update_fields=["note"])
     return HttpResponseRedirect(reverse("video:recording_play", args=[rec.pk]))
+
+
+@login_required
+@require_POST
+def recording_availability(request, pk):
+    """Set who a recording is listed to and who may watch it (host/staff).
+
+    The containment rule lives on the model, so an incoherent pair (e.g. listed
+    to LSP Members but watchable by all registrants, who are not a subset) is
+    refused here exactly as it is in the admin.
+    """
+    from django.contrib import messages
+    from django.core.exceptions import ValidationError
+
+    rec = get_object_or_404(Recording, pk=pk)
+    if not rec.can_manage(request.user):
+        raise PermissionDenied("You can't manage this recording.")
+    valid = set(Recording.Visibility.values)
+    listing = request.POST.get("listing_visibility") or rec.listing_visibility
+    content = request.POST.get("content_visibility") or rec.content_visibility
+    back = reverse("video:recording_play", args=[rec.pk])
+    if listing not in valid or content not in valid:
+        messages.error(request, "That isn't a valid availability setting.")
+        return HttpResponseRedirect(back)
+    rec.listing_visibility, rec.content_visibility = listing, content
+    try:
+        rec.clean()
+    except ValidationError as exc:
+        rec.refresh_from_db()
+        messages.error(request, "; ".join(m for msgs in exc.message_dict.values() for m in msgs))
+        return HttpResponseRedirect(back)
+    rec.save(update_fields=["listing_visibility", "content_visibility"])
+    messages.success(request, "Availability updated.")
+    return HttpResponseRedirect(back)
 
 
 @login_required

@@ -9,6 +9,11 @@ urlpatterns = [
     path("video/recordings/<int:pk>/", views.recording_play, name="recording_play"),
     path("video/recordings/<int:pk>/keep/", views.recording_keep, name="recording_keep"),
     path("video/recordings/<int:pk>/note/", views.recording_annotate, name="recording_annotate"),
+    path(
+        "video/recordings/<int:pk>/availability/",
+        views.recording_availability,
+        name="recording_availability",
+    ),
     path("video/recordings/<int:pk>/delete/", views.recording_delete, name="recording_delete"),
     path("video/webhooks/daily/", views.recording_webhook, name="recording_webhook"),
     path("groups/<slug:slug>/room/", views.workgroup_room, name="workgroup_room"),

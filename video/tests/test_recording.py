@@ -172,6 +172,200 @@ def test_purge_leaves_kept_recordings_alone():
     assert rec.status != Recording.Status.DELETED
 
 
+# --- availability taxonomy (task #475) ---
+
+V = Recording.Visibility
+
+
+def _event_recording(event, *, content, listing=None):
+    room = DailyRoom.objects.create(
+        event=event, name=f"lsp-event-{event.slug}",
+        url=f"https://x/{event.slug}", provider_created=True,
+    )
+    return Recording.objects.create(
+        daily_recording_id=f"rv-{event.slug}", room=room, event=event,
+        status=Recording.Status.READY,
+        content_visibility=content, listing_visibility=listing or content,
+    )
+
+
+def test_registered_members_excludes_a_registered_non_member():
+    # The distinction the whole taxonomy turns on: an external attendee who
+    # registered is on the roster but is not an LSP member.
+    from .factories import special_event
+
+    ev = special_event(slug="avail-rm")
+    rec = _event_recording(ev, content=V.ROSTER_MEMBERS)
+    member = user("rm-member@x.test")          # factories give ANALYST
+    register(member, ev)
+    outsider = user("rm-outsider@x.test")
+    outsider.profile.role = Profile.Role.EXTERNAL
+    outsider.profile.save(update_fields=["role"])
+    register(outsider, ev)
+    assert rec.content_visible_to(member) is True
+    assert rec.content_visible_to(outsider) is False
+
+
+def test_registered_includes_a_registered_non_member():
+    from .factories import special_event
+
+    ev = special_event(slug="avail-roster")
+    rec = _event_recording(ev, content=V.ROSTER)
+    outsider = user("roster-outsider@x.test")
+    outsider.profile.role = Profile.Role.EXTERNAL
+    outsider.profile.save(update_fields=["role"])
+    register(outsider, ev)
+    assert rec.content_visible_to(outsider) is True
+
+
+def test_members_level_ignores_registration():
+    from .factories import special_event
+
+    ev = special_event(slug="avail-members")
+    rec = _event_recording(ev, content=V.MEMBERS)
+    unregistered_member = user("m-unreg@x.test")
+    assert rec.content_visible_to(unregistered_member) is True
+
+
+def test_accounts_level_admits_any_signed_in_account():
+    from .factories import special_event
+
+    ev = special_event(slug="avail-accounts")
+    rec = _event_recording(ev, content=V.ACCOUNTS)
+    auditor = user("auditor@x.test")
+    auditor.profile.role = Profile.Role.EXTERNAL
+    auditor.profile.save(update_fields=["role"])
+    assert rec.content_visible_to(auditor) is True
+
+
+def test_owners_level_admits_only_owners():
+    from .factories import special_event
+
+    ev = special_event(slug="avail-owners")
+    rec = _event_recording(ev, content=V.OWNERS)
+    speaker = user("owners-speaker@x.test")
+    ev.member_speakers.add(speaker)
+    attendee = user("owners-att@x.test")
+    register(attendee, ev)
+    assert rec.content_visible_to(speaker) is True
+    assert rec.content_visible_to(attendee) is False
+
+
+def test_a_non_member_host_can_watch_their_own_members_only_recording():
+    # The live bug this fixes: the MEMBERS level had no host fallback, so an
+    # external speaker (role=external — Derek Hook's exact configuration) could
+    # not watch the recording of his own talk.
+    from .factories import special_event
+
+    ev = special_event(slug="avail-hostgap")
+    rec = _event_recording(ev, content=V.MEMBERS)
+    guest = user("guest-speaker@x.test")
+    guest.profile.role = Profile.Role.EXTERNAL
+    guest.profile.save(update_fields=["role"])
+    ev.member_speakers.add(guest)
+    assert rec.content_visible_to(guest) is True
+
+
+def test_web_roles_can_manage_any_recording():
+    from core.models import StaffRole
+
+    from .factories import special_event
+
+    ev = special_event(slug="avail-webrole")
+    rec = _event_recording(ev, content=V.OWNERS)
+    wc = user("wc-rec@x.test")
+    role, _ = StaffRole.objects.get_or_create(
+        key=StaffRole.WEB_COORDINATOR, defaults={"name": "Web Coordinator"}
+    )
+    role.holders.add(wc)
+    assert rec.can_manage(wc) is True
+    assert rec.content_visible_to(wc) is True
+
+
+def test_containment_rejects_the_incomparable_pair():
+    # "Registered" and "LSP Members" are incomparable: neither contains the
+    # other, so this combination has no coherent meaning and must be refused.
+    from django.core.exceptions import ValidationError
+
+    from .factories import special_event
+
+    ev = special_event(slug="avail-incomp")
+    rec = _event_recording(ev, content=V.ROSTER, listing=V.MEMBERS)
+    with pytest.raises(ValidationError):
+        rec.full_clean(exclude=["daily_recording_id"])
+
+
+def test_containment_allows_a_genuine_narrowing():
+    from .factories import special_event
+
+    ev = special_event(slug="avail-ok")
+    rec = _event_recording(ev, content=V.ROSTER_MEMBERS, listing=V.MEMBERS)
+    rec.full_clean(exclude=["daily_recording_id"])  # must not raise
+
+
+def test_containment_still_rejects_content_wider_than_listing():
+    from django.core.exceptions import ValidationError
+
+    from .factories import special_event
+
+    ev = special_event(slug="avail-wider")
+    rec = _event_recording(ev, content=V.PUBLIC, listing=V.MEMBERS)
+    with pytest.raises(ValidationError):
+        rec.full_clean(exclude=["daily_recording_id"])
+
+
+def test_host_can_set_availability_from_the_recording_page(client):
+    from .factories import special_event
+
+    ev = special_event(slug="avail-setform")
+    rec = _event_recording(ev, content=V.OWNERS)
+    host = user("set-host@x.test")
+    ev.member_speakers.add(host)
+    client.force_login(host)
+    resp = client.post(
+        reverse("video:recording_availability", args=[rec.pk]),
+        {"listing_visibility": V.MEMBERS, "content_visibility": V.ROSTER_MEMBERS},
+    )
+    assert resp.status_code == 302
+    rec.refresh_from_db()
+    assert rec.listing_visibility == V.MEMBERS
+    assert rec.content_visibility == V.ROSTER_MEMBERS
+
+
+def test_availability_form_refuses_an_incomparable_pair(client):
+    from .factories import special_event
+
+    ev = special_event(slug="avail-setbad")
+    rec = _event_recording(ev, content=V.OWNERS)
+    host = user("bad-host@x.test")
+    ev.member_speakers.add(host)
+    client.force_login(host)
+    resp = client.post(
+        reverse("video:recording_availability", args=[rec.pk]),
+        {"listing_visibility": V.MEMBERS, "content_visibility": V.ROSTER},
+    )
+    rec.refresh_from_db()
+    assert rec.content_visibility == V.OWNERS  # unchanged
+    assert resp.status_code in (200, 302)
+
+
+def test_non_host_cannot_set_availability(client):
+    from .factories import special_event
+
+    ev = special_event(slug="avail-setdenied")
+    rec = _event_recording(ev, content=V.OWNERS)
+    attendee = user("set-att@x.test")
+    register(attendee, ev)
+    client.force_login(attendee)
+    resp = client.post(
+        reverse("video:recording_availability", args=[rec.pk]),
+        {"listing_visibility": V.PUBLIC, "content_visibility": V.PUBLIC},
+    )
+    assert resp.status_code == 403
+    rec.refresh_from_db()
+    assert rec.content_visibility == V.OWNERS
+
+
 # --- visibility ---
 
 def _recording(wg, *, content, listing=None):
@@ -196,10 +390,12 @@ def test_visibility_members_vs_nonmember():
     assert rec.content_visible_to(outsider) is False
 
 
-def test_visibility_registrants_only():
+def test_visibility_roster_only():
+    # "Registered group members": for an offering this resolves to the current
+    # term's paid/comped registrants, so a member who never registered is out.
     event = seminar()
     wg = event.ensure_workgroup()
-    rec = _recording(wg, content=Recording.Visibility.REGISTRANTS)
+    rec = _recording(wg, content=Recording.Visibility.ROSTER)
     paid = user("p@x.test")
     register(paid, event)  # PAID
     member = user("m2@x.test")  # member, not registered
@@ -207,10 +403,10 @@ def test_visibility_registrants_only():
     assert rec.content_visible_to(member) is False
 
 
-def test_visibility_staff_only_needs_host():
+def test_visibility_owners_only_needs_host():
     event = seminar()
     wg = event.ensure_workgroup()
-    rec = _recording(wg, content=Recording.Visibility.STAFF)
+    rec = _recording(wg, content=Recording.Visibility.OWNERS)
     member = user("m3@x.test")
     teacher = user("t@x.test", is_faculty=True)
     event.add_faculty(teacher)
@@ -329,13 +525,13 @@ def test_purge_old_recordings_dry_run(capsys):
     from django.utils import timezone
 
     wg = seminar().ensure_workgroup()
-    old = _recording(wg, content=Recording.Visibility.STAFF)
+    old = _recording(wg, content=Recording.Visibility.OWNERS)
     Recording.objects.filter(pk=old.pk).update(
         created_at=timezone.now() - timedelta(days=400)
     )
     fresh = Recording.objects.create(
         daily_recording_id="fresh", status=Recording.Status.READY,
-        content_visibility=Recording.Visibility.STAFF,
+        content_visibility=Recording.Visibility.OWNERS,
     )
     call_command("purge_old_recordings", "--dry-run")
     out = capsys.readouterr().out
