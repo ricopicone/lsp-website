@@ -88,3 +88,13 @@ def test_junk_is_excluded_from_the_open_filter(client, coordinator):
     client.post(reverse("referrals:mark_junk", args=[req.reference]))
     resp = client.get(reverse("referrals:dashboard"), {"status": "open"})
     assert list(resp.context["requests"]) == []
+
+
+def test_mark_referral_junk_command():
+    from django.core.management import call_command
+
+    req = services.intake(dict(JUNK))
+    call_command("mark_referral_junk", req.reference, "--note", "bot, task #479")
+    req.refresh_from_db()
+    assert req.status == ReferralRequest.Status.JUNK
+    assert "bot, task #479" in req.coordinator_notes

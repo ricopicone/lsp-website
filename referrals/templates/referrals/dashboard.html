@@ -5,8 +5,10 @@
     Find-an-Analyst requests, tracked from intake to reply. {{ open_count }} open.
   </p>
 
-  {# Spam screening (task #479): held requests need a decision; the blocked
-     count is how you can tell the screen is still working. #}
+  {% comment %}
+    Spam screening (task #479): held requests need a decision; the blocked
+    count is how you can tell the screen is still working.
+  {% endcomment %}
   {% if held_count or blocked_30d %}
   <div class="flex flex-wrap items-center gap-3">
     {% if held_count %}
