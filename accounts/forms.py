@@ -116,7 +116,13 @@ class LoginForm(AuthenticationForm):
 
 
 class ReferralRequestForm(forms.Form):
-    """Find-an-Analyst inquiry — fields mirror the Wix Typeform exactly."""
+    """Find-an-Analyst inquiry — fields mirror the Wix Typeform exactly.
+
+    Carries the same invisible deterrents as signup (task #471): a CSS-hidden
+    honeypot text input and a signed render stamp. Both are inspected by the
+    view rather than raised as errors here, so a caught bot sees the ordinary
+    thank-you page and learns nothing (task #479).
+    """
 
     PRONOUN_CHOICES = [
         ("she/her",   "she/her"),
@@ -180,8 +186,30 @@ class ReferralRequestForm(forms.Form):
             "whose availability is matched with your own."
         ),
     )
-    # Honeypot — humans don't see it; bots fill it. Reject if non-empty.
-    website = forms.CharField(required=False, widget=forms.HiddenInput())
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # A CSS-hidden *text* input, not type="hidden": request 26-0727 was a
+        # bot that filled every visible input and skipped the hidden one,
+        # which is what commodity bots do (task #479).
+        self.fields[antibot.HONEYPOT_FIELD] = forms.CharField(
+            required=False,
+            label="Website",
+            widget=forms.TextInput(attrs={
+                "autocomplete": "off",
+                "tabindex": "-1",
+                "class": "hp-field",
+            }),
+        )
+        self.fields[antibot.TIMESTAMP_FIELD] = forms.CharField(
+            required=False,
+            widget=forms.HiddenInput(),
+            initial=antibot.sign_timestamp,
+        )
+
+    @property
+    def honeypot_tripped(self) -> bool:
+        """Whether a field a human never sees came back filled."""
+        return bool(self.data.get(antibot.HONEYPOT_FIELD, "").strip())
 
     def clean_pronouns_other(self):
         v = (self.cleaned_data.get("pronouns_other") or "").strip()
@@ -190,11 +218,6 @@ class ReferralRequestForm(forms.Form):
                 "Please specify your pronouns since you selected Other."
             )
         return v
-
-    def clean_website(self):
-        if self.cleaned_data.get("website"):
-            raise forms.ValidationError("Bot detected.")
-        return ""
 
     def pronouns_display(self) -> str:
         """Pronouns formatted for the coordinator email (resolves "other")."""
