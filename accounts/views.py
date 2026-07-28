@@ -427,10 +427,36 @@ def find_an_analyst(request):
     Handles form GET (display) and POST. A valid submission becomes a tracked
     ``referrals.ReferralRequest`` (the coordinator inquiry email and, in auto
     mode, the acknowledgment are sent by ``referrals.services.intake``).
+
+    Transport-level bot checks run *before* intake, so a bot submitting a
+    harvested address never causes the school to mail that stranger. A caught
+    bot gets the ordinary success redirect (task #479).
     """
     submitted = request.GET.get("submitted") == "1"
     if request.method == "POST":
+        from referrals.models import BlockedSubmission
+
         form = ReferralRequestForm(request.POST)
+        ip = antibot.client_ip(request)
+        success = redirect(f"{request.path}?submitted=1#submitted")
+
+        blocked = None
+        if form.honeypot_tripped:
+            blocked = BlockedSubmission.Reason.HONEYPOT
+        elif antibot.looks_too_fast(
+            request.POST.get(antibot.TIMESTAMP_FIELD, ""),
+            minimum=antibot.REFERRAL_MIN_FILL_SECONDS,
+        ):
+            blocked = BlockedSubmission.Reason.TIMING
+        elif antibot.over_rate_limit(ip):
+            blocked = BlockedSubmission.Reason.RATE_LIMIT
+
+        if blocked is not None:
+            logger.info("referral form blocked (%s) from %s", blocked, ip)
+            BlockedSubmission.objects.create(reason=blocked)
+            return success
+
+        antibot.record_attempt(ip)
         if form.is_valid():
             from referrals.services import intake
 
@@ -446,12 +472,13 @@ def find_an_analyst(request):
                 ),
                 "additional_information": form.cleaned_data["additional_information"],
             })
-            return redirect(f"{request.path}?submitted=1#submitted")
+            return success
     else:
         form = ReferralRequestForm()
     return render(request, "accounts/find_an_analyst.html", {
         "form": form,
         "submitted": submitted,
+        "honeypot_field": antibot.HONEYPOT_FIELD,
     })
 
 

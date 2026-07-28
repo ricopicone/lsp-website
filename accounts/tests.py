@@ -382,6 +382,18 @@ def test_directory_detail_shows_faculty_badge(client):
 
 
 def _valid_referral_post():
+    """A submission that clears every bot check and the content screen.
+
+    The render stamp is backdated because the form is rejected if it comes
+    back faster than a human could fill it (task #479), and the narrative is
+    a realistic length — under 40 characters it would be held for review.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from accounts import antibot
+
     return {
         "name":                   "Alex Patient",
         "pronouns":               "they/them",
@@ -390,8 +402,14 @@ def _valid_referral_post():
         "location":               "Brooklyn, NY",
         "language":               "English",
         "modality":               ["video"],
-        "additional_information": "Looking for a Lacanian analyst.",
-        "website":                "",  # honeypot
+        "additional_information": (
+            "Looking for a Lacanian analyst. I have been in therapy before "
+            "and would like to work more deeply this time."
+        ),
+        antibot.HONEYPOT_FIELD:   "",
+        antibot.TIMESTAMP_FIELD:  antibot.sign_timestamp(
+            timezone.now() - timedelta(seconds=60),
+        ),
     }
 
 

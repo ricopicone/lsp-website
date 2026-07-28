@@ -87,7 +87,12 @@ INTAKE_DATA = {
     "location": "Brooklyn, NY",
     "language": "English",
     "modality": "By online video",
-    "additional_information": "Looking for a Lacanian analyst.",
+    # Realistic length on purpose: a narrative under 40 characters is held
+    # for review by the spam screen (task #479).
+    "additional_information": (
+        "Looking for a Lacanian analyst. I have been in therapy before "
+        "and would like to work more deeply this time."
+    ),
 }
 
 

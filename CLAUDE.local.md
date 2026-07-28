@@ -1,9 +1,9 @@
-# Resuming task #477
+# Resuming task #479
 
-**Task:** Styled as Capitalized Falling Letters fall as lowercase
+**Task:** Junk referral request
 
 ## Description
-All appear capitalized in headers, but when they fall some are lowercase (presumably the ones that are styled capitalized instead of typed that way)
+We had a junk referral request come through today: 26-0727. We need to add a screen/filter. I think it was a bot
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -56,7 +56,10 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
-- **direct-admission-web-coordinator** (architecture) — Members admitted outside the site are admitted at /admin-tools/web-coordinator/admit/ (Web Coordinator, NOT the Applications Coordinator); admissions.services.admit_member() is the shared chokepoint both routes go through
+- **new-member-blocked-until-tuition-decision** (gotcha) — A newly admitted in-training member cannot register for ANY event until they record that year's tuition decision — self-service, and any option unblocks except payment-plan
+- **direct-admission-web-coordinator** (architecture) — SHIPPED+LIVE (task #476, deployed 2026-07-27): members admitted outside the site are admitted at /admin-tools/web-coordinator/admit/ (Web Coordinator, NOT the Applications Coordinator); admissions.services.admit_member() is the shared choke
+- **speaker-invitation-expiry-tracks-the-event** (decision) — Speaker invitations expire the day after their event (events.speaker_invitations.invitation_expiry), not a fixed 30 days — a lapsed one is unrecoverable because password reset silently skips unusable-password accounts
+- **detached-clone-loses-inherited-css** (gotcha) — A visual clone appended to document.body inherits nothing from its source element — the flourishes falling letter lost text-transform this way (task #477), so CSS-capitalized headings dropped lowercase glyphs
 - **amount-only-dues-guess-swallowed-charges** (gotcha) — Stripe importer duplicate-matching: three defects fixed in #474 (circular dues guess, method-blind overlap, deceased members hidden from the matcher); full history now reconciles to $0.00 new money
 - **daily-room-config-freezes-at-first-open** (architecture) — FIXED (task #475, deployed 2026-07-26): ensure_room now reconciles its full property set against the live Daily room. Comparisons must normalize — Daily stores a falsy enable_recording as the string "0". Reconciliation fires on next join, n
 - **sync-charges-mints-obligations-not-payments** (glossary) — The treasurer Accounts tab's "Sync charges" button mints missing current-year DUES CHARGES (what members owe) — it never contacts Stripe and never fetches payments
@@ -126,7 +129,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=477`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=479`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

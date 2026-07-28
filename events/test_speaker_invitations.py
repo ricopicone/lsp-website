@@ -90,11 +90,13 @@ def test_invitation_prefers_the_last_session_over_end_date():
 
     e = _special_event("exp-sessions")
     start = timezone.now() + timedelta(days=100)
-    Session.objects.create(
-        event=e, sequence=1, start_at=start, end_at=start + timedelta(hours=3)
-    )
+    end = start + timedelta(hours=3)
+    Session.objects.create(event=e, sequence=1, start_at=start, end_at=end)
     exp = invitation_expiry(e)
-    expected = (timezone.localtime(start).date() + timedelta(days=1))
+    # Anchored on the session's *end*, which is what invitation_expiry uses.
+    # Anchoring on start_at made this fail for the ~3 hours each night when a
+    # session spans local midnight and the two land on different dates.
+    expected = (timezone.localtime(end).date() + timedelta(days=1))
     assert timezone.localtime(exp).date() == expected
 
 

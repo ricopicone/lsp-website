@@ -31,6 +31,11 @@ _SALT = "accounts.antibot"
 #: error is recoverable rather than a silent drop.
 MIN_FILL_SECONDS = 2
 
+#: The Find-an-Analyst form is a two-step wizard with seven fields; no human
+#: clears it in ten seconds, so it can afford a stricter floor than signup
+#: (task #479).
+REFERRAL_MIN_FILL_SECONDS = 10
+
 #: Per-IP signup cap. Generous — real members share institutional IPs, and a
 #: seminar cohort signing up from one campus must not lock itself out.
 RATE_LIMIT = 5
@@ -58,12 +63,16 @@ def seconds_since_render(value: str) -> float | None:
     return timezone.now().timestamp() - float(rendered_at)
 
 
-def looks_too_fast(value: str) -> bool:
-    """Whether this submission arrived faster than a human could type it."""
+def looks_too_fast(value: str, minimum: float = MIN_FILL_SECONDS) -> bool:
+    """Whether this submission arrived faster than a human could type it.
+
+    ``minimum`` is per-form: a short signup and a multi-step wizard have
+    very different floors.
+    """
     elapsed = seconds_since_render(value)
     if elapsed is None:
         return True
-    return elapsed < MIN_FILL_SECONDS
+    return elapsed < minimum
 
 
 def client_ip(request) -> str:

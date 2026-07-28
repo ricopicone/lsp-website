@@ -562,6 +562,41 @@ Done (see `git log` for specifics):
   Dues charges stay with the treasurer's Sync charges; the success message says
   so.
 
+- **Referral spam screening** (task #479). Referral request `26-0727` was a
+  commodity form-spam bot: every visible text input filled with a random
+  mixed-case token, every checkbox checked, and a harvested real address in
+  the email field. It got through because `ReferralRequestForm`'s honeypot was
+  a `forms.HiddenInput` — `type="hidden"`, the one variant commodity bots skip
+  on purpose — while the signup form's (task #471, `accounts/antibot.py`) is a
+  CSS-hidden **text** input, which this bot demonstrably would have filled.
+  Prod runs `ack=auto dist=auto`, so the school auto-acknowledged a stranger
+  and distributed gibberish to the entire referral list; one clinician
+  responded to it. Now two layers. **Transport** (`accounts/antibot.py`, newly
+  adopted here with a per-form `looks_too_fast(minimum=…)` — 10s for this
+  two-step wizard vs. signup's 2s) drops near-certain bots to the ordinary
+  thank-you page, recording a deliberately **content-free** `BlockedSubmission`
+  row (timestamp + reason, no address, no IP, nothing to leak) so the hit rate
+  is visible — without it, a screen that silently broke and started eating real
+  requests would look identical to one that works. **Content**
+  (`referrals/screening.py`, a pure function) puts anything suspicious into the
+  new `Status.HELD`: not acknowledged, not distributed, bell to the coordinator
+  only, with `services.SuppressedStatusError` guarding `send_acknowledgment`
+  and `distribute` so no future caller can leak one. The heuristics are
+  gibberish detection (≥8 chars, `isalpha()`, ≥4 upper/lower transitions), a
+  40-character narrative floor, and URL markers. **Vowel ratio was specified,
+  then rejected during implementation**: at any threshold catching the junk it
+  also flags `Pittsburgh` (0.20 — an actually-submitted location), `Frankfurt`,
+  and `they/them`; case transitions separate the populations cleanly (junk
+  scores 5–15, every real value scores 1). The screen only ever *holds* —
+  `JUNK` is set by a human, via a Mark-as-junk button available on any request
+  for the coherent-but-fake submission no heuristic will catch.
+  `process_referrals` escalates a hold left unreviewed past
+  `held_escalation_days` (default 3) to one email, bounding what a false
+  positive costs someone in distress. Two pre-existing test payloads had
+  sub-40-character narratives and were lengthened to stay realistic rather
+  than weakening the floor. Design:
+  `docs/superpowers/specs/2026-07-27-referral-spam-screening-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
