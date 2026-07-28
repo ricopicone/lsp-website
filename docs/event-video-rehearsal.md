@@ -96,6 +96,10 @@ Hand each person only their own script.
    controls.
 2. Watch for "Live now · N in the room" on the event page as people join.
 3. Once the speaker is presenting, start a recording. Stop it two minutes later.
+   **Then confirm the recording stopped** — the indicator clears for everyone,
+   and afterwards the recording's duration should be about two minutes, not the
+   length of the whole rehearsal. This is the rehearsal for a partial recording
+   (see below); if stopping doesn't work cleanly, you need to know now.
 4. If anyone reports being stuck, note exactly what they saw. **Their words, not
    your interpretation.**
 
@@ -171,6 +175,38 @@ One line per beat. Fill it in live.
 | 15 | Recording appears afterwards and plays, gated correctly | | |
 | 16 | Works on Safari macOS | | |
 | 17 | Works on Safari iOS | | |
+
+---
+
+## 5a. Recording only part of an event
+
+Presenters sometimes want one portion recorded and the rest not — for *Working
+with Masochism* (2026-09-06), the first half but not the second. The system
+supports this with no special configuration, but the failure mode is human.
+
+**Setup.** Leave the event at `record_video=False` and `recording_mode` at its
+default. That gives hosts a Record button with nothing recording automatically.
+**Do not set `record_video=True`**: it auto-starts the moment a host joins, so it
+captures the pre-talk setup, and it flips the resulting recording's default
+visibility from staff-only to members-visible.
+
+**On the day.**
+
+1. **Name one person** to run the recording, and put it in their script. "Whoever
+   remembers" is how the second half ends up on tape.
+2. Press Record when the talk actually begins, not when the room opens.
+3. Press Stop at the break. Watch the recording indicator clear.
+4. Afterwards, check the recording's duration matches the portion you meant to
+   capture. That is the unambiguous confirmation.
+
+**If it goes wrong.** There is no trimming. If unwanted material lands in the
+file, the options are deleting the whole recording (host/staff can, and it
+removes the file from S3 and from Daily as well as the database row) or editing
+it outside the system. There is no partial fix inside the site.
+
+**Consent.** Daily shows a recording indicator to every participant for the whole
+time it is rolling, so the room can see its own state — and can say something if
+it is still recording after the point it should have stopped.
 
 ---
 
