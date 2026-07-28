@@ -88,3 +88,31 @@ def send_to_clinician(user, subject: str, body: str) -> None:
     )
     msg.attach_alternative(_html_alternative(body), "text/html")
     msg.send(fail_silently=False)
+
+
+def send_held_escalation(request_obj, manage_url: str) -> None:
+    """One reminder that a held submission is still unreviewed.
+
+    Held requests ring the bell only, by design. This is the backstop so a
+    genuine requester wrongly held cannot wait indefinitely (task #479).
+
+    Unlike ``send_coordinator_inquiry`` this sets no Reply-To: a held
+    request may well be a bot using a stranger's address, and a stray reply
+    to it is exactly the unsolicited mail the hold exists to prevent.
+    """
+    body = (
+        f"Referral request {request_obj.reference} was held by the spam "
+        f"screen and has not been reviewed.\n\n"
+        f"Reason: {request_obj.held_reason}\n\n"
+        f"Nothing has been sent to the requester and the referral list has "
+        f"not been contacted. If this is a real request, release it:\n\n"
+        f"{manage_url}\n"
+    )
+    msg = EmailMultiAlternatives(
+        subject=f"Referral {request_obj.reference} is still held for review",
+        body=body,
+        from_email=_coordinator_from(),
+        to=[referrals_address()],
+    )
+    msg.attach_alternative(_html_alternative(body), "text/html")
+    msg.send(fail_silently=False)

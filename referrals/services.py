@@ -30,7 +30,7 @@ from django.conf import settings as django_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from . import emails, notifications
+from . import emails, notifications, screening
 from .models import (
     MessageTemplate,
     Mode,
@@ -104,7 +104,6 @@ def intake(data: dict) -> ReferralRequest:
             data["email"], recent.reference,
         )
         return recent
-    from . import screening
 
     held_reason = screening.screen(data)
     req = ReferralRequest.objects.create(
@@ -360,3 +359,51 @@ def purge_expired(now=None) -> int:
         ])
         count += 1
     return count
+
+
+#: How long a content-free BlockedSubmission row is kept.
+BLOCKED_RETENTION_DAYS = 365
+
+
+def escalate_stale_holds(now=None) -> int:
+    """Email the coordinator about holds left unreviewed past the threshold.
+
+    Sends once per request (``held_escalated_at``). Returns how many were
+    escalated (task #479).
+    """
+    config = ReferralSettings.load()
+    now = now or timezone.now()
+    cutoff = now - timedelta(days=config.held_escalation_days)
+    stale = ReferralRequest.objects.filter(
+        status=ReferralRequest.Status.HELD,
+        held_at__lte=cutoff,
+        held_escalated_at__isnull=True,
+    )
+    count = 0
+    for req in stale:
+        try:
+            emails.send_held_escalation(
+                req,
+                _absolute(reverse("referrals:detail", args=[req.reference])),
+            )
+        except Exception:
+            logger.exception(
+                "Failed to escalate held referral %s", req.reference,
+            )
+            continue
+        req.held_escalated_at = now
+        req.save(update_fields=["held_escalated_at"])
+        count += 1
+    return count
+
+
+def prune_blocked_submissions(now=None) -> int:
+    """Drop blocked-submission counter rows past their retention."""
+    from .models import BlockedSubmission
+
+    now = now or timezone.now()
+    cutoff = now - timedelta(days=BLOCKED_RETENTION_DAYS)
+    deleted, _ = BlockedSubmission.objects.filter(
+        created_at__lt=cutoff,
+    ).delete()
+    return deleted
