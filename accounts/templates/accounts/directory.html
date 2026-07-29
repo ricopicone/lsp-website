@@ -48,8 +48,8 @@
             <div><span class="text-xs text-base-content/60 italic">Retired</span></div>
             {% endif %}
             {% if m.show_location and p.location %}<div class="text-xs text-base-content/60 mt-0.5">{{ p.location }}</div>{% endif %}
-            {% with mems=p.user.active_public_memberships roles=p.badge_staff_roles %}
-            {% if p.is_faculty or mems or roles %}
+            {% with mems=p.user.active_public_memberships roles=p.badge_staff_roles officers=p.badge_officer_roles %}
+            {% if p.is_faculty or mems or roles or officers %}
             <div class="flex flex-wrap gap-1 mt-1.5">
               {% if p.is_faculty %}
               <span class="inline-flex items-center text-[0.65rem] leading-none font-medium px-1.5 py-0.5 rounded
@@ -61,6 +61,13 @@
               <span class="inline-flex items-center text-[0.65rem] leading-none font-medium px-1.5 py-0.5 rounded
                            bg-secondary/15 text-secondary border border-secondary/25">
                 {{ role.name }}
+              </span>
+              {% endfor %}
+              {# Officers of committees with no public page: position only, never the committee name (#481). #}
+              {% for mem in officers %}
+              <span class="inline-flex items-center text-[0.65rem] leading-none font-medium px-1.5 py-0.5 rounded
+                           bg-secondary/15 text-secondary border border-secondary/25">
+                {{ mem.role_label }}
               </span>
               {% endfor %}
               {% for mem in mems %}

@@ -597,6 +597,41 @@ Done (see `git log` for specifics):
   than weakening the floor. Design:
   `docs/superpowers/specs/2026-07-27-referral-spam-screening-design.md`.
 
+- **Applications Coordinator directory badge** (task #481). Every other named
+  coordinator badges the Directory; this one didn't, because two decisions
+  intersected. The role was deliberately retired as a `core.StaffRole`
+  (`core/migrations/0011`, task #272) in favour of an officer role on the Meeting
+  of Analysts workgroup, and `_directory_qs()` filters its committee-badge
+  prefetch to `committee__public=True` while the Meeting of Analysts is seeded
+  `public=False` — so the holder fell through *both* paths. **`Committee.public`
+  gates only three things** (the workgroup's `landing_visibility`, directory
+  badging, and a Public/**Internal** chip in the Board's committees admin) and
+  asserts nothing about confidentiality; "Internal" is the app's own word for it,
+  and for the Meeting of Analysts it is mostly just the unchanged default —
+  `seed_committees.py:98-100` force-opts-in every committee it carries a roster
+  for, and the Meeting isn't one of them. It should nonetheless stay Internal:
+  `committees/0009` sets `auto_member_role="analyst"`, so **membership is derived,
+  not appointed** — flipping the committee public would stamp "Meeting of
+  Analysts" onto every analyst beside the "Analyst" role badge that already says
+  it. Hence the organising rule, which is what the code encodes: **badge appointed
+  positions, never derived membership.** A new prefetch collects serving officer
+  memberships on `kind=COMMITTEE` workgroups whose committee is *not* public,
+  `.exclude(role=MEMBER)` — that exclusion is load-bearing, not tidying — and
+  `_badge_officer_roles` renders them as standalone **secondary** badges showing
+  `role_label` only, never naming the Internal committee. Positions already shown
+  by a StaffRole badge or a public committee officer badge are dropped so one
+  appointment never yields two chips (`StaffRole.name` is admin-editable, so it's
+  the better label where both exist). Restoring the StaffRole and syncing it from
+  the roster (the President/VP precedent) was rejected: `StaffRole.holders` is a
+  permission surface `core/staff.py` gates on, so a synced row would sit beside
+  `is_applications_coordinator` as a second near-miss authorisation path. **Known
+  consequence:** `Committee.public` defaults to `False`, so a committee created in
+  the admin later badges its officers with no opt-in step — inert today (the
+  Meeting of Analysts is the only Internal committee; Board and Programming
+  Committee are both public, verified against the live directory), but "Internal"
+  no longer implies "unbadged officers". Design:
+  `docs/superpowers/specs/2026-07-29-applications-coordinator-badge-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
