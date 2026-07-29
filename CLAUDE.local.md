@@ -1,9 +1,6 @@
-# Resuming task #479
+# Resuming task #483
 
-**Task:** Junk referral request
-
-## Description
-We had a junk referral request come through today: 26-0727. We need to add a screen/filter. I think it was a bot
+**Task:** Open up advisor selection to all analysts for now so that people who already have advisors who aren't currently accepting new advisees can still select their advisors.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -56,6 +53,8 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **directory-badge-colors** (convention) — Directory profile badges: Faculty=accent, board-appointee StaffRole=secondary (LSP Staff / Registrar / Web Developer excluded; deduped vs committee officer), committee=primary
+- **hidden-input-honeypot-is-the-weak-variant** (gotcha) — A type="hidden" honeypot is the variant commodity bots skip — use the CSS-hidden TEXT input from accounts/antibot.py; also, prod referral settings are ack=auto dist=auto, not the code defaults
 - **new-member-blocked-until-tuition-decision** (gotcha) — A newly admitted in-training member cannot register for ANY event until they record that year's tuition decision — self-service, and any option unblocks except payment-plan
 - **direct-admission-web-coordinator** (architecture) — SHIPPED+LIVE (task #476, deployed 2026-07-27): members admitted outside the site are admitted at /admin-tools/web-coordinator/admit/ (Web Coordinator, NOT the Applications Coordinator); admissions.services.admit_member() is the shared choke
 - **speaker-invitation-expiry-tracks-the-event** (decision) — Speaker invitations expire the day after their event (events.speaker_invitations.invitation_expiry), not a fixed 30 days — a lapsed one is unrecoverable because password reset silently skips unusable-password accounts
@@ -106,7 +105,6 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **analyst-availability-feature** (architecture) — Task #272 SHIPPED + LIVE: analyst-availability woven into the directory (new `availability` app); all phases + review refinements deployed; 2026-2027 data + per-analyst notes imported on prod
 - **event-change-review-loop** (architecture) — Approved-event content edits (title/desc/readings/fee) route through a certify-or-submit dialog; EventChangeRequest is the audit row; PC queue on the program-admin Changes tab. SHIPPED to main 2026-06-22.
 - **program-archive-and-content-migration** (status) — Task #259: program archive (member-gated past-year PDFs) + old-Wix content migration mostly complete; map in docs/content-migration-map.md
-- **directory-badge-colors** (convention) — Directory profile badges: Faculty=accent, board-appointee StaffRole=secondary (LSP Staff excluded; deduped vs committee officer), committee=primary
 - **self-hosted-fonts** (decision) — Web fonts are bundled/self-hosted (static/fonts/), NOT loaded from Google Fonts CDN — done to kill the FOUT/reflow on page load (task #270)
 - **email-from-names** (convention) — All mail shows a friendly From: DEFAULT_FROM_EMAIL is wrapped with EMAIL_FROM_NAME ("Lacanian School of Psychoanalysis"). Per-type senders use core.email.school_from(name) — e.g. referral mail is "LSP Referral Coordinator". DEFAULT_FROM_ADD
 - **works-video** (architecture) — Works supports member video upload (direct-to-S3 presigned POST) + gated streaming (private S3 presigned range URLs, no transcoding). Per-file cap + on/off in the Web Developer admin. nginx 1100M kept for the no-JS fallback.
@@ -129,7 +127,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=479`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=483`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.
