@@ -517,20 +517,18 @@ class AdvisorSelectForm(forms.Form):
         if advisee is None:
             return
 
-        from .advisor import advisor_availability_split, eligible_advisors
+        from .advisor import advisor_choice_groups, eligible_advisors
 
-        # The queryset backs validation (any eligible, i.e. not "No", advisor).
+        # The queryset backs validation: every role-eligible analyst, whatever
+        # they declared about taking new advisees (task #483).
         field.queryset = eligible_advisors(advisee)
-        # The rendered choices group unreported analysts into their own section,
-        # so those who declared they're available appear first.
-        available, unknown = advisor_availability_split(advisee)
-        choices = [("", "Select an advisor…")]
-        choices += [(u.pk, _label(u)) for u in available]
-        if unknown:
-            choices.append(
-                ("Unknown availability", [(u.pk, _label(u)) for u in unknown])
-            )
-        field.choices = choices
+        # The rendered choices group by declared availability, so those who said
+        # they're available appear first and those who said they aren't are
+        # labelled rather than hidden.
+        field.choices = [("", "Select an advisor…")] + [
+            (label, [(u.pk, _label(u)) for u in users])
+            for label, users in advisor_choice_groups(advisee)
+        ]
 
 
 class ReplyToPasswordResetForm(PasswordResetForm):

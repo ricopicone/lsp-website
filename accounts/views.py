@@ -1060,7 +1060,12 @@ def intake_survey(request):
     submit it reconciles into structured records (see ``accounts.survey``)."""
     from django.contrib import messages
 
-    from .advisor import current_advisor, eligible_advisors, set_advisor
+    from .advisor import (
+        advisor_choice_groups,
+        current_advisor,
+        eligible_advisors,
+        set_advisor,
+    )
     from .forms import IntakeSurveyForm
     from .membership import academic_year_choices
     from .models import MemberIntakeSurvey, Profile
@@ -1125,7 +1130,7 @@ def intake_survey(request):
         "tuition_prechecked": sum(1 for r in rows if r["tuition_state"] == "full"),
         "milestones": milestone_questions(request.user),
         "needs_advisor": needs_advisor,
-        "advisors": eligible_advisors(request.user) if needs_advisor else [],
+        "advisor_groups": advisor_choice_groups(request.user) if needs_advisor else [],
         "current_advisor": current_advisor(request.user) if needs_advisor else None,
         "can_list": can_list,
     })

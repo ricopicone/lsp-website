@@ -27,12 +27,12 @@ def advisor_roles_for(advisee_role: str) -> set[str]:
 def eligible_advisors(advisee):
     """Active members whose role may advise ``advisee``, excluding the advisee.
 
-    Analysts who declared they are *not* available as an Advisor (an open
-    availability span with status "no" for the ``advisor`` function) are
-    dropped. "Yes" and "Unknown" (never reported) both stay eligible, so an
-    analyst who simply hasn't filled the availability sheet isn't hidden. Only
-    Analysts of the School carry availability spans, so scholar-track advisors
-    are unaffected.
+    Declared availability does *not* filter this pool (task #483). An analyst
+    who reported they are not taking new advisees stays selectable, because the
+    picker is the only way an advisorship gets recorded and most existing
+    advisorships predate the site — a member whose Advisor has since closed
+    their door must still be able to name them. Availability instead *labels*
+    the picker; see :func:`advisor_choice_groups`.
     """
     return (
         User.objects.filter(
@@ -42,44 +42,55 @@ def eligible_advisors(advisee):
             profile__role__in=advisor_roles_for(advisee.profile.role),
         )
         .exclude(pk=advisee.pk)
-        .exclude(
-            profile__availability_spans__function__slug="advisor",
-            profile__availability_spans__status="no",
-            profile__availability_spans__end_date__isnull=True,
-        )
         .select_related("profile")
         .order_by("last_name", "first_name", "email")
     )
 
 
-def advisor_availability_split(advisee):
-    """Split :func:`eligible_advisors` into ``(available, unknown)``.
+AVAILABLE_LABEL = "Available to advise"
+UNKNOWN_LABEL = "Unknown availability"
+UNAVAILABLE_LABEL = "Not currently accepting new advisees"
 
-    ``available`` are those who declared "Yes" for the ``advisor`` function;
-    ``unknown`` are the rest (never reported — this includes scholar-track
-    advisors, who don't carry availability spans). Those who declared "No" are
-    already dropped by :func:`eligible_advisors`. Both lists keep the query's
-    ordering. Used to group the advisor picker so unreported analysts sit in a
-    separate "Unknown availability" section.
+
+def advisor_choice_groups(advisee):
+    """Group :func:`eligible_advisors` for the advisor picker.
+
+    Returns an ordered list of ``(group_label, [users])``: those who declared
+    "Yes" for the ``advisor`` function, then those with no declared status
+    (never reported, an explicit "Unknown", or a scholar-track advisor, who
+    carry no availability spans at all), then those who declared "No". Empty
+    groups are omitted and the query's ordering is kept within each group.
+
+    Only the *open* span counts, so an analyst whose "No" has since been closed
+    reads as unknown rather than unavailable.
     """
     users = list(eligible_advisors(advisee))
     # Lazy import: availability is a separate app; avoid an import cycle at load.
     from availability.models import AnalystFunction, AvailabilitySpan
 
     fn = AnalystFunction.objects.filter(slug="advisor").first()
-    yes_ids: set[int] = set()
+    declared: dict[int, str] = {}
     if fn is not None and users:
-        yes_ids = set(
+        # At most one open span per (profile, function) — a DB constraint backs
+        # that invariant, so this map has one entry per analyst.
+        declared = dict(
             AvailabilitySpan.objects.filter(
-                function=fn,
-                status=AvailabilitySpan.Status.YES,
-                end_date__isnull=True,
-                profile__user__in=users,
-            ).values_list("profile__user_id", flat=True)
+                function=fn, end_date__isnull=True, profile__user__in=users,
+            ).values_list("profile__user_id", "status")
         )
-    available = [u for u in users if u.pk in yes_ids]
-    unknown = [u for u in users if u.pk not in yes_ids]
-    return available, unknown
+
+    buckets: dict[str, list] = {
+        AVAILABLE_LABEL: [], UNKNOWN_LABEL: [], UNAVAILABLE_LABEL: [],
+    }
+    for u in users:
+        status = declared.get(u.pk)
+        if status == AvailabilitySpan.Status.YES:
+            buckets[AVAILABLE_LABEL].append(u)
+        elif status == AvailabilitySpan.Status.NO:
+            buckets[UNAVAILABLE_LABEL].append(u)
+        else:
+            buckets[UNKNOWN_LABEL].append(u)
+    return [(label, users) for label, users in buckets.items() if users]
 
 
 def current_advisor(advisee):

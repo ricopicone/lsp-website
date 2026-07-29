@@ -597,6 +597,40 @@ Done (see `git log` for specifics):
   than weakening the floor. Design:
   `docs/superpowers/specs/2026-07-27-referral-spam-screening-design.md`.
 
+- **Advisor pool opened to all eligible analysts** (task #483).
+  `accounts.advisor.eligible_advisors` dropped any analyst carrying an open
+  `availability` span of `status="no"` for the `advisor` function. The intent was
+  to stop a member picking someone who has said they aren't taking new advisees;
+  the effect was that a member whose *existing* Advisor closed their door
+  couldn't name them at all, because **the picker is the only way an advisorship
+  gets recorded** and there's no prior `Advisorship` row to grant an exception
+  from — at launch essentially every real advisorship predates the site. The
+  filter therefore failed hardest on the intake survey's "Who is your current
+  advisor?", which is *precisely* a request to record a relationship that
+  already exists off-site. Declared availability is now **advisory**: it labels
+  the picker instead of gating it. `advisor_availability_split` becomes
+  `advisor_choice_groups`, returning ordered `(label, users)` groups —
+  *Available to advise* (open `yes` span) / *Unknown availability* (no declared
+  status: no open span, an explicit `unknown`, or a scholar-track advisor, who
+  carry no spans) / *Not currently accepting new advisees* (open `no` span) —
+  with empty groups omitted, query ordering kept inside each, and the labels as
+  module constants so picker and tests can't drift. One open span per
+  (profile, function) is a DB constraint, so the status map needs no precedence
+  rule; a *closed* `no` span still reads as unknown. Both surfaces share it: the
+  Formation-tab `AdvisorSelectForm` (whose `queryset` is now the wider pool, so
+  the POST validates) and the intake survey's `<select>`, which gained the same
+  `<optgroup>`s. **No block, no confirmation, no warning** — the group label is
+  the whole disclosure (do-not-over-automate), plus one line of help text on both
+  surfaces. `set_advisor` is untouched, so the chosen analyst is notified
+  whatever they declared; for the already-advising case that notification *is*
+  the record. The availability surfaces are unchanged —
+  `/directory/availability/?only=advisor`, linked from the account-ready and
+  acceptance letters as "currently available to advise", still lists only
+  analysts who said yes. That page stays the recommendation; the picker is the
+  record. Deliberately no `FormationSettings` toggle: "for now" is served by a
+  revert, not by a field, a migration, and a branch to test both ways. Design:
+  `docs/superpowers/specs/2026-07-29-open-advisor-pool-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
