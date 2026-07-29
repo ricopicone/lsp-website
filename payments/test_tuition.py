@@ -92,6 +92,18 @@ def test_payment_plan_status_is_tuition_current(current_period):
 
 
 @pytest.mark.django_db
+def test_plan_requested_status_is_tuition_current(current_period):
+    """A plan application pending with the Board covers events, same as a
+    commitment (task #484). The year's tuition charge is minted either way."""
+    u = _mk_candidate()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PLAN_REQUESTED,
+    )
+    assert u.profile.is_tuition_current() is True
+
+
+@pytest.mark.django_db
 def test_enrollment_unique_per_user_per_period(current_period):
     u = _mk_candidate()
     TuitionEnrollment.objects.create(
