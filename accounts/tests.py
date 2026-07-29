@@ -239,6 +239,24 @@ def test_directory_excludes_lsp_staff_badge(client):
 
 
 @pytest.mark.django_db
+def test_directory_excludes_web_developer_badge(client):
+    """Web Developer is technical operations, not a public school position —
+    it must not badge the directory (task #482), like LSP Staff and Registrar."""
+    from core.models import StaffRole
+
+    u = _mk_member("dev@x.test", "Dev", "Ops", Profile.Role.ANALYST)
+    StaffRole.objects.get(key=StaffRole.WEB_DEVELOPER).holders.add(u)
+    StaffRole.objects.get(key=StaffRole.CARTEL_COORDINATOR).holders.add(u)
+
+    detail = client.get("/directory/dev-ops/").content
+    assert b"Cartel Coordinator" in detail
+    assert b"Web Developer" not in detail
+
+    grid = client.get("/directory/").content
+    assert b"Web Developer" not in grid
+
+
+@pytest.mark.django_db
 def test_directory_dedups_staff_role_against_committee_officer(client):
     """A Treasurer who is also the Board's Treasurer gets only the more
     informative committee officer badge, not a redundant standalone one."""
