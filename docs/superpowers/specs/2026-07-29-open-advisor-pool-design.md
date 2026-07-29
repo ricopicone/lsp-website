@@ -51,8 +51,9 @@ records why availability no longer filters.
 Returns an ordered list of `(group_label, [users])`:
 
 1. `Available to advise` — an open advisor span with status `yes`
-2. `Unknown availability` — no open advisor span (this includes every
-   scholar-track advisor, who carry no spans at all)
+2. `Unknown availability` — no declared status: no open advisor span, an
+   explicit `unknown` span, or a scholar-track advisor (who carry no spans at
+   all)
 3. `Not currently accepting new advisees` — an open advisor span with status `no`
 
 Rules:
@@ -61,12 +62,14 @@ Rules:
 - The query's ordering (last name, first name, email) is preserved within each
   group.
 - One query over open advisor spans builds a `{user_id: status}` map; the user
-  list is partitioned from it. The `availability` import stays lazy, as it is
-  today, to avoid a load-time cycle.
-- If a data glitch leaves an analyst with both an open `yes` and an open `no`
-  span, `no` wins the label. Conservative and deterministic.
+  list is partitioned from it. `AvailabilitySpan` holds at most one open span
+  per (profile, function) — a DB constraint backs that invariant — so the map
+  has one entry per analyst and no precedence rule is needed. The `availability`
+  import stays lazy, as it is today, to avoid a load-time cycle.
 - A *closed* `no` span (an `end_date` set) reads as unknown, unchanged from
   today's semantics.
+- The three labels are module constants (`AVAILABLE_LABEL`, `UNKNOWN_LABEL`,
+  `UNAVAILABLE_LABEL`) so the picker and its tests can't drift.
 
 `advisor_availability_split` has two callers, `AdvisorSelectForm` and its test,
 so it is replaced rather than kept alongside.
@@ -112,10 +115,15 @@ Member-facing copy, so commas rather than em dashes.
   function is irrelevant to the advisor pool.
 - The split test becomes a three-way group test: yes / unknown / no land in the
   right groups in that order, and empty groups are omitted.
-- A form test asserts all three optgroup labels render, and that posting a
-  not-accepting analyst's pk validates and records the advisorship.
+- A group test covers empty groups being omitted, and a closed `no` span reading
+  as unknown.
+- A form test asserts all three optgroup labels render and that posting a
+  not-accepting analyst's pk validates; a view test posts to `advisor_select` and
+  asserts the advisorship is recorded.
 
-`accounts/test_survey.py::test_survey_sets_advisor` passes unchanged.
+`accounts/test_survey.py`: `test_survey_sets_advisor` passes unchanged; two new
+tests cover the survey picker rendering the not-accepting group and recording a
+choice from it.
 
 ## Out of scope
 

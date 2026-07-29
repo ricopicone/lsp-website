@@ -140,10 +140,18 @@
       <p class="text-sm text-base-content/60">Who is your current advisor (an Analyst of the School)?</p>
       <select name="advisor" class="select select-bordered w-full sm:max-w-sm">
         <option value="">— select —</option>
-        {% for a in advisors %}
-        <option value="{{ a.pk }}" {% if current_advisor and a.pk == current_advisor.pk %}selected{% endif %}>{{ a.get_full_name|default:a.email }}</option>
+        {% for label, advisors in advisor_groups %}
+        <optgroup label="{{ label }}">
+          {% for a in advisors %}
+          <option value="{{ a.pk }}" {% if current_advisor and a.pk == current_advisor.pk %}selected{% endif %}>{{ a.get_full_name|default:a.email }}</option>
+          {% endfor %}
+        </optgroup>
         {% endfor %}
       </select>
+      <p class="text-xs text-base-content/45">
+        Analysts who aren't taking new advisees are still listed, so you can name
+        an Advisor you already work with.
+      </p>
     </section>
     {% endif %}
 
