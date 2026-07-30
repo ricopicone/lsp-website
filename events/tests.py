@@ -382,10 +382,10 @@ def test_speaker_spotlight_defaults_off():
 
 
 def test_open_to_guests_is_on_edit_forms_and_not_reviewable():
-    from events.forms import EventDescriptionForm, ProgramEventForm
+    from events.forms import EventEditForm, ProgramEventForm
     from events.review import REVIEWABLE_FIELDS
 
-    assert "open_to_guests" in EventDescriptionForm.Meta.fields
+    assert "open_to_guests" in EventEditForm.Meta.fields
     assert "open_to_guests" in ProgramEventForm.Meta.fields
     # Non-reviewable: applies immediately, skips the change-review dialog.
     assert "open_to_guests" not in REVIEWABLE_FIELDS

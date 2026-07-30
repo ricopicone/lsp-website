@@ -141,7 +141,7 @@ def test_public_event_shows_no_faculty_link_to_random_user(client, event, random
     client.force_login(random_user)
     response = client.get(reverse("events:detail", args=[event.slug]))
     assert b"Faculty view" not in response.content
-    assert b"Edit description" not in response.content
+    assert b"Edit event" not in response.content
 
 
 def test_workspace_offers_roster_tab_to_faculty(client, event, faculty_member):
@@ -151,7 +151,7 @@ def test_workspace_offers_roster_tab_to_faculty(client, event, faculty_member):
     response = client.get(event.workgroup.get_absolute_url())
     assert response.status_code == 200
     assert b"tab=roster" in response.content
-    assert b"Edit description" in response.content   # edit affordance on the masthead
+    assert b"Edit event" in response.content   # edit affordance on the masthead
 
 
 def test_roster_tab_renders_roster_for_faculty(
@@ -222,7 +222,7 @@ def test_special_event_presenter_sees_faculty_view_link(client, special_event, p
     response = client.get(reverse("events:detail", args=[special_event.slug]))
     assert response.status_code == 200
     assert b"Faculty view" in response.content
-    assert b"Edit description" in response.content
+    assert b"Edit event" in response.content
 
 
 def test_special_event_presenter_sees_roster(

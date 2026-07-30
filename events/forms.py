@@ -6,17 +6,24 @@ from decimal import Decimal
 
 from django import forms
 
+from .ce import CECreditBasis
 from .models import Event, EventProposal, PricingCode, Program, Session
 
 
-class EventDescriptionForm(forms.ModelForm):
-    """Faculty-facing edit form for the event description (PROG-7)."""
+class EventEditForm(forms.ModelForm):
+    """Faculty-facing edit form for an event's public content (PROG-7).
+
+    Named for the whole page, not just the description: it has carried title,
+    readings, schedule, contact, fee, and now CE for some time.
+    """
 
     class Meta:
         model = Event
         fields = (
             "title", "description", "readings", "schedule_note", "contact",
             "fee_note", "record_video", "speaker_spotlight", "open_to_guests",
+            "offers_ce", "ce_credits", "ce_credits_basis", "ce_note",
+            "ce_organizations",
         )
         widgets = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
@@ -24,7 +31,26 @@ class EventDescriptionForm(forms.ModelForm):
             "readings": forms.Textarea(attrs={"rows": 8, "cols": 80}),
             "schedule_note": forms.Textarea(attrs={"rows": 2, "cols": 80}),
             "fee_note": forms.Textarea(attrs={"rows": 2, "cols": 80}),
+            "ce_note": forms.Textarea(attrs={"rows": 2, "cols": 80}),
+            # Rendered by hand in the template so each option carries its logo.
+            "ce_organizations": forms.CheckboxSelectMultiple,
+            "ce_credits": forms.NumberInput(
+                attrs={"class": "input input-bordered input-sm", "step": "0.5", "min": "0"},
+            ),
+            "ce_credits_basis": forms.Select(
+                attrs={"class": "select select-bordered select-sm"},
+            ),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # The basis is meaningless without a count and always has a default, so
+        # a POST that omits it (the change-review dialog's re-post, a partial
+        # form) must not fail validation.
+        self.fields["ce_credits_basis"].required = False
+
+    def clean_ce_credits_basis(self):
+        return self.cleaned_data.get("ce_credits_basis") or CECreditBasis.TOTAL
 
 
 class PricingCodeForm(forms.ModelForm):

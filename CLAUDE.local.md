@@ -1,6 +1,9 @@
-# Resuming task #483
+# Resuming task #486
 
-**Task:** Open up advisor selection to all analysts for now so that people who already have advisors who aren't currently accepting new advisees can still select their advisors.
+**Task:** CE images display
+
+## Description
+Some events will be approved by different organizations for continuing education (CE) credits. Apparently we are to display images in this case. I don't really want to manage the collection of images, so I think we should let faculty add CE image display. I think we should add a setting in the Settings tab (and probably also in the proposal form) for CE credits (at all and number of credits) and uploading CE organization images. The CE information and images should be displayed compactly (max height and max width) at the bottom of the About section of the Overview.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -53,9 +56,13 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **skipping-a-covered-year-rebills-events** (architecture) — Task #485 SHIPPED+LIVE 2026-07-30: recording SKIPPING re-bills the tuition-covered registrations in that year at the regular fee (re-quote, never a bare Charge); recording a paying decision un-bills and restores access
+- **new-member-blocked-until-tuition-decision** (gotcha) — A newly admitted in-training member cannot register for ANY event until they record that year's tuition decision — self-service, and EVERY option unblocks, payment-plan included
+- **one-registration-gate-coverage-follows-decision** (decision) — Task #484 SHIPPED+LIVE 2026-07-30: tuition coverage follows ANY non-skipping decision (payment-plan-requested included) and the narrow special-event gate is deleted — a missing decision row is the only tuition block left
+- **committee-public-is-page-not-privacy** (architecture) — Committee.public means "has a public page", NOT confidential — "Internal" is the app's word and for MoA it's the unchanged default; MoA membership is auto-derived, so directory badges must badge appointed positions only (#481)
+- **advisor-pool-not-availability-gated** (decision) — Task #483 SHIPPED to main: declared availability no longer filters the advisor picker, it only labels it (three optgroups) — the picker is the only way an advisorship gets recorded
 - **directory-badge-colors** (convention) — Directory profile badges: Faculty=accent, board-appointee StaffRole=secondary (LSP Staff / Registrar / Web Developer excluded; deduped vs committee officer), committee=primary
 - **hidden-input-honeypot-is-the-weak-variant** (gotcha) — A type="hidden" honeypot is the variant commodity bots skip — use the CSS-hidden TEXT input from accounts/antibot.py; also, prod referral settings are ack=auto dist=auto, not the code defaults
-- **new-member-blocked-until-tuition-decision** (gotcha) — A newly admitted in-training member cannot register for ANY event until they record that year's tuition decision — self-service, and any option unblocks except payment-plan
 - **direct-admission-web-coordinator** (architecture) — SHIPPED+LIVE (task #476, deployed 2026-07-27): members admitted outside the site are admitted at /admin-tools/web-coordinator/admit/ (Web Coordinator, NOT the Applications Coordinator); admissions.services.admit_member() is the shared choke
 - **speaker-invitation-expiry-tracks-the-event** (decision) — Speaker invitations expire the day after their event (events.speaker_invitations.invitation_expiry), not a fixed 30 days — a lapsed one is unrecoverable because password reset silently skips unusable-password accounts
 - **detached-clone-loses-inherited-css** (gotcha) — A visual clone appended to document.body inherits nothing from its source element — the flourishes falling letter lost text-transform this way (task #477), so CSS-capitalized headings dropped lowercase glyphs
@@ -127,7 +134,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=483`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=486`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.
