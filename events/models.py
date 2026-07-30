@@ -17,10 +17,14 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models, transaction
+from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
 from core.storage import private_storage
+
+from .ce import CECreditBasis, credits_label
 
 # Excludes visually ambiguous characters (0/O, 1/I/L).
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -184,6 +188,42 @@ class Speaker(models.Model):
     def __str__(self):
         if self.affiliation:
             return f"{self.name} ({self.affiliation})"
+        return self.name
+
+
+class CEOrganization(models.Model):
+    """A body that accredits events for continuing-education credits.
+
+    A shared library rather than a per-event upload: the same accreditor
+    approves many events, and its logo and mandated approval language should be
+    correctable in one place. Faculty add an entry inline when theirs is not
+    listed yet, so nobody curates the collection, it accretes from use.
+    """
+
+    name = models.CharField(max_length=120)
+    logo = models.ImageField(upload_to="ce-organizations/")
+    url = models.URLField(
+        blank=True,
+        help_text="The organization's site. Links the logo when set.",
+    )
+    statement = models.TextField(
+        blank=True,
+        help_text="Approval language this body requires on approved events. "
+        "Shown under its logo on every event that claims it.",
+    )
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="ce_organizations_added",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("name",)
+        constraints = [
+            models.UniqueConstraint(Lower("name"), name="ce_organization_name_ci_unique"),
+        ]
+
+    def __str__(self) -> str:
         return self.name
 
 
@@ -429,6 +469,31 @@ class Event(models.Model):
             "it does not restrict who can register."
         ),
     )
+
+    # ---- Continuing education (task #486) ----
+    #: Master switch. Ticked once an accrediting body has approved the event;
+    #: drives whether the CE panel renders at all.
+    offers_ce = models.BooleanField(
+        default=False, verbose_name="Approved for CE credits",
+    )
+    ce_credits = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Leave blank if the body has not set a count yet.",
+    )
+    ce_credits_basis = models.CharField(
+        max_length=12, choices=CECreditBasis.choices, default=CECreditBasis.TOTAL,
+    )
+    ce_note = models.TextField(
+        blank=True,
+        help_text="Anything specific to this event, e.g. full attendance "
+        "required for credit.",
+    )
+    ce_organizations = models.ManyToManyField(
+        "events.CEOrganization", blank=True, related_name="events",
+        verbose_name="Approved by",
+    )
+
     program = models.ForeignKey(
         "events.Program",
         on_delete=models.PROTECT,
@@ -478,6 +543,11 @@ class Event(models.Model):
         """The reading list as individual entries (one per non-blank line),
         for formatted rendering on the event page."""
         return [ln.strip() for ln in self.readings.splitlines() if ln.strip()]
+
+    @property
+    def ce_credits_label(self) -> str:
+        """The public CE sentence, or "" when this event offers no credits."""
+        return credits_label(self.offers_ce, self.ce_credits, self.ce_credits_basis)
 
     @property
     def is_offering(self) -> bool:
@@ -1115,6 +1185,17 @@ class EventProposal(models.Model):
         default=False,
         help_text="Offer APA CE credits (you apply to GPPA separately).",
     )
+    #: The count the proposer *expects* to offer. Accreditation happens after
+    #: the proposal (faculty apply to GPPA separately), so this is an estimate;
+    #: the real figure is confirmed on the event edit form once approval lands.
+    ce_credits = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="If you know it yet. You can set or change this later.",
+    )
+    ce_credits_basis = models.CharField(
+        max_length=12, choices=CECreditBasis.choices, default=CECreditBasis.TOTAL,
+    )
 
     # ---- Seminar / reading-group meeting schedule (optional; materializes into a
     # MeetingSeries on the workgroup at approval). Date range comes from the term
@@ -1183,6 +1264,10 @@ class EventProposal(models.Model):
     @property
     def academic_year(self) -> str:
         return academic_year_of(self.start_date) if self.start_date else ""
+
+    @property
+    def ce_credits_label(self) -> str:
+        return credits_label(self.offers_ce, self.ce_credits, self.ce_credits_basis)
 
     def missing_for_submission(self) -> str:
         """Human list of what's still needed before a saved proposal can be
@@ -1309,6 +1394,9 @@ class EventProposal(models.Model):
             description=self.description, program=program,
             readings="\n".join(r.citation for r in self.readings.all()),
             contact=self.contact,
+            offers_ce=self.offers_ce,
+            ce_credits=self.ce_credits,
+            ce_credits_basis=self.ce_credits_basis,
         )
         self._build_price_tier(event)
         # A concrete special-event date/time becomes the event's first Session.
