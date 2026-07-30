@@ -52,7 +52,9 @@ def test_plan_requested_status_exists():
     assert TuitionEnrollment.Status.PLAN_REQUESTED == "plan_requested"
 
 
-def test_plan_requested_does_not_cover_seminars(member):
+def test_plan_requested_covers_seminars(member):
+    """Task #484: a plan application pending with the Board covers events, the
+    same as a commitment. Only SKIPPING declines to cover."""
     period = _period(
         "AY 2026-2027", "ay-2026-2027",
         date(2026, 9, 1), date(2027, 6, 30), date(2026, 10, 1),
@@ -61,7 +63,7 @@ def test_plan_requested_does_not_cover_seminars(member):
         user=member, tuition_period=period,
         status=TuitionEnrollment.Status.PLAN_REQUESTED, source="staff",
     )
-    assert enrollment.covers_seminars is False
+    assert enrollment.covers_seminars is True
 
 
 # ----------------------------------------------------------- upcoming() ---

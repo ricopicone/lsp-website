@@ -578,6 +578,19 @@ def test_covered_year_decision_label_reads_paid(member):
     assert e.status == TuitionEnrollment.Status.COMMITTED  # record untouched
 
 
+def test_covered_year_reads_paid_for_a_pending_plan_request(member):
+    """A PLAN_REQUESTED year the sweep fully covers reads 'Paid' rather than a
+    stale 'Payment plan requested' (task #484)."""
+    t25 = _tuition_period(2025, "2000")
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=t25,
+        status=TuitionEnrollment.Status.PLAN_REQUESTED, source="staff")
+    _pay(member, Payment.Type.TUITION, "2000", WHEN)
+    row = ledger.member_account(member)["tuition_rows"][0]
+    assert row["state"] == "paid"
+    assert row["decision_label"] == "Paid"
+
+
 def test_uncovered_year_decision_label_is_the_decision(member):
     t25 = _tuition_period(2025, "2000")
     TuitionEnrollment.objects.create(

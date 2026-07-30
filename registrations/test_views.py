@@ -656,12 +656,12 @@ def test_special_event_allows_skipping_student(
 
 
 @pytest.mark.django_db
-def test_special_event_blocks_committed_student_when_event_is_tuition_covered(
+def test_special_event_covers_committed_student_when_event_is_tuition_covered(
     client, special_event, special_event_tier, tuition_period_2026,
 ):
-    """The narrow gate only fires when the event actually has a covered tier
-    matching the student's audience. When it does, COMMITTED-without-payment
-    is blocked — they'd be claiming coverage they haven't paid for."""
+    """Task #484 removed the narrow gate: a special event carrying a covered
+    tier for the student's audience is waived for COMMITTED, on the assumption
+    tuition will be paid. It used to 403 them."""
     from accounts.models import Profile
     from events.models import Audience, PriceTier
     from payments.models import TuitionEnrollment
@@ -682,8 +682,36 @@ def test_special_event_blocks_committed_student_when_event_is_tuition_covered(
     resp = client.get(
         reverse("registrations:register", args=[special_event.slug])
     )
-    assert resp.status_code == 403
-    assert b"committed to pay tuition" in resp.content
+    assert resp.status_code == 200
+    assert b"included in your tuition" in resp.content
+
+
+@pytest.mark.django_db
+def test_special_event_covers_plan_requested_student(
+    client, special_event, special_event_tier, tuition_period_2026,
+):
+    """A pending plan application is in parity with COMMITTED (task #484)."""
+    from accounts.models import Profile
+    from events.models import Audience, PriceTier
+    from payments.models import TuitionEnrollment
+
+    u = User.objects.create_user(email="cand8@example.com", password="x")
+    u.profile.role = Profile.Role.CANDIDATE
+    u.profile.save()
+    PriceTier.objects.create(
+        event=special_event, audience=Audience.CANDIDATE,
+        base_amount=Decimal("50.00"), covered_by_tuition=True,
+    )
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=tuition_period_2026,
+        status=TuitionEnrollment.Status.PLAN_REQUESTED,
+    )
+    client.force_login(u)
+    resp = client.get(
+        reverse("registrations:register", args=[special_event.slug])
+    )
+    assert resp.status_code == 200
+    assert b"included in your tuition" in resp.content
 
 
 @pytest.mark.django_db

@@ -89,7 +89,7 @@ conflate:
 - The **annual-decision exemption** is a separate, quieter milestone: once a
   member has **four non-skipping years on record** (committed, on a payment
   plan, or paid — Skipping doesn't count), they stop being asked for a
-  yearly decision — no more Undecided-queue nag, no more Gate 1 block —
+  yearly decision — no more Undecided-queue nag, no more registration block —
   whether or not every one of those years is actually paid off. A member can
   be decision-exempt and still owe real money; that money is chased through
   the balance on their statement, not through decision reminders. Don't read
@@ -290,54 +290,53 @@ has been minted yet.
 
 ---
 
-## Tuition & registration gates
+## Tuition & registration gate
 
-There are **two gates** in front of event registration for in-training
-students. Both must clear for registration to go through. (These gates key
-off a student's **tuition decision** for the year — they're unaffected by
-the ledger rework; money doesn't drive them, the decision does.)
+There is **one gate** in front of event registration for in-training
+students. (It keys off a student's **tuition decision** for the year — money
+doesn't drive it, the decision does.)
 
-### Gate 1 — Broad: a decision must be on file
+### A decision must be on file
 
-An in-training student with no tuition decision recorded for the current
-year cannot register for *any* event. They see a polite page directing
-them to `/tuition/`. **Any** of the four decisions clears this gate —
-**including `skipping`**. The point is to force engagement with the
-annual decision, not to collect money.
+An in-training student with no tuition decision recorded for the event's
+academic year cannot register for *any* event. They see a polite page
+directing them to `/tuition/`. **Any** decision clears this gate —
+**including `skipping`**, and including a payment plan still awaiting the
+Board. The point is to force engagement with the annual decision, not to
+collect money.
 
-### Gate 2 — Narrow: committed-without-payment blocked from a tuition-covered special event
+### Coverage is per event, and every non-skipping decision gets it
 
-This gate fires only when **all three** are true:
+Whether an event is covered by tuition is set **per event**, by whoever
+configures its price tiers (a tier with "covered by tuition" checked,
+matching the student's audience). Where such a tier exists, it applies to
+every non-skipping decision: `committed`, `plan_requested`, `payment_plan`,
+and `paid_in_full` alike. Where it doesn't, the student pays the regular fee
+whatever their tuition status.
 
-1. The event's type is **Special event** (Days of Assembly, Working Days,
-   Scholarly Seminars, and the annual-program types — seminars, reading
-   groups, cartels — do **not** engage this gate).
-2. The student's status is **`committed`** — they said they'd pay, but no
-   payment and no payment plan is on file.
-3. The event has a "covered by tuition" price tier matching the student's
-   audience (whether an event is tuition-covered is set per-event by
-   whoever configures its price tiers).
-
-The intuition: this stops a student from claiming "covered by tuition"
-pricing on a special event without having paid the tuition that would
-cover it. If the event isn't tuition-covered, the student just pays the
-regular fee and this gate never fires.
+Until task #484 (2026-07-29) a second gate blocked a `committed`
+student from a tuition-covered **special event**, on the grounds that they
+would be claiming coverage they hadn't paid for. That gate is gone: the fee
+is waived on the assumption tuition will be paid, and a plan application
+pending with the Board is treated the same way rather than waiting on the
+Board's turnaround.
 
 ### Full case table
 
 Read as: *"a student with this tuition status, registering for this kind
-of event, gets this outcome."* Gate 1 applies first, then Gate 2.
+of event, gets this outcome."*
 
-| Tuition status | Annual-program event (seminar, RG, cartel) | Day of Assembly, Working Day, Scholarly Seminar | Special event (no covered tier) | Special event (covered tier matching audience) |
-|---|---|---|---|---|
-| **No decision recorded** | Blocked by Gate 1 | Blocked by Gate 1 | Blocked by Gate 1 | Blocked by Gate 1 |
-| **`committed`** | Allowed — regular or covered fare if a covered tier exists | Allowed — same | Allowed — pays regular fee | **Blocked by Gate 2** — would claim coverage not paid for |
-| **`payment_plan`** | Allowed — coverage applies if a covered tier exists | Allowed — same | Allowed — pays regular fee | Allowed — covered (plan is set up) |
-| **`paid_in_full`** | Allowed — coverage applies if a covered tier exists | Allowed — same | Allowed — pays regular fee | Allowed — covered |
-| **`skipping`** | Allowed — pays regular fee (no coverage) | Allowed — same | Allowed — pays regular fee | Allowed — pays regular fee (coverage doesn't apply to skipping) |
+| Tuition status | Any event with no covered tier for their audience | Any event with a covered tier matching their audience |
+|---|---|---|
+| **No decision recorded** | Blocked | Blocked |
+| **`committed`** | Allowed — pays regular fee | Allowed — covered |
+| **`plan_requested`** (with the Board) | Allowed — pays regular fee | Allowed — covered |
+| **`payment_plan`** | Allowed — pays regular fee | Allowed — covered |
+| **`paid_in_full`** | Allowed — pays regular fee | Allowed — covered |
+| **`skipping`** | Allowed — pays regular fee | Allowed — pays regular fee (coverage doesn't apply to skipping) |
 
 **Non-in-training roles** (Analyst, Scholar, Auditor) are never blocked by
-either gate — they register on the regular rules: free where allowed, paid
+the gate — they register on the regular rules: free where allowed, paid
 where required.
 
 ---

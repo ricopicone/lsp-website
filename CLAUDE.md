@@ -631,6 +631,34 @@ Done (see `git log` for specifics):
   revert, not by a field, a migration, and a branch to test both ways. Design:
   `docs/superpowers/specs/2026-07-29-open-advisor-pool-design.md`.
 
+- **A requested payment plan covers events** (task #484). Applying for a
+  payment plan is a request to the Board (`PLAN_REQUESTED` + a PENDING
+  `TuitionPlanApplication`, task #450 phase B), and fall registration could
+  not wait on the Board's turnaround. The hold was never a *block* — the
+  enrollment row exists, so the broad no-decision gate was always satisfied —
+  it was **pricing**: `PLAN_REQUESTED` was absent from
+  `TuitionEnrollment.covers_seminars`, so `is_tuition_current()` was False, no
+  `covered_by_tuition` tier resolved, and the member was quoted the full
+  seminar fee. The charge side never agreed with that reading:
+  `payments.charges._owed_periods` exempts only SKIPPING, so the year's
+  tuition charge was minted regardless — the school treated the money as owed
+  while withholding what paying it buys. `covers_seminars` now covers every
+  non-skipping decision. Second, the **narrow special-event gate is deleted**
+  (`TUITION_BLOCKING_EVENT_TYPES` + its branch in `_tuition_block_reason`):
+  per Rico (2026-07-29), a tuition-eligible special event is waived for
+  COMMITTED *and* PLAN_REQUESTED on the assumption tuition will be paid, which
+  removes the one place where "committed but no money yet" had teeth —
+  deliberately, and reversible by revert rather than by a flag. One gate
+  remains: some decision must be on file. Also: a fully covered year reads
+  "Paid" for a pending request (`payments/ledger.py`), the member's pending
+  note and the Board's queue intro both say coverage is already live, and the
+  decline notification warns that a $0 registration taken under provisional
+  coverage may need settling (nothing unwinds automatically — do-not-over-
+  automate). The treasurer guide's two-gate section and its case table were
+  rewritten to one gate. No migration, no backfill, no flag; balances cannot
+  move. Design:
+  `docs/superpowers/specs/2026-07-29-plan-requested-seminar-coverage-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

@@ -220,6 +220,7 @@ def notify_plan_application_decided(application) -> None:
     from .models import TuitionPlanApplication
 
     period = application.tuition_period
+    body = ""
     if application.status == TuitionPlanApplication.Status.APPROVED:
         title = f"The Board approved your payment plan application for {period.name}."
     else:
@@ -228,9 +229,16 @@ def notify_plan_application_decided(application) -> None:
             f"for {period.name}. Please choose to pay in full or skip this "
             "year on your Account tab."
         )
+        # A pending request carried event coverage (task #484), so a decline
+        # can leave a $0 registration behind. Nothing unwinds automatically —
+        # staff settle it, and the member should not be surprised.
+        body = (
+            "If you registered for an event with tuition coverage while your "
+            "application was pending, we'll be in touch about settling it."
+        )
     notify(
         application.user, Category.TUITION_PLAN_REVIEW,
-        title=title, url=_account_tab_url(), target=application,
+        title=title, body=body, url=_account_tab_url(), target=application,
     )
 
 
