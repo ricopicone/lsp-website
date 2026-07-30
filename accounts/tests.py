@@ -299,6 +299,83 @@ def test_directory_styles_board_chair_as_president(client):
     assert detail.count(b"President") == 1
 
 
+def _moa():
+    """The Meeting of Analysts committee (seeded, Internal)."""
+    from committees.models import Committee
+    return Committee.objects.get(slug="meeting-of-analysts")
+
+
+@pytest.mark.django_db
+def test_directory_badges_applications_coordinator(client):
+    """Task #481: the Applications Coordinator is an appointed position on the
+    Meeting of Analysts, which has no public page — it must still badge, as the
+    position alone (the Meeting is not named)."""
+    moa = _moa()
+    assert not moa.public, "fixture assumes the Meeting of Analysts is Internal"
+
+    dana = _mk_member("dana@x.test", "Dana", "Coordinator", Profile.Role.ANALYST)
+    moa.add_member(dana, role="applications_coordinator")
+    _mk_member("plain2@x.test", "Plainer", "Person", Profile.Role.ANALYST)
+
+    grid = client.get("/directory/").content
+    assert b"Applications Coordinator" in grid
+    assert grid.count(b"Applications Coordinator") == 1
+
+    detail = client.get("/directory/dana-coordinator/").content
+    assert b"Applications Coordinator" in detail
+    # The badge names the position, not the Internal committee.
+    assert b"Meeting of Analysts" not in detail
+
+    other = client.get("/directory/plainer-person/").content
+    assert b"Applications Coordinator" not in other
+
+
+@pytest.mark.django_db
+def test_directory_does_not_badge_derived_membership(client):
+    """The load-bearing rule: badge appointed positions, never plain membership.
+    Meeting-of-Analysts membership is auto-derived from the Analyst role, so
+    badging it would stamp every analyst with a redundant committee name."""
+    moa = _moa()
+    member = _mk_member("mem@x.test", "Mem", "Bership", Profile.Role.ANALYST)
+    moa.add_member(member, role="member")
+
+    detail = client.get("/directory/mem-bership/").content
+    assert b"Meeting of Analysts" not in detail
+
+
+@pytest.mark.django_db
+def test_directory_dedups_internal_officer_against_staff_role(client):
+    """An Internal-committee officer whose position is also a StaffRole they hold
+    gets one badge, using the StaffRole's editable display name."""
+    from committees.models import Committee
+    from core.models import StaffRole
+
+    u = _mk_member("dee@x.test", "Dee", "Dupe", Profile.Role.ANALYST)
+    StaffRole.objects.get(key=StaffRole.TREASURER).holders.add(u)
+    internal = Committee.objects.create(name="Audit", slug="audit", public=False)
+    internal.add_member(u, role="treasurer")
+
+    detail = client.get("/directory/dee-dupe/").content
+    assert detail.count(b"Treasurer") == 1
+    # The Internal committee itself is never named.
+    assert b"Audit" not in detail
+
+
+@pytest.mark.django_db
+def test_directory_does_not_badge_non_committee_officer_roles(client):
+    """Officer-ish roles on cartels/seminars (organizer, faculty, plus-one) are
+    not school appointments and must not badge."""
+    from workgroups.models import Workgroup, build_workgroup
+
+    u = _mk_member("carl@x.test", "Carl", "Telist", Profile.Role.ANALYST)
+    wg = build_workgroup(Workgroup.Kind.CARTEL, name="Some Cartel", slug="some-cartel")
+    wg.add_member(u, role="organizer")
+
+    detail = client.get("/directory/carl-telist/").content
+    assert b"Organizer" not in detail
+    assert b"Some Cartel" not in detail
+
+
 def test_split_location_single():
     from accounts.geocoding import split_location
     assert split_location("Paris, France") == ["Paris, France"]

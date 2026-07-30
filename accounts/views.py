@@ -103,6 +103,31 @@ def _directory_qs():
                 ),
                 to_attr="public_staff_roles",
             ),
+            # Appointed officers of committees with no public page (task #481).
+            # The Applications Coordinator is one: an appointment on the Meeting
+            # of Analysts, which is Internal, so neither the committee badge above
+            # nor the StaffRole badge (retired in core/0011) could reach it.
+            #
+            # Two filters carry the weight. ``kind=COMMITTEE`` keeps cartel and
+            # seminar roles (organizer, faculty, plus-one) out — those aren't
+            # school appointments. Excluding ``member`` is the load-bearing rule:
+            # Meeting-of-Analysts membership is auto-derived from the Analyst role
+            # (committees/0009), so badging it would stamp a redundant committee
+            # name on every analyst in the directory.
+            Prefetch(
+                "user__workgroup_memberships",
+                queryset=(
+                    WorkgroupMembership.objects.serving()
+                    .filter(
+                        workgroup__kind=Workgroup.Kind.COMMITTEE,
+                        workgroup__committee__public=False,
+                    )
+                    .exclude(role=WorkgroupMembership.Role.MEMBER)
+                    .select_related("workgroup__committee")
+                    .order_by("workgroup__committee__name")
+                ),
+                to_attr="badge_officer_memberships",
+            ),
         )
         .order_by("user__last_name", "user__first_name")
     )
@@ -142,6 +167,44 @@ def _badge_staff_roles(user):
     return [
         role for role in getattr(user, "public_staff_roles", [])
         if role.key not in officer_keys
+    ]
+
+
+def _badge_officer_roles(user, staff_roles):
+    """Officer appointments on committees with no public page — badged as the
+    position alone, never naming the committee (task #481).
+
+    The Applications Coordinator is the motivating case: an appointment on the
+    Meeting of Analysts, whose page is members-only, and who is the named contact
+    in every applicant-facing email. The membership rows that reach here are
+    already filtered to real appointments by ``_directory_qs``.
+
+    A position already shown by another badge is dropped, so a holder never gets
+    two chips for one appointment. That covers the StaffRole badges (``StaffRole``
+    ``name`` is admin-editable — "Administrative Assistant to the Board" — so it's
+    the better label wherever both exist) and public committee officer badges
+    (which name their committee, so they're more informative). Position identity
+    is the shared key string, the same assumption ``_badge_staff_roles`` relies on.
+
+    Relies on the ``badge_officer_memberships`` prefetch set by ``_directory_qs``.
+    """
+    from core.models import StaffRole
+
+    # A stored Chair / Co-chair is the school President / Vice-President, whose
+    # StaffRole badge carries the title (tasks #368, #428). The Meeting of
+    # Analysts can't trip this — its President / VP are *derived* rows carrying an
+    # officer_title, not stored memberships — but another Internal committee could.
+    STAFFROLE_FOR_OFFICER = {
+        "chair": StaffRole.PRESIDENT,
+        "co_chair": StaffRole.VICE_PRESIDENT,
+    }
+    badged = {role.key for role in staff_roles}
+    for m in getattr(user, "active_public_memberships", []):
+        badged.add(m.role)
+    return [
+        m for m in getattr(user, "badge_officer_memberships", [])
+        if m.role not in badged
+        and STAFFROLE_FOR_OFFICER.get(m.role, m.role) not in badged
     ]
 
 
@@ -273,6 +336,9 @@ def directory(request):
     by_role: dict[str, list[dict]] = {}
     for profile in _directory_qs():
         profile.badge_staff_roles = _badge_staff_roles(profile.user)
+        profile.badge_officer_roles = _badge_officer_roles(
+            profile.user, profile.badge_staff_roles
+        )
         by_role.setdefault(profile.role, []).append({
             "profile": profile,
             "slug": profile.directory_slug,
@@ -292,6 +358,9 @@ def directory_detail(request, slug: str):
     for profile in _directory_qs():
         if profile.directory_slug == slug:
             profile.badge_staff_roles = _badge_staff_roles(profile.user)
+            profile.badge_officer_roles = _badge_officer_roles(
+                profile.user, profile.badge_staff_roles
+            )
             works = (
                 Work.listing_for(request.user)
                 .filter(authors=profile.user)
