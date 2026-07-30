@@ -194,6 +194,10 @@ def test_decline_deletes_enrollment_and_notifies(client, board_member, member, p
 
     note = Notification.objects.get(recipient=member, category=Category.TUITION_PLAN_REVIEW)
     assert "unable to approve" in note.title
+    # Provisional coverage was live while the request was pending, so the
+    # decline has to mention anything registered under it (task #484).
+    assert "tuition coverage" in note.body
+    assert "settling" in note.body
 
 
 def test_decline_leaves_enrollment_alone_if_no_longer_plan_requested(
