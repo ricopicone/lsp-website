@@ -199,6 +199,7 @@ def member_account(user) -> dict:
         if state == "paid" and e.status in (
             TuitionEnrollment.Status.COMMITTED,
             TuitionEnrollment.Status.PAYMENT_PLAN,
+            TuitionEnrollment.Status.PLAN_REQUESTED,
         ):
             decision_label = "Paid"
         else:
