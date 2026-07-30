@@ -229,12 +229,13 @@ def notify_plan_application_decided(application) -> None:
             f"for {period.name}. Please choose to pay in full or skip this "
             "year on your Account tab."
         )
-        # A pending request carried event coverage (task #484), so a decline
-        # can leave a $0 registration behind. Nothing unwinds automatically —
-        # staff settle it, and the member should not be surprised.
+        # A pending request carried event coverage (task #484). Say what each
+        # branch of the choice now costs (task #485).
         body = (
-            "If you registered for an event with tuition coverage while your "
-            "application was pending, we'll be in touch about settling it."
+            "Your tuition decision is open again on your Account tab. If you "
+            "record that you plan to pay tuition, any events you registered "
+            "for stay covered. If you skip this year, those events carry their "
+            "regular fee and you'll be shown the total before it applies."
         )
     notify(
         application.user, Category.TUITION_PLAN_REVIEW,

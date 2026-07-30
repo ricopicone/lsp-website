@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from django.urls import reverse
 
 from accounts.models import Profile, User
 from events.models import Audience, Event, PriceTier
@@ -183,3 +184,34 @@ def test_unbilling_ignores_another_academic_year(period, student):
 def test_a_free_covered_tier_owes_nothing(period, student):
     _reg(student, _tier(_event("free-tier"), amount="0.00"))
     assert coverage.bill_skipped_coverage(student, period) == []
+
+
+# ---- notification ----------------------------------------------------------
+
+def test_rebill_notification_names_the_count_and_total(period, student):
+    from notifications.categories import Category
+    from notifications.models import Notification
+    from payments.notifications import notify_coverage_rebilled
+
+    _reg(student, _tier(_event("notify-me"), amount="200.00"))
+    # Pass the rows billing returned, exactly as the decision view does — a
+    # stale in-memory copy would still read $0.
+    billed = coverage.bill_skipped_coverage(student, period)
+    notify_coverage_rebilled(student, period, billed)
+
+    note = Notification.objects.get(
+        recipient=student, category=Category.ACCOUNT_UPDATES,
+    )
+    assert "1 registration" in note.title
+    assert "200.00" in note.title or "200.00" in note.body
+
+
+def test_confirmation_page_explains_a_rebilled_registration(client, period, student):
+    reg = _reg(student, _tier(_event("explain-me"), amount="200.00"))
+    coverage.bill_skipped_coverage(student, period)
+    client.force_login(student)
+    body = client.get(
+        reverse("registrations:confirm", args=[reg.pk])
+    ).content.decode()
+    assert "skipping tuition for the year" in body
+    assert "restores the coverage" in body
