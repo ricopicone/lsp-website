@@ -447,6 +447,37 @@ def event_edit(request, slug: str):
     return redirect("events:detail", slug=event.slug)
 
 
+@login_required
+@require_POST
+def ce_organization_add(request, slug: str):
+    """Add an accrediting body to the shared library and apply it to this event.
+
+    Reaching this from an event can only mean "this event is approved by it", so
+    the new organization is ticked on straight away. Gated by can_edit_event: the
+    library is shared, so only someone who can edit *some* event may seed it.
+    """
+    from .forms import CEOrganizationForm
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to edit this event.")
+
+    org_form = CEOrganizationForm(request.POST, request.FILES)
+    if org_form.is_valid():
+        org = org_form.save(added_by=request.user)
+        event.ce_organizations.add(org)
+        messages.success(request, f"Added {org.name} and applied it to this event.")
+        return redirect("events:edit", slug=event.slug)
+
+    form = EventEditForm(instance=event)
+    return render(request, "events/event_edit.html", {
+        "event": event, "form": form, "ce_org_form": org_form,
+        "speaker_invites": _speaker_invite_rows(event),
+        **_ce_edit_context(form),
+        **_schedule_editor_context(event),
+    })
+
+
 def _schedule_editor_context(event, formset=None):
     """Context for the standalone-event schedule editor on the edit page.
 

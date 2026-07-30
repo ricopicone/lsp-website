@@ -7,7 +7,14 @@ from decimal import Decimal
 from django import forms
 
 from .ce import CECreditBasis
-from .models import Event, EventProposal, PricingCode, Program, Session
+from .models import (
+    CEOrganization,
+    Event,
+    EventProposal,
+    PricingCode,
+    Program,
+    Session,
+)
 
 
 class EventEditForm(forms.ModelForm):
@@ -558,3 +565,57 @@ def _build_schedule_formset():
 
 #: Session formset for the standalone-event schedule editor (start/end datetimes + location).
 SessionScheduleFormSet = _build_schedule_formset()
+
+
+class CEOrganizationForm(forms.ModelForm):
+    """Add an accrediting body to the shared library, from an event page.
+
+    The library is not curated, so the guard rails are here: a case-insensitive
+    name check that points at the existing entry rather than minting a second
+    one, and logo normalization so nobody's 4000px PNG lands on an event page.
+    """
+
+    class Meta:
+        model = CEOrganization
+        fields = ("name", "logo", "url", "statement")
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "input input-bordered input-sm w-full"}),
+            "url": forms.URLInput(attrs={"class": "input input-bordered input-sm w-full"}),
+            "statement": forms.Textarea(
+                attrs={"class": "textarea textarea-bordered w-full", "rows": 3},
+            ),
+        }
+
+    def clean_name(self):
+        name = (self.cleaned_data["name"] or "").strip()
+        existing = CEOrganization.objects.filter(name__iexact=name).first()
+        if existing is not None:
+            raise forms.ValidationError(
+                f"{existing.name} is already listed. Tick it in the list above "
+                "instead of adding it again."
+            )
+        return name
+
+    def clean_logo(self):
+        from .ce_images import MAX_UPLOAD_BYTES, InvalidImage, normalize_logo
+
+        raw = self.cleaned_data["logo"]
+        if getattr(raw, "size", 0) > MAX_UPLOAD_BYTES:
+            raise forms.ValidationError("That image is too large (8 MB max).")
+        try:
+            self._logo_webp = normalize_logo(raw)
+        except InvalidImage as exc:
+            raise forms.ValidationError(str(exc)) from exc
+        return raw
+
+    def save(self, added_by=None, commit=True):
+        from django.utils.text import slugify
+
+        org = super().save(commit=False)
+        org.added_by = added_by
+        org.logo.save(
+            f"{slugify(org.name) or 'ce-organization'}.webp", self._logo_webp, save=False,
+        )
+        if commit:
+            org.save()
+        return org
