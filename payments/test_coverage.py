@@ -112,3 +112,74 @@ def test_covered_registrations_excludes_a_paid_nonzero_registration(period, stud
     """Someone who paid the regular fee owes nothing extra."""
     _reg(student, _tier(_event("paidfor")), amount="200.00")
     assert coverage.covered_registrations(student, period) == []
+
+
+# ---- bill / un-bill ---------------------------------------------------------
+
+def test_billing_requotes_a_paid_registration(period, student):
+    reg = _reg(student, _tier(_event("bill-me"), amount="200.00"))
+    changed = coverage.bill_skipped_coverage(student, period)
+    assert changed == [reg]
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("200.00")
+    assert reg.status == Registration.Status.AWAITING_PAYMENT
+    assert reg.quoted_explanation == coverage.REBILLED_EXPLANATION
+    assert reg.needs_payment is True      # the "Pay →" button renders
+    assert "Re-billed $200.00" in reg.staff_notes
+
+
+def test_billing_leaves_a_pending_approval_row_pending(period, student):
+    """approve() routes on the amount, so the row must keep its status or it
+    would skip the faculty approval it is waiting for."""
+    reg = _reg(student, _tier(_event("await-approval"), amount="150.00"),
+               status=Registration.Status.PENDING_APPROVAL)
+    coverage.bill_skipped_coverage(student, period)
+    reg.refresh_from_db()
+    assert reg.status == Registration.Status.PENDING_APPROVAL
+    assert reg.quoted_amount == Decimal("150.00")
+
+
+def test_billing_is_idempotent(period, student):
+    reg = _reg(student, _tier(_event("twice"), amount="200.00"))
+    coverage.bill_skipped_coverage(student, period)
+    assert coverage.bill_skipped_coverage(student, period) == []
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("200.00")
+
+
+def test_unbilling_restores_coverage(period, student):
+    reg = _reg(student, _tier(_event("restore"), amount="200.00"))
+    coverage.bill_skipped_coverage(student, period)
+    changed = coverage.unbill_skipped_coverage(student, period)
+    assert [r.pk for r in changed] == [reg.pk]
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("0")
+    assert reg.status == Registration.Status.PAID    # access gate passes again
+    assert reg.quoted_explanation == coverage.COVERED_EXPLANATION
+
+
+def test_unbilling_leaves_a_paid_fee_alone(period, student):
+    """If they paid the re-billed fee and then commit to tuition, that is a
+    refund conversation for the treasurer, not a silent unwind."""
+    reg = _reg(student, _tier(_event("already-paid"), amount="200.00"))
+    coverage.bill_skipped_coverage(student, period)
+    Registration.objects.filter(pk=reg.pk).update(status=Registration.Status.PAID)
+    assert coverage.unbill_skipped_coverage(student, period) == []
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("200.00")
+
+
+def test_unbilling_ignores_another_academic_year(period, student):
+    reg = _reg(student, _tier(_event("other-yr", start=date(2025, 10, 1)),
+                             amount="200.00"))
+    Registration.objects.filter(pk=reg.pk).update(
+        quoted_amount=Decimal("200.00"),
+        quoted_explanation=coverage.REBILLED_EXPLANATION,
+        status=Registration.Status.AWAITING_PAYMENT,
+    )
+    assert coverage.unbill_skipped_coverage(student, period) == []
+
+
+def test_a_free_covered_tier_owes_nothing(period, student):
+    _reg(student, _tier(_event("free-tier"), amount="0.00"))
+    assert coverage.bill_skipped_coverage(student, period) == []
