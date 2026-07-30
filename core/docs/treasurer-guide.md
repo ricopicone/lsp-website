@@ -335,6 +335,28 @@ of event, gets this outcome."*
 | **`paid_in_full`** | Allowed — pays regular fee | Allowed — covered |
 | **`skipping`** | Allowed — pays regular fee | Allowed — pays regular fee (coverage doesn't apply to skipping) |
 
+### Skipping a year whose events tuition already covered
+
+Coverage is provisional in one direction: a member can register for a covered
+event and *later* record that they're skipping tuition for the year (or have a
+payment-plan application declined and then choose to skip). When they record
+skipping, the site shows them every event tuition covered that year with its
+regular fee and a total, and on confirmation **re-bills each one**: the
+registration moves to Awaiting payment at the regular fee, which turns on its
+"Pay" button and the ordinary registration reminders. They lose event access
+until it's settled.
+
+The reverse also holds. If they later record that they plan to pay tuition, or
+apply for a plan, those registrations go straight back to covered at $0 and
+access returns, with no money moving. A fee they already **paid** is never
+unwound automatically, that's a refund for you to decide on.
+
+**This only fires on the member's own confirmed action.** Setting someone's
+tuition status yourself, in the Django admin or from the Accounts tab, does not
+re-bill anything, and neither do the import or backfill commands. If a member's
+year should be re-billed and they haven't done it themselves, adjust the
+registration amount, or add a charge on their account page.
+
 **Non-in-training roles** (Analyst, Scholar, Auditor) are never blocked by
 the gate — they register on the regular rules: free where allowed, paid
 where required.

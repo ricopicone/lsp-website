@@ -229,16 +229,38 @@ def notify_plan_application_decided(application) -> None:
             f"for {period.name}. Please choose to pay in full or skip this "
             "year on your Account tab."
         )
-        # A pending request carried event coverage (task #484), so a decline
-        # can leave a $0 registration behind. Nothing unwinds automatically —
-        # staff settle it, and the member should not be surprised.
+        # A pending request carried event coverage (task #484). Say what each
+        # branch of the choice now costs (task #485).
         body = (
-            "If you registered for an event with tuition coverage while your "
-            "application was pending, we'll be in touch about settling it."
+            "Your tuition decision is open again on your Account tab. If you "
+            "record that you plan to pay tuition, any events you registered "
+            "for stay covered. If you skip this year, those events carry their "
+            "regular fee and you'll be shown the total before it applies."
         )
     notify(
         application.user, Category.TUITION_PLAN_REVIEW,
         title=title, body=body, url=_account_tab_url(), target=application,
+    )
+
+
+def notify_coverage_rebilled(user, period, registrations) -> None:
+    """Tell the member the events tuition had covered now carry their regular
+    fee, because they recorded skipping for the year (task #485)."""
+    total = sum(r.quoted_amount for r in registrations)
+    count = len(registrations)
+    plural = "registration" if count == 1 else "registrations"
+    notify(
+        user, Category.ACCOUNT_UPDATES,
+        title=(
+            f"{count} {plural} now carries the regular fee, ${total} in total, "
+            f"because you're skipping tuition for {period.name}."
+        ),
+        body=(
+            "You can pay each fee from its registration page. If you decide to "
+            f"pay tuition for {period.name} after all, record that on your "
+            "Account tab and these events go back to being covered, at no cost."
+        ),
+        url=_account_tab_url(),
     )
 
 

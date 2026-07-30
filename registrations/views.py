@@ -18,6 +18,7 @@ from django.views.decorators.http import require_POST
 
 from events.models import Event, PriceTier, PricingCode
 from events.permissions import can_edit_event
+from payments import coverage
 from payments import notifications as notify_payments
 from payments.refund import RefundError
 from payments.stripe_checkout import create_checkout_session
@@ -240,7 +241,12 @@ def registration_confirm(request, reg_id: int):
     return render(
         request,
         "registrations/register_confirm.html",
-        {"registration": reg},
+        {
+            "registration": reg,
+            # Lets the page say *why* a formerly covered place now wants money
+            # (task #485) without duplicating the marker string in a template.
+            "rebilled_explanation": coverage.REBILLED_EXPLANATION,
+        },
     )
 
 

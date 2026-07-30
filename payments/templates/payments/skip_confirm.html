@@ -1,0 +1,48 @@
+{% extends "core/base.html" %}
+{% block title %}Skipping tuition · LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">Before you skip {{ period.name }}</h1>
+    <p class="text-sm text-base-content/70">
+      Your tuition covered the events below. If you skip tuition for
+      {{ period.name }}, the regular fee applies to each of them.
+    </p>
+  </header>
+
+  <div class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-3">
+    <table class="table table-sm">
+      <thead><tr><th>Event</th><th class="text-right">Fee</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.registration.event.title }}</td>
+          <td class="text-right whitespace-nowrap">${{ row.amount }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><th>Total</th><th class="text-right whitespace-nowrap">${{ total }}</th></tr>
+      </tfoot>
+    </table>
+    <p class="text-xs text-base-content/60">
+      You'll be able to pay each fee from your registration page. If you decide
+      to pay tuition after all, record that on your Account tab and these events
+      go back to being covered, at no cost.
+    </p>
+  </div>
+
+  <div class="flex flex-wrap gap-3">
+    <form method="post" action="{% url 'tuition' %}">
+      {% csrf_token %}
+      <input type="hidden" name="status" value="skipping">
+      <input type="hidden" name="confirm" value="1">
+      {% if period_slug %}<input type="hidden" name="period" value="{{ period_slug }}">{% endif %}
+      <button type="submit" class="btn btn-warning">Skip tuition and accept the fees</button>
+    </form>
+    <a href="{{ account_url }}" class="btn btn-ghost">Cancel</a>
+  </div>
+
+</div>
+{% endblock %}

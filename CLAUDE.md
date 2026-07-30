@@ -659,6 +659,43 @@ Done (see `git log` for specifics):
   move. Design:
   `docs/superpowers/specs/2026-07-29-plan-requested-seminar-coverage-design.md`.
 
+- **Skipping a covered year re-bills the events** (task #485, follow-on to
+  #484). #484 made coverage provisional in one direction, and nothing owned the
+  other: a member who consumed coverage and then ended up SKIPPING owed nothing
+  for those events, because a covered registration is created with
+  `quoted_amount=0` and **no Payment and no Charge** (`mint_registration_charge`
+  requires a positive amount), while SKIPPING is exempt from tuition charges.
+  The Board declining a plan is only the rarest route in — the likelier one is a
+  member who records COMMITTED, registers free, then re-records SKIPPING — so
+  the mechanism keys off the *decision*, not the decline. New
+  `payments/coverage.py` answers what coverage bought in a year
+  (`covered_registrations`, which excludes comps and pricing-code freebies since
+  neither is coverage), what it was worth (`retro_amount` — the tier's
+  `base_amount`, or `minimum_amount` for a sliding tier, since a skipping member
+  would have picked their own figure at or above the floor), and bills or
+  un-bills it. **Billing re-quotes the Registration rather than minting a
+  Charge**: `quoted_amount` + AWAITING_PAYMENT lights up the built "Pay →"
+  Stripe button, the registration reminders, and `mint_registration_charge` at
+  settle, where a bare Charge would have been unpayable — the member-facing
+  payment endpoints are dues, tuition-in-full, installments, donations, and
+  per-registration checkout, nothing else. A PENDING_APPROVAL row gets its
+  amount rewritten but **keeps its status**, because `approve()` routes on the
+  amount and flipping it would skip the faculty approval it awaits. Recording a
+  paying decision un-bills, so **committing to pay restores event access without
+  any money moving**; a fee actually paid is never unwound (treasurer's refund
+  call). The member confirms on an interstitial listing every event, its fee, and
+  the total before anything is recorded, and gets one notification after — built
+  from the rows `bill_skipped_coverage` *returns*, since a stale in-memory copy
+  still reads $0. Access loss while re-billed is accepted, deliberately: the
+  routes back are the registration's Pay button and the tuition decision form.
+  **Staff paths do not auto-bill** — admin, the treasurer's set-status,
+  `backfill_tuition_status`, the importers — or a historical backfill would
+  retro-bill years of events. No migration: the marker is the
+  `quoted_explanation` string, held in `coverage.REBILLED_EXPLANATION` and pinned
+  by a test, mirroring how `"Covered by tuition (tuition-paying member, REG-4)"`
+  already identifies a covered registration. Design:
+  `docs/superpowers/specs/2026-07-29-skipped-coverage-rebilling-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
