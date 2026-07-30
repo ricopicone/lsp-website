@@ -163,7 +163,7 @@ class EventProposalForm(forms.ModelForm):
             "location_kind", "location", "contact",
             "continues_seminar", "faculty",
             "fee_amount", "fee_sliding_min", "fee_sliding_max", "tuition_covers",
-            "offers_ce",
+            "offers_ce", "ce_credits", "ce_credits_basis",
             "sched_frequency", "sched_start_time", "sched_end_time",
             "speaker_arrangement", "honoraria_estimate",
         )
@@ -174,6 +174,12 @@ class EventProposalForm(forms.ModelForm):
                 attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M",
             ),
             "description": forms.Textarea(attrs={"rows": 8}),
+            "ce_credits": forms.NumberInput(
+                attrs={"class": "input input-bordered input-sm", "step": "0.5", "min": "0"},
+            ),
+            "ce_credits_basis": forms.Select(
+                attrs={"class": "select select-bordered select-sm"},
+            ),
             "speaker_arrangement": forms.RadioSelect,
             "sched_frequency": forms.Select,
             "sched_start_time": forms.TimeInput(attrs={"type": "time"}),
@@ -221,6 +227,10 @@ class EventProposalForm(forms.ModelForm):
         self.fields["end_date"].label = "End date"
         self.fields["location_kind"].label = "Location"
         self.fields["offers_ce"].label = "Offer CE credits"
+        self.fields["ce_credits"].label = "Credits you expect to offer"
+        self.fields["ce_credits_basis"].label = "Counted"
+        # Meaningless without a count, and always defaulted, so never required.
+        self.fields["ce_credits_basis"].required = False
 
         # Recurring-schedule fields (offerings). Frequency optional at field level
         # — required only when the member chooses to schedule now (in clean()).
@@ -280,6 +290,9 @@ class EventProposalForm(forms.ModelForm):
                     self.initial["sched_week_positions"] = (
                         self.instance.sched_week_positions.split(",")
                     )
+
+    def clean_ce_credits_basis(self):
+        return self.cleaned_data.get("ce_credits_basis") or CECreditBasis.TOTAL
 
     def clean_proposed_datetime(self):
         """Interpret the naive datetime-local input in the editor's own timezone

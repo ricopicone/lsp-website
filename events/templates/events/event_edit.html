@@ -142,7 +142,7 @@
                  class="checkbox checkbox-sm"
                  {% if org.pk|stringformat:"s" in selected_ce_values %}checked{% endif %}>
           {% if org.logo %}
-          <span class="inline-flex items-center rounded bg-white p-1.5">
+          <span class="inline-flex items-center rounded border border-base-300/60 bg-white p-1.5">
             <img src="{{ org.logo.url }}" alt="{{ org.name }} logo"
                  class="max-h-8 max-w-28 object-contain">
           </span>

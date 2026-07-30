@@ -192,6 +192,10 @@
     {# ---- CE (offerings) ---- #}
     <div data-types="seminar reading_group" class="space-y-1">
       {% include "events/_proposal_field.html" with field=form.offers_ce %}
+      <div class="flex flex-wrap items-end gap-3 pl-6">
+        {% include "events/_proposal_field.html" with field=form.ce_credits %}
+        {% include "events/_proposal_field.html" with field=form.ce_credits_basis %}
+      </div>
       <p class="text-xs text-base-content/50">Note: If interested, you will need to
         apply to the Greater Pittsburgh Psychological Association (GPPA) for APA
         Accredited Continuing Education Credits for your proposal. We request that you
