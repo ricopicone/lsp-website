@@ -242,6 +242,27 @@ def notify_plan_application_decided(application) -> None:
     )
 
 
+def notify_coverage_rebilled(user, period, registrations) -> None:
+    """Tell the member the events tuition had covered now carry their regular
+    fee, because they recorded skipping for the year (task #485)."""
+    total = sum(r.quoted_amount for r in registrations)
+    count = len(registrations)
+    plural = "registration" if count == 1 else "registrations"
+    notify(
+        user, Category.ACCOUNT_UPDATES,
+        title=(
+            f"{count} {plural} now carries the regular fee, ${total} in total, "
+            f"because you're skipping tuition for {period.name}."
+        ),
+        body=(
+            "You can pay each fee from its registration page. If you decide to "
+            f"pay tuition for {period.name} after all, record that on your "
+            "Account tab and these events go back to being covered, at no cost."
+        ),
+        url=_account_tab_url(),
+    )
+
+
 def approval_reminder_inapp(event, pending_count: int) -> None:
     """Bell rows for event faculty (the cron paces the batched faculty email)."""
     url = reverse("events:detail", args=[event.slug]) + "?view=faculty"
