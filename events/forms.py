@@ -6,17 +6,31 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import Event, EventProposal, PricingCode, Program, Session
+from .ce import CECreditBasis
+from .models import (
+    CEOrganization,
+    Event,
+    EventProposal,
+    PricingCode,
+    Program,
+    Session,
+)
 
 
-class EventDescriptionForm(forms.ModelForm):
-    """Faculty-facing edit form for the event description (PROG-7)."""
+class EventEditForm(forms.ModelForm):
+    """Faculty-facing edit form for an event's public content (PROG-7).
+
+    Named for the whole page, not just the description: it has carried title,
+    readings, schedule, contact, fee, and now CE for some time.
+    """
 
     class Meta:
         model = Event
         fields = (
             "title", "description", "readings", "schedule_note", "contact",
             "fee_note", "record_video", "speaker_spotlight", "open_to_guests",
+            "offers_ce", "ce_credits", "ce_credits_basis", "ce_note",
+            "ce_organizations",
         )
         widgets = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
@@ -24,7 +38,26 @@ class EventDescriptionForm(forms.ModelForm):
             "readings": forms.Textarea(attrs={"rows": 8, "cols": 80}),
             "schedule_note": forms.Textarea(attrs={"rows": 2, "cols": 80}),
             "fee_note": forms.Textarea(attrs={"rows": 2, "cols": 80}),
+            "ce_note": forms.Textarea(attrs={"rows": 2, "cols": 80}),
+            # Rendered by hand in the template so each option carries its logo.
+            "ce_organizations": forms.CheckboxSelectMultiple,
+            "ce_credits": forms.NumberInput(
+                attrs={"class": "input input-bordered input-sm", "step": "0.5", "min": "0"},
+            ),
+            "ce_credits_basis": forms.Select(
+                attrs={"class": "select select-bordered select-sm"},
+            ),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # The basis is meaningless without a count and always has a default, so
+        # a POST that omits it (the change-review dialog's re-post, a partial
+        # form) must not fail validation.
+        self.fields["ce_credits_basis"].required = False
+
+    def clean_ce_credits_basis(self):
+        return self.cleaned_data.get("ce_credits_basis") or CECreditBasis.TOTAL
 
 
 class PricingCodeForm(forms.ModelForm):
@@ -130,7 +163,7 @@ class EventProposalForm(forms.ModelForm):
             "location_kind", "location", "contact",
             "continues_seminar", "faculty",
             "fee_amount", "fee_sliding_min", "fee_sliding_max", "tuition_covers",
-            "offers_ce",
+            "offers_ce", "ce_credits", "ce_credits_basis",
             "sched_frequency", "sched_start_time", "sched_end_time",
             "speaker_arrangement", "honoraria_estimate",
         )
@@ -141,6 +174,12 @@ class EventProposalForm(forms.ModelForm):
                 attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M",
             ),
             "description": forms.Textarea(attrs={"rows": 8}),
+            "ce_credits": forms.NumberInput(
+                attrs={"class": "input input-bordered input-sm", "step": "0.5", "min": "0"},
+            ),
+            "ce_credits_basis": forms.Select(
+                attrs={"class": "select select-bordered select-sm"},
+            ),
             "speaker_arrangement": forms.RadioSelect,
             "sched_frequency": forms.Select,
             "sched_start_time": forms.TimeInput(attrs={"type": "time"}),
@@ -188,6 +227,10 @@ class EventProposalForm(forms.ModelForm):
         self.fields["end_date"].label = "End date"
         self.fields["location_kind"].label = "Location"
         self.fields["offers_ce"].label = "Offer CE credits"
+        self.fields["ce_credits"].label = "Credits you expect to offer"
+        self.fields["ce_credits_basis"].label = "Counted"
+        # Meaningless without a count, and always defaulted, so never required.
+        self.fields["ce_credits_basis"].required = False
 
         # Recurring-schedule fields (offerings). Frequency optional at field level
         # — required only when the member chooses to schedule now (in clean()).
@@ -247,6 +290,9 @@ class EventProposalForm(forms.ModelForm):
                     self.initial["sched_week_positions"] = (
                         self.instance.sched_week_positions.split(",")
                     )
+
+    def clean_ce_credits_basis(self):
+        return self.cleaned_data.get("ce_credits_basis") or CECreditBasis.TOTAL
 
     def clean_proposed_datetime(self):
         """Interpret the naive datetime-local input in the editor's own timezone
@@ -532,3 +578,57 @@ def _build_schedule_formset():
 
 #: Session formset for the standalone-event schedule editor (start/end datetimes + location).
 SessionScheduleFormSet = _build_schedule_formset()
+
+
+class CEOrganizationForm(forms.ModelForm):
+    """Add an accrediting body to the shared library, from an event page.
+
+    The library is not curated, so the guard rails are here: a case-insensitive
+    name check that points at the existing entry rather than minting a second
+    one, and logo normalization so nobody's 4000px PNG lands on an event page.
+    """
+
+    class Meta:
+        model = CEOrganization
+        fields = ("name", "logo", "url", "statement")
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "input input-bordered input-sm w-full"}),
+            "url": forms.URLInput(attrs={"class": "input input-bordered input-sm w-full"}),
+            "statement": forms.Textarea(
+                attrs={"class": "textarea textarea-bordered w-full", "rows": 3},
+            ),
+        }
+
+    def clean_name(self):
+        name = (self.cleaned_data["name"] or "").strip()
+        existing = CEOrganization.objects.filter(name__iexact=name).first()
+        if existing is not None:
+            raise forms.ValidationError(
+                f"{existing.name} is already listed. Tick it in the list above "
+                "instead of adding it again."
+            )
+        return name
+
+    def clean_logo(self):
+        from .ce_images import MAX_UPLOAD_BYTES, InvalidImage, normalize_logo
+
+        raw = self.cleaned_data["logo"]
+        if getattr(raw, "size", 0) > MAX_UPLOAD_BYTES:
+            raise forms.ValidationError("That image is too large (8 MB max).")
+        try:
+            self._logo_webp = normalize_logo(raw)
+        except InvalidImage as exc:
+            raise forms.ValidationError(str(exc)) from exc
+        return raw
+
+    def save(self, added_by=None, commit=True):
+        from django.utils.text import slugify
+
+        org = super().save(commit=False)
+        org.added_by = added_by
+        org.logo.save(
+            f"{slugify(org.name) or 'ce-organization'}.webp", self._logo_webp, save=False,
+        )
+        if commit:
+            org.save()
+        return org

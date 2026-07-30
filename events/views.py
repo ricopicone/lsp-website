@@ -22,7 +22,7 @@ from django.views.decorators.http import require_POST
 from accounts.permissions import is_lsp_member
 from core.access import gate_or_login
 
-from .forms import EventDescriptionForm, PricingCodeForm
+from .forms import EventEditForm, PricingCodeForm
 from .models import (
     ArchivedProgram,
     Event,
@@ -303,6 +303,21 @@ def event_detail(request, slug: str):
     return render(request, "events/event_detail.html", context)
 
 
+def _ce_edit_context(form):
+    """Organization checkboxes for the edit form.
+
+    Rendered by hand rather than through the widget so each option can show its
+    logo. ``BoundField.value()`` gives the *submitted* selection when the form
+    is bound, so a failed POST re-renders with the user's ticks intact.
+    """
+    from .models import CEOrganization
+
+    return {
+        "ce_organizations": CEOrganization.objects.all(),
+        "selected_ce_values": [str(v) for v in (form["ce_organizations"].value() or [])],
+    }
+
+
 @login_required
 def event_edit(request, slug: str):
     """Faculty-facing edit form for the event description (PROG-7).
@@ -324,10 +339,11 @@ def event_edit(request, slug: str):
         )
 
     if request.method != "POST":
-        form = EventDescriptionForm(instance=event)
+        form = EventEditForm(instance=event)
         return render(request, "events/event_edit.html", {
             "event": event, "form": form,
             "speaker_invites": _speaker_invite_rows(event),
+            **_ce_edit_context(form),
             **_schedule_editor_context(event),
         })
 
@@ -336,10 +352,13 @@ def event_edit(request, slug: str):
     # would compare the new value against itself.
     original = {f: (getattr(event, f) or "") for f in REVIEWABLE_FIELDS}
 
-    form = EventDescriptionForm(request.POST, instance=event)
+    form = EventEditForm(request.POST, instance=event)
     if not form.is_valid():
         return render(request, "events/event_edit.html", {
-            "event": event, "form": form, **_schedule_editor_context(event),
+            "event": event, "form": form,
+            "speaker_invites": _speaker_invite_rows(event),
+            **_ce_edit_context(form),
+            **_schedule_editor_context(event),
         })
 
     cd = form.cleaned_data
@@ -372,13 +391,21 @@ def event_edit(request, slug: str):
     from . import notifications as event_notifications
     from .models import EventChangeRequest
 
+    # Apply non-reviewable changes immediately either way. ManyToMany fields
+    # (ce_organizations) can go through neither setattr() nor update_fields, so
+    # they're set separately.
+    m2m_names = {f.name for f in Event._meta.many_to_many}
     nonreviewable = [
         f for f in form.changed_data if f not in REVIEWABLE_FIELDS
     ]
-    if nonreviewable:
-        for f in nonreviewable:
+    concrete = [f for f in nonreviewable if f not in m2m_names]
+    if concrete:
+        for f in concrete:
             setattr(event, f, cd[f])
-        event.save(update_fields=nonreviewable)
+        event.save(update_fields=concrete)
+    for f in nonreviewable:
+        if f in m2m_names:
+            getattr(event, f).set(cd[f])
 
     reviewer = is_change_reviewer(request.user)
     desc_ratio = change_ratio(original["description"], cd["description"]) \
@@ -418,6 +445,37 @@ def event_edit(request, slug: str):
     cr.save()
     messages.success(request, "Change adopted.")
     return redirect("events:detail", slug=event.slug)
+
+
+@login_required
+@require_POST
+def ce_organization_add(request, slug: str):
+    """Add an accrediting body to the shared library and apply it to this event.
+
+    Reaching this from an event can only mean "this event is approved by it", so
+    the new organization is ticked on straight away. Gated by can_edit_event: the
+    library is shared, so only someone who can edit *some* event may seed it.
+    """
+    from .forms import CEOrganizationForm
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to edit this event.")
+
+    org_form = CEOrganizationForm(request.POST, request.FILES)
+    if org_form.is_valid():
+        org = org_form.save(added_by=request.user)
+        event.ce_organizations.add(org)
+        messages.success(request, f"Added {org.name} and applied it to this event.")
+        return redirect("events:edit", slug=event.slug)
+
+    form = EventEditForm(instance=event)
+    return render(request, "events/event_edit.html", {
+        "event": event, "form": form, "ce_org_form": org_form,
+        "speaker_invites": _speaker_invite_rows(event),
+        **_ce_edit_context(form),
+        **_schedule_editor_context(event),
+    })
 
 
 def _schedule_editor_context(event, formset=None):
@@ -485,7 +543,7 @@ def event_edit_schedule(request, slug: str):
         messages.success(request, "Schedule updated.")
         return redirect("events:edit", slug=event.slug)
 
-    form = EventDescriptionForm(instance=event)
+    form = EventEditForm(instance=event)
     return render(request, "events/event_edit.html", {
         "event": event, "form": form,
         **_schedule_editor_context(event, formset=formset),

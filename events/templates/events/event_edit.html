@@ -108,8 +108,105 @@
       </span>
     </label>
 
+    <section class="space-y-3 border-t border-base-300/60 pt-6">
+      <h2 class="font-serif text-lg text-base-content">Continuing education</h2>
+
+      <label class="flex items-start gap-2 cursor-pointer">
+        {{ form.offers_ce }}
+        <span class="label-text">
+          Approved for CE credits
+          <span class="block text-xs text-base-content/60">Tick this once an accrediting body has approved the event. It adds a CE panel at the bottom of the About section on the event page.</span>
+        </span>
+      </label>
+
+      <div class="flex flex-wrap items-end gap-3">
+        <div class="space-y-1">
+          <label for="id_ce_credits" class="block text-xs text-base-content/60">Credits</label>
+          {{ form.ce_credits }}
+        </div>
+        <div class="space-y-1">
+          <label for="id_ce_credits_basis" class="block text-xs text-base-content/60">Counted</label>
+          {{ form.ce_credits_basis }}
+        </div>
+      </div>
+      <p class="text-xs text-base-content/60">Leave the count blank if the body hasn't set one yet, the page will say credits are available.</p>
+      {% if form.ce_credits.errors %}
+      <p class="text-xs text-error">{{ form.ce_credits.errors|join:", " }}</p>
+      {% endif %}
+
+      <div class="space-y-2">
+        <span class="block text-xs text-base-content/60">Approved by</span>
+        {% for org in ce_organizations %}
+        <label class="flex cursor-pointer items-center gap-3">
+          <input type="checkbox" name="ce_organizations" value="{{ org.pk }}"
+                 class="checkbox checkbox-sm"
+                 {% if org.pk|stringformat:"s" in selected_ce_values %}checked{% endif %}>
+          {% if org.logo %}
+          <span class="inline-flex items-center rounded border border-base-300/60 bg-white p-1.5">
+            <img src="{{ org.logo.url }}" alt="{{ org.name }} logo"
+                 class="max-h-8 max-w-28 object-contain">
+          </span>
+          {% endif %}
+          <span class="text-sm text-base-content">{{ org.name }}</span>
+        </label>
+        {% empty %}
+        <p class="text-xs text-base-content/50">No organizations listed yet. Add yours below the form.</p>
+        {% endfor %}
+      </div>
+
+      <div class="form-control space-y-1">
+        <label for="id_ce_note" class="block text-xs text-base-content/60">Note for this event</label>
+        {{ form.ce_note }}
+        <p class="text-xs text-base-content/60">Anything specific to this event, e.g. "full attendance is required for credit".</p>
+      </div>
+    </section>
+
     <button type="submit" class="btn btn-primary">Save</button>
   </form>
+
+  {# Its own form (HTML forbids nesting) — posts to the CE-organization view. #}
+  <section class="space-y-3 border-t border-base-300/60 pt-6">
+    <h2 class="font-serif text-lg text-base-content">Add a CE organization</h2>
+    <p class="text-xs text-base-content/60">
+      If the body that approved your event isn't in the list above, add it here.
+      It becomes available to every other event, so use the organization's full
+      name and its official logo. A transparent PNG looks best.
+    </p>
+    <form method="post" enctype="multipart/form-data"
+          action="{% url 'events:ce_organization_add' event.slug %}" class="space-y-3">
+      {% csrf_token %}
+      {% with f=ce_org_form %}
+      <div class="space-y-1">
+        <label for="id_name" class="block text-xs text-base-content/60">Name</label>
+        <input type="text" name="name" id="id_name" required
+               value="{% if f %}{{ f.name.value|default_if_none:'' }}{% endif %}"
+               class="input input-bordered input-sm w-full">
+        {% if f.name.errors %}<p class="text-xs text-error">{{ f.name.errors|join:", " }}</p>{% endif %}
+      </div>
+      <div class="space-y-1">
+        <label for="id_logo" class="block text-xs text-base-content/60">Logo</label>
+        <input type="file" name="logo" id="id_logo" accept="image/*" required
+               class="file-input file-input-bordered file-input-sm w-full">
+        {% if f.logo.errors %}<p class="text-xs text-error">{{ f.logo.errors|join:", " }}</p>{% endif %}
+      </div>
+      <div class="space-y-1">
+        <label for="id_url" class="block text-xs text-base-content/60">Website (optional)</label>
+        <input type="url" name="url" id="id_url"
+               value="{% if f %}{{ f.url.value|default_if_none:'' }}{% endif %}"
+               class="input input-bordered input-sm w-full">
+        {% if f.url.errors %}<p class="text-xs text-error">{{ f.url.errors|join:", " }}</p>{% endif %}
+      </div>
+      <div class="space-y-1">
+        <label for="id_statement" class="block text-xs text-base-content/60">Required approval language (optional)</label>
+        <textarea name="statement" id="id_statement" rows="3"
+                  class="textarea textarea-bordered w-full">{% if f %}{{ f.statement.value|default_if_none:'' }}{% endif %}</textarea>
+        <p class="text-xs text-base-content/60">Wording this body requires on approved events. Shown under its logo on every event that claims it.</p>
+        {% if f.statement.errors %}<p class="text-xs text-error">{{ f.statement.errors|join:", " }}</p>{% endif %}
+      </div>
+      {% endwith %}
+      <button type="submit" class="btn btn-outline btn-sm">Add organization</button>
+    </form>
+  </section>
 
   {% if show_schedule_editor %}
   <section class="space-y-4 border-t border-base-300/60 pt-6">
