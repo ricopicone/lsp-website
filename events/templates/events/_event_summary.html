@@ -72,11 +72,16 @@ show_access_info.{% endcomment %}
 {% endif %}
 {% endwith %}
 
-{# ---------- About ---------- #}
+{# ---------- About (+ CE panel, which stands alone if there's no body) ---------- #}
 {% if event.description %}
 <section class="space-y-3">
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">About</h2>
   <div class="text-base-content/90 leading-relaxed space-y-4">{{ event.description|inline_italics|linebreaks }}</div>
+  {% if event.offers_ce %}{% include "events/_ce_credits.html" %}{% endif %}
+</section>
+{% elif event.offers_ce %}
+<section class="space-y-3">
+  {% include "events/_ce_credits.html" %}
 </section>
 {% endif %}
 
