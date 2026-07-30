@@ -55,6 +55,43 @@ def test_proposal_form_accepts_a_credit_estimate(client, proposer):
 
 
 @pytest.mark.django_db
+def test_a_special_event_can_declare_ce_intent(client, proposer):
+    """A visiting speaker's day is among the likeliest things to carry CE, so
+    the CE block is not restricted to the annual-program offerings."""
+    client.force_login(proposer)
+    response = client.post(reverse("propose_event"), {
+        **_MGMT,
+        "event_type": Event.Type.SPECIAL_EVENT,
+        "title": "A Day on Masochism",
+        "description": "A one-day event with a visiting speaker.",
+        "date_tbd": "on",
+        "fee_type": "free",
+        "offers_ce": "on",
+        "ce_credits": "6",
+        "ce_credits_basis": CECreditBasis.TOTAL,
+    })
+    assert response.status_code == 302
+    proposal = EventProposal.objects.get(title="A Day on Masochism")
+    assert proposal.offers_ce is True
+    assert proposal.ce_credits == Decimal("6")
+    assert proposal.ce_credits_label == "Approved for 6 CE credits."
+
+
+@pytest.mark.django_db
+def test_the_ce_fields_are_shown_for_every_proposable_type(client, proposer):
+    """The per-type show/hide is driven by data-types attributes, so the CE
+    field block must list special_event alongside the offerings."""
+    client.force_login(proposer)
+    body = client.get(reverse("propose_event")).content.decode()
+    checkbox = body.index('id="id_offers_ce"')
+    # The nearest data-types attribute before the checkbox is the block that
+    # governs whether it's shown.
+    start = body.rindex('data-types="', 0, checkbox) + len('data-types="')
+    types = body[start:body.index('"', start)].split()
+    assert set(types) == {"seminar", "reading_group", "special_event"}
+
+
+@pytest.mark.django_db
 def test_the_estimate_is_optional(client, proposer):
     client.force_login(proposer)
     response = client.post(reverse("propose_event"), {

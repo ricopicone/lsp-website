@@ -189,19 +189,32 @@
       </details>
     </div>
 
-    {# ---- CE (offerings) ---- #}
-    <div data-types="seminar reading_group" class="space-y-1">
+    {% comment %}---- CE. The fields apply to every proposable type; the guidance
+    below differs because the May 15th deadline belongs to the annual program
+    round and a special event can fall anywhere in the year. ----{% endcomment %}
+    <div data-types="seminar reading_group special_event" class="space-y-1">
       {% include "events/_proposal_field.html" with field=form.offers_ce %}
       <div class="flex flex-wrap items-end gap-3 pl-6">
         {% include "events/_proposal_field.html" with field=form.ce_credits %}
         {% include "events/_proposal_field.html" with field=form.ce_credits_basis %}
       </div>
+    </div>
+    <div data-types="seminar reading_group" class="space-y-1">
       <p class="text-xs text-base-content/50">Note: If interested, you will need to
         apply to the Greater Pittsburgh Psychological Association (GPPA) for APA
         Accredited Continuing Education Credits for your proposal. We request that you
         email the program committee with your email of approval from GPPA by May 15th.
         Not all proposals will be suitable for CEs and the choice to apply lies
         entirely with individual instructors. If you have questions about how to offer
+        CE credits, please contact Diana Cuello, program committee convener.</p>
+    </div>
+    <div data-types="special_event" class="space-y-1">
+      <p class="text-xs text-base-content/50">Note: If interested, you will need to
+        apply to the Greater Pittsburgh Psychological Association (GPPA) for APA
+        Accredited Continuing Education Credits for your proposal, and email the
+        program committee with your email of approval from GPPA once you have it.
+        Not all proposals will be suitable for CEs and the choice to apply lies
+        entirely with the presenter. If you have questions about how to offer
         CE credits, please contact Diana Cuello, program committee convener.</p>
     </div>
 
