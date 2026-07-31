@@ -6,7 +6,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from accounts.models import User
@@ -14,16 +13,16 @@ from events.ce import CECreditBasis
 from events.models import CEOrganization, Event
 
 
-@pytest.fixture
-def logo():
-    """A 1x1 PNG is enough — these tests care about markup, not pixels."""
-    return SimpleUploadedFile(
-        "apa.png",
-        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
-        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00"
-        b"\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82",
-        content_type="image/png",
-    )
+def _blob():
+    """A WebP blob shaped like normalize_logo() output."""
+    import io
+
+    from django.core.files.base import ContentFile
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGBA", (40, 20), (10, 20, 30, 255)).save(buf, format="WEBP")
+    return ContentFile(buf.getvalue())
 
 
 @pytest.fixture
@@ -64,14 +63,14 @@ def test_ce_panel_renders_when_the_event_has_no_description(client, event):
 
 
 @pytest.mark.django_db
-def test_ce_panel_shows_logo_statement_and_note(client, event, logo, settings, tmp_path):
+def test_ce_panel_shows_logo_statement_and_note(client, event, settings, tmp_path):
     settings.MEDIA_ROOT = str(tmp_path)
     org = CEOrganization.objects.create(
         name="American Psychological Association",
-        logo=logo,
         url="https://www.apa.org/",
         statement="LSP maintains responsibility for this program and its content.",
     )
+    org.add_logos([_blob()])
     event.offers_ce = True
     event.ce_credits = Decimal("2.00")
     event.ce_credits_basis = CECreditBasis.PER_MEETING
@@ -107,3 +106,33 @@ def test_ce_panel_appears_on_the_workspace_overview(client, event):
     workgroup = event.ensure_workgroup()
     response = client.get(workgroup.get_absolute_url())
     assert b"Approved for 2 CE credits per meeting." in response.content
+
+
+@pytest.mark.django_db
+def test_every_logo_in_the_set_is_shown(client, event, settings, tmp_path):
+    """A body requiring a sponsor mark and a provider seal gets both on every
+    event that claims it."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    org = CEOrganization.objects.create(name="APA")
+    org.add_logos([_blob(), _blob(), _blob()])
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert body.count('alt="APA logo"') == 3
+
+
+@pytest.mark.django_db
+def test_an_organization_with_no_logos_renders_without_error(client, event):
+    """Defensive: admin can delete the last row even though the UI refuses to."""
+    org = CEOrganization.objects.create(name="Logoless")
+    org.statement = "Still has something to say."
+    org.save()
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    response = client.get(reverse("events:detail", args=[event.slug]))
+    assert response.status_code == 200
+    assert b"Still has something to say." in response.content
