@@ -12,10 +12,6 @@
     <p class="text-sm text-base-content/60">{{ application.get_track_display }}{% if application.background %} · {{ application.get_background_display }}{% endif %}</p>
   </header>
 
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'info' %}alert-info{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
-
   {% if is_sandbox %}
   <div class="alert alert-warning py-2 text-sm">
     🧪 <span><strong>Sandbox.</strong> A training applicant — any email here is

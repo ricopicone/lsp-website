@@ -16,12 +16,6 @@
     <p class="mt-1">Someone accepted by the Meeting of the Analysts before the application process moved here, or admitted by another route. Anyone who applied on the site is admitted from their application, in the Applications Coordinator's console.</p>
   </div>
 
-  {% if messages %}
-    {% for m in messages %}
-    <div role="alert" class="alert {% if m.tags %}alert-{{ m.tags }}{% endif %}"><span>{{ m }}</span></div>
-    {% endfor %}
-  {% endif %}
-
   <form method="post" class="space-y-5">
     {% csrf_token %}
     {% if form.non_field_errors %}

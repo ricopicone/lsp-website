@@ -1,14 +1,6 @@
 {% load static %}
 <div class="space-y-6">
 
-  {% if messages %}
-  <div class="space-y-2">
-    {% for m in messages %}
-    <div class="alert {% if 'error' in m.tags %}alert-error{% elif 'success' in m.tags %}alert-success{% else %}alert-info{% endif %} text-sm">{{ m }}</div>
-    {% endfor %}
-  </div>
-  {% endif %}
-
   <section class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h2 class="font-serif text-xl text-base-content">Files</h2>

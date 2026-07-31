@@ -30,12 +30,6 @@
     </div>
   </div>
 
-  {% if messages %}
-    {% for m in messages %}
-    <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-    {% endfor %}
-  {% endif %}
-
   {% comment %}Member search{% endcomment %}
   <form method="get" class="flex flex-wrap items-end gap-2">
     <div class="flex-1 min-w-0 space-y-1">

@@ -3,10 +3,6 @@
 {% block content %}
 <div class="space-y-6 max-w-2xl">
 
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
-
   {% if done %}
   {% comment %}Screen 5 — done; route them to finish their profile.{% endcomment %}
   <div class="rounded-xl border border-base-300 p-6 space-y-3 text-center">

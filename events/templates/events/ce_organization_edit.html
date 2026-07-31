@@ -10,12 +10,6 @@
     </p>
   </header>
 
-  {% if messages %}
-    {% for m in messages %}
-    <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-    {% endfor %}
-  {% endif %}
-
   <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-base-content/80">
     This organization is shared across the whole site. Changes here appear on
     every event approved by it, not just this one.

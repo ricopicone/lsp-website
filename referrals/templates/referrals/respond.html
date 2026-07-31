@@ -12,10 +12,6 @@
     </p>
   </header>
 
-  {% if messages %}{% for m in messages %}
-  <div class="alert alert-success py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
-
   <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-3">
     <dl class="grid gap-x-8 gap-y-2 sm:grid-cols-2 text-sm">
       <div><dt class="text-base-content/60">Pronouns</dt><dd>{{ req.pronouns|default:"(not given)" }}</dd></div>
