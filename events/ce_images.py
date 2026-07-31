@@ -21,6 +21,10 @@ MAX_BOX = (800, 400)
 #: Reject an upload larger than this outright, before decoding it.
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024  # 8 MB
 
+#: Most logos one organization may carry. Lives here beside the other upload
+#: limits so every bound on a logo is in one file.
+MAX_LOGOS = 10
+
 #: Pillow format names we accept. Everything is re-encoded to WebP on the way
 #: out, so the stored format is uniform regardless of what was uploaded.
 ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP", "GIF", "BMP", "TIFF"}

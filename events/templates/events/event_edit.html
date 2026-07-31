@@ -184,10 +184,9 @@
         {% if f.name.errors %}<p class="text-xs text-error">{{ f.name.errors|join:", " }}</p>{% endif %}
       </div>
       <div class="space-y-1">
-        <label for="id_logo" class="block text-xs text-base-content/60">Logo</label>
-        <input type="file" name="logo" id="id_logo" accept="image/*" required
-               class="file-input file-input-bordered file-input-sm w-full">
-        {% if f.logo.errors %}<p class="text-xs text-error">{{ f.logo.errors|join:", " }}</p>{% endif %}
+        <span class="block text-xs text-base-content/60">Logos</span>
+        {% include "events/_ce_logo_inputs.html" with max_new=max_new_logos %}
+        {% if f.logos.errors %}<p class="text-xs text-error">{{ f.logos.errors|join:", " }}</p>{% endif %}
       </div>
       <div class="space-y-1">
         <label for="id_url" class="block text-xs text-base-content/60">Website (optional)</label>

@@ -580,6 +580,66 @@ def _build_schedule_formset():
 SessionScheduleFormSet = _build_schedule_formset()
 
 
+class MultipleFileInput(forms.ClearableFileInput):
+    """A file input Django will read with ``getlist``.
+
+    The template renders several inputs all named ``logo`` (the "Add another
+    logo" button clones one), and this flag is what makes the field collect
+    every one of them rather than the last.
+    """
+
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    """``FileField`` whose ``clean`` returns a list of uploaded files."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        # Handle "nothing uploaded" here rather than delegating: the base
+        # class's required check never sees an empty *list*, so without this a
+        # required field would silently accept a post with no files at all.
+        items = [f for f in data if f] if isinstance(data, (list, tuple)) else (
+            [data] if data else []
+        )
+        if not items:
+            if self.required:
+                raise forms.ValidationError(
+                    self.error_messages["required"], code="required",
+                )
+            return []
+        clean_one = super().clean
+        return [clean_one(item, initial) for item in items]
+
+
+def clean_logo_files(files, *, existing=0):
+    """Normalize uploaded logos, or raise ``ValidationError`` saying why not.
+
+    Shared by the create form and the per-organization page so the cap, the
+    size limit, and the bounded-WebP rendering can't drift apart.
+    """
+    from .ce_images import MAX_LOGOS, MAX_UPLOAD_BYTES, InvalidImage, normalize_logo
+
+    files = [f for f in files if f]
+    if existing + len(files) > MAX_LOGOS:
+        raise forms.ValidationError(
+            f"An organization can carry at most {MAX_LOGOS} logos"
+            + (f" and this one already has {existing}." if existing else ".")
+        )
+    blobs = []
+    for f in files:
+        if getattr(f, "size", 0) > MAX_UPLOAD_BYTES:
+            raise forms.ValidationError(f"{f.name} is too large (8 MB max).")
+        try:
+            blobs.append(normalize_logo(f))
+        except InvalidImage as exc:
+            raise forms.ValidationError(f"{f.name}: {exc}") from exc
+    return blobs
+
+
 class CEOrganizationForm(forms.ModelForm):
     """Add an accrediting body to the shared library, from an event page.
 
@@ -587,6 +647,11 @@ class CEOrganizationForm(forms.ModelForm):
     name check that points at the existing entry rather than minting a second
     one, and logo normalization so nobody's 4000px PNG lands on an event page.
     """
+
+    logos = MultipleFileField(
+        label="Logo", required=True,
+        error_messages={"required": "Add at least one logo."},
+    )
 
     class Meta:
         model = CEOrganization
@@ -609,26 +674,12 @@ class CEOrganizationForm(forms.ModelForm):
             )
         return name
 
-    def clean_logo(self):
-        from .ce_images import MAX_UPLOAD_BYTES, InvalidImage, normalize_logo
-
-        raw = self.cleaned_data["logo"]
-        if getattr(raw, "size", 0) > MAX_UPLOAD_BYTES:
-            raise forms.ValidationError("That image is too large (8 MB max).")
-        try:
-            self._logo_webp = normalize_logo(raw)
-        except InvalidImage as exc:
-            raise forms.ValidationError(str(exc)) from exc
-        return raw
+    def clean_logos(self):
+        return clean_logo_files(self.cleaned_data.get("logos") or [])
 
     def save(self, added_by=None, commit=True):
-        from django.utils.text import slugify
-
         org = super().save(commit=False)
         org.added_by = added_by
-        org.logo.save(
-            f"{slugify(org.name) or 'ce-organization'}.webp", self._logo_webp, save=False,
-        )
-        if commit:
-            org.save()
+        org.save()
+        org.add_logos(self.cleaned_data["logos"])
         return org

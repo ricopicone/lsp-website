@@ -1,0 +1,32 @@
+{% comment %}Logo file inputs plus an "Add another logo" button (task #486).
+
+Every input is named "logo"; the view reads request.FILES.getlist("logo") and
+hands the list to the form's `logos` MultipleFileField. Expects: max_new (how
+many more this organization may take). With JavaScript off you still get one
+working input, so the form degrades rather than breaks.{% endcomment %}
+<div class="space-y-2" data-logo-inputs data-max="{{ max_new }}">
+  <div data-logo-row>
+    <input type="file" name="logo" accept="image/*"
+           class="file-input file-input-sm w-full">
+  </div>
+  <button type="button" class="btn btn-ghost btn-xs" data-add-logo>
+    + Add another logo
+  </button>
+</div>
+<script>
+  if (!window.__ceLogoInputs) {
+    window.__ceLogoInputs = true;
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-add-logo]");
+      if (!btn) return;
+      var box = btn.closest("[data-logo-inputs]");
+      var rows = box.querySelectorAll("[data-logo-row]");
+      var max = parseInt(box.getAttribute("data-max"), 10) || 1;
+      if (rows.length >= max) return;
+      var row = rows[rows.length - 1].cloneNode(true);
+      row.querySelector("input").value = "";
+      rows[rows.length - 1].after(row);
+      if (rows.length + 1 >= max) btn.setAttribute("hidden", "hidden");
+    });
+  }
+</script>

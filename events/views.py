@@ -17,6 +17,7 @@ from django.http import (
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.datastructures import MultiValueDict
 from django.views.decorators.http import require_POST
 
 from accounts.permissions import is_lsp_member
@@ -310,11 +311,13 @@ def _ce_edit_context(form):
     logo. ``BoundField.value()`` gives the *submitted* selection when the form
     is bound, so a failed POST re-renders with the user's ticks intact.
     """
+    from .ce_images import MAX_LOGOS
     from .models import CEOrganization
 
     return {
-        "ce_organizations": CEOrganization.objects.all(),
+        "ce_organizations": CEOrganization.objects.prefetch_related("logos"),
         "selected_ce_values": [str(v) for v in (form["ce_organizations"].value() or [])],
+        "max_new_logos": MAX_LOGOS,
     }
 
 
@@ -462,7 +465,9 @@ def ce_organization_add(request, slug: str):
     if not can_edit_event(request.user, event):
         return HttpResponseForbidden("You don't have permission to edit this event.")
 
-    org_form = CEOrganizationForm(request.POST, request.FILES)
+    org_form = CEOrganizationForm(
+        request.POST, MultiValueDict({"logos": request.FILES.getlist("logo")}),
+    )
     if org_form.is_valid():
         org = org_form.save(added_by=request.user)
         event.ce_organizations.add(org)
