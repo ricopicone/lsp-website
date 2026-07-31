@@ -11,7 +11,7 @@ from django.db import IntegrityError, transaction
 
 from accounts.models import User
 from events.ce import CECreditBasis, credits_label
-from events.models import CEOrganization, Event, EventProposal
+from events.models import CEOrganization, CEOrganizationLogo, Event, EventProposal
 
 # ---- Credit-line phrasing ----------------------------------------------
 
@@ -94,3 +94,50 @@ def test_approve_carries_ce_intent_onto_the_minted_event():
     assert event.ce_credits == Decimal("2.00")
     assert event.ce_credits_basis == CECreditBasis.PER_MEETING
     assert event.ce_credits_label == "Approved for 2 CE credits per meeting."
+
+
+# ---- Logo set ----------------------------------------------------------
+
+
+def _webp_blob():
+    """A tiny real WebP, the shape normalize_logo() returns."""
+    import io
+
+    from django.core.files.base import ContentFile
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGBA", (40, 20), (10, 20, 30, 255)).save(buf, format="WEBP")
+    return ContentFile(buf.getvalue())
+
+
+@pytest.mark.django_db
+def test_add_logos_appends_in_order(settings, tmp_path):
+    settings.MEDIA_ROOT = str(tmp_path)
+    org = CEOrganization.objects.create(name="APA")
+
+    org.add_logos([_webp_blob(), _webp_blob()])
+    org.add_logos([_webp_blob()])
+
+    logos = list(org.logos.all())
+    assert len(logos) == 3
+    assert [logo.sort_order for logo in logos] == [1, 2, 3]
+    assert all(logo.image.name.endswith(".webp") for logo in logos)
+
+
+@pytest.mark.django_db
+def test_deleting_an_organization_takes_its_logos(settings, tmp_path):
+    settings.MEDIA_ROOT = str(tmp_path)
+    org = CEOrganization.objects.create(name="GPPA")
+    org.add_logos([_webp_blob()])
+    org.delete()
+    assert CEOrganizationLogo.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_the_single_logo_field_is_gone():
+    """Its replacement is the related set; a stray `logo` attribute would mean
+    the migration left the old column behind."""
+    field_names = {f.name for f in CEOrganization._meta.get_fields()}
+    assert "logo" not in field_names
+    assert "logos" in field_names

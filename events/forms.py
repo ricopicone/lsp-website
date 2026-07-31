@@ -590,7 +590,7 @@ class CEOrganizationForm(forms.ModelForm):
 
     class Meta:
         model = CEOrganization
-        fields = ("name", "logo", "url", "statement")
+        fields = ("name", "url", "statement")
         widgets = {
             "name": forms.TextInput(attrs={"class": "input input-bordered input-sm w-full"}),
             "url": forms.URLInput(attrs={"class": "input input-bordered input-sm w-full"}),
