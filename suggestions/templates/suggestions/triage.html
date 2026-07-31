@@ -15,10 +15,6 @@
     </p>
   </header>
 
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
-
   {# Filters #}
   <form method="get" class="flex flex-wrap items-end gap-3">
     <label class="space-y-1">

@@ -5,12 +5,6 @@
 
   <h1 class="font-serif text-3xl text-base-content">Registration recorded</h1>
 
-  {% if messages %}
-    {% for m in messages %}
-    <div role="alert" class="alert alert-error"><span>{{ m }}</span></div>
-    {% endfor %}
-  {% endif %}
-
   {% if request.GET.already %}
   <div role="alert" class="alert alert-warning">
     <span>You're already registered for this event — here are the details.</span>

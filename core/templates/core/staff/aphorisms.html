@@ -13,12 +13,6 @@
     <a href="{% url 'staff_aphorism_new' %}" class="btn btn-primary btn-sm">Add aphorism</a>
   </header>
 
-  {% if messages %}
-    {% for m in messages %}
-    <div role="alert" class="alert {% if m.tags %}alert-{{ m.tags }}{% endif %}"><span>{{ m }}</span></div>
-    {% endfor %}
-  {% endif %}
-
   <ul class="divide-y divide-base-300/70 border-y border-base-300/70">
     {% for a in aphorisms %}
     <li class="py-4 flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 {% if not a.is_active %}opacity-50{% endif %}">

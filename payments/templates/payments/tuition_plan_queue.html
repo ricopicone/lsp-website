@@ -4,10 +4,6 @@
 <div class="space-y-6 max-w-4xl">
   <nav class="text-sm"><a href="{% url 'board_admin' %}" class="link link-hover text-base-content/60">← Board Admin</a></nav>
 
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
-
   <header class="space-y-2">
     <h1 class="font-serif text-3xl text-base-content tracking-tight">Tuition payment plans</h1>
     <p class="text-base-content/70">Members' requests for a Board-approved payment plan. Approving moves their enrollment to "on payment plan", declining returns it to no decision so they can choose to pay in full or skip the year. A pending request already carries tuition coverage for events, so approving sets the installment schedule rather than unlocking registration.</p>

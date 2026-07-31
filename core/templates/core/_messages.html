@@ -1,0 +1,17 @@
+{% comment %}Django messages, rendered once for the whole site (2026-07-31).
+
+Included from core/base.html. Do NOT add a per-page messages loop: a second
+rendering in the same response prints every message twice. core/test_templates.py
+enforces this.
+
+Levels are matched with `in` rather than `==` because extra_tags makes m.tags a
+space-separated string ("mytag success"), which `==` silently misses. Every
+DaisyUI class is spelled out in full so the Tailwind scanner keeps it.
+{% endcomment %}
+{% if messages %}
+<div class="mb-6 space-y-2">
+  {% for m in messages %}
+  <div role="alert" class="alert py-2 text-sm {% if 'error' in m.tags %}alert-error{% elif 'warning' in m.tags %}alert-warning{% elif 'success' in m.tags %}alert-success{% else %}alert-info{% endif %}">{{ m }}</div>
+  {% endfor %}
+</div>
+{% endif %}
