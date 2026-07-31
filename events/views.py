@@ -17,6 +17,7 @@ from django.http import (
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.datastructures import MultiValueDict
 from django.views.decorators.http import require_POST
 
 from accounts.permissions import is_lsp_member
@@ -310,11 +311,13 @@ def _ce_edit_context(form):
     logo. ``BoundField.value()`` gives the *submitted* selection when the form
     is bound, so a failed POST re-renders with the user's ticks intact.
     """
+    from .ce_images import MAX_LOGOS
     from .models import CEOrganization
 
     return {
-        "ce_organizations": CEOrganization.objects.all(),
+        "ce_organizations": CEOrganization.objects.prefetch_related("logos"),
         "selected_ce_values": [str(v) for v in (form["ce_organizations"].value() or [])],
+        "max_new_logos": MAX_LOGOS,
     }
 
 
@@ -462,7 +465,9 @@ def ce_organization_add(request, slug: str):
     if not can_edit_event(request.user, event):
         return HttpResponseForbidden("You don't have permission to edit this event.")
 
-    org_form = CEOrganizationForm(request.POST, request.FILES)
+    org_form = CEOrganizationForm(
+        request.POST, MultiValueDict({"logos": request.FILES.getlist("logo")}),
+    )
     if org_form.is_valid():
         org = org_form.save(added_by=request.user)
         event.ce_organizations.add(org)
@@ -475,6 +480,55 @@ def ce_organization_add(request, slug: str):
         "speaker_invites": _speaker_invite_rows(event),
         **_ce_edit_context(form),
         **_schedule_editor_context(event),
+    })
+
+
+@login_required
+def ce_organization_edit(request, slug: str, pk: int):
+    """Manage a CE organization's logo set, site, and required wording.
+
+    The event in the path is provenance for the permission check and the back
+    link only. The organization is shared, so edits here land on every event
+    that claims it, which the page says in as many words.
+    """
+    from .ce_images import MAX_LOGOS
+    from .forms import CEOrganizationDetailsForm
+    from .models import CEOrganization
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to edit this event.")
+    org = get_object_or_404(CEOrganization, pk=pk)
+
+    if request.method == "POST" and request.POST.get("action") == "remove":
+        if org.logos.count() <= 1:
+            messages.error(
+                request,
+                "An organization needs at least one logo. To swap this one out, "
+                "add the replacement first, then remove this.",
+            )
+        else:
+            org.logos.filter(pk=request.POST.get("logo_id")).delete()
+            messages.success(request, "Logo removed.")
+        return redirect("events:ce_organization_edit", slug=event.slug, pk=org.pk)
+
+    if request.method == "POST":
+        form = CEOrganizationDetailsForm(
+            request.POST,
+            MultiValueDict({"logos": request.FILES.getlist("logo")}),
+            instance=org,
+        )
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Saved {org.name}.")
+            return redirect("events:edit", slug=event.slug)
+    else:
+        form = CEOrganizationDetailsForm(instance=org)
+
+    return render(request, "events/ce_organization_edit.html", {
+        "event": event, "organization": org, "form": form,
+        "logos": list(org.logos.all()),
+        "max_new_logos": max(0, MAX_LOGOS - org.logos.count()),
     })
 
 

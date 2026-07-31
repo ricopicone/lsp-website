@@ -137,18 +137,22 @@
       <div class="space-y-2">
         <span class="block text-xs text-base-content/60">Approved by</span>
         {% for org in ce_organizations %}
-        <label class="flex cursor-pointer items-center gap-3">
-          <input type="checkbox" name="ce_organizations" value="{{ org.pk }}"
-                 class="checkbox checkbox-sm"
-                 {% if org.pk|stringformat:"s" in selected_ce_values %}checked{% endif %}>
-          {% if org.logo %}
-          <span class="inline-flex items-center rounded border border-base-300/60 bg-white p-1.5">
-            <img src="{{ org.logo.url }}" alt="{{ org.name }} logo"
-                 class="max-h-8 max-w-28 object-contain">
-          </span>
-          {% endif %}
-          <span class="text-sm text-base-content">{{ org.name }}</span>
-        </label>
+        <div class="flex items-center gap-3">
+          <label class="flex flex-1 cursor-pointer items-center gap-3">
+            <input type="checkbox" name="ce_organizations" value="{{ org.pk }}"
+                   class="checkbox checkbox-sm"
+                   {% if org.pk|stringformat:"s" in selected_ce_values %}checked{% endif %}>
+            {% for logo in org.logos.all %}
+            <span class="inline-flex items-center rounded border border-base-300/60 bg-white p-1.5">
+              <img src="{{ logo.image.url }}" alt="{{ org.name }} logo"
+                   class="max-h-8 max-w-28 object-contain">
+            </span>
+            {% endfor %}
+            <span class="text-sm text-base-content">{{ org.name }}</span>
+          </label>
+          <a href="{% url 'events:ce_organization_edit' event.slug org.pk %}"
+             class="link link-hover text-xs text-base-content/50">Manage logos</a>
+        </div>
         {% empty %}
         <p class="text-xs text-base-content/50">No organizations listed yet. Add yours below the form.</p>
         {% endfor %}
@@ -184,10 +188,9 @@
         {% if f.name.errors %}<p class="text-xs text-error">{{ f.name.errors|join:", " }}</p>{% endif %}
       </div>
       <div class="space-y-1">
-        <label for="id_logo" class="block text-xs text-base-content/60">Logo</label>
-        <input type="file" name="logo" id="id_logo" accept="image/*" required
-               class="file-input file-input-bordered file-input-sm w-full">
-        {% if f.logo.errors %}<p class="text-xs text-error">{{ f.logo.errors|join:", " }}</p>{% endif %}
+        <span class="block text-xs text-base-content/60">Logos</span>
+        {% include "events/_ce_logo_inputs.html" with max_new=max_new_logos %}
+        {% if f.logos.errors %}<p class="text-xs text-error">{{ f.logos.errors|join:", " }}</p>{% endif %}
       </div>
       <div class="space-y-1">
         <label for="id_url" class="block text-xs text-base-content/60">Website (optional)</label>
@@ -200,7 +203,7 @@
         <label for="id_statement" class="block text-xs text-base-content/60">Required approval language (optional)</label>
         <textarea name="statement" id="id_statement" rows="3"
                   class="textarea textarea-bordered w-full">{% if f %}{{ f.statement.value|default_if_none:'' }}{% endif %}</textarea>
-        <p class="text-xs text-base-content/60">Wording this body requires on approved events. Shown under its logo on every event that claims it.</p>
+        <p class="text-xs text-base-content/60">Wording this body requires on approved events. Shown under its logos on every event that claims it.</p>
         {% if f.statement.errors %}<p class="text-xs text-error">{{ f.statement.errors|join:", " }}</p>{% endif %}
       </div>
       {% endwith %}

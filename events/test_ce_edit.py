@@ -141,3 +141,10 @@ def test_edit_affordance_is_labelled_edit_event(client, event, faculty):
     ).content.decode()
     assert "Edit event" in body
     assert "Edit description" not in body
+
+
+@pytest.mark.django_db
+def test_edit_page_offers_the_add_another_logo_control(client, event, faculty):
+    client.force_login(faculty)
+    body = client.get(reverse("events:edit", args=[event.slug])).content.decode()
+    assert "Add another logo" in body

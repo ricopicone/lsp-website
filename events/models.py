@@ -195,21 +195,20 @@ class CEOrganization(models.Model):
     """A body that accredits events for continuing-education credits.
 
     A shared library rather than a per-event upload: the same accreditor
-    approves many events, and its logo and mandated approval language should be
+    approves many events, and its logos and mandated approval language should be
     correctable in one place. Faculty add an entry inline when theirs is not
     listed yet, so nobody curates the collection, it accretes from use.
     """
 
     name = models.CharField(max_length=120)
-    logo = models.ImageField(upload_to="ce-organizations/")
     url = models.URLField(
         blank=True,
-        help_text="The organization's site. Links the logo when set.",
+        help_text="The organization's site. Links the logos when set.",
     )
     statement = models.TextField(
         blank=True,
         help_text="Approval language this body requires on approved events. "
-        "Shown under its logo on every event that claims it.",
+        "Shown under its logos on every event that claims it.",
     )
     added_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
@@ -225,6 +224,48 @@ class CEOrganization(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    def add_logos(self, blobs):
+        """Append normalized WebP blobs as logo rows, after the current last.
+
+        ``blobs`` are the ContentFiles ``ce_images.normalize_logo`` returns, so
+        both editing surfaces store identical, already-bounded images.
+        """
+        from django.utils.text import slugify
+
+        start = (self.logos.aggregate(models.Max("sort_order"))["sort_order__max"] or 0) + 1
+        stem = slugify(self.name) or "ce-organization"
+        created = []
+        for offset, blob in enumerate(blobs):
+            order = start + offset
+            logo = CEOrganizationLogo(organization=self, sort_order=order)
+            logo.image.save(f"{stem}-{order}.webp", blob, save=False)
+            logo.save()
+            created.append(logo)
+        return created
+
+
+class CEOrganizationLogo(models.Model):
+    """One mark belonging to a CE accreditor.
+
+    A body can require more than one image on an approved event's page, e.g. a
+    sponsor logo alongside an approved-provider seal, so the logo is a set on
+    the organization rather than a single field. Every event claiming the
+    organization shows the whole set.
+    """
+
+    organization = models.ForeignKey(
+        "events.CEOrganization", on_delete=models.CASCADE, related_name="logos",
+    )
+    image = models.ImageField(upload_to="ce-organizations/")
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("sort_order", "pk")
+
+    def __str__(self) -> str:
+        return f"{self.organization.name} logo {self.sort_order}"
 
 
 class SpeakerInvitation(models.Model):
