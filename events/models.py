@@ -195,7 +195,7 @@ class CEOrganization(models.Model):
     """A body that accredits events for continuing-education credits.
 
     A shared library rather than a per-event upload: the same accreditor
-    approves many events, and its logo and mandated approval language should be
+    approves many events, and its logos and mandated approval language should be
     correctable in one place. Faculty add an entry inline when theirs is not
     listed yet, so nobody curates the collection, it accretes from use.
     """
@@ -203,12 +203,12 @@ class CEOrganization(models.Model):
     name = models.CharField(max_length=120)
     url = models.URLField(
         blank=True,
-        help_text="The organization's site. Links the logo when set.",
+        help_text="The organization's site. Links the logos when set.",
     )
     statement = models.TextField(
         blank=True,
         help_text="Approval language this body requires on approved events. "
-        "Shown under its logo on every event that claims it.",
+        "Shown under its logos on every event that claims it.",
     )
     added_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,

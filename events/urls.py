@@ -15,6 +15,8 @@ urlpatterns = [
     path("<slug:slug>/edit/schedule/", views.event_edit_schedule, name="edit_schedule"),
     path("<slug:slug>/ce-organizations/add/",
          views.ce_organization_add, name="ce_organization_add"),
+    path("<slug:slug>/ce-organizations/<int:pk>/",
+         views.ce_organization_edit, name="ce_organization_edit"),
     path("<slug:slug>/roster.csv", views.event_roster_csv, name="roster_csv"),
     path("<slug:slug>/codes/", views.event_generate_code, name="generate_code"),
     path("<slug:slug>/check-code/", views.check_pricing_code, name="check_code"),

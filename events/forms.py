@@ -683,3 +683,35 @@ class CEOrganizationForm(forms.ModelForm):
         org.save()
         org.add_logos(self.cleaned_data["logos"])
         return org
+
+
+class CEOrganizationDetailsForm(forms.ModelForm):
+    """Edit an existing accreditor: its logo set, site, and required wording.
+
+    No name field on purpose. The name is the case-insensitive dedup key, and a
+    rename ripples through every event claiming the organization, so renaming
+    stays a Django admin action.
+    """
+
+    logos = MultipleFileField(label="Add logos", required=False)
+
+    class Meta:
+        model = CEOrganization
+        fields = ("url", "statement")
+        widgets = {
+            "url": forms.URLInput(attrs={"class": "input input-bordered input-sm w-full"}),
+            "statement": forms.Textarea(
+                attrs={"class": "textarea textarea-bordered w-full", "rows": 3},
+            ),
+        }
+
+    def clean_logos(self):
+        return clean_logo_files(
+            self.cleaned_data.get("logos") or [],
+            existing=self.instance.logos.count(),
+        )
+
+    def save(self, commit=True):
+        org = super().save(commit=commit)
+        org.add_logos(self.cleaned_data.get("logos") or [])
+        return org

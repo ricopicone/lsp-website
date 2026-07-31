@@ -483,6 +483,55 @@ def ce_organization_add(request, slug: str):
     })
 
 
+@login_required
+def ce_organization_edit(request, slug: str, pk: int):
+    """Manage a CE organization's logo set, site, and required wording.
+
+    The event in the path is provenance for the permission check and the back
+    link only. The organization is shared, so edits here land on every event
+    that claims it, which the page says in as many words.
+    """
+    from .ce_images import MAX_LOGOS
+    from .forms import CEOrganizationDetailsForm
+    from .models import CEOrganization
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to edit this event.")
+    org = get_object_or_404(CEOrganization, pk=pk)
+
+    if request.method == "POST" and request.POST.get("action") == "remove":
+        if org.logos.count() <= 1:
+            messages.error(
+                request,
+                "An organization needs at least one logo. To swap this one out, "
+                "add the replacement first, then remove this.",
+            )
+        else:
+            org.logos.filter(pk=request.POST.get("logo_id")).delete()
+            messages.success(request, "Logo removed.")
+        return redirect("events:ce_organization_edit", slug=event.slug, pk=org.pk)
+
+    if request.method == "POST":
+        form = CEOrganizationDetailsForm(
+            request.POST,
+            MultiValueDict({"logos": request.FILES.getlist("logo")}),
+            instance=org,
+        )
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Saved {org.name}.")
+            return redirect("events:edit", slug=event.slug)
+    else:
+        form = CEOrganizationDetailsForm(instance=org)
+
+    return render(request, "events/ce_organization_edit.html", {
+        "event": event, "organization": org, "form": form,
+        "logos": list(org.logos.all()),
+        "max_new_logos": max(0, MAX_LOGOS - org.logos.count()),
+    })
+
+
 def _schedule_editor_context(event, formset=None):
     """Context for the standalone-event schedule editor on the edit page.
 
