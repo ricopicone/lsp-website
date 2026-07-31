@@ -110,6 +110,9 @@ video/          Daily.co in-site meeting rooms (one per Workgroup)          <- P
 - Committees (Board, Programming Committee) drive admin permissions; **LSP
   Staff is now the `Profile.is_lsp_staff` designation**, not a committee — it
   grants board entry, event-edit, and an `access=lsp_staff` Parlêtre channel.
+- **Django messages render once**, from `core/templates/core/_messages.html`,
+  included by `core/base.html`. Never add a per-page messages loop: a second
+  rendering prints every message twice. `core/test_templates.py` enforces this.
 - Tests use pytest-django; lint with ruff. Keep both green — CI runs them on push.
 
 ## Design principle: do not over-automate
