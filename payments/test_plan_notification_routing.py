@@ -162,3 +162,21 @@ def test_the_applicant_hears_the_decision_even_with_review_email_off(
     )
     assert "approved" in row.title.lower()
     assert [addr for m in mailoutbox for addr in m.to] == [application.user.email]
+
+
+def test_settings_page_shows_each_member_their_true_default(client, treasurer, board_member):
+    """The page reads the same resolve() dispatch uses, so a role-sensitive
+    default is displayed honestly rather than as a static category default."""
+    from notifications.preferences import resolve
+
+    for user, expected in ((treasurer, "immediate"), (board_member, "off")):
+        assert resolve(user, Category.TUITION_PLAN_REVIEW).email_mode == expected
+
+        client.force_login(user)
+        html = client.get("/notifications/settings/").content.decode()
+        select = html.split('name="tuition_plan_review__email"', 1)[1].split("</select>", 1)[0]
+        selected = [
+            line for line in select.splitlines() if "selected" in line
+        ]
+        assert len(selected) == 1
+        assert f'value="{expected}"' in selected[0]
