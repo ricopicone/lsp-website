@@ -1,0 +1,140 @@
+"""Who gets emailed when a member applies for a tuition payment plan
+(task #491).
+
+The Board keeps the queue and the decision, but only the Treasurer is
+emailed per application; the rest of the Board gets the bell row. Both
+sides can still change it on the notification settings page.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from decimal import Decimal
+
+import pytest
+
+from accounts.models import User
+from committees.models import Committee
+from core.models import StaffRole
+from notifications.categories import Category, EmailDelivery
+from notifications.models import Notification, NotificationPreference
+from payments.models import TuitionPeriod, TuitionPlanApplication
+from payments.notifications import notify_plan_application_submitted
+from workgroups.models import WorkgroupMembership
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _clear_seeded_periods():
+    TuitionPeriod.objects.all().delete()
+
+
+@pytest.fixture
+def period():
+    return TuitionPeriod.objects.create(
+        name="AY 2026-2027", slug="ay-2026-2027",
+        start_date=date(2026, 9, 1), end_date=date(2027, 6, 30),
+        decision_due_date=date(2026, 10, 1),
+        tuition_amount=Decimal("1000"),
+    )
+
+
+def _board(user):
+    Committee.objects.get(slug="board").add_member(
+        user, role=WorkgroupMembership.Role.MEMBER, start_date=date(2026, 1, 1),
+    )
+    return user
+
+
+@pytest.fixture
+def treasurer():
+    u = _board(User.objects.create_user(email="plan-treasurer@x.test", password="x"))
+    StaffRole.objects.get(key=StaffRole.TREASURER).holders.add(u)
+    return u
+
+
+@pytest.fixture
+def board_member():
+    return _board(User.objects.create_user(email="plan-board@x.test", password="x"))
+
+
+@pytest.fixture
+def application(period):
+    applicant = User.objects.create_user(email="plan-applicant@x.test", password="x")
+    applicant.profile.role = "candidate"
+    applicant.profile.save()
+    return TuitionPlanApplication.objects.create(
+        user=applicant, tuition_period=period, reasons="Money is tight this year.",
+    )
+
+
+def test_treasurer_is_emailed_and_the_rest_of_the_board_is_not(
+    treasurer, board_member, application, mailoutbox,
+    django_capture_on_commit_callbacks,
+):
+    with django_capture_on_commit_callbacks(execute=True):
+        notify_plan_application_submitted(application)
+
+    # Both see it in the bell.
+    for user in (treasurer, board_member):
+        assert Notification.objects.filter(
+            recipient=user, category=Category.TUITION_PLAN_REVIEW,
+        ).exists()
+
+    recipients = {addr for m in mailoutbox for addr in m.to}
+    assert recipients == {treasurer.email}
+
+
+def test_a_board_member_can_opt_into_the_email(
+    treasurer, board_member, application, mailoutbox,
+    django_capture_on_commit_callbacks,
+):
+    pref = NotificationPreference.objects.create(user=board_member)
+    pref.set(Category.TUITION_PLAN_REVIEW, in_app=True, email=EmailDelivery.IMMEDIATE)
+    pref.save()
+
+    with django_capture_on_commit_callbacks(execute=True):
+        notify_plan_application_submitted(application)
+
+    recipients = {addr for m in mailoutbox for addr in m.to}
+    assert recipients == {treasurer.email, board_member.email}
+
+
+def test_the_treasurer_can_opt_out(
+    treasurer, application, mailoutbox, django_capture_on_commit_callbacks,
+):
+    pref = NotificationPreference.objects.create(user=treasurer)
+    pref.set(Category.TUITION_PLAN_REVIEW, in_app=True, email=EmailDelivery.OFF)
+    pref.save()
+
+    with django_capture_on_commit_callbacks(execute=True):
+        notify_plan_application_submitted(application)
+
+    assert mailoutbox == []
+
+
+def test_with_no_treasurer_the_board_is_emailed(
+    board_member, application, mailoutbox, django_capture_on_commit_callbacks,
+):
+    # An unassigned role must never mean an application sits unseen.
+    StaffRole.objects.get(key=StaffRole.TREASURER).holders.clear()
+
+    with django_capture_on_commit_callbacks(execute=True):
+        notify_plan_application_submitted(application)
+
+    recipients = {addr for m in mailoutbox for addr in m.to}
+    assert recipients == {board_member.email}
+
+
+def test_the_applicant_is_not_notified_as_a_reviewer(
+    treasurer, application, mailoutbox, django_capture_on_commit_callbacks,
+):
+    _board(application.user)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        notify_plan_application_submitted(application)
+
+    assert not Notification.objects.filter(
+        recipient=application.user, category=Category.TUITION_PLAN_REVIEW,
+    ).exists()

@@ -136,6 +136,26 @@ _M = CategoryMeta
 _C = Category
 _E = EmailDelivery
 
+
+def _tuition_plan_review_default(user) -> str:
+    """Aim payment-plan application email at the Treasurer (task #491).
+
+    The Board reviews and decides these applications, so everyone on it gets
+    the bell row, but only the Treasurer needs an email per application. If
+    nobody holds the role, fall back to emailing the Board — an unassigned
+    role must never mean an application sits unseen.
+    """
+    from core.access import has_staff_role
+    from core.models import StaffRole
+
+    if has_staff_role(user, StaffRole.TREASURER):
+        return EmailDelivery.IMMEDIATE
+    held = StaffRole.objects.filter(
+        key=StaffRole.TREASURER, holders__isnull=False,
+    ).exists()
+    return EmailDelivery.OFF if held else EmailDelivery.IMMEDIATE
+
+
 CATEGORY_META: dict[str, CategoryMeta] = {
     # Discussion — email cadence is governed by Parlêtre's own per-channel
     # subscriptions; these flags drive the in-app bell and the master on/off.
@@ -177,8 +197,11 @@ CATEGORY_META: dict[str, CategoryMeta] = {
     ),
     _C.TUITION_PLAN_REVIEW: _M(
         SECTION_PAYMENTS, _("Tuition payment plans"),
-        _("For Board members: a payment plan application to review. Also "
-          "carries the Board's decision on a plan application you filed."),
+        _("For the Treasurer and Board: a payment plan application to review. "
+          "The Treasurer is emailed each application; the rest of the Board "
+          "sees it in the bell, unless you turn email on here."),
+        default_email=_E.OFF,
+        default_email_for=_tuition_plan_review_default,
     ),
     _C.BALANCE_REMINDER: _M(
         SECTION_PAYMENTS, _("Balance reminders"),
