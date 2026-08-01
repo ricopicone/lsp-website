@@ -22,6 +22,7 @@ Preferences are resolved against these defaults — see
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from django.db import models
@@ -124,6 +125,11 @@ class CategoryMeta:
     # Whether this category can appear on each channel at all.
     in_app_capable: bool = True
     email_capable: bool = True
+    # Optional per-recipient email default, consulted only when the member
+    # hasn't chosen for themselves. Lets a queue aim its email at the role that
+    # owns it while the rest of the committee keeps the bell row; both sides
+    # can still override on the settings page.
+    default_email_for: Callable[[object], str] | None = None
 
 
 _M = CategoryMeta
