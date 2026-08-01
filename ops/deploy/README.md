@@ -58,6 +58,14 @@ plus shared `redis`; the deploy script always targets one color by name.
   fan-out stays consistent and clients reconnect seamlessly.
 - A **failed `/healthz`** aborts the deploy before the flip — the old color keeps
   serving, so a bad build means no downtime (and a non-zero SSM/GHA result).
+- **Disk is the quiet failure mode.** The host is a 20GB volume. Nothing pruned
+  the BuildKit cache until 2026-07-31, by which point it had reached 22.6GB and
+  failed a deploy mid-build with "No space left on device" — blue-green meant no
+  outage, but no fix could ship either. The script now ends with
+  `docker builder prune -f --reserved-space 3GB` (a size cap, not `--filter until=`:
+  the cap bounds the disk, which is what actually breaks, whatever the deploy
+  rate) and prints `df -h /` plus `docker system df`. **Read those two lines in
+  the deploy log**; they exist so the next creeping problem is visible early.
 
 ## First-time bootstrap (one-time, zero-downtime)
 
