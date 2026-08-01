@@ -138,3 +138,27 @@ def test_the_applicant_is_not_notified_as_a_reviewer(
     assert not Notification.objects.filter(
         recipient=application.user, category=Category.TUITION_PLAN_REVIEW,
     ).exists()
+
+
+def test_the_applicant_hears_the_decision_even_with_review_email_off(
+    application, mailoutbox, django_capture_on_commit_callbacks,
+):
+    """The reviewer queue and the applicant's own outcome are separate
+    categories — silencing the queue must not silence the applicant."""
+    from payments.notifications import notify_plan_application_decided
+
+    pref = NotificationPreference.objects.create(user=application.user)
+    pref.set(Category.TUITION_PLAN_REVIEW, in_app=True, email=EmailDelivery.OFF)
+    pref.save()
+
+    application.status = TuitionPlanApplication.Status.APPROVED
+    application.save(update_fields=["status"])
+
+    with django_capture_on_commit_callbacks(execute=True):
+        notify_plan_application_decided(application)
+
+    row = Notification.objects.get(
+        recipient=application.user, category=Category.TUITION_PLAN_DECISION,
+    )
+    assert "approved" in row.title.lower()
+    assert [addr for m in mailoutbox for addr in m.to] == [application.user.email]

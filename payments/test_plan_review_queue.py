@@ -156,7 +156,7 @@ def test_approve_flips_enrollment_and_notifies(client, board_member, member, per
     enrollment = TuitionEnrollment.objects.get(user=member, tuition_period=period)
     assert enrollment.status == TuitionEnrollment.Status.PAYMENT_PLAN
 
-    note = Notification.objects.get(recipient=member, category=Category.TUITION_PLAN_REVIEW)
+    note = Notification.objects.get(recipient=member, category=Category.TUITION_PLAN_DECISION)
     assert "approved" in note.title
 
 
@@ -192,7 +192,7 @@ def test_decline_deletes_enrollment_and_notifies(client, board_member, member, p
 
     assert not TuitionEnrollment.objects.filter(user=member, tuition_period=period).exists()
 
-    note = Notification.objects.get(recipient=member, category=Category.TUITION_PLAN_REVIEW)
+    note = Notification.objects.get(recipient=member, category=Category.TUITION_PLAN_DECISION)
     assert "unable to approve" in note.title
     # A declined plan leaves them with a choice, and the consequence of each
     # branch is stated (task #485).

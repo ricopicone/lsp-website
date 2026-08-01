@@ -257,8 +257,9 @@ def test_submitting_does_not_notify_applicant_even_if_on_board(member):
 def test_submitting_emails_board_member_with_default_preferences(
     member, mailoutbox, django_capture_on_commit_callbacks
 ):
-    """Board reviewers get an email on submit (TUITION_PLAN_REVIEW defaults to
-    immediate email); the applicant gets no notification at all."""
+    """Board reviewers get an email on submit when nobody holds the Treasurer
+    role — the task #491 fallback, so an unassigned role never leaves an
+    application unseen. The applicant gets no notification at all."""
     from payments.notifications import notify_plan_application_submitted
 
     board_member = _board_member()
@@ -323,7 +324,7 @@ def test_deciding_notifies_applicant_approved(member, staffer):
     notify_plan_application_decided(app)
 
     note = Notification.objects.get(recipient=member)
-    assert note.category == Category.TUITION_PLAN_REVIEW
+    assert note.category == Category.TUITION_PLAN_DECISION
     assert "approved" in note.title
     assert period.name in note.title
 

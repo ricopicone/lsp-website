@@ -42,6 +42,7 @@ class Category(models.TextChoices):
     DUES_REMINDER = "dues_reminder", _("Dues reminders")
     TUITION_REMINDER = "tuition_reminder", _("Tuition reminders")
     TUITION_PLAN_REVIEW = "tuition_plan_review", _("Tuition payment plans")
+    TUITION_PLAN_DECISION = "tuition_plan_decision", _("Your payment plan application")
     BALANCE_REMINDER = "balance_reminder", _("Balance reminders")
 
     # --- Cartels ---------------------------------------------------------
@@ -202,6 +203,12 @@ CATEGORY_META: dict[str, CategoryMeta] = {
           "sees it in the bell, unless you turn email on here."),
         default_email=_E.OFF,
         default_email_for=_tuition_plan_review_default,
+    ),
+    # Kept separate from the reviewer queue above: quieting the queue must
+    # never stop an applicant hearing their own outcome.
+    _C.TUITION_PLAN_DECISION: _M(
+        SECTION_PAYMENTS, _("Your payment plan application"),
+        _("The Board's decision on a tuition payment plan you applied for."),
     ),
     _C.BALANCE_REMINDER: _M(
         SECTION_PAYMENTS, _("Balance reminders"),
