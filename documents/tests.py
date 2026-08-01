@@ -510,3 +510,35 @@ def test_shipped_tuition_body_is_clean_and_current():
     assert "$2,000" not in html
     assert "$2,500" in html
     assert "/tuition/" in html
+
+
+@pytest.mark.django_db
+def test_tuition_assistance_rewrite_describes_the_payment_plan_application():
+    """Task #491: assistance IS the payment plan. The document drops the old
+    email-the-Treasurer procedure and the reduced-amount language, and
+    describes the application members actually file on the site."""
+    from importlib import import_module
+
+    from django.apps import apps as django_apps
+
+    mod = import_module(
+        "documents.migrations.0012_tuition_assistance_is_the_payment_plan"
+    )
+    doc = _html_doc(
+        slug="tuition-assistance", title="Tuition Assistance",
+        body="## Requesting tuition assistance\n\nEmail the Treasurer.",
+    )
+
+    mod.rewrite(django_apps, None)
+
+    doc.refresh_from_db()
+    body = doc.body
+    assert "mailto:treasurer@lacanschool.org" not in body
+    assert "symbolic contribution" not in body
+    assert "No special authorization is needed" not in body
+
+    assert "apply to the Board for a payment plan" in body
+    assert "/formation/?tab=account" in body
+    assert "September and February" in body
+    # Member-facing copy uses commas, not em dashes (house style).
+    assert "—" not in body

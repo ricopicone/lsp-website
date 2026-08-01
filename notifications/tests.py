@@ -287,3 +287,90 @@ def test_settings_digest_forces_in_app_on(client):
     res = resolve(user, Category.DUES_REMINDER)
     assert res.in_app is True
     assert res.email_mode == EmailDelivery.DIGEST
+
+
+@pytest.mark.django_db
+def test_default_email_for_gives_each_recipient_its_own_default(monkeypatch):
+    from notifications import categories as cats
+
+    meta = cats.CategoryMeta(
+        cats.SECTION_ACCOUNT, "Test queue",
+        default_email_for=lambda u: (
+            EmailDelivery.IMMEDIATE if u.email == "owner@x.co" else EmailDelivery.OFF
+        ),
+    )
+    monkeypatch.setitem(cats.CATEGORY_META, "test_queue", meta)
+
+    owner = make_user("owner@x.co")
+    bystander = make_user("bystander@x.co")
+
+    assert resolve(owner, "test_queue").email is True
+    assert resolve(bystander, "test_queue").email is False
+    # The bell is unaffected — only email delivery varies by recipient.
+    assert resolve(bystander, "test_queue").in_app is True
+
+
+@pytest.mark.django_db
+def test_explicit_override_beats_the_role_default(monkeypatch):
+    from notifications import categories as cats
+
+    meta = cats.CategoryMeta(
+        cats.SECTION_ACCOUNT, "Test queue",
+        default_email_for=lambda u: EmailDelivery.OFF,
+    )
+    monkeypatch.setitem(cats.CATEGORY_META, "test_queue", meta)
+
+    user = make_user("opted-in@x.co")
+    pref = NotificationPreference.objects.create(user=user)
+    pref.set("test_queue", in_app=True, email=EmailDelivery.IMMEDIATE)
+    pref.save()
+
+    user = User.objects.get(pk=user.pk)  # drop the cached relation
+    assert resolve(user, "test_queue").email is True
+
+
+@pytest.mark.django_db
+def test_categories_without_a_role_default_are_unchanged():
+    user = make_user("plain@x.co")
+    assert resolve(user, Category.REGISTRATION_STATUS).email is True
+
+
+@pytest.mark.django_db
+def test_incidental_plan_review_override_is_cleared_by_the_migration():
+    """The settings page stores an entry for every category on save, so a
+    stored `immediate` is not evidence the member chose it (task #491)."""
+    from importlib import import_module
+
+    from django.apps import apps as django_apps
+
+    mod = import_module(
+        "notifications.migrations.0014_clear_incidental_plan_review_overrides"
+    )
+
+    incidental = make_user("incidental@x.co")
+    NotificationPreference.objects.create(
+        user=incidental,
+        overrides={
+            "tuition_plan_review": {"in_app": True, "email": "immediate"},
+            "dues_reminder": {"in_app": True, "email": "immediate"},
+        },
+    )
+    deliberate = make_user("deliberate@x.co")
+    NotificationPreference.objects.create(
+        user=deliberate,
+        overrides={"tuition_plan_review": {"in_app": True, "email": "off"}},
+    )
+
+    mod.clear_incidental(django_apps, None)
+
+    assert "tuition_plan_review" not in NotificationPreference.objects.get(
+        user=incidental
+    ).overrides
+    # Unrelated categories are untouched.
+    assert "dues_reminder" in NotificationPreference.objects.get(
+        user=incidental
+    ).overrides
+    # A deliberate "off" is a real choice — leave it.
+    assert NotificationPreference.objects.get(user=deliberate).overrides[
+        "tuition_plan_review"
+    ]["email"] == "off"

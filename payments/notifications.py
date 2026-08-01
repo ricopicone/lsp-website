@@ -216,7 +216,12 @@ def notify_plan_application_submitted(application) -> None:
 
 def notify_plan_application_decided(application) -> None:
     """Tell the applicant the Board's decision on their payment-plan
-    application (task #450 phase B)."""
+    application (task #450 phase B).
+
+    Its own category, separate from the reviewers' queue (task #491): the
+    queue's email now defaults to the Treasurer alone, and that must never
+    silence an applicant hearing their own outcome.
+    """
     from .models import TuitionPlanApplication
 
     period = application.tuition_period
@@ -238,7 +243,7 @@ def notify_plan_application_decided(application) -> None:
             "regular fee and you'll be shown the total before it applies."
         )
     notify(
-        application.user, Category.TUITION_PLAN_REVIEW,
+        application.user, Category.TUITION_PLAN_DECISION,
         title=title, body=body, url=_account_tab_url(), target=application,
     )
 
