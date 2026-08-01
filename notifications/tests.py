@@ -333,3 +333,44 @@ def test_explicit_override_beats_the_role_default(monkeypatch):
 def test_categories_without_a_role_default_are_unchanged():
     user = make_user("plain@x.co")
     assert resolve(user, Category.REGISTRATION_STATUS).email is True
+
+
+@pytest.mark.django_db
+def test_incidental_plan_review_override_is_cleared_by_the_migration():
+    """The settings page stores an entry for every category on save, so a
+    stored `immediate` is not evidence the member chose it (task #491)."""
+    from importlib import import_module
+
+    from django.apps import apps as django_apps
+
+    mod = import_module(
+        "notifications.migrations.0014_clear_incidental_plan_review_overrides"
+    )
+
+    incidental = make_user("incidental@x.co")
+    NotificationPreference.objects.create(
+        user=incidental,
+        overrides={
+            "tuition_plan_review": {"in_app": True, "email": "immediate"},
+            "dues_reminder": {"in_app": True, "email": "immediate"},
+        },
+    )
+    deliberate = make_user("deliberate@x.co")
+    NotificationPreference.objects.create(
+        user=deliberate,
+        overrides={"tuition_plan_review": {"in_app": True, "email": "off"}},
+    )
+
+    mod.clear_incidental(django_apps, None)
+
+    assert "tuition_plan_review" not in NotificationPreference.objects.get(
+        user=incidental
+    ).overrides
+    # Unrelated categories are untouched.
+    assert "dues_reminder" in NotificationPreference.objects.get(
+        user=incidental
+    ).overrides
+    # A deliberate "off" is a real choice — leave it.
+    assert NotificationPreference.objects.get(user=deliberate).overrides[
+        "tuition_plan_review"
+    ]["email"] == "off"
