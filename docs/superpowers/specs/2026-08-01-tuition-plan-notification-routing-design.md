@@ -81,7 +81,20 @@ delivery routing at send time, and those rows are already delivered — unlike
 `Notification.url`, which is denormalized into the row and does need migrating
 when a link builder changes.
 
-### 3. Queue access
+### 3. Clear incidental stored overrides
+
+`notifications/views.py` writes an override entry for *every* category whenever
+a member saves the settings page. Any Board member who has ever saved their
+preferences therefore carries an explicit `tuition_plan_review: immediate`
+entry, which would beat the new role default and leave them on the mail —
+making the fix a no-op for exactly the people who complained.
+
+A data migration drops `tuition_plan_review` entries whose email equals the old
+default (`immediate`), restoring "no override, use the role default". Entries
+with a deliberate non-default value (`off`, `digest`) are left alone, and anyone
+who does want the email can set it again.
+
+### 4. Queue access
 
 Unchanged. `payments/views_plan_review.py::_can_review` gates on superuser or
 active Board membership; the Treasurer is always on the Board, so no additional
