@@ -2217,3 +2217,37 @@ def test_moa_roster_shows_president_and_vp_as_leaders(client):
 
     body = client.get(wg.get_absolute_url()).content.decode()
     assert "President" in body
+
+
+def test_board_officer_roster_row_keeps_its_stored_membership():
+    """Task #480: participants() upgrades an officer's entry rather than
+    replacing it — the old MoA-only block overwrote the Participant outright,
+    which on the Board would have discarded the Chair's stored row."""
+    from core.models import StaffRole
+
+    board = Committee.objects.get(slug="board")
+    wg = board.workgroup
+    chair = _user("chair-b@x.test", role=Profile.Role.ANALYST)
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=chair, role=WorkgroupMembership.Role.CHAIR,
+        start_date=datetime.date(2026, 1, 1),
+    )
+    StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.add(chair)
+
+    row = {p.user.email: p for p in wg.participants()}["chair-b@x.test"]
+    assert row.membership is not None          # stored row survived
+    assert row.is_lead is True
+    assert row.role_label == "President"
+
+
+def test_my_groups_shows_the_officer_as_a_lead_of_the_meeting():
+    from core.models import StaffRole
+    from workgroups.membership import my_groups
+
+    pres = _user("pres-mg@x.test", role=Profile.Role.ANALYST)
+    StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.add(pres)
+    moa = Committee.objects.get(slug="meeting-of-analysts").workgroup
+
+    row = {r.workgroup.id: r for r in my_groups(pres)}[moa.id]
+    assert row.is_lead is True
+    assert row.role_label == "President"
