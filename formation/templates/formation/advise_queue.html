@@ -2,10 +2,6 @@
 {% block title %}Demandes you advise · LSP{% endblock %}
 {% block content %}
 <div class="space-y-6 max-w-3xl">
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
-
   <header class="space-y-2">
     <h1 class="font-serif text-3xl text-base-content tracking-tight">Demandes you advise</h1>
     <p class="text-base-content/70">

@@ -484,6 +484,13 @@ class TuitionEnrollment(models.Model):
     def covers_seminars(self) -> bool:
         """True when this enrollment grants 'covered by tuition' pricing.
 
+        Any non-skipping decision covers, PLAN_REQUESTED included: a plan
+        application pending with the Board is a decision to pay, and the
+        year's tuition charge is minted for it either way
+        (``payments.charges._owed_periods`` exempts only SKIPPING). Waiting on
+        the Board's turnaround used to mean paying full seminar fees in the
+        meantime — task #484.
+
         SKIPPING does not cover — the student opted out of tuition this
         year and pays the regular per-event fee.
         """
@@ -491,6 +498,7 @@ class TuitionEnrollment(models.Model):
             self.Status.COMMITTED,
             self.Status.PAYMENT_PLAN,
             self.Status.PAID_IN_FULL,
+            self.Status.PLAN_REQUESTED,
         }
 
 

@@ -14,10 +14,6 @@
     </p>
   </header>
 
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
-
   {% comment %}Appoint someone to a role.{% endcomment %}
   <form method="post" class="rounded-xl border border-base-300 p-5 space-y-3">
     {% csrf_token %}

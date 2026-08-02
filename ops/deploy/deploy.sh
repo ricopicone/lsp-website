@@ -61,4 +61,20 @@ echo "flipped traffic to $newsvc (:$nport)"
 # Drain the old color and reclaim the now-dangling image.
 sg docker -c "docker compose stop $oldsvc" || true
 sg docker -c "docker image prune -f" || true
+
+# Bound the BuildKit cache. Nothing pruned it before, and on 2026-07-31 it
+# reached 22.6GB on a 20GB disk and failed a deploy mid-build ("No space left on
+# device"); blue-green meant no outage, but no fix could ship either. A size cap
+# rather than `--filter until=`: the cap bounds the disk, which is the thing that
+# actually breaks, whatever the deploy rate. 3GB holds roughly five deploys'
+# worth of layers, so incremental rebuilds stay fast. Runs after the flip, so a
+# failed build keeps its cache.
+# `--reserved-space`, not the older `--keep-storage`: the latter still works on
+# Docker 25 but prints a deprecation notice saying it has been renamed.
+sg docker -c "docker builder prune -f --reserved-space 3GB" || true
+
+# Report disk on every deploy. The cache grew past the size of the whole disk
+# with nothing ever saying so; make the next creeping problem visible early.
+df -h / | tail -1
+sg docker -c "docker system df" || true
 echo "deploy done."

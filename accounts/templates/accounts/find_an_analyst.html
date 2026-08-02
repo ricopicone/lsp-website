@@ -60,7 +60,15 @@
 
       <form method="post" id="referral-form" class="space-y-5">
         {% csrf_token %}
-        {{ form.website }}{# honeypot, visually hidden via HiddenInput #}
+        {{ form.form_ts }}
+        {% comment %}
+          Honeypot: a real text input, moved off-screen by .hp-wrap rather
+          than type="hidden" — commodity bots skip hidden inputs (#479).
+        {% endcomment %}
+        <div class="hp-wrap" aria-hidden="true">
+          <label for="{{ form.website.id_for_label }}">Website</label>
+          {{ form.website }}
+        </div>
 
         {# Step indicator #}
         <div class="flex items-center gap-2 text-xs text-base-content/60" aria-hidden="true">

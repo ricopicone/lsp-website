@@ -262,6 +262,42 @@ def test_survey_sets_advisor(client):
     assert current_advisor(u) == analyst
 
 
+def test_survey_advisor_picker_groups_by_availability(client):
+    """The survey picker carries the same three groups as the Formation tab, so
+    an advisor who isn't taking new advisees is offered but labelled (#483)."""
+    from availability.models import AnalystFunction, AvailabilitySpan
+    from availability.services import set_availability
+
+    _periods(2023)
+    advisor_fn = AnalystFunction.objects.get(slug="advisor")
+    u = _member(role=Profile.Role.CANDIDATE)
+    says_no = _member("sno@x.test", role=Profile.Role.ANALYST)
+    set_availability(says_no.profile, advisor_fn, AvailabilitySpan.Status.NO)
+
+    client.force_login(u)
+    html = client.get(reverse("intake_survey")).content.decode()
+    assert "Not currently accepting new advisees" in html
+    assert f'value="{says_no.pk}"' in html
+
+
+def test_survey_sets_advisor_who_is_not_accepting(client):
+    from accounts.advisor import current_advisor
+    from availability.models import AnalystFunction, AvailabilitySpan
+    from availability.services import set_availability
+
+    _periods(2023)
+    advisor_fn = AnalystFunction.objects.get(slug="advisor")
+    u = _member(role=Profile.Role.CANDIDATE)
+    says_no = _member("sno2@x.test", role=Profile.Role.ANALYST)
+    set_availability(says_no.profile, advisor_fn, AvailabilitySpan.Status.NO)
+
+    client.force_login(u)
+    client.post(reverse("intake_survey"), {
+        "year_joined": "2020", "advisor": str(says_no.pk),
+    })
+    assert current_advisor(u) == says_no
+
+
 def test_directory_optin_sets_public(client):
     _periods(2023)
     u = _member(role=Profile.Role.CANDIDATE)  # directory-eligible

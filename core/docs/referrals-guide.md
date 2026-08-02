@@ -104,6 +104,39 @@ puts the choice in the requester's hands. After the retention period
 (Settings), a finished request's identifying details are automatically
 redacted, keeping only the non-identifying record.
 
+## Held submissions and junk
+
+Some submissions are automated. In July 2026 a bot filled every field on the
+Find-an-Analyst form with random text, and because acknowledgment and
+distribution were both set to automatic, it was acknowledged to a stranger's
+address and sent to the whole referral list before anyone saw it.
+
+Two things now sit in front of that.
+
+Submissions that are obviously automated are dropped before they ever become
+a request. You never see them. The dashboard shows a count of how many were
+blocked in the last 30 days, so you can tell the screen is working.
+
+Submissions that only *look* suspicious are **held**. A held request is on
+the dashboard behind the "held for review" badge, and it rings your
+notification bell. Nothing has been sent: no acknowledgment to the requester,
+no message to the referral list. You have two buttons:
+
+1. **Release** puts it back into the normal workflow, exactly as if it had
+   never been held. If acknowledgment and distribution are set to automatic,
+   they happen the moment you release it.
+2. **Mark as junk** closes it out. Junk requests are hidden from the open
+   list.
+
+If a held request sits unreviewed for a few days, you get an email about it.
+That threshold is the **held escalation days** setting.
+
+The screen is deliberately cautious, so it will sometimes hold a real
+request: an unusual name or a very short description can trip it. That is
+why it holds rather than deletes. **Mark as junk** is also available on any
+request, for the occasional submission that is clearly not a real referral
+but was written by a person and so could never be caught automatically.
+
 ## If something doesn't fit the process
 
 That's expected—the process serves the singular case, not the other way

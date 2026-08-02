@@ -9,8 +9,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from .audience import visible_categories
 from .categories import (
-    CATEGORY_META,
     SECTION_ORDER,
     DigestCadence,
     EmailDelivery,
@@ -92,7 +92,9 @@ def settings_page(request):
     pref, _ = NotificationPreference.objects.get_or_create(user=request.user)
 
     if request.method == "POST":
-        for category in CATEGORY_META:
+        # Only what the page rendered for this member — a category they can't
+        # see submits no fields, and a missing checkbox would read as "off".
+        for category in visible_categories(request.user):
             meta = meta_for(category)
             in_app = (
                 request.POST.get(f"{category}__in_app") == "on"
@@ -119,7 +121,8 @@ def settings_page(request):
 
     # Build the grouped view model.
     sections: dict[str, list] = {s: [] for s in SECTION_ORDER}
-    for category, meta in CATEGORY_META.items():
+    for category in visible_categories(request.user):
+        meta = meta_for(category)
         res = resolve(request.user, category)
         sections[meta.section].append(
             {

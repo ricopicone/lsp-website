@@ -49,9 +49,11 @@ def test_eligible_advisors_pool():
     assert analyst in spool and scholar in spool
 
 
-def test_eligible_advisors_excludes_only_advisor_unavailable():
-    """Analysts who declared they're NOT available as an Advisor are hidden;
-    Yes and Unknown (never reported) both remain (see availability app)."""
+def test_eligible_advisors_ignores_declared_availability():
+    """Declared availability doesn't gate the pool (task #483) — an analyst who
+    said they're not taking new advisees stays selectable, so a member can name
+    the Advisor they already have. Availability only labels the picker; see
+    :func:`accounts.advisor.advisor_choice_groups`."""
     from availability.models import AnalystFunction, AvailabilitySpan
     from availability.services import set_availability
 
@@ -66,33 +68,72 @@ def test_eligible_advisors_excludes_only_advisor_unavailable():
 
     set_availability(says_yes.profile, advisor_fn, AvailabilitySpan.Status.YES)
     set_availability(says_no.profile, advisor_fn, AvailabilitySpan.Status.NO)
-    # "No" for a *different* function must not hide them from the advisor pool.
+    # "No" for a *different* function is likewise irrelevant to the advisor pool.
     set_availability(no_for_control.profile, control_fn, AvailabilitySpan.Status.NO)
 
     pool = set(eligible_advisors(advisee))
-    assert says_yes in pool
-    assert unknown in pool  # unreported availability still eligible
-    assert no_for_control in pool
-    assert says_no not in pool  # explicit "not available as Advisor" → hidden
+    assert {says_yes, says_no, unknown, no_for_control} <= pool
 
 
-def test_advisor_availability_split_groups_unknown():
-    from accounts.advisor import advisor_availability_split
+def test_advisor_choice_groups_three_way():
+    from accounts.advisor import advisor_choice_groups
     from availability.models import AnalystFunction, AvailabilitySpan
     from availability.services import set_availability
 
     advisor_fn = AnalystFunction.objects.get(slug="advisor")
     advisee = _u("ac3@x.test", role=Profile.Role.PRE_CANDIDATE)
     says_yes = _u("y2@x.test", role=Profile.Role.ANALYST)
-    unknown = _u("u2@x.test", role=Profile.Role.ANALYST)
+    never_reported = _u("u2@x.test", role=Profile.Role.ANALYST)
+    says_unknown = _u("uu2@x.test", role=Profile.Role.ANALYST)
+    says_no = _u("n2@x.test", role=Profile.Role.ANALYST)
     set_availability(says_yes.profile, advisor_fn, AvailabilitySpan.Status.YES)
+    set_availability(says_unknown.profile, advisor_fn, AvailabilitySpan.Status.UNKNOWN)
+    set_availability(says_no.profile, advisor_fn, AvailabilitySpan.Status.NO)
 
-    available, unk = advisor_availability_split(advisee)
-    assert says_yes in available and says_yes not in unk
-    assert unknown in unk and unknown not in available
+    groups = advisor_choice_groups(advisee)
+    assert [label for label, _users in groups] == [
+        "Available to advise",
+        "Unknown availability",
+        "Not currently accepting new advisees",
+    ]
+    by_label = dict(groups)
+    assert by_label["Available to advise"] == [says_yes]
+    assert set(by_label["Unknown availability"]) == {never_reported, says_unknown}
+    assert by_label["Not currently accepting new advisees"] == [says_no]
 
 
-def test_advisor_select_form_renders_unknown_optgroup():
+def test_advisor_choice_groups_omits_empty_groups():
+    from accounts.advisor import advisor_choice_groups
+
+    advisee = _u("ac5@x.test", role=Profile.Role.PRE_CANDIDATE)
+    _u("u5@x.test", role=Profile.Role.ANALYST)  # never reported
+    groups = advisor_choice_groups(advisee)
+    assert [label for label, _users in groups] == ["Unknown availability"]
+
+
+def test_advisor_choice_groups_closed_no_span_reads_unknown():
+    """Only an *open* "no" span labels an analyst as not accepting."""
+    import datetime as dt
+
+    from accounts.advisor import advisor_choice_groups
+    from availability.models import AnalystFunction, AvailabilitySpan
+    from availability.services import set_availability
+
+    advisor_fn = AnalystFunction.objects.get(slug="advisor")
+    advisee = _u("ac6@x.test", role=Profile.Role.PRE_CANDIDATE)
+    was_no = _u("wasno@x.test", role=Profile.Role.ANALYST)
+    span = set_availability(
+        was_no.profile, advisor_fn, AvailabilitySpan.Status.NO,
+        on_date=dt.date(2025, 9, 1),
+    )
+    span.end_date = dt.date(2026, 6, 30)
+    span.save(update_fields=["end_date"])
+
+    by_label = dict(advisor_choice_groups(advisee))
+    assert by_label["Unknown availability"] == [was_no]
+
+
+def test_advisor_select_form_renders_three_optgroups():
     from accounts.forms import AdvisorSelectForm
     from availability.models import AnalystFunction, AvailabilitySpan
     from availability.services import set_availability
@@ -100,15 +141,37 @@ def test_advisor_select_form_renders_unknown_optgroup():
     advisor_fn = AnalystFunction.objects.get(slug="advisor")
     advisee = _u("ac4@x.test", role=Profile.Role.PRE_CANDIDATE)
     says_yes = _u("y3@x.test", role=Profile.Role.ANALYST)
+    says_no = _u("n3@x.test", role=Profile.Role.ANALYST)
     _u("u3@x.test", role=Profile.Role.ANALYST)  # unknown
     set_availability(says_yes.profile, advisor_fn, AvailabilitySpan.Status.YES)
+    set_availability(says_no.profile, advisor_fn, AvailabilitySpan.Status.NO)
 
     html = str(AdvisorSelectForm(advisee=advisee)["advisor"])
-    assert "<optgroup" in html and "Unknown availability" in html
-    # A validating POST still resolves an unknown-availability analyst.
-    form = AdvisorSelectForm({"advisor": str(_u("u4@x.test", role=Profile.Role.ANALYST).pk)},
-                             advisee=advisee)
+    assert "<optgroup" in html
+    for label in ("Available to advise", "Unknown availability",
+                  "Not currently accepting new advisees"):
+        assert label in html
+
+    # A validating POST resolves an analyst who declared they're not accepting.
+    form = AdvisorSelectForm({"advisor": str(says_no.pk)}, advisee=advisee)
     assert form.is_valid(), form.errors
+    assert form.cleaned_data["advisor"] == says_no
+
+
+def test_member_selects_advisor_who_is_not_accepting(client):
+    """End to end: the not-accepting analyst is recorded and notified."""
+    from availability.models import AnalystFunction, AvailabilitySpan
+    from availability.services import set_availability
+
+    advisor_fn = AnalystFunction.objects.get(slug="advisor")
+    advisee = _u("v3@x.test", role=Profile.Role.CANDIDATE)
+    says_no = _u("v-no@x.test", role=Profile.Role.ANALYST)
+    set_availability(says_no.profile, advisor_fn, AvailabilitySpan.Status.NO)
+
+    client.force_login(advisee)
+    resp = client.post(reverse("advisor_select"), {"advisor": says_no.pk})
+    assert resp.status_code == 302
+    assert current_advisor(advisee) == says_no
 
 
 def test_set_advisor_records_and_supersedes():

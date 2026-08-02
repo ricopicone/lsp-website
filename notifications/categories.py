@@ -22,6 +22,7 @@ Preferences are resolved against these defaults — see
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from django.db import models
@@ -41,6 +42,7 @@ class Category(models.TextChoices):
     DUES_REMINDER = "dues_reminder", _("Dues reminders")
     TUITION_REMINDER = "tuition_reminder", _("Tuition reminders")
     TUITION_PLAN_REVIEW = "tuition_plan_review", _("Tuition payment plans")
+    TUITION_PLAN_DECISION = "tuition_plan_decision", _("Your payment plan application")
     BALANCE_REMINDER = "balance_reminder", _("Balance reminders")
 
     # --- Cartels ---------------------------------------------------------
@@ -124,11 +126,36 @@ class CategoryMeta:
     # Whether this category can appear on each channel at all.
     in_app_capable: bool = True
     email_capable: bool = True
+    # Optional per-recipient email default, consulted only when the member
+    # hasn't chosen for themselves. Lets a queue aim its email at the role that
+    # owns it while the rest of the committee keeps the bell row; both sides
+    # can still override on the settings page.
+    default_email_for: Callable[[object], str] | None = None
 
 
 _M = CategoryMeta
 _C = Category
 _E = EmailDelivery
+
+
+def _tuition_plan_review_default(user) -> str:
+    """Aim payment-plan application email at the Treasurer (task #491).
+
+    The Board reviews and decides these applications, so everyone on it gets
+    the bell row, but only the Treasurer needs an email per application. If
+    nobody holds the role, fall back to emailing the Board — an unassigned
+    role must never mean an application sits unseen.
+    """
+    from core.access import has_staff_role
+    from core.models import StaffRole
+
+    if has_staff_role(user, StaffRole.TREASURER):
+        return EmailDelivery.IMMEDIATE
+    held = StaffRole.objects.filter(
+        key=StaffRole.TREASURER, holders__isnull=False,
+    ).exists()
+    return EmailDelivery.OFF if held else EmailDelivery.IMMEDIATE
+
 
 CATEGORY_META: dict[str, CategoryMeta] = {
     # Discussion — email cadence is governed by Parlêtre's own per-channel
@@ -171,8 +198,17 @@ CATEGORY_META: dict[str, CategoryMeta] = {
     ),
     _C.TUITION_PLAN_REVIEW: _M(
         SECTION_PAYMENTS, _("Tuition payment plans"),
-        _("For Board members: a payment plan application to review. Also "
-          "carries the Board's decision on a plan application you filed."),
+        _("For the Treasurer and Board: a payment plan application to review. "
+          "The Treasurer is emailed each application; the rest of the Board "
+          "sees it in the bell, unless you turn email on here."),
+        default_email=_E.OFF,
+        default_email_for=_tuition_plan_review_default,
+    ),
+    # Kept separate from the reviewer queue above: quieting the queue must
+    # never stop an applicant hearing their own outcome.
+    _C.TUITION_PLAN_DECISION: _M(
+        SECTION_PAYMENTS, _("Your payment plan application"),
+        _("The Board's decision on a tuition payment plan you applied for."),
     ),
     _C.BALANCE_REMINDER: _M(
         SECTION_PAYMENTS, _("Balance reminders"),

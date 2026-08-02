@@ -239,6 +239,24 @@ def test_directory_excludes_lsp_staff_badge(client):
 
 
 @pytest.mark.django_db
+def test_directory_excludes_web_developer_badge(client):
+    """Web Developer is technical operations, not a public school position —
+    it must not badge the directory (task #482), like LSP Staff and Registrar."""
+    from core.models import StaffRole
+
+    u = _mk_member("dev@x.test", "Dev", "Ops", Profile.Role.ANALYST)
+    StaffRole.objects.get(key=StaffRole.WEB_DEVELOPER).holders.add(u)
+    StaffRole.objects.get(key=StaffRole.CARTEL_COORDINATOR).holders.add(u)
+
+    detail = client.get("/directory/dev-ops/").content
+    assert b"Cartel Coordinator" in detail
+    assert b"Web Developer" not in detail
+
+    grid = client.get("/directory/").content
+    assert b"Web Developer" not in grid
+
+
+@pytest.mark.django_db
 def test_directory_dedups_staff_role_against_committee_officer(client):
     """A Treasurer who is also the Board's Treasurer gets only the more
     informative committee officer badge, not a redundant standalone one."""
@@ -279,6 +297,83 @@ def test_directory_styles_board_chair_as_president(client):
     # The generic enum label must not leak, and there's a single "President".
     assert b"Chair" not in detail
     assert detail.count(b"President") == 1
+
+
+def _moa():
+    """The Meeting of Analysts committee (seeded, Internal)."""
+    from committees.models import Committee
+    return Committee.objects.get(slug="meeting-of-analysts")
+
+
+@pytest.mark.django_db
+def test_directory_badges_applications_coordinator(client):
+    """Task #481: the Applications Coordinator is an appointed position on the
+    Meeting of Analysts, which has no public page — it must still badge, as the
+    position alone (the Meeting is not named)."""
+    moa = _moa()
+    assert not moa.public, "fixture assumes the Meeting of Analysts is Internal"
+
+    dana = _mk_member("dana@x.test", "Dana", "Coordinator", Profile.Role.ANALYST)
+    moa.add_member(dana, role="applications_coordinator")
+    _mk_member("plain2@x.test", "Plainer", "Person", Profile.Role.ANALYST)
+
+    grid = client.get("/directory/").content
+    assert b"Applications Coordinator" in grid
+    assert grid.count(b"Applications Coordinator") == 1
+
+    detail = client.get("/directory/dana-coordinator/").content
+    assert b"Applications Coordinator" in detail
+    # The badge names the position, not the Internal committee.
+    assert b"Meeting of Analysts" not in detail
+
+    other = client.get("/directory/plainer-person/").content
+    assert b"Applications Coordinator" not in other
+
+
+@pytest.mark.django_db
+def test_directory_does_not_badge_derived_membership(client):
+    """The load-bearing rule: badge appointed positions, never plain membership.
+    Meeting-of-Analysts membership is auto-derived from the Analyst role, so
+    badging it would stamp every analyst with a redundant committee name."""
+    moa = _moa()
+    member = _mk_member("mem@x.test", "Mem", "Bership", Profile.Role.ANALYST)
+    moa.add_member(member, role="member")
+
+    detail = client.get("/directory/mem-bership/").content
+    assert b"Meeting of Analysts" not in detail
+
+
+@pytest.mark.django_db
+def test_directory_dedups_internal_officer_against_staff_role(client):
+    """An Internal-committee officer whose position is also a StaffRole they hold
+    gets one badge, using the StaffRole's editable display name."""
+    from committees.models import Committee
+    from core.models import StaffRole
+
+    u = _mk_member("dee@x.test", "Dee", "Dupe", Profile.Role.ANALYST)
+    StaffRole.objects.get(key=StaffRole.TREASURER).holders.add(u)
+    internal = Committee.objects.create(name="Audit", slug="audit", public=False)
+    internal.add_member(u, role="treasurer")
+
+    detail = client.get("/directory/dee-dupe/").content
+    assert detail.count(b"Treasurer") == 1
+    # The Internal committee itself is never named.
+    assert b"Audit" not in detail
+
+
+@pytest.mark.django_db
+def test_directory_does_not_badge_non_committee_officer_roles(client):
+    """Officer-ish roles on cartels/seminars (organizer, faculty, plus-one) are
+    not school appointments and must not badge."""
+    from workgroups.models import Workgroup, build_workgroup
+
+    u = _mk_member("carl@x.test", "Carl", "Telist", Profile.Role.ANALYST)
+    wg = build_workgroup(Workgroup.Kind.CARTEL, name="Some Cartel", slug="some-cartel")
+    wg.add_member(u, role="organizer")
+
+    detail = client.get("/directory/carl-telist/").content
+    assert b"Organizer" not in detail
+    assert b"Some Cartel" not in detail
 
 
 def test_split_location_single():
@@ -382,6 +477,18 @@ def test_directory_detail_shows_faculty_badge(client):
 
 
 def _valid_referral_post():
+    """A submission that clears every bot check and the content screen.
+
+    The render stamp is backdated because the form is rejected if it comes
+    back faster than a human could fill it (task #479), and the narrative is
+    a realistic length — under 40 characters it would be held for review.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from accounts import antibot
+
     return {
         "name":                   "Alex Patient",
         "pronouns":               "they/them",
@@ -390,8 +497,14 @@ def _valid_referral_post():
         "location":               "Brooklyn, NY",
         "language":               "English",
         "modality":               ["video"],
-        "additional_information": "Looking for a Lacanian analyst.",
-        "website":                "",  # honeypot
+        "additional_information": (
+            "Looking for a Lacanian analyst. I have been in therapy before "
+            "and would like to work more deeply this time."
+        ),
+        antibot.HONEYPOT_FIELD:   "",
+        antibot.TIMESTAMP_FIELD:  antibot.sign_timestamp(
+            timezone.now() - timedelta(seconds=60),
+        ),
     }
 
 

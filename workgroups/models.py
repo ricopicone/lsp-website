@@ -14,6 +14,7 @@ the attaching models.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import replace as dataclass_replace
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
@@ -460,33 +461,39 @@ class Workgroup(models.Model):
                     seen[u.pk] = Participant(
                         user=u, role=WorkgroupMembership.Role.MEMBER, is_lead=False,
                     )
-        # The Meeting of Analysts' leaders are the school officers (President /
-        # Vice-President), synced from the Board roster (task #428). Surface them
-        # as leads here — overwriting their plain auto-member row — reusing the
-        # Chair / Co-chair role values so they rank first, with an explicit
-        # officer title for display.
-        if self.auto_member_role:
-            try:
-                is_moa = self.committee.slug == "meeting-of-analysts"
-            except ObjectDoesNotExist:
-                is_moa = False
-            if is_moa:
-                from core.models import StaffRole
+        # The Board's and the Meeting of Analysts' leaders are the school
+        # officers (President / Vice-President), synced from the Board roster
+        # (task #428) rather than stored as lead-role memberships. Surface them
+        # as leads here, reusing the Chair / Co-chair role values so they rank
+        # first, with an explicit officer title for display. This *upgrades* an
+        # existing entry rather than replacing it (task #480): a stored Board
+        # Chair keeps their membership and gains only the title, where the old
+        # code would have discarded the row — which is why it had to be
+        # restricted to the auto-membership Meeting.
+        from .permissions import officer_lead_titles
 
-                officer_rows = [
-                    (StaffRole.PRESIDENT, WorkgroupMembership.Role.CHAIR, "President"),
-                    (StaffRole.VICE_PRESIDENT, WorkgroupMembership.Role.CO_CHAIR,
-                     "Vice President"),
-                ]
-                for key, role_value, title in officer_rows:
-                    sr = StaffRole.objects.filter(key=key).first()
-                    if sr is None:
-                        continue
-                    for u in sr.holders.all():
-                        seen[u.pk] = Participant(
-                            user=u, role=role_value, is_lead=True,
-                            officer_title=title,
-                        )
+        officer_role = {
+            "President": WorkgroupMembership.Role.CHAIR,
+            "Vice President": WorkgroupMembership.Role.CO_CHAIR,
+        }
+        for user_id, title in officer_lead_titles(self).items():
+            existing = seen.get(user_id)
+            if existing is not None:
+                seen[user_id] = dataclass_replace(
+                    existing,
+                    role=existing.role if existing.membership else officer_role[title],
+                    is_lead=True,
+                    officer_title=title,
+                )
+                continue
+            from accounts.models import User
+
+            u = User.objects.filter(pk=user_id).select_related("profile").first()
+            if u is not None:
+                seen[user_id] = Participant(
+                    user=u, role=officer_role[title], is_lead=True,
+                    officer_title=title,
+                )
 
         # The ACTIVE roster of a term-based offering = the current term's
         # paid/comped registrants (past-term-only attendees are archive-only,

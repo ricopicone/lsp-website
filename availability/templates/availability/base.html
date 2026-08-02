@@ -12,10 +12,6 @@
 
   {% include "core/_admin_tab_nav.html" %}
 
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% elif m.tags == 'info' %}alert-info{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
-
   <div class="pt-2">
     {% block tab_content %}{% endblock %}
   </div>

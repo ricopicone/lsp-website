@@ -1,0 +1,74 @@
+{% extends "core/base.html" %}
+{% block title %}{{ organization.name }} · CE organization · LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">{{ organization.name }}</h1>
+    <p class="text-sm">
+      <a href="{% url 'events:edit' event.slug %}" class="link link-hover text-base-content/70">← Back to {{ event.title }}</a>
+    </p>
+  </header>
+
+  <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-base-content/80">
+    This organization is shared across the whole site. Changes here appear on
+    every event approved by it, not just this one.
+  </div>
+
+  <section class="space-y-3">
+    <h2 class="font-serif text-lg text-base-content">Logos</h2>
+    {% if logos %}
+    <ul class="space-y-2">
+      {% for logo in logos %}
+      <li class="flex items-center gap-3">
+        <span class="inline-flex items-center rounded border border-base-300/60 bg-white p-1.5">
+          <img src="{{ logo.image.url }}" alt="{{ organization.name }} logo"
+               class="max-h-12 max-w-36 object-contain">
+        </span>
+        <form method="post" class="ml-auto">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="remove">
+          <input type="hidden" name="logo_id" value="{{ logo.pk }}">
+          <button class="btn btn-ghost btn-xs text-error">Remove</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-base-content/50">No logos yet.</p>
+    {% endif %}
+  </section>
+
+  <form method="post" enctype="multipart/form-data" class="space-y-4">
+    {% csrf_token %}
+
+    <div class="space-y-1">
+      <span class="block text-xs text-base-content/60">
+        Add logos{% if max_new_logos %} (room for {{ max_new_logos }} more){% endif %}
+      </span>
+      {% if max_new_logos %}
+      {% include "events/_ce_logo_inputs.html" with max_new=max_new_logos %}
+      {% else %}
+      <p class="text-xs text-base-content/50">This organization is at the limit of 10 logos.</p>
+      {% endif %}
+      {% if form.logos.errors %}<p class="text-xs text-error">{{ form.logos.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="id_url" class="block text-xs text-base-content/60">Website</label>
+      {{ form.url }}
+      <p class="text-xs text-base-content/60">Links the logos when set.</p>
+      {% if form.url.errors %}<p class="text-xs text-error">{{ form.url.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="id_statement" class="block text-xs text-base-content/60">Required approval language</label>
+      {{ form.statement }}
+      <p class="text-xs text-base-content/60">Wording this body requires on approved events. Shown under its logos on every event that claims it.</p>
+      {% if form.statement.errors %}<p class="text-xs text-error">{{ form.statement.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+  </form>
+</div>
+{% endblock %}

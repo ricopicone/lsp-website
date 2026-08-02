@@ -1,11 +1,9 @@
-# Resuming task #474
+# Resuming task #486
 
-**Task:** Treasurer admin issues
+**Task:** CE images display
 
 ## Description
-* I don't know if this is an issue or not, but I want to check that we're automatically syncing new payments. We don't have any new ones since 3 days ago. Related: What does the "Sync changes" button in the Accounts tab do?
-* Under Payments two recent payments are listed "Pending" but I think they might have gone through or been cancelled. This could be related to the automatic updating question above.
-* Remove the "Dues (this AY)" column on the Accounts tab table
+Some events will be approved by different organizations for continuing education (CE) credits. Apparently we are to display images in this case. I don't really want to manage the collection of images, so I think we should let faculty add CE image display. I think we should add a setting in the Settings tab (and probably also in the proposal form) for CE credits (at all and number of credits) and uploading CE organization images. The CE information and images should be displayed compactly (max height and max width) at the bottom of the About section of the Overview.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -58,6 +56,20 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **skipping-a-covered-year-rebills-events** (architecture) — Task #485 SHIPPED+LIVE 2026-07-30: recording SKIPPING re-bills the tuition-covered registrations in that year at the regular fee (re-quote, never a bare Charge); recording a paying decision un-bills and restores access
+- **new-member-blocked-until-tuition-decision** (gotcha) — A newly admitted in-training member cannot register for ANY event until they record that year's tuition decision — self-service, and EVERY option unblocks, payment-plan included
+- **one-registration-gate-coverage-follows-decision** (decision) — Task #484 SHIPPED+LIVE 2026-07-30: tuition coverage follows ANY non-skipping decision (payment-plan-requested included) and the narrow special-event gate is deleted — a missing decision row is the only tuition block left
+- **committee-public-is-page-not-privacy** (architecture) — Committee.public means "has a public page", NOT confidential — "Internal" is the app's word and for MoA it's the unchanged default; MoA membership is auto-derived, so directory badges must badge appointed positions only (#481)
+- **advisor-pool-not-availability-gated** (decision) — Task #483 SHIPPED to main: declared availability no longer filters the advisor picker, it only labels it (three optgroups) — the picker is the only way an advisorship gets recorded
+- **directory-badge-colors** (convention) — Directory profile badges: Faculty=accent, board-appointee StaffRole=secondary (LSP Staff / Registrar / Web Developer excluded; deduped vs committee officer), committee=primary
+- **hidden-input-honeypot-is-the-weak-variant** (gotcha) — A type="hidden" honeypot is the variant commodity bots skip — use the CSS-hidden TEXT input from accounts/antibot.py; also, prod referral settings are ack=auto dist=auto, not the code defaults
+- **direct-admission-web-coordinator** (architecture) — SHIPPED+LIVE (task #476, deployed 2026-07-27): members admitted outside the site are admitted at /admin-tools/web-coordinator/admit/ (Web Coordinator, NOT the Applications Coordinator); admissions.services.admit_member() is the shared choke
+- **speaker-invitation-expiry-tracks-the-event** (decision) — Speaker invitations expire the day after their event (events.speaker_invitations.invitation_expiry), not a fixed 30 days — a lapsed one is unrecoverable because password reset silently skips unusable-password accounts
+- **detached-clone-loses-inherited-css** (gotcha) — A visual clone appended to document.body inherits nothing from its source element — the flourishes falling letter lost text-transform this way (task #477), so CSS-capitalized headings dropped lowercase glyphs
+- **amount-only-dues-guess-swallowed-charges** (gotcha) — Stripe importer duplicate-matching: three defects fixed in #474 (circular dues guess, method-blind overlap, deceased members hidden from the matcher); full history now reconciles to $0.00 new money
+- **daily-room-config-freezes-at-first-open** (architecture) — FIXED (task #475, deployed 2026-07-26): ensure_room now reconciles its full property set against the live Daily room. Comparisons must normalize — Daily stores a falsy enable_recording as the string "0". Reconciliation fires on next join, n
+- **sync-charges-mints-obligations-not-payments** (glossary) — The treasurer Accounts tab's "Sync charges" button mints missing current-year DUES CHARGES (what members owe) — it never contacts Stripe and never fetches payments
+- **pending-payment-is-not-money** (architecture) — A PENDING Payment only means "we sent them to Stripe" — expired checkouts now settle to the new ABANDONED status via the expired webhook + a nightly reconcile timer (task #474)
 - **imported-registration-payments-have-no-charge** (gotcha) — Stripe-imported REGISTRATION payments never mint a Charge (mint_registration_charge requires a registration FK), so they read as phantom credit on the balance — the #439 backfill closed this hole for dues only
 - **tuition-cumulative-coverage-model** (architecture) — Tuition + dues each accounted as their OWN bucket (category's charges vs category's payments, oldest-first, no fungibility); the single account ledger stays fungible ground truth
 - **container-query-units-self-reference** (architecture) — CSS gotcha: an element with container-type can't query itself — cqw in its OWN padding/radius resolves against an ancestor container; put cqw sizing on a child
@@ -100,7 +112,6 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **analyst-availability-feature** (architecture) — Task #272 SHIPPED + LIVE: analyst-availability woven into the directory (new `availability` app); all phases + review refinements deployed; 2026-2027 data + per-analyst notes imported on prod
 - **event-change-review-loop** (architecture) — Approved-event content edits (title/desc/readings/fee) route through a certify-or-submit dialog; EventChangeRequest is the audit row; PC queue on the program-admin Changes tab. SHIPPED to main 2026-06-22.
 - **program-archive-and-content-migration** (status) — Task #259: program archive (member-gated past-year PDFs) + old-Wix content migration mostly complete; map in docs/content-migration-map.md
-- **directory-badge-colors** (convention) — Directory profile badges: Faculty=accent, board-appointee StaffRole=secondary (LSP Staff excluded; deduped vs committee officer), committee=primary
 - **self-hosted-fonts** (decision) — Web fonts are bundled/self-hosted (static/fonts/), NOT loaded from Google Fonts CDN — done to kill the FOUT/reflow on page load (task #270)
 - **email-from-names** (convention) — All mail shows a friendly From: DEFAULT_FROM_EMAIL is wrapped with EMAIL_FROM_NAME ("Lacanian School of Psychoanalysis"). Per-type senders use core.email.school_from(name) — e.g. referral mail is "LSP Referral Coordinator". DEFAULT_FROM_ADD
 - **works-video** (architecture) — Works supports member video upload (direct-to-S3 presigned POST) + gated streaming (private S3 presigned range URLs, no transcoding). Per-file cap + on/off in the Web Developer admin. nginx 1100M kept for the no-JS fallback.
@@ -123,7 +134,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=474`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=486`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

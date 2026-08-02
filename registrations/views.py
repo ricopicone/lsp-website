@@ -18,6 +18,7 @@ from django.views.decorators.http import require_POST
 
 from events.models import Event, PriceTier, PricingCode
 from events.permissions import can_edit_event
+from payments import coverage
 from payments import notifications as notify_payments
 from payments.refund import RefundError
 from payments.stripe_checkout import create_checkout_session
@@ -91,32 +92,22 @@ def _create_registration(
     return reg
 
 
-#: Event types where COMMITTED-but-unpaid additionally blocks registration
-#: (M7.5). Only ``special_event`` for now — Days of Assembly, Working Days,
-#: Scholarly Seminars all let COMMITTED students through. The set is a
-#: deliberate config point; flip more event types in as the policy evolves.
-TUITION_BLOCKING_EVENT_TYPES = frozenset({"special_event"})
-
-
 def _tuition_block_reason(user, event) -> str | None:
     """Return a human-readable reason if the user is blocked from registering
     for this event due to unsettled-tuition status, or None to allow.
 
-    Two-layer policy (M7.5):
+    One gate (M7.5, narrowed to this by task #484): in-training students
+    (pre-candidate / candidate / pre-candidate-scholar / candidate-scholar)
+    who have not recorded a tuition decision for the event's academic year
+    are blocked from registering for *any* event. Some decision — even
+    SKIPPING — must be on file before they can register for anything.
 
-    1. **Broad gate.** In-training students (pre-candidate / candidate /
-       pre-candidate-scholar / candidate-scholar) who have not yet
-       recorded a tuition decision for the current period are blocked
-       from registering for *any* event. Some decision — even SKIPPING
-       — must be on file before they can register for anything.
-
-    2. **Narrow gate.** On top of layer 1, in-training students with
-       status=COMMITTED (said they'll pay, but no payment received and
-       no payment plan set up) are additionally blocked from event
-       types in ``TUITION_BLOCKING_EVENT_TYPES``. This currently
-       targets only ``special_event``; we may extend later. Other
-       statuses (PAYMENT_PLAN, PAID_IN_FULL, SKIPPING) all
-       pass — SKIPPING students pay the regular event fee.
+    There is no longer a second gate. A special event carrying a
+    ``covered_by_tuition`` tier is waived for every non-skipping decision,
+    COMMITTED and PLAN_REQUESTED included, on the assumption tuition will be
+    paid (Rico, 2026-07-29). Coverage itself is decided per event by whoever
+    configures its price tiers, so an event with no covered tier for the
+    student's audience charges them the regular fee regardless of status.
     """
     profile = getattr(user, "profile", None)
     if not (profile and profile.owes_tuition):
@@ -138,19 +129,6 @@ def _tuition_block_reason(user, event) -> str | None:
             f"decision for {period.name}. You'll be able to commit to pay, "
             "set up a payment plan, or note that you're skipping tuition "
             "this year — all options unlock registration."
-        )
-    if (event.event_type in TUITION_BLOCKING_EVENT_TYPES
-            and enr.status == TuitionEnrollment.Status.COMMITTED
-            and _find_covered_tier(user, event) is not None):
-        # The student would be claiming tuition coverage they haven't paid
-        # for. If the event has no covered_by_tuition tier matching their
-        # audience, no coverage would apply — they'd pay the regular fee
-        # like everyone else, so there's nothing to gate on.
-        return (
-            "You committed to pay tuition for "
-            f"{period.name} but we haven't received a payment or a payment "
-            "plan setup yet. Please complete payment, or switch to a payment "
-            "plan, before registering for this special event."
         )
     return None
 
@@ -263,7 +241,12 @@ def registration_confirm(request, reg_id: int):
     return render(
         request,
         "registrations/register_confirm.html",
-        {"registration": reg},
+        {
+            "registration": reg,
+            # Lets the page say *why* a formerly covered place now wants money
+            # (task #485) without duplicating the marker string in a template.
+            "rebilled_explanation": coverage.REBILLED_EXPLANATION,
+        },
     )
 
 

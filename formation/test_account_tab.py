@@ -428,3 +428,27 @@ def test_split_action_hidden_when_already_split(client):
     assert body.count('title="Re-categorize"') == 2   # parent + child
     assert body.count('title="Split across categories"') == 0
     assert reverse("my_payment_note", args=[child.id]) in body
+
+
+# ---- 6. Pending payment-plan note (task #484) --------------------------------
+
+def test_pending_plan_note_says_coverage_already_applies(client):
+    """A member waiting on the Board is told their tuition already covers
+    seminar fees — the note is the whole disclosure (task #484)."""
+    member = _user("planpending@x.test")
+    period = TuitionPeriod.current()
+    if period is None:
+        period = TuitionPeriod.objects.create(
+            name="Test AY", slug="test-ay-planpending",
+            start_date=timezone.now().date(),
+            decision_due_date=timezone.now().date(),
+            end_date=timezone.now().date(), tuition_amount=Decimal("800.00"),
+        )
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=period,
+        status=TuitionEnrollment.Status.PLAN_REQUESTED,
+    )
+    client.force_login(member)
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+    assert "Your payment plan application is with the Board." in body
+    assert "covers seminar fees" in body

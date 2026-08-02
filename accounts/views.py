@@ -88,15 +88,45 @@ def _directory_qs():
                 to_attr="active_public_memberships",
             ),
             # Board-appointed operational roles (Treasurer, Cartel Coordinator,
-            # …) badge the directory. LSP Staff and Registrar are internal
-            # access designations, not public positions — exclude them.
+            # …) badge the directory. LSP Staff, Registrar, and Web Developer
+            # are internal designations — an access grant, a placeholder, and
+            # technical operations — not public positions, so exclude them.
             # StaffRole.Meta orders by name.
             Prefetch(
                 "user__staff_roles",
                 queryset=StaffRole.objects.exclude(
-                    key__in=(StaffRole.LSP_STAFF, StaffRole.REGISTRAR)
+                    key__in=(
+                        StaffRole.LSP_STAFF,
+                        StaffRole.REGISTRAR,
+                        StaffRole.WEB_DEVELOPER,
+                    )
                 ),
                 to_attr="public_staff_roles",
+            ),
+            # Appointed officers of committees with no public page (task #481).
+            # The Applications Coordinator is one: an appointment on the Meeting
+            # of Analysts, which is Internal, so neither the committee badge above
+            # nor the StaffRole badge (retired in core/0011) could reach it.
+            #
+            # Two filters carry the weight. ``kind=COMMITTEE`` keeps cartel and
+            # seminar roles (organizer, faculty, plus-one) out — those aren't
+            # school appointments. Excluding ``member`` is the load-bearing rule:
+            # Meeting-of-Analysts membership is auto-derived from the Analyst role
+            # (committees/0009), so badging it would stamp a redundant committee
+            # name on every analyst in the directory.
+            Prefetch(
+                "user__workgroup_memberships",
+                queryset=(
+                    WorkgroupMembership.objects.serving()
+                    .filter(
+                        workgroup__kind=Workgroup.Kind.COMMITTEE,
+                        workgroup__committee__public=False,
+                    )
+                    .exclude(role=WorkgroupMembership.Role.MEMBER)
+                    .select_related("workgroup__committee")
+                    .order_by("workgroup__committee__name")
+                ),
+                to_attr="badge_officer_memberships",
             ),
         )
         .order_by("user__last_name", "user__first_name")
@@ -137,6 +167,44 @@ def _badge_staff_roles(user):
     return [
         role for role in getattr(user, "public_staff_roles", [])
         if role.key not in officer_keys
+    ]
+
+
+def _badge_officer_roles(user, staff_roles):
+    """Officer appointments on committees with no public page — badged as the
+    position alone, never naming the committee (task #481).
+
+    The Applications Coordinator is the motivating case: an appointment on the
+    Meeting of Analysts, whose page is members-only, and who is the named contact
+    in every applicant-facing email. The membership rows that reach here are
+    already filtered to real appointments by ``_directory_qs``.
+
+    A position already shown by another badge is dropped, so a holder never gets
+    two chips for one appointment. That covers the StaffRole badges (``StaffRole``
+    ``name`` is admin-editable — "Administrative Assistant to the Board" — so it's
+    the better label wherever both exist) and public committee officer badges
+    (which name their committee, so they're more informative). Position identity
+    is the shared key string, the same assumption ``_badge_staff_roles`` relies on.
+
+    Relies on the ``badge_officer_memberships`` prefetch set by ``_directory_qs``.
+    """
+    from core.models import StaffRole
+
+    # A stored Chair / Co-chair is the school President / Vice-President, whose
+    # StaffRole badge carries the title (tasks #368, #428). The Meeting of
+    # Analysts can't trip this — its President / VP are *derived* rows carrying an
+    # officer_title, not stored memberships — but another Internal committee could.
+    STAFFROLE_FOR_OFFICER = {
+        "chair": StaffRole.PRESIDENT,
+        "co_chair": StaffRole.VICE_PRESIDENT,
+    }
+    badged = {role.key for role in staff_roles}
+    for m in getattr(user, "active_public_memberships", []):
+        badged.add(m.role)
+    return [
+        m for m in getattr(user, "badge_officer_memberships", [])
+        if m.role not in badged
+        and STAFFROLE_FOR_OFFICER.get(m.role, m.role) not in badged
     ]
 
 
@@ -268,6 +336,9 @@ def directory(request):
     by_role: dict[str, list[dict]] = {}
     for profile in _directory_qs():
         profile.badge_staff_roles = _badge_staff_roles(profile.user)
+        profile.badge_officer_roles = _badge_officer_roles(
+            profile.user, profile.badge_staff_roles
+        )
         by_role.setdefault(profile.role, []).append({
             "profile": profile,
             "slug": profile.directory_slug,
@@ -287,6 +358,9 @@ def directory_detail(request, slug: str):
     for profile in _directory_qs():
         if profile.directory_slug == slug:
             profile.badge_staff_roles = _badge_staff_roles(profile.user)
+            profile.badge_officer_roles = _badge_officer_roles(
+                profile.user, profile.badge_staff_roles
+            )
             works = (
                 Work.listing_for(request.user)
                 .filter(authors=profile.user)
@@ -427,10 +501,36 @@ def find_an_analyst(request):
     Handles form GET (display) and POST. A valid submission becomes a tracked
     ``referrals.ReferralRequest`` (the coordinator inquiry email and, in auto
     mode, the acknowledgment are sent by ``referrals.services.intake``).
+
+    Transport-level bot checks run *before* intake, so a bot submitting a
+    harvested address never causes the school to mail that stranger. A caught
+    bot gets the ordinary success redirect (task #479).
     """
     submitted = request.GET.get("submitted") == "1"
     if request.method == "POST":
+        from referrals.models import BlockedSubmission
+
         form = ReferralRequestForm(request.POST)
+        ip = antibot.client_ip(request)
+        success = redirect(f"{request.path}?submitted=1#submitted")
+
+        blocked = None
+        if form.honeypot_tripped:
+            blocked = BlockedSubmission.Reason.HONEYPOT
+        elif antibot.looks_too_fast(
+            request.POST.get(antibot.TIMESTAMP_FIELD, ""),
+            minimum=antibot.REFERRAL_MIN_FILL_SECONDS,
+        ):
+            blocked = BlockedSubmission.Reason.TIMING
+        elif antibot.over_rate_limit(ip):
+            blocked = BlockedSubmission.Reason.RATE_LIMIT
+
+        if blocked is not None:
+            logger.info("referral form blocked (%s) from %s", blocked, ip)
+            BlockedSubmission.objects.create(reason=blocked)
+            return success
+
+        antibot.record_attempt(ip)
         if form.is_valid():
             from referrals.services import intake
 
@@ -446,12 +546,13 @@ def find_an_analyst(request):
                 ),
                 "additional_information": form.cleaned_data["additional_information"],
             })
-            return redirect(f"{request.path}?submitted=1#submitted")
+            return success
     else:
         form = ReferralRequestForm()
     return render(request, "accounts/find_an_analyst.html", {
         "form": form,
         "submitted": submitted,
+        "honeypot_field": antibot.HONEYPOT_FIELD,
     })
 
 
@@ -1028,7 +1129,12 @@ def intake_survey(request):
     submit it reconciles into structured records (see ``accounts.survey``)."""
     from django.contrib import messages
 
-    from .advisor import current_advisor, eligible_advisors, set_advisor
+    from .advisor import (
+        advisor_choice_groups,
+        current_advisor,
+        eligible_advisors,
+        set_advisor,
+    )
     from .forms import IntakeSurveyForm
     from .membership import academic_year_choices
     from .models import MemberIntakeSurvey, Profile
@@ -1093,7 +1199,7 @@ def intake_survey(request):
         "tuition_prechecked": sum(1 for r in rows if r["tuition_state"] == "full"),
         "milestones": milestone_questions(request.user),
         "needs_advisor": needs_advisor,
-        "advisors": eligible_advisors(request.user) if needs_advisor else [],
+        "advisor_groups": advisor_choice_groups(request.user) if needs_advisor else [],
         "current_advisor": current_advisor(request.user) if needs_advisor else None,
         "can_list": can_list,
     })

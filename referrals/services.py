@@ -30,7 +30,7 @@ from django.conf import settings as django_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from . import emails, notifications
+from . import emails, notifications, screening
 from .models import (
     MessageTemplate,
     Mode,
@@ -42,6 +42,23 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 _TOKEN = re.compile(r"\{([a-z_]+)\}")
+
+
+class SuppressedStatusError(RuntimeError):
+    """Raised when a held or junk request is asked to send something.
+
+    The hold in ``intake`` is the fix; this is what keeps it fixed. Any
+    future caller — cron, view, admin action — hits this rather than
+    quietly mailing 36 clinicians about a bot submission (task #479).
+    """
+
+
+def _refuse_if_suppressed(req: ReferralRequest, action: str) -> None:
+    if req.status in ReferralRequest.SUPPRESSED_STATUSES:
+        raise SuppressedStatusError(
+            f"Refusing to {action} {req.reference}: status is "
+            f"{req.get_status_display()}."
+        )
 
 
 def render_template(text: str, context: dict) -> str:
@@ -87,6 +104,8 @@ def intake(data: dict) -> ReferralRequest:
             data["email"], recent.reference,
         )
         return recent
+
+    held_reason = screening.screen(data)
     req = ReferralRequest.objects.create(
         name=data["name"],
         pronouns=data.get("pronouns", ""),
@@ -95,7 +114,26 @@ def intake(data: dict) -> ReferralRequest:
         language=data["language"],
         modalities=data.get("modality", ""),
         additional_information=data.get("additional_information", ""),
+        status=(
+            ReferralRequest.Status.HELD if held_reason
+            else ReferralRequest.Status.NEW
+        ),
+        held_reason=held_reason,
+        held_at=timezone.now() if held_reason else None,
     )
+    if held_reason:
+        # Nothing sends: not the coordinator inquiry, not the acknowledgment
+        # to what may be a harvested address, not the distribution.
+        logger.info("Held referral %s: %s", req.reference, held_reason)
+        try:
+            notifications.referral_held(req)
+        except Exception:
+            logger.exception(
+                "Failed to notify the coordinator about held referral %s",
+                req.reference,
+            )
+        return req
+
     try:
         emails.send_coordinator_inquiry(
             req, _absolute(reverse("referrals:detail", args=[req.reference])),
@@ -122,8 +160,53 @@ def intake(data: dict) -> ReferralRequest:
     return req
 
 
+def release(req: ReferralRequest) -> ReferralRequest:
+    """Clear a hold and resume the normal post-intake chain.
+
+    A released request is treated exactly as a clean one would have been:
+    the coordinator inquiry goes out, and the acknowledgment and
+    distribution follow whatever the auto/review toggles say (task #479).
+    """
+    if req.status != ReferralRequest.Status.HELD:
+        return req
+    config = ReferralSettings.load()
+    req.status = ReferralRequest.Status.NEW
+    req.held_reason = ""
+    req.held_at = None
+    req.held_escalated_at = None
+    req.save(update_fields=[
+        "status", "held_reason", "held_at", "held_escalated_at",
+    ])
+    try:
+        emails.send_coordinator_inquiry(
+            req, _absolute(reverse("referrals:detail", args=[req.reference])),
+        )
+    except Exception:
+        logger.exception(
+            "Failed to email released referral %s to the coordinator",
+            req.reference,
+        )
+    if config.ack_mode == Mode.AUTO:
+        try:
+            send_acknowledgment(req)
+        except Exception:
+            logger.exception(
+                "Failed to acknowledge released referral %s", req.reference,
+            )
+    if config.distribution_mode == Mode.AUTO:
+        try:
+            distribute(req)
+        except Exception:
+            logger.exception(
+                "Failed to distribute released referral %s", req.reference,
+            )
+    req.refresh_from_db()
+    return req
+
+
 def send_acknowledgment(req: ReferralRequest) -> None:
     """Step 2: the process reply to the requester (editable template)."""
+    _refuse_if_suppressed(req, "acknowledge")
     tpl = MessageTemplate.get(MessageTemplate.Key.ACKNOWLEDGMENT)
     context = {"name": req.name, "reference": req.reference}
     emails.send_to_requester(
@@ -144,6 +227,7 @@ def distribute(req: ReferralRequest) -> int:
     notifications center) so their response attributes to them. Returns the
     number of clinicians notified.
     """
+    _refuse_if_suppressed(req, "distribute")
     config = ReferralSettings.load()
     members = list(
         ReferralListMember.objects.filter(is_active=True)
@@ -275,3 +359,51 @@ def purge_expired(now=None) -> int:
         ])
         count += 1
     return count
+
+
+#: How long a content-free BlockedSubmission row is kept.
+BLOCKED_RETENTION_DAYS = 365
+
+
+def escalate_stale_holds(now=None) -> int:
+    """Email the coordinator about holds left unreviewed past the threshold.
+
+    Sends once per request (``held_escalated_at``). Returns how many were
+    escalated (task #479).
+    """
+    config = ReferralSettings.load()
+    now = now or timezone.now()
+    cutoff = now - timedelta(days=config.held_escalation_days)
+    stale = ReferralRequest.objects.filter(
+        status=ReferralRequest.Status.HELD,
+        held_at__lte=cutoff,
+        held_escalated_at__isnull=True,
+    )
+    count = 0
+    for req in stale:
+        try:
+            emails.send_held_escalation(
+                req,
+                _absolute(reverse("referrals:detail", args=[req.reference])),
+            )
+        except Exception:
+            logger.exception(
+                "Failed to escalate held referral %s", req.reference,
+            )
+            continue
+        req.held_escalated_at = now
+        req.save(update_fields=["held_escalated_at"])
+        count += 1
+    return count
+
+
+def prune_blocked_submissions(now=None) -> int:
+    """Drop blocked-submission counter rows past their retention."""
+    from .models import BlockedSubmission
+
+    now = now or timezone.now()
+    cutoff = now - timedelta(days=BLOCKED_RETENTION_DAYS)
+    deleted, _ = BlockedSubmission.objects.filter(
+        created_at__lt=cutoff,
+    ).delete()
+    return deleted

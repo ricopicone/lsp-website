@@ -4,10 +4,6 @@
 <div class="space-y-6 max-w-3xl">
   <nav class="text-sm"><a href="{{ back_url }}" class="link link-hover text-base-content/60">← {{ back_label }}</a></nav>
 
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
-
   {% if is_sandbox %}
   <div class="alert alert-warning py-2 text-sm flex flex-wrap items-center justify-between gap-3">
     <span>🧪 <strong>Sandbox application.</strong> This is a training applicant —

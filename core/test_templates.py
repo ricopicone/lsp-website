@@ -14,7 +14,7 @@ from django.conf import settings
 
 # Directories that are not our source templates (vendored, generated, copies).
 EXCLUDE_DIRS = {
-    ".git", ".venv", "venv", "node_modules", ".claude",
+    ".git", ".venv", "venv", "node_modules", ".claude", ".claude-worktrees",
     "staticfiles", "htmlcov", "dist", "build",
 }
 
@@ -50,4 +50,23 @@ def test_no_multiline_hash_comments_in_templates():
         "(Django {# #} is single-line only). "
         "Use {% comment %} / {% endcomment %} instead. Offending lines:\n  "
         + "\n  ".join(offenders)
+    )
+
+
+def test_only_the_shared_partial_renders_messages():
+    """Messages render once, from core/_messages.html via core/base.html.
+
+    A second loop in a page template prints every message twice, and the habit
+    that produced 30 of them was copying a neighbouring template.
+    """
+    offenders = []
+    for path in _template_files():
+        if path.name == "_messages.html":
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "for m in messages" in text or "for message in messages" in text:
+            offenders.append(str(path.relative_to(Path(settings.BASE_DIR))))
+    assert not offenders, (
+        "Messages are rendered once, by core/_messages.html (included from "
+        "core/base.html). Remove the loop from:\n  " + "\n  ".join(offenders)
     )

@@ -110,6 +110,9 @@ video/          Daily.co in-site meeting rooms (one per Workgroup)          <- P
 - Committees (Board, Programming Committee) drive admin permissions; **LSP
   Staff is now the `Profile.is_lsp_staff` designation**, not a committee — it
   grants board entry, event-edit, and an `access=lsp_staff` Parlêtre channel.
+- **Django messages render once**, from `core/templates/core/_messages.html`,
+  included by `core/base.html`. Never add a per-page messages loop: a second
+  rendering prints every message twice. `core/test_templates.py` enforces this.
 - Tests use pytest-django; lint with ruff. Keep both green — CI runs them on push.
 
 ## Design principle: do not over-automate
@@ -561,6 +564,222 @@ Done (see `git log` for specifics):
   a member admitted over the summer is joining for the year about to start).
   Dues charges stay with the treasurer's Sync charges; the success message says
   so.
+
+- **Referral spam screening** (task #479). Referral request `26-0727` was a
+  commodity form-spam bot: every visible text input filled with a random
+  mixed-case token, every checkbox checked, and a harvested real address in
+  the email field. It got through because `ReferralRequestForm`'s honeypot was
+  a `forms.HiddenInput` — `type="hidden"`, the one variant commodity bots skip
+  on purpose — while the signup form's (task #471, `accounts/antibot.py`) is a
+  CSS-hidden **text** input, which this bot demonstrably would have filled.
+  Prod runs `ack=auto dist=auto`, so the school auto-acknowledged a stranger
+  and distributed gibberish to the entire referral list; one clinician
+  responded to it. Now two layers. **Transport** (`accounts/antibot.py`, newly
+  adopted here with a per-form `looks_too_fast(minimum=…)` — 10s for this
+  two-step wizard vs. signup's 2s) drops near-certain bots to the ordinary
+  thank-you page, recording a deliberately **content-free** `BlockedSubmission`
+  row (timestamp + reason, no address, no IP, nothing to leak) so the hit rate
+  is visible — without it, a screen that silently broke and started eating real
+  requests would look identical to one that works. **Content**
+  (`referrals/screening.py`, a pure function) puts anything suspicious into the
+  new `Status.HELD`: not acknowledged, not distributed, bell to the coordinator
+  only, with `services.SuppressedStatusError` guarding `send_acknowledgment`
+  and `distribute` so no future caller can leak one. The heuristics are
+  gibberish detection (≥8 chars, `isalpha()`, ≥4 upper/lower transitions), a
+  40-character narrative floor, and URL markers. **Vowel ratio was specified,
+  then rejected during implementation**: at any threshold catching the junk it
+  also flags `Pittsburgh` (0.20 — an actually-submitted location), `Frankfurt`,
+  and `they/them`; case transitions separate the populations cleanly (junk
+  scores 5–15, every real value scores 1). The screen only ever *holds* —
+  `JUNK` is set by a human, via a Mark-as-junk button available on any request
+  for the coherent-but-fake submission no heuristic will catch.
+  `process_referrals` escalates a hold left unreviewed past
+  `held_escalation_days` (default 3) to one email, bounding what a false
+  positive costs someone in distress. Two pre-existing test payloads had
+  sub-40-character narratives and were lengthened to stay realistic rather
+  than weakening the floor. Design:
+  `docs/superpowers/specs/2026-07-27-referral-spam-screening-design.md`.
+
+- **Applications Coordinator directory badge** (task #481). Every other named
+  coordinator badges the Directory; this one didn't, because two decisions
+  intersected. The role was deliberately retired as a `core.StaffRole`
+  (`core/migrations/0011`, task #272) in favour of an officer role on the Meeting
+  of Analysts workgroup, and `_directory_qs()` filters its committee-badge
+  prefetch to `committee__public=True` while the Meeting of Analysts is seeded
+  `public=False` — so the holder fell through *both* paths. **`Committee.public`
+  gates only three things** (the workgroup's `landing_visibility`, directory
+  badging, and a Public/**Internal** chip in the Board's committees admin) and
+  asserts nothing about confidentiality; "Internal" is the app's own word for it,
+  and for the Meeting of Analysts it is mostly just the unchanged default —
+  `seed_committees.py:98-100` force-opts-in every committee it carries a roster
+  for, and the Meeting isn't one of them. It should nonetheless stay Internal:
+  `committees/0009` sets `auto_member_role="analyst"`, so **membership is derived,
+  not appointed** — flipping the committee public would stamp "Meeting of
+  Analysts" onto every analyst beside the "Analyst" role badge that already says
+  it. Hence the organising rule, which is what the code encodes: **badge appointed
+  positions, never derived membership.** A new prefetch collects serving officer
+  memberships on `kind=COMMITTEE` workgroups whose committee is *not* public,
+  `.exclude(role=MEMBER)` — that exclusion is load-bearing, not tidying — and
+  `_badge_officer_roles` renders them as standalone **secondary** badges showing
+  `role_label` only, never naming the Internal committee. Positions already shown
+  by a StaffRole badge or a public committee officer badge are dropped so one
+  appointment never yields two chips (`StaffRole.name` is admin-editable, so it's
+  the better label where both exist). Restoring the StaffRole and syncing it from
+  the roster (the President/VP precedent) was rejected: `StaffRole.holders` is a
+  permission surface `core/staff.py` gates on, so a synced row would sit beside
+  `is_applications_coordinator` as a second near-miss authorisation path. **Known
+  consequence:** `Committee.public` defaults to `False`, so a committee created in
+  the admin later badges its officers with no opt-in step — inert today (the
+  Meeting of Analysts is the only Internal committee; Board and Programming
+  Committee are both public, verified against the live directory), but "Internal"
+  no longer implies "unbadged officers". Design:
+  `docs/superpowers/specs/2026-07-29-applications-coordinator-badge-design.md`.
+
+- **Advisor pool opened to all eligible analysts** (task #483).
+  `accounts.advisor.eligible_advisors` dropped any analyst carrying an open
+  `availability` span of `status="no"` for the `advisor` function. The intent was
+  to stop a member picking someone who has said they aren't taking new advisees;
+  the effect was that a member whose *existing* Advisor closed their door
+  couldn't name them at all, because **the picker is the only way an advisorship
+  gets recorded** and there's no prior `Advisorship` row to grant an exception
+  from — at launch essentially every real advisorship predates the site. The
+  filter therefore failed hardest on the intake survey's "Who is your current
+  advisor?", which is *precisely* a request to record a relationship that
+  already exists off-site. Declared availability is now **advisory**: it labels
+  the picker instead of gating it. `advisor_availability_split` becomes
+  `advisor_choice_groups`, returning ordered `(label, users)` groups —
+  *Available to advise* (open `yes` span) / *Unknown availability* (no declared
+  status: no open span, an explicit `unknown`, or a scholar-track advisor, who
+  carry no spans) / *Not currently accepting new advisees* (open `no` span) —
+  with empty groups omitted, query ordering kept inside each, and the labels as
+  module constants so picker and tests can't drift. One open span per
+  (profile, function) is a DB constraint, so the status map needs no precedence
+  rule; a *closed* `no` span still reads as unknown. Both surfaces share it: the
+  Formation-tab `AdvisorSelectForm` (whose `queryset` is now the wider pool, so
+  the POST validates) and the intake survey's `<select>`, which gained the same
+  `<optgroup>`s. **No block, no confirmation, no warning** — the group label is
+  the whole disclosure (do-not-over-automate), plus one line of help text on both
+  surfaces. `set_advisor` is untouched, so the chosen analyst is notified
+  whatever they declared; for the already-advising case that notification *is*
+  the record. The availability surfaces are unchanged —
+  `/directory/availability/?only=advisor`, linked from the account-ready and
+  acceptance letters as "currently available to advise", still lists only
+  analysts who said yes. That page stays the recommendation; the picker is the
+  record. Deliberately no `FormationSettings` toggle: "for now" is served by a
+  revert, not by a field, a migration, and a branch to test both ways. Design:
+  `docs/superpowers/specs/2026-07-29-open-advisor-pool-design.md`.
+
+- **A requested payment plan covers events** (task #484). Applying for a
+  payment plan is a request to the Board (`PLAN_REQUESTED` + a PENDING
+  `TuitionPlanApplication`, task #450 phase B), and fall registration could
+  not wait on the Board's turnaround. The hold was never a *block* — the
+  enrollment row exists, so the broad no-decision gate was always satisfied —
+  it was **pricing**: `PLAN_REQUESTED` was absent from
+  `TuitionEnrollment.covers_seminars`, so `is_tuition_current()` was False, no
+  `covered_by_tuition` tier resolved, and the member was quoted the full
+  seminar fee. The charge side never agreed with that reading:
+  `payments.charges._owed_periods` exempts only SKIPPING, so the year's
+  tuition charge was minted regardless — the school treated the money as owed
+  while withholding what paying it buys. `covers_seminars` now covers every
+  non-skipping decision. Second, the **narrow special-event gate is deleted**
+  (`TUITION_BLOCKING_EVENT_TYPES` + its branch in `_tuition_block_reason`):
+  per Rico (2026-07-29), a tuition-eligible special event is waived for
+  COMMITTED *and* PLAN_REQUESTED on the assumption tuition will be paid, which
+  removes the one place where "committed but no money yet" had teeth —
+  deliberately, and reversible by revert rather than by a flag. One gate
+  remains: some decision must be on file. Also: a fully covered year reads
+  "Paid" for a pending request (`payments/ledger.py`), the member's pending
+  note and the Board's queue intro both say coverage is already live, and the
+  decline notification warns that a $0 registration taken under provisional
+  coverage may need settling (nothing unwinds automatically — do-not-over-
+  automate). The treasurer guide's two-gate section and its case table were
+  rewritten to one gate. No migration, no backfill, no flag; balances cannot
+  move. Design:
+  `docs/superpowers/specs/2026-07-29-plan-requested-seminar-coverage-design.md`.
+
+- **Skipping a covered year re-bills the events** (task #485, follow-on to
+  #484). #484 made coverage provisional in one direction, and nothing owned the
+  other: a member who consumed coverage and then ended up SKIPPING owed nothing
+  for those events, because a covered registration is created with
+  `quoted_amount=0` and **no Payment and no Charge** (`mint_registration_charge`
+  requires a positive amount), while SKIPPING is exempt from tuition charges.
+  The Board declining a plan is only the rarest route in — the likelier one is a
+  member who records COMMITTED, registers free, then re-records SKIPPING — so
+  the mechanism keys off the *decision*, not the decline. New
+  `payments/coverage.py` answers what coverage bought in a year
+  (`covered_registrations`, which excludes comps and pricing-code freebies since
+  neither is coverage), what it was worth (`retro_amount` — the tier's
+  `base_amount`, or `minimum_amount` for a sliding tier, since a skipping member
+  would have picked their own figure at or above the floor), and bills or
+  un-bills it. **Billing re-quotes the Registration rather than minting a
+  Charge**: `quoted_amount` + AWAITING_PAYMENT lights up the built "Pay →"
+  Stripe button, the registration reminders, and `mint_registration_charge` at
+  settle, where a bare Charge would have been unpayable — the member-facing
+  payment endpoints are dues, tuition-in-full, installments, donations, and
+  per-registration checkout, nothing else. A PENDING_APPROVAL row gets its
+  amount rewritten but **keeps its status**, because `approve()` routes on the
+  amount and flipping it would skip the faculty approval it awaits. Recording a
+  paying decision un-bills, so **committing to pay restores event access without
+  any money moving**; a fee actually paid is never unwound (treasurer's refund
+  call). The member confirms on an interstitial listing every event, its fee, and
+  the total before anything is recorded, and gets one notification after — built
+  from the rows `bill_skipped_coverage` *returns*, since a stale in-memory copy
+  still reads $0. Access loss while re-billed is accepted, deliberately: the
+  routes back are the registration's Pay button and the tuition decision form.
+  **Staff paths do not auto-bill** — admin, the treasurer's set-status,
+  `backfill_tuition_status`, the importers — or a historical backfill would
+  retro-bill years of events. No migration: the marker is the
+  `quoted_explanation` string, held in `coverage.REBILLED_EXPLANATION` and pinned
+  by a test, mirroring how `"Covered by tuition (tuition-paying member, REG-4)"`
+  already identifies a covered registration. Design:
+  `docs/superpowers/specs/2026-07-29-skipped-coverage-rebilling-design.md`.
+
+- **School officers count as workgroup leads** (task #480). Verified on prod
+  across all 30 workgroups, two had members and zero owners — meaning if anyone
+  opened their video room, *nobody* got moderator controls (mute / camera-off /
+  remove) and *nobody* got a Record button. The room worked; it was
+  unmoderatable. For the **Meeting of Analysts** the cause was structural. The
+  workgroups layer already treats the school officers as authoritative —
+  `can_manage_workgroup` returns True for the President / Vice-President on
+  every workgroup, and `participants()` synthesized them as the Meeting's
+  leaders, so they *displayed* as its leadership. But that leadership is
+  **derived** from `StaffRole` holders synced off the Board roster (task #428),
+  never stored as a `WorkgroupMembership` carrying a `LEAD_ROLES` value, and
+  four call sites re-ran the raw roster query
+  (`memberships.serving().filter(role__in=LEAD_ROLES)`) instead of asking a
+  predicate — so the roster asserted a leadership the permission layer didn't
+  grant. New **`workgroups.permissions.is_workgroup_lead`** knows about both,
+  and five call sites adopt it: `video.services.is_owner` (the Daily token's
+  owner flag), `Recording._can_host`, `parletre.permissions._workgroup_lead`,
+  `workgroup_has_leads`, and — not in the ticket — `channel_can_moderate`'s
+  legacy committee-access branch, which resolves *only* for committees and so
+  was the likeliest place for the bug to survive a fix aimed at it.
+  **Scope is the Board and the Meeting of Analysts, nothing else** (Rico,
+  2026-08-01): not the Programming Committee, not other committees, not
+  cartels, seminars, reading groups or working groups. Narrower than *both*
+  existing rules, deliberately — management authority and leadership are
+  different claims, and the President may fix a cartel's roster without leading
+  the cartel. Narrowness is also load-bearing: `workgroup_has_leads` feeds
+  `can_register_decision`, where a **leaderless** group lets any active member
+  record, so officers-as-leads-everywhere would have made every cartel lead-led
+  and silently taken the decision register away from its members. The one
+  behavior change beyond the room: the Meeting stops being leaderless, so
+  recording a decision in *its* register narrows from any analyst to the
+  officers plus managers — which is how the Meeting actually decides. **The
+  orphan guard deliberately stays stored-rows-only** (`lead_members` /
+  `_would_orphan`): the Board's stored Chair is the source of truth that syncs
+  the President `StaffRole`, so a derived-aware guard would authorize removing
+  the last Chair on the grounds that the President covers it — the very change
+  that un-syncs the President. No superuser bypass in the predicate either; it
+  answers who *leads*, and call sites keep their own `is_staff` clauses.
+  `participants()` now shares the helper and **upgrades** an officer's entry
+  rather than replacing it — a stored Board Chair keeps their membership and
+  gains only the title, where the old code discarded the row, which is why it
+  had to be restricted to the auto-membership Meeting. No migration, no flag.
+  The other zero-owner group, **Working Group on Cartels** (6 members, no
+  organizer), is `kind=working_group` and thus out of scope by the same
+  decision: it is a data fix, appointing an organizer in its Settings roster.
+  Design: `docs/superpowers/specs/2026-08-01-workgroup-lead-officers-design.md`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

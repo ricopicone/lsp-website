@@ -38,6 +38,12 @@
           {{ role.name }}
         </span>
         {% endfor %}
+        {# Officers of committees with no public page: position only, never the committee name (#481). #}
+        {% for mem in profile.badge_officer_roles %}
+        <span class="inline-block text-xs uppercase tracking-widest px-2 py-1 rounded bg-secondary/15 text-secondary border border-secondary/25">
+          {{ mem.role_label }}
+        </span>
+        {% endfor %}
         {% for mem in profile.user.active_public_memberships %}
         <span class="inline-block text-xs uppercase tracking-widest px-2 py-1 rounded
                      {% if mem.role != "member" %}bg-primary/15 text-primary border border-primary/25

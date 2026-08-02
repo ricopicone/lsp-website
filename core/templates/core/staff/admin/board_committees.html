@@ -14,10 +14,6 @@
     </p>
   </header>
 
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
-
   {% comment %}List{% endcomment %}
   <div class="overflow-x-auto rounded-lg border border-base-300">
     <table class="table table-sm">

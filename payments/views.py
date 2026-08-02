@@ -27,6 +27,7 @@ from django.views.decorators.http import require_POST
 
 from registrations.models import Registration
 
+from . import coverage
 from .forms import DonationForm, TuitionDecisionForm
 from .models import (
     Charge,
@@ -39,7 +40,10 @@ from .models import (
     TuitionPeriod,
     TuitionPlanApplication,
 )
-from .notifications import notify_plan_application_submitted
+from .notifications import (
+    notify_coverage_rebilled,
+    notify_plan_application_submitted,
+)
 from .operations import complete_payment
 from .stripe_checkout import (
     create_donation_session,
@@ -2351,6 +2355,23 @@ def tuition_decision(request):
         form = TuitionDecisionForm(request.POST)
         if form.is_valid():
             status = form.cleaned_data["status"]
+            # Skipping a year whose events tuition already covered re-bills
+            # those events (task #485). Warn first: the member sees the cost,
+            # confirms, and only then is anything recorded or billed.
+            if status == "skipping" and not request.POST.get("confirm"):
+                rows = [
+                    {"registration": r, "amount": coverage.retro_amount(r.price_tier)}
+                    for r in coverage.covered_registrations(request.user, period)
+                ]
+                rows = [r for r in rows if r["amount"] > 0]
+                if rows:
+                    return render(request, "payments/skip_confirm.html", {
+                        "period": period,
+                        "period_slug": request.POST.get("period", ""),
+                        "rows": rows,
+                        "total": sum(r["amount"] for r in rows),
+                        "account_url": _account_tab_url(),
+                    })
             with transaction.atomic():
                 if status == "payment_plan":
                     # Applying for a payment plan is a request to the Board,
@@ -2387,6 +2408,16 @@ def tuition_decision(request):
                         user=request.user, tuition_period=period,
                         defaults={"status": status},
                     )
+                # Bill or restore the events tuition coverage paid for. A
+                # paying decision (committed / plan request) restores coverage,
+                # so committing returns their access without money moving.
+                if status == "skipping":
+                    billed = coverage.bill_skipped_coverage(request.user, period)
+                else:
+                    billed = []
+                    coverage.unbill_skipped_coverage(request.user, period)
+            if billed:
+                notify_coverage_rebilled(request.user, period, billed)
             messages.success(request, "Your tuition decision has been recorded.")
         else:
             messages.error(request, "Please choose one of the listed options.")

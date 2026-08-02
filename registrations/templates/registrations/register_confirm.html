@@ -5,12 +5,6 @@
 
   <h1 class="font-serif text-3xl text-base-content">Registration recorded</h1>
 
-  {% if messages %}
-    {% for m in messages %}
-    <div role="alert" class="alert alert-error"><span>{{ m }}</span></div>
-    {% endfor %}
-  {% endif %}
-
   {% if request.GET.already %}
   <div role="alert" class="alert alert-warning">
     <span>You're already registered for this event — here are the details.</span>
@@ -61,7 +55,7 @@
   </div>
   {% elif registration.needs_payment %}
   <div role="alert" class="alert alert-warning">
-    <span>{% if registration.decided_at %}Your registration was approved — complete payment to confirm your place.{% else %}Your place isn't confirmed until payment is complete.{% endif %}</span>
+    <span>{% if registration.quoted_explanation == rebilled_explanation %}Your tuition covered this event until you recorded that you're skipping tuition for the year, so the regular fee now applies. Recording that you plan to pay tuition on your Account tab restores the coverage.{% elif registration.decided_at %}Your registration was approved — complete payment to confirm your place.{% else %}Your place isn't confirmed until payment is complete.{% endif %}</span>
   </div>
   <form method="post" action="{% url 'registrations:pay' registration.id %}">
     {% csrf_token %}

@@ -215,6 +215,10 @@ class Recording(models.Model):
         wg = self._workgroup()
         if wg is None:
             return services.is_site_technical(user)
+        # services.is_owner is the one definition of "runs this meeting": the
+        # site-technical roles, the event's hosts, and (task #480) any workgroup
+        # lead including the derived school officers. Delegating keeps recording
+        # management and room moderation from drifting apart.
         return services.is_owner(wg, user)
 
     def _in_roster(self, user) -> bool:

@@ -391,11 +391,9 @@ def is_owner(owner, user) -> bool:
 
         if can_edit_event(user, event):
             return True
-    from workgroups.models import WorkgroupMembership
+    from workgroups.permissions import is_workgroup_lead
 
-    return owner.memberships.serving().filter(
-        user=user, role__in=WorkgroupMembership.LEAD_ROLES
-    ).exists()
+    return is_workgroup_lead(user, owner)
 
 
 # ---- Live presence ------------------------------------------------------

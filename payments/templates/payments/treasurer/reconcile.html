@@ -106,10 +106,6 @@
     </p>
   </header>
 
-  {% if messages %}{% for m in messages %}
-  <div class="alert {% if m.tags == 'error' %}alert-error{% else %}alert-success{% endif %} py-2 text-sm">{{ m }}</div>
-  {% endfor %}{% endif %}
-
   {% for g in groups %}
   <section class="rounded-xl border border-base-300 p-4 space-y-3" data-recon-group>
     <div class="flex flex-wrap items-baseline justify-between gap-2">

@@ -66,6 +66,12 @@ class ReferralSettings(models.Model):
         help_text="Months after a request is replied/closed before its "
         "identifying details are redacted.",
     )
+    held_escalation_days = models.PositiveSmallIntegerField(
+        default=3,
+        help_text="Days a held submission may sit unreviewed before the "
+        "coordinator is emailed about it. Held requests otherwise only "
+        "ring the notification bell.",
+    )
 
     class Meta:
         verbose_name = "Referral settings"
@@ -133,9 +139,17 @@ class ReferralRequest(models.Model):
         DISTRIBUTED = "distributed", _("Distributed — collecting responses")
         REPLIED = "replied", _("Replied")
         CLOSED = "closed", _("Closed")
+        HELD = "held", _("Held for review")
+        JUNK = "junk", _("Junk")
 
     #: Statuses still on the coordinator's plate.
     OPEN_STATUSES = (Status.NEW, Status.ACKNOWLEDGED, Status.DISTRIBUTED)
+
+    #: Statuses that must never be acknowledged or distributed. Screening
+    #: puts a request in HELD; a coordinator puts it in JUNK. Guarded in
+    #: services.send_acknowledgment and services.distribute so no future
+    #: caller can leak one to the referral list (task #479).
+    SUPPRESSED_STATUSES = (Status.HELD, Status.JUNK)
 
     reference = models.CharField(max_length=20, unique=True, editable=False)
 
@@ -159,6 +173,20 @@ class ReferralRequest(models.Model):
     replied_at = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     purged_at = models.DateTimeField(null=True, blank=True)
+
+    # Spam screening (task #479). A held request is not acknowledged and not
+    # distributed until a coordinator releases it.
+    held_reason = models.TextField(
+        blank=True,
+        help_text="Why screening held this submission, shown to the "
+        "coordinator so they can judge it at a glance.",
+    )
+    held_at = models.DateTimeField(null=True, blank=True)
+    held_escalated_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the unreviewed-hold reminder was emailed, so it "
+        "is sent only once.",
+    )
 
     coordinator_notes = models.TextField(blank=True)
 
@@ -333,3 +361,28 @@ class ReferralResponse(models.Model):
     def __str__(self) -> str:
         verb = "available" if self.available else "not available"
         return f"{self.member} — {verb} for {self.request.reference}"
+
+
+class BlockedSubmission(models.Model):
+    """One Find-an-Analyst submission rejected by a transport-level check.
+
+    Deliberately content-free: a timestamp and a reason, nothing else. No
+    address, no IP, no submitted text. It exists only so the coordinator can
+    see a hit rate — without it, a filter that silently broke and started
+    eating real requests would look exactly like a filter that is working
+    (task #479).
+    """
+
+    class Reason(models.TextChoices):
+        HONEYPOT = "honeypot", _("Honeypot field filled")
+        TIMING = "timing", _("Submitted too fast")
+        RATE_LIMIT = "rate_limit", _("Rate limit")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.get_reason_display()} at {self.created_at:%Y-%m-%d %H:%M}"

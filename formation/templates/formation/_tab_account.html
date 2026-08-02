@@ -175,7 +175,7 @@ payments/treasurer/member_detail.html for the full picture with actions).
         {% if not decision_exempt %}
         {% if tuition_enrollment.status == "plan_requested" %}
         <div class="rounded-lg border border-base-300 bg-base-200/40 px-5 py-4 text-sm">
-          Your payment plan application is with the Board.
+          Your payment plan application is with the Board. In the meantime your tuition covers seminar fees, just as it does for anyone paying tuition this year.
         </div>
         {% else %}
         <form method="post" action="{% url 'tuition' %}" class="space-y-4 rounded-lg border border-base-300 p-5">
@@ -229,7 +229,7 @@ payments/treasurer/member_detail.html for the full picture with actions).
           {% if not decision_exempt %}
           {% if upcoming_enrollment.status == "plan_requested" %}
           <div class="rounded-lg border border-base-300 bg-base-200/40 px-5 py-4 text-sm">
-            Your payment plan application is with the Board.
+            Your payment plan application is with the Board. In the meantime your tuition covers seminar fees, just as it does for anyone paying tuition this year.
           </div>
           {% else %}
           <form method="post" action="{% url 'tuition' %}" class="space-y-4">

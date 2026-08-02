@@ -92,6 +92,18 @@ def test_payment_plan_status_is_tuition_current(current_period):
 
 
 @pytest.mark.django_db
+def test_plan_requested_status_is_tuition_current(current_period):
+    """A plan application pending with the Board covers events, same as a
+    commitment (task #484). The year's tuition charge is minted either way."""
+    u = _mk_candidate()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.PLAN_REQUESTED,
+    )
+    assert u.profile.is_tuition_current() is True
+
+
+@pytest.mark.django_db
 def test_enrollment_unique_per_user_per_period(current_period):
     u = _mk_candidate()
     TuitionEnrollment.objects.create(
@@ -104,6 +116,111 @@ def test_enrollment_unique_per_user_per_period(current_period):
             user=u, tuition_period=current_period,
             status=TuitionEnrollment.Status.SKIPPING,
         )
+
+
+# --- Skipping after consuming coverage (task #485) -----------------------
+
+
+def _covered_registration(user, period, amount="200.00"):
+    """A $0 registration that tuition coverage paid for, inside `period`."""
+    from datetime import timedelta
+
+    from events.models import Audience, Event, PriceTier
+    from payments import coverage
+    from registrations.models import Registration
+
+    when = period.start_date + timedelta(days=30)
+    event = Event.objects.create(
+        title="Covered Seminar", slug=f"covered-{user.pk}",
+        start_date=when, end_date=when,
+        status=Event.Status.OPEN, published=True,
+    )
+    tier = PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal(amount),
+        covered_by_tuition=True,
+    )
+    return Registration.objects.create(
+        user=user, event=event, price_tier=tier,
+        quoted_amount=Decimal("0"),
+        quoted_explanation=coverage.COVERED_EXPLANATION,
+        status=Registration.Status.PAID,
+    )
+
+
+@pytest.mark.django_db
+def test_skipping_with_coverage_consumed_asks_to_confirm_first(client, current_period):
+    """The first POST warns and records nothing — the member sees what skipping
+    will cost before it happens."""
+    u = _mk_candidate()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    reg = _covered_registration(u, current_period)
+    client.force_login(u)
+    resp = client.post(reverse("tuition"), {"status": "skipping"})
+
+    assert resp.status_code == 200                  # the confirm page, not a redirect
+    assert b"Covered Seminar" in resp.content
+    assert b"200.00" in resp.content
+    enr = TuitionEnrollment.objects.get(user=u, tuition_period=current_period)
+    assert enr.status == TuitionEnrollment.Status.COMMITTED   # unchanged
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("0")                  # unbilled
+
+
+@pytest.mark.django_db
+def test_confirmed_skipping_bills_the_covered_registrations(client, current_period):
+    from registrations.models import Registration
+
+    u = _mk_candidate()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    reg = _covered_registration(u, current_period)
+    client.force_login(u)
+    resp = client.post(reverse("tuition"), {"status": "skipping", "confirm": "1"})
+
+    assert resp.status_code == 302
+    enr = TuitionEnrollment.objects.get(user=u, tuition_period=current_period)
+    assert enr.status == TuitionEnrollment.Status.SKIPPING
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("200.00")
+    assert reg.status == Registration.Status.AWAITING_PAYMENT
+
+
+@pytest.mark.django_db
+def test_skipping_with_no_coverage_consumed_records_in_one_post(client, current_period):
+    u = _mk_candidate()
+    client.force_login(u)
+    resp = client.post(reverse("tuition"), {"status": "skipping"})
+    assert resp.status_code == 302
+    enr = TuitionEnrollment.objects.get(user=u, tuition_period=current_period)
+    assert enr.status == TuitionEnrollment.Status.SKIPPING
+
+
+@pytest.mark.django_db
+def test_committing_after_skipping_unbills_and_restores_access(client, current_period):
+    """The member's route back: commit to pay and the events are covered again,
+    without any money moving."""
+    from registrations.models import Registration
+
+    u = _mk_candidate()
+    TuitionEnrollment.objects.create(
+        user=u, tuition_period=current_period,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    reg = _covered_registration(u, current_period)
+    client.force_login(u)
+    client.post(reverse("tuition"), {"status": "skipping", "confirm": "1"})
+    client.post(reverse("tuition"), {"status": "committed"})
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("0")
+    assert reg.status == Registration.Status.PAID
+    enr = TuitionEnrollment.objects.get(user=u, tuition_period=current_period)
+    assert enr.status == TuitionEnrollment.Status.COMMITTED
 
 
 @pytest.mark.django_db

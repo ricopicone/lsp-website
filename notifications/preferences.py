@@ -4,6 +4,11 @@ The result combines the category defaults with any per-user override, then
 applies the hard constraints (locked email, channel capability). This is the
 single source of truth both :func:`notifications.dispatch.notify` and the
 settings page rely on.
+
+A category may vary its email default per recipient
+(:attr:`~notifications.categories.CategoryMeta.default_email_for`) — used to
+aim a queue's email at the role that owns it. Because the settings page reads
+this same function, it shows each member their true effective delivery.
 """
 
 from __future__ import annotations
@@ -29,6 +34,11 @@ def resolve(user, category: str) -> Resolved:
 
     in_app = meta.default_in_app
     email_choice = meta.default_email
+    # A category may aim its email at the role that owns it, so the default can
+    # differ per recipient (a queue's Treasurer is emailed, the rest of the
+    # committee gets the bell). A stored override still wins, below.
+    if meta.default_email_for is not None:
+        email_choice = meta.default_email_for(user)
 
     pref = getattr(user, "notification_preference", None)
     if pref is not None:

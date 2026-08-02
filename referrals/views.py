@@ -9,6 +9,7 @@ is gated to active referral-list members.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from functools import wraps
 
 from django.contrib import messages
@@ -30,6 +31,7 @@ from .forms import (
     RespondForm,
 )
 from .models import (
+    BlockedSubmission,
     MessageTemplate,
     ReferralListMember,
     ReferralRequest,
@@ -103,6 +105,12 @@ def dashboard(request):
         "status_choices": ReferralRequest.Status.choices,
         "open_count": ReferralRequest.objects.filter(
             status__in=ReferralRequest.OPEN_STATUSES
+        ).count(),
+        "held_count": ReferralRequest.objects.filter(
+            status=ReferralRequest.Status.HELD,
+        ).count(),
+        "blocked_30d": BlockedSubmission.objects.filter(
+            created_at__gte=timezone.now() - timedelta(days=30),
         ).count(),
         "config": ReferralSettings.load(),
     })
@@ -223,6 +231,58 @@ def reopen(request, reference):
     req.closed_at = None
     req.save(update_fields=["status", "closed_at"])
     messages.success(request, f"{req.reference} reopened.")
+    return redirect("referrals:detail", reference=reference)
+
+
+@coordinator_required
+@require_POST
+def release(request, reference):
+    """Clear a screening hold: the request resumes the normal chain."""
+    req = _get_request(reference)
+    services.release(req)
+    messages.success(
+        request,
+        f"{req.reference} released. It now follows the normal workflow.",
+    )
+    return redirect("referrals:detail", reference=reference)
+
+
+def _audit_note(req, request, text: str) -> None:
+    """Append a stamped line to coordinator_notes (the override trail)."""
+    stamp = timezone.now().strftime("%Y-%m-%d %H:%M")
+    line = f"[{stamp}] {text} — {request.user.email}"
+    req.coordinator_notes = (
+        f"{req.coordinator_notes}\n{line}".strip()
+        if req.coordinator_notes else line
+    )
+
+
+@coordinator_required
+@require_POST
+def mark_junk(request, reference):
+    """Mark a request as junk. Available on any status — this is the escape
+    hatch for the coherent-but-fake submission no heuristic will catch."""
+    req = _get_request(reference)
+    req.status = ReferralRequest.Status.JUNK
+    _audit_note(req, request, "Marked as junk")
+    req.save(update_fields=["status", "coordinator_notes"])
+    messages.success(request, f"{req.reference} marked as junk.")
+    return redirect("referrals:detail", reference=reference)
+
+
+@coordinator_required
+@require_POST
+def unmark_junk(request, reference):
+    """Undo a junk marking; the request returns to the normal workflow."""
+    req = _get_request(reference)
+    req.status = ReferralRequest.Status.NEW
+    req.held_reason = ""
+    req.held_at = None
+    _audit_note(req, request, "Unmarked as junk")
+    req.save(update_fields=[
+        "status", "held_reason", "held_at", "coordinator_notes",
+    ])
+    messages.success(request, f"{req.reference} restored.")
     return redirect("referrals:detail", reference=reference)
 
 

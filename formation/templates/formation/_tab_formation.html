@@ -43,7 +43,9 @@
           {% if advisor_form.advisor.errors %}<p class="text-error text-xs">{{ advisor_form.advisor.errors|striptags }}</p>{% endif %}
           <p class="text-xs text-base-content/50">
             {% if advisor_form.advisor.field.queryset.exists %}
-              Your Advisor will be notified of your choice.
+              Analysts who aren't taking new advisees are still listed, so you can
+              name an Advisor you already work with. Your Advisor will be notified
+              of your choice.
             {% else %}
               No eligible advisors are listed yet. Please contact the School.
             {% endif %}

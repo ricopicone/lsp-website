@@ -43,7 +43,7 @@
           {% endif %}{% endwith %}
           {% if p.speaker_arrangement %}<p class="text-xs text-base-content/60">Arrangement: {{ p.get_speaker_arrangement_display }}</p>{% endif %}
           {% if p.honoraria_estimate %}<p class="text-xs text-base-content/60">Honoraria estimate: {{ p.honoraria_estimate }}</p>{% endif %}
-          {% if p.offers_ce %}<p class="text-xs text-base-content/60">Requests CE credits.</p>{% endif %}
+          {% if p.offers_ce %}<p class="text-xs text-base-content/60">Requests CE credits{% if p.ce_credits %} ({{ p.ce_credits|floatformat:"-2" }} {{ p.get_ce_credits_basis_display }}){% endif %}.</p>{% endif %}
           <p class="text-xs text-base-content/60">Fee:
             {% if p.fee_amount is not None %}${{ p.fee_amount }}{% elif p.fee_sliding_max is not None %}sliding ${{ p.fee_sliding_min|default:"0" }}–${{ p.fee_sliding_max }}{% else %}free{% endif %}{% if p.tuition_covers %} · tuition covers{% endif %}</p>
           {% with reads=p.readings.all %}{% if reads %}

@@ -37,6 +37,10 @@ urlpatterns = [
          name="followup"),
     path(f"{_ADMIN}/<str:reference>/close/", views.close, name="close"),
     path(f"{_ADMIN}/<str:reference>/reopen/", views.reopen, name="reopen"),
+    path(f"{_ADMIN}/<str:reference>/release/", views.release, name="release"),
+    path(f"{_ADMIN}/<str:reference>/junk/", views.mark_junk, name="mark_junk"),
+    path(f"{_ADMIN}/<str:reference>/unjunk/", views.unmark_junk,
+         name="unmark_junk"),
     path(f"{_ADMIN}/<str:reference>/notes/", views.save_notes, name="notes"),
     # Clinician-facing (step 4).
     path("referrals/<str:reference>/respond/", views.respond, name="respond"),

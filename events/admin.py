@@ -3,6 +3,7 @@ from django.contrib import admin
 
 from .models import (
     ArchivedProgram,
+    CEOrganization,
     Event,
     EventChangeRequest,
     EventMemberSpeaker,
@@ -224,3 +225,13 @@ class ProgramAdmin(admin.ModelAdmin):
     @admin.display(description="Events")
     def event_count(self, obj):
         return obj.events.count()
+
+
+@admin.register(CEOrganization)
+class CEOrganizationAdmin(admin.ModelAdmin):
+    """Staff escape hatch: replace a bad logo, correct mandated wording, or
+    delete a duplicate that slipped past the case-insensitive name guard."""
+
+    list_display = ("name", "url", "added_by", "created_at")
+    search_fields = ("name",)
+    readonly_fields = ("created_at",)
