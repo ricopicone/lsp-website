@@ -210,11 +210,20 @@ not cover it.
 ## Verification on prod
 
 After deploy, over SSM: iterate `Workgroup.objects.all()`, take
-`wg.active_members()` (these are `Participant` wrappers — pass `.user`, not the
-participant, or `is_owner` raises `ValueError: Must be "User" instance`) and count
-how many satisfy `video.services.is_owner(wg, user)`. Any group with members and
-zero owners is a failure. Expect exactly one remaining: Working Group on Cartels,
-pending its data fix.
+**`wg.participants()`** and count how many satisfy
+`video.services.is_owner(wg, p.user)` — pass `.user`, not the participant, or
+`is_owner` raises `ValueError: Must be "User" instance`. Any group with people and
+zero owners is a failure.
+
+**Audit over `participants()`, not `active_members()`.** The ticket's recipe used
+`active_members()`, which returns *stored* membership rows only. On the Meeting of
+Analysts that is just the Applications Coordinator — the derived officers this
+whole task is about are invisible to it, so the audit reports the Meeting as
+still broken after a fix that works. Confirmed on prod 2026-08-01: over
+`active_members()` the Meeting still read zero owners, while over `participants()`
+the President and Vice-President both computed `is_owner=True`.
+
+Expect exactly one group remaining: Working Group on Cartels, pending its data fix.
 
 ## No migration
 
