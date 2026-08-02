@@ -751,14 +751,19 @@ memory; the active service alternates `web_blue` / `web_green`):
 from workgroups.models import Workgroup
 from video.services import is_owner
 for wg in Workgroup.objects.all():
-    members = list(wg.active_members())
-    owners = [p for p in members if is_owner(wg, p.user)]
-    if members and not owners:
-        print(wg.name, wg.kind, len(members))
+    people = list(wg.participants())
+    if people and not any(is_owner(wg, p.user) for p in people):
+        print(wg.name, wg.kind, len(people))
 ```
 
-`active_members()` yields `Participant` wrappers — pass `.user`, or `is_owner`
-raises `ValueError: Must be "User" instance`.
+Pass `.user`, not the participant, or `is_owner` raises
+`ValueError: Must be "User" instance`.
+
+**`participants()`, not `active_members()`.** The ticket's recipe used
+`active_members()`, which returns stored membership rows only — on the Meeting of
+Analysts that is just the Applications Coordinator, so the derived officers this
+task is about are invisible to it and the audit reports the Meeting as still
+broken after a working fix. Confirmed on prod 2026-08-01.
 
 Expected output: `Working Group on Cartels` only. Its fix is data — appoint an
 organizer in the group's Settings roster — and is out of scope for this plan.
