@@ -142,6 +142,9 @@ def my_groups(user) -> list[MyGroup]:
     """
     if not getattr(user, "is_authenticated", False):
         return []
+    # Imported here, not at module level: permissions imports models, which
+    # imports this module's siblings.
+    from .permissions import officer_lead_titles
 
     # workgroup_id -> the best stored membership row to display (prefer a
     # currently-serving one, else the most recently ended).
@@ -208,6 +211,14 @@ def my_groups(user) -> list[MyGroup]:
             is_lead = False
             ended_on = None
             via_registration = False
+        # A school officer leads the Board and the Meeting of Analysts ex
+        # officio (task #480) — on the Meeting they reach this function through
+        # the role-derived branch, so without this their card would read
+        # "Member" while the roster calls them President.
+        officer_title = officer_lead_titles(wg).get(user.pk)
+        if officer_title:
+            role_label = officer_title
+            is_lead = True
         rows.append(
             MyGroup(
                 workgroup=wg,

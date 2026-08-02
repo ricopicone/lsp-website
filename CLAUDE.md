@@ -734,6 +734,53 @@ Done (see `git log` for specifics):
   already identifies a covered registration. Design:
   `docs/superpowers/specs/2026-07-29-skipped-coverage-rebilling-design.md`.
 
+- **School officers count as workgroup leads** (task #480). Verified on prod
+  across all 30 workgroups, two had members and zero owners — meaning if anyone
+  opened their video room, *nobody* got moderator controls (mute / camera-off /
+  remove) and *nobody* got a Record button. The room worked; it was
+  unmoderatable. For the **Meeting of Analysts** the cause was structural. The
+  workgroups layer already treats the school officers as authoritative —
+  `can_manage_workgroup` returns True for the President / Vice-President on
+  every workgroup, and `participants()` synthesized them as the Meeting's
+  leaders, so they *displayed* as its leadership. But that leadership is
+  **derived** from `StaffRole` holders synced off the Board roster (task #428),
+  never stored as a `WorkgroupMembership` carrying a `LEAD_ROLES` value, and
+  four call sites re-ran the raw roster query
+  (`memberships.serving().filter(role__in=LEAD_ROLES)`) instead of asking a
+  predicate — so the roster asserted a leadership the permission layer didn't
+  grant. New **`workgroups.permissions.is_workgroup_lead`** knows about both,
+  and five call sites adopt it: `video.services.is_owner` (the Daily token's
+  owner flag), `Recording._can_host`, `parletre.permissions._workgroup_lead`,
+  `workgroup_has_leads`, and — not in the ticket — `channel_can_moderate`'s
+  legacy committee-access branch, which resolves *only* for committees and so
+  was the likeliest place for the bug to survive a fix aimed at it.
+  **Scope is the Board and the Meeting of Analysts, nothing else** (Rico,
+  2026-08-01): not the Programming Committee, not other committees, not
+  cartels, seminars, reading groups or working groups. Narrower than *both*
+  existing rules, deliberately — management authority and leadership are
+  different claims, and the President may fix a cartel's roster without leading
+  the cartel. Narrowness is also load-bearing: `workgroup_has_leads` feeds
+  `can_register_decision`, where a **leaderless** group lets any active member
+  record, so officers-as-leads-everywhere would have made every cartel lead-led
+  and silently taken the decision register away from its members. The one
+  behavior change beyond the room: the Meeting stops being leaderless, so
+  recording a decision in *its* register narrows from any analyst to the
+  officers plus managers — which is how the Meeting actually decides. **The
+  orphan guard deliberately stays stored-rows-only** (`lead_members` /
+  `_would_orphan`): the Board's stored Chair is the source of truth that syncs
+  the President `StaffRole`, so a derived-aware guard would authorize removing
+  the last Chair on the grounds that the President covers it — the very change
+  that un-syncs the President. No superuser bypass in the predicate either; it
+  answers who *leads*, and call sites keep their own `is_staff` clauses.
+  `participants()` now shares the helper and **upgrades** an officer's entry
+  rather than replacing it — a stored Board Chair keeps their membership and
+  gains only the title, where the old code discarded the row, which is why it
+  had to be restricted to the auto-membership Meeting. No migration, no flag.
+  The other zero-owner group, **Working Group on Cartels** (6 members, no
+  organizer), is `kind=working_group` and thus out of scope by the same
+  decision: it is a data fix, appointing an organizer in its Settings roster.
+  Design: `docs/superpowers/specs/2026-08-01-workgroup-lead-officers-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

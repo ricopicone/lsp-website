@@ -243,3 +243,43 @@ def test_message_payload_includes_reply_context():
     assert payload["reply_to"]["id"] == parent.id
     assert payload["reply_to"]["author"]  # parent author name present
     assert message_payload(parent)["reply_to"] is None
+
+
+# ---- Task #480: derived school officers moderate their bodies' channels ----
+
+def _president_user(email="pres@x.test"):
+    from core.models import StaffRole
+    u = _user(email)
+    StaffRole.objects.get(key=StaffRole.PRESIDENT).holders.add(u)
+    return u
+
+
+def test_president_moderates_the_meetings_workgroup_channel():
+    from committees.models import Committee
+    # The seeded Meeting of Analysts predates channel auto-provisioning (it was
+    # created by a data migration), so its channel is made here.
+    wg = Committee.objects.get(slug="meeting-of-analysts").workgroup
+    channel = Channel.objects.create(
+        name="The Meeting", slug="the-meeting", kind=Channel.Kind.FORUM,
+        access=Channel.Access.WORKGROUP, workgroup=wg,
+    )
+    assert channel_can_moderate(channel, _president_user()) is True
+    assert channel_can_moderate(channel, _user("plain@x.test")) is False
+
+
+def test_president_moderates_a_legacy_committee_access_channel():
+    """The committee-keyed branch resolves only for committees — which is
+    exactly the Board and the Meeting — so it must see derived officers too."""
+    from committees.models import Committee
+    board = Committee.objects.get(slug="board")
+    channel = Channel.objects.create(
+        name="Board room", slug="board-room", kind=Channel.Kind.FORUM,
+        access=Channel.Access.COMMITTEE, committee=board,
+    )
+    assert channel_can_moderate(channel, _president_user()) is True
+
+
+def test_president_does_not_moderate_a_cartel_channel():
+    wg = _wg(name="Cartel P")
+    channel = wg.channels.get(kind=Channel.Kind.FORUM)
+    assert channel_can_moderate(channel, _president_user()) is False

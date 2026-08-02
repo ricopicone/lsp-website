@@ -9,6 +9,67 @@ from __future__ import annotations
 
 from .models import WorkgroupMembership
 
+#: The bodies whose leadership the school officers hold ex officio. The
+#: President / Vice-President govern the school's two standing bodies; that is a
+#: governance fact about two named committees, not a per-committee setting, so it
+#: lives here rather than as a field anyone could flip in the admin. Deliberately
+#: narrower than ``can_manage_workgroup``, which grants the officers *management*
+#: of every workgroup: fixing a cartel's roster is not leading the cartel.
+OFFICER_LED_COMMITTEE_SLUGS = ("board", "meeting-of-analysts")
+
+
+def officer_lead_titles(workgroup) -> dict:
+    """``{user_id: "President" | "Vice President"}`` for the school officers who
+    lead ``workgroup`` ex officio — ``{}`` for anything outside
+    :data:`OFFICER_LED_COMMITTEE_SLUGS`.
+
+    The Meeting of Analysts' leadership is *derived*: the officers hold no
+    ``WorkgroupMembership`` there, only the ``StaffRole`` synced off the Board
+    roster (task #428). This is the one place that derivation is spelled out, so
+    display and permission cannot drift."""
+    from django.core.exceptions import ObjectDoesNotExist
+
+    try:
+        slug = workgroup.committee.slug
+    except ObjectDoesNotExist:
+        return {}
+    if slug not in OFFICER_LED_COMMITTEE_SLUGS:
+        return {}
+    from core.models import StaffRole
+
+    titles = {}
+    for key, title in (
+        (StaffRole.PRESIDENT, "President"),
+        (StaffRole.VICE_PRESIDENT, "Vice President"),
+    ):
+        role = StaffRole.objects.filter(key=key).first()
+        if role is None:
+            continue
+        for user in role.holders.all():
+            titles[user.pk] = title
+    return titles
+
+
+def is_workgroup_lead(user, workgroup) -> bool:
+    """Whether ``user`` leads ``workgroup``: a serving lead-role membership
+    (chair / co-chair / faculty / organizer), or a school officer of a body the
+    officers lead ex officio.
+
+    The single "is this person a lead" primitive. Use it instead of querying
+    ``memberships.serving().filter(role__in=LEAD_ROLES)`` at a call site — that
+    query cannot see derived officers, which is how the Meeting of Analysts'
+    video room ended up with no moderator at all (task #480).
+
+    No superuser bypass: this answers who *leads* the group, not who may act.
+    Call sites that grant staff their own access keep their own clause."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if workgroup.memberships.serving().filter(
+        user=user, role__in=WorkgroupMembership.LEAD_ROLES,
+    ).exists():
+        return True
+    return user.pk in officer_lead_titles(workgroup)
+
 
 def can_manage_workgroup(user, workgroup) -> bool:
     """Whether ``user`` may manage ``workgroup`` — edit its roster/settings,
@@ -43,12 +104,16 @@ def can_manage_workgroup(user, workgroup) -> bool:
 
 
 def workgroup_has_leads(workgroup) -> bool:
-    """Whether any currently-serving member holds a leadership role (chair,
-    co-chair, faculty, organizer). False for leaderless groups like cartels
-    (a plus-one is deliberately not a lead)."""
-    return workgroup.memberships.serving().filter(
+    """Whether the group is led at all — a currently-serving member holding a
+    leadership role (chair, co-chair, faculty, organizer), or a school officer
+    leading it ex officio. False for leaderless groups like cartels (a plus-one
+    is deliberately not a lead), which is what lets any of their members record
+    a decision."""
+    if workgroup.memberships.serving().filter(
         role__in=WorkgroupMembership.LEAD_ROLES
-    ).exists()
+    ).exists():
+        return True
+    return bool(officer_lead_titles(workgroup))
 
 
 def can_register_decision(user, workgroup) -> bool:
