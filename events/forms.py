@@ -60,8 +60,44 @@ class EventEditForm(forms.ModelForm):
         return self.cleaned_data.get("ce_credits_basis") or CECreditBasis.TOTAL
 
 
+def _code_recipient_queryset():
+    """Accounts a pricing code may be pinned to.
+
+    Everyone except the never-verified signups ``purge_unverified_signups``
+    treats as bot rows (task #471): inactive *and* carrying no
+    ``email_verified_at``. A deceased member's account is deactivated but keeps
+    its stamp, so this never hides a real person.
+    """
+    from accounts.models import User
+
+    return User.objects.exclude(
+        is_active=False, profile__email_verified_at__isnull=True,
+    ).order_by("last_name", "first_name", "email")
+
+
+def _person_label(user) -> str:
+    """"Ada Byron (ada@example.com)", or the email alone for a nameless row."""
+    name = user.get_full_name().strip()
+    return f"{name} ({user.email})" if name else user.email
+
+
 class PricingCodeForm(forms.ModelForm):
     """Faculty-issued pricing code (PROG-8 / REG-17)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # The field faculty reach for when extending a discount or a scholarship
+        # to a named person: it defaulted to every account in the database,
+        # unordered and labelled by bare email (task #495).
+        field = self.fields["restricted_to_user"]
+        field.queryset = _code_recipient_queryset()
+        field.label_from_instance = _person_label
+        field.label = "Only this person may use it"
+        field.help_text = (
+            "Leave blank and anyone holding the code may redeem it. Someone "
+            "outside the school needs a free account before you can pick them "
+            "here, so a one-use code you send them works either way."
+        )
 
     class Meta:
         model = PricingCode

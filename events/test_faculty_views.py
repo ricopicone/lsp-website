@@ -690,3 +690,57 @@ def test_convener_sees_the_roster_tab_with_the_mint_form(client, reading_group):
     body = client.get(url).content.decode()
     assert "Generate a pricing code" in body
     assert reverse("events:generate_code", args=[reading_group.slug]) in body
+
+
+# ---- The pricing-code person picker (task #495) ------------------------
+
+
+@pytest.mark.django_db
+def test_code_recipient_picker_labels_by_name_and_email():
+    from events.forms import PricingCodeForm
+
+    person = User.objects.create_user(
+        email="ext@example.com", password="x",
+        first_name="Ada", last_name="Byron",
+    )
+    field = PricingCodeForm().fields["restricted_to_user"]
+    assert field.label_from_instance(person) == "Ada Byron (ext@example.com)"
+    nameless = User.objects.create_user(email="bare@example.com", password="x")
+    assert field.label_from_instance(nameless) == "bare@example.com"
+
+
+@pytest.mark.django_db
+def test_code_recipient_picker_hides_never_verified_signups():
+    from django.utils import timezone
+
+    from events.forms import PricingCodeForm
+
+    real = User.objects.create_user(email="real@example.com", password="x")
+    real.profile.email_verified_at = timezone.now()
+    real.profile.save(update_fields=["email_verified_at"])
+
+    bot = User.objects.create_user(email="bot@example.com", password="x", is_active=False)
+    bot.profile.email_verified_at = None
+    bot.profile.save(update_fields=["email_verified_at"])
+
+    # Deactivated but verified (e.g. a deceased member) stays pickable: only the
+    # never-verified signups purge_unverified_signups deletes are hidden.
+    departed = User.objects.create_user(email="gone@example.com", password="x")
+    departed.profile.email_verified_at = timezone.now()
+    departed.profile.save(update_fields=["email_verified_at"])
+    departed.is_active = False
+    departed.save(update_fields=["is_active"])
+
+    pickable = set(PricingCodeForm().fields["restricted_to_user"].queryset)
+    assert real in pickable
+    assert departed in pickable
+    assert bot not in pickable
+
+
+@pytest.mark.django_db
+def test_code_recipient_picker_help_text_names_the_external_case():
+    from events.forms import PricingCodeForm
+
+    help_text = PricingCodeForm().fields["restricted_to_user"].help_text
+    assert "free account" in help_text
+    assert "—" not in help_text  # site copy uses commas, not em dashes
