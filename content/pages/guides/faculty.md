@@ -15,7 +15,7 @@ three. (If you're looking to *register* for something rather than run it, see
 CE credits, and guests-welcome note; the roster; approvals, if your event
 requires them; and **what any individual pays**.
 
-**The Programming Committee's:** the listed fee and its price tiers (built from
+**The Program Committee's:** the listed fee and its price tiers (built from
 the proposal they approved), publishing the page, opening and closing
 registration, the access details, and who is listed as faculty.
 
@@ -28,7 +28,7 @@ in the second or third list, ask rather than work around it.
 ## Where your tools are
 
 **Seminars and reading groups** keep them on the group's **Workspace**, under
-the **Roster** tab. Open [your groups](/groups/), choose the seminar or reading
+the **Roster** tab. Open [your groups](/formation/?tab=groups), choose the seminar or reading
 group, then Roster.
 
 **One-off events**—a special event, a Day of Assembly—keep them on the event
@@ -47,7 +47,7 @@ sessions may be recorded.
 Changing the **title, description, readings, or fee note** of an event that
 came from an approved proposal is different. The School approved a particular
 offering, so those edits go through a short dialog: mark the change **minor**
-and it's adopted at once, or send it as **substantial** and the Programming
+and it's adopted at once, or send it as **substantial** and the Program
 Committee sees it in their review queue. Your live page stays as it was while a
 substantial change waits.
 
@@ -65,10 +65,10 @@ If your event was set up to require your approval, registrations arrive in a
 ### Where the listed price comes from
 
 The prices on your event page are its **price tiers**, built when the
-Programming Committee approved the proposal. A tier can be a flat amount for
+Program Committee approved the proposal. A tier can be a flat amount for
 everyone, an amount per audience, a **sliding scale** (the payer chooses any
 amount at or above a floor, sometimes zero), or **covered by tuition** (free for
-members currently paying tuition). Tiers themselves are the Committee's to set.
+members currently paying tuition). Tiers themselves are the Committee's to set (based on your proposal).
 The **fee note** is yours, and it's the right place to say in words what the fee
 means.
 
@@ -78,7 +78,7 @@ To give someone a reduced fee, mint a **pricing code** on the Roster tab, under
 **Generate a pricing code**. You choose:
 
 - **Percent off**—a percentage off the listed price.
-- **Fixed amount**—the person pays exactly this, whatever the listed price is.
+- **Fixed amount**—the person pays exactly this.
 - **Sliding-scale floor**—the person chooses their own amount, at or above the
   floor you set.
 
@@ -90,7 +90,7 @@ see at a glance whether it has been taken up. The person you gave it to enters
 it in the **Pricing code** box on the registration form, and the price updates
 before they pay anything.
 
-### For an LSP member
+### For a specific LSP member
 
 Mint the code, pick them under **Only this person may use it**, set the maximum
 uses to **one**, and send them the code. Pinned to their account, it can't
@@ -120,7 +120,7 @@ registrant.
 
 ### What a code can't do
 
-- **Change the listed fee for everyone.** That's the Programming Committee, and
+- **Change the listed fee for everyone.** That's the Program Committee, and
   it's the honest fix when the whole price is wrong.
 - **Refund or reduce something already paid.** Once money has moved, it's the
   treasurer's to reverse.
@@ -138,9 +138,9 @@ tab.
 **Access details**—the room, the address, or a meeting link—are set with the
 event and shown to anyone registered. You and your co-faculty see them without
 registering, since you're the ones running the meeting. If they're wrong or
-missing, ask the Programming Committee.
+missing, ask the Program Committee.
 
-If the event meets **in the site's own video room**, there's nothing to send:
+If the event meets **in the site's own video room (recommended)**, there's nothing to send:
 the join button on the event page and on your Workspace's **Meet** tab is the
 way in, and it appears for registrants when the meeting is live.
 
@@ -149,7 +149,7 @@ from inside the room, and only when recording is enabled for your group.
 
 ## Who to ask
 
-- **Programming Committee**—fees and tiers, dates, publishing, opening or
+- **Program Committee**—fees and tiers, dates, publishing, opening or
   closing registration, access details, faculty listings.
 - **Treasurer**—refunds, checks and cash, anything already paid.
 - **Anything else**, or something that looks broken:
