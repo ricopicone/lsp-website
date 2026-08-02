@@ -45,15 +45,15 @@
       </label>
     </div>
     <p class="text-xs text-base-content/60">
-      Who can watch has to be contained in who can see it exists. Note that
-      "Registered group members" and "LSP Members" are different groups, neither
-      inside the other, so they can't be paired.
+      The two settings combine, so a viewer has to satisfy both. Right now this
+      recording is watchable by
+      <strong class="text-base-content">{{ recording.effective_visibility_label }}</strong>.
     </p>
     <button class="btn btn-sm">Save availability</button>
   </form>
   {% else %}
   <p class="text-sm text-base-content/60">
-    Available to: {{ recording.get_content_visibility_display }}.
+    Available to: {{ recording.effective_visibility_label }}.
   </p>
   {% endif %}
 

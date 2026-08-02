@@ -117,12 +117,11 @@ def recording_annotate(request, pk):
 def recording_availability(request, pk):
     """Set who a recording is listed to and who may watch it (host/staff).
 
-    The containment rule lives on the model, so an incoherent pair (e.g. listed
-    to LSP Members but watchable by all registrants, who are not a subset) is
-    refused here exactly as it is in the admin.
+    Every combination is meaningful — the two settings intersect rather than
+    compete — so nothing is rejected. The confirmation names the resulting
+    audience, since an intersection isn't always the setting you just picked.
     """
     from django.contrib import messages
-    from django.core.exceptions import ValidationError
 
     rec = get_object_or_404(Recording, pk=pk)
     if not rec.can_manage(request.user):
@@ -135,14 +134,11 @@ def recording_availability(request, pk):
         messages.error(request, "That isn't a valid availability setting.")
         return HttpResponseRedirect(back)
     rec.listing_visibility, rec.content_visibility = listing, content
-    try:
-        rec.clean()
-    except ValidationError as exc:
-        rec.refresh_from_db()
-        messages.error(request, "; ".join(m for msgs in exc.message_dict.values() for m in msgs))
-        return HttpResponseRedirect(back)
     rec.save(update_fields=["listing_visibility", "content_visibility"])
-    messages.success(request, "Availability updated.")
+    messages.success(
+        request, f"Availability updated. This recording is watchable by: "
+        f"{rec.effective_visibility_label}."
+    )
     return HttpResponseRedirect(back)
 
 

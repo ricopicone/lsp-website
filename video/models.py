@@ -152,26 +152,51 @@ class Recording(models.Model):
 
     # ---- visibility (mirrors works.Work) ----
 
-    #: Which settings each setting's audience contains. NOT a rank: MEMBERS and
-    #: ROSTER are incomparable (a registered external is in one, an unregistered
-    #: member in the other), so ``content <= listing`` is a subset test.
-    _CONTAINS = {
-        Visibility.OWNERS: frozenset({Visibility.OWNERS}),
-        Visibility.ROSTER_MEMBERS: frozenset({
-            Visibility.OWNERS, Visibility.ROSTER_MEMBERS,
-        }),
-        Visibility.ROSTER: frozenset({
-            Visibility.OWNERS, Visibility.ROSTER_MEMBERS, Visibility.ROSTER,
-        }),
-        Visibility.MEMBERS: frozenset({
-            Visibility.OWNERS, Visibility.ROSTER_MEMBERS, Visibility.MEMBERS,
-        }),
-        Visibility.ACCOUNTS: frozenset({
-            Visibility.OWNERS, Visibility.ROSTER_MEMBERS, Visibility.ROSTER,
-            Visibility.MEMBERS, Visibility.ACCOUNTS,
-        }),
-        Visibility.PUBLIC: frozenset(Visibility.values),
+    #: Each setting decomposed into the two independent dimensions it actually
+    #: constrains: how much standing a viewer needs, and whether they must be on
+    #: the roster. Making those explicit is what lets ``_meet`` combine two
+    #: settings arithmetically instead of by lookup table — and it is why the six
+    #: settings are closed under intersection (every intersection of two of them
+    #: is itself one of the six, so an effective audience always has a name).
+    _ANON, _ACCOUNT, _MEMBER = 0, 1, 2
+    _DIMENSIONS = {
+        Visibility.PUBLIC: (_ANON, False),
+        Visibility.ACCOUNTS: (_ACCOUNT, False),
+        Visibility.MEMBERS: (_MEMBER, False),
+        Visibility.ROSTER: (_ACCOUNT, True),
+        Visibility.ROSTER_MEMBERS: (_MEMBER, True),
+        # OWNERS is the empty audience — no amount of standing qualifies — so it
+        # has no decomposition and is handled directly in _meet.
     }
+
+    @classmethod
+    def _meet(cls, a, b):
+        """Everyone in BOTH audiences, as one of the six settings.
+
+        Standing takes the stricter of the two; the roster requirement is the
+        OR. So "LSP Members" ∩ "Registered group members" is "Registered group
+        members who are LSP Members" — the combination that has no ordering
+        between its parts is exactly the one that names their intersection.
+        """
+        V = cls.Visibility
+        if V.OWNERS in (a, b):
+            return V.OWNERS
+        standing_a, roster_a = cls._DIMENSIONS[a]
+        standing_b, roster_b = cls._DIMENSIONS[b]
+        target = (max(standing_a, standing_b), roster_a or roster_b)
+        for level, dimensions in cls._DIMENSIONS.items():
+            if dimensions == target:
+                return level
+        raise AssertionError(f"unreachable: {target} is not one of the six")  # pragma: no cover
+
+    @property
+    def effective_visibility(self):
+        """Who can actually watch this: the intersection of the two settings."""
+        return self._meet(self.listing_visibility, self.content_visibility)
+
+    @property
+    def effective_visibility_label(self) -> str:
+        return self.Visibility(self.effective_visibility).label
 
     def _workgroup(self):
         return self.room.workgroup if self.room_id else None
@@ -228,7 +253,13 @@ class Recording(models.Model):
         return self._visible_at(self.listing_visibility, user)
 
     def content_visible_to(self, user) -> bool:
-        return self._visible_at(self.content_visibility, user)
+        """Both settings must admit you — you cannot watch what you cannot see
+        exists. Enforcing that here rather than in ``clean()`` makes it
+        structural: a raw ``QuerySet.update()`` (which skips validation, and
+        which our own data migrations use) can't produce a leaking pair."""
+        return self._visible_at(self.listing_visibility, user) and self._visible_at(
+            self.content_visibility, user
+        )
 
     def can_manage(self, user) -> bool:
         """Whether ``user`` may manage this recording (keep / annotate / delete) —
@@ -252,18 +283,8 @@ class Recording(models.Model):
             pass
         self.delete()
 
-    def clean(self):
-        from django.core.exceptions import ValidationError
-
-        allowed = self._CONTAINS.get(self.listing_visibility, frozenset())
-        if self.content_visibility not in allowed:
-            listed = self.Visibility(self.listing_visibility).label
-            watch = self.Visibility(self.content_visibility).label
-            raise ValidationError({"content_visibility": (
-                f"“{watch}” isn't contained in “{listed}”, so the recording would "
-                f"be watchable by people who can't see that it exists. Choose a "
-                f"narrower audience for who can watch, or widen who can see it."
-            )})
+    # No clean() guard on the visibility pair: the two settings intersect rather
+    # than compete, so every combination is meaningful. See ``_meet``.
 
     # ---- playback ----
 

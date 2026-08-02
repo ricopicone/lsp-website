@@ -282,36 +282,68 @@ def test_web_roles_can_manage_any_recording():
     assert rec.content_visible_to(wc) is True
 
 
-def test_containment_rejects_the_incomparable_pair():
-    # "Registered" and "LSP Members" are incomparable: neither contains the
-    # other, so this combination has no coherent meaning and must be refused.
-    from django.core.exceptions import ValidationError
-
+def test_the_incomparable_pair_resolves_to_their_intersection():
+    # "Registered" and "LSP Members" have no ordering between them. Intersecting
+    # them names the audience that used to look like an odd extra option.
     from .factories import special_event
 
     ev = special_event(slug="avail-incomp")
     rec = _event_recording(ev, content=V.ROSTER, listing=V.MEMBERS)
-    with pytest.raises(ValidationError):
-        rec.full_clean(exclude=["daily_recording_id"])
+    assert rec.effective_visibility == V.ROSTER_MEMBERS
+    rec.full_clean(exclude=["daily_recording_id"])  # no combination is invalid
+
+    member_reg = user("ix-mr@x.test")
+    register(member_reg, ev)
+    member_unreg = user("ix-mu@x.test")
+    auditor_reg = user("ix-ar@x.test")
+    auditor_reg.profile.role = Profile.Role.EXTERNAL
+    auditor_reg.profile.save(update_fields=["role"])
+    register(auditor_reg, ev)
+    assert rec.content_visible_to(member_reg) is True
+    assert rec.content_visible_to(member_unreg) is False   # not registered
+    assert rec.content_visible_to(auditor_reg) is False     # not a member
 
 
-def test_containment_allows_a_genuine_narrowing():
-    from .factories import special_event
-
-    ev = special_event(slug="avail-ok")
-    rec = _event_recording(ev, content=V.ROSTER_MEMBERS, listing=V.MEMBERS)
-    rec.full_clean(exclude=["daily_recording_id"])  # must not raise
-
-
-def test_containment_still_rejects_content_wider_than_listing():
-    from django.core.exceptions import ValidationError
-
+def test_content_wider_than_listing_clamps_to_the_listing():
+    # Formerly an error. Now it simply means "no further restriction".
     from .factories import special_event
 
     ev = special_event(slug="avail-wider")
     rec = _event_recording(ev, content=V.PUBLIC, listing=V.MEMBERS)
-    with pytest.raises(ValidationError):
-        rec.full_clean(exclude=["daily_recording_id"])
+    assert rec.effective_visibility == V.MEMBERS
+    anon = None
+    assert rec.content_visible_to(anon) is False
+    outsider = user("wider-out@x.test")
+    outsider.profile.role = Profile.Role.EXTERNAL
+    outsider.profile.save(update_fields=["role"])
+    assert rec.content_visible_to(outsider) is False
+
+
+def test_the_settings_are_closed_under_intersection():
+    # Every intersection is itself one of the six, so an effective audience can
+    # always be named — that is what makes the UI honest.
+    from video.models import Recording as R
+
+    for a in V.values:
+        for b in V.values:
+            assert R._meet(a, b) in set(V.values)
+            assert R._meet(a, b) == R._meet(b, a)   # order can't matter
+
+
+def test_a_raw_update_cannot_leak_a_recording():
+    # clean() is skipped by QuerySet.update() — which our own data migration
+    # uses. Intersection makes the guarantee structural instead of validated.
+    from .factories import special_event
+
+    ev = special_event(slug="avail-rawupdate")
+    rec = _event_recording(ev, content=V.OWNERS, listing=V.OWNERS)
+    Recording.objects.filter(pk=rec.pk).update(content_visibility=V.PUBLIC)
+    rec.refresh_from_db()
+    stranger = user("raw-stranger@x.test")
+    stranger.profile.role = Profile.Role.EXTERNAL
+    stranger.profile.save(update_fields=["role"])
+    assert rec.content_visible_to(stranger) is False
+    assert rec.content_visible_to(None) is False
 
 
 def test_host_can_set_availability_from_the_recording_page(client):
@@ -332,7 +364,8 @@ def test_host_can_set_availability_from_the_recording_page(client):
     assert rec.content_visibility == V.ROSTER_MEMBERS
 
 
-def test_availability_form_refuses_an_incomparable_pair(client):
+def test_availability_form_accepts_the_incomparable_pair(client):
+    # No longer a wall to reason about: it saves, and means the intersection.
     from .factories import special_event
 
     ev = special_event(slug="avail-setbad")
@@ -344,9 +377,9 @@ def test_availability_form_refuses_an_incomparable_pair(client):
         reverse("video:recording_availability", args=[rec.pk]),
         {"listing_visibility": V.MEMBERS, "content_visibility": V.ROSTER},
     )
+    assert resp.status_code == 302
     rec.refresh_from_db()
-    assert rec.content_visibility == V.OWNERS  # unchanged
-    assert resp.status_code in (200, 302)
+    assert rec.effective_visibility == V.ROSTER_MEMBERS
 
 
 def test_non_host_cannot_set_availability(client):
@@ -415,12 +448,17 @@ def test_visibility_owners_only_needs_host():
 
 
 def test_content_cannot_exceed_listing():
-    from django.core.exceptions import ValidationError
-
+    # Same guarantee as before — a recording is never watchable by someone who
+    # can't see it exists — but now it holds by construction rather than by
+    # validation, so this asserts the behaviour rather than an exception.
     wg = seminar().ensure_workgroup()
     rec = _recording(wg, content=Recording.Visibility.PUBLIC, listing=Recording.Visibility.MEMBERS)
-    with pytest.raises(ValidationError):
-        rec.clean()
+    outsider = user("exceed@x.test")
+    outsider.profile.role = Profile.Role.EXTERNAL
+    outsider.profile.save(update_fields=["role"])
+    assert rec.listing_visible_to(outsider) is False
+    assert rec.content_visible_to(outsider) is False
+    assert rec.effective_visibility == Recording.Visibility.MEMBERS
 
 
 # --- player view ---
