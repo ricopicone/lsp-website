@@ -1269,7 +1269,7 @@ class EventProposal(models.Model):
 
     class SpeakerArrangement(models.TextChoices):
         PROPOSER = "proposer", "I'll arrange with the speaker(s) directly"
-        PC = "pc", "I'd like the Programming Committee to arrange it"
+        PC = "pc", "I'd like the Program Committee to arrange it"
 
     speaker_arrangement = models.CharField(
         max_length=12, choices=SpeakerArrangement.choices, blank=True,

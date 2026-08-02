@@ -6,7 +6,7 @@
   <header class="space-y-1">
     <h1 class="font-serif text-3xl text-base-content">How substantial is this change?</h1>
     <p class="text-sm text-base-content/70">
-      “{{ event.title }}” was approved by the Programming Committee. Tell us
+      “{{ event.title }}” was approved by the Program Committee. Tell us
       whether this edit is minor enough to adopt now, or substantial enough to
       send back for review.
     </p>
@@ -45,7 +45,7 @@
         It's a minor change — adopt now
       </button>
       <button type="submit" name="decision" value="review" class="btn btn-outline">
-        It's substantial — send to the Programming Committee
+        It's substantial — send to the Program Committee
       </button>
       {% if is_reviewer %}
       <button type="submit" name="decision" value="admin" class="btn btn-ghost">

@@ -428,7 +428,7 @@ def event_edit(request, slug: str):
         event_notifications.notify_change_submitted(cr)
         messages.success(
             request,
-            "Submitted to the Programming Committee — the event stays as it is "
+            "Submitted to the Program Committee — the event stays as it is "
             "until they review your change.",
         )
         return redirect("events:detail", slug=event.slug)

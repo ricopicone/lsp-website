@@ -221,7 +221,7 @@ CATEGORY_META: dict[str, CategoryMeta] = {
     _C.CARTEL_DECISION: _M(SECTION_CARTELS, _("Decisions on your cartel")),
     _C.CARTEL_PROPOSAL: _M(
         SECTION_CARTELS, _("Proposal review"),
-        _("For coordinators and the Programming Committee."),
+        _("For coordinators and the Program Committee."),
     ),
     # Admissions.
     _C.ADMISSIONS_APPLICATION: _M(

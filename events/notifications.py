@@ -51,10 +51,10 @@ def notify_change_decided(change_request):
     approved = change_request.status == change_request.Status.APPROVED
     if approved:
         title = f"Your change to “{event.title}” was approved"
-        body = "The Programming Committee approved your change; it is now live."
+        body = "The Program Committee approved your change; it is now live."
     else:
         title = f"Your change to “{event.title}” was declined"
-        body = "The Programming Committee declined your change."
+        body = "The Program Committee declined your change."
         if change_request.review_note:
             body += f" Note: {change_request.review_note}"
     notify(

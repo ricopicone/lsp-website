@@ -35,7 +35,7 @@ only about the program.
 3. On the Admin Tools page, choose **Program Committee Admin**.
 
 You'll see the **Admin Tools** entry, and the Program Committee Admin
-panel on it, if you're a current member of the **Programming Committee**
+panel on it, if you're a current member of the **Program Committee**
 on the committees list (or LSP staff with full admin access).
 
 ---

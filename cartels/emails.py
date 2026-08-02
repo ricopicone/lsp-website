@@ -100,7 +100,7 @@ def notify_generator_of_decision(cartel, url: str) -> None:
     if cartel.registration_status == cartel.RegistrationStatus.REGISTERED:
         body = (
             f"Your cartel '{cartel.workgroup.name}' was registered by the "
-            f"Programming Committee.\n\n{url}\n"
+            f"Program Committee.\n\n{url}\n"
         )
         subject = f"[LSP] Cartel registered: {cartel.workgroup.name}"
     else:

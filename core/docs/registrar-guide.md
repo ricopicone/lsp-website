@@ -13,7 +13,7 @@ replacing them.
   console is theirs. The role is internal: holders are not listed or badged
   publicly.
 - **Web Coordinator.**
-- **Programming Committee** — every serving member, automatically.
+- **Program Committee** — every serving member, automatically.
 - **Site staff** (Django staff accounts and superusers).
 
 ## The Registrations tab

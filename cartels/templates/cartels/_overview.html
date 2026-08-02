@@ -26,10 +26,10 @@ is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment
 {% if is_member and not cartel.workgroup.is_archived and cartel.registration_status != "registered" %}
 <section class="space-y-3 rounded-xl border border-base-300/60 bg-base-100 p-5">
   {% if cartel.registration_status == "forming" and cartel.review_note %}
-  <p class="text-sm text-base-content/70">The Programming Committee returned this cartel for revision: “{{ cartel.review_note }}”. Revise the details and submit again.</p>
+  <p class="text-sm text-base-content/70">The Program Committee returned this cartel for revision: “{{ cartel.review_note }}”. Revise the details and submit again.</p>
   {% endif %}
   <h3 class="font-medium">Register this cartel</h3>
-  <p class="text-xs text-base-content/50">A cartel registers with the Programming Committee once it has a plus-one, an agreed period of one to two years, and three to five cartelisands.</p>
+  <p class="text-xs text-base-content/50">A cartel registers with the Program Committee once it has a plus-one, an agreed period of one to two years, and three to five cartelisands.</p>
   <ul class="space-y-1 text-sm">
     <li>{% if registration.plus_one %}✓{% else %}○{% endif %} Plus-one assigned</li>
     <li>{% if registration.duration %}✓{% else %}○{% endif %} Fixed period of one to two years</li>
@@ -42,7 +42,7 @@ is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment
     <button class="btn btn-primary btn-sm" {% if not registration.can_submit %}disabled{% endif %}>Submit for registration</button>
   </form>
   {% elif cartel.registration_status == "submitted" %}
-  <p class="text-sm text-base-content/60">Submitted to the Programming Committee, awaiting their decision.</p>
+  <p class="text-sm text-base-content/60">Submitted to the Program Committee, awaiting their decision.</p>
   {% endif %}
 </section>
 {% endif %}

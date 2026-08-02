@@ -95,7 +95,7 @@ def propose(request):
             messages.success(
                 request,
                 "Your cartel is now forming and visible to the school. Invite "
-                "members, then submit it to the Programming Committee to register.",
+                "members, then submit it to the Program Committee to register.",
             )
             return redirect(cartel.get_absolute_url())
     else:
@@ -131,7 +131,7 @@ def submit(request, slug):
     notify_cartels.submitted(cartel, _abs(request, cartel))
     messages.success(
         request,
-        "Submitted to the Programming Committee for registration. They have been notified.",
+        "Submitted to the Program Committee for registration. They have been notified.",
     )
     return redirect(cartel.get_absolute_url())
 
