@@ -97,13 +97,12 @@ def can_enter_parletre(user) -> bool:
 
 
 def _workgroup_lead(workgroup, user) -> bool:
-    """Whether ``user`` holds a leading role (chair / co-chair / plus-one) in
-    ``workgroup`` — the roles that moderate its channel."""
-    return WorkgroupMembership.objects.serving().filter(
-        workgroup=workgroup,
-        user=user,
-        role__in=WorkgroupMembership.LEAD_ROLES,
-    ).exists()
+    """Whether ``user`` leads ``workgroup`` — the role that moderates its
+    channel. Includes the school officers who lead the Board and the Meeting of
+    Analysts ex officio, who hold no stored membership there (task #480)."""
+    from workgroups.permissions import is_workgroup_lead
+
+    return is_workgroup_lead(user, workgroup)
 
 
 def _can_moderate_workgroup_channel(channel, user) -> bool:
@@ -131,14 +130,20 @@ def channel_can_moderate(channel, user) -> bool:
         return True
     if channel.moderators.filter(pk=user.pk).exists():
         return True
-    # Legacy committee-access channels: chairs of the gating committee
-    # moderate, read via the committee's workgroup roster.
+    # Legacy committee-access channels: the gating committee's leads moderate,
+    # read via its workgroup — which is where derived school officers live, and
+    # this branch resolves only for committees, so it must see them (task #480).
     if channel.committee_id is not None:
-        return WorkgroupMembership.objects.serving().filter(
-            user=user,
-            workgroup__committee__pk=channel.committee_id,
-            role__in=WorkgroupMembership.LEAD_ROLES,
-        ).exists()
+        from committees.models import Committee
+        from workgroups.permissions import is_workgroup_lead
+
+        committee = (
+            Committee.objects.filter(pk=channel.committee_id)
+            .select_related("workgroup")
+            .first()
+        )
+        wg = committee.workgroup if committee else None
+        return bool(wg and is_workgroup_lead(user, wg))
     return False
 
 
