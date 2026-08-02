@@ -92,3 +92,29 @@ def test_logging_in_guide_public_and_linked(client):
     assert "/accounts/password/reset/" in body
     # Listed on the index.
     assert "Logging in" in client.get(reverse("guides_index")).content.decode()
+
+
+@pytest.mark.django_db
+def test_faculty_guide_listed_and_answers_the_pricing_code_question(client):
+    body = client.get(reverse("guide_detail", args=["faculty"])).content.decode()
+    # The question that prompted the guide: a reduced fee for someone outside
+    # the school.
+    assert "free account" in body
+    assert "Fixed amount" in body
+    assert "one use" in body
+    # Where the tools are, for both kinds of group.
+    assert "Roster" in body
+    assert "reading group" in body.lower()
+    # Listed on the index like every other guide.
+    assert "Running a seminar or reading group" in client.get(
+        reverse("guides_index"),
+    ).content.decode()
+
+
+@pytest.mark.django_db
+def test_faculty_guide_is_public_and_points_at_the_member_guide(client):
+    """No login gate (nothing in it is confidential), and it hands anyone who
+    wanted the *registering* side over to the member guide."""
+    r = client.get(reverse("guide_detail", args=["faculty"]))
+    assert r.status_code == 200
+    assert reverse("guide_detail", args=["seminars"]) in r.content.decode()

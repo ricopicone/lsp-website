@@ -80,8 +80,12 @@ Sections:
 7. **Access details, the meeting room, recordings** — short, with pointers.
 8. **Who to ask** — Programming Committee, treasurer, registrar.
 
-The guide is member-facing site copy, so it uses commas where in-repo prose
-would use em dashes (the 2026-07-06 style exception).
+**Amended during implementation:** the spec first said the guide would use
+commas rather than em dashes, per the 2026-07-06 site-copy exception. Every
+neighbouring guide was written after that date and uses unspaced em dashes
+freely (`tuition-dues.md` has thirteen), so the exception evidently governs the
+public pages Annie and Diana reviewed, not `/guides/`. The guide follows its
+neighbours' voice; a lone comma-only guide would read as the odd one out.
 
 One line is added to `events/templates/events/_faculty_tools.html` linking the
 panel to the guide, so the explanation sits where the question gets asked.

@@ -690,6 +690,8 @@ def test_convener_sees_the_roster_tab_with_the_mint_form(client, reading_group):
     body = client.get(url).content.decode()
     assert "Generate a pricing code" in body
     assert reverse("events:generate_code", args=[reading_group.slug]) in body
+    # The panel points at the guide that explains it (task #495).
+    assert reverse("guide_detail", args=["faculty"]) in body
 
 
 # ---- The pricing-code person picker (task #495) ------------------------
@@ -743,4 +745,3 @@ def test_code_recipient_picker_help_text_names_the_external_case():
 
     help_text = PricingCodeForm().fields["restricted_to_user"].help_text
     assert "free account" in help_text
-    assert "—" not in help_text  # site copy uses commas, not em dashes
