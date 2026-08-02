@@ -29,6 +29,7 @@ GUIDE_SLUGS: list[str] = [
     "logging-in",
     "profile",
     "seminars",
+    "faculty",
     "parletre",
     "cartels",
     "my-formation",

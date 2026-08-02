@@ -600,3 +600,148 @@ def test_edit_toggles_speaker_spotlight(client, event, faculty_member):
     )
     event.refresh_from_db()
     assert event.speaker_spotlight is False
+
+
+# ---- Reading-group conveners (task #495) -------------------------------
+
+
+@pytest.fixture
+def reading_group(db):
+    rg = Event.objects.create(
+        title="Reading Seminar XI", slug="reading-xi",
+        event_type=Event.Type.READING_GROUP,
+        start_date=date(2026, 9, 1), end_date=date(2027, 5, 1),
+        published=True, status=Event.Status.OPEN,
+    )
+    rg.ensure_workgroup()
+    return rg
+
+
+def _convener(reading_group, email="convener@example.com"):
+    """A convener as the proposal flow creates one: ORGANIZER on the reading
+    group's workgroup, with no FACULTY role anywhere."""
+    from django.utils import timezone
+
+    from workgroups.models import WorkgroupMembership
+
+    u = User.objects.create_user(email=email, password="x")
+    WorkgroupMembership.objects.create(
+        workgroup=reading_group.workgroup, user=u,
+        role=WorkgroupMembership.Role.ORGANIZER,
+        start_date=timezone.localdate(),
+    )
+    return u
+
+
+def test_reading_group_convener_may_edit_the_offering(reading_group):
+    from events.permissions import can_edit_event
+
+    convener = _convener(reading_group)
+    assert reading_group.is_faculty(convener) is False   # ORGANIZER, not FACULTY
+    assert can_edit_event(convener, reading_group) is True
+
+
+def test_plain_member_of_a_reading_group_may_not_edit_it(reading_group):
+    from django.utils import timezone
+
+    from events.permissions import can_edit_event
+    from workgroups.models import WorkgroupMembership
+
+    member = User.objects.create_user(email="member@example.com", password="x")
+    WorkgroupMembership.objects.create(
+        workgroup=reading_group.workgroup, user=member,
+        role=WorkgroupMembership.Role.MEMBER,
+        start_date=timezone.localdate(),
+    )
+    assert can_edit_event(member, reading_group) is False
+
+
+@pytest.mark.django_db
+def test_pc_workgroup_lead_gains_nothing_on_a_special_event():
+    """A special event shares the Programming Committee's workgroup, so lead
+    status there must not be read as leading the event (the PC clause already
+    covers real PC members)."""
+    from events.permissions import can_edit_event
+    from workgroups.models import WorkgroupMembership
+
+    special = Event.objects.create(
+        title="Working with Masochism", slug="masochism-495",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 10, 1), end_date=date(2026, 10, 1),
+    )
+    special.ensure_workgroup()
+    assert special.workgroup == Committee.objects.get(
+        slug="programming-committee",
+    ).workgroup
+    # An ex-chair whose term has ended leads nothing today.
+    stranger = User.objects.create_user(email="ex@example.com", password="x")
+    WorkgroupMembership.objects.create(
+        workgroup=special.workgroup, user=stranger,
+        role=WorkgroupMembership.Role.CHAIR,
+        start_date=date(2020, 9, 1), end_date=date(2021, 9, 1),
+    )
+    assert can_edit_event(stranger, special) is False
+
+
+def test_convener_sees_the_roster_tab_with_the_mint_form(client, reading_group):
+    convener = _convener(reading_group, email="tab@example.com")
+    client.force_login(convener)
+    url = reading_group.workgroup.get_absolute_url() + "?tab=roster"
+    body = client.get(url).content.decode()
+    assert "Generate a pricing code" in body
+    assert reverse("events:generate_code", args=[reading_group.slug]) in body
+    # The panel points at the guide that explains it (task #495).
+    assert reverse("guide_detail", args=["faculty"]) in body
+
+
+# ---- The pricing-code person picker (task #495) ------------------------
+
+
+@pytest.mark.django_db
+def test_code_recipient_picker_labels_by_name_and_email():
+    from events.forms import PricingCodeForm
+
+    person = User.objects.create_user(
+        email="ext@example.com", password="x",
+        first_name="Ada", last_name="Byron",
+    )
+    field = PricingCodeForm().fields["restricted_to_user"]
+    assert field.label_from_instance(person) == "Ada Byron (ext@example.com)"
+    nameless = User.objects.create_user(email="bare@example.com", password="x")
+    assert field.label_from_instance(nameless) == "bare@example.com"
+
+
+@pytest.mark.django_db
+def test_code_recipient_picker_hides_never_verified_signups():
+    from django.utils import timezone
+
+    from events.forms import PricingCodeForm
+
+    real = User.objects.create_user(email="real@example.com", password="x")
+    real.profile.email_verified_at = timezone.now()
+    real.profile.save(update_fields=["email_verified_at"])
+
+    bot = User.objects.create_user(email="bot@example.com", password="x", is_active=False)
+    bot.profile.email_verified_at = None
+    bot.profile.save(update_fields=["email_verified_at"])
+
+    # Deactivated but verified (e.g. a deceased member) stays pickable: only the
+    # never-verified signups purge_unverified_signups deletes are hidden.
+    departed = User.objects.create_user(email="gone@example.com", password="x")
+    departed.profile.email_verified_at = timezone.now()
+    departed.profile.save(update_fields=["email_verified_at"])
+    departed.is_active = False
+    departed.save(update_fields=["is_active"])
+
+    pickable = set(PricingCodeForm().fields["restricted_to_user"].queryset)
+    assert real in pickable
+    assert departed in pickable
+    assert bot not in pickable
+
+
+@pytest.mark.django_db
+def test_code_recipient_picker_help_text_names_the_external_case():
+    from events.forms import PricingCodeForm
+
+    help_text = PricingCodeForm().fields["restricted_to_user"].help_text
+    assert "free account" in help_text
