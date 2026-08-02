@@ -159,13 +159,8 @@ class Recording(models.Model):
         wg = self._workgroup()
         if wg is None:
             return getattr(user, "is_staff", False)
-        from workgroups.models import WorkgroupMembership
-        return (
-            getattr(user, "is_staff", False)
-            or wg.memberships.serving().filter(
-                user=user, role__in=WorkgroupMembership.LEAD_ROLES
-            ).exists()
-        )
+        from workgroups.permissions import is_workgroup_lead
+        return getattr(user, "is_staff", False) or is_workgroup_lead(user, wg)
 
     def _visible_at(self, level, user) -> bool:
         if level == self.Visibility.PUBLIC:
