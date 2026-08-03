@@ -78,6 +78,36 @@ def payment_reminder_inapp(reg) -> None:
     )
 
 
+def plan_cancel_needs_treasurer(registration) -> None:
+    """Tell the treasurer a payment-plan registrant asked to cancel (task
+    #501). The site deliberately refuses to decide the refund — a member who
+    attended part of an event is a pro-rating conversation, not a full
+    refund."""
+    from core.models import StaffRole
+
+    role = StaffRole.objects.filter(key=StaffRole.TREASURER).first()
+    holders = list(role.holders.all()) if role else []
+    if not holders:
+        log.warning(
+            "plan_cancel_needs_treasurer: no Treasurer role holder — "
+            "registration %s cancellation request unseen", registration.pk,
+        )
+        return
+    who = registration.user.get_full_name() or registration.user.email
+    for user in holders:
+        notify(
+            user, Category.ACCOUNT_UPDATES,
+            title=f"Cancellation request on a payment plan: {who}",
+            body=(
+                f"{who} asked to cancel their registration for "
+                f'"{registration.event.title}" (${registration.quoted_amount} '
+                "on a payment plan). The refund needs your decision."
+            ),
+            url=reverse("treasurer_member_detail", args=[registration.user_id]),
+            target=registration, dedupe=True,
+        )
+
+
 def _receipt_url(payment) -> str:
     """Where a receipt's bell row lands — the same split Stripe's success paths
     use. ``payments:thanks`` is a public page and so deliberately 404s

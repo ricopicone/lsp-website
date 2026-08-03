@@ -536,3 +536,74 @@ def test_the_confirmation_page_shows_the_schedule(client):
     assert "payment plan" in body.lower()
     assert "$200.00" in body            # still to pay
     assert "you're all set" not in body.lower()
+
+
+# ---- Task 7: cancel refuses on a plan ------------------------------------
+
+
+def test_a_plan_registration_refuses_self_cancel():
+    from payments import registration_plans
+    from payments.refund import PlanRefundRequiresTreasurer
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    with pytest.raises(PlanRefundRequiresTreasurer):
+        reg.cancel()
+    reg.refresh_from_db()
+    assert reg.status == Registration.Status.PAID   # nothing moved
+
+
+def test_the_cancel_view_tells_the_member_to_ask_the_treasurer(client):
+    from core.models import StaffRole
+    from notifications.models import Notification
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    treasurer = _user("treasurer@example.com")
+    role, _ = StaffRole.objects.get_or_create(
+        key=StaffRole.TREASURER, defaults={"name": "Treasurer"},
+    )
+    role.holders.add(treasurer)
+
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    client.force_login(member)
+    resp = client.post(f"/registrations/{reg.pk}/cancel/", follow=True)
+    # The specific flash, not just the word "treasurer" somewhere in the chrome.
+    assert "the treasurer handles the cancellation" in resp.content.decode().lower()
+    reg.refresh_from_db()
+    assert reg.status == Registration.Status.PAID
+    assert Notification.objects.filter(recipient=treasurer).exists()
+
+
+def test_an_ordinary_paid_registration_still_self_cancels(monkeypatch):
+    from payments.models import Payment
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg, user=member,
+        amount=Decimal("300.00"), method=Payment.Method.STRIPE,
+        status=Payment.Status.SUCCEEDED, stripe_payment_intent_id="pi_ok",
+    )
+    monkeypatch.setattr(
+        "payments.refund.refund_payment", lambda p: {"id": "re_test"},
+    )
+    reg.cancel()
+    reg.refresh_from_db()
+    assert reg.status == Registration.Status.REFUNDED

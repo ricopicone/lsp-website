@@ -132,10 +132,23 @@ class Registration(models.Model):
         refund = None
         with transaction.atomic():
             if self.status == self.Status.PAID:
-                payment = self.payments.filter(
+                from payments.refund import PlanRefundRequiresTreasurer
+                from payments.registration_plans import is_on_plan
+
+                succeeded = self.payments.filter(
                     status=_Payment.Status.SUCCEEDED,
                     method=_Payment.Method.STRIPE,
-                ).first()
+                )
+                # A plan pays one registration several times. Refunding the
+                # first row we find would under-refund and call the whole
+                # thing refunded — a latent bug for any multi-payment
+                # registration, not only a plan (task #501).
+                if is_on_plan(self) or succeeded.count() > 1:
+                    raise PlanRefundRequiresTreasurer(
+                        "This registration was paid in installments; the "
+                        "treasurer settles the refund by hand."
+                    )
+                payment = succeeded.first()
                 if payment is None:
                     raise RuntimeError(
                         f"Registration {self.id} is PAID but has no SUCCEEDED Stripe "

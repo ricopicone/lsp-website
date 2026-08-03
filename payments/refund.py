@@ -21,6 +21,16 @@ class RefundError(RuntimeError):
     """Raised when a payment can't be refunded (wrong method, no intent, etc.)."""
 
 
+class PlanRefundRequiresTreasurer(RefundError):
+    """Raised when a registration can't be self-cancelled because more than
+    one payment settled it (task #501).
+
+    A member who attended four of ten sessions and stops paying is a
+    pro-rating conversation, not a full refund, and pro-rating is the kind of
+    judgment the school reserves for a person (architecture §4.1).
+    """
+
+
 def refund_payment(payment: Payment):
     """Issue a full Stripe refund for ``payment``; mark the row REFUNDED.
 

@@ -21,7 +21,7 @@ from events.models import Event, PriceTier, PricingCode
 from events.permissions import can_edit_event
 from payments import coverage
 from payments import notifications as notify_payments
-from payments.refund import RefundError
+from payments.refund import PlanRefundRequiresTreasurer, RefundError
 from payments import registration_plans
 from payments.stripe_checkout import (
     create_checkout_session,
@@ -283,6 +283,16 @@ def cancel_registration(request, reg_id: int):
     refund = None
     try:
         refund = reg.cancel()
+    except PlanRefundRequiresTreasurer:
+        # The site deliberately refuses to decide this one (task #501).
+        notify_payments.plan_cancel_needs_treasurer(reg)
+        messages.info(
+            request,
+            "Because you're paying for this in installments, the treasurer "
+            "handles the cancellation. We've let them know, and they'll be in "
+            "touch about the payments already made.",
+        )
+        return redirect("registrations:confirm", reg_id=reg.id)
     except RefundError as exc:
         # Could not auto-refund (offline payment, missing intent, etc.).
         logger.warning("Cancel failed for reg %s: %s", reg.id, exc)
