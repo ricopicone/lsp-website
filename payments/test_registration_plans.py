@@ -280,3 +280,95 @@ def test_due_installment_prefers_the_oldest_overdue():
     assert registration_plans.due_installment(reg, date(2026, 10, 1)).sequence == 2
     reg.installments.update(paid=True)
     assert registration_plans.due_installment(reg, date(2026, 12, 1)) is None
+
+
+# ---- Task 4: settlement --------------------------------------------------
+
+
+def _settle(reg, installment):
+    """Pay one installment the way the Stripe webhook does."""
+    from payments.models import Payment
+    from payments.operations import complete_payment
+    p = Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg,
+        user=reg.user, amount=installment.amount,
+        method=Payment.Method.STRIPE, status=Payment.Status.PENDING,
+        registration_installment=installment,
+        stripe_payment_intent_id=f"pi_test_{installment.pk}",
+    )
+    complete_payment(p)
+    return p
+
+
+def test_a_plan_mints_one_charge_for_the_whole_fee():
+    from payments import registration_plans
+    from payments.models import Charge
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "500.00")
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    _settle(reg, rows[0])
+    charges = Charge.objects.filter(registration=reg)
+    assert charges.count() == 1
+    # The full fee, not the $166.66 that actually moved.
+    assert charges.first().amount == Decimal("500.00")
+
+    _settle(reg, rows[1])
+    _settle(reg, rows[2])
+    assert Charge.objects.filter(registration=reg).count() == 1
+
+
+def test_a_non_plan_registration_mints_exactly_what_it_did_before():
+    from payments.models import Charge, Payment
+    from payments.operations import complete_payment
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "500.00")
+    p = Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg,
+        user=member, amount=Decimal("500.00"),
+        method=Payment.Method.STRIPE, status=Payment.Status.PENDING,
+        stripe_payment_intent_id="pi_test_plain",
+    )
+    complete_payment(p)
+    assert Charge.objects.get(registration=reg).amount == Decimal("500.00")
+
+
+def test_settling_an_installment_marks_it_and_grants_access():
+    from registrations.models import Registration
+    from payments import registration_plans
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "300.00")
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    _settle(reg, rows[0])
+    rows[0].refresh_from_db()
+    reg.refresh_from_db()
+    assert rows[0].paid is True
+    # Access follows the first payment — the existing AWAITING_PAYMENT flip.
+    assert reg.status == Registration.Status.PAID
+    assert registration_plans.outstanding(reg) == Decimal("200.00")
+
+
+def test_the_ledger_reads_partial_until_the_last_installment():
+    from payments import registration_plans
+    from payments.ledger import member_account
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "300.00")
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    _settle(reg, rows[0])
+    assert member_account(member)["balance"] == Decimal("200.00")
+
+    _settle(reg, rows[1])
+    assert member_account(member)["balance"] == Decimal("100.00")
+
+    _settle(reg, rows[2])
+    assert member_account(member)["balance"] == Decimal("0.00")
