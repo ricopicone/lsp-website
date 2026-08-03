@@ -24,10 +24,10 @@ def _user(email="member@example.com"):
 
 def _event(title="Seminar", **kwargs):
     today = timezone.localdate()
+    kwargs.setdefault("event_type", Event.Type.SEMINAR)
     return Event.objects.create(
         title=title,
         slug=title.lower().replace(" ", "-"),
-        event_type=Event.Type.SEMINAR,
         start_date=today + timedelta(days=7),
         end_date=today + timedelta(days=90),
         published=True,
@@ -739,3 +739,70 @@ def test_a_registration_without_a_plan_is_not_flagged(client):
     client.force_login(faculty)
     resp = client.get(event.workgroup.get_absolute_url() + "?tab=roster")
     assert "On a plan" not in resp.content.decode()
+
+
+# ---- The mint form is reachable for BOTH offering types ------------------
+#
+# A reading group's conveners hold ORGANIZER, not FACULTY (task #495), and the
+# Workspace tab renders the mint form while a *different* view handles the POST.
+# These assert the two gates agree, for a seminar and a reading group alike.
+
+
+def _offering(event_type, convener_role):
+    """An offering event whose workgroup has one lead in ``convener_role``."""
+    title = "Seminar" if event_type == Event.Type.SEMINAR else "Reading Group"
+    event = _event(title=title, event_type=event_type)
+    wg = event.ensure_workgroup()
+    convener = _user(f"{event.slug}-convener@example.com")
+    wg.add_member(convener, role=convener_role)
+    assert wg.memberships.serving().filter(
+        user=convener, role=convener_role,
+    ).exists()
+    return event, convener
+
+
+@pytest.mark.parametrize("event_type,convener_role", [
+    (Event.Type.SEMINAR, "faculty"),
+    (Event.Type.READING_GROUP, "organizer"),
+])
+def test_the_convener_sees_the_mint_form(client, event_type, convener_role):
+    event, convener = _offering(event_type, convener_role)
+    client.force_login(convener)
+    resp = client.get(event.workgroup.get_absolute_url() + "?tab=roster")
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "Generate a pricing code" in body
+    assert "Number of payments" in body       # the task #501 field
+
+
+@pytest.mark.parametrize("event_type,convener_role", [
+    (Event.Type.SEMINAR, "faculty"),
+    (Event.Type.READING_GROUP, "organizer"),
+])
+def test_the_convener_can_actually_mint_a_plan_code(
+    client, event_type, convener_role,
+):
+    """The POST endpoint is a different view from the tab that renders the
+    form — if their gates disagreed, the form would 403 on submit."""
+    event, convener = _offering(event_type, convener_role)
+    client.force_login(convener)
+    resp = client.post(
+        f"/events/{event.slug}/codes/",
+        {"pricing_mode": PricingCode.Mode.FULL_PRICE, "installments": "3"},
+    )
+    assert resp.status_code == 302
+    code = event.pricing_codes.get()
+    assert code.installments == 3
+    assert code.issued_by == convener
+
+
+def test_a_plain_member_cannot_mint_a_code(client):
+    event, _convener = _offering(Event.Type.READING_GROUP, "organizer")
+    outsider = _user("outsider@example.com")
+    client.force_login(outsider)
+    resp = client.post(
+        f"/events/{event.slug}/codes/",
+        {"pricing_mode": PricingCode.Mode.FULL_PRICE, "installments": "3"},
+    )
+    assert resp.status_code == 403
+    assert event.pricing_codes.count() == 0
