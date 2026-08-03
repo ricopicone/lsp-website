@@ -21,6 +21,15 @@ but we haven't recorded a payment yet.
 Please pay in full, or switch to a payment plan, at:
 
   {{ site_base_url }}/tuition/
+{% elif installment %}
+You're on a payment plan for {{ period.name }}. Installment
+{{ installment.sequence }} of {{ installment_total }}, ${{ installment.amount|floatformat:2 }},
+{% if installment_overdue %}was due {{ installment.due_date|date:"F j, Y" }}{% else %}is due {{ installment.due_date|date:"F j, Y" }}{% endif %}.
+
+Payments aren't taken automatically, so nothing happens until you pay it
+here:
+
+  {{ site_base_url }}/tuition/
 {% else %}
 Your current tuition decision for {{ period.name }} is:
 {{ enrollment.get_status_display }}.

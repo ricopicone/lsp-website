@@ -157,12 +157,24 @@ def send_dues_reminder(user, period) -> None:
 def send_tuition_reminder(user, period, *, enrollment=None) -> None:
     """Reminder for an in-training student who hasn't decided / paid for the year (M7.5).
 
-    Three phrasings depending on enrollment state:
+    Four phrasings depending on enrollment state:
     - no enrollment row: "please record your decision at /tuition/"
     - status=committed but unpaid: "please pay or set up a payment plan"
-    - status=payment_plan with overdue installment: "your installment is due"
+    - status=payment_plan with an installment due or overdue: names that
+      installment, its amount, and its date (task #494 — nothing charges
+      automatically, so this nudge is the only thing that moves a plan along)
+    - anything else: the recorded decision, with a link to change it
     """
+    from payments import plans
+
     subject = f"Tuition for {period.name}: please respond"
+    installment = None
+    installment_total = 0
+    if enrollment is not None and (
+        enrollment.status == enrollment.Status.PAYMENT_PLAN
+    ):
+        installment = plans.due_installment(enrollment, timezone.now().date())
+        installment_total = enrollment.installments.count()
     with _recipient_timezone(user):
         body = render_to_string(
             "payments/email/tuition_reminder.txt",
@@ -170,6 +182,12 @@ def send_tuition_reminder(user, period, *, enrollment=None) -> None:
                 "user": user,
                 "period": period,
                 "enrollment": enrollment,
+                "installment": installment,
+                "installment_total": installment_total,
+                "installment_overdue": (
+                    installment is not None
+                    and installment.due_date < timezone.now().date()
+                ),
                 "support_email": settings.SUPPORT_EMAIL,
                 "site_base_url": settings.SITE_BASE_URL,
             },

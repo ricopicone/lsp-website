@@ -24,6 +24,7 @@ from django.utils import timezone
 from accounts.models import Profile
 from notifications.categories import Category
 from payments import notifications as notify_payments
+from payments import plans
 from payments.emails import send_tuition_reminder
 from payments.models import TuitionEnrollment, TuitionPeriod, TuitionReminder
 from payments.sending import ThrottledSender
@@ -46,10 +47,9 @@ def _needs_reminder(enrollment: TuitionEnrollment | None, today, period: Tuition
         pay_due = period.payment_due_date or period.decision_due_date
         return today > pay_due
     if enrollment.status == TuitionEnrollment.Status.PAYMENT_PLAN:
-        # Overdue installment?
-        return enrollment.installments.filter(
-            paid=False, due_date__lte=today,
-        ).exists()
+        # An installment overdue, or falling due inside the lead window —
+        # nothing charges automatically, so the nudge is the whole mechanism.
+        return plans.due_installment(enrollment, today) is not None
     return False
 
 

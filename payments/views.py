@@ -190,9 +190,15 @@ def treasurer_accounts(request):
 
     Filters and sort live in the querystring so filtered views are linkable
     (the replacement for the old per-category rosters)."""
-    from payments import ledger
+    from payments import ledger, plans
 
     rows = ledger.accounts_overview()
+    # A plan member carries the whole year as owed from the day they commit
+    # (one annual charge, whatever the schedule), so "Owing" can't say whether
+    # they're behind — the marker can. Batched, not per row.
+    plan_states = plans.plan_states(timezone.now().date())
+    for r in rows:
+        r["plan_state"] = plan_states.get(r["user"].id)
     q = (request.GET.get("q") or "").strip().lower()
     balance = request.GET.get("balance") or ""
     role = request.GET.get("role") or ""
