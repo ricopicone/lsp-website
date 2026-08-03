@@ -192,3 +192,91 @@ def test_a_payment_can_point_at_an_installment():
         registration_installment=inst,
     )
     assert list(inst.payments.all()) == [p]
+
+
+# ---- Task 3: the schedule module ----------------------------------------
+
+
+def test_schedule_sums_to_the_exact_fee_with_the_remainder_last():
+    from payments import registration_plans
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "500.00")
+
+    rows = registration_plans.build_schedule(reg, 3, today=date(2026, 9, 1))
+    assert [r.amount for r in rows] == [
+        Decimal("166.66"), Decimal("166.66"), Decimal("166.68"),
+    ]
+    assert sum(r.amount for r in rows) == Decimal("500.00")
+    assert [r.due_date for r in rows] == [
+        date(2026, 9, 1), date(2026, 10, 1), date(2026, 11, 1),
+    ]
+
+
+def test_build_schedule_is_idempotent():
+    from payments import registration_plans
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier)
+
+    first = registration_plans.build_schedule(reg, 3, today=date(2026, 9, 1))
+    again = registration_plans.build_schedule(reg, 5, today=date(2026, 9, 1))
+    assert len(first) == 3
+    assert len(again) == 3
+    assert reg.installments.count() == 3
+
+
+def test_build_schedule_declines_degenerate_input():
+    from payments import registration_plans
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+
+    reg = _registration(member, event, tier)
+    assert registration_plans.build_schedule(reg, 1) == []
+    assert reg.installments.count() == 0
+
+    free = _registration(_user("free@example.com"), event, tier, "0.00")
+    assert registration_plans.build_schedule(free, 3) == []
+
+
+def test_plan_readers():
+    from payments import registration_plans
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "300.00")
+
+    assert registration_plans.is_on_plan(reg) is False
+    registration_plans.build_schedule(reg, 3, today=date(2026, 9, 1))
+    assert registration_plans.is_on_plan(reg) is True
+    assert registration_plans.outstanding(reg) == Decimal("300.00")
+
+    first = registration_plans.next_unpaid(reg)
+    assert first.sequence == 1
+    first.mark_paid()
+    assert registration_plans.next_unpaid(reg).sequence == 2
+    assert registration_plans.outstanding(reg) == Decimal("200.00")
+
+
+def test_due_installment_prefers_the_oldest_overdue():
+    from payments import registration_plans
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "300.00")
+    registration_plans.build_schedule(reg, 3, today=date(2026, 9, 1))
+
+    # Nothing due a month before the schedule starts.
+    assert registration_plans.due_installment(reg, date(2026, 8, 1)) is None
+    # Within the lead window ahead of #1.
+    assert registration_plans.due_installment(reg, date(2026, 8, 28)).sequence == 1
+    # #1 unpaid and overdue wins over #2 falling due.
+    assert registration_plans.due_installment(reg, date(2026, 10, 1)).sequence == 1
+
+    reg.installments.filter(sequence=1).update(paid=True)
+    assert registration_plans.due_installment(reg, date(2026, 10, 1)).sequence == 2
+    reg.installments.update(paid=True)
+    assert registration_plans.due_installment(reg, date(2026, 12, 1)) is None
