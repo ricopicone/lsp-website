@@ -66,3 +66,20 @@ def test_create_checkout_session_refuses_zero_amount(registration):
         create_checkout_session(registration)
     # Sanity: no Payment row created.
     assert Payment.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_checkout_offers_card_only_never_buy_now_pay_later(registration):
+    """Regression pin (task #494): a Board member asked whether the school
+    uses Klarna. It doesn't — and this explicit ``payment_method_types`` is
+    the only reason. Passing it opts the Session out of Stripe's dynamic
+    payment methods, the Dashboard-managed set where Klarna / Affirm /
+    Afterpay live and which Stripe enables by default. Drop the argument and
+    BNPL appears at checkout with no other code change.
+    """
+    fake_session = MagicMock(id="cs_test_pm", url="https://stripe.test/cs_test_pm")
+    with patch("payments.stripe_checkout.stripe.checkout.Session.create",
+               return_value=fake_session) as create:
+        create_checkout_session(registration)
+
+    assert create.call_args.kwargs["payment_method_types"] == ["card"]

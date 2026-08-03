@@ -67,6 +67,9 @@
             <a class="link" href="{% url 'treasurer_member_detail' r.user.id %}">
               {{ r.user.get_full_name|default:r.user.email }}</a>
             {% if r.conflict %}<span class="badge badge-warning badge-xs ml-1" title="Paid past the tuition obligation while a year is marked Skipping">conflict</span>{% endif %}
+            {% if r.plan_state == "overdue" %}<span class="badge badge-warning badge-xs ml-1" title="On an approved payment plan with an installment past due">plan overdue</span>
+            {% elif r.plan_state == "current" %}<span class="badge badge-ghost badge-xs ml-1" title="On an approved payment plan, nothing past due — the balance is the rest of the year, not arrears">on plan</span>
+            {% elif r.plan_state == "requested" %}<span class="badge badge-ghost badge-xs ml-1" title="Applied for a payment plan; the Board hasn't decided yet">plan requested</span>{% endif %}
           </td>
           <td class="text-xs">{{ r.user.profile.get_role_display }}</td>
           <td class="text-right whitespace-nowrap">{{ r.obligation|usd }}</td>

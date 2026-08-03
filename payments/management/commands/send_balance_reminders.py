@@ -30,58 +30,27 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from notifications.categories import Category
-from payments import ledger
+from payments import ledger, plans
 from payments import notifications as notify_payments
 from payments.emails import send_balance_reminder
-from payments.models import (
-    BalanceReminder,
-    DuesPeriod,
-    TuitionEnrollment,
-    TuitionInstallment,
-    TuitionPeriod,
-)
+from payments.models import BalanceReminder, DuesPeriod
 from payments.sending import ThrottledSender
 
 REMINDER_INTERVAL_DAYS = 7
 
 
 def _spared_plan_user_ids(today) -> set:
-    """User ids to skip: PLAN_REQUESTED, or PAYMENT_PLAN with no overdue
-    unpaid installment, in the current TuitionPeriod. One batched query
-    pair over all such enrollments, not a per-member lookup."""
-    tuition_period = TuitionPeriod.current(on_date=today)
-    if tuition_period is None:
-        return set()
+    """User ids to skip: a pending plan application, or an approved plan with
+    nothing past due, in the current TuitionPeriod.
 
-    enrollments = list(
-        TuitionEnrollment.objects.filter(
-            tuition_period=tuition_period,
-            status__in=(
-                TuitionEnrollment.Status.PLAN_REQUESTED,
-                TuitionEnrollment.Status.PAYMENT_PLAN,
-            ),
-        ).values("id", "user_id", "status")
-    )
-    spared = {
-        e["user_id"] for e in enrollments
-        if e["status"] == TuitionEnrollment.Status.PLAN_REQUESTED
+    Reads ``payments.plans`` — the same batched helper the tuition reminder
+    nudges on and the treasurer's Accounts marker labels — so "current on a
+    plan" has one definition rather than three that can drift apart.
+    """
+    return {
+        user_id for user_id, state in plans.plan_states(today).items()
+        if state in (plans.State.REQUESTED, plans.State.CURRENT)
     }
-    plan_enrollments = {
-        e["id"]: e["user_id"] for e in enrollments
-        if e["status"] == TuitionEnrollment.Status.PAYMENT_PLAN
-    }
-    overdue_enrollment_ids = set(
-        TuitionInstallment.objects.filter(
-            enrollment_id__in=plan_enrollments.keys(),
-            paid=False,
-            due_date__lte=today,
-        ).values_list("enrollment_id", flat=True).distinct()
-    )
-    spared.update(
-        user_id for eid, user_id in plan_enrollments.items()
-        if eid not in overdue_enrollment_ids
-    )
-    return spared
 
 
 class Command(BaseCommand):
