@@ -64,6 +64,9 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
                 {% else %}badge-warning{% endif %}">
                 {{ reg.get_status_display }}
               </span>
+              {% if reg.on_payment_plan %}
+              <span class="badge badge-sm badge-ghost ml-1">On a plan</span>
+              {% endif %}
             </td>
           </tr>
         {% endfor %}
@@ -101,14 +104,15 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Code</th><th>Mode</th><th>Value</th><th>Uses left</th><th>Expires</th><th>For</th></tr>
+          <tr><th>Code</th><th>Mode</th><th>Value</th><th>Payments</th><th>Uses left</th><th>Expires</th><th>For</th></tr>
         </thead>
         <tbody>
         {% for code in existing_codes %}
           <tr>
             <td><code class="badge badge-ghost font-mono">{{ code.code }}</code></td>
             <td>{{ code.get_pricing_mode_display }}</td>
-            <td class="whitespace-nowrap">{{ code.amount_or_percent }}{% if code.pricing_mode == "percent_off" %}%{% else %} USD{% endif %}</td>
+            <td class="whitespace-nowrap">{% if code.pricing_mode == "full_price" %}—{% else %}{{ code.amount_or_percent }}{% if code.pricing_mode == "percent_off" %}%{% else %} USD{% endif %}{% endif %}</td>
+            <td class="whitespace-nowrap">{% if code.installments > 1 %}{{ code.installments }}{% else %}—{% endif %}</td>
             <td>{% if code.max_uses is None %}∞{% else %}{{ code.uses_remaining }}{% endif %}</td>
             <td class="whitespace-nowrap">{% if code.valid_until %}{{ code.valid_until|date:"M j, Y" }}{% else %}—{% endif %}</td>
             <td class="text-base-content/70">{% if code.restricted_to_user %}{{ code.restricted_to_user.email }}{% else %}anyone{% endif %}</td>

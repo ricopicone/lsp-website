@@ -33,6 +33,10 @@ _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 #: a course starting Sept 2025 is academic year "2025-2026".
 ACADEMIC_YEAR_START_MONTH = 9
 
+#: Ceiling on a pricing code's installment count (task #501). A sanity bound,
+#: not a policy — twelve monthly payments already outlasts any event we run.
+MAX_INSTALLMENTS = 12
+
 
 def _speaker_invitation_token() -> str:
     """Opaque, single-use token for an external-speaker invitation link."""
@@ -1035,6 +1039,9 @@ class PricingCode(models.Model):
         PERCENT_OFF = "percent_off", _("Percent off")
         FIXED_AMOUNT = "fixed_amount", _("Fixed amount")
         SLIDING_FLOOR = "sliding_floor", _("Sliding-scale floor")
+        #: No discount at all — the code exists only to carry a payment plan
+        #: (task #501). ``amount_or_percent`` is unused and stored as 0.
+        FULL_PRICE = "full_price", _("Full price — payment plan only")
 
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="pricing_codes")
     code = models.CharField(max_length=20, unique=True, db_index=True)
@@ -1064,6 +1071,14 @@ class PricingCode(models.Model):
         null=True,
         blank=True,
         help_text="Decremented on successful redemption. Null when max_uses is null.",
+    )
+    installments = models.PositiveSmallIntegerField(
+        default=1,
+        help_text=(
+            "1 = pay in full at registration. A higher number splits the fee "
+            "into that many payments, the first due at registration and the "
+            "rest monthly. The total never changes."
+        ),
     )
     restricted_to_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1096,6 +1111,14 @@ class PricingCode(models.Model):
         super().save(*args, **kwargs)
 
     def clean(self):
+        # Bound the schedule first — the amount checks below return early on a
+        # blank amount, which would skip this.
+        if self.installments is not None and not (
+            1 <= self.installments <= MAX_INSTALLMENTS
+        ):
+            raise ValidationError({
+                "installments": f"Choose between 1 and {MAX_INSTALLMENTS} payments.",
+            })
         # Form-level clean strips invalid fields from the instance; guard against None.
         if self.amount_or_percent is None:
             return

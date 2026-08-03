@@ -781,6 +781,68 @@ Done (see `git log` for specifics):
   decision: it is a data fix, appointing an organizer in its Settings roster.
   Design: `docs/superpowers/specs/2026-08-01-workgroup-lead-officers-design.md`.
 
+- **Payment plans for a single seminar or reading group** (task #501). Seminar
+  fees run $50–$900 (a $60/session seminar over fifteen sessions), and faculty
+  held three discretionary levers for a member who couldn't meet one —
+  percent-off, fixed-price, sliding floor — all of which answer *how much* and
+  none of which answers *when*. `PricingCode` now carries an **`installments`
+  count orthogonal to `pricing_mode`**, so "20% off, payable in three" and
+  "full price, payable in three" are both expressible; making a plan a fourth
+  `Mode` was rejected because `amount_or_percent` is money or percent in all
+  three existing modes and would have had to mean a count in the one function
+  documented as a place where a bug costs money. `Mode.FULL_PRICE` fills the
+  no-discount case (rejected: a blank-able `pricing_mode`, which adds a null
+  branch to `_apply_code`; and a `fixed_amount` code at the base price, which
+  hardcodes a fee that later goes stale). **The total never changes** — the
+  same discipline the tuition plan holds. The count is all faculty choose; the
+  site splits evenly with the remainder on the **final** installment, first due
+  at registration and the rest monthly (the AY-anchored Sept/Feb tuition shape
+  doesn't transfer to events starting on arbitrary dates).
+  **The feature is small because the accounting was already there:** `Charge`
+  carries a `registration` FK with a unique-when-not-void constraint, the
+  ledger's `_charge_states` already returns `"partial"`, `Payment` already
+  points at a registration with nothing limiting it to one, and
+  `complete_payment` already flipped `AWAITING_PAYMENT → PAID` on the first
+  payment — which *is* the access semantics a plan wants. So one registration
+  stays one full-fee `Charge`, and the balance, statement, and reminders come
+  out right with no new accounting. New: `payments.RegistrationInstallment` (a
+  field-for-field twin of `TuitionInstallment`; unifying them would rewrite the
+  #494 plumbing for no behavior gain), `Payment.registration_installment`, and
+  `payments/registration_plans.py`.
+  **Two existing behaviors were wrong and are fixed.**
+  `mint_registration_charge` minted `payment.amount`, so a $500 seminar paid in
+  three would have entered the books as a **$166.66 obligation**; it now bills
+  `quoted_amount` for a plan registration, scoped so no ordinary row's
+  provenance shifts. And `Registration.cancel()` refunded `.first()` succeeded
+  Stripe payment and flipped to REFUNDED — with three installments that
+  **under-refunds and calls the whole thing done**. That was a latent bug for
+  *any* multi-payment registration, not only a plan; self-cancel now raises
+  `PlanRefundRequiresTreasurer` and routes to the treasurer, because someone
+  who attended four of ten sessions is a pro-rating conversation, not an
+  arithmetic (§4.1). Rejected: refunding every installment automatically, and a
+  before-the-first-session date rule.
+  **The consequence worth stating: `Registration.status == PAID` now means
+  *enrolled*, not *settled*.** The ledger is untouched (it reads charges and
+  payments, never registration status), so the money is right from day one;
+  what shifts is the reading of `PAID` on the registrar console's per-status
+  counts and the roster CSV, both deliberately left alone. The disclosure is a
+  neutral **"On a plan"** chip on the faculty roster — no amounts, no
+  behind/current distinction, since faculty issued the plan and the roster is
+  a surface they export to CSV and read in class. Note the roster that matters
+  is the **Workspace `?tab=roster`**, not `?view=faculty`: a seminar's event
+  page redirects to its Workspace, and `_faculty_tools.html` is shared by both,
+  so `Registration.on_payment_plan` is a property and each context builder just
+  prefetches. `outstanding()` quantizes because `Sum` hands back an unscaled
+  Decimal — a $200.00 balance arrived as `Decimal("200")` and rendered as
+  "$200" beside its own "$166.66" installments.
+  A plan registration reads `PAID` and so was invisible to every existing
+  nudge; `send_registration_reminders` gains a third kind on the same throttle
+  field and host timer. **No automatic consequence for defaulting** — the lever
+  stays the treasurer's `seminar_access_suspended`, human and audited. No
+  autopay, no pro-rating, no faculty-authored dates, no new flag, no backfill.
+  Design:
+  `docs/superpowers/specs/2026-08-03-registration-payment-plans-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

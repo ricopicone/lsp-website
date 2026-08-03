@@ -61,6 +61,10 @@
     {% csrf_token %}
     <button type="submit" class="btn btn-primary btn-lg">Pay ${{ registration.quoted_amount }} →</button>
   </form>
+  {% elif registration.status == "paid" and installments and outstanding > 0 %}
+  <div role="alert" class="alert alert-info">
+    <span>Your place is confirmed. You're paying in installments, so ${{ outstanding }} is still to come.</span>
+  </div>
   {% elif registration.status == "paid" %}
   <p class="text-base-content/80">
     Payment received — you're all set. Access details have been emailed.
@@ -71,13 +75,51 @@
   </div>
   {% endif %}
 
+  {% if installments %}
+  <div class="space-y-3">
+    <h2 class="font-serif text-lg text-base-content">Your payment plan</h2>
+    <div class="overflow-x-auto rounded-lg border border-base-300">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Payment</th><th>Due</th><th class="whitespace-nowrap">Amount</th><th></th></tr>
+        </thead>
+        <tbody>
+        {% for inst in installments %}
+          <tr>
+            <td>{{ inst.sequence }} of {{ installments|length }}</td>
+            <td class="whitespace-nowrap">{{ inst.due_date|date:"M j, Y" }}</td>
+            <td class="whitespace-nowrap">${{ inst.amount }}</td>
+            <td class="text-right">
+              {% if inst.paid %}
+                <span class="badge badge-sm badge-success">Paid</span>
+              {% else %}
+                <form method="post" action="{% url 'registrations:pay_installment' inst.id %}" style="display:contents">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-xs {% if inst.due_date <= today %}btn-primary{% else %}btn-ghost{% endif %}">
+                    Pay ${{ inst.amount }} →
+                  </button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-xs text-base-content/60">
+      Your place is held for the whole event, you don't need to wait for the
+      last payment. If your circumstances change, contact the treasurer.
+    </p>
+  </div>
+  {% endif %}
+
   {% if registration.status == "awaiting_payment" or registration.status == "paid" or registration.status == "pending_approval" %}
   <form method="post"
         action="{% url 'registrations:cancel' registration.id %}"
         onsubmit="return confirm('{% if registration.status == "paid" %}Cancel this registration and refund your payment?{% elif registration.status == "pending_approval" %}Withdraw this registration request?{% else %}Cancel this registration?{% endif %}');">
     {% csrf_token %}
     <button type="submit" class="btn btn-outline btn-error btn-sm">
-      {% if registration.status == "pending_approval" %}Withdraw request{% else %}Cancel registration{% if registration.status == "paid" %} (full refund){% endif %}{% endif %}
+      {% if registration.status == "pending_approval" %}Withdraw request{% else %}Cancel registration{% if registration.status == "paid" and not installments %} (full refund){% endif %}{% endif %}
     </button>
   </form>
   {% endif %}

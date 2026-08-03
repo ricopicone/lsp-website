@@ -132,10 +132,23 @@ class Registration(models.Model):
         refund = None
         with transaction.atomic():
             if self.status == self.Status.PAID:
-                payment = self.payments.filter(
+                from payments.refund import PlanRefundRequiresTreasurer
+                from payments.registration_plans import is_on_plan
+
+                succeeded = self.payments.filter(
                     status=_Payment.Status.SUCCEEDED,
                     method=_Payment.Method.STRIPE,
-                ).first()
+                )
+                # A plan pays one registration several times. Refunding the
+                # first row we find would under-refund and call the whole
+                # thing refunded — a latent bug for any multi-payment
+                # registration, not only a plan (task #501).
+                if is_on_plan(self) or succeeded.count() > 1:
+                    raise PlanRefundRequiresTreasurer(
+                        "This registration was paid in installments; the "
+                        "treasurer settles the refund by hand."
+                    )
+                payment = succeeded.first()
                 if payment is None:
                     raise RuntimeError(
                         f"Registration {self.id} is PAID but has no SUCCEEDED Stripe "
@@ -158,6 +171,14 @@ class Registration(models.Model):
         return refund
 
     @property
+    def on_payment_plan(self) -> bool:
+        """Whether this registration is being paid in installments (task
+        #501). A property so the two roster surfaces share one answer rather
+        than each annotating their own queryset."""
+        from payments.registration_plans import is_on_plan
+        return is_on_plan(self)
+
+    @property
     def needs_payment(self) -> bool:
         """Approved (or normal) but unpaid — a Stripe payment is still due."""
         return self.status == self.Status.AWAITING_PAYMENT and self.quoted_amount > 0
@@ -174,6 +195,12 @@ class Registration(models.Model):
             PricingCode.objects.filter(
                 pk=self.pricing_code_id, max_uses__isnull=False,
             ).update(uses_remaining=F("uses_remaining") - 1)
+        # A plan-carrying code splits the fee (task #501). Built here rather
+        # than at registration so the schedule starts the day the place is
+        # confirmed, not the day it was requested.
+        if self.pricing_code_id and self.quoted_amount > 0:
+            from payments.registration_plans import build_schedule
+            build_schedule(self, self.pricing_code.installments)
         self.approved_by = by
         self.decided_at = timezone.now()
         self.reminded_at = None

@@ -13,15 +13,19 @@ from django.db.models import F
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from events.models import Event, PriceTier, PricingCode
 from events.permissions import can_edit_event
-from payments import coverage
+from payments import coverage, registration_plans
 from payments import notifications as notify_payments
-from payments.refund import RefundError
-from payments.stripe_checkout import create_checkout_session
+from payments.refund import PlanRefundRequiresTreasurer, RefundError
+from payments.stripe_checkout import (
+    create_checkout_session,
+    create_registration_installment_session,
+)
 
 from .forms import RegistrationForm
 from .models import Registration
@@ -83,6 +87,13 @@ def _create_registration(
             quoted_explanation=resolution.explanation,
             status=status,
         )
+        # A plan-carrying code splits the fee (task #501). The registration
+        # keeps the full quoted_amount; only the payment is chunked. An
+        # approval-gated registration waits — its schedule is built at
+        # approve(), so a fortnight in the queue doesn't make installment 1
+        # overdue on arrival.
+        if resolution.installments > 1 and not requires_approval:
+            registration_plans.build_schedule(reg, resolution.installments)
         # Consume the code now only for an immediately-active reg; the approval
         # flow consumes it on approval (a declined reg shouldn't burn a use).
         if code and code.max_uses is not None and not requires_approval:
@@ -208,7 +219,11 @@ def register_for_event(request, event_slug: str):
                 notify_payments.registration_confirmed(reg)
                 return redirect("registrations:confirm", reg_id=reg.id)
 
-            _payment, session = create_checkout_session(reg)
+            first = registration_plans.next_unpaid(reg)
+            if first is not None:
+                _payment, session = create_registration_installment_session(first)
+            else:
+                _payment, session = create_checkout_session(reg)
             return redirect(session.url)
     else:
         form = RegistrationForm(event=event, user=request.user)
@@ -246,6 +261,10 @@ def registration_confirm(request, reg_id: int):
             # Lets the page say *why* a formerly covered place now wants money
             # (task #485) without duplicating the marker string in a template.
             "rebilled_explanation": coverage.REBILLED_EXPLANATION,
+            # Payment-plan schedule (task #501); empty for an ordinary reg.
+            "installments": list(reg.installments.all()),
+            "outstanding": registration_plans.outstanding(reg),
+            "today": timezone.localdate(),
         },
     )
 
@@ -263,6 +282,16 @@ def cancel_registration(request, reg_id: int):
     refund = None
     try:
         refund = reg.cancel()
+    except PlanRefundRequiresTreasurer:
+        # The site deliberately refuses to decide this one (task #501).
+        notify_payments.plan_cancel_needs_treasurer(reg)
+        messages.info(
+            request,
+            "Because you're paying for this in installments, the treasurer "
+            "handles the cancellation. We've let them know, and they'll be in "
+            "touch about the payments already made.",
+        )
+        return redirect("registrations:confirm", reg_id=reg.id)
     except RefundError as exc:
         # Could not auto-refund (offline payment, missing intent, etc.).
         logger.warning("Cancel failed for reg %s: %s", reg.id, exc)
@@ -341,4 +370,25 @@ def pay_registration(request, reg_id: int):
     if not reg.needs_payment:
         return redirect("registrations:confirm", reg_id=reg.id)
     _payment, session = create_checkout_session(reg)
+    return redirect(session.url)
+
+
+@login_required
+@require_POST
+def pay_installment(request, installment_id: int):
+    """The registrant pays one installment of a payment-plan registration
+    (task #501). Owner-only; a paid installment is a no-op redirect."""
+    from payments.models import RegistrationInstallment
+
+    installment = get_object_or_404(
+        RegistrationInstallment.objects.select_related(
+            "registration", "registration__event",
+        ),
+        pk=installment_id, registration__user=request.user,
+    )
+    if installment.paid:
+        return redirect(
+            "registrations:confirm", reg_id=installment.registration_id,
+        )
+    _payment, session = create_registration_installment_session(installment)
     return redirect(session.url)

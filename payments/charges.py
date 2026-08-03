@@ -231,12 +231,24 @@ def mint_registration_charge(payment) -> Charge | None:
     )
     if existing is not None:
         return existing
+
+    from .registration_plans import is_on_plan
+
+    registration = payment.registration
+    # A payment plan pays one debt in chunks: the school billed the whole fee,
+    # so that is what the ledger records. Without this a $500 seminar paid in
+    # three would enter the books as a $166.66 obligation (task #501). Scoped
+    # to plan registrations so no ordinary row's provenance shifts.
+    amount = (
+        registration.quoted_amount if is_on_plan(registration)
+        else payment.amount
+    )
     user_id = payment.user_id or payment.registration.user_id
     when = payment.paid_at or timezone.now()
     return Charge.objects.create(
         user_id=user_id,
         category=Charge.Category.REGISTRATION,
-        amount=payment.amount,
+        amount=amount,
         effective_date=when.date(),
         registration_id=payment.registration_id,
         source=(Source.VERIFIED if payment.method == Payment.Method.STRIPE

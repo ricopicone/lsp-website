@@ -205,6 +205,7 @@ class PricingCodeAdmin(admin.ModelAdmin):
         "event",
         "pricing_mode",
         "amount_or_percent",
+        "installments",
         "valid_until",
         "uses_remaining",
         "issued_by",

@@ -30,6 +30,9 @@ class PriceResolution:
     amount: Decimal
     explanation: str
     code_redeemed: PricingCode | None = None
+    #: How many payments the amount is split into (task #501). 1 = pay in
+    #: full, which is every path that does not redeem a plan-carrying code.
+    installments: int = 1
 
 
 def resolve_price(
@@ -47,6 +50,10 @@ def resolve_price(
     2. ``covered_by_tuition`` + tuition-paying member ⇒ zero (REG-4).
     3. Sliding-scale tier requires ``sliding_amount`` ≥ ``minimum_amount`` (REG-5).
     4. Otherwise the tier's ``base_amount``.
+
+    A code may additionally carry an installment count (task #501), returned on
+    ``PriceResolution.installments``. That is a *schedule*, not a price: it
+    never changes the amount this function resolves.
 
     Raises ``PricingError`` on inconsistent inputs (sliding without amount,
     amount below the floor, code from a different event, code not redeemable).
@@ -123,10 +130,19 @@ def _apply_code(
         explanation = (
             f"Sliding scale via code {code.code} (min ${floor}); chose ${amount}."
         )
+    elif code.pricing_mode == PricingCode.Mode.FULL_PRICE:
+        # The code carries no discount — it exists to carry the schedule.
+        amount = tier.base_amount
+        explanation = f"Full price ${amount} via code {code.code}."
     else:
         raise PricingError(f"Unknown pricing_mode: {code.pricing_mode!r}")
 
-    return PriceResolution(amount=amount, explanation=explanation, code_redeemed=code)
+    return PriceResolution(
+        amount=amount,
+        explanation=explanation,
+        code_redeemed=code,
+        installments=code.installments,
+    )
 
 
 def _is_tuition_paying(user, tier: PriceTier) -> bool:

@@ -1,0 +1,808 @@
+"""Registration payment plans (task #501)."""
+
+from __future__ import annotations
+
+from datetime import date, timedelta
+from decimal import Decimal
+
+import pytest
+from django.utils import timezone
+
+from accounts.models import Profile, User
+from events.models import Audience, Event, PriceTier, PricingCode
+from events.pricing import resolve_price
+
+pytestmark = pytest.mark.django_db
+
+
+def _user(email="member@example.com"):
+    u = User.objects.create_user(email=email, password="x")
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    return u
+
+
+def _event(title="Seminar", **kwargs):
+    today = timezone.localdate()
+    kwargs.setdefault("event_type", Event.Type.SEMINAR)
+    return Event.objects.create(
+        title=title,
+        slug=title.lower().replace(" ", "-"),
+        start_date=today + timedelta(days=7),
+        end_date=today + timedelta(days=90),
+        published=True,
+        status=Event.Status.OPEN,
+        **kwargs,
+    )
+
+
+def _tier(event, amount="500.00", **kwargs):
+    return PriceTier.objects.create(
+        event=event, audience=Audience.ALL,
+        base_amount=Decimal(amount), **kwargs,
+    )
+
+
+def _code(event, issuer, **kwargs):
+    kwargs.setdefault("pricing_mode", PricingCode.Mode.FULL_PRICE)
+    kwargs.setdefault("amount_or_percent", Decimal("0"))
+    return PricingCode.objects.create(event=event, issued_by=issuer, **kwargs)
+
+
+# ---- Task 1: the code carries a count and a full-price mode -------------
+
+
+def test_installments_defaults_to_one():
+    issuer = _user("faculty@example.com")
+    event = _event()
+    code = _code(event, issuer)
+    assert code.installments == 1
+
+
+def test_plain_code_resolution_is_unchanged():
+    """installments=1 must resolve byte-identically to today."""
+    issuer = _user("faculty@example.com")
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    code = _code(
+        event, issuer,
+        pricing_mode=PricingCode.Mode.PERCENT_OFF,
+        amount_or_percent=Decimal("20"),
+    )
+    r = resolve_price(user=member, tier=tier, pricing_code=code)
+    assert r.amount == Decimal("400.00")
+    assert r.installments == 1
+
+
+def test_full_price_mode_returns_the_tier_base():
+    issuer = _user("faculty@example.com")
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    code = _code(event, issuer, installments=3)
+    r = resolve_price(user=member, tier=tier, pricing_code=code)
+    assert r.amount == Decimal("500.00")
+    assert r.installments == 3
+    assert code.code in r.explanation
+
+
+def test_a_discount_and_a_plan_are_independent_axes():
+    issuer = _user("faculty@example.com")
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    code = _code(
+        event, issuer,
+        pricing_mode=PricingCode.Mode.PERCENT_OFF,
+        amount_or_percent=Decimal("20"),
+        installments=3,
+    )
+    r = resolve_price(user=member, tier=tier, pricing_code=code)
+    assert r.amount == Decimal("400.00")   # the plan did not change the total
+    assert r.installments == 3
+
+
+def test_installment_count_is_bounded():
+    from django.core.exceptions import ValidationError
+    issuer = _user("faculty@example.com")
+    event = _event()
+    code = PricingCode(
+        event=event, issued_by=issuer,
+        pricing_mode=PricingCode.Mode.FULL_PRICE,
+        amount_or_percent=Decimal("0"),
+        installments=0,
+    )
+    with pytest.raises(ValidationError):
+        code.clean()
+    code.installments = 13
+    with pytest.raises(ValidationError):
+        code.clean()
+    code.installments = 3
+    code.clean()   # no raise
+
+
+# ---- Task 2: the installment model --------------------------------------
+
+
+def _registration(user, event, tier, amount="500.00", **kwargs):
+    from registrations.models import Registration
+    kwargs.setdefault("status", Registration.Status.AWAITING_PAYMENT)
+    return Registration.objects.create(
+        user=user, event=event, price_tier=tier,
+        quoted_amount=Decimal(amount), **kwargs,
+    )
+
+
+def test_installment_rows_hang_off_the_registration():
+    from payments.models import RegistrationInstallment
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier)
+    inst = RegistrationInstallment.objects.create(
+        registration=reg, sequence=1,
+        due_date=timezone.localdate(), amount=Decimal("166.66"),
+    )
+    assert list(reg.installments.all()) == [inst]
+    assert inst.paid is False
+
+    inst.mark_paid()
+    inst.refresh_from_db()
+    assert inst.paid is True
+    assert inst.paid_at is not None
+
+    before = inst.paid_at
+    inst.mark_paid()          # idempotent
+    inst.refresh_from_db()
+    assert inst.paid_at == before
+
+
+def test_installment_sequence_is_unique_per_registration():
+    from django.db import IntegrityError
+
+    from payments.models import RegistrationInstallment
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier)
+    RegistrationInstallment.objects.create(
+        registration=reg, sequence=1,
+        due_date=timezone.localdate(), amount=Decimal("250.00"),
+    )
+    with pytest.raises(IntegrityError):
+        RegistrationInstallment.objects.create(
+            registration=reg, sequence=1,
+            due_date=timezone.localdate(), amount=Decimal("250.00"),
+        )
+
+
+def test_a_payment_can_point_at_an_installment():
+    from payments.models import Payment, RegistrationInstallment
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier)
+    inst = RegistrationInstallment.objects.create(
+        registration=reg, sequence=1,
+        due_date=timezone.localdate(), amount=Decimal("166.66"),
+    )
+    p = Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg,
+        user=member, amount=Decimal("166.66"),
+        registration_installment=inst,
+    )
+    assert list(inst.payments.all()) == [p]
+
+
+# ---- Task 3: the schedule module ----------------------------------------
+
+
+def test_schedule_sums_to_the_exact_fee_with_the_remainder_last():
+    from payments import registration_plans
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "500.00")
+
+    rows = registration_plans.build_schedule(reg, 3, today=date(2026, 9, 1))
+    assert [r.amount for r in rows] == [
+        Decimal("166.66"), Decimal("166.66"), Decimal("166.68"),
+    ]
+    assert sum(r.amount for r in rows) == Decimal("500.00")
+    assert [r.due_date for r in rows] == [
+        date(2026, 9, 1), date(2026, 10, 1), date(2026, 11, 1),
+    ]
+
+
+def test_build_schedule_is_idempotent():
+    from payments import registration_plans
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier)
+
+    first = registration_plans.build_schedule(reg, 3, today=date(2026, 9, 1))
+    again = registration_plans.build_schedule(reg, 5, today=date(2026, 9, 1))
+    assert len(first) == 3
+    assert len(again) == 3
+    assert reg.installments.count() == 3
+
+
+def test_build_schedule_declines_degenerate_input():
+    from payments import registration_plans
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+
+    reg = _registration(member, event, tier)
+    assert registration_plans.build_schedule(reg, 1) == []
+    assert reg.installments.count() == 0
+
+    free = _registration(_user("free@example.com"), event, tier, "0.00")
+    assert registration_plans.build_schedule(free, 3) == []
+
+
+def test_plan_readers():
+    from payments import registration_plans
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "300.00")
+
+    assert registration_plans.is_on_plan(reg) is False
+    registration_plans.build_schedule(reg, 3, today=date(2026, 9, 1))
+    assert registration_plans.is_on_plan(reg) is True
+    assert registration_plans.outstanding(reg) == Decimal("300.00")
+
+    first = registration_plans.next_unpaid(reg)
+    assert first.sequence == 1
+    first.mark_paid()
+    assert registration_plans.next_unpaid(reg).sequence == 2
+    assert registration_plans.outstanding(reg) == Decimal("200.00")
+
+
+def test_due_installment_prefers_the_oldest_overdue():
+    from payments import registration_plans
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "300.00")
+    registration_plans.build_schedule(reg, 3, today=date(2026, 9, 1))
+
+    # Nothing due a month before the schedule starts.
+    assert registration_plans.due_installment(reg, date(2026, 8, 1)) is None
+    # Within the lead window ahead of #1.
+    assert registration_plans.due_installment(reg, date(2026, 8, 28)).sequence == 1
+    # #1 unpaid and overdue wins over #2 falling due.
+    assert registration_plans.due_installment(reg, date(2026, 10, 1)).sequence == 1
+
+    reg.installments.filter(sequence=1).update(paid=True)
+    assert registration_plans.due_installment(reg, date(2026, 10, 1)).sequence == 2
+    reg.installments.update(paid=True)
+    assert registration_plans.due_installment(reg, date(2026, 12, 1)) is None
+
+
+# ---- Task 4: settlement --------------------------------------------------
+
+
+def _settle(reg, installment):
+    """Pay one installment the way the Stripe webhook does."""
+    from payments.models import Payment
+    from payments.operations import complete_payment
+    p = Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg,
+        user=reg.user, amount=installment.amount,
+        method=Payment.Method.STRIPE, status=Payment.Status.PENDING,
+        registration_installment=installment,
+        stripe_payment_intent_id=f"pi_test_{installment.pk}",
+    )
+    complete_payment(p)
+    return p
+
+
+def test_a_plan_mints_one_charge_for_the_whole_fee():
+    from payments import registration_plans
+    from payments.models import Charge
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "500.00")
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    _settle(reg, rows[0])
+    charges = Charge.objects.filter(registration=reg)
+    assert charges.count() == 1
+    # The full fee, not the $166.66 that actually moved.
+    assert charges.first().amount == Decimal("500.00")
+
+    _settle(reg, rows[1])
+    _settle(reg, rows[2])
+    assert Charge.objects.filter(registration=reg).count() == 1
+
+
+def test_a_non_plan_registration_mints_exactly_what_it_did_before():
+    from payments.models import Charge, Payment
+    from payments.operations import complete_payment
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "500.00")
+    p = Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg,
+        user=member, amount=Decimal("500.00"),
+        method=Payment.Method.STRIPE, status=Payment.Status.PENDING,
+        stripe_payment_intent_id="pi_test_plain",
+    )
+    complete_payment(p)
+    assert Charge.objects.get(registration=reg).amount == Decimal("500.00")
+
+
+def test_settling_an_installment_marks_it_and_grants_access():
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "300.00")
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    _settle(reg, rows[0])
+    rows[0].refresh_from_db()
+    reg.refresh_from_db()
+    assert rows[0].paid is True
+    # Access follows the first payment — the existing AWAITING_PAYMENT flip.
+    assert reg.status == Registration.Status.PAID
+    assert registration_plans.outstanding(reg) == Decimal("200.00")
+
+
+def test_the_ledger_reads_partial_until_the_last_installment():
+    from payments import registration_plans
+    from payments.ledger import member_account
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "300.00")
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    _settle(reg, rows[0])
+    assert member_account(member)["balance"] == Decimal("200.00")
+
+    _settle(reg, rows[1])
+    assert member_account(member)["balance"] == Decimal("100.00")
+
+    _settle(reg, rows[2])
+    assert member_account(member)["balance"] == Decimal("0.00")
+
+
+# ---- Task 5: redemption builds the schedule ------------------------------
+
+
+def test_redeeming_a_plan_code_builds_the_schedule(client, monkeypatch):
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "500.00")
+    code = _code(event, issuer, installments=3)
+
+    sessions = []
+
+    def _fake(installment):
+        from payments.models import Payment
+        p = Payment.objects.create(
+            payment_type=Payment.Type.REGISTRATION,
+            registration=installment.registration,
+            user=installment.registration.user, amount=installment.amount,
+            method=Payment.Method.STRIPE, status=Payment.Status.PENDING,
+            registration_installment=installment,
+        )
+        sessions.append(p)
+        return p, type("S", (), {"url": "https://stripe.test/session"})()
+
+    monkeypatch.setattr(
+        "registrations.views.create_registration_installment_session", _fake,
+    )
+
+    client.force_login(member)
+    resp = client.post(
+        f"/events/{event.slug}/register/",
+        {"price_tier": tier.pk, "pricing_code": code.code},
+    )
+    assert resp.status_code == 302
+
+    reg = Registration.objects.get(user=member, event=event)
+    assert reg.quoted_amount == Decimal("500.00")      # the full fee
+    assert reg.installments.count() == 3
+    # Checkout was opened for installment 1 only.
+    assert len(sessions) == 1
+    assert sessions[0].amount == Decimal("166.66")
+
+
+def test_an_approval_gated_plan_builds_its_schedule_on_approval():
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event(requires_faculty_approval=True)
+    tier = _tier(event, "300.00")
+    code = _code(event, issuer, installments=3)
+
+    reg = _registration(
+        member, event, tier, "300.00",
+        status=Registration.Status.PENDING_APPROVAL, pricing_code=code,
+    )
+    assert reg.installments.count() == 0
+
+    reg.approve(issuer)
+    reg.refresh_from_db()
+    assert reg.status == Registration.Status.AWAITING_PAYMENT
+    assert reg.installments.count() == 3
+
+
+def test_a_declined_plan_registration_builds_no_schedule():
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event(requires_faculty_approval=True)
+    tier = _tier(event, "300.00")
+    code = _code(event, issuer, installments=3)
+    reg = _registration(
+        member, event, tier, "300.00",
+        status=Registration.Status.PENDING_APPROVAL, pricing_code=code,
+    )
+    reg.decline(issuer, "no")
+    assert reg.installments.count() == 0
+
+
+# ---- Task 6: paying the rest ---------------------------------------------
+
+
+def test_a_member_can_pay_a_later_installment(client, monkeypatch):
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+    rows[0].mark_paid()
+
+    called = {}
+
+    def _fake(installment):
+        called["seq"] = installment.sequence
+        return None, type("S", (), {"url": "https://stripe.test/session"})()
+
+    monkeypatch.setattr(
+        "registrations.views.create_registration_installment_session", _fake,
+    )
+
+    client.force_login(member)
+    resp = client.post(f"/registrations/installments/{rows[1].pk}/pay/")
+    assert resp.status_code == 302
+    assert called["seq"] == 2
+
+
+def test_paying_a_paid_installment_is_a_no_op(client):
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+    rows[0].mark_paid()
+
+    client.force_login(member)
+    resp = client.post(f"/registrations/installments/{rows[0].pk}/pay/")
+    assert resp.status_code == 302
+    assert f"/registrations/{reg.pk}/confirmation/" in resp["Location"]
+
+
+def test_another_member_cannot_pay_your_installment(client):
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    intruder = _user("intruder@example.com")
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    client.force_login(intruder)
+    resp = client.post(f"/registrations/installments/{rows[0].pk}/pay/")
+    assert resp.status_code == 404
+
+
+def test_the_confirmation_page_shows_the_schedule(client):
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+    rows[0].mark_paid()
+
+    client.force_login(member)
+    body = client.get(f"/registrations/{reg.pk}/confirmation/").content.decode()
+    assert "payment plan" in body.lower()
+    assert "$200.00" in body            # still to pay
+    assert "you're all set" not in body.lower()
+
+
+# ---- Task 7: cancel refuses on a plan ------------------------------------
+
+
+def test_a_plan_registration_refuses_self_cancel():
+    from payments import registration_plans
+    from payments.refund import PlanRefundRequiresTreasurer
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    with pytest.raises(PlanRefundRequiresTreasurer):
+        reg.cancel()
+    reg.refresh_from_db()
+    assert reg.status == Registration.Status.PAID   # nothing moved
+
+
+def test_the_cancel_view_tells_the_member_to_ask_the_treasurer(client):
+    from core.models import StaffRole
+    from notifications.models import Notification
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    treasurer = _user("treasurer@example.com")
+    role, _ = StaffRole.objects.get_or_create(
+        key=StaffRole.TREASURER, defaults={"name": "Treasurer"},
+    )
+    role.holders.add(treasurer)
+
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    client.force_login(member)
+    resp = client.post(f"/registrations/{reg.pk}/cancel/", follow=True)
+    # The specific flash, not just the word "treasurer" somewhere in the chrome.
+    assert "the treasurer handles the cancellation" in resp.content.decode().lower()
+    reg.refresh_from_db()
+    assert reg.status == Registration.Status.PAID
+    assert Notification.objects.filter(recipient=treasurer).exists()
+
+
+def test_an_ordinary_paid_registration_still_self_cancels(monkeypatch):
+    from payments.models import Payment
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg, user=member,
+        amount=Decimal("300.00"), method=Payment.Method.STRIPE,
+        status=Payment.Status.SUCCEEDED, stripe_payment_intent_id="pi_ok",
+    )
+    monkeypatch.setattr(
+        "payments.refund.refund_payment", lambda p: {"id": "re_test"},
+    )
+    reg.cancel()
+    reg.refresh_from_db()
+    assert reg.status == Registration.Status.REFUNDED
+
+
+# ---- Task 8: installment reminders ---------------------------------------
+
+
+def _run_reminders(**opts):
+    from io import StringIO
+
+    from django.core.management import call_command
+    out = StringIO()
+    call_command("send_registration_reminders", stdout=out, **opts)
+    return out.getvalue()
+
+
+def _plan_reg(days_ago=40, amount="300.00"):
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, amount, status=Registration.Status.PAID,
+    )
+    registration_plans.build_schedule(
+        reg, 3, today=timezone.localdate() - timedelta(days=days_ago),
+    )
+    return reg
+
+
+def test_an_overdue_installment_is_nudged(mailoutbox):
+    reg = _plan_reg()
+    _run_reminders()
+    assert len(mailoutbox) == 1
+    assert "payment" in mailoutbox[0].subject.lower()
+    reg.refresh_from_db()
+    assert reg.reminded_at is not None
+
+
+def test_a_fully_paid_plan_is_not_nudged(mailoutbox):
+    reg = _plan_reg()
+    reg.installments.update(paid=True)
+    _run_reminders()
+    assert len(mailoutbox) == 0
+
+
+def test_an_installment_far_in_the_future_is_not_nudged(mailoutbox):
+    _plan_reg(days_ago=-60)
+    _run_reminders()
+    assert len(mailoutbox) == 0
+
+
+def test_the_installment_nudge_is_throttled(mailoutbox):
+    _plan_reg()
+    _run_reminders()
+    _run_reminders()
+    assert len(mailoutbox) == 1
+
+
+# ---- Task 9: faculty + treasurer surfaces --------------------------------
+
+
+def test_the_mint_form_accepts_a_plan_without_a_discount():
+    from events.forms import PricingCodeForm
+    form = PricingCodeForm(data={
+        "pricing_mode": PricingCode.Mode.FULL_PRICE,
+        "installments": "3",
+    })
+    assert form.is_valid(), form.errors
+    code = form.save(commit=False)
+    assert code.installments == 3
+    assert code.amount_or_percent == Decimal("0")
+
+
+def test_the_mint_form_still_defaults_to_pay_in_full():
+    """The new field must not become required — an existing POST omitting it
+    still works (see the new-modelform-field-is-required-by-default memory)."""
+    from events.forms import PricingCodeForm
+    form = PricingCodeForm(data={
+        "pricing_mode": PricingCode.Mode.PERCENT_OFF,
+        "amount_or_percent": "20",
+    })
+    assert form.is_valid(), form.errors
+    assert form.save(commit=False).installments == 1
+
+
+def test_a_discount_mode_still_requires_an_amount():
+    from events.forms import PricingCodeForm
+    form = PricingCodeForm(data={"pricing_mode": PricingCode.Mode.FIXED_AMOUNT})
+    assert not form.is_valid()
+    assert "amount_or_percent" in form.errors
+
+
+def test_the_faculty_roster_flags_a_plan_without_dollars(client):
+    """The roster faculty actually use is the Workspace tab — a seminar's
+    event page redirects there."""
+    from payments import registration_plans
+    from registrations.models import Registration
+    faculty = _user("faculty@example.com")
+    faculty.profile.is_faculty = True
+    faculty.profile.save()
+    member = _user()
+    event = _event()
+    event.add_faculty(faculty)
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    client.force_login(faculty)
+    resp = client.get(event.workgroup.get_absolute_url() + "?tab=roster")
+    body = resp.content.decode()
+    assert "On a plan" in body
+    assert "$100.00" not in body       # no per-installment dollars
+    assert "2 of 3" not in body        # no progress
+
+
+def test_a_registration_without_a_plan_is_not_flagged(client):
+    from registrations.models import Registration
+    faculty = _user("faculty@example.com")
+    faculty.profile.is_faculty = True
+    faculty.profile.save()
+    member = _user()
+    event = _event()
+    event.add_faculty(faculty)
+    tier = _tier(event)
+    _registration(member, event, tier, "300.00", status=Registration.Status.PAID)
+
+    client.force_login(faculty)
+    resp = client.get(event.workgroup.get_absolute_url() + "?tab=roster")
+    assert "On a plan" not in resp.content.decode()
+
+
+# ---- The mint form is reachable for BOTH offering types ------------------
+#
+# A reading group's conveners hold ORGANIZER, not FACULTY (task #495), and the
+# Workspace tab renders the mint form while a *different* view handles the POST.
+# These assert the two gates agree, for a seminar and a reading group alike.
+
+
+def _offering(event_type, convener_role):
+    """An offering event whose workgroup has one lead in ``convener_role``."""
+    title = "Seminar" if event_type == Event.Type.SEMINAR else "Reading Group"
+    event = _event(title=title, event_type=event_type)
+    wg = event.ensure_workgroup()
+    convener = _user(f"{event.slug}-convener@example.com")
+    wg.add_member(convener, role=convener_role)
+    assert wg.memberships.serving().filter(
+        user=convener, role=convener_role,
+    ).exists()
+    return event, convener
+
+
+@pytest.mark.parametrize("event_type,convener_role", [
+    (Event.Type.SEMINAR, "faculty"),
+    (Event.Type.READING_GROUP, "organizer"),
+])
+def test_the_convener_sees_the_mint_form(client, event_type, convener_role):
+    event, convener = _offering(event_type, convener_role)
+    client.force_login(convener)
+    resp = client.get(event.workgroup.get_absolute_url() + "?tab=roster")
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "Generate a pricing code" in body
+    assert "Number of payments" in body       # the task #501 field
+
+
+@pytest.mark.parametrize("event_type,convener_role", [
+    (Event.Type.SEMINAR, "faculty"),
+    (Event.Type.READING_GROUP, "organizer"),
+])
+def test_the_convener_can_actually_mint_a_plan_code(
+    client, event_type, convener_role,
+):
+    """The POST endpoint is a different view from the tab that renders the
+    form — if their gates disagreed, the form would 403 on submit."""
+    event, convener = _offering(event_type, convener_role)
+    client.force_login(convener)
+    resp = client.post(
+        f"/events/{event.slug}/codes/",
+        {"pricing_mode": PricingCode.Mode.FULL_PRICE, "installments": "3"},
+    )
+    assert resp.status_code == 302
+    code = event.pricing_codes.get()
+    assert code.installments == 3
+    assert code.issued_by == convener
+
+
+def test_a_plain_member_cannot_mint_a_code(client):
+    event, _convener = _offering(Event.Type.READING_GROUP, "organizer")
+    outsider = _user("outsider@example.com")
+    client.force_login(outsider)
+    resp = client.post(
+        f"/events/{event.slug}/codes/",
+        {"pricing_mode": PricingCode.Mode.FULL_PRICE, "installments": "3"},
+    )
+    assert resp.status_code == 403
+    assert event.pricing_codes.count() == 0

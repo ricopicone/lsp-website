@@ -294,7 +294,7 @@ def event_detail(request, slug: str):
 
         context["registrations"] = event.registrations.select_related(
             "user", "price_tier"
-        ).order_by("created_at")
+        ).prefetch_related("installments").order_by("created_at")
         context["pending_registrations"] = event.registrations.filter(
             status=Registration.Status.PENDING_APPROVAL
         ).select_related("user")

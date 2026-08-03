@@ -128,6 +128,48 @@ def create_checkout_session(
     return payment, session
 
 
+def create_registration_installment_session(
+    installment,
+) -> tuple[Payment, stripe.checkout.Session]:
+    """Build a Checkout Session for one installment of a plan registration
+    (task #501).
+
+    The twin of :func:`create_tuition_session`, minting its own Payment the way
+    :func:`create_checkout_session` does — a plan pays the same registration
+    several times, so each attempt needs its own row.
+    """
+    registration = installment.registration
+    total = registration.installments.count()
+
+    payment = Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION,
+        registration=registration,
+        user=registration.user,
+        amount=installment.amount,
+        method=Payment.Method.STRIPE,
+        status=Payment.Status.PENDING,
+        registration_installment=installment,
+    )
+
+    session = _make_session(
+        payment=payment,
+        product_name=registration.event.title,
+        product_description=(
+            f"Payment {installment.sequence} of {total} "
+            f"(${registration.quoted_amount} total)"
+        ),
+        success_path=(
+            reverse("registrations:confirm", args=[registration.id])
+            + "?stripe=success"
+        ),
+        cancel_path=(
+            reverse("registrations:confirm", args=[registration.id])
+            + "?stripe=cancelled"
+        ),
+    )
+    return payment, session
+
+
 def create_dues_session(payment: Payment) -> stripe.checkout.Session:
     """Build a Checkout Session for membership dues (REG-12)."""
     return _make_session(

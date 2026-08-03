@@ -1,9 +1,9 @@
-# Resuming task #486
+# Resuming task #501
 
-**Task:** CE images display
+**Task:** Feature request: Payment plans for individual seminar or reading group
 
 ## Description
-Some events will be approved by different organizations for continuing education (CE) credits. Apparently we are to display images in this case. I don't really want to manage the collection of images, so I think we should let faculty add CE image display. I think we should add a setting in the Settings tab (and probably also in the proposal form) for CE credits (at all and number of credits) and uploading CE organization images. The CE information and images should be displayed compactly (max height and max width) at the bottom of the About section of the Overview.
+I think the idea would be to make a payment plan one of the code minting options for faculty/conveners of a seminar or reading group. Look into the feasibility and how clean this feature would be.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -56,13 +56,27 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **payment-plan-is-manual-stripe-not-autopay** (architecture) — An approved payment plan auto-charges nothing (no Klarna/BNPL/Subscriptions) — the member hand-pays each installment via Stripe Checkout, the year stays ONE annual Charge, and due-date nudges shipped 2026-08-02
+- **program-committee-is-the-name** (convention) — In prose the body is the "Program Committee" — only the slug and docstrings say "programming-committee" (committees/0003 renamed it), so code is no evidence about the display name
+- **faculty-guide-and-code-recipes** (architecture) — Task #495 SHIPPED 2026-08-02: /guides/faculty/ is the faculty guide (seminars AND reading groups in one); a scholarship for a non-member is an unrestricted 1-use code, and reading-group conveners now reach their own roster
+- **recording-availability-intersects** (architecture) — Recording availability = six settings across two dimensions (standing × roster); listing and content INTERSECT rather than rank, so no pair is invalid and the guarantee is structural, not validated
+- **officer-lead-predicate** (architecture) — Task #480 SHIPPED+LIVE: is_workgroup_lead() is the one lead primitive; the school officers lead ONLY the Board and the Meeting of Analysts, and the orphan guard deliberately stays stored-rows-only
+- **active-members-vs-participants** (gotcha) — Workgroup.active_members() returns STORED membership rows only — audit a roster over participants(), or derived members (auto-role, registrants, ex-officio officers) are invisible
+- **hidden-input-honeypot-is-the-weak-variant** (gotcha) — SHIPPED+LIVE (task #479, deployed 2026-07-28): type="hidden" honeypots are the variant bots skip on purpose; vowel-ratio gibberish detection flags Pittsburgh (use case transitions); referral screening HOLDS, never rejects; prod runs dist=au
+- **tracker-rows-go-stale-after-shipping** (convention) — A TODO row is weak evidence work is undone — #485 and #479 both shipped and deployed while sitting TODO; verify with merge ancestry + a green deploy on that SHA or any later one
+- **settings-page-saves-what-it-renders** (gotcha) — The notification settings POST loop treats a missing checkbox as OFF, so anything that changes which rows render must change the save loop too — both now go through notifications.audience.visible_categories(user)
+- **queue-notifications-are-per-category-adjustable** (architecture) — Task #491 SHIPPED 2026-08-01: queue notifications were always recipient-adjustable per category; what was missing is role-sensitive DEFAULTS, now available as CategoryMeta.default_email_for
+- **tuition-assistance-is-the-payment-plan** (glossary) — "Tuition assistance" and "payment plan" are ONE process, not two — an approved plan is the full annual amount over 2 or 9 installments, never a reduced total
+- **deploy-script-host-is-authoritative** (gotcha) — ~/bin/deploy.sh on the EC2 host is AUTHORITATIVE and ops/deploy/deploy.sh is only a reference copy — editing the repo alone changes nothing on prod; also the deploy now bounds the BuildKit cache and prints disk state
+- **messages-render-once-in-base** (convention) — SHIPPED+LIVE 2026-07-31: Django messages render once from core/_messages.html via core/base.html — never add a per-page loop, a second rendering prints every message twice (test-enforced)
+- **new-modelform-field-is-required-by-default** (gotcha) — Adding a choices+default CharField to an existing ModelForm silently makes it REQUIRED, breaking every existing POST that omits it — set required=False and coerce in clean_&lt;field&gt;
+- **ce-credits-on-events** (architecture) — Task #486 SHIPPED+LIVE 2026-07-30: CE credits live on the Event and are edited on the event edit form (never the Workspace Settings tab); accreditor logos come from a shared, self-growing events.CEOrganization library
 - **skipping-a-covered-year-rebills-events** (architecture) — Task #485 SHIPPED+LIVE 2026-07-30: recording SKIPPING re-bills the tuition-covered registrations in that year at the regular fee (re-quote, never a bare Charge); recording a paying decision un-bills and restores access
 - **new-member-blocked-until-tuition-decision** (gotcha) — A newly admitted in-training member cannot register for ANY event until they record that year's tuition decision — self-service, and EVERY option unblocks, payment-plan included
 - **one-registration-gate-coverage-follows-decision** (decision) — Task #484 SHIPPED+LIVE 2026-07-30: tuition coverage follows ANY non-skipping decision (payment-plan-requested included) and the narrow special-event gate is deleted — a missing decision row is the only tuition block left
 - **committee-public-is-page-not-privacy** (architecture) — Committee.public means "has a public page", NOT confidential — "Internal" is the app's word and for MoA it's the unchanged default; MoA membership is auto-derived, so directory badges must badge appointed positions only (#481)
 - **advisor-pool-not-availability-gated** (decision) — Task #483 SHIPPED to main: declared availability no longer filters the advisor picker, it only labels it (three optgroups) — the picker is the only way an advisorship gets recorded
 - **directory-badge-colors** (convention) — Directory profile badges: Faculty=accent, board-appointee StaffRole=secondary (LSP Staff / Registrar / Web Developer excluded; deduped vs committee officer), committee=primary
-- **hidden-input-honeypot-is-the-weak-variant** (gotcha) — A type="hidden" honeypot is the variant commodity bots skip — use the CSS-hidden TEXT input from accounts/antibot.py; also, prod referral settings are ack=auto dist=auto, not the code defaults
 - **direct-admission-web-coordinator** (architecture) — SHIPPED+LIVE (task #476, deployed 2026-07-27): members admitted outside the site are admitted at /admin-tools/web-coordinator/admit/ (Web Coordinator, NOT the Applications Coordinator); admissions.services.admit_member() is the shared choke
 - **speaker-invitation-expiry-tracks-the-event** (decision) — Speaker invitations expire the day after their event (events.speaker_invitations.invitation_expiry), not a fixed 30 days — a lapsed one is unrecoverable because password reset silently skips unusable-password accounts
 - **detached-clone-loses-inherited-css** (gotcha) — A visual clone appended to document.body inherits nothing from its source element — the flourishes falling letter lost text-transform this way (task #477), so CSS-capitalized headings dropped lowercase glyphs
@@ -134,7 +148,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=486`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=501`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

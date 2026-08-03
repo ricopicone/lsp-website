@@ -344,3 +344,27 @@ def send_payment_reminder(registration: Registration) -> None:
             },
         )
     _send(subject=subject, body=body, to=[registration.user.email])
+
+
+def send_installment_reminder(installment) -> None:
+    """Nudge a registrant about the next payment on their plan (task #501)."""
+    from . import registration_plans
+
+    registration = installment.registration
+    subject = (
+        f"Reminder: payment {installment.sequence} for "
+        f"{registration.event.title}"
+    )
+    with _recipient_timezone(registration.user):
+        body = render_to_string(
+            "payments/email/installment_reminder.txt",
+            {
+                "registration": registration,
+                "installment": installment,
+                "total": registration.installments.count(),
+                "outstanding": registration_plans.outstanding(registration),
+                "confirm_url": _confirm_url(registration),
+                "support_email": settings.SUPPORT_EMAIL,
+            },
+        )
+    _send(subject=subject, body=body, to=[registration.user.email])

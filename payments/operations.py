@@ -30,6 +30,12 @@ def complete_payment(payment: Payment) -> None:
     For TUITION payments, additionally mark the linked installment as paid
     and flip the enrollment to PAID_IN_FULL when all of its installments are
     paid. Idempotent. Email failures don't roll back the DB transition.
+
+    For a payment-plan registration (task #501), additionally mark the linked
+    ``RegistrationInstallment`` paid. The registration's
+    ``AWAITING_PAYMENT → PAID`` flip is unchanged and happens on the *first*
+    installment — on a plan, ``PAID`` means enrolled, and the ledger holds the
+    truth about what is still owed.
     """
     with transaction.atomic():
         payment.mark_succeeded()
@@ -57,6 +63,8 @@ def complete_payment(payment: Payment) -> None:
                 mint_registration_charge(payment)
         if payment.payment_type == Payment.Type.TUITION and payment.tuition_installment_id:
             _apply_tuition_payment_success(payment)
+        if payment.registration_installment_id:
+            payment.registration_installment.mark_paid()
         if not hasattr(payment, "receipt"):
             Receipt.create_for_payment(payment)
 

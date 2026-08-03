@@ -440,7 +440,14 @@
             <td class="whitespace-nowrap text-xs text-base-content/70">{{ r.created_at|user_datetime:True }}</td>
             <td>{{ r.event.title }}</td>
             <td class="text-xs">{% if r.price_tier %}{{ r.price_tier.get_audience_display }}{% endif %}</td>
-            <td class="whitespace-nowrap">${{ r.quoted_amount }}</td>
+            <td class="whitespace-nowrap">
+              ${{ r.quoted_amount }}
+              {% if r.on_payment_plan %}
+              <div class="text-xs text-base-content/60">
+                payment plan, {{ r.installments.count }} payments
+              </div>
+              {% endif %}
+            </td>
             <td><span class="badge badge-sm">{{ r.get_status_display }}</span></td>
           </tr>
           {% endfor %}
