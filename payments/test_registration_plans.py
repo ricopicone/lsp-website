@@ -160,6 +160,7 @@ def test_installment_rows_hang_off_the_registration():
 
 def test_installment_sequence_is_unique_per_registration():
     from django.db import IntegrityError
+
     from payments.models import RegistrationInstallment
     member = _user()
     event = _event()
@@ -338,8 +339,8 @@ def test_a_non_plan_registration_mints_exactly_what_it_did_before():
 
 
 def test_settling_an_installment_marks_it_and_grants_access():
-    from registrations.models import Registration
     from payments import registration_plans
+    from registrations.models import Registration
     member = _user()
     event = _event()
     tier = _tier(event)
@@ -663,3 +664,78 @@ def test_the_installment_nudge_is_throttled(mailoutbox):
     _run_reminders()
     _run_reminders()
     assert len(mailoutbox) == 1
+
+
+# ---- Task 9: faculty + treasurer surfaces --------------------------------
+
+
+def test_the_mint_form_accepts_a_plan_without_a_discount():
+    from events.forms import PricingCodeForm
+    form = PricingCodeForm(data={
+        "pricing_mode": PricingCode.Mode.FULL_PRICE,
+        "installments": "3",
+    })
+    assert form.is_valid(), form.errors
+    code = form.save(commit=False)
+    assert code.installments == 3
+    assert code.amount_or_percent == Decimal("0")
+
+
+def test_the_mint_form_still_defaults_to_pay_in_full():
+    """The new field must not become required — an existing POST omitting it
+    still works (see the new-modelform-field-is-required-by-default memory)."""
+    from events.forms import PricingCodeForm
+    form = PricingCodeForm(data={
+        "pricing_mode": PricingCode.Mode.PERCENT_OFF,
+        "amount_or_percent": "20",
+    })
+    assert form.is_valid(), form.errors
+    assert form.save(commit=False).installments == 1
+
+
+def test_a_discount_mode_still_requires_an_amount():
+    from events.forms import PricingCodeForm
+    form = PricingCodeForm(data={"pricing_mode": PricingCode.Mode.FIXED_AMOUNT})
+    assert not form.is_valid()
+    assert "amount_or_percent" in form.errors
+
+
+def test_the_faculty_roster_flags_a_plan_without_dollars(client):
+    """The roster faculty actually use is the Workspace tab — a seminar's
+    event page redirects there."""
+    from payments import registration_plans
+    from registrations.models import Registration
+    faculty = _user("faculty@example.com")
+    faculty.profile.is_faculty = True
+    faculty.profile.save()
+    member = _user()
+    event = _event()
+    event.add_faculty(faculty)
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    client.force_login(faculty)
+    resp = client.get(event.workgroup.get_absolute_url() + "?tab=roster")
+    body = resp.content.decode()
+    assert "On a plan" in body
+    assert "$100.00" not in body       # no per-installment dollars
+    assert "2 of 3" not in body        # no progress
+
+
+def test_a_registration_without_a_plan_is_not_flagged(client):
+    from registrations.models import Registration
+    faculty = _user("faculty@example.com")
+    faculty.profile.is_faculty = True
+    faculty.profile.save()
+    member = _user()
+    event = _event()
+    event.add_faculty(faculty)
+    tier = _tier(event)
+    _registration(member, event, tier, "300.00", status=Registration.Status.PAID)
+
+    client.force_login(faculty)
+    resp = client.get(event.workgroup.get_absolute_url() + "?tab=roster")
+    assert "On a plan" not in resp.content.decode()

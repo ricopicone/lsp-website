@@ -171,6 +171,14 @@ class Registration(models.Model):
         return refund
 
     @property
+    def on_payment_plan(self) -> bool:
+        """Whether this registration is being paid in installments (task
+        #501). A property so the two roster surfaces share one answer rather
+        than each annotating their own queryset."""
+        from payments.registration_plans import is_on_plan
+        return is_on_plan(self)
+
+    @property
     def needs_payment(self) -> bool:
         """Approved (or normal) but unpaid — a Stripe payment is still due."""
         return self.status == self.Status.AWAITING_PAYMENT and self.quoted_amount > 0

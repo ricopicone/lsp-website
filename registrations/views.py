@@ -19,10 +19,9 @@ from django.views.decorators.http import require_POST
 
 from events.models import Event, PriceTier, PricingCode
 from events.permissions import can_edit_event
-from payments import coverage
+from payments import coverage, registration_plans
 from payments import notifications as notify_payments
 from payments.refund import PlanRefundRequiresTreasurer, RefundError
-from payments import registration_plans
 from payments.stripe_checkout import (
     create_checkout_session,
     create_registration_installment_session,

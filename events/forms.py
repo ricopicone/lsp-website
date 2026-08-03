@@ -98,12 +98,25 @@ class PricingCodeForm(forms.ModelForm):
             "outside the school needs a free account before you can pick them "
             "here, so a one-use code you send them works either way."
         )
+        # Adding a field with a model default silently makes it *required* on
+        # an existing ModelForm, which would break every POST that omits it
+        # (the new-modelform-field-is-required-by-default memory). Both of
+        # these are optional on the form and coerced in clean.
+        self.fields["installments"].required = False
+        self.fields["installments"].label = "Number of payments"
+        self.fields["installments"].help_text = (
+            "Leave at 1 for the usual single payment. Choose more and the fee "
+            "is split evenly, the first payment due at registration and the "
+            "rest monthly. The total is the same either way."
+        )
+        self.fields["amount_or_percent"].required = False
 
     class Meta:
         model = PricingCode
         fields = (
             "pricing_mode",
             "amount_or_percent",
+            "installments",
             "valid_until",
             "max_uses",
             "restricted_to_user",
@@ -114,15 +127,28 @@ class PricingCodeForm(forms.ModelForm):
             ),
         }
 
+    def clean_installments(self):
+        return self.cleaned_data.get("installments") or 1
+
     def clean(self):
         data = super().clean()
         mode = data.get("pricing_mode")
         amount = data.get("amount_or_percent")
-        if mode == PricingCode.Mode.PERCENT_OFF and amount is not None and not (
+
+        if mode == PricingCode.Mode.FULL_PRICE:
+            # No discount to state — the code exists to carry the schedule.
+            data["amount_or_percent"] = Decimal("0")
+            self.instance.amount_or_percent = Decimal("0")
+            return data
+
+        if amount is None:
+            self.add_error("amount_or_percent", "This field is required.")
+            return data
+        if mode == PricingCode.Mode.PERCENT_OFF and not (
             Decimal("0") <= amount <= Decimal("100")
         ):
             self.add_error("amount_or_percent", "percent_off requires a value between 0 and 100.")
-        if amount is not None and amount < 0:
+        if amount < 0:
             self.add_error("amount_or_percent", "Cannot be negative.")
         return data
 

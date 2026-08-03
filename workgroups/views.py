@@ -378,7 +378,7 @@ def workgroup_detail(request, slug):
         context["event"] = primary_event
         context["registrations"] = primary_event.registrations.select_related(
             "user", "price_tier"
-        ).order_by("created_at")
+        ).prefetch_related("installments").order_by("created_at")
         context["pending_registrations"] = primary_event.registrations.filter(
             status=Registration.Status.PENDING_APPROVAL
         ).select_related("user")
