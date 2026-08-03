@@ -13,6 +13,7 @@ from django.db.models import F
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -261,6 +262,10 @@ def registration_confirm(request, reg_id: int):
             # Lets the page say *why* a formerly covered place now wants money
             # (task #485) without duplicating the marker string in a template.
             "rebilled_explanation": coverage.REBILLED_EXPLANATION,
+            # Payment-plan schedule (task #501); empty for an ordinary reg.
+            "installments": list(reg.installments.all()),
+            "outstanding": registration_plans.outstanding(reg),
+            "today": timezone.localdate(),
         },
     )
 
@@ -356,4 +361,25 @@ def pay_registration(request, reg_id: int):
     if not reg.needs_payment:
         return redirect("registrations:confirm", reg_id=reg.id)
     _payment, session = create_checkout_session(reg)
+    return redirect(session.url)
+
+
+@login_required
+@require_POST
+def pay_installment(request, installment_id: int):
+    """The registrant pays one installment of a payment-plan registration
+    (task #501). Owner-only; a paid installment is a no-op redirect."""
+    from payments.models import RegistrationInstallment
+
+    installment = get_object_or_404(
+        RegistrationInstallment.objects.select_related(
+            "registration", "registration__event",
+        ),
+        pk=installment_id, registration__user=request.user,
+    )
+    if installment.paid:
+        return redirect(
+            "registrations:confirm", reg_id=installment.registration_id,
+        )
+    _payment, session = create_registration_installment_session(installment)
     return redirect(session.url)

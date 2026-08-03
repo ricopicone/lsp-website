@@ -451,3 +451,88 @@ def test_a_declined_plan_registration_builds_no_schedule():
     )
     reg.decline(issuer, "no")
     assert reg.installments.count() == 0
+
+
+# ---- Task 6: paying the rest ---------------------------------------------
+
+
+def test_a_member_can_pay_a_later_installment(client, monkeypatch):
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+    rows[0].mark_paid()
+
+    called = {}
+
+    def _fake(installment):
+        called["seq"] = installment.sequence
+        return None, type("S", (), {"url": "https://stripe.test/session"})()
+
+    monkeypatch.setattr(
+        "registrations.views.create_registration_installment_session", _fake,
+    )
+
+    client.force_login(member)
+    resp = client.post(f"/registrations/installments/{rows[1].pk}/pay/")
+    assert resp.status_code == 302
+    assert called["seq"] == 2
+
+
+def test_paying_a_paid_installment_is_a_no_op(client):
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+    rows[0].mark_paid()
+
+    client.force_login(member)
+    resp = client.post(f"/registrations/installments/{rows[0].pk}/pay/")
+    assert resp.status_code == 302
+    assert f"/registrations/{reg.pk}/confirmation/" in resp["Location"]
+
+
+def test_another_member_cannot_pay_your_installment(client):
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    intruder = _user("intruder@example.com")
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+
+    client.force_login(intruder)
+    resp = client.post(f"/registrations/installments/{rows[0].pk}/pay/")
+    assert resp.status_code == 404
+
+
+def test_the_confirmation_page_shows_the_schedule(client):
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "300.00", status=Registration.Status.PAID,
+    )
+    rows = registration_plans.build_schedule(reg, 3, today=timezone.localdate())
+    rows[0].mark_paid()
+
+    client.force_login(member)
+    body = client.get(f"/registrations/{reg.pk}/confirmation/").content.decode()
+    assert "payment plan" in body.lower()
+    assert "$200.00" in body            # still to pay
+    assert "you're all set" not in body.lower()

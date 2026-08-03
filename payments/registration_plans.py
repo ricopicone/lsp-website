@@ -105,8 +105,13 @@ def due_installment(
 
 
 def outstanding(registration) -> Decimal:
-    """Sum of the unpaid installments. Zero when there is no plan."""
+    """Sum of the unpaid installments. Zero when there is no plan.
+
+    Quantized to cents because ``Sum`` hands back an unscaled Decimal — a
+    $200.00 balance arrives as ``Decimal("200")`` and would render as "$200"
+    beside its own "$166.66" installments.
+    """
     total = registration.installments.filter(paid=False).aggregate(
         total=Sum("amount"),
     )["total"]
-    return total or Decimal("0.00")
+    return (total or Decimal("0")).quantize(CENT)
