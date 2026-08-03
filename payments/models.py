@@ -201,6 +201,15 @@ class Payment(models.Model):
         related_name="payments",
         help_text="The tuition installment this payment satisfies — set for type=TUITION.",
     )
+    registration_installment = models.ForeignKey(
+        "payments.RegistrationInstallment",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payments",
+        help_text="The registration installment this payment satisfies — set "
+                  "for a payment-plan registration (task #501).",
+    )
     tuition_period = models.ForeignKey(
         "payments.TuitionPeriod",
         on_delete=models.PROTECT,
@@ -589,6 +598,52 @@ class TuitionInstallment(models.Model):
 
     def __str__(self):
         return f"{self.enrollment} #{self.sequence} due {self.due_date}"
+
+    def mark_paid(self, *, save=True) -> None:
+        if self.paid:
+            return
+        self.paid = True
+        if self.paid_at is None:
+            self.paid_at = timezone.now()
+        if save:
+            self.save(update_fields=("paid", "paid_at"))
+
+
+class RegistrationInstallment(models.Model):
+    """One installment of a payment-plan event registration (task #501).
+
+    The twin of :class:`TuitionInstallment`, for a single seminar or reading
+    group instead of a year of tuition. The registration keeps its full
+    ``quoted_amount`` and mints one full-fee ``Charge``; these rows only split
+    that one debt into payable chunks, exactly as the tuition plan does.
+
+    Deliberately a separate model rather than a generalization of its twin:
+    unifying them would rewrite the load-bearing tuition plumbing shipped in
+    task #494 for no behavior gain.
+    """
+
+    registration = models.ForeignKey(
+        "registrations.Registration",
+        on_delete=models.CASCADE,
+        related_name="installments",
+    )
+    sequence = models.PositiveSmallIntegerField(help_text="1-indexed order within the plan.")
+    due_date = models.DateField()
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    paid = models.BooleanField(default=False)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("registration", "sequence")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("registration", "sequence"),
+                name="payments_unique_registration_installment_sequence",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.registration} #{self.sequence} due {self.due_date}"
 
     def mark_paid(self, *, save=True) -> None:
         if self.paid:
