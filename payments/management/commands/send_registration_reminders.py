@@ -1,12 +1,15 @@
 """Reminders for the faculty-approval registration flow.
 
-Two kinds, both throttled via ``Registration.reminded_at`` (reset on each
+Three kinds, all throttled via ``Registration.reminded_at`` (reset on each
 state transition):
 
 - **Faculty approval reminders** — one digest per event whose faculty have
   registrations still ``PENDING_APPROVAL``.
 - **Student payment reminders** — to registrants whose registration was
   *approved* (``decided_at`` set) and is ``AWAITING_PAYMENT`` but unpaid.
+- **Payment-plan reminders** (task #501) — to registrants on an installment
+  plan with one due or overdue. These read ``PAID`` (a plan grants access on
+  the first installment), so they are invisible to the kind above.
 
 Wire via the same daily systemd timer as the dues/tuition reminders on the
 EC2 host. Default interval is 3 days; pass ``--interval-days`` to change it.
@@ -91,8 +94,43 @@ class Command(BaseCommand):
                 reg.save(update_fields=["reminded_at"])
             student_sent += 1
 
+        # --- Payment-plan installment reminders (task #501) ---
+        from payments import registration_plans
+        from payments.emails import send_installment_reminder
+
+        today = timezone.localdate()
+        on_plan = (
+            Registration.objects.filter(
+                status=Registration.Status.PAID,
+                installments__paid=False,
+            )
+            .filter(user__is_active=True)
+            .exclude(user__profile__standing__in=Profile.NON_MEMBER_STANDINGS)
+            .filter(due)
+            .select_related("event", "user")
+            .distinct()
+        )
+        installment_sent = 0
+        for reg in on_plan:
+            installment = registration_plans.due_installment(reg, today)
+            if installment is None:
+                continue
+            if dry:
+                self.stdout.write(
+                    f"  would remind {reg.user.email} of payment "
+                    f"{installment.sequence} for '{reg.event.title}'"
+                )
+            else:
+                notify_payments.installment_reminder_inapp(installment)
+                if notify_payments.should_email(reg.user, Category.REGISTRATION_STATUS):
+                    sender.send(send_installment_reminder, installment)
+                reg.reminded_at = timezone.now()
+                reg.save(update_fields=["reminded_at"])
+            installment_sent += 1
+
         verb = "Would send" if dry else "Sent"
         self.stdout.write(self.style.SUCCESS(
-            f"{verb} {faculty_sent} faculty approval reminder(s) and "
-            f"{student_sent} student payment reminder(s)."
+            f"{verb} {faculty_sent} faculty approval reminder(s), "
+            f"{student_sent} student payment reminder(s), and "
+            f"{installment_sent} payment-plan reminder(s)."
         ))

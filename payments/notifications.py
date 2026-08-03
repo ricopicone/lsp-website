@@ -78,6 +78,20 @@ def payment_reminder_inapp(reg) -> None:
     )
 
 
+def installment_reminder_inapp(installment) -> None:
+    """Bell row for a due payment-plan installment (task #501). The cron paces
+    the email itself, gated by :func:`should_email`."""
+    reg = installment.registration
+    notify(
+        reg.user, Category.REGISTRATION_STATUS,
+        title=(
+            f"Payment {installment.sequence} of your plan for "
+            f"{reg.event.title} is due"
+        ),
+        url=_confirm_url(reg), target=installment, email=False, dedupe=True,
+    )
+
+
 def plan_cancel_needs_treasurer(registration) -> None:
     """Tell the treasurer a payment-plan registrant asked to cancel (task
     #501). The site deliberately refuses to decide the refund — a member who

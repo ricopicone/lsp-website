@@ -607,3 +607,59 @@ def test_an_ordinary_paid_registration_still_self_cancels(monkeypatch):
     reg.cancel()
     reg.refresh_from_db()
     assert reg.status == Registration.Status.REFUNDED
+
+
+# ---- Task 8: installment reminders ---------------------------------------
+
+
+def _run_reminders(**opts):
+    from io import StringIO
+
+    from django.core.management import call_command
+    out = StringIO()
+    call_command("send_registration_reminders", stdout=out, **opts)
+    return out.getvalue()
+
+
+def _plan_reg(days_ago=40, amount="300.00"):
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, amount, status=Registration.Status.PAID,
+    )
+    registration_plans.build_schedule(
+        reg, 3, today=timezone.localdate() - timedelta(days=days_ago),
+    )
+    return reg
+
+
+def test_an_overdue_installment_is_nudged(mailoutbox):
+    reg = _plan_reg()
+    _run_reminders()
+    assert len(mailoutbox) == 1
+    assert "payment" in mailoutbox[0].subject.lower()
+    reg.refresh_from_db()
+    assert reg.reminded_at is not None
+
+
+def test_a_fully_paid_plan_is_not_nudged(mailoutbox):
+    reg = _plan_reg()
+    reg.installments.update(paid=True)
+    _run_reminders()
+    assert len(mailoutbox) == 0
+
+
+def test_an_installment_far_in_the_future_is_not_nudged(mailoutbox):
+    _plan_reg(days_ago=-60)
+    _run_reminders()
+    assert len(mailoutbox) == 0
+
+
+def test_the_installment_nudge_is_throttled(mailoutbox):
+    _plan_reg()
+    _run_reminders()
+    _run_reminders()
+    assert len(mailoutbox) == 1

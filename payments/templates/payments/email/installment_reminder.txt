@@ -1,0 +1,19 @@
+{% autoescape off %}{{ registration.user.first_name|default:"Hello" }},
+
+This is a reminder about your payment plan for "{{ registration.event.title }}".
+
+Payment {{ installment.sequence }} of {{ total }}:  ${{ installment.amount }}
+Due:                                                {{ installment.due_date }}
+Still to pay:                                       ${{ outstanding }}
+
+Make this payment here:
+{{ confirm_url }}
+
+Your place in the event is confirmed, this is only about the remaining
+payments. If your circumstances have changed, reply and we'll sort something
+out.
+
+Questions? Reply to this email, it goes to {{ support_email }}.
+
+— Lacanian School of Psychoanalysis
+{% endautoescape %}
