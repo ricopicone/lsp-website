@@ -8,6 +8,7 @@ from .models import (
     Payment,
     PaymentMemberAction,
     Receipt,
+    RegistrationInstallment,
     TuitionEnrollment,
     TuitionInstallment,
     TuitionPeriod,
@@ -142,6 +143,20 @@ class TuitionInstallmentAdmin(admin.ModelAdmin):
     list_filter = ("paid", "enrollment__tuition_period")
     search_fields = ("enrollment__user__email",)
     autocomplete_fields = ("enrollment",)
+
+
+@admin.register(RegistrationInstallment)
+class RegistrationInstallmentAdmin(admin.ModelAdmin):
+    """The treasurer's hand-edit surface for an event payment plan (task #501).
+
+    ``registration_plans.due_installment`` orders by due date rather than
+    sequence precisely so a schedule edited here still reads correctly.
+    """
+
+    list_display = ("registration", "sequence", "due_date", "amount", "paid", "paid_at")
+    list_filter = ("paid", "registration__event")
+    search_fields = ("registration__user__email", "registration__event__title")
+    autocomplete_fields = ("registration",)
 
 
 @admin.register(TuitionReminder)

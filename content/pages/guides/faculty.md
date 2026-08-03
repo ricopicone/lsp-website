@@ -81,9 +81,12 @@ To give someone a reduced fee, mint a **pricing code** on the Roster tab, under
 - **Fixed amount**—the person pays exactly this.
 - **Sliding-scale floor**—the person chooses their own amount, at or above the
   floor you set.
+- **Full price**—no discount at all. Pick this when what you're offering is a
+  payment plan rather than a lower price.
 
-Then, optionally, an expiry date, a **maximum number of uses** (leave it blank
-for unlimited), and **Only this person may use it**.
+Then **Number of payments** (see below), and optionally an expiry date, a
+**maximum number of uses** (leave it blank for unlimited), and **Only this
+person may use it**.
 
 The code appears under **Existing codes** with its uses remaining, so you can
 see at a glance whether it has been taken up. The person you gave it to enters
@@ -111,6 +114,27 @@ it's a small thing to ask of a guest.
 
 An unrestricted code with no use limit is a public discount. That's fine when
 you mean it, and worth avoiding when you mean to help one person.
+
+### Spreading the fee over several payments
+
+Sometimes the fee isn't wrong, the timing is. Set **Number of payments** to 2 or
+more and the fee is divided evenly: the first payment is due at registration,
+the rest monthly. **The total doesn't change**, so this isn't a discount, it's a
+schedule.
+
+The two settings are independent. Leave the mode at *Full price* for a plain
+plan at the listed fee, or combine them, 20% off payable in three, if that's
+what the person needs.
+
+Their place is confirmed as soon as the first payment clears, so they attend
+from the first session like anyone else. The remaining payments show on their
+own registration page with a Pay button, and the site reminds them as each one
+falls due. Your roster marks them **On a plan** and shows no amounts, how the
+payments are going is between them and the treasurer.
+
+One thing to know: a member on a plan can't cancel and refund themselves. The
+button sends them to the treasurer instead, because part-way through a term
+what's owed back is a judgment, not an arithmetic.
 
 ### A full scholarship
 
