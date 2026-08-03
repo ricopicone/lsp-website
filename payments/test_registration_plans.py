@@ -372,3 +372,82 @@ def test_the_ledger_reads_partial_until_the_last_installment():
 
     _settle(reg, rows[2])
     assert member_account(member)["balance"] == Decimal("0.00")
+
+
+# ---- Task 5: redemption builds the schedule ------------------------------
+
+
+def test_redeeming_a_plan_code_builds_the_schedule(client, monkeypatch):
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "500.00")
+    code = _code(event, issuer, installments=3)
+
+    sessions = []
+
+    def _fake(installment):
+        from payments.models import Payment
+        p = Payment.objects.create(
+            payment_type=Payment.Type.REGISTRATION,
+            registration=installment.registration,
+            user=installment.registration.user, amount=installment.amount,
+            method=Payment.Method.STRIPE, status=Payment.Status.PENDING,
+            registration_installment=installment,
+        )
+        sessions.append(p)
+        return p, type("S", (), {"url": "https://stripe.test/session"})()
+
+    monkeypatch.setattr(
+        "registrations.views.create_registration_installment_session", _fake,
+    )
+
+    client.force_login(member)
+    resp = client.post(
+        f"/events/{event.slug}/register/",
+        {"price_tier": tier.pk, "pricing_code": code.code},
+    )
+    assert resp.status_code == 302
+
+    reg = Registration.objects.get(user=member, event=event)
+    assert reg.quoted_amount == Decimal("500.00")      # the full fee
+    assert reg.installments.count() == 3
+    # Checkout was opened for installment 1 only.
+    assert len(sessions) == 1
+    assert sessions[0].amount == Decimal("166.66")
+
+
+def test_an_approval_gated_plan_builds_its_schedule_on_approval():
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event(requires_faculty_approval=True)
+    tier = _tier(event, "300.00")
+    code = _code(event, issuer, installments=3)
+
+    reg = _registration(
+        member, event, tier, "300.00",
+        status=Registration.Status.PENDING_APPROVAL, pricing_code=code,
+    )
+    assert reg.installments.count() == 0
+
+    reg.approve(issuer)
+    reg.refresh_from_db()
+    assert reg.status == Registration.Status.AWAITING_PAYMENT
+    assert reg.installments.count() == 3
+
+
+def test_a_declined_plan_registration_builds_no_schedule():
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event(requires_faculty_approval=True)
+    tier = _tier(event, "300.00")
+    code = _code(event, issuer, installments=3)
+    reg = _registration(
+        member, event, tier, "300.00",
+        status=Registration.Status.PENDING_APPROVAL, pricing_code=code,
+    )
+    reg.decline(issuer, "no")
+    assert reg.installments.count() == 0

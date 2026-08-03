@@ -21,7 +21,11 @@ from events.permissions import can_edit_event
 from payments import coverage
 from payments import notifications as notify_payments
 from payments.refund import RefundError
-from payments.stripe_checkout import create_checkout_session
+from payments import registration_plans
+from payments.stripe_checkout import (
+    create_checkout_session,
+    create_registration_installment_session,
+)
 
 from .forms import RegistrationForm
 from .models import Registration
@@ -83,6 +87,13 @@ def _create_registration(
             quoted_explanation=resolution.explanation,
             status=status,
         )
+        # A plan-carrying code splits the fee (task #501). The registration
+        # keeps the full quoted_amount; only the payment is chunked. An
+        # approval-gated registration waits — its schedule is built at
+        # approve(), so a fortnight in the queue doesn't make installment 1
+        # overdue on arrival.
+        if resolution.installments > 1 and not requires_approval:
+            registration_plans.build_schedule(reg, resolution.installments)
         # Consume the code now only for an immediately-active reg; the approval
         # flow consumes it on approval (a declined reg shouldn't burn a use).
         if code and code.max_uses is not None and not requires_approval:
@@ -208,7 +219,11 @@ def register_for_event(request, event_slug: str):
                 notify_payments.registration_confirmed(reg)
                 return redirect("registrations:confirm", reg_id=reg.id)
 
-            _payment, session = create_checkout_session(reg)
+            first = registration_plans.next_unpaid(reg)
+            if first is not None:
+                _payment, session = create_registration_installment_session(first)
+            else:
+                _payment, session = create_checkout_session(reg)
             return redirect(session.url)
     else:
         form = RegistrationForm(event=event, user=request.user)

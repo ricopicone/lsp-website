@@ -174,6 +174,12 @@ class Registration(models.Model):
             PricingCode.objects.filter(
                 pk=self.pricing_code_id, max_uses__isnull=False,
             ).update(uses_remaining=F("uses_remaining") - 1)
+        # A plan-carrying code splits the fee (task #501). Built here rather
+        # than at registration so the schedule starts the day the place is
+        # confirmed, not the day it was requested.
+        if self.pricing_code_id and self.quoted_amount > 0:
+            from payments.registration_plans import build_schedule
+            build_schedule(self, self.pricing_code.installments)
         self.approved_by = by
         self.decided_at = timezone.now()
         self.reminded_at = None
