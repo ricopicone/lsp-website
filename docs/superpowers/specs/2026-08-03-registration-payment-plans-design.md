@@ -223,7 +223,8 @@ read by three tuition surfaces; the two share a shape, not a caller.
 - `due_installment(registration, today, *, lead_days=LEAD_DAYS)` — oldest
   overdue, else earliest falling due within the lead window. Mirrors
   `plans.due_installment`, including `LEAD_DAYS = 7`.
-- `is_on_plan(registration) -> bool` — has more than one installment row.
+- `is_on_plan(registration) -> bool` — carries an installment schedule at all
+  (`build_schedule` never writes fewer than two rows).
 - `outstanding(registration) -> Decimal` — sum of unpaid installment amounts.
 
 ### Registration flow
