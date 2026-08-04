@@ -53,6 +53,13 @@
   <div role="alert" class="alert alert-info">
     <span>Your registration is awaiting faculty approval. We'll email you as soon as it's reviewed{% if registration.quoted_amount > 0 %}, and you'll be able to complete payment then{% endif %}.</span>
   </div>
+  {% elif registration.needs_payment and installments %}
+  {% comment %}A plan is paid installment by installment, so the schedule below
+  carries the Pay buttons. Offering the whole fee here too would be two
+  competing payment paths on one page.{% endcomment %}
+  <div role="alert" class="alert alert-info">
+    <span>You're set up to pay for this in {{ installments|length }} payments, ${{ registration.quoted_amount }} in total. Your place is confirmed as soon as the first payment clears.</span>
+  </div>
   {% elif registration.needs_payment %}
   <div role="alert" class="alert alert-warning">
     <span>{% if registration.quoted_explanation == rebilled_explanation %}Your tuition covered this event until you recorded that you're skipping tuition for the year, so the regular fee now applies. Recording that you plan to pay tuition on your Account tab restores the coverage.{% elif registration.decided_at %}Your registration was approved — complete payment to confirm your place.{% else %}Your place isn't confirmed until payment is complete.{% endif %}</span>

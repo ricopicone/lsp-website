@@ -219,11 +219,15 @@ def register_for_event(request, event_slug: str):
                 notify_payments.registration_confirmed(reg)
                 return redirect("registrations:confirm", reg_id=reg.id)
 
-            first = registration_plans.next_unpaid(reg)
-            if first is not None:
-                _payment, session = create_registration_installment_session(first)
-            else:
-                _payment, session = create_checkout_session(reg)
+            if registration_plans.is_on_plan(reg):
+                # Show the schedule before taking any money. The event page
+                # quoted the whole fee; bouncing straight to Checkout for one
+                # installment would be the member's first news that this is a
+                # plan at all. The confirmation page lists every payment and
+                # its date, with the first one's Pay button.
+                return redirect("registrations:confirm", reg_id=reg.id)
+
+            _payment, session = create_checkout_session(reg)
             return redirect(session.url)
     else:
         form = RegistrationForm(event=event, user=request.user)
@@ -368,6 +372,11 @@ def pay_registration(request, reg_id: int):
     awaiting-payment registration."""
     reg = get_object_or_404(Registration, pk=reg_id, user=request.user)
     if not reg.needs_payment:
+        return redirect("registrations:confirm", reg_id=reg.id)
+    if registration_plans.is_on_plan(reg):
+        # A plan is paid installment by installment (task #501). The full-fee
+        # button isn't rendered for one, so this is a stale form — send them
+        # to the schedule rather than charging the whole thing.
         return redirect("registrations:confirm", reg_id=reg.id)
     _payment, session = create_checkout_session(reg)
     return redirect(session.url)
