@@ -12,7 +12,7 @@ import contextlib
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -22,21 +22,51 @@ from registrations.models import Registration
 from .models import Payment
 
 
-def _send(*, subject: str, body: str, to: list[str], sender: str = "LSP Registration") -> None:
+def _send(
+    *,
+    subject: str,
+    body: str,
+    to: list[str],
+    sender: str = "LSP Registration",
+    html_body: str | None = None,
+    reply_to: str | None = None,
+) -> None:
     """Send a transactional email with the right From and Reply-To headers.
 
     ``sender`` is the friendly From display name (most payments mail is event
-    registration; receipts and dues/tuition reminders pass "LSP Treasurer")."""
+    registration; receipts and dues/tuition reminders pass "LSP Treasurer").
+    ``reply_to`` overrides the default support mailbox for mail that belongs to
+    a particular officer. ``html_body``, when given, is attached as the
+    house-styled alternative alongside the plain text."""
     from core.email import school_from
 
-    msg = EmailMessage(
+    msg = EmailMultiAlternatives(
         subject=subject,
         body=body,
         from_email=school_from(sender),
         to=to,
-        reply_to=[settings.SUPPORT_EMAIL],
+        reply_to=[reply_to or settings.SUPPORT_EMAIL],
     )
+    if html_body:
+        msg.attach_alternative(html_body, "text/html")
     msg.send(fail_silently=False)
+
+
+def _treasurer_signature() -> dict:
+    """Name and title for the balance email's sign-off.
+
+    Follows the ``StaffRole`` holder — the model's whole premise is that a
+    handoff is reassigning ``holders``, so the signature must not be a literal
+    in a template. Falls back to an unnamed sign-off when the role is unheld or
+    shared, which reads correctly rather than inventing a signatory.
+    """
+    from core.models import StaffRole
+
+    role = StaffRole.objects.filter(key=StaffRole.TREASURER).first()
+    title = (role.name if role else "") or "Treasurer"
+    holders = list(role.holders.all()) if role else []
+    name = holders[0].get_full_name().strip() if len(holders) == 1 else ""
+    return {"treasurer_name": name, "treasurer_title": title}
 
 
 def _recipient_timezone(user) -> contextlib.AbstractContextManager:
@@ -206,17 +236,23 @@ def send_balance_reminder(user, balance) -> None:
     subject = "Your Lacanian School account balance"
     account_url = settings.SITE_BASE_URL.rstrip("/") + reverse(
         "formation:formation") + "?tab=account"
+    context = {
+        "user": user,
+        "balance": balance,
+        "account_url": account_url,
+        # SUPPORT_EMAIL is the Web Coordinator's; the treasurer owns the
+        # Reply-To, so this appears in the body as the second contact.
+        "support_email": settings.SUPPORT_EMAIL,
+        "treasurer_email": settings.TREASURER_EMAIL,
+        **_treasurer_signature(),
+    }
     with _recipient_timezone(user):
-        body = render_to_string(
-            "payments/email/balance_reminder.txt",
-            {
-                "user": user,
-                "balance": balance,
-                "account_url": account_url,
-                "support_email": settings.SUPPORT_EMAIL,
-            },
-        )
-    _send(subject=subject, body=body, to=[user.email], sender="LSP Treasurer")
+        body = render_to_string("payments/email/balance_reminder.txt", context)
+        html_body = render_to_string("payments/email/balance_reminder.html", context)
+    _send(
+        subject=subject, body=body, to=[user.email], sender="LSP Treasurer",
+        html_body=html_body, reply_to=settings.TREASURER_EMAIL,
+    )
 
 
 def send_cancellation_email(registration: Registration, refund=None) -> None:

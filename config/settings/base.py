@@ -219,6 +219,10 @@ if "@" in DEFAULT_FROM_ADDRESS and "<" not in DEFAULT_FROM_ADDRESS:
 else:
     DEFAULT_FROM_EMAIL = DEFAULT_FROM_ADDRESS
 SUPPORT_EMAIL = env("DJANGO_SUPPORT_EMAIL", default="website@lacanschool.org")
+# The Treasurer's mailbox: account-balance mail carries it as Reply-To so a
+# question about money reaches the treasurer rather than the Web Coordinator.
+# SUPPORT_EMAIL stays in the body as a second contact.
+TREASURER_EMAIL = env("DJANGO_TREASURER_EMAIL", default="treasurer@lacanschool.org")
 # The Referral Coordinator's mailbox: Find-an-Analyst inquiries land here, and
 # referral-flow mail (acknowledgments, distributions, follow-ups) carries it
 # as Reply-To so any reply reaches the coordinator.

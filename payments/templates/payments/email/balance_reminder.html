@@ -1,0 +1,27 @@
+{% extends "email/base_email.html" %}{% load treasurer_filters %}
+{% block title %}Your Lacanian School account balance{% endblock %}
+{% block preheader %}Your balance, and a note about the records we are still reconciling.{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 16px 0; font-family:Georgia, 'Iowan Old Style', serif; font-weight:normal; font-size:24px; line-height:1.3; color:#1c1c29;">Your account balance</h1>
+<p style="margin:0 0 16px 0;">{{ user.first_name|default:"Hello" }},</p>
+<p style="margin:0 0 16px 0;">Your Lacanian School account currently shows an outstanding balance of <strong style="color:#1c1c29;">{{ balance|usd }}</strong>. This may include dues, tuition, or event fees.</p>
+<p style="margin:0 0 16px 0;">Please read that figure with some caution. We are still reconciling records carried over from our previous system, so a balance can be incomplete, or simply wrong. If it does not match what you remember paying, it may well be our error, and we would rather hear from you than have you pay something you do not owe.</p>
+<p style="margin:0 0 16px 0;">You can review everything on your account page, under <strong style="color:#1c1c29;">My LSP</strong>, then the <strong style="color:#1c1c29;">Account</strong> tab. From there you can:</p>
+<ul style="margin:0 0 16px 0; padding-left:22px;">
+  <li style="margin:0 0 8px 0;">see every charge and payment we have on record for you</li>
+  <li style="margin:0 0 8px 0;">re-categorize a payment that was filed under the wrong heading</li>
+  <li style="margin:0 0 8px 0;">send the treasurer a correction, or tell us about a payment that is missing from your record</li>
+</ul>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+  <tr><td style="background-color:#1c1c29; border-radius:8px;">
+    <a href="{{ account_url }}" style="display:inline-block; padding:12px 26px; font-family:-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; font-weight:600; color:#e1ff00; text-decoration:none;">Review my account</a>
+  </td></tr>
+</table>
+<p style="margin:0 0 16px 0;">If the balance does look right, you can pay from that same page. If you have already paid, you can ignore this, it crossed in the mail.</p>
+<p style="margin:0 0 16px 0;">Thank you for your patience while we settle into the new system. Going through this now means your record will be right from here on.</p>
+<p style="margin:0 0 16px 0;">Questions, or having trouble paying? Reply to this email, it reaches me at <a href="mailto:{{ treasurer_email }}" style="color:#1c1c29;">{{ treasurer_email }}</a>. For anything about the website itself, write to <a href="mailto:{{ support_email }}" style="color:#1c1c29;">{{ support_email }}</a>.</p>
+<p style="margin:24px 0 0 0;">Warmly,<br>
+{% if treasurer_name %}{{ treasurer_name }}<br>
+{% endif %}<span style="color:#8a847e;">{{ treasurer_title }}<br>
+Lacanian School of Psychoanalysis</span></p>
+{% endblock %}

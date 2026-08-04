@@ -275,3 +275,76 @@ def test_reminder_says_the_balance_may_still_need_correcting(
     assert "correction" in body                 # and here is how to fix it
     assert "patience" in body                   # we know this is a transition
     assert "?tab=account" in body               # My LSP > Account, the one place to act
+
+
+@pytest.mark.django_db
+def test_reminder_replies_to_the_treasurer_not_the_web_coordinator(
+    period, member, mailoutbox, settings, monkeypatch,
+):
+    """Money questions should reach the treasurer's mailbox. SUPPORT_EMAIL is
+    the Web Coordinator's, and stays in the body as a second contact."""
+    settings.EMAIL_MAX_SEND_RATE = 1000.0
+    _charge(member, "100")
+    _freeze(monkeypatch, "2026-10-01")
+    call_command("send_balance_reminders")
+
+    assert mailoutbox[0].reply_to == [settings.TREASURER_EMAIL]
+    assert settings.SUPPORT_EMAIL in mailoutbox[0].body
+
+
+@pytest.mark.django_db
+def test_reminder_is_signed_by_the_serving_treasurer(
+    period, member, mailoutbox, settings, monkeypatch,
+):
+    """The signature follows the StaffRole holder, so a handoff is just
+    reassigning the role rather than editing a template."""
+    from core.models import StaffRole
+
+    settings.EMAIL_MAX_SEND_RATE = 1000.0
+    treasurer = User.objects.create_user(
+        email="treas@example.com", password="x",
+        first_name="Garrett", last_name="Tanner",
+    )
+    role, _ = StaffRole.objects.get_or_create(
+        key=StaffRole.TREASURER, defaults={"name": "Treasurer"},
+    )
+    role.holders.add(treasurer)
+    _charge(member, "100")
+    _freeze(monkeypatch, "2026-10-01")
+    call_command("send_balance_reminders")
+
+    body = mailoutbox[0].body
+    assert "Garrett Tanner" in body
+    assert "Treasurer" in body
+    assert "— Lacanian School of Psychoanalysis" not in body  # no em-dash sign-off
+
+
+@pytest.mark.django_db
+def test_reminder_carries_a_house_styled_html_alternative(
+    period, member, mailoutbox, settings, monkeypatch,
+):
+    settings.EMAIL_MAX_SEND_RATE = 1000.0
+    _charge(member, "100")
+    _freeze(monkeypatch, "2026-10-01")
+    call_command("send_balance_reminders")
+
+    alternatives = mailoutbox[0].alternatives
+    assert len(alternatives) == 1
+    html, mimetype = alternatives[0]
+    assert mimetype == "text/html"
+    assert "<li" in html                      # real bullets, not hyphens
+    assert "lacanschool.org" in html
+
+
+@pytest.mark.django_db
+def test_plain_text_uses_real_bullet_characters(
+    period, member, mailoutbox, settings, monkeypatch,
+):
+    settings.EMAIL_MAX_SEND_RATE = 1000.0
+    _charge(member, "100")
+    _freeze(monkeypatch, "2026-10-01")
+    call_command("send_balance_reminders")
+
+    body = mailoutbox[0].body
+    assert "•" in body
+    assert "\n  - " not in body
