@@ -25,11 +25,11 @@ def _user(email="member@example.com"):
 def _event(title="Seminar", **kwargs):
     today = timezone.localdate()
     kwargs.setdefault("event_type", Event.Type.SEMINAR)
+    kwargs.setdefault("start_date", today + timedelta(days=7))
+    kwargs.setdefault("end_date", today + timedelta(days=90))
     return Event.objects.create(
         title=title,
         slug=title.lower().replace(" ", "-"),
-        start_date=today + timedelta(days=7),
-        end_date=today + timedelta(days=90),
         published=True,
         status=Event.Status.OPEN,
         **kwargs,
@@ -198,10 +198,14 @@ def test_a_payment_can_point_at_an_installment():
 # ---- Task 3: the schedule module ----------------------------------------
 
 
+def _dated_event(start, end, title="Seminar"):
+    return _event(title=title, start_date=start, end_date=end)
+
+
 def test_schedule_sums_to_the_exact_fee_with_the_remainder_last():
     from payments import registration_plans
     member = _user()
-    event = _event()
+    event = _dated_event(date(2026, 9, 1), date(2027, 5, 31))
     tier = _tier(event)
     reg = _registration(member, event, tier, "500.00")
 
@@ -210,8 +214,84 @@ def test_schedule_sums_to_the_exact_fee_with_the_remainder_last():
         Decimal("166.66"), Decimal("166.66"), Decimal("166.68"),
     ]
     assert sum(r.amount for r in rows) == Decimal("500.00")
+
+
+# The spacing rule, against the three shapes the real 2026-27 program has.
+# Payments are spread across the event's own run rather than falling monthly
+# from registration, which bunched them at the front of a nine-month seminar.
+
+
+def test_a_long_seminar_spreads_across_its_run():
+    """Sept-May, the common shape. Two payments land fall and spring, four
+    land two-and-two, nine land monthly — the named schedules fall out of the
+    geometry rather than being special cases."""
+    from payments import registration_plans
+    event = _dated_event(date(2026, 9, 1), date(2027, 5, 31))
+    tier = _tier(event)
+    start = date(2026, 9, 1)
+
+    def dates(count, email):
+        reg = _registration(_user(email), event, tier, "900.00")
+        return [r.due_date for r in
+                registration_plans.build_schedule(reg, count, today=start)]
+
+    assert dates(2, "a@example.com") == [date(2026, 9, 1), date(2027, 1, 15)]
+    assert dates(4, "b@example.com") == [
+        date(2026, 9, 1), date(2026, 11, 8), date(2027, 1, 15), date(2027, 3, 24),
+    ]
+    nine = dates(9, "c@example.com")
+    assert nine[0] == date(2026, 9, 1)
+    assert nine[-1] == date(2027, 4, 29)
+    # Every gap is about a month, none bunched.
+    gaps = {(nine[i + 1] - nine[i]).days for i in range(8)}
+    assert gaps == {30}
+
+
+def test_a_four_week_workshop_falls_back_to_monthly():
+    """Oct 1-29 in the real program. Spreading two payments across 28 days
+    would put them a fortnight apart; the floor holds them to a month."""
+    from payments import registration_plans
+    event = _dated_event(date(2026, 10, 1), date(2026, 10, 29), title="Workshop")
+    tier = _tier(event)
+    reg = _registration(_user(), event, tier, "500.00")
+    rows = registration_plans.build_schedule(reg, 2, today=date(2026, 10, 1))
+    assert [r.due_date for r in rows] == [date(2026, 10, 1), date(2026, 10, 29)]
+
+
+def test_a_spring_group_spreads_across_its_own_run():
+    """Jan 17 - Jun 20 in the real program. A named 'fall and spring' schedule
+    could not describe this at all; even spreading needs no vocabulary."""
+    from payments import registration_plans
+    event = _dated_event(date(2027, 1, 17), date(2027, 6, 20), title="Spring Group")
+    tier = _tier(event)
+    reg = _registration(_user(), event, tier, "400.00")
+    rows = registration_plans.build_schedule(reg, 2, today=date(2027, 1, 17))
+    assert [r.due_date for r in rows] == [date(2027, 1, 17), date(2027, 4, 4)]
+
+
+def test_the_last_payment_lands_before_the_event_ends():
+    """The school shouldn't still be collecting after it has finished
+    delivering. True for every count on a normal-length event."""
+    from payments import registration_plans
+    event = _dated_event(date(2026, 9, 1), date(2027, 5, 31))
+    tier = _tier(event)
+    for count in range(2, 10):
+        reg = _registration(
+            _user(f"m{count}@example.com"), event, tier, "900.00",
+        )
+        rows = registration_plans.build_schedule(reg, count, today=date(2026, 9, 1))
+        assert rows[-1].due_date < event.end_date, count
+
+
+def test_a_late_registration_falls_back_to_monthly():
+    """Registering after the event ends leaves no span to spread over."""
+    from payments import registration_plans
+    event = _dated_event(date(2026, 9, 1), date(2026, 10, 1))
+    tier = _tier(event)
+    reg = _registration(_user(), event, tier, "300.00")
+    rows = registration_plans.build_schedule(reg, 3, today=date(2026, 11, 1))
     assert [r.due_date for r in rows] == [
-        date(2026, 9, 1), date(2026, 10, 1), date(2026, 11, 1),
+        date(2026, 11, 1), date(2026, 11, 29), date(2026, 12, 27),
     ]
 
 

@@ -106,8 +106,9 @@ class PricingCodeForm(forms.ModelForm):
         self.fields["installments"].label = "Number of payments"
         self.fields["installments"].help_text = (
             "Leave at 1 for the usual single payment. Choose more and the fee "
-            "is split evenly, the first payment due at registration and the "
-            "rest monthly. The total is the same either way."
+            "is split evenly and spread across the run of the event, so two "
+            "payments on a September to May seminar fall roughly in fall and "
+            "spring. The total is the same either way."
         )
         self.fields["amount_or_percent"].required = False
 

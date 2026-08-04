@@ -1077,7 +1077,7 @@ class PricingCode(models.Model):
         help_text=(
             "1 = pay in full at registration. A higher number splits the fee "
             "into that many payments, the first due at registration and the "
-            "rest monthly. The total never changes."
+            "rest spread across the event's run. The total never changes."
         ),
     )
     restricted_to_user = models.ForeignKey(
