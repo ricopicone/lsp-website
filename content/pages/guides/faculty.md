@@ -1,6 +1,6 @@
 ---
 title: Running a seminar or reading group
-summary: Your tools for the event page, the roster, and per-person pricing, including discount and scholarship codes.
+summary: Your tools for the event page, the roster, and per-person pricing, including discounts, scholarships, and payment plans.
 ---
 
 If you teach a seminar or convene a reading group, the site hands you a small
@@ -13,7 +13,7 @@ three. (If you're looking to *register* for something rather than run it, see
 
 **Yours:** the event page's description, readings, schedule note, contact line,
 CE credits, and guests-welcome note; the roster; approvals, if your event
-requires them; and **what any individual pays**.
+requires them; and **what any individual pays, and when**.
 
 **The Program Committee's:** the listed fee and its price tiers (built from
 the proposal they approved), publishing the page, opening and closing
@@ -84,14 +84,15 @@ To give someone a reduced fee, mint a **pricing code** on the Roster tab, under
 - **Full price**—no discount at all. Pick this when what you're offering is a
   payment plan rather than a lower price.
 
-Then **Number of payments** (see below), and optionally an expiry date, a
-**maximum number of uses** (leave it blank for unlimited), and **Only this
-person may use it**.
+Then **Number of payments**, which spreads the fee over time rather than
+reducing it (see *Spreading the fee over several payments*, below), and
+optionally an expiry date, a **maximum number of uses** (leave it blank for
+unlimited), and **Only this person may use it**.
 
-The code appears under **Existing codes** with its uses remaining, so you can
-see at a glance whether it has been taken up. The person you gave it to enters
-it in the **Pricing code** box on the registration form, and the price updates
-before they pay anything.
+The code appears under **Existing codes** with its uses remaining and its
+number of payments, so you can see at a glance what you offered and whether it
+has been taken up. The person you gave it to enters it in the **Pricing code**
+box on the registration form.
 
 ### For a specific LSP member
 
@@ -133,15 +134,24 @@ The two settings are independent. Leave the mode at *Full price* for a plain
 plan at the listed fee, or combine them, 20% off payable in three, if that's
 what the person needs.
 
-Their place is confirmed as soon as the first payment clears, so they attend
-from the first session like anyone else. The remaining payments show on their
-own registration page with a Pay button, and the site reminds them as each one
-falls due. Your roster marks them **On a plan** and shows no amounts, how the
-payments are going is between them and the treasurer.
+**What they see.** Redeeming the code sends them straight to checkout for the
+first payment only, labelled *Payment 1 of 3* with the full fee beside it.
+Their place is confirmed as soon as that payment clears, so they attend from
+the first session like anyone else. The rest of the schedule then lives on
+their own registration page, each with its own Pay button, and the site emails
+a reminder as each falls due.
 
-One thing to know: a member on a plan can't cancel and refund themselves. The
-button sends them to the treasurer instead, because part-way through a term
-what's owed back is a judgment, not an arithmetic.
+**What you see.** Your roster marks them **On a plan**, with no amounts and no
+sign of whether they're behind. You extended the terms, so you know the plan
+exists; how it's going is between them and the treasurer.
+
+**If the payments stop.** Nothing happens automatically. They keep their place
+and the site keeps reminding them, because deciding that someone has stopped
+paying is a judgment about a person, not a rule the site should apply on its
+own. If it needs resolving, it's the treasurer's, and they can suspend access
+if it comes to that. The same goes in the other direction: a member on a plan
+can't cancel and refund themselves, the button sends them to the treasurer,
+because part-way through a term what's owed back is a judgment too.
 
 ### A full scholarship
 
