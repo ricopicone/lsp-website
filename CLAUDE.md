@@ -795,9 +795,21 @@ Done (see `git log` for specifics):
   branch to `_apply_code`; and a `fixed_amount` code at the base price, which
   hardcodes a fee that later goes stale). **The total never changes** — the
   same discipline the tuition plan holds. The count is all faculty choose; the
-  site splits evenly with the remainder on the **final** installment, first due
-  at registration and the rest monthly (the AY-anchored Sept/Feb tuition shape
-  doesn't transfer to events starting on arbitrary dates).
+  site splits evenly with the remainder on the **final** installment and
+  **spreads the payments across the event's own run** — the span from
+  registration to the event's end divided into `count` equal periods, one
+  payment at the start of each, floored at `MIN_INTERVAL_DAYS = 28`.
+  The first cut shipped monthly-from-registration and **bunched every payment
+  at the front of a nine-month seminar** (caught by Rico, 2026-08-03); the
+  AY-anchored Sept/Feb tuition shape doesn't transfer either. Spreading makes
+  the school's own vocabulary fall out of the geometry — on the common Sept–May
+  seminar two payments land fall and spring, four land two-and-two, nine land
+  monthly — **without naming any of it**, which matters because named terms
+  cannot describe two events in the real 2026-27 program: the four-week October
+  workshop (`workshop-clinic-of-psychosis`, Oct 1–29) and the January–June
+  reading group. The floor stops a short event getting a fortnightly debit, and
+  the last payment always lands inside the run, so the school is paid before it
+  finishes delivering.
   **The feature is small because the accounting was already there:** `Charge`
   carries a `registration` FK with a unique-when-not-void constraint, the
   ledger's `_charge_states` already returns `"partial"`, `Payment` already

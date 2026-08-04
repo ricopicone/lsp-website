@@ -97,17 +97,39 @@ The tuition schedules are academic-year anchored (Sept + Feb, or monthly
 Sept–May). Seminars start on arbitrary dates and run six to fifteen sessions,
 so that shape does not transfer.
 
-The code carries a count. On redemption the site divides the fee evenly, puts
-the rounding remainder on the **final** installment so the sum is exact (the
-rule `_build_installment_schedule` already uses), sets installment 1 due
-immediately, and spaces the rest **monthly from the registration date**.
+The code carries a count. On redemption the site divides the fee evenly and
+puts the rounding remainder on the **final** installment so the sum is exact
+(the rule `_build_installment_schedule` already uses).
 
-Rejected: spreading due dates across the event's own session run (requires
-sessions to be scheduled before the code is minted, and compresses badly for
-short events); faculty authoring amounts and dates by hand (faculty mint a code
-in about ten seconds today, and this would make every code bespoke); and the
-member choosing the count from an allowed range (an extra step in a register
-flow that is currently one form).
+**Amended 2026-08-03, after the first cut shipped.** The original rule spaced
+payments *monthly from the registration date*, which bunched all of them into
+the opening weeks of a nine-month seminar — three payments on a Sept–May
+seminar were all collected by November. Payments are now **spread across the
+event's own run**: the span from registration to the event's `end_date` divided
+into `count` equal periods, one payment at the start of each, floored at
+`MIN_INTERVAL_DAYS = 28`.
+
+The proposal that prompted the fix was a set of *named* schedules — fall/spring,
+2 fall + 2 spring, monthly. Spreading produces exactly those on the events where
+they mean anything (Sept–May: 2 → fall and spring; 4 → two-and-two; 9 →
+monthly) while needing no vocabulary, which is what settles it: **named terms
+cannot describe two events in the real 2026-27 program.** The four-week
+`workshop-clinic-of-psychosis` (Oct 1–29) has no spring, and one reading group
+runs Jan 17 – Jun 20, so "fall" is simply wrong for it. A named dropdown would
+have to suppress or reject its own options per event.
+
+Two consequences worth stating: the last payment always lands *inside* the
+event's run, so the school is paid before it finishes delivering; and the floor
+means a short event degrades to monthly rather than to a fortnightly debit.
+An event with no `end_date`, or a registration taken after it has ended, is
+monthly outright.
+
+Rejected: faculty authoring amounts and dates by hand (faculty mint a code in
+about ten seconds today, and this would make every code bespoke); the member
+choosing the count from an allowed range (an extra step in a register flow that
+is currently one form); and named presets with a geometric fallback (two code
+paths and two vocabularies for one field, and conveners running two different
+groups would see two different forms).
 
 The treasurer can hand-edit a schedule afterward in Django admin, exactly as
 they can for tuition today.
@@ -218,7 +240,9 @@ Deliberately a sibling of `payments/plans.py` rather than an extension of it.
 read by three tuition surfaces; the two share a shape, not a caller.
 
 - `build_schedule(registration, count, *, today) -> list[RegistrationInstallment]`
-  — even split, remainder onto the last, first due `today`, subsequent monthly.
+  — even split, remainder onto the last, first due `today`, the rest at
+  `_interval_days` steps (the event's remaining span ÷ `count`, floored at
+  `MIN_INTERVAL_DAYS`).
   Idempotent: returns the existing rows if any exist.
 - `due_installment(registration, today, *, lead_days=LEAD_DAYS)` — oldest
   overdue, else earliest falling due within the lead window. Mirrors

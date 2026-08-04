@@ -15,7 +15,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import ROUND_DOWN, Decimal
 
-from dateutil.relativedelta import relativedelta
 from django.db.models import Sum
 from django.utils import timezone
 
@@ -25,6 +24,11 @@ from .models import RegistrationInstallment
 #: to :data:`payments.plans.LEAD_DAYS` so a member on both a tuition plan and
 #: an event plan is nudged on the same rhythm.
 LEAD_DAYS = 7
+
+#: Closest two installments may ever fall. Spreading three payments across a
+#: four-week workshop would put them a fortnight apart, which is a direct debit
+#: rather than a payment plan; below this the schedule simply goes monthly.
+MIN_INTERVAL_DAYS = 28
 
 CENT = Decimal("0.01")
 
@@ -36,9 +40,24 @@ def build_schedule(
     existing ones.
 
     Even split with the rounding remainder on the **final** installment, so
-    the schedule sums to the fee exactly. Installment 1 is due ``today``; the
-    rest fall monthly. Idempotent — a registration that already carries a
-    schedule keeps it, whatever ``count`` says.
+    the schedule sums to the fee exactly.
+
+    **Payments are spread across the event's own run**, not dropped monthly
+    from registration: the span from today to the event's end is divided into
+    ``count`` equal periods and a payment falls at the start of each. On the
+    common Sept–May seminar that puts two payments in fall and spring, four at
+    two-and-two, and nine at monthly — the schedules the school already thinks
+    in, without naming any of them. Named terms were rejected precisely because
+    they cannot describe the real program's four-week October workshop or its
+    January–June reading group.
+
+    The last payment therefore lands inside the event's run: the school is paid
+    before it finishes delivering. :data:`MIN_INTERVAL_DAYS` floors the gap, so
+    a short event degrades to monthly rather than to a fortnightly debit, and
+    an event with no end date (or one already over) is monthly outright.
+
+    Idempotent — a registration that already carries a schedule keeps it,
+    whatever ``count`` says.
 
     Returns ``[]`` for a degenerate request (fewer than two installments, or a
     non-positive fee); those are the ordinary pay-in-full path, not a plan.
@@ -53,17 +72,26 @@ def build_schedule(
         return []
 
     today = today or timezone.localdate()
+    interval = _interval_days(registration, count, today)
     each = (total / count).quantize(CENT, rounding=ROUND_DOWN)
     rows = [
         RegistrationInstallment(
             registration=registration,
             sequence=i,
-            due_date=today + relativedelta(months=i - 1),
+            due_date=today + timedelta(days=interval * (i - 1)),
             amount=(each if i < count else total - each * (count - 1)),
         )
         for i in range(1, count + 1)
     ]
     return RegistrationInstallment.objects.bulk_create(rows)
+
+
+def _interval_days(registration, count: int, today: date) -> int:
+    """Days between installments: the event's remaining span divided into
+    ``count`` periods, never below :data:`MIN_INTERVAL_DAYS`."""
+    end = getattr(registration.event, "end_date", None)
+    span = (end - today).days if end else 0
+    return max(span // count, MIN_INTERVAL_DAYS)
 
 
 def is_on_plan(registration) -> bool:
