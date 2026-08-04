@@ -146,12 +146,11 @@ sign of whether they're behind. You extended the terms, so you know the plan
 exists; how it's going is between them and the treasurer.
 
 **If the payments stop.** Nothing happens automatically. They keep their place
-and the site keeps reminding them, because deciding that someone has stopped
-paying is a judgment about a person, not a rule the site should apply on its
-own. If it needs resolving, it's the treasurer's, and they can suspend access
-if it comes to that. The same goes in the other direction: a member on a plan
-can't cancel and refund themselves, the button sends them to the treasurer,
-because part-way through a term what's owed back is a judgment too.
+and the site keeps reminding them. If it needs resolving, it's the treasurer's,
+and they can suspend access if it comes to that. The same goes in the other
+direction: a member on a plan can't cancel and refund themselves, the button
+sends them to the treasurer, because part-way through a term what's owed back
+is a judgment.
 
 ### A full scholarship
 
