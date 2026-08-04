@@ -134,12 +134,13 @@ The two settings are independent. Leave the mode at *Full price* for a plain
 plan at the listed fee, or combine them, 20% off payable in three, if that's
 what the person needs.
 
-**What they see.** Redeeming the code sends them straight to checkout for the
-first payment only, labelled *Payment 1 of 3* with the full fee beside it.
-Their place is confirmed as soon as that payment clears, so they attend from
-the first session like anyone else. The rest of the schedule then lives on
-their own registration page, each with its own Pay button, and the site emails
-a reminder as each falls due.
+**What they see.** Redeeming the code doesn't charge them anything. It takes
+them to their registration page, which lists every payment and the date it
+falls due, and they pay the first one from there. Their place is confirmed as
+soon as that payment clears, so they attend from the first session like anyone
+else. The remaining payments stay on that page, each with its own Pay button,
+and the site emails a reminder as each one comes due. They can also pay ahead
+if they'd rather.
 
 **What you see.** Your roster marks them **On a plan**, with no amounts and no
 sign of whether they're behind. You extended the terms, so you know the plan

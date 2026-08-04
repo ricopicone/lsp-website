@@ -458,31 +458,16 @@ def test_the_ledger_reads_partial_until_the_last_installment():
 # ---- Task 5: redemption builds the schedule ------------------------------
 
 
-def test_redeeming_a_plan_code_builds_the_schedule(client, monkeypatch):
+def test_redeeming_a_plan_code_builds_the_schedule(client):
+    """The registration keeps the whole fee; only the payment is chunked.
+    (Where redemption *lands* is asserted by
+    ``test_redeeming_a_plan_code_lands_on_the_schedule_not_stripe``.)"""
     from registrations.models import Registration
     member = _user()
     issuer = _user("faculty@example.com")
-    event = _event()
+    event = _dated_event(date(2026, 9, 1), date(2027, 5, 31))
     tier = _tier(event, "500.00")
     code = _code(event, issuer, installments=3)
-
-    sessions = []
-
-    def _fake(installment):
-        from payments.models import Payment
-        p = Payment.objects.create(
-            payment_type=Payment.Type.REGISTRATION,
-            registration=installment.registration,
-            user=installment.registration.user, amount=installment.amount,
-            method=Payment.Method.STRIPE, status=Payment.Status.PENDING,
-            registration_installment=installment,
-        )
-        sessions.append(p)
-        return p, type("S", (), {"url": "https://stripe.test/session"})()
-
-    monkeypatch.setattr(
-        "registrations.views.create_registration_installment_session", _fake,
-    )
 
     client.force_login(member)
     resp = client.post(
@@ -493,10 +478,9 @@ def test_redeeming_a_plan_code_builds_the_schedule(client, monkeypatch):
 
     reg = Registration.objects.get(user=member, event=event)
     assert reg.quoted_amount == Decimal("500.00")      # the full fee
-    assert reg.installments.count() == 3
-    # Checkout was opened for installment 1 only.
-    assert len(sessions) == 1
-    assert sessions[0].amount == Decimal("166.66")
+    assert [i.amount for i in reg.installments.all()] == [
+        Decimal("166.66"), Decimal("166.66"), Decimal("166.68"),
+    ]
 
 
 def test_an_approval_gated_plan_builds_its_schedule_on_approval():
@@ -886,3 +870,96 @@ def test_a_plain_member_cannot_mint_a_code(client):
     )
     assert resp.status_code == 403
     assert event.pricing_codes.count() == 0
+
+
+# ---- The plan is disclosed before checkout -------------------------------
+
+
+def test_redeeming_a_plan_code_lands_on_the_schedule_not_stripe(client, monkeypatch):
+    """A member must see what they're committing to before paying. Redeeming a
+    plan code used to bounce straight to Stripe asking for $166.66 when the
+    event page said $500."""
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _dated_event(date(2026, 9, 1), date(2027, 5, 31))
+    tier = _tier(event, "500.00")
+    code = _code(event, issuer, installments=3)
+
+    def _boom(installment):
+        raise AssertionError("must not open Checkout before the member confirms")
+
+    monkeypatch.setattr(
+        "registrations.views.create_registration_installment_session", _boom,
+    )
+
+    client.force_login(member)
+    resp = client.post(
+        f"/events/{event.slug}/register/",
+        {"price_tier": tier.pk, "pricing_code": code.code},
+    )
+    reg = Registration.objects.get(user=member, event=event)
+    assert resp.status_code == 302
+    assert resp["Location"] == f"/registrations/{reg.pk}/confirmation/"
+    assert reg.status == Registration.Status.AWAITING_PAYMENT
+    assert reg.installments.count() == 3
+
+
+def test_the_schedule_page_offers_the_first_payment_not_the_whole_fee(client):
+    """An unpaid plan registration must not also show the full-fee Pay button:
+    two competing payment paths on one page, and the plan is the one the member
+    agreed to."""
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    event = _dated_event(date(2026, 9, 1), date(2027, 5, 31))
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "500.00",
+        status=Registration.Status.AWAITING_PAYMENT,
+    )
+    registration_plans.build_schedule(reg, 3, today=date(2026, 9, 1))
+
+    client.force_login(member)
+    body = client.get(f"/registrations/{reg.pk}/confirmation/").content.decode()
+    assert "payment plan" in body.lower()
+    assert "$166.66" in body                       # the first payment
+    assert "Pay $500.00 →" not in body             # not the whole fee
+    assert f"/registrations/{reg.pk}/pay/" not in body
+
+
+def test_the_full_fee_endpoint_refuses_a_plan_registration(client):
+    """Defence in depth: the button is gone, so a POST here is a stale form."""
+    from payments import registration_plans
+    from registrations.models import Registration
+    member = _user()
+    event = _dated_event(date(2026, 9, 1), date(2027, 5, 31))
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "500.00",
+        status=Registration.Status.AWAITING_PAYMENT,
+    )
+    registration_plans.build_schedule(reg, 3, today=date(2026, 9, 1))
+
+    client.force_login(member)
+    resp = client.post(f"/registrations/{reg.pk}/pay/")
+    assert resp.status_code == 302
+    assert resp["Location"] == f"/registrations/{reg.pk}/confirmation/"
+
+
+def test_an_ordinary_registration_still_goes_straight_to_checkout(client, monkeypatch):
+    from registrations.models import Registration
+    member = _user()
+    event = _dated_event(date(2026, 9, 1), date(2027, 5, 31))
+    tier = _tier(event, "500.00")
+
+    monkeypatch.setattr(
+        "registrations.views.create_checkout_session",
+        lambda reg: (None, type("S", (), {"url": "https://stripe.test/s"})()),
+    )
+    client.force_login(member)
+    resp = client.post(
+        f"/events/{event.slug}/register/", {"price_tier": tier.pk},
+    )
+    assert resp["Location"] == "https://stripe.test/s"
+    assert Registration.objects.get(user=member, event=event).installments.count() == 0
