@@ -122,13 +122,12 @@ Sometimes the fee isn't wrong, the timing is. Set **Number of payments** to 2 or
 more and the fee is divided evenly. **The total doesn't change**, so this isn't
 a discount, it's a schedule.
 
-The payments are **spread across the run of your event**, not taken monthly at
-the start. On a seminar running September to May, two payments land roughly in
-fall and spring, four land two in each term, and nine come about monthly. On a
-four-week workshop they simply fall a month apart, and on a group running
-January to June they spread over those months instead. You choose only how
-many; the dates follow from your own dates, so the last payment always arrives
-before the group finishes.
+The payments are **spread across the run of your event**. On a seminar running
+September to May, two payments land roughly in fall and spring, four land two in
+each term, and nine come about monthly. On a four-week workshop they simply fall
+a month apart, and on a group running January to June they spread over those
+months instead. You choose only how many; the dates follow from your own dates,
+so the last payment always arrives before the group finishes.
 
 The two settings are independent. Leave the mode at *Full price* for a plain
 plan at the listed fee, or combine them, 20% off payable in three, if that's
