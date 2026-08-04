@@ -255,3 +255,23 @@ def test_payment_plan_overdue_installment_still_reminded(
     call_command("send_balance_reminders")
     assert len(mailoutbox) == 1
     assert BalanceReminder.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_reminder_says_the_balance_may_still_need_correcting(
+    period, member, mailoutbox, settings, monkeypatch,
+):
+    """The ledger is mid-migration from the old system, so a balance can be
+    wrong. The email has to say so and route the member to the one place they
+    can act on it, or an incorrect figure reads as a demand (task #494).
+    """
+    settings.EMAIL_MAX_SEND_RATE = 1000.0
+    _charge(member, "100")
+    _freeze(monkeypatch, "2026-10-01")
+    call_command("send_balance_reminders")
+
+    body = mailoutbox[0].body
+    assert "still reconciling" in body          # the balance may be wrong
+    assert "correction" in body                 # and here is how to fix it
+    assert "patience" in body                   # we know this is a transition
+    assert "?tab=account" in body               # My LSP > Account, the one place to act

@@ -1,16 +1,34 @@
-{% autoescape off %}{{ user.first_name|default:"Hello" }},
+{% load treasurer_filters %}{% autoescape off %}{{ user.first_name|default:"Hello" }},
 
 Your Lacanian School account currently shows an outstanding balance of
-${{ balance }}. This may include dues, tuition, or event fees that are
-past due.
+{{ balance|usd }}. This may include dues, tuition, or event fees.
 
-You can review your account and make a payment here:
+Please read that figure with some caution. We are still reconciling
+records carried over from our previous system, so a balance can be
+incomplete, or simply wrong. If it does not match what you remember
+paying, it may well be our error, and we would rather hear from you than
+have you pay something you do not owe.
+
+You can review everything on your account page, under My LSP, then the
+Account tab:
 
   {{ account_url }}
 
-If you've already paid, you can ignore this — it crossed in the mail.
+From there you can:
 
-Questions, or having trouble paying? Reply to this email — it goes to
+  - see every charge and payment we have on record for you
+  - re-categorize a payment that was filed under the wrong heading
+  - send the treasurer a correction, or tell us about a payment that is
+    missing from your record
+
+If the balance does look right, you can pay from that same page.
+
+If you have already paid, you can ignore this, it crossed in the mail.
+
+Thank you for your patience while we settle into the new system. Going
+through this now means your record will be right from here on.
+
+Questions, or having trouble paying? Reply to this email, it goes to
 {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
