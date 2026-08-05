@@ -348,3 +348,25 @@ def test_a_modest_upload_stores_no_duplicate(
     img = event.feature()
     assert not img.image_full
     assert img.modal_image == img.image
+
+
+# ---- Opening it at full size -------------------------------------------
+
+
+@pytest.mark.django_db
+def test_the_image_links_to_the_full_render(
+    client, special_event, special_faculty, settings, tmp_path,
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(special_faculty)
+    _post(client, special_event, upload=_upload(size=(4000, 2000)))
+    body = client.get(reverse("events:detail", args=[special_event.slug])).content.decode()
+    img = special_event.feature()
+    assert f'href="{img.image_full.url}"' in body
+    assert body.count('id="feature-image-modal"') == 1
+
+
+@pytest.mark.django_db
+def test_an_event_without_an_image_renders_no_modal(client, special_event):
+    body = client.get(reverse("events:detail", args=[special_event.slug])).content.decode()
+    assert "feature-image-modal" not in body

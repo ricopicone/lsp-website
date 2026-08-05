@@ -857,3 +857,16 @@
   height: 1px;
   overflow: hidden;
 }
+
+/* Feature-image lightbox (task #504). Plain CSS, and note the `[open]`: DaisyUI
+   dims the scrim from `.modal[open]` (specificity 0,2,0), so a bare
+   `.lsp-lightbox` class silently loses and you get its 40% black, which over
+   the dark theme is too weak to separate a picture from the page behind it.
+   The caption is a fixed light colour rather than `text-base-content`, which in
+   the light theme would be near-black type on a near-black scrim. */
+.lsp-lightbox[open] {
+  background-color: rgb(0 0 0 / 0.88);
+}
+.lsp-lightbox-caption {
+  color: rgb(255 255 255 / 0.72);
+}

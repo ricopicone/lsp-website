@@ -904,6 +904,38 @@ Done (see `git log` for specifics):
   absence of the row *is* "no image". Design:
   `docs/superpowers/specs/2026-08-04-event-feature-image-design.md`.
 
+- **Opening the feature image at full size** (task #504, follow-on). Clicking the
+  image opens it centred in a modal. Doing so exposed a resolution question the
+  340 px band was hiding: the 1600×900 render is ample for the band even at 2×
+  and visibly soft filling a modal, so `EventFeatureImage` gained a second
+  **`image_full`** render at `FULL_BOX = (2400, 1350)` from the same crop, and
+  `render()` grew a `box` parameter rather than being duplicated. The event page
+  keeps serving the smaller file above the fold. Because `thumbnail()` never
+  upscales, an upload between the 800 px floor and 1600 px would store two
+  identical files, so the larger render is kept **only when genuinely larger**
+  and a `modal_image` property returns `image_full or image`. Doing this now was
+  the point: the feature had deployed minutes earlier with no event carrying an
+  image, so there was nothing to backfill. Not the stored original, which is
+  bounded to 2400 px and would seem the obvious candidate but is **uncropped**,
+  so it would show what faculty framed out.
+  The `<img>` is wrapped in a **real anchor** to the full render: with no
+  JavaScript that opens the image directly, and it is focusable and
+  keyboard-operable because of what it is rather than through added `role` and
+  `tabindex`. JavaScript upgrades the click to a DaisyUI `<dialog class="modal">`
+  (the house pattern), where `<form method="dialog" class="modal-backdrop">`
+  gives click-outside and Escape is free — all three dismissal paths verified in
+  a browser, Escape with a real key press since a synthetic `KeyboardEvent` does
+  not trigger the UA default. **Two scrim traps, both found by looking rather
+  than by reading the markup:** DaisyUI dims from `.modal[open]` (specificity
+  0,2,0), so a bare `.lsp-lightbox` class silently loses and leaves its 40%
+  black, which over the dark theme barely separates picture from page; and the
+  caption must be a fixed light colour, since `text-base-content` in the light
+  theme is near-black type on a near-black scrim. Both are plain CSS in
+  `assets/css/input.css`, beside the `.hp-wrap` precedent. One latent bug caught
+  by the tests: the new `box` parameter was shadowed by the existing local crop
+  rectangle, feeding a 4-tuple to `thumbnail()`, so the local is now `crop_box`.
+  Design: `docs/superpowers/specs/2026-08-05-feature-image-lightbox-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

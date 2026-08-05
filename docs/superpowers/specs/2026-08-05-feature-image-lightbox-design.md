@@ -68,11 +68,24 @@ which is the house pattern (`payments/templates/payments/*/_note_modal.html` and
 its neighbours). `<form method="dialog" class="modal-backdrop">` gives
 click-outside dismissal, and Escape works for free.
 
-The dialog centres the image at `max-w-[95vw] max-h-[90vh] w-auto h-auto` on a
+The dialog centres the image at `max-w-[95vw] max-h-[85vh] w-auto h-auto` on a
 transparent box, with no chrome competing with the picture, and repeats the
-credit beneath it in small muted type. One partial serves both the event page
-and the Workspace masthead, so the masthead gains the behaviour without a second
-implementation.
+credit beneath it. One partial serves both the event page and the Workspace
+masthead, so the masthead gains the behaviour without a second implementation.
+
+Two things the scrim needs, both found by looking at the built page rather than
+by reading the markup:
+
+- DaisyUI dims from **`.modal[open]`**, specificity 0,2,0. A plain
+  `.lsp-lightbox` class silently loses to it and you get DaisyUI's 40% black,
+  which over the dark theme barely separates the picture from the page. The
+  override has to carry `[open]` too.
+- The caption must be a **fixed light colour**, not `text-base-content`. In the
+  light theme that token is near-black, and it would be printed on a near-black
+  scrim.
+
+Both rules are plain CSS in `assets/css/input.css`, beside the `.hp-wrap`
+precedent.
 
 ## Out of scope
 
