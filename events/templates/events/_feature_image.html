@@ -18,12 +18,45 @@
 {% endcomment %}
 {% if img %}
 <figure class="lsp-feature-image space-y-1.5">
-  <img src="{{ img.image.url }}"
-       width="{{ img.image_width }}" height="{{ img.image_height }}"
-       alt="{{ img.alt_text }}"
-       class="{{ size_class|default:'max-h-[260px] sm:max-h-[340px]' }} w-auto max-w-full rounded-xl ring-1 ring-base-300/60">
+  {% comment %}
+    A real anchor, not a div carrying a click handler: with no JavaScript it
+    opens the full render directly, and it is focusable and keyboard-operable
+    because of what it is rather than because of added role and tabindex. The
+    script below upgrades the click to the modal.
+  {% endcomment %}
+  <a href="{{ img.modal_image.url }}" class="block cursor-zoom-in"
+     data-feature-image-open aria-label="Open the image at full size">
+    <img src="{{ img.image.url }}"
+         width="{{ img.image_width }}" height="{{ img.image_height }}"
+         alt="{{ img.alt_text }}"
+         class="{{ size_class|default:'max-h-[260px] sm:max-h-[340px]' }} w-auto max-w-full rounded-xl ring-1 ring-base-300/60">
+  </a>
   {% if img.credit %}
   <figcaption class="text-xs text-base-content/55">{{ img.credit }}</figcaption>
   {% endif %}
 </figure>
+
+<dialog id="feature-image-modal" class="modal lsp-lightbox">
+  <div class="modal-box max-w-none w-auto bg-transparent shadow-none p-0 overflow-visible">
+    <img src="{{ img.modal_image.url }}" alt="{{ img.alt_text }}"
+         class="max-w-[95vw] max-h-[85vh] w-auto h-auto rounded-lg shadow-2xl">
+    {% if img.credit %}
+    <p class="lsp-lightbox-caption mt-3 text-center text-xs">{{ img.credit }}</p>
+    {% endif %}
+  </div>
+  {# DaisyUI's click-outside idiom; Escape closes a <dialog> for free. #}
+  <form method="dialog" class="modal-backdrop"><button aria-label="Close">close</button></form>
+</dialog>
+
+<script>
+(function () {
+  var modal = document.getElementById("feature-image-modal");
+  var link = document.querySelector("[data-feature-image-open]");
+  if (!modal || !link || typeof modal.showModal !== "function") return;
+  link.addEventListener("click", function (e) {
+    e.preventDefault();
+    modal.showModal();
+  });
+})();
+</script>
 {% endif %}

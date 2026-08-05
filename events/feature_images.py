@@ -26,6 +26,11 @@ MAX_RATIO = 2.5
 #: pixels tall, which leaves retina headroom.
 RENDER_BOX = (1600, 900)
 
+#: What the full-size modal serves. Bounded rather than unbounded because the
+#: point is to look at the image, not to ship a 6000px scan to a phone. Kept
+#: separate from RENDER_BOX so the page band above the fold stays light.
+FULL_BOX = (2400, 1350)
+
 #: The retained original is bounded too: re-cropping later must stay possible,
 #: but a 20 MB phone photo should not sit in S3 forever to make it so.
 ORIGINAL_BOX = (2400, 2400)
@@ -113,16 +118,24 @@ def _clamp_ratio(box: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
     return (left, top, right, bottom)
 
 
-def render(source, crop: dict | None = None) -> ContentFile:
+def render(
+    source, crop: dict | None = None, box: tuple[int, int] = RENDER_BOX,
+) -> ContentFile:
     """Render ``source`` to a bounded WebP ``ContentFile`` inside the ratio range.
 
     With no usable ``crop`` the whole image is used, narrowed about its centre
-    only as far as the range demands. Raises :class:`InvalidImage`.
+    only as far as the range demands. ``box`` selects the size: the page band
+    uses :data:`RENDER_BOX`, the full-size modal :data:`FULL_BOX`. Both come
+    from the same crop, so the two can never disagree about the framing.
+    Raises :class:`InvalidImage`.
     """
     img = _open(source)
     width, height = img.size
-    box = _clamp_ratio(_coerce_box(crop, width, height) or (0, 0, width, height))
-    img = img.crop(box)
+    # Named apart from ``box``: this one is a 4-tuple crop rectangle, that one
+    # the 2-tuple output bound. Conflating them silently feeds a crop rect to
+    # thumbnail().
+    crop_box = _clamp_ratio(_coerce_box(crop, width, height) or (0, 0, width, height))
+    img = img.crop(crop_box)
 
     if img.mode in ("RGBA", "LA", "P"):
         background = Image.new("RGB", img.size, (255, 255, 255))
@@ -134,7 +147,7 @@ def render(source, crop: dict | None = None) -> ContentFile:
 
     # thumbnail() never upscales, so a small crop stays small and is refused
     # below rather than blown up into blur.
-    img.thumbnail(RENDER_BOX, Image.LANCZOS)
+    img.thumbnail(box, Image.LANCZOS)
     if img.width < MIN_RENDER_WIDTH:
         raise InvalidImage(
             "That image is too small. It needs to be at least "

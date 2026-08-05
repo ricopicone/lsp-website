@@ -927,6 +927,16 @@ class EventFeatureImage(models.Model):
     # the <img> reserve its space before the file arrives.
     image_width = models.PositiveIntegerField(default=0)
     image_height = models.PositiveIntegerField(default=0)
+    image_full = models.ImageField(
+        upload_to="events/feature/full/%Y/", blank=True,
+        width_field="image_full_width", height_field="image_full_height",
+        help_text=(
+            "Larger render for the full-size view. Blank when the upload was "
+            "too small for this to differ from `image`."
+        ),
+    )
+    image_full_width = models.PositiveIntegerField(default=0)
+    image_full_height = models.PositiveIntegerField(default=0)
     original = models.ImageField(
         upload_to="events/feature/originals/%Y/", blank=True,
         help_text="The bounded upload, kept so the framing can be revised later.",
@@ -965,6 +975,16 @@ class EventFeatureImage(models.Model):
     def alt_text(self) -> str:
         """What the ``alt`` attribute should say. Never blank."""
         return self.alt or self.event.title
+
+    @property
+    def modal_image(self):
+        """The file the full-size view serves.
+
+        ``image_full`` is absent whenever the upload was too small for it to
+        differ from the page render, so this saves every template from having
+        to know that.
+        """
+        return self.image_full or self.image
 
 
 class EventMemberSpeaker(models.Model):
