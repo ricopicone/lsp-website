@@ -7,8 +7,10 @@ from datetime import date
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
 from PIL import Image
 
+from accounts.models import User
 from events import feature_images
 from events.models import Event, EventFeatureImage
 
@@ -93,3 +95,114 @@ def test_the_stored_original_is_bounded_webp():
     out = _rendered(feature_images.bound_original(_upload(size=(5000, 3000))))
     assert out.format == "WEBP"
     assert max(out.size) <= feature_images.ORIGINAL_BOX[0]
+
+
+# ---- Upload, replace, remove -------------------------------------------
+
+
+@pytest.fixture
+def faculty(db, event):
+    u = User.objects.create_user(email="fac-img@x.test")
+    u.profile.is_faculty = True
+    u.profile.save()
+    event.add_faculty(u)
+    return u
+
+
+@pytest.fixture
+def outsider(db):
+    return User.objects.create_user(email="outsider-img@x.test")
+
+
+def _post(client, event, **extra):
+    data = {
+        "upload": _upload(size=(2000, 1000)),
+        "source": EventFeatureImage.Source.OWN_WORK,
+        "rights_confirmed": "on",
+    }
+    data.update(extra)
+    return client.post(reverse("events:feature_image", args=[event.slug]), data)
+
+
+@pytest.mark.django_db
+def test_faculty_can_upload_a_feature_image(client, event, faculty, settings, tmp_path):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(faculty)
+    _post(client, event, credit="René Magritte")
+
+    img = event.feature()
+    assert img is not None
+    assert img.credit == "René Magritte"
+    assert img.image_width and img.image_height
+    assert img.original
+    assert img.rights_confirmed_by == faculty
+    assert img.rights_confirmed_at is not None
+
+
+@pytest.mark.django_db
+def test_the_rights_checkbox_is_required(client, event, faculty, settings, tmp_path):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(faculty)
+    response = client.post(
+        reverse("events:feature_image", args=[event.slug]),
+        {"upload": _upload(), "source": EventFeatureImage.Source.OWN_WORK},
+    )
+    assert response.status_code == 200
+    assert event.feature() is None
+
+
+@pytest.mark.django_db
+def test_a_licensed_source_needs_a_url(client, event, faculty, settings, tmp_path):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(faculty)
+    response = _post(client, event, source=EventFeatureImage.Source.LICENSED)
+    assert response.status_code == 200
+    assert "source_url" in response.context["feature_image_form"].errors
+    assert event.feature() is None
+
+
+@pytest.mark.django_db
+def test_metadata_can_be_edited_without_re_uploading(
+    client, event, faculty, settings, tmp_path,
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(faculty)
+    _post(client, event)
+    client.post(
+        reverse("events:feature_image", args=[event.slug]),
+        {"source": EventFeatureImage.Source.OWN_WORK,
+         "rights_confirmed": "on", "credit": "Later credit"},
+    )
+    event.refresh_from_db()
+    assert event.feature().credit == "Later credit"
+
+
+@pytest.mark.django_db
+def test_the_image_can_be_removed(client, event, faculty, settings, tmp_path):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(faculty)
+    _post(client, event)
+    client.post(reverse("events:feature_image", args=[event.slug]), {"remove": "1"})
+    event.refresh_from_db()
+    assert event.feature() is None
+
+
+@pytest.mark.django_db
+def test_someone_who_cannot_edit_the_event_is_refused(
+    client, event, outsider, settings, tmp_path,
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(outsider)
+    assert _post(client, event).status_code == 403
+    assert event.feature() is None
+
+
+@pytest.mark.django_db
+def test_a_too_small_image_is_reported_on_the_form(
+    client, event, faculty, settings, tmp_path,
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(faculty)
+    response = _post(client, event, upload=_upload(size=(400, 300)))
+    assert response.status_code == 200
+    assert "upload" in response.context["feature_image_form"].errors

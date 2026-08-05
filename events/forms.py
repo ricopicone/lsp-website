@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 
 from django import forms
+from django.utils import timezone
 
+from . import feature_images
 from .ce import CECreditBasis
 from .models import (
     CEOrganization,
     Event,
+    EventFeatureImage,
     EventProposal,
     PricingCode,
     Program,
@@ -58,6 +62,97 @@ class EventEditForm(forms.ModelForm):
 
     def clean_ce_credits_basis(self):
         return self.cleaned_data.get("ce_credits_basis") or CECreditBasis.TOTAL
+
+
+class EventFeatureImageForm(forms.ModelForm):
+    """The feature image and its rights record (task #504).
+
+    Deliberately not folded into ``EventEditForm``: ``event_edit_confirm.html``
+    re-posts that form's values as hidden textareas, and a file input cannot
+    survive the round trip, so an upload would vanish on exactly those events
+    that route through change review.
+    """
+
+    upload = forms.ImageField(
+        required=False,
+        label="Image file",
+        widget=forms.ClearableFileInput(attrs={
+            "class": "file-input file-input-bordered file-input-sm w-full",
+            "accept": "image/*",
+        }),
+    )
+    crop = forms.CharField(required=False, widget=forms.HiddenInput)
+    rights_confirmed = forms.BooleanField(
+        required=True,
+        label="I have the right to publish this image on the school's site.",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
+    )
+
+    class Meta:
+        model = EventFeatureImage
+        fields = ("credit", "alt", "source", "source_url")
+        widgets = {
+            "credit": forms.TextInput(attrs={"class": "input input-bordered input-sm w-full"}),
+            "alt": forms.TextInput(attrs={"class": "input input-bordered input-sm w-full"}),
+            "source": forms.Select(attrs={"class": "select select-bordered select-sm w-full"}),
+            "source_url": forms.URLInput(attrs={"class": "input input-bordered input-sm w-full"}),
+        }
+
+    def clean_crop(self):
+        raw = self.cleaned_data.get("crop")
+        if not raw:
+            return None
+        try:
+            value = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if isinstance(value, dict) else None
+
+    def clean_upload(self):
+        upload = self.cleaned_data.get("upload")
+        if upload and upload.size > feature_images.MAX_UPLOAD_BYTES:
+            megabytes = feature_images.MAX_UPLOAD_BYTES // (1024 * 1024)
+            raise forms.ValidationError(
+                f"That file is too large. The limit is {megabytes} MB.",
+            )
+        return upload
+
+    def clean(self):
+        cleaned = super().clean()
+        upload = cleaned.get("upload")
+
+        if not upload and not (self.instance and self.instance.pk):
+            self.add_error("upload", "Choose an image to upload.")
+
+        if cleaned.get("source") == EventFeatureImage.Source.LICENSED and not cleaned.get("source_url"):
+            self.add_error("source_url", "Give the source of the licence for a licensed image.")
+
+        # Rendered here rather than in save(), so an unreadable or too-small
+        # image comes back as a form error instead of a 500.
+        self.render_blob = self.original_blob = None
+        if upload:
+            try:
+                self.render_blob = feature_images.render(upload, cleaned.get("crop"))
+                self.original_blob = feature_images.bound_original(upload)
+            except feature_images.InvalidImage as exc:
+                self.add_error("upload", str(exc))
+        return cleaned
+
+    def save(self, event, user):
+        """Attach the image to ``event``, stamping who confirmed the rights."""
+        obj = super().save(commit=False)
+        obj.event = event
+        if self.render_blob is not None:
+            obj.image.save(f"{event.slug}.webp", self.render_blob, save=False)
+            obj.original.save(f"{event.slug}-original.webp", self.original_blob, save=False)
+            obj.crop = self.cleaned_data.get("crop")
+            # ImageFileDescriptor refreshes the dimension fields only when it is
+            # *replacing* a file, so a first upload would insert nulls.
+            obj.image_width, obj.image_height = obj.image.width, obj.image.height
+        obj.rights_confirmed_by = user
+        obj.rights_confirmed_at = timezone.now()
+        obj.save()
+        return obj
 
 
 def _code_recipient_queryset():

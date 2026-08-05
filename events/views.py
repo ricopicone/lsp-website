@@ -488,6 +488,45 @@ def ce_organization_add(request, slug: str):
 
 
 @login_required
+@require_POST
+def event_feature_image(request, slug: str):
+    """Set, replace, or remove an event's feature image (task #504).
+
+    Its own endpoint rather than a field on ``EventEditForm``: the change-review
+    dialog re-posts that form as hidden textareas, which a file input cannot
+    survive. Keeping it separate also makes its exclusion from review structural
+    rather than a rule someone has to remember.
+    """
+    from .forms import EventFeatureImageForm
+    from .models import EventFeatureImage
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to edit this event.")
+
+    if request.POST.get("remove"):
+        EventFeatureImage.objects.filter(event=event).delete()
+        messages.success(request, "Feature image removed.")
+        return redirect("events:edit", slug=event.slug)
+
+    image_form = EventFeatureImageForm(
+        request.POST, request.FILES, instance=event.feature(),
+    )
+    if image_form.is_valid():
+        image_form.save(event=event, user=request.user)
+        messages.success(request, "Feature image saved.")
+        return redirect("events:edit", slug=event.slug)
+
+    form = EventEditForm(instance=event)
+    return render(request, "events/event_edit.html", {
+        "event": event, "form": form, "feature_image_form": image_form,
+        "speaker_invites": _speaker_invite_rows(event),
+        **_ce_edit_context(form),
+        **_schedule_editor_context(event),
+    })
+
+
+@login_required
 def ce_organization_edit(request, slug: str, pk: int):
     """Manage a CE organization's logo set, site, and required wording.
 
