@@ -82,8 +82,14 @@
   </div>
   {% endif %}
 
+  {% if pending_code %}
+  <div role="alert" class="alert">
+    <span>Your convener has set aside a code for you, <code class="font-mono">{{ pending_code.code }}</code>. Enter it below to choose how it applies.</span>
+  </div>
+  {% endif %}
+
   {% if registration.status == "awaiting_payment" %}
-  <details class="rounded-lg border border-base-300 p-4">
+  <details class="rounded-lg border border-base-300 p-4"{% if pending_code %} open{% endif %}>
     <summary class="cursor-pointer text-sm text-base-content/80">
       Have a code from your convener?
     </summary>

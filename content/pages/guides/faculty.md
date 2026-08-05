@@ -94,11 +94,20 @@ number of payments, so you can see at a glance what you offered and whether it
 has been taken up. The person you gave it to enters it in the **Pricing code**
 box on the registration form.
 
-**If they've already registered**, they don't need to start over. Their
-registration page has a *Have a code from your convener?* box, and entering it
-there reprices the place they already hold. A $0 code confirms them on the
-spot. This is the usual case when someone signs up first and asks about a
-scholarship afterwards.
+**If you pinned it to one person, they don't have to do anything.** A code
+addressed to a named member applies itself the moment they open their
+registration page, or the moment they register. They see the new price without
+entering anything, and a $0 code confirms their place on the spot. Sending them
+the code does no harm, but it isn't needed.
+
+Two kinds wait for them rather than applying themselves, because both ask for a
+decision: a **payment plan** (they should see the schedule before taking it) and
+a **sliding-scale floor** (they choose the amount). Those appear on their
+registration page as a code set aside for them, ready to accept.
+
+**If they registered before you minted the code**, that all still works. Their
+registration page has a *Have a code from your convener?* box, and a pinned code
+applies on sight anyway. Nobody has to cancel anything.
 
 ### For a specific LSP member
 
