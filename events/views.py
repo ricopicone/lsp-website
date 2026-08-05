@@ -292,9 +292,13 @@ def event_detail(request, slug: str):
     if show_faculty_view:
         from registrations.models import Registration
 
-        context["registrations"] = event.registrations.select_related(
-            "user", "price_tier"
-        ).prefetch_related("installments").order_by("created_at")
+        context["registrations"] = (
+            event.registrations
+            .exclude(status__in=Registration.INACTIVE_ROSTER_STATUSES)
+            .select_related("user", "price_tier")
+            .prefetch_related("installments")
+            .order_by("created_at")
+        )
         context["pending_registrations"] = event.registrations.filter(
             status=Registration.Status.PENDING_APPROVAL
         ).select_related("user")
@@ -661,10 +665,7 @@ def event_roster_csv(request, slug: str):
 
     qs = (
         Registration.objects.filter(event=event)
-        .exclude(status__in=(
-            Registration.Status.CANCELLED,
-            Registration.Status.REFUNDED,
-        ))
+        .exclude(status__in=Registration.INACTIVE_ROSTER_STATUSES)
         .select_related("user", "user__profile", "price_tier", "pricing_code")
         .order_by("created_at")
     )

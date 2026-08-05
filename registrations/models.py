@@ -19,6 +19,13 @@ class Registration(models.Model):
         CANCELLED = "cancelled", _("Cancelled")
         REFUNDED = "refunded", _("Refunded")
 
+    #: Statuses that keep a row off a roster — the person isn't coming. Shared
+    #: by the roster CSV (REG-10) and both on-screen rosters, which had drifted:
+    #: the CSV excluded these while the screens showed faculty their own
+    #: cancelled test registrations. DECLINED stays visible on purpose, so
+    #: faculty can see who they turned away.
+    INACTIVE_ROSTER_STATUSES = ("cancelled", "refunded")
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -160,6 +167,15 @@ class Registration(models.Model):
                 self.status = self.Status.CANCELLED
 
             self.save(update_fields=("status",))
+
+            # Kill any Checkout session still open on this registration, or a
+            # stale tab can charge for a place that no longer exists (and, for
+            # someone who cancelled in order to re-register with a code, for
+            # one they now hold for free).
+            from payments.stripe_sync import expire_open_sessions
+            expire_open_sessions(
+                self, reason="Registration cancelled; checkout expired.",
+            )
 
             if self.pricing_code_id:
                 from events.models import PricingCode  # avoid circular import

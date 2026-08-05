@@ -54,6 +54,43 @@ def abandon_payment(payment: Payment, *, reason: str) -> bool:
     return True
 
 
+def expire_open_sessions(registration, *, reason: str) -> int:
+    """Kill any live Checkout session for ``registration``. Returns how many.
+
+    A cancelled registration used to leave its sessions open for the rest of
+    their ~24h window. That matters because cancel-then-re-register is the only
+    way to apply a pricing code to an existing registration: a member who did
+    it could return to a stale tab, pay, and be charged for a place they now
+    hold for free — and ``complete_payment``'s settle guard would mint no
+    ``Charge`` against it, so the money would land on their ledger as
+    unattributed credit for the treasurer to refund by hand.
+
+    Only ever abandons a row Stripe confirms it expired. If Stripe refuses —
+    which is what it does for a session that has actually been paid — the row
+    stays PENDING for ``reconcile_stripe_pending`` to settle properly, because
+    money that arrived must never be recorded as an abandonment.
+    """
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    killed = 0
+    open_payments = registration.payments.filter(
+        status=Payment.Status.PENDING,
+        method=Payment.Method.STRIPE,
+    ).exclude(stripe_checkout_session_id="")
+    for payment in open_payments:
+        try:
+            stripe.checkout.Session.expire(payment.stripe_checkout_session_id)
+        except Exception:
+            logger.warning(
+                "Could not expire Checkout session %s for payment %s; leaving "
+                "it PENDING for the nightly reconcile.",
+                payment.stripe_checkout_session_id, payment.pk, exc_info=True,
+            )
+            continue
+        if abandon_payment(payment, reason=reason):
+            killed += 1
+    return killed
+
+
 def settle_from_session(payment: Payment, session) -> str:
     """Bring ``payment`` in line with the Stripe ``session``.
 
