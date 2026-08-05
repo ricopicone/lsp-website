@@ -206,3 +206,12 @@ def test_a_too_small_image_is_reported_on_the_form(
     response = _post(client, event, upload=_upload(size=(400, 300)))
     assert response.status_code == 200
     assert "upload" in response.context["feature_image_form"].errors
+
+
+@pytest.mark.django_db
+def test_the_edit_page_offers_the_feature_image_form(client, event, faculty):
+    client.force_login(faculty)
+    response = client.get(reverse("events:edit", args=[event.slug]))
+    assert response.status_code == 200
+    assert "feature_image_form" in response.context
+    assert reverse("events:feature_image", args=[event.slug]) in response.content.decode()

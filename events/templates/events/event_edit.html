@@ -1,6 +1,10 @@
 {% extends "core/base.html" %}
+{% load static %}
 {% load tz_filters %}
 {% block title %}Edit · {{ event.title }} · LSP{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'vendor/cropper-1.6.2.min.css' %}">
+{% endblock %}
 {% block content %}
 <div class="max-w-2xl mx-auto space-y-6">
 
@@ -210,6 +214,8 @@
       <button type="submit" class="btn btn-outline btn-sm">Add organization</button>
     </form>
   </section>
+
+  {% include "events/_feature_image_form.html" %}
 
   {% if show_schedule_editor %}
   <section class="space-y-4 border-t border-base-300/60 pt-6">

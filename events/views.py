@@ -308,6 +308,17 @@ def event_detail(request, slug: str):
     return render(request, "events/event_detail.html", context)
 
 
+def _feature_image_context(event):
+    """The feature-image fieldset's own form (task #504).
+
+    A separate form on the same page, because a file input cannot survive the
+    change-review dialog's re-post of ``EventEditForm``.
+    """
+    from .forms import EventFeatureImageForm
+
+    return {"feature_image_form": EventFeatureImageForm(instance=event.feature())}
+
+
 def _ce_edit_context(form):
     """Organization checkboxes for the edit form.
 
@@ -350,6 +361,7 @@ def event_edit(request, slug: str):
         return render(request, "events/event_edit.html", {
             "event": event, "form": form,
             "speaker_invites": _speaker_invite_rows(event),
+            **_feature_image_context(event),
             **_ce_edit_context(form),
             **_schedule_editor_context(event),
         })
@@ -364,6 +376,7 @@ def event_edit(request, slug: str):
         return render(request, "events/event_edit.html", {
             "event": event, "form": form,
             "speaker_invites": _speaker_invite_rows(event),
+            **_feature_image_context(event),
             **_ce_edit_context(form),
             **_schedule_editor_context(event),
         })
@@ -482,6 +495,7 @@ def ce_organization_add(request, slug: str):
     return render(request, "events/event_edit.html", {
         "event": event, "form": form, "ce_org_form": org_form,
         "speaker_invites": _speaker_invite_rows(event),
+        **_feature_image_context(event),
         **_ce_edit_context(form),
         **_schedule_editor_context(event),
     })
@@ -643,6 +657,7 @@ def event_edit_schedule(request, slug: str):
     form = EventEditForm(instance=event)
     return render(request, "events/event_edit.html", {
         "event": event, "form": form,
+        **_feature_image_context(event),
         **_schedule_editor_context(event, formset=formset),
     })
 

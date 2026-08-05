@@ -1,0 +1,193 @@
+{% load static %}
+{% comment %}
+  Feature image (task #504).
+
+  Its own multipart form and endpoint: the change-review dialog re-posts the
+  edit form's values as hidden textareas, which a file input cannot survive.
+  HTML forbids nesting forms, so this sits outside the edit form entirely.
+{% endcomment %}
+<section class="space-y-3 border-t border-base-300/60 pt-6">
+  <h2 class="font-serif text-lg text-base-content">Feature image</h2>
+  <p class="text-xs text-base-content/60">
+    An image shown at the top of the event page, in the workspace, and when
+    someone shares the link. Anything from a square to a wide banner works, and
+    you can adjust the framing after choosing a file. It needs to be at least
+    800 pixels wide.
+  </p>
+
+  {% with img=event.feature %}
+  {% if img %}
+  <figure class="space-y-1">
+    <img src="{{ img.image.url }}" width="{{ img.image_width }}" height="{{ img.image_height }}"
+         alt="{{ img.alt_text }}"
+         class="max-h-[160px] w-auto max-w-full rounded-lg ring-1 ring-base-300/60">
+    {% if img.credit %}
+    <figcaption class="text-xs text-base-content/55">{{ img.credit }}</figcaption>
+    {% endif %}
+  </figure>
+  <form method="post" action="{% url 'events:feature_image' event.slug %}">
+    {% csrf_token %}
+    <button type="submit" name="remove" value="1" class="btn btn-ghost btn-xs">Remove image</button>
+  </form>
+  {% endif %}
+  {% endwith %}
+
+  <form method="post" enctype="multipart/form-data" id="feature-image-form"
+        action="{% url 'events:feature_image' event.slug %}" class="space-y-3">
+    {% csrf_token %}
+    {% with f=feature_image_form %}
+    <div class="space-y-1">
+      <label for="{{ f.upload.id_for_label }}" class="block text-xs text-base-content/60">
+        {% if event.feature %}Replace the image{% else %}Image file{% endif %}
+      </label>
+      {{ f.upload }}
+      {% if f.upload.errors %}<p class="text-xs text-error">{{ f.upload.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div id="feature-image-preview" class="hidden space-y-2">
+      <img id="feature-image-preview-img" alt=""
+           class="max-h-[160px] w-auto max-w-full rounded-lg ring-1 ring-base-300/60">
+      <div>
+        <button type="button" id="feature-image-adjust" class="btn btn-outline btn-xs">
+          Adjust framing
+        </button>
+      </div>
+    </div>
+    {{ f.crop }}
+
+    <div class="space-y-1">
+      <label for="{{ f.credit.id_for_label }}" class="block text-xs text-base-content/60">
+        Credit (optional)
+      </label>
+      {{ f.credit }}
+      <p class="text-xs text-base-content/60">
+        Shown small under the image, for example the artist and the title of the work.
+      </p>
+      {% if f.credit.errors %}<p class="text-xs text-error">{{ f.credit.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ f.alt.id_for_label }}" class="block text-xs text-base-content/60">
+        Description for screen readers (optional)
+      </label>
+      {{ f.alt }}
+      <p class="text-xs text-base-content/60">Left blank, this falls back to the event title.</p>
+      {% if f.alt.errors %}<p class="text-xs text-error">{{ f.alt.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ f.source.id_for_label }}" class="block text-xs text-base-content/60">
+        Where this image came from
+      </label>
+      {{ f.source }}
+      {% if f.source.errors %}<p class="text-xs text-error">{{ f.source.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label for="{{ f.source_url.id_for_label }}" class="block text-xs text-base-content/60">
+        Link to the licence or the source (required for a licensed image)
+      </label>
+      {{ f.source_url }}
+      {% if f.source_url.errors %}<p class="text-xs text-error">{{ f.source_url.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <div class="space-y-1">
+      <label class="flex items-start gap-2 text-xs text-base-content/80">
+        {{ f.rights_confirmed }}
+        <span>{{ f.rights_confirmed.label }}</span>
+      </label>
+      {% if f.rights_confirmed.errors %}<p class="text-xs text-error">{{ f.rights_confirmed.errors|join:", " }}</p>{% endif %}
+    </div>
+
+    <button type="submit" class="btn btn-outline btn-sm">Save image</button>
+    {% endwith %}
+  </form>
+
+  {# ---- Framing modal ---------------------------------------------------- #}
+  <dialog id="feature-cropper-modal" class="modal">
+    <div class="modal-box max-w-3xl">
+      <h3 class="font-serif text-lg mb-3">Adjust the framing</h3>
+      <p class="text-xs text-base-content/60 mb-3">
+        Drag to choose what the image shows. The frame can be anything from a
+        square to two and a half times as wide as it is tall.
+      </p>
+      <div class="bg-base-200 rounded-lg overflow-hidden">
+        <img id="feature-cropper-image" alt="" style="max-width:100%;display:block">
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" id="feature-cropper-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="feature-cropper-apply">Use this framing</button>
+      </div>
+    </div>
+  </dialog>
+</section>
+
+<script src="{% static 'vendor/cropper-1.6.2.min.js' %}"></script>
+<script>
+(function () {
+  // Kept in step with events/feature_images.py — the server re-validates, so a
+  // drifted constant here is a nuisance, not a hole.
+  var MIN_RATIO = 1.0, MAX_RATIO = 2.5;
+
+  var input      = document.getElementById("{{ feature_image_form.upload.id_for_label }}");
+  var preview    = document.getElementById("feature-image-preview");
+  var previewImg = document.getElementById("feature-image-preview-img");
+  var adjust     = document.getElementById("feature-image-adjust");
+  var modal      = document.getElementById("feature-cropper-modal");
+  var image      = document.getElementById("feature-cropper-image");
+  var cropField  = document.getElementById("{{ feature_image_form.crop.auto_id }}");
+  var cropper = null, dataUrl = null;
+
+  if (!input || !cropField) return;
+
+  input.addEventListener("change", function () {
+    var file = input.files && input.files[0];
+    // A new file invalidates any framing chosen for the previous one; with the
+    // crop cleared the server falls back to the whole image, narrowed only as
+    // far as the ratio range demands.
+    cropField.value = "";
+    if (!file) { preview.classList.add("hidden"); return; }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      dataUrl = e.target.result;
+      previewImg.src = dataUrl;
+      preview.classList.remove("hidden");
+    };
+    reader.readAsDataURL(file);
+  });
+
+  adjust.addEventListener("click", function () {
+    if (!dataUrl) return;
+    image.src = dataUrl;
+    modal.showModal();
+    // Cropper.js has no ratio *range*, only a locked ratio, so the crop handler
+    // pulls the box back into range as it is dragged.
+    cropper = new Cropper(image, {
+      viewMode: 1, autoCropArea: 1, background: false,
+      movable: false, zoomable: false, rotatable: false,
+      crop: function (event) {
+        var w = event.detail.width, h = event.detail.height;
+        if (!w || !h || !cropper) return;
+        var ratio = w / h;
+        if (ratio > MAX_RATIO) { cropper.setData({ width: h * MAX_RATIO }); }
+        else if (ratio < MIN_RATIO) { cropper.setData({ height: w / MIN_RATIO }); }
+      }
+    });
+  });
+
+  function close() {
+    if (cropper) { cropper.destroy(); cropper = null; }
+    modal.close();
+  }
+
+  document.getElementById("feature-cropper-cancel").addEventListener("click", close);
+  document.getElementById("feature-cropper-apply").addEventListener("click", function () {
+    if (cropper) {
+      var d = cropper.getData(true);
+      cropField.value = JSON.stringify({ x: d.x, y: d.y, width: d.width, height: d.height });
+      previewImg.src = cropper.getCroppedCanvas({ maxWidth: 800 }).toDataURL("image/png");
+    }
+    close();
+  });
+})();
+</script>
