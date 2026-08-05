@@ -94,6 +94,12 @@ number of payments, so you can see at a glance what you offered and whether it
 has been taken up. The person you gave it to enters it in the **Pricing code**
 box on the registration form.
 
+**If they've already registered**, they don't need to start over. Their
+registration page has a *Have a code from your convener?* box, and entering it
+there reprices the place they already hold. A $0 code confirms them on the
+spot. This is the usual case when someone signs up first and asks about a
+scholarship afterwards.
+
 ### For a specific LSP member
 
 Mint the code, pick them under **Only this person may use it**, set the maximum

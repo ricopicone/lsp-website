@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -380,6 +380,87 @@ def pay_registration(request, reg_id: int):
         return redirect("registrations:confirm", reg_id=reg.id)
     _payment, session = create_checkout_session(reg)
     return redirect(session.url)
+
+
+@login_required
+@require_POST
+def apply_code(request, reg_id: int):
+    """Redeem a pricing code against a registration that already exists.
+
+    Codes used to be redeemable only on the register form, which anyone with an
+    active registration is bounced past — so a member offered a scholarship
+    after registering had no way to take it, short of cancelling their place
+    and registering again. This is that missing route: same resolver, same
+    consumption, applied in situ.
+    """
+    reg = get_object_or_404(Registration, pk=reg_id, user=request.user)
+    back = redirect("registrations:confirm", reg_id=reg.id)
+
+    if reg.status != Registration.Status.AWAITING_PAYMENT:
+        messages.error(
+            request,
+            "A code can only be applied to a registration that's still "
+            "awaiting payment. If something needs adjusting, contact the "
+            "treasurer.",
+        )
+        return back
+
+    raw = (request.POST.get("pricing_code") or "").strip().upper()
+    code = PricingCode.objects.filter(code=raw, event=reg.event).first()
+    if code is None:
+        messages.error(request, "That code isn't valid for this event.")
+        return back
+
+    sliding_raw = (request.POST.get("sliding_amount") or "").strip()
+    try:
+        sliding = Decimal(sliding_raw) if sliding_raw else None
+    except (InvalidOperation, ValueError):
+        messages.error(request, "Enter the amount as a number, like 120.")
+        return back
+
+    from events.pricing import PricingError, resolve_price
+    try:
+        resolution = resolve_price(
+            user=request.user, tier=reg.price_tier,
+            sliding_amount=sliding, pricing_code=code,
+        )
+    except PricingError as exc:
+        messages.error(request, str(exc))
+        return back
+
+    with transaction.atomic():
+        reg.quoted_amount = resolution.amount
+        reg.quoted_explanation = resolution.explanation
+        reg.pricing_code = code
+        if resolution.amount <= Decimal("0"):
+            reg.status = Registration.Status.PAID
+        reg.save(update_fields=(
+            "quoted_amount", "quoted_explanation", "pricing_code", "status",
+        ))
+        if code.max_uses is not None:
+            PricingCode.objects.filter(pk=code.pk).update(
+                uses_remaining=F("uses_remaining") - 1
+            )
+        if resolution.installments > 1 and resolution.amount > 0:
+            registration_plans.build_schedule(reg, resolution.installments)
+
+    # The old price must stop being payable: a Checkout session opened before
+    # the code was applied would still charge the full fee.
+    from payments.stripe_sync import expire_open_sessions
+    expire_open_sessions(
+        reg, reason=f"Repriced by code {code.code}; checkout expired.",
+    )
+
+    if reg.status == Registration.Status.PAID:
+        notify_payments.registration_confirmed(reg)
+        messages.success(
+            request, "Your code was applied and your place is confirmed.",
+        )
+    else:
+        messages.success(
+            request, f"Your code was applied. The fee is now ${reg.quoted_amount}.",
+        )
+    return back
 
 
 @login_required

@@ -1105,3 +1105,201 @@ def test_the_roster_hides_cancelled_and_refunded(client):
     assert on_roster(live.user.email)
     assert not on_roster("gone@example.com")
     assert not on_roster("back@example.com")
+
+
+# ---- A code can be applied to a registration that already exists ---------
+#
+# Previously a code could only be redeemed on the register form, which an
+# already-registered member is bounced past. The only route was cancel and
+# re-register, i.e. give up your place to receive your scholarship.
+
+
+def _apply(client, reg, code, **extra):
+    return client.post(
+        f"/registrations/{reg.pk}/apply-code/",
+        {"pricing_code": code.code, **extra}, follow=True,
+    )
+
+
+def test_a_scholarship_code_settles_an_existing_registration(client):
+    from events.models import PricingCode
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    code = _code(
+        event, issuer, pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("0"), max_uses=1, restricted_to_user=member,
+    )
+
+    client.force_login(member)
+    _apply(client, reg, code)
+
+    reg.refresh_from_db()
+    code.refresh_from_db()
+    assert reg.status == Registration.Status.PAID
+    assert reg.quoted_amount == Decimal("0.00")
+    assert reg.pricing_code_id == code.pk
+    assert code.uses_remaining == 0
+    # The confirmation email itself goes out on transaction.on_commit, which
+    # pytest-django doesn't run; the bell row is written synchronously.
+    from notifications.models import Notification
+    assert Notification.objects.filter(recipient=member).exists()
+
+
+def test_a_discount_code_reprices_without_settling(client):
+    from events.models import PricingCode
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    code = _code(
+        event, issuer, pricing_mode=PricingCode.Mode.PERCENT_OFF,
+        amount_or_percent=Decimal("20"),
+    )
+
+    client.force_login(member)
+    _apply(client, reg, code)
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("200.00")
+    assert reg.status == Registration.Status.AWAITING_PAYMENT
+
+
+def test_applying_a_plan_code_builds_the_schedule(client):
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _dated_event(date(2026, 9, 1), date(2027, 5, 31))
+    tier = _tier(event, "500.00")
+    reg = _registration(member, event, tier, "500.00")
+    code = _code(event, issuer, installments=3)
+
+    client.force_login(member)
+    _apply(client, reg, code)
+
+    reg.refresh_from_db()
+    assert reg.installments.count() == 3
+
+
+def test_repricing_expires_the_stale_checkout(client, monkeypatch):
+    """The old price must not remain payable from a tab left open."""
+    from events.models import PricingCode
+    from payments.models import Payment
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    pay = _pending_payment(reg, "cs_stale")
+    code = _code(
+        event, issuer, pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("0"),
+    )
+    expired = []
+    monkeypatch.setattr(
+        "payments.stripe_sync.stripe.checkout.Session.expire",
+        lambda sid: expired.append(sid),
+    )
+
+    client.force_login(member)
+    _apply(client, reg, code)
+
+    pay.refresh_from_db()
+    assert expired == ["cs_stale"]
+    assert pay.status == Payment.Status.ABANDONED
+
+
+def test_a_code_for_another_event_is_refused(client):
+    from decimal import Decimal as D
+
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    other = _event(title="Other Seminar")
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    code = _code(other, issuer, pricing_mode="fixed_amount", amount_or_percent=D("0"))
+
+    client.force_login(member)
+    resp = _apply(client, reg, code)
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == D("250.00")
+    assert reg.status == Registration.Status.AWAITING_PAYMENT
+    assert "valid for this event" in resp.content.decode()
+
+
+def test_a_code_pinned_to_someone_else_is_refused(client):
+    from events.models import PricingCode
+    member = _user()
+    other = _user("other@example.com")
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    code = _code(
+        event, issuer, pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("0"), restricted_to_user=other,
+    )
+
+    client.force_login(member)
+    _apply(client, reg, code)
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("250.00")
+
+
+def test_a_paid_registration_cannot_be_repriced(client):
+    from events.models import PricingCode
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(
+        member, event, tier, "250.00", status=Registration.Status.PAID,
+    )
+    code = _code(
+        event, issuer, pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("0"),
+    )
+
+    client.force_login(member)
+    _apply(client, reg, code)
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("250.00")
+
+
+def test_someone_elses_registration_is_404(client):
+    from events.models import PricingCode
+    member = _user()
+    intruder = _user("intruder@example.com")
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    code = _code(
+        event, issuer, pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("0"),
+    )
+    client.force_login(intruder)
+    resp = client.post(
+        f"/registrations/{reg.pk}/apply-code/", {"pricing_code": code.code},
+    )
+    assert resp.status_code == 404
+
+
+def test_the_confirmation_page_offers_the_code_box(client):
+    member = _user()
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    client.force_login(member)
+    body = client.get(f"/registrations/{reg.pk}/confirmation/").content.decode()
+    assert f"/registrations/{reg.pk}/apply-code/" in body
