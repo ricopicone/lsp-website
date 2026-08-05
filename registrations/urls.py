@@ -46,6 +46,11 @@ urlpatterns = [
         name="pay",
     ),
     path(
+        "registrations/<int:reg_id>/apply-code/",
+        views.apply_code,
+        name="apply_code",
+    ),
+    path(
         "registrations/installments/<int:installment_id>/pay/",
         views.pay_installment,
         name="pay_installment",
