@@ -107,7 +107,7 @@ registration page as a code set aside for them, ready to accept.
 
 **If they registered before you minted the code**, that all still works. Their
 registration page has a *Have a code from your convener?* box, and a pinned code
-applies on sight anyway. Nobody has to cancel anything.
+applies on sight anyway.
 
 ### For a specific LSP member
 
