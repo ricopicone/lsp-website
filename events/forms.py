@@ -124,8 +124,11 @@ class EventFeatureImageForm(forms.ModelForm):
         if not upload and not (self.instance and self.instance.pk):
             self.add_error("upload", "Choose an image to upload.")
 
-        if cleaned.get("source") == EventFeatureImage.Source.LICENSED and not cleaned.get("source_url"):
-            self.add_error("source_url", "Give the source of the licence for a licensed image.")
+        licensed = cleaned.get("source") == EventFeatureImage.Source.LICENSED
+        if licensed and not cleaned.get("source_url"):
+            self.add_error(
+                "source_url", "Give the source of the licence for a licensed image.",
+            )
 
         # Rendered here rather than in save(), so an unreadable or too-small
         # image comes back as a form error instead of a 500.

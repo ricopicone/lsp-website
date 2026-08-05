@@ -282,3 +282,32 @@ def test_a_seminars_image_shows_on_its_workspace_masthead(
     body = client.get(event.workgroup.get_absolute_url()).content.decode()
     assert "lsp-feature-image" in body
     assert event.feature().image.url in body
+
+
+# ---- Share preview -----------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_the_event_page_carries_opengraph_tags_with_an_image(
+    client, special_event, special_faculty, settings, tmp_path,
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    settings.SITE_BASE_URL = "https://lacanschool.org"
+    client.force_login(special_faculty)
+    _post(client, special_event)
+    body = client.get(reverse("events:detail", args=[special_event.slug])).content.decode()
+    assert 'property="og:title" content="Working with Masochism"' in body
+    assert 'property="og:image"' in body
+    assert 'name="twitter:card" content="summary_large_image"' in body
+    assert "https://lacanschool.org/events/working-with-masochism/" in body
+
+
+@pytest.mark.django_db
+def test_an_event_without_an_image_still_carries_text_opengraph_tags(
+    client, special_event, settings,
+):
+    settings.SITE_BASE_URL = "https://lacanschool.org"
+    body = client.get(reverse("events:detail", args=[special_event.slug])).content.decode()
+    assert 'property="og:title" content="Working with Masochism"' in body
+    assert 'property="og:image"' not in body
+    assert 'name="twitter:card" content="summary"' in body

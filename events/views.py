@@ -283,10 +283,13 @@ def event_detail(request, slug: str):
             and wg.landing_visible_to(request.user)):
         workspace_url = wg.get_absolute_url()
 
+    feature = event.feature()
     context = {
         "can_edit": can_edit,
         "show_faculty_view": show_faculty_view,
         "workspace_url": workspace_url,
+        "og_url": _absolute(reverse("events:detail", args=[event.slug])),
+        "og_image": _absolute(feature.image.url) if feature else "",
         **event_summary_context(event, request.user),
     }
     if show_faculty_view:
@@ -306,6 +309,17 @@ def event_detail(request, slug: str):
         context["existing_codes"] = event.pricing_codes.order_by("-created_at")
 
     return render(request, "events/event_detail.html", context)
+
+
+def _absolute(url: str) -> str:
+    """An absolute URL, for sharing (task #504).
+
+    In production media already lives on S3 and its URL is absolute; in
+    development it's a MEDIA_URL path that needs the site base in front of it.
+    """
+    if url.startswith(("http://", "https://")):
+        return url
+    return settings.SITE_BASE_URL.rstrip("/") + url
 
 
 def _feature_image_context(event):
