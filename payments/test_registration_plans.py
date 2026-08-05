@@ -963,3 +963,145 @@ def test_an_ordinary_registration_still_goes_straight_to_checkout(client, monkey
     )
     assert resp["Location"] == "https://stripe.test/s"
     assert Registration.objects.get(user=member, event=event).installments.count() == 0
+
+
+# ---- Cancelling kills the open Checkout session --------------------------
+#
+# A cancelled registration used to leave its Stripe session live for the rest
+# of its ~24h window. A member who cancelled and re-registered (the only way to
+# apply a code to an existing registration) could then complete the stale tab
+# and be charged for a place they already hold, with no Charge minted against
+# it because the settle guard sees a non-settled registration.
+
+
+def _pending_payment(reg, session_id="cs_test_open"):
+    from payments.models import Payment
+    return Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg,
+        user=reg.user, amount=reg.quoted_amount,
+        method=Payment.Method.STRIPE, status=Payment.Status.PENDING,
+        stripe_checkout_session_id=session_id,
+    )
+
+
+def test_cancelling_expires_the_open_checkout_session(monkeypatch):
+    from payments.models import Payment
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "250.00")
+    pay = _pending_payment(reg)
+
+    expired = []
+    monkeypatch.setattr(
+        "payments.stripe_sync.stripe.checkout.Session.expire",
+        lambda sid: expired.append(sid),
+    )
+
+    reg.cancel()
+    reg.refresh_from_db()
+    pay.refresh_from_db()
+    assert reg.status == Registration.Status.CANCELLED
+    assert expired == ["cs_test_open"]
+    assert pay.status == Payment.Status.ABANDONED
+
+
+def test_a_session_stripe_says_is_already_paid_is_left_alone(monkeypatch):
+    """If Stripe refuses the expiry the money may really have arrived; leave
+    the row PENDING for the nightly reconcile rather than calling it
+    abandoned."""
+    import stripe as _stripe
+
+    from payments.models import Payment
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(member, event, tier, "250.00")
+    pay = _pending_payment(reg)
+
+    def _refuse(sid):
+        raise _stripe.error.InvalidRequestError("already completed", None)
+
+    monkeypatch.setattr(
+        "payments.stripe_sync.stripe.checkout.Session.expire", _refuse,
+    )
+
+    reg.cancel()          # must not raise
+    reg.refresh_from_db()
+    pay.refresh_from_db()
+    assert reg.status == Registration.Status.CANCELLED
+    assert pay.status == Payment.Status.PENDING
+
+
+def test_cancelling_leaves_settled_payments_alone(monkeypatch):
+    from payments.models import Payment
+    from registrations.models import Registration
+    member = _user()
+    event = _event()
+    tier = _tier(event)
+    reg = _registration(
+        member, event, tier, "250.00", status=Registration.Status.PAID,
+    )
+    done = Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg, user=member,
+        amount=Decimal("250.00"), method=Payment.Method.STRIPE,
+        status=Payment.Status.SUCCEEDED, stripe_payment_intent_id="pi_ok",
+        stripe_checkout_session_id="cs_done",
+    )
+    expired = []
+    monkeypatch.setattr(
+        "payments.stripe_sync.stripe.checkout.Session.expire",
+        lambda sid: expired.append(sid),
+    )
+    monkeypatch.setattr(
+        "payments.refund.refund_payment", lambda p: {"id": "re_x"},
+    )
+
+    reg.cancel()
+    done.refresh_from_db()
+    assert expired == []                       # nothing open to expire
+    assert done.status == Payment.Status.SUCCEEDED
+
+
+# ---- The roster shows active registrations only --------------------------
+
+
+def test_the_roster_hides_cancelled_and_refunded(client):
+    """Faculty were seeing their own test registrations, cancelled, sitting on
+    the roster. The CSV already excluded them."""
+    from registrations.models import Registration
+    faculty = _user("faculty@example.com")
+    faculty.profile.is_faculty = True
+    faculty.profile.save()
+    event = _event()
+    event.add_faculty(faculty)
+    tier = _tier(event)
+
+    live = _registration(
+        _user("live@example.com"), event, tier, "250.00",
+        status=Registration.Status.PAID,
+    )
+    _registration(
+        _user("gone@example.com"), event, tier, "250.00",
+        status=Registration.Status.CANCELLED,
+    )
+    _registration(
+        _user("back@example.com"), event, tier, "250.00",
+        status=Registration.Status.REFUNDED,
+    )
+
+    client.force_login(faculty)
+    body = client.get(
+        event.workgroup.get_absolute_url() + "?tab=roster"
+    ).content.decode()
+
+    # Scoped to the roster's own cells: every account also appears in the
+    # pricing-code form's "Only this person may use it" dropdown.
+    def on_roster(email):
+        return f'<td class="text-base-content/70">{email}</td>' in body
+
+    assert on_roster(live.user.email)
+    assert not on_roster("gone@example.com")
+    assert not on_roster("back@example.com")
