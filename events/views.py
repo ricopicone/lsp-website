@@ -283,10 +283,13 @@ def event_detail(request, slug: str):
             and wg.landing_visible_to(request.user)):
         workspace_url = wg.get_absolute_url()
 
+    feature = event.feature()
     context = {
         "can_edit": can_edit,
         "show_faculty_view": show_faculty_view,
         "workspace_url": workspace_url,
+        "og_url": _absolute(reverse("events:detail", args=[event.slug])),
+        "og_image": _absolute(feature.image.url) if feature else "",
         **event_summary_context(event, request.user),
     }
     if show_faculty_view:
@@ -306,6 +309,28 @@ def event_detail(request, slug: str):
         context["existing_codes"] = event.pricing_codes.order_by("-created_at")
 
     return render(request, "events/event_detail.html", context)
+
+
+def _absolute(url: str) -> str:
+    """An absolute URL, for sharing (task #504).
+
+    In production media already lives on S3 and its URL is absolute; in
+    development it's a MEDIA_URL path that needs the site base in front of it.
+    """
+    if url.startswith(("http://", "https://")):
+        return url
+    return settings.SITE_BASE_URL.rstrip("/") + url
+
+
+def _feature_image_context(event):
+    """The feature-image fieldset's own form (task #504).
+
+    A separate form on the same page, because a file input cannot survive the
+    change-review dialog's re-post of ``EventEditForm``.
+    """
+    from .forms import EventFeatureImageForm
+
+    return {"feature_image_form": EventFeatureImageForm(instance=event.feature())}
 
 
 def _ce_edit_context(form):
@@ -350,6 +375,7 @@ def event_edit(request, slug: str):
         return render(request, "events/event_edit.html", {
             "event": event, "form": form,
             "speaker_invites": _speaker_invite_rows(event),
+            **_feature_image_context(event),
             **_ce_edit_context(form),
             **_schedule_editor_context(event),
         })
@@ -364,6 +390,7 @@ def event_edit(request, slug: str):
         return render(request, "events/event_edit.html", {
             "event": event, "form": form,
             "speaker_invites": _speaker_invite_rows(event),
+            **_feature_image_context(event),
             **_ce_edit_context(form),
             **_schedule_editor_context(event),
         })
@@ -481,6 +508,46 @@ def ce_organization_add(request, slug: str):
     form = EventEditForm(instance=event)
     return render(request, "events/event_edit.html", {
         "event": event, "form": form, "ce_org_form": org_form,
+        "speaker_invites": _speaker_invite_rows(event),
+        **_feature_image_context(event),
+        **_ce_edit_context(form),
+        **_schedule_editor_context(event),
+    })
+
+
+@login_required
+@require_POST
+def event_feature_image(request, slug: str):
+    """Set, replace, or remove an event's feature image (task #504).
+
+    Its own endpoint rather than a field on ``EventEditForm``: the change-review
+    dialog re-posts that form as hidden textareas, which a file input cannot
+    survive. Keeping it separate also makes its exclusion from review structural
+    rather than a rule someone has to remember.
+    """
+    from .forms import EventFeatureImageForm
+    from .models import EventFeatureImage
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to edit this event.")
+
+    if request.POST.get("remove"):
+        EventFeatureImage.objects.filter(event=event).delete()
+        messages.success(request, "Feature image removed.")
+        return redirect("events:edit", slug=event.slug)
+
+    image_form = EventFeatureImageForm(
+        request.POST, request.FILES, instance=event.feature(),
+    )
+    if image_form.is_valid():
+        image_form.save(event=event, user=request.user)
+        messages.success(request, "Feature image saved.")
+        return redirect("events:edit", slug=event.slug)
+
+    form = EventEditForm(instance=event)
+    return render(request, "events/event_edit.html", {
+        "event": event, "form": form, "feature_image_form": image_form,
         "speaker_invites": _speaker_invite_rows(event),
         **_ce_edit_context(form),
         **_schedule_editor_context(event),
@@ -604,6 +671,7 @@ def event_edit_schedule(request, slug: str):
     form = EventEditForm(instance=event)
     return render(request, "events/event_edit.html", {
         "event": event, "form": form,
+        **_feature_image_context(event),
         **_schedule_editor_context(event, formset=formset),
     })
 

@@ -855,6 +855,55 @@ Done (see `git log` for specifics):
   Design:
   `docs/superpowers/specs/2026-08-03-registration-payment-plans-design.md`.
 
+- **A feature image on an event** (task #504). An event page was all type, while
+  faculty routinely have a painting or a book cover in mind for the offering.
+  Storing a file is the easy half; the hard half is that faculty upload every
+  shape there is, and one layout has to hold all of them. **The shape is settled
+  at upload, not at display** (`events/feature_images.py`), which is the
+  `accounts/images.py` principle — normalize on the way in so every render site
+  "just works" — departing from it only in allowing a **range** rather than a
+  square: `1:1 ≤ ratio ≤ 2.5:1`, free-cropped in the vendored Cropper.js and
+  re-clamped server-side, since a hand-rolled POST, a no-JS upload, and the
+  whole-image default all bypass the drag handles. A single fixed ratio was
+  designed first and rejected: it butchers a square poster. The render fits a
+  1600×900 box (a 2.5:1 lands 1600×640, a square 900×900), WebP q82, alpha
+  flattened onto white; the retained original — kept so the framing can be
+  revised — is itself re-encoded to 2400 px WebP q88, so a 20 MB phone photo
+  does not sit in S3 forever to make re-cropping possible. Refused: over 12 MB
+  before decoding, and any render under 800 px wide, where the band shows a
+  blur.
+  **The layout rule is to bound both dimensions rather than fix the height**:
+  never taller than the band, never wider than the column, and never asked to be
+  both at once. So a 2.5:1 runs the full column, a square sits as a narrow plate
+  beside white space, every event page keeps the same vertical rhythm, and
+  nothing is re-cropped at display time. Verified in the browser at three
+  shapes: the phone cap is the *looser* of the two (260 vs 340) because at that
+  width anything wide is already column-bound, so the cap governs only the
+  squarer end — at 200 px a square poster sat stranded.
+  **It is edited by its own form posting to its own endpoint**, which is not a
+  style preference: `event_edit_confirm.html:39` re-posts `EventEditForm` as
+  hidden `<textarea>`s and a file input cannot survive that, so folding the
+  image in would have silently dropped uploads on exactly those events that
+  route through change review. That separation also makes its **absence from
+  `REVIEWABLE_FIELDS` structural** rather than a remembered rule — and it is
+  absent deliberately: review protects a description the PC approved, and there
+  is no prior image to diverge from. Rights are a **condition of the upload**,
+  not a field beside it: a structured source (public domain / licensed / own
+  work / permission) plus a confirmation checkbox, both required, stamped with
+  who confirmed and when, because a public page is where a takedown arrives.
+  Surfaces are the event page, the Workspace masthead (via
+  `Workgroup.primary_event()`, and note a seminar's event page *redirects*
+  there), and a new OpenGraph block — the site emitted no social metadata at
+  all before, so it is scoped to `event_detail.html` rather than pushed into
+  `base.html`. WebP is served to scrapers directly; no JPEG twin. Two things
+  found while building: Django refreshes `width_field`/`height_field` only when
+  *replacing* a file, so a first upload inserted nulls, and the og description
+  needs `inline_italics` before `striptags` or the member-text convention's
+  `*asterisks*` reach a share card as punctuation. Nine fields went onto a new
+  `OneToOne` `EventFeatureImage` rather than onto the 1,722-line `Event`, so
+  absence of the row *is* "no image". Design:
+  `docs/superpowers/specs/2026-08-04-event-feature-image-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

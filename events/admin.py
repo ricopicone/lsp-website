@@ -6,6 +6,7 @@ from .models import (
     CEOrganization,
     Event,
     EventChangeRequest,
+    EventFeatureImage,
     EventMemberSpeaker,
     EventProposal,
     PriceTier,
@@ -115,6 +116,14 @@ class EventMemberSpeakerInline(admin.TabularInline):
     )
 
 
+class EventFeatureImageInline(admin.StackedInline):
+    model = EventFeatureImage
+    extra = 0
+    readonly_fields = (
+        "image_width", "image_height", "rights_confirmed_by", "rights_confirmed_at",
+    )
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     form = EventAdminForm
@@ -131,7 +140,10 @@ class EventAdmin(admin.ModelAdmin):
     search_fields = ("title", "slug", "description")
     prepopulated_fields = {"slug": ("title",)}
     filter_horizontal = ("speakers",)
-    inlines = [SessionInline, PriceTierInline, EventMemberSpeakerInline]
+    inlines = [
+        SessionInline, PriceTierInline, EventMemberSpeakerInline,
+        EventFeatureImageInline,
+    ]
     actions = ("create_workspace",)
 
     def save_related(self, request, form, formsets, change):
