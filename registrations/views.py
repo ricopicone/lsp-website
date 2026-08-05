@@ -29,6 +29,7 @@ from payments.stripe_checkout import (
 
 from .forms import RegistrationForm
 from .models import Registration
+from .services import apply_resolution, auto_apply_pinned_code, pinned_code_for
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,11 @@ def register_for_event(request, event_slug: str):
                 notify_payments.registration_pending(reg)   # notify faculty
                 return redirect("registrations:confirm", reg_id=reg.id)
 
+            # A code the convener addressed to this member applies itself, so
+            # a scholarship holder is never sent to Checkout at full price.
+            if auto_apply_pinned_code(reg) is not None:
+                return redirect("registrations:confirm", reg_id=reg.id)
+
             if reg.quoted_amount == Decimal("0"):
                 notify_payments.registration_confirmed(reg)
                 return redirect("registrations:confirm", reg_id=reg.id)
@@ -257,6 +263,7 @@ def register_for_event(request, event_slug: str):
 @login_required
 def registration_confirm(request, reg_id: int):
     reg = get_object_or_404(Registration, pk=reg_id, user=request.user)
+    auto_apply_pinned_code(reg)
     return render(
         request,
         "registrations/register_confirm.html",
@@ -269,6 +276,9 @@ def registration_confirm(request, reg_id: int):
             "installments": list(reg.installments.all()),
             "outstanding": registration_plans.outstanding(reg),
             "today": timezone.localdate(),
+            # A pinned code we deliberately left for the member to accept —
+            # a plan or a sliding floor. Surfaced so it isn't invisible.
+            "pending_code": pinned_code_for(reg),
         },
     )
 
@@ -428,31 +438,9 @@ def apply_code(request, reg_id: int):
         messages.error(request, str(exc))
         return back
 
-    with transaction.atomic():
-        reg.quoted_amount = resolution.amount
-        reg.quoted_explanation = resolution.explanation
-        reg.pricing_code = code
-        if resolution.amount <= Decimal("0"):
-            reg.status = Registration.Status.PAID
-        reg.save(update_fields=(
-            "quoted_amount", "quoted_explanation", "pricing_code", "status",
-        ))
-        if code.max_uses is not None:
-            PricingCode.objects.filter(pk=code.pk).update(
-                uses_remaining=F("uses_remaining") - 1
-            )
-        if resolution.installments > 1 and resolution.amount > 0:
-            registration_plans.build_schedule(reg, resolution.installments)
-
-    # The old price must stop being payable: a Checkout session opened before
-    # the code was applied would still charge the full fee.
-    from payments.stripe_sync import expire_open_sessions
-    expire_open_sessions(
-        reg, reason=f"Repriced by code {code.code}; checkout expired.",
-    )
+    apply_resolution(reg, code, resolution)
 
     if reg.status == Registration.Status.PAID:
-        notify_payments.registration_confirmed(reg)
         messages.success(
             request, "Your code was applied and your place is confirmed.",
         )

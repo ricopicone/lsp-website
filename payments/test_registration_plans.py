@@ -1303,3 +1303,181 @@ def test_the_confirmation_page_offers_the_code_box(client):
     client.force_login(member)
     body = client.get(f"/registrations/{reg.pk}/confirmation/").content.decode()
     assert f"/registrations/{reg.pk}/apply-code/" in body
+
+
+# ---- A code minted for one person applies itself -------------------------
+#
+# Nathan pinned a code to a member, sent it to them, and they still had to type
+# it. If we already know whose it is, and applying it needs no decision from
+# them, they should just see the new price.
+
+
+def _pinned(event, issuer, member, **kwargs):
+    kwargs.setdefault("restricted_to_user", member)
+    kwargs.setdefault("max_uses", 1)
+    return _code(event, issuer, **kwargs)
+
+
+def test_a_pinned_scholarship_applies_on_sight(client):
+    from events.models import PricingCode
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    code = _pinned(
+        event, issuer, member, pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("0"),
+    )
+
+    client.force_login(member)
+    client.get(f"/registrations/{reg.pk}/confirmation/")
+
+    reg.refresh_from_db()
+    code.refresh_from_db()
+    assert reg.status == Registration.Status.PAID
+    assert reg.quoted_amount == Decimal("0.00")
+    assert code.uses_remaining == 0
+
+
+def test_a_pinned_discount_applies_on_sight(client):
+    from events.models import PricingCode
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    _pinned(
+        event, issuer, member, pricing_mode=PricingCode.Mode.PERCENT_OFF,
+        amount_or_percent=Decimal("20"),
+    )
+
+    client.force_login(member)
+    client.get(f"/registrations/{reg.pk}/confirmation/")
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("200.00")
+
+
+def test_an_unpinned_code_is_never_auto_applied(client):
+    from events.models import PricingCode
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    _code(
+        event, issuer, pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("0"),
+    )   # open to anyone — not addressed to this member
+
+    client.force_login(member)
+    client.get(f"/registrations/{reg.pk}/confirmation/")
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("250.00")
+
+
+def test_someone_elses_pinned_code_is_not_applied(client):
+    from events.models import PricingCode
+    member = _user()
+    other = _user("other@example.com")
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    _pinned(
+        event, issuer, other, pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("0"),
+    )
+
+    client.force_login(member)
+    client.get(f"/registrations/{reg.pk}/confirmation/")
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("250.00")
+
+
+def test_a_pinned_plan_is_offered_not_imposed(client):
+    """A plan changes *when* they pay, which is a decision. Auto-applying it
+    would undo the interstitial that exists so they see the schedule first."""
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _dated_event(date(2026, 9, 1), date(2027, 5, 31))
+    tier = _tier(event, "500.00")
+    reg = _registration(member, event, tier, "500.00")
+    code = _pinned(event, issuer, member, installments=3)
+
+    client.force_login(member)
+    body = client.get(f"/registrations/{reg.pk}/confirmation/").content.decode()
+
+    reg.refresh_from_db()
+    assert reg.installments.count() == 0
+    assert reg.quoted_amount == Decimal("500.00")
+    assert code.code in body          # surfaced so it isn't invisible
+
+
+def test_a_pinned_sliding_code_is_offered_not_imposed(client):
+    """A sliding floor needs them to choose an amount."""
+    from events.models import PricingCode
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "250.00")
+    code = _pinned(
+        event, issuer, member, pricing_mode=PricingCode.Mode.SLIDING_FLOOR,
+        amount_or_percent=Decimal("50"),
+    )
+
+    client.force_login(member)
+    body = client.get(f"/registrations/{reg.pk}/confirmation/").content.decode()
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("250.00")
+    assert code.code in body
+
+
+def test_a_pinned_code_that_costs_more_is_not_applied(client):
+    from events.models import PricingCode
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    reg = _registration(member, event, tier, "100.00")   # already discounted
+    _pinned(
+        event, issuer, member, pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("200"),
+    )
+
+    client.force_login(member)
+    client.get(f"/registrations/{reg.pk}/confirmation/")
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("100.00")
+
+
+def test_registering_with_a_pinned_scholarship_never_reaches_stripe(client, monkeypatch):
+    from events.models import PricingCode
+    from registrations.models import Registration
+    member = _user()
+    issuer = _user("faculty@example.com")
+    event = _event()
+    tier = _tier(event, "250.00")
+    _pinned(
+        event, issuer, member, pricing_mode=PricingCode.Mode.FIXED_AMOUNT,
+        amount_or_percent=Decimal("0"),
+    )
+
+    def _boom(reg):
+        raise AssertionError("must not charge a member holding a scholarship")
+
+    monkeypatch.setattr("registrations.views.create_checkout_session", _boom)
+
+    client.force_login(member)
+    client.post(f"/events/{event.slug}/register/", {"price_tier": tier.pk})
+
+    reg = Registration.objects.get(user=member, event=event)
+    assert reg.status == Registration.Status.PAID
+    assert reg.quoted_amount == Decimal("0.00")
