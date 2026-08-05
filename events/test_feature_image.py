@@ -311,3 +311,40 @@ def test_an_event_without_an_image_still_carries_text_opengraph_tags(
     assert 'property="og:title" content="Working with Masochism"' in body
     assert 'property="og:image"' not in body
     assert 'name="twitter:card" content="summary"' in body
+
+
+# ---- Full-size render --------------------------------------------------
+
+
+def test_the_full_render_is_larger_and_keeps_the_ratio():
+    out = _rendered(feature_images.render(_upload(size=(4000, 2000)),
+                                          box=feature_images.FULL_BOX))
+    assert out.width <= feature_images.FULL_BOX[0]
+    assert out.height <= feature_images.FULL_BOX[1]
+    assert out.width > feature_images.RENDER_BOX[0]
+    assert out.width / out.height == pytest.approx(2.0, abs=0.02)
+
+
+@pytest.mark.django_db
+def test_a_big_upload_stores_a_separate_full_render(
+    client, event, faculty, settings, tmp_path,
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(faculty)
+    _post(client, event, upload=_upload(size=(4000, 2000)))
+    img = event.feature()
+    assert img.image_full
+    assert img.image_full_width > img.image_width
+    assert img.modal_image == img.image_full
+
+
+@pytest.mark.django_db
+def test_a_modest_upload_stores_no_duplicate(
+    client, event, faculty, settings, tmp_path,
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(faculty)
+    _post(client, event, upload=_upload(size=(1200, 600)))
+    img = event.feature()
+    assert not img.image_full
+    assert img.modal_image == img.image

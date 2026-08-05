@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from django import forms
 from django.utils import timezone
+from PIL import Image
 
 from . import feature_images
 from .ce import CECreditBasis
@@ -132,10 +133,13 @@ class EventFeatureImageForm(forms.ModelForm):
 
         # Rendered here rather than in save(), so an unreadable or too-small
         # image comes back as a form error instead of a 500.
-        self.render_blob = self.original_blob = None
+        self.render_blob = self.original_blob = self.full_blob = None
         if upload:
             try:
                 self.render_blob = feature_images.render(upload, cleaned.get("crop"))
+                self.full_blob = feature_images.render(
+                    upload, cleaned.get("crop"), box=feature_images.FULL_BOX,
+                )
                 self.original_blob = feature_images.bound_original(upload)
             except feature_images.InvalidImage as exc:
                 self.add_error("upload", str(exc))
@@ -152,6 +156,18 @@ class EventFeatureImageForm(forms.ModelForm):
             # ImageFileDescriptor refreshes the dimension fields only when it is
             # *replacing* a file, so a first upload would insert nulls.
             obj.image_width, obj.image_height = obj.image.width, obj.image.height
+
+            # thumbnail() never upscales, so a source between the 800px floor
+            # and RENDER_BOX yields two identical files. Keep the larger render
+            # only when it really is larger; modal_image falls back.
+            obj.image_full.delete(save=False)
+            obj.image_full = None
+            obj.image_full_width = obj.image_full_height = 0
+            full = Image.open(self.full_blob)
+            self.full_blob.seek(0)
+            if full.width > obj.image_width:
+                obj.image_full.save(f"{event.slug}-full.webp", self.full_blob, save=False)
+                obj.image_full_width, obj.image_full_height = full.size
         obj.rights_confirmed_by = user
         obj.rights_confirmed_at = timezone.now()
         obj.save()
