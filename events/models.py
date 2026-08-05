@@ -887,6 +887,85 @@ class Event(models.Model):
         self.save(update_fields=["workgroup"])
         return self.workgroup
 
+    # ---- Feature image (task #504) ----
+
+    def feature(self):
+        """This event's feature image row, or ``None``.
+
+        ``getattr`` with a default is safe on a reverse one-to-one: Django's
+        ``RelatedObjectDoesNotExist`` subclasses ``AttributeError`` precisely so
+        this works.
+        """
+        return getattr(self, "feature_image", None)
+
+
+class EventFeatureImage(models.Model):
+    """The image an event leads with (task #504).
+
+    A separate row rather than nine more fields on ``Event``: absence of the row
+    *is* "no image", removal is a delete, and the rights record stays beside the
+    file it licenses. The shape is settled at upload (see
+    ``events.feature_images``) so every render site meets a shape it can lay out.
+    """
+
+    class Source(models.TextChoices):
+        PUBLIC_DOMAIN = "public_domain", "Public domain"
+        LICENSED = "licensed", "Licensed"
+        OWN_WORK = "own_work", "My own work"
+        PERMISSION = "permission", "Permission granted by the rights holder"
+
+    event = models.OneToOneField(
+        Event, on_delete=models.CASCADE, related_name="feature_image",
+    )
+    image = models.ImageField(
+        upload_to="events/feature/%Y/",
+        width_field="image_width", height_field="image_height",
+        help_text="Rendered WebP, derived from the upload via feature_images.render().",
+    )
+    # Denormalized: media lives in S3 in production, so reading image.width at
+    # render time is a network round trip per page view. Storing them also lets
+    # the <img> reserve its space before the file arrives.
+    image_width = models.PositiveIntegerField(default=0)
+    image_height = models.PositiveIntegerField(default=0)
+    original = models.ImageField(
+        upload_to="events/feature/originals/%Y/", blank=True,
+        help_text="The bounded upload, kept so the framing can be revised later.",
+    )
+    crop = models.JSONField(
+        blank=True, null=True,
+        help_text=(
+            "Cropper.js rect in natural-image pixels, so the framing modal "
+            "reopens where it was left."
+        ),
+    )
+    credit = models.CharField(
+        max_length=200, blank=True,
+        help_text='Shown small under the image, e.g. "René Magritte, The Treachery of Images".',
+    )
+    alt = models.CharField(
+        max_length=300, blank=True,
+        help_text="Description for screen readers. Blank falls back to the event title.",
+    )
+    source = models.CharField(max_length=20, choices=Source.choices)
+    source_url = models.URLField(
+        blank=True, help_text="Required when the source is Licensed.",
+    )
+    rights_confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="+",
+    )
+    rights_confirmed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Feature image for {self.event}"
+
+    @property
+    def alt_text(self) -> str:
+        """What the ``alt`` attribute should say. Never blank."""
+        return self.alt or self.event.title
+
 
 class EventMemberSpeaker(models.Model):
     """Through model for ``Event.member_speakers``.
