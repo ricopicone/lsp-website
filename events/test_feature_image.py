@@ -215,3 +215,70 @@ def test_the_edit_page_offers_the_feature_image_form(client, event, faculty):
     assert response.status_code == 200
     assert "feature_image_form" in response.context
     assert reverse("events:feature_image", args=[event.slug]) in response.content.decode()
+
+
+# ---- Rendering ---------------------------------------------------------
+#
+# A seminar's event page redirects to its Workspace, so the two render surfaces
+# have to be exercised through two kinds of event: a standalone special event
+# for the event page, the seminar for the Workspace masthead.
+
+
+@pytest.fixture
+def special_event(db):
+    return Event.objects.create(
+        title="Working with Masochism", slug="working-with-masochism",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 10, 3), end_date=date(2026, 10, 3),
+        published=True, status=Event.Status.OPEN,
+    )
+
+
+@pytest.fixture
+def special_faculty(db, special_event):
+    u = User.objects.create_user(email="fac-special@x.test")
+    u.profile.is_faculty = True
+    u.profile.save()
+    special_event.add_faculty(u)
+    return u
+
+
+@pytest.mark.django_db
+def test_the_event_page_shows_the_image_and_its_credit(
+    client, special_event, special_faculty, settings, tmp_path,
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(special_faculty)
+    _post(client, special_event, credit="René Magritte")
+    body = client.get(reverse("events:detail", args=[special_event.slug])).content.decode()
+    assert special_event.feature().image.url in body
+    assert "René Magritte" in body
+
+
+@pytest.mark.django_db
+def test_the_alt_attribute_falls_back_to_the_title(
+    client, special_event, special_faculty, settings, tmp_path,
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(special_faculty)
+    _post(client, special_event)
+    body = client.get(reverse("events:detail", args=[special_event.slug])).content.decode()
+    assert 'alt="Working with Masochism"' in body
+
+
+@pytest.mark.django_db
+def test_an_event_without_an_image_renders_no_figure(client, special_event):
+    body = client.get(reverse("events:detail", args=[special_event.slug])).content.decode()
+    assert "lsp-feature-image" not in body
+
+
+@pytest.mark.django_db
+def test_a_seminars_image_shows_on_its_workspace_masthead(
+    client, event, faculty, settings, tmp_path,
+):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.force_login(faculty)
+    _post(client, event)
+    body = client.get(event.workgroup.get_absolute_url()).content.decode()
+    assert "lsp-feature-image" in body
+    assert event.feature().image.url in body

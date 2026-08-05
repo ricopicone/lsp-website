@@ -14,6 +14,7 @@
         <a href="{% url 'events:list' %}" class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">← Events</a>
       {% endif %}
     </nav>
+    {% include "events/_feature_image.html" with img=event.feature %}
     <h1 class="font-serif text-3xl sm:text-4xl text-base-content leading-tight">{{ event.title }}</h1>
     <div class="flex flex-wrap items-center gap-2">
       <span class="badge badge-ghost">{{ event.get_event_type_display }}</span>

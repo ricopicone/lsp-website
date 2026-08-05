@@ -55,6 +55,13 @@
           {% endif %}
         </div>
 
+        {# The offering's feature image, when it has one (task #504). #}
+        {% with feature=workgroup.primary_event.feature %}
+        {% if feature %}
+        {% include "events/_feature_image.html" with img=feature size_class="max-h-[140px] sm:max-h-[180px]" %}
+        {% endif %}
+        {% endwith %}
+
         <h1 class="font-serif text-3xl sm:text-4xl leading-tight text-base-content">{{ workgroup.name }}</h1>
 
         <nav class="flex flex-wrap items-center gap-2 pt-1 text-sm">

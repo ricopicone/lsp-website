@@ -1,0 +1,25 @@
+{% comment %}
+  An event's feature image (task #504).
+
+  Both dimensions are bounded rather than the height being fixed: the image is
+  never taller than the band and never wider than the column, and is never asked
+  to be both at once. So a 2.5:1 runs the column's full width, a square sits as
+  a narrow plate, and on a phone, where the width bound binds first, everything
+  simply gets shorter. Nothing is cropped at display time; the shape was settled
+  at upload.
+
+  Args:
+    img        — an EventFeatureImage. Nothing renders without one.
+    size_class — the height bounds. Defaults to the event-page band.
+{% endcomment %}
+{% if img %}
+<figure class="lsp-feature-image space-y-1.5">
+  <img src="{{ img.image.url }}"
+       width="{{ img.image_width }}" height="{{ img.image_height }}"
+       alt="{{ img.alt_text }}"
+       class="{{ size_class|default:'max-h-[200px] sm:max-h-[340px]' }} w-auto max-w-full rounded-xl ring-1 ring-base-300/60">
+  {% if img.credit %}
+  <figcaption class="text-xs text-base-content/55">{{ img.credit }}</figcaption>
+  {% endif %}
+</figure>
+{% endif %}
