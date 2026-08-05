@@ -1,9 +1,9 @@
-# Resuming task #501
+# Resuming task #504
 
-**Task:** Feature request: Payment plans for individual seminar or reading group
+**Task:** Add a feature image to an event
 
 ## Description
-I think the idea would be to make a payment plan one of the code minting options for faculty/conveners of a seminar or reading group. Look into the feasibility and how clean this feature would be.
+The biggest challenge here is making the layout work for most resolutions and shapes of images. This should be an option under the edit event page.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -56,6 +56,11 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **registration-payment-plans** (architecture) — Task #501 SHIPPED+LIVE: a pricing code's installments count is ORTHOGONAL to pricing_mode; payments spread across the EVENT'S OWN RUN (never monthly-from-registration, never named terms); a plan registration reads PAID = enrolled while stil
+- **dues-cron-sends-balances-only** (reference) — lsp-dues-cron now runs ONLY the balance reminder (dues + tuition per-category reminders muted 2026-08-03) — and enabling the timer fires a catch-up batch immediately unless you touch the stamp file first
+- **route53-staged-zone-is-pre-cutover-stale** (gotcha) — FIXED 2026-08-03 — the staged Route 53 zone (Z07184784MROHMIJPJLF) now matches live and is safe to flip to; it HAD pointed apex+www at Wix. The standing rule survives: re-diff both zones immediately before any nameserver flip
+- **account-custodians** (reference) — Who holds which LSP accounts: Caroline Barensfeld = Google Workspace admin; domains are managed in Wix but the .org's registrar of record is TUCOWS (Wix is reseller) while the .com's is Wix.com Ltd; lspwixwebsite@gmail.com mystery (Typeform
+- **lacanschool-com-redirect** (architecture) — lacanschool.com (separate Wix registration, Bret Fimiani) 301s to lacanschool.org with the path preserved via nginx lsp-dotcom.conf + its own LE cert — Wix forwarding could NOT do this
 - **payment-plan-is-manual-stripe-not-autopay** (architecture) — An approved payment plan auto-charges nothing (no Klarna/BNPL/Subscriptions) — the member hand-pays each installment via Stripe Checkout, the year stays ONE annual Charge, and due-date nudges shipped 2026-08-02
 - **program-committee-is-the-name** (convention) — In prose the body is the "Program Committee" — only the slug and docstrings say "programming-committee" (committees/0003 renamed it), so code is no evidence about the display name
 - **faculty-guide-and-code-recipes** (architecture) — Task #495 SHIPPED 2026-08-02: /guides/faculty/ is the faculty guide (seminars AND reading groups in one); a scholarship for a non-member is an unrestricted 1-use code, and reading-group conveners now reach their own roster
@@ -136,7 +141,6 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **old-site-artwork-and-style** (decision) — Task #259: section-landing artwork heroes + Playfair/Cinzel fonts + tuned silk palette; artwork gated on copyright (multiple artists, ../wix-files)
 - **referral-coordinator** (status) — Referral Coordinator workflow (task #229) SHIPPED + LIVE 2026-06-12: referrals app at /admin-tools/referrals/ (tabbed UI + Help), Diana appointed, 36-clinician list imported, date-based references (26-0612), live-tested end-to-end
 - **devapi-mcp-server** (architecture) — Web-developer admin: token-auth /devapi/ JSON API + stdio MCP server (task #252); first slice = Suggestions triage, built to grow
-- **account-custodians** (reference) — Who holds which LSP accounts: Caroline Barensfeld = Google Workspace admin (lsp-members export); Wix = registrar for lacanschool.org; lspwixwebsite@gmail.com mystery (Typeform MFA)
 - **code-memory-location** (reference) — Deep, code-level implementation memory lives IN the repo, not here: CLAUDE.md (project context + status log) + a 40+ entry file-based memory index (MEMORY.md) under the Claude Code project dir. This connector memory is the project-managemen
 - **planning-docs** (reference) — Planning docs are loose LSP-Website-*.md files in ~/LSP-Web-Coordinator (parent of the repo): Requirements-Spec (USR-/REG-/PROG- IDs), Architecture-Phase1, Phase2-Plan (M9–M17 + 10 open decisions). Edit in place, never git-commit them
 - **glossary** (glossary) — LSP/domain glossary: Parlêtre, cartel, working group, committee, seminar, formation pipeline (palimpsest/passage/traversée), Meeting of Analysts, Days of Assembly, auditor, dues vs tuition, roles
@@ -148,7 +152,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=501`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=504`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

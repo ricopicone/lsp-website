@@ -8,6 +8,10 @@
   simply gets shorter. Nothing is cropped at display time; the shape was settled
   at upload.
 
+  The phone bound is the looser of the two on purpose: at that width anything
+  wide is already bound by the column, so the height cap only ever governs the
+  squarer end, where 200px left a poster stranded beside empty space.
+
   Args:
     img        — an EventFeatureImage. Nothing renders without one.
     size_class — the height bounds. Defaults to the event-page band.
@@ -17,7 +21,7 @@
   <img src="{{ img.image.url }}"
        width="{{ img.image_width }}" height="{{ img.image_height }}"
        alt="{{ img.alt_text }}"
-       class="{{ size_class|default:'max-h-[200px] sm:max-h-[340px]' }} w-auto max-w-full rounded-xl ring-1 ring-base-300/60">
+       class="{{ size_class|default:'max-h-[260px] sm:max-h-[340px]' }} w-auto max-w-full rounded-xl ring-1 ring-base-300/60">
   {% if img.credit %}
   <figcaption class="text-xs text-base-content/55">{{ img.credit }}</figcaption>
   {% endif %}

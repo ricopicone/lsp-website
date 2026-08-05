@@ -127,9 +127,14 @@ to diverge from, and `change_ratio` compares strings.
 One partial, `events/_feature_image.html`, used by both page surfaces:
 
 ```html
-<img class="max-h-[200px] sm:max-h-[340px] w-auto max-w-full rounded-xl
+<img class="max-h-[260px] sm:max-h-[340px] w-auto max-w-full rounded-xl
             ring-1 ring-base-300/60" width="…" height="…" alt="…">
 ```
+
+The phone bound is the looser of the two, which reads backwards until you
+notice that at phone widths anything wide is already bound by the column: the
+height cap governs only the squarer end. Built at 200 px first, and a square
+poster sat stranded beside empty space; 260 was measured, not guessed.
 
 Bounding both dimensions rather than fixing the height is what makes the
 constant-height rule hold without distortion: the image is never taller than the
@@ -180,3 +185,8 @@ hypothetical one.
   is refused.
 - `alt` falls back to the event title; the credit renders when set.
 - OpenGraph tags present with an image and absent without one.
+
+The render tests need two kinds of event, which is not obvious until the first
+one fails: a seminar's event page **redirects to its Workspace**, so the event
+page must be exercised through a standalone special event and the masthead
+through a seminar.
