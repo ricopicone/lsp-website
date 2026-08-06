@@ -124,6 +124,118 @@ def test_every_logo_in_the_set_is_shown(client, event, settings, tmp_path):
 
 
 @pytest.mark.django_db
+def test_the_panel_names_the_accrediting_organization(client, event, settings, tmp_path):
+    """The logos alone said nothing about who accredited the event (task #506)."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    org = CEOrganization.objects.create(
+        name="Greater Pittsburgh Psychological Association",
+        url="https://gppa.wildapricot.org/",
+    )
+    org.add_logos([_blob()])
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    # As element text, not merely inside the logo's alt="… logo" — the alt was
+    # already there and is not what a reader sees.
+    assert ">Greater Pittsburgh Psychological Association</a>" in body
+
+
+@pytest.mark.django_db
+def test_the_name_carries_the_outbound_link(client, event, settings, tmp_path):
+    """The link used to wrap the logo, which would collide with click-to-zoom;
+    it belongs on the name now (task #506)."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    org = CEOrganization.objects.create(name="GPPA", url="https://gppa.wildapricot.org/")
+    org.add_logos([_blob()])
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert '<a href="https://gppa.wildapricot.org/" target="_blank" rel="noopener"' in body
+    assert ">GPPA</a>" in body
+
+
+@pytest.mark.django_db
+def test_an_organization_without_a_url_renders_its_name_as_plain_text(client, event):
+    org = CEOrganization.objects.create(name="Unlinked Accreditor")
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert "Unlinked Accreditor" in body
+    assert 'href=""' not in body
+
+
+@pytest.mark.django_db
+def test_each_statement_sits_inside_its_own_organizations_group(client, event, settings, tmp_path):
+    """Two accreditors must not have their mandated language pooled at the
+    bottom, where either statement reads as applying to both sets of marks."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    first = CEOrganization.objects.create(name="Alpha Board", statement="Alpha says so.")
+    first.add_logos([_blob()])
+    second = CEOrganization.objects.create(name="Beta Board", statement="Beta says so.")
+    second.add_logos([_blob()])
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(first, second)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    # Ordering is CEOrganization.Meta.ordering = ("name",), so Alpha precedes Beta.
+    assert body.index("Alpha Board") < body.index("Alpha says so.") < body.index("Beta Board")
+    assert body.index("Beta Board") < body.index("Beta says so.")
+
+
+@pytest.mark.django_db
+def test_every_logo_is_an_anchor_to_its_own_file(client, event, settings, tmp_path):
+    """The no-JS path, and what makes each mark individually zoomable: two marks
+    on one accreditor must link to two different files, not one shared modal
+    target (task #506)."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    org = CEOrganization.objects.create(name="Two Marks")
+    first, second = org.add_logos([_blob(), _blob()])
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert f'href="{first.image.url}" ' in body
+    assert f'href="{second.image.url}" ' in body
+    assert first.image.url != second.image.url
+    assert body.count("data-ce-logo ") == 2
+
+
+@pytest.mark.django_db
+def test_the_lightbox_is_rendered_once_for_the_whole_panel(client, event, settings, tmp_path):
+    """One dialog, whatever the number of marks — the partial renders at most
+    once per page, so a dialog per logo would only duplicate markup and ids."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    org = CEOrganization.objects.create(name="Three Marks")
+    org.add_logos([_blob(), _blob(), _blob()])
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert body.count('id="ce-logo-modal"') == 1
+    assert "lsp-lightbox" in body
+
+
+@pytest.mark.django_db
+def test_no_lightbox_when_the_event_claims_no_organization(client, event):
+    """An event marked as offering CE before an accreditor is recorded should
+    not carry a dialog with nothing to show."""
+    event.offers_ce = True
+    event.save()
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert "CE credits available." in body
+    assert 'id="ce-logo-modal"' not in body
+
+
+@pytest.mark.django_db
 def test_an_organization_with_no_logos_renders_without_error(client, event):
     """Defensive: admin can delete the last row even though the UI refuses to."""
     org = CEOrganization.objects.create(name="Logoless")

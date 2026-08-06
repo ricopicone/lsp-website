@@ -14,9 +14,12 @@ import io
 from django.core.files.base import ContentFile
 from PIL import Image, ImageOps
 
-#: Largest stored logo, in pixels. Rendered at max 144x48 CSS pixels, so this
-#: leaves generous headroom for retina without storing anything absurd.
-MAX_BOX = (800, 400)
+#: Largest stored logo, in pixels. Rendered at max 192x64 CSS pixels on the
+#: event page and opened at full size in a modal (task #506), so the box leaves
+#: headroom for retina and for that modal. The former 800x400 was actively wrong
+#: for a squarish mark: it downsampled a 459x431 accreditor seal to 426x400, and
+#: no original is retained for a logo, so that loss could not be undone.
+MAX_BOX = (1200, 600)
 
 #: Reject an upload larger than this outright, before decoding it.
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024  # 8 MB

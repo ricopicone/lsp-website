@@ -30,8 +30,17 @@ def test_a_small_logo_is_left_at_its_own_size():
 def test_an_oversized_logo_is_fitted_inside_the_box_without_distortion():
     out = normalize_logo(io.BytesIO(_png_bytes(size=(4000, 1000))))
     width, height = Image.open(io.BytesIO(out.read())).size
-    assert width <= 800 and height <= 400
-    assert width == 800 and height == 200      # 4:1 aspect ratio preserved
+    assert width <= 1200 and height <= 600
+    assert width == 1200 and height == 300     # 4:1 aspect ratio preserved
+
+
+def test_a_squarish_seal_is_stored_without_downsampling():
+    """The real APA Approved Sponsor mark is 459x431. The former 800x400 box
+    shrank it to 426x400, throwing away resolution the full-size modal (task
+    #506) then wants back — and no original is retained for a logo, so that
+    loss was permanent."""
+    out = normalize_logo(io.BytesIO(_png_bytes(size=(459, 431))))
+    assert Image.open(io.BytesIO(out.read())).size == (459, 431)
 
 
 def test_transparency_survives():
