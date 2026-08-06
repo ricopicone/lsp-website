@@ -75,7 +75,7 @@ def test_the_stored_logo_is_normalized_webp(client, event, faculty, settings, tm
     org = CEOrganization.objects.get(name="GPPA")
     img = Image.open(org.logos.first().image.path)
     assert img.format == "WEBP"
-    assert img.size == (800, 200)
+    assert img.size == (1200, 300)      # fitted inside MAX_BOX, 4:1 preserved
 
 
 @pytest.mark.django_db
@@ -135,7 +135,7 @@ def test_several_logos_can_be_uploaded_at_once(client, event, faculty, settings,
     # Each one went through the same normalization as a single upload.
     second = Image.open(org.logos.all()[1].image.path)
     assert second.format == "WEBP"
-    assert second.size == (800, 200)
+    assert second.size == (1200, 300)   # fitted inside MAX_BOX, 4:1 preserved
 
 
 @pytest.mark.django_db

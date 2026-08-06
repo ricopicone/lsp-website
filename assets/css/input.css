@@ -858,7 +858,8 @@
   overflow: hidden;
 }
 
-/* Feature-image lightbox (task #504). Plain CSS, and note the `[open]`: DaisyUI
+/* Lightbox scrim, shared by the event feature image (task #504) and the CE
+   accreditor logos (task #506). Plain CSS, and note the `[open]`: DaisyUI
    dims the scrim from `.modal[open]` (specificity 0,2,0), so a bare
    `.lsp-lightbox` class silently loses and you get its 40% black, which over
    the dark theme is too weak to separate a picture from the page behind it.

@@ -190,6 +190,52 @@ def test_each_statement_sits_inside_its_own_organizations_group(client, event, s
 
 
 @pytest.mark.django_db
+def test_every_logo_is_an_anchor_to_its_own_file(client, event, settings, tmp_path):
+    """The no-JS path, and what makes each mark individually zoomable: two marks
+    on one accreditor must link to two different files, not one shared modal
+    target (task #506)."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    org = CEOrganization.objects.create(name="Two Marks")
+    first, second = org.add_logos([_blob(), _blob()])
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert f'href="{first.image.url}" ' in body
+    assert f'href="{second.image.url}" ' in body
+    assert first.image.url != second.image.url
+    assert body.count("data-ce-logo ") == 2
+
+
+@pytest.mark.django_db
+def test_the_lightbox_is_rendered_once_for_the_whole_panel(client, event, settings, tmp_path):
+    """One dialog, whatever the number of marks — the partial renders at most
+    once per page, so a dialog per logo would only duplicate markup and ids."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    org = CEOrganization.objects.create(name="Three Marks")
+    org.add_logos([_blob(), _blob(), _blob()])
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert body.count('id="ce-logo-modal"') == 1
+    assert "lsp-lightbox" in body
+
+
+@pytest.mark.django_db
+def test_no_lightbox_when_the_event_claims_no_organization(client, event):
+    """An event marked as offering CE before an accreditor is recorded should
+    not carry a dialog with nothing to show."""
+    event.offers_ce = True
+    event.save()
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert "CE credits available." in body
+    assert 'id="ce-logo-modal"' not in body
+
+
+@pytest.mark.django_db
 def test_an_organization_with_no_logos_renders_without_error(client, event):
     """Defensive: admin can delete the last row even though the UI refuses to."""
     org = CEOrganization.objects.create(name="Logoless")

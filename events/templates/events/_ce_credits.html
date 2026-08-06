@@ -30,10 +30,12 @@ would disappear against the dark theme. Same reasoning as the header crest.
     {% if org.logos.all %}
     <div class="flex flex-wrap items-center gap-3">
       {% for logo in org.logos.all %}
-      <span class="inline-flex items-center rounded-lg border border-base-300/60 bg-white p-2">
+      <a href="{{ logo.image.url }}" data-ce-logo data-ce-caption="{{ org.name }}"
+         aria-label="Open the {{ org.name }} logo at full size"
+         class="inline-flex cursor-zoom-in items-center rounded-lg border border-base-300/60 bg-white p-2">
         <img src="{{ logo.image.url }}" alt="{{ org.name }} logo"
              class="max-h-16 max-w-48 object-contain">
-      </span>
+      </a>
       {% endfor %}
     </div>
     {% endif %}
@@ -43,6 +45,42 @@ would disappear against the dark theme. Same reasoning as the header crest.
     {% endif %}
   </div>
   {% endfor %}
+
+  {% if orgs %}
+  <dialog id="ce-logo-modal" class="modal lsp-lightbox">
+    <div class="modal-box w-auto max-w-none overflow-visible bg-transparent p-0 shadow-none">
+      {% comment %}A white plate, not the bare scrim: an accreditor mark is
+      dark-on-transparent and would vanish against .lsp-lightbox[open]'s 88%
+      black.{% endcomment %}
+      <div class="rounded-lg bg-white p-6 shadow-2xl">
+        <img data-ce-logo-image src="" alt=""
+             class="max-h-[75vh] max-w-[90vw] h-auto w-auto object-contain">
+      </div>
+      <p data-ce-logo-caption class="lsp-lightbox-caption mt-3 text-center text-xs"></p>
+    </div>
+    {# DaisyUI's click-outside idiom; Escape closes a <dialog> for free. #}
+    <form method="dialog" class="modal-backdrop"><button aria-label="Close">close</button></form>
+  </dialog>
+
+  <script>
+  (function () {
+    var modal = document.getElementById("ce-logo-modal");
+    if (!modal || typeof modal.showModal !== "function") return;
+    var image = modal.querySelector("[data-ce-logo-image]");
+    var caption = modal.querySelector("[data-ce-logo-caption]");
+    document.querySelectorAll("[data-ce-logo]").forEach(function (link) {
+      link.addEventListener("click", function (e) {
+        e.preventDefault();
+        var name = link.getAttribute("data-ce-caption");
+        image.src = link.getAttribute("href");
+        image.alt = name + " logo";
+        caption.textContent = name;
+        modal.showModal();
+      });
+    });
+  })();
+  </script>
+  {% endif %}
   {% endwith %}
 
   {% if event.ce_note %}
