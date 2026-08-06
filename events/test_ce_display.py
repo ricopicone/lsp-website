@@ -124,6 +124,72 @@ def test_every_logo_in_the_set_is_shown(client, event, settings, tmp_path):
 
 
 @pytest.mark.django_db
+def test_the_panel_names_the_accrediting_organization(client, event, settings, tmp_path):
+    """The logos alone said nothing about who accredited the event (task #506)."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    org = CEOrganization.objects.create(
+        name="Greater Pittsburgh Psychological Association",
+        url="https://gppa.wildapricot.org/",
+    )
+    org.add_logos([_blob()])
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    # As element text, not merely inside the logo's alt="… logo" — the alt was
+    # already there and is not what a reader sees.
+    assert ">Greater Pittsburgh Psychological Association</a>" in body
+
+
+@pytest.mark.django_db
+def test_the_name_carries_the_outbound_link(client, event, settings, tmp_path):
+    """The link used to wrap the logo, which would collide with click-to-zoom;
+    it belongs on the name now (task #506)."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    org = CEOrganization.objects.create(name="GPPA", url="https://gppa.wildapricot.org/")
+    org.add_logos([_blob()])
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert '<a href="https://gppa.wildapricot.org/" target="_blank" rel="noopener"' in body
+    assert ">GPPA</a>" in body
+
+
+@pytest.mark.django_db
+def test_an_organization_without_a_url_renders_its_name_as_plain_text(client, event):
+    org = CEOrganization.objects.create(name="Unlinked Accreditor")
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(org)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert "Unlinked Accreditor" in body
+    assert 'href=""' not in body
+
+
+@pytest.mark.django_db
+def test_each_statement_sits_inside_its_own_organizations_group(client, event, settings, tmp_path):
+    """Two accreditors must not have their mandated language pooled at the
+    bottom, where either statement reads as applying to both sets of marks."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    first = CEOrganization.objects.create(name="Alpha Board", statement="Alpha says so.")
+    first.add_logos([_blob()])
+    second = CEOrganization.objects.create(name="Beta Board", statement="Beta says so.")
+    second.add_logos([_blob()])
+    event.offers_ce = True
+    event.save()
+    event.ce_organizations.add(first, second)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    # Ordering is CEOrganization.Meta.ordering = ("name",), so Alpha precedes Beta.
+    assert body.index("Alpha Board") < body.index("Alpha says so.") < body.index("Beta Board")
+    assert body.index("Beta Board") < body.index("Beta says so.")
+
+
+@pytest.mark.django_db
 def test_an_organization_with_no_logos_renders_without_error(client, event):
     """Defensive: admin can delete the last row even though the UI refuses to."""
     org = CEOrganization.objects.create(name="Logoless")

@@ -1,7 +1,15 @@
-{% comment %}Continuing-education credits + accreditor logos (task #486).
+{% comment %}Continuing-education credits + accreditor logos (tasks #486, #506).
 
 Rendered at the bottom of About in events/_event_summary.html, and standing on
 its own when the event has no description yet. Expects: event.
+
+Grouped per organization — name, then its marks, then the approval language it
+requires — rather than every logo in one row and every statement after them,
+which with two accreditors leaves each statement reading as if it applied to
+both sets of marks.
+
+The name carries the outbound link that used to wrap the logo. That is not a
+style preference: it frees the image itself to be the click target.
 
 The logo chips are deliberately paper-white in BOTH themes rather than a
 DaisyUI token: accreditor logos are near-universally dark-on-transparent and
@@ -13,25 +21,28 @@ would disappear against the dark theme. Same reasoning as the header crest.
   <p class="text-sm text-base-content/90">{{ event.ce_credits_label }}</p>
 
   {% with orgs=event.ce_organizations.all %}
-  {% if orgs %}
-  <div class="flex flex-wrap items-center gap-3">
-    {% for org in orgs %}
-    {% for logo in org.logos.all %}
-    <span class="inline-flex items-center rounded-lg border border-base-300/60 bg-white p-2">
-      {% if org.url %}<a href="{{ org.url }}" target="_blank" rel="noopener">{% endif %}
-      <img src="{{ logo.image.url }}" alt="{{ org.name }} logo"
-           class="max-h-12 max-w-36 object-contain">
-      {% if org.url %}</a>{% endif %}
-    </span>
-    {% endfor %}
-    {% endfor %}
-  </div>
   {% for org in orgs %}
-  {% if org.statement %}
-  <p class="text-xs leading-relaxed text-base-content/60">{{ org.statement }}</p>
-  {% endif %}
+  <div class="space-y-2">
+    <p class="text-sm text-base-content/80">
+      {% if org.url %}<a href="{{ org.url }}" target="_blank" rel="noopener" class="link link-hover">{{ org.name }}</a>{% else %}{{ org.name }}{% endif %}
+    </p>
+
+    {% if org.logos.all %}
+    <div class="flex flex-wrap items-center gap-3">
+      {% for logo in org.logos.all %}
+      <span class="inline-flex items-center rounded-lg border border-base-300/60 bg-white p-2">
+        <img src="{{ logo.image.url }}" alt="{{ org.name }} logo"
+             class="max-h-16 max-w-48 object-contain">
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if org.statement %}
+    <p class="text-xs leading-relaxed text-base-content/60">{{ org.statement }}</p>
+    {% endif %}
+  </div>
   {% endfor %}
-  {% endif %}
   {% endwith %}
 
   {% if event.ce_note %}
