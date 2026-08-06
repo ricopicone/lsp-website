@@ -936,6 +936,46 @@ Done (see `git log` for specifics):
   rectangle, feeding a 4-tuple to `thumbnail()`, so the local is now `crop_box`.
   Design: `docs/superpowers/specs/2026-08-05-feature-image-lightbox-design.md`.
 
+- **Naming and enlarging the CE accreditors** (task #506). The CE panel showed
+  accreditor logos as anonymous 48×144 thumbnails, and the ask was to name the
+  organization and make the marks zoomable. Looking at the one accreditor on
+  prod turned it into a data task too. *Greater Pittsburgh Psychological
+  Association* carried a **single 645×360 file that was itself a composite** of
+  three things: the APA Approved Sponsor seal, the GPPA wordmark, and — boxed
+  beneath the seal — **the APA-mandated approval paragraph rasterized as tiny
+  text**, while `statement` and `url` on the row sat empty. That paragraph is
+  why the panel read as too small, and no zoom fixes it: the stored file is
+  645px and **no original is retained for a logo**. The accreditor's original
+  email attachments turned out to be exactly those three panels, so **two are
+  logos and the third is the statement** — added as a third logo row it would
+  keep every defect (unreadable at 189px, dark text on a *partly transparent*
+  background so it half-vanishes on `abyss`, and unselectable, unsearchable,
+  unreadable aloud, unreflowable).
+  The panel now **groups per organization** — name, then its marks, then its
+  statement — rather than pooling every logo in one row and every statement
+  after them, which with two accreditors leaves each statement reading as if it
+  covered both sets of marks. The outbound `org.url` link **moves from the logo
+  to the name**, which is not cosmetic: it is what frees the image to become the
+  click target. Chips grow to 64×192, and each is a **real anchor to its own
+  file** (the #504 pattern — no-JS opens the image, focus and keyboard come from
+  what it is), upgraded by one **shared** `<dialog>` per page, safe because the
+  partial renders at most once (`_event_summary.html`'s `{% if %}`/`{% elif %}`)
+  and scaling to N marks without N dialogs.
+  **The modal image sits on a white plate**, not bare on the scrim as the
+  feature-image lightbox does — verified in the browser, the GPPA wordmark is
+  black-on-white and the APA seal's background is *fully* transparent, so
+  either would vanish against `.lsp-lightbox[open]`'s 88% black. Same reasoning
+  that already makes the chips `bg-white` in both themes.
+  `ce_images.MAX_BOX` rose 800×400 → 1200×600: the incoming marks are squarish,
+  so the old bound was actively **downsampling** them (459×431→426×400,
+  605×548→441×400) and discarding resolution the zoom wants back. Two things
+  found by the full suite rather than by the CE tests: a two-line `{# … #}`
+  comment (Django's is single-line only, so line two would have leaked onto the
+  page — `core/test_templates.py` enforces this), and two `test_ce_organization_add`
+  cases that hardcoded the old box. Deliberately unchanged: the two *edit*
+  surfaces keep their small chips, and CE stays out of `REVIEWABLE_FIELDS`.
+  Design: `docs/superpowers/specs/2026-08-05-ce-logo-zoom-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
