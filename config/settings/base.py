@@ -6,9 +6,29 @@ Choose an environment with the DJANGO_SETTINGS_MODULE variable; it defaults
 to config.settings.development (set in manage.py, wsgi.py and asgi.py).
 """
 
+import mimetypes
 from pathlib import Path
 
 import environ
+
+# --- Media content types ------------------------------------------------
+#
+# django-storages types an upload with mimetypes.guess_type(), and the slim
+# container image carries no /etc/mime.types at all (mimetypes.knownfiles comes
+# back empty there), so it falls back to Python's built-in table — which has no
+# .webp before 3.11 and no .docx at all. Every image the site normalizes to WebP
+# therefore reached S3 as application/octet-stream: invisible in an <img>, but it
+# makes a *direct* link download rather than display, which is precisely the
+# no-JS path the feature-image (#504) and CE-logo (#506) lightboxes rely on.
+#
+# This is registered here rather than fixed per upload because it is the whole
+# process's answer to "what is this file", and it must run before any storage
+# backend asks. Note it is invisible in development: macOS and the CI runner both
+# ship a system mime table, so only the container ever had the gap.
+mimetypes.add_type("image/webp", ".webp")
+mimetypes.add_type(
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx"
+)
 
 # Repository root. This file is config/settings/base.py, so the root is
 # three directories up.
