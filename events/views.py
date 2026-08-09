@@ -134,7 +134,7 @@ def event_list(request):
     """
     today = timezone.now().date()
     events = (
-        Event.objects.filter(published=True, end_date__gte=today)
+        Event.objects.filter(Event.public_now_q(), end_date__gte=today)
         .exclude(event_type__in=Event.ANNUAL_PROGRAM_TYPES)
         .order_by("start_date", "title")
     )

@@ -132,12 +132,11 @@ class Program(models.Model):
     def for_year(cls, academic_year: str):
         return cls.objects.filter(academic_year=academic_year).first()
 
-    @classmethod
-    def public_program_year_q(cls):
-        """Q expression for ``Event``-side filters: program is public now."""
-        from django.db.models import Q
-        from django.utils import timezone
-        return Q(program__published=True) | Q(program__publish_date__lte=timezone.now())
+    # NOTE: a ``public_program_year_q()`` lived here, written for Event-side
+    # filters and never called by anything — which is precisely how the listings
+    # went on reading the raw ``Event.published`` flag while ``is_public_now``
+    # said otherwise (task #532). ``Event.public_now_q()`` replaces it, covers
+    # the non-program types too, and has callers.
 
 
 def generate_pricing_code() -> str:
@@ -636,6 +635,32 @@ class Event(models.Model):
                 return self.program.is_public_now
             return self.published
         return self.published
+
+    @classmethod
+    def public_now_q(cls, prefix: str = ""):
+        """Q expression selecting exactly the rows where ``is_public_now`` is True.
+
+        The queryset counterpart of that property, and the reason it exists:
+        every listing that filtered on ``published=True`` hid a program event
+        whose Program was public (task #532). ``prefix`` lets a related
+        queryset filter through a FK —
+        ``Session.objects.filter(Event.public_now_q("event__"))``.
+        """
+        from django.db.models import Q
+        from django.utils import timezone
+
+        annual = Q(**{f"{prefix}event_type__in": sorted(cls.ANNUAL_PROGRAM_TYPES)})
+        has_program = Q(**{f"{prefix}program__isnull": False})
+        published = Q(**{f"{prefix}published": True})
+        program_public = (
+            Q(**{f"{prefix}program__published": True})
+            | Q(**{f"{prefix}program__publish_date__lte": timezone.now()})
+        )
+        return (
+            (annual & has_program & program_public)
+            | (annual & ~has_program & published)
+            | (~annual & published)
+        )
 
     # ---- Workgroup attachment (Stage 5) ----
 

@@ -37,7 +37,7 @@ def _base_queryset(user, today):
     """Published events that haven't started yet — plus seminars inside the
     late-registration grace — narrowed to what ``user`` may see."""
     grace_start = today - timedelta(days=LATE_SEMINAR_GRACE_DAYS)
-    qs = Event.objects.filter(published=True).filter(
+    qs = Event.objects.filter(Event.public_now_q()).filter(
         models.Q(start_date__gte=today)
         | models.Q(
             event_type__in=_SEMINAR_TYPES,
