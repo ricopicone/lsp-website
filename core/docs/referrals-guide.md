@@ -9,8 +9,10 @@ records, does the assembly, and sends what you tell it to send.
    reply).
 3. The request—**with the requester's name and email withheld**—goes out to
    every active clinician on the referral list, individually.
-4. Clinicians respond on the site; their responses collect on the request's
-   page, connected to the referral number automatically.
+4. Clinicians who are available say so on the site, with one checkbox; their
+   responses collect on the request's page, connected to the referral number
+   automatically. A clinician who is not available lets the request pass,
+   and one who checked the box can uncheck it later to withdraw.
 5. You send the **follow-up**: the site drafts it from your wording, with
    each available clinician's practice details filled in, and you adjust
    anything before it goes.
@@ -48,9 +50,10 @@ as they arrive, and a private notes box only you can see.
   on the referral list, with a respond-by date and a link to respond on the
   site. Each clinician is emailed individually.
 - **Record a response manually**—the escape hatch for a clinician who
-  replies to you by email or in person: pick their name, mark them
-  available, and their details flow into the follow-up like any other
-  response.
+  replies to you by email or in person: pick their name and their details
+  flow into the follow-up like any other response. A clinician who is not
+  available simply doesn't respond, so there is no availability to record.
+  **Remove** on a response takes it back off the request.
 - **Compose follow-up**—opens the drafted reply. The site picks the right
   variant (no responses, a single clinician, several clinicians) and fills
   in each available clinician's practice details. Edit anything—the

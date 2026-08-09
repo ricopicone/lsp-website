@@ -486,6 +486,43 @@ def test_coordinator_can_use_surface(client, coordinator):
     assert b"Referral list" in help_page.content
 
 
+def test_record_response_is_always_available(client, coordinator, listed):
+    """The coordinator's escape hatch records a response; there is no
+    availability question to answer any more (task #531)."""
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    client.force_login(coordinator)
+    resp = client.post(
+        reverse("referrals:record_response", args=[req.reference]),
+        {"member": listed.pk, "message": "By phone."},
+    )
+    assert resp.status_code == 302
+    response = ReferralResponse.objects.get(request=req, member=listed)
+    assert response.available
+    assert response.recorded_by == coordinator
+
+
+def test_coordinator_can_remove_a_response(client, coordinator, listed):
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    response = ReferralResponse.objects.create(request=req, member=listed)
+    client.force_login(coordinator)
+    resp = client.post(
+        reverse("referrals:remove_response", args=[req.reference, response.pk]),
+    )
+    assert resp.status_code == 302
+    assert not ReferralResponse.objects.filter(pk=response.pk).exists()
+
+
+def test_remove_response_forbidden_without_role(client, clinician, listed):
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    response = ReferralResponse.objects.create(request=req, member=listed)
+    client.force_login(clinician)
+    resp = client.post(
+        reverse("referrals:remove_response", args=[req.reference, response.pk]),
+    )
+    assert resp.status_code == 403
+    assert ReferralResponse.objects.filter(pk=response.pk).exists()
+
+
 def test_coordinator_actions_roundtrip(client, coordinator, listed):
     client.force_login(coordinator)
     req = make_request()
@@ -496,7 +533,7 @@ def test_coordinator_actions_roundtrip(client, coordinator, listed):
     # Record a manual response (escape hatch).
     client.post(
         reverse("referrals:record_response", args=[req.reference]),
-        {"member": listed.pk, "available": "True", "message": "By phone."},
+        {"member": listed.pk, "message": "By phone."},
     )
     response = ReferralResponse.objects.get(request=req, member=listed)
     assert response.recorded_by == coordinator

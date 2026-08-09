@@ -150,6 +150,25 @@
           {% endif %}
           <span class="text-base-content/55">{{ resp.created_at|date:"M j, Y, g:i a" }}</span>
           {% if resp.recorded_by %}<span class="badge badge-outline badge-sm">recorded by {{ resp.recorded_by.get_full_name|default:resp.recorded_by.email }}</span>{% endif %}
+          {% if not req.is_purged %}
+          <button type="button" class="btn btn-ghost btn-xs" aria-label="Remove response"
+                  onclick="document.getElementById('rmresp-{{ resp.pk }}').showModal()">Remove</button>
+          <dialog id="rmresp-{{ resp.pk }}" class="modal">
+            <div class="modal-box max-w-sm whitespace-normal text-left">
+              <h3 class="font-serif text-lg mb-2">Remove this response?</h3>
+              <p class="text-sm text-base-content/70">{{ resp.member }} will no longer be listed as available for this referral, and their details will not appear in the follow-up.</p>
+              <form method="post" action="{% url 'referrals:remove_response' req.reference resp.pk %}">
+                {% csrf_token %}
+                <div class="modal-action mt-3">
+                  <button type="submit" class="btn btn-error btn-sm">Remove</button>
+                  <button type="button" class="btn btn-ghost btn-sm"
+                          onclick="document.getElementById('rmresp-{{ resp.pk }}').close()">Cancel</button>
+                </div>
+              </form>
+            </div>
+            <form method="dialog" class="modal-backdrop"><button>close</button></form>
+          </dialog>
+          {% endif %}
         </div>
         {% if resp.message %}<p class="whitespace-pre-line text-base-content/80">{{ resp.message }}</p>{% endif %}
         <details class="text-xs text-base-content/60">
@@ -171,10 +190,6 @@
         <label class="block space-y-1 text-sm">
           <span class="text-base-content/60">{{ record_form.member.label }}</span>
           {{ record_form.member }}
-        </label>
-        <label class="block space-y-1 text-sm">
-          <span class="text-base-content/60">Availability</span>
-          {{ record_form.available }}
         </label>
         <label class="block space-y-1 text-sm">
           <span class="text-base-content/60">{{ record_form.message.label }}</span>

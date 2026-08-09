@@ -172,7 +172,7 @@ def record_response(request, reference):
             request=req,
             member=form.cleaned_data["member"],
             defaults={
-                "available": form.cleaned_data["available"],
+                "available": True,
                 "message": form.cleaned_data["message"],
                 "recorded_by": request.user,
             },
@@ -184,6 +184,19 @@ def record_response(request, reference):
         )
     else:
         messages.error(request, "Couldn't record that response.")
+    return redirect("referrals:detail", reference=reference)
+
+
+@coordinator_required
+@require_POST
+def remove_response(request, reference, pk):
+    """Take a response off a request — the manual counterpart to a clinician
+    unchecking their own box (task #531)."""
+    req = _get_request(reference)
+    response = get_object_or_404(ReferralResponse, pk=pk, request=req)
+    member = str(response.member)
+    response.delete()
+    messages.success(request, f"Removed the response from {member}.")
     return redirect("referrals:detail", reference=reference)
 
 

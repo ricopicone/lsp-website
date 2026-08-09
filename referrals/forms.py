@@ -111,17 +111,12 @@ class RespondForm(forms.ModelForm):
 
 class RecordResponseForm(forms.Form):
     """Coordinator escape hatch: record a clinician's response by hand
-    (e.g. one received by email or in conversation)."""
+    (e.g. one received by email or in conversation). Recorded responses are
+    always available ones, there is no unavailable answer (task #531)."""
 
     member = forms.ModelChoiceField(
         queryset=ReferralListMember.objects.filter(is_active=True),
         label="Clinician", widget=_SELECT,
-    )
-    available = forms.TypedChoiceField(
-        choices=((True, "Available"), (False, "Not available")),
-        coerce=lambda v: v in (True, "True"),
-        initial=True,
-        widget=_SELECT,
     )
     message = forms.CharField(
         required=False, widget=_textarea(2), label="Note",
