@@ -101,6 +101,7 @@ class MessageTemplate(models.Model):
         FOLLOWUP_ONE = "followup_one", _("Follow-up — a single clinician")
         FOLLOWUP_NONE = "followup_none", _("Follow-up — no responses")
         ONBOARDING = "onboarding", _("New Member Instructions")
+        ADDENDUM = "addendum", _("Addendum to a distributed request")
 
     key = models.CharField(max_length=30, choices=Key.choices, unique=True)
     subject = models.CharField(max_length=200)
@@ -366,6 +367,39 @@ class ReferralResponse(models.Model):
     def __str__(self) -> str:
         verb = "available" if self.available else "not available"
         return f"{self.member} — {verb} for {self.request.reference}"
+
+
+class ReferralAddendum(models.Model):
+    """Something the coordinator told the clinicians after distribution.
+
+    Kept on the record rather than only sent, so the respond page can show it
+    to a clinician who opens their link a week later (task #531).
+    """
+
+    class Audience(models.TextChoices):
+        DISTRIBUTED = "distributed", _("Clinicians this request went to")
+        ALL = "all", _("Everyone on the referral list")
+
+    request = models.ForeignKey(
+        ReferralRequest, on_delete=models.CASCADE, related_name="addenda",
+    )
+    text = models.TextField()
+    audience = models.CharField(
+        max_length=20, choices=Audience.choices, default=Audience.DISTRIBUTED,
+    )
+    recipient_count = models.PositiveIntegerField(default=0)
+    sent_at = models.DateTimeField(auto_now_add=True)
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+
+    class Meta:
+        ordering = ("sent_at",)
+        verbose_name_plural = "referral addenda"
+
+    def __str__(self) -> str:
+        return f"Addendum to {self.request.reference}"
 
 
 class BlockedSubmission(models.Model):

@@ -16,6 +16,7 @@ from . import services
 from .models import (
     MessageTemplate,
     Mode,
+    ReferralAddendum,
     ReferralListMember,
     ReferralRequest,
     ReferralResponse,
@@ -330,6 +331,110 @@ def test_respond_blocked_when_closed(client, listed, clinician):
     url = reverse("referrals:respond", args=[req.reference])
     assert client.get(url).status_code == 200  # read-only notice
     assert client.post(url, {"available": "True"}).status_code == 403
+
+
+# ---- Addendum ---------------------------------------------------------------
+
+
+def add_clinician(email="second@example.com") -> ReferralListMember:
+    """A second listed clinician, created mid-test so it can stand for
+    someone who joined the list after a distribution went out."""
+    user = User.objects.create_user(
+        email=email, password="pw", first_name="Ben", last_name="Beta",
+    )
+    return ReferralListMember.objects.create(
+        user=user, onboarded_at=timezone.now(),
+    )
+
+
+def test_addendum_to_distributed_skips_later_additions(
+    listed, django_capture_on_commit_callbacks,
+):
+    req = make_request()
+    services.distribute(req)
+    add_clinician()  # joined the list only after the request went out
+    mail.outbox.clear()
+
+    with django_capture_on_commit_callbacks(execute=True):
+        addendum = services.send_addendum(
+            req, "They are looking for a sliding scale.",
+            ReferralAddendum.Audience.DISTRIBUTED,
+        )
+    assert addendum.recipient_count == 1
+    assert [m.to for m in mail.outbox] == [[listed.user.email]]
+    assert "sliding scale" in mail.outbox[0].body
+    assert req.reference in mail.outbox[0].body
+
+
+def test_addendum_to_everyone_reaches_and_records_new_members(listed):
+    req = make_request()
+    services.distribute(req)
+    later = add_clinician()
+
+    addendum = services.send_addendum(
+        req, "Sliding scale, please.", ReferralAddendum.Audience.ALL,
+    )
+    assert addendum.recipient_count == 2
+    assert later in req.distributed_to.all()
+
+
+def test_addendum_skips_deactivated_clinicians(
+    listed, django_capture_on_commit_callbacks,
+):
+    req = make_request()
+    services.distribute(req)
+    gone = add_clinician()
+    gone.is_active = False
+    gone.save()
+    mail.outbox.clear()
+
+    with django_capture_on_commit_callbacks(execute=True):
+        addendum = services.send_addendum(
+            req, "Sliding scale.", ReferralAddendum.Audience.ALL,
+        )
+    assert addendum.recipient_count == 1
+    assert [m.to for m in mail.outbox] == [[listed.user.email]]
+
+
+def test_addendum_can_extend_the_response_window(listed):
+    req = make_request()
+    services.distribute(req)
+    req.refresh_from_db()
+    later = req.responses_due_at + timedelta(days=7)
+
+    services.send_addendum(
+        req, "Sliding scale.", ReferralAddendum.Audience.ALL,
+        responses_due_at=later,
+    )
+    req.refresh_from_db()
+    assert req.responses_due_at == later
+
+
+def test_addendum_refused_on_a_held_request(listed):
+    req = make_request(status=ReferralRequest.Status.HELD)
+    with pytest.raises(services.SuppressedStatusError):
+        services.send_addendum(
+            req, "Sliding scale.", ReferralAddendum.Audience.ALL,
+        )
+
+
+def test_purge_redacts_addendum_text(listed):
+    req = make_request()
+    services.distribute(req)
+    addendum = services.send_addendum(
+        req, "They are looking for a sliding scale.",
+        ReferralAddendum.Audience.ALL,
+    )
+    config = ReferralSettings.load()
+    req.status = ReferralRequest.Status.REPLIED
+    req.replied_at = timezone.now() - timedelta(
+        days=30 * config.retention_months + 30,
+    )
+    req.save()
+
+    assert services.purge_expired() == 1
+    addendum.refresh_from_db()
+    assert "sliding scale" not in addendum.text
 
 
 # ---- Follow-up (step 5) ------------------------------------------------------
