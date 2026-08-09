@@ -90,13 +90,17 @@ class ClinicianEditForm(forms.ModelForm):
 
 
 class RespondForm(forms.ModelForm):
-    """The clinician's step-4 response."""
+    """The clinician's step-4 response.
 
-    available = forms.TypedChoiceField(
-        label="Are you available to work with this person?",
-        choices=((True, "I'm available"), (False, "Not available")),
-        coerce=lambda v: v in (True, "True"),
-        widget=forms.RadioSelect,
+    One checkbox, never a choice (task #531): a clinician who is not
+    available lets the request pass. Submitting it unchecked withdraws a
+    response rather than recording "unavailable".
+    """
+
+    available = forms.BooleanField(
+        required=False,
+        label="I'm available to work with this person",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
     )
 
     class Meta:

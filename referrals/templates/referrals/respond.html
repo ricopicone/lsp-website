@@ -6,8 +6,8 @@
     <h1 class="font-serif text-3xl text-base-content">Referral {{ req.reference }}</h1>
     <p class="text-base-content/70 text-sm">
       A request for referral received through the LSP website. The
-      requester's name and email are withheld; if you respond as available,
-      the Referral Coordinator sends them your practice details from your
+      requester's name and email are withheld; if you respond, the Referral
+      Coordinator sends them your practice details from your
       <a href="{% url 'profile_edit' %}" class="link">profile</a>.
     </p>
   </header>
@@ -39,14 +39,18 @@
     {% csrf_token %}
     {% if existing %}
     <p class="text-sm text-base-content/60">
-      You responded {{ existing.updated_at|date:"M j, Y, g:i a" }}
-      ({% if existing.available %}available{% else %}not available{% endif %}).
-      You can update your response below.
+      You responded {{ existing.updated_at|date:"M j, Y, g:i a" }}. Unchecking
+      the box below withdraws your response.
     </p>
     {% endif %}
     <div class="space-y-1">
-      <span class="text-sm font-medium text-base-content">{{ form.available.label }}</span>
-      <div class="flex flex-col gap-1 text-sm [&_li]:list-none">{{ form.available }}</div>
+      <label class="flex items-center gap-2 text-sm font-medium text-base-content">
+        {{ form.available }}
+        <span>{{ form.available.label }}</span>
+      </label>
+      <p class="text-xs text-base-content/60">
+        If you're not available, you can simply ignore this request. No response is needed.
+      </p>
       {% for error in form.available.errors %}<span class="block text-xs text-error">{{ error }}</span>{% endfor %}
     </div>
     <label class="block space-y-1">

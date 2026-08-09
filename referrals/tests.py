@@ -261,15 +261,52 @@ def test_clinician_can_respond_and_update(client, listed, clinician):
     url = reverse("referrals:respond", args=[req.reference])
     assert client.get(url).status_code == 200
 
-    resp = client.post(url, {"available": "True", "message": "Happy to."})
+    resp = client.post(url, {"available": "on", "message": "Happy to."})
     assert resp.status_code == 302
     response = ReferralResponse.objects.get(request=req, member=listed)
     assert response.available and response.message == "Happy to."
+    assert response.recorded_by is None
 
-    client.post(url, {"available": "False", "message": ""})
+    # Editing the note keeps the single row (unique per request+member).
+    client.post(url, {"available": "on", "message": "By video only."})
     response.refresh_from_db()
-    assert not response.available
+    assert response.message == "By video only."
     assert ReferralResponse.objects.filter(request=req).count() == 1
+
+
+def test_unchecking_withdraws_the_response(client, listed, clinician):
+    """No unavailable answer exists: an unchecked box means no response on
+    file, so the row goes away (task #531)."""
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    client.force_login(clinician)
+    url = reverse("referrals:respond", args=[req.reference])
+    client.post(url, {"available": "on", "message": "Happy to."})
+    assert ReferralResponse.objects.filter(request=req).count() == 1
+
+    resp = client.post(url, {"message": ""}, follow=True)
+    assert ReferralResponse.objects.filter(request=req).count() == 0
+    assert any("withdrawn" in str(m) for m in resp.context["messages"])
+
+
+def test_unchecked_with_no_response_is_a_no_op(client, listed, clinician):
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    client.force_login(clinician)
+    url = reverse("referrals:respond", args=[req.reference])
+    resp = client.post(url, {"message": ""})
+    assert resp.status_code == 302
+    assert ReferralResponse.objects.filter(request=req).count() == 0
+
+
+def test_respond_page_offers_no_unavailable_option(client, listed, clinician):
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    client.force_login(clinician)
+    html = client.get(
+        reverse("referrals:respond", args=[req.reference]),
+    ).content.decode()
+    assert 'type="checkbox"' in html
+    assert 'type="radio"' not in html
+    assert "Not available" not in html
+    assert "you can simply ignore this request" in html
 
 
 def test_respond_blocked_when_closed(client, listed, clinician):
