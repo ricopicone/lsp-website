@@ -851,7 +851,9 @@ def program_admin_programs(request):
         rows.append({
             "program":         p,
             "event_count":     p.events.count(),
-            "published_count": p.events.filter(published=True).count(),
+            # No per-event published count: a program event's visibility
+            # cascades from the program (task #532), so counting the raw flag
+            # would report something that means nothing. No template used it.
             "is_public_now":   p.is_public_now,
         })
     return _pc_admin_render(request, "programs", "events/program_admin/index.html", {
