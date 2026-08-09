@@ -459,6 +459,26 @@ def test_coordinator_sends_an_addendum_from_the_page(
     assert "sliding scale" in mail.outbox[0].body
 
 
+def test_addendum_page_can_move_the_deadline(client, coordinator, listed):
+    """The date input posts a bare date, which is naive under USE_TZ."""
+    req = make_request()
+    services.distribute(req)
+    client.force_login(coordinator)
+    resp = client.post(
+        reverse("referrals:addendum", args=[req.reference]),
+        {"text": "Sliding scale.",
+         "audience": ReferralAddendum.Audience.DISTRIBUTED,
+         "responses_due_at": "2026-09-30"},
+    )
+    assert resp.status_code == 302
+    req.refresh_from_db()
+    assert timezone.is_aware(req.responses_due_at)
+    due = timezone.localtime(req.responses_due_at)
+    assert due.date().isoformat() == "2026-09-30"
+    # The window must not close at the start of the day the email names.
+    assert due.hour == 23
+
+
 def test_addendum_page_forbidden_without_role(client, clinician, listed):
     req = make_request()
     services.distribute(req)

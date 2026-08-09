@@ -54,6 +54,14 @@ as they arrive, and a private notes box only you can see.
   flow into the follow-up like any other response. A clinician who is not
   available simply doesn't respond, so there is no availability to record.
   **Remove** on a response takes it back off the request.
+- **Send an addendum**—for something that changed after the request went
+  out, such as the person turning out to need a sliding scale. Choose
+  whether it reaches only the clinicians the request already went to or
+  everyone on the list, and move the response deadline if the change
+  deserves more time. What you write is emailed and also shown on the
+  clinicians' respond page, so it stays with the request instead of living
+  in one email. Requests distributed before this feature existed have no
+  recorded recipient list, so those can only go to everyone.
 - **Compose follow-up**—opens the drafted reply. The site picks the right
   variant (no responses, a single clinician, several clinicians) and fills
   in each available clinician's practice details. Edit anything—the

@@ -169,6 +169,15 @@ class AddendumForm(forms.Form):
         )
         self.fields["responses_due_at"].initial = request_obj.responses_due_at
 
+    def clean_responses_due_at(self):
+        """A date input gives midnight, which would close the window at the
+        start of the day the email tells clinicians to respond by. Read a
+        bare date as the end of that day."""
+        due = self.cleaned_data["responses_due_at"]
+        if due is not None and (due.hour, due.minute, due.second) == (0, 0, 0):
+            due = due.replace(hour=23, minute=59, second=59)
+        return due
+
     def clean_audience(self):
         """An unrecorded audience cannot be targeted, whatever the POST says.
 
