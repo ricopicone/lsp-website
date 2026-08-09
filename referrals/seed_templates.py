@@ -7,8 +7,8 @@ ones the in-site process genuinely requires: ``{placeholder}`` tokens where
 her drafts had "XYZ" or a blank, and the New Member Instructions' steps 1
 and 3 now point at the self-service profile editor instead of emailing her
 the information. The distribution template (step 3) had no prior wording —
-she sent the requests by hand — so that one is ours, and like all of these
-it is editable on the Templates page.
+she sent the requests by hand — so that one is ours, as is the addendum
+(task #531), and like all of these both are editable on the Templates page.
 
 Used by the seed data migration and by ``MessageTemplate.get`` to restore a
 deleted row.
@@ -25,6 +25,28 @@ Thank you very much for contacting the Lacanian School of Psychoanalysis. Your r
 Sincerely,
 
 Diana C. Cuello, PhD
+
+Referral Coordinator
+
+On behalf of LSP""",
+    ),
+    "addendum": (
+        "LSP referral request {reference} - additional information",
+        """Dear colleague,
+
+There is additional information about referral {reference}:
+
+{addendum}
+
+If you are available to work with this person, please respond on the site by {due_date}:
+
+{respond_url}
+
+If you have already responded and this changes your answer, you can update it on the same page.
+
+Sincerely,
+
+Dr. Diana C. Cuello
 
 Referral Coordinator
 

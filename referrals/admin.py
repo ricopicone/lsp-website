@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     MessageTemplate,
+    ReferralAddendum,
     ReferralListMember,
     ReferralRequest,
     ReferralResponse,
@@ -40,6 +41,14 @@ class ReferralResponseAdmin(admin.ModelAdmin):
     list_display = ("request", "member", "available", "created_at", "recorded_by")
     list_filter = ("available",)
     raw_id_fields = ("request", "member", "recorded_by")
+
+
+@admin.register(ReferralAddendum)
+class ReferralAddendumAdmin(admin.ModelAdmin):
+    list_display = ("request", "audience", "recipient_count", "sent_at",
+                    "sent_by")
+    list_filter = ("audience",)
+    raw_id_fields = ("request", "sent_by")
 
 
 @admin.register(MessageTemplate)

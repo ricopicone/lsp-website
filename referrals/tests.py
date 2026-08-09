@@ -16,6 +16,7 @@ from . import services
 from .models import (
     MessageTemplate,
     Mode,
+    ReferralAddendum,
     ReferralListMember,
     ReferralRequest,
     ReferralResponse,
@@ -224,6 +225,21 @@ def test_distribute_emails_active_clinicians_anonymized(
     assert f"/referrals/{req.reference}/respond/" in msg.body
 
 
+def test_distribute_records_its_recipients(listed, clinician):
+    """Who a request went to has to be a recorded fact, or a later addendum
+    cannot target them (task #531)."""
+    req = make_request()
+    services.distribute(req)
+    assert list(req.distributed_to.all()) == [listed]
+
+    # A clinician added afterwards is not retroactively a recipient.
+    later = User.objects.create_user(email="later@example.com", password="pw")
+    later_listed = ReferralListMember.objects.create(
+        user=later, onboarded_at=timezone.now(),
+    )
+    assert later_listed not in req.distributed_to.all()
+
+
 def test_distribute_skips_inactive_members(listed):
     listed.is_active = False
     listed.save()
@@ -315,6 +331,200 @@ def test_respond_blocked_when_closed(client, listed, clinician):
     url = reverse("referrals:respond", args=[req.reference])
     assert client.get(url).status_code == 200  # read-only notice
     assert client.post(url, {"available": "True"}).status_code == 403
+
+
+# ---- Addendum ---------------------------------------------------------------
+
+
+def add_clinician(email="second@example.com") -> ReferralListMember:
+    """A second listed clinician, created mid-test so it can stand for
+    someone who joined the list after a distribution went out."""
+    user = User.objects.create_user(
+        email=email, password="pw", first_name="Ben", last_name="Beta",
+    )
+    return ReferralListMember.objects.create(
+        user=user, onboarded_at=timezone.now(),
+    )
+
+
+def test_addendum_to_distributed_skips_later_additions(
+    listed, django_capture_on_commit_callbacks,
+):
+    req = make_request()
+    services.distribute(req)
+    add_clinician()  # joined the list only after the request went out
+    mail.outbox.clear()
+
+    with django_capture_on_commit_callbacks(execute=True):
+        addendum = services.send_addendum(
+            req, "They are looking for a sliding scale.",
+            ReferralAddendum.Audience.DISTRIBUTED,
+        )
+    assert addendum.recipient_count == 1
+    assert [m.to for m in mail.outbox] == [[listed.user.email]]
+    assert "sliding scale" in mail.outbox[0].body
+    assert req.reference in mail.outbox[0].body
+
+
+def test_addendum_to_everyone_reaches_and_records_new_members(listed):
+    req = make_request()
+    services.distribute(req)
+    later = add_clinician()
+
+    addendum = services.send_addendum(
+        req, "Sliding scale, please.", ReferralAddendum.Audience.ALL,
+    )
+    assert addendum.recipient_count == 2
+    assert later in req.distributed_to.all()
+
+
+def test_addendum_skips_deactivated_clinicians(
+    listed, django_capture_on_commit_callbacks,
+):
+    req = make_request()
+    services.distribute(req)
+    gone = add_clinician()
+    gone.is_active = False
+    gone.save()
+    mail.outbox.clear()
+
+    with django_capture_on_commit_callbacks(execute=True):
+        addendum = services.send_addendum(
+            req, "Sliding scale.", ReferralAddendum.Audience.ALL,
+        )
+    assert addendum.recipient_count == 1
+    assert [m.to for m in mail.outbox] == [[listed.user.email]]
+
+
+def test_addendum_can_extend_the_response_window(listed):
+    req = make_request()
+    services.distribute(req)
+    req.refresh_from_db()
+    later = req.responses_due_at + timedelta(days=7)
+
+    services.send_addendum(
+        req, "Sliding scale.", ReferralAddendum.Audience.ALL,
+        responses_due_at=later,
+    )
+    req.refresh_from_db()
+    assert req.responses_due_at == later
+
+
+def test_addendum_refused_on_a_held_request(listed):
+    req = make_request(status=ReferralRequest.Status.HELD)
+    with pytest.raises(services.SuppressedStatusError):
+        services.send_addendum(
+            req, "Sliding scale.", ReferralAddendum.Audience.ALL,
+        )
+
+
+def test_purge_redacts_addendum_text(listed):
+    req = make_request()
+    services.distribute(req)
+    addendum = services.send_addendum(
+        req, "They are looking for a sliding scale.",
+        ReferralAddendum.Audience.ALL,
+    )
+    config = ReferralSettings.load()
+    req.status = ReferralRequest.Status.REPLIED
+    req.replied_at = timezone.now() - timedelta(
+        days=30 * config.retention_months + 30,
+    )
+    req.save()
+
+    assert services.purge_expired() == 1
+    addendum.refresh_from_db()
+    assert "sliding scale" not in addendum.text
+
+
+def test_coordinator_sends_an_addendum_from_the_page(
+    client, coordinator, listed, django_capture_on_commit_callbacks,
+):
+    req = make_request()
+    services.distribute(req)
+    mail.outbox.clear()
+    client.force_login(coordinator)
+    url = reverse("referrals:addendum", args=[req.reference])
+    assert client.get(url).status_code == 200
+
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = client.post(url, {
+            "text": "They are looking for a sliding scale.",
+            "audience": ReferralAddendum.Audience.DISTRIBUTED,
+        })
+    assert resp.status_code == 302
+    addendum = ReferralAddendum.objects.get(request=req)
+    assert addendum.sent_by == coordinator
+    assert addendum.recipient_count == 1
+    assert "sliding scale" in mail.outbox[0].body
+
+
+def test_addendum_page_can_move_the_deadline(client, coordinator, listed):
+    """The date input posts a bare date, which is naive under USE_TZ."""
+    req = make_request()
+    services.distribute(req)
+    client.force_login(coordinator)
+    resp = client.post(
+        reverse("referrals:addendum", args=[req.reference]),
+        {"text": "Sliding scale.",
+         "audience": ReferralAddendum.Audience.DISTRIBUTED,
+         "responses_due_at": "2026-09-30"},
+    )
+    assert resp.status_code == 302
+    req.refresh_from_db()
+    assert timezone.is_aware(req.responses_due_at)
+    due = timezone.localtime(req.responses_due_at)
+    assert due.date().isoformat() == "2026-09-30"
+    # The window must not close at the start of the day the email names.
+    assert due.hour == 23
+
+
+def test_addendum_page_forbidden_without_role(client, clinician, listed):
+    req = make_request()
+    services.distribute(req)
+    client.force_login(clinician)
+    assert client.get(
+        reverse("referrals:addendum", args=[req.reference]),
+    ).status_code == 403
+
+
+def test_unrecorded_audience_cannot_be_targeted(client, coordinator, listed):
+    """A request distributed before the recipient log existed can only go to
+    everyone — guessing the old set would be a fiction (task #531)."""
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    client.force_login(coordinator)
+    resp = client.post(
+        reverse("referrals:addendum", args=[req.reference]),
+        {"text": "Sliding scale.",
+         "audience": ReferralAddendum.Audience.DISTRIBUTED},
+    )
+    assert resp.status_code == 200  # redisplayed with an error
+    assert not ReferralAddendum.objects.exists()
+
+
+def test_addendum_shows_on_both_pages(client, coordinator, listed, clinician):
+    req = make_request()
+    services.distribute(req)
+    services.send_addendum(
+        req, "They are looking for a sliding scale.",
+        ReferralAddendum.Audience.ALL,
+    )
+
+    client.force_login(clinician)
+    page = client.get(reverse("referrals:respond", args=[req.reference]))
+    assert b"sliding scale" in page.content
+
+    client.force_login(coordinator)
+    page = client.get(reverse("referrals:detail", args=[req.reference]))
+    assert b"sliding scale" in page.content
+
+
+def test_addendum_page_refuses_a_closed_request(client, coordinator, listed):
+    req = make_request(status=ReferralRequest.Status.CLOSED)
+    client.force_login(coordinator)
+    resp = client.get(reverse("referrals:addendum", args=[req.reference]))
+    assert resp.status_code == 302  # bounced back to the detail page
+    assert not ReferralAddendum.objects.exists()
 
 
 # ---- Follow-up (step 5) ------------------------------------------------------

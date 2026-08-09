@@ -25,6 +25,12 @@
       <p class="whitespace-pre-line text-sm mt-1">{{ req.additional_information }}</p>
     </div>
     {% endif %}
+    {% for add in req.addenda.all %}
+    <div class="rounded-lg border border-warning/40 bg-warning/5 p-3">
+      <p class="text-base-content/60 text-xs">Added {{ add.sent_at|date:"M j, Y" }} by the Referral Coordinator</p>
+      <p class="whitespace-pre-line text-sm mt-1">{{ add.text }}</p>
+    </div>
+    {% endfor %}
     {% if req.responses_due_at %}
     <p class="text-sm {% if window_closed %}text-warning{% else %}text-base-content/60{% endif %}">
       {% if window_closed %}The response window closed {{ req.responses_due_at|date:"M j, Y" }} — a late response is still recorded and may reach the requester in an update.{% else %}Please respond by {{ req.responses_due_at|date:"M j, Y" }}.{% endif %}

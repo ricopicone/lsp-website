@@ -34,6 +34,7 @@ from . import emails, notifications, screening
 from .models import (
     MessageTemplate,
     Mode,
+    ReferralAddendum,
     ReferralListMember,
     ReferralRequest,
     ReferralSettings,
@@ -255,7 +256,56 @@ def distribute(req: ReferralRequest) -> int:
     req.responses_due_at = due
     req.status = ReferralRequest.Status.DISTRIBUTED
     req.save(update_fields=["distributed_at", "responses_due_at", "status"])
+    req.distributed_to.add(*members)
     return len(members)
+
+
+def send_addendum(
+    req: ReferralRequest,
+    text: str,
+    audience: str,
+    sent_by=None,
+    responses_due_at=None,
+) -> ReferralAddendum:
+    """Tell the clinicians something changed about a distributed request.
+
+    ``audience`` picks between the clinicians the request has already reached
+    and the whole active list; either way deactivated members are skipped, and
+    everyone reached is recorded on ``req.distributed_to`` so a later addendum
+    can target them too (task #531).
+    """
+    _refuse_if_suppressed(req, "send an addendum for")
+    if audience == ReferralAddendum.Audience.DISTRIBUTED:
+        members = list(
+            req.distributed_to.filter(is_active=True).select_related("user")
+        )
+    else:
+        members = list(
+            ReferralListMember.objects.filter(is_active=True)
+            .select_related("user")
+        )
+    if responses_due_at and responses_due_at != req.responses_due_at:
+        req.responses_due_at = responses_due_at
+        req.save(update_fields=["responses_due_at"])
+    due = req.responses_due_at
+    tpl = MessageTemplate.get(MessageTemplate.Key.ADDENDUM)
+    context = {
+        "reference": req.reference,
+        "addendum": text,
+        "due_date": due.strftime("%B %-d, %Y") if due else "(no date set)",
+        "respond_url": _absolute(
+            reverse("referrals:respond", args=[req.reference]),
+        ),
+    }
+    subject = render_template(tpl.subject, context)
+    body = render_template(tpl.body, context)
+    for member in members:
+        notifications.referral_addendum(member.user, req, subject, body)
+    req.distributed_to.add(*members)
+    return ReferralAddendum.objects.create(
+        request=req, text=text, audience=audience,
+        recipient_count=len(members), sent_by=sent_by,
+    )
 
 
 def build_followup(req: ReferralRequest) -> tuple[str, str]:
@@ -352,6 +402,9 @@ def purge_expired(now=None) -> int:
             f"(redacted after {config.retention_months} months)"
         )
         req.coordinator_notes = ""
+        req.addenda.update(
+            text=f"(redacted after {config.retention_months} months)",
+        )
         req.purged_at = now
         req.save(update_fields=[
             "name", "email", "pronouns", "additional_information",

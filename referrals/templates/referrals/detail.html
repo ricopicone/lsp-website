@@ -134,6 +134,32 @@
     </div>
   </section>
 
+  {# --- Addenda --------------------------------------------------------- #}
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-3">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="font-serif text-xl text-base-content">Addenda</h2>
+      {% if req.status == "distributed" or req.status == "replied" %}
+      <a href="{% url 'referrals:addendum' req.reference %}" class="btn btn-sm">Send an addendum</a>
+      {% endif %}
+    </div>
+    {% if req.addenda.all %}
+    <ul class="space-y-3">
+      {% for add in req.addenda.all %}
+      <li class="rounded-lg border border-base-300/60 p-3 text-sm space-y-1">
+        <div class="flex flex-wrap items-center gap-2 text-base-content/55">
+          <span>{{ add.sent_at|date:"M j, Y, g:i a" }}</span>
+          <span class="badge badge-ghost badge-sm">{{ add.get_audience_display }}</span>
+          <span>{{ add.recipient_count }} clinician{{ add.recipient_count|pluralize }}</span>
+        </div>
+        <p class="whitespace-pre-line text-base-content/80">{{ add.text }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-base-content/60 text-sm">Nothing added since the request went out.</p>
+    {% endif %}
+  </section>
+
   {# --- Responses (step 4) --------------------------------------------- #}
   <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
     <h2 class="font-serif text-xl text-base-content">Clinician responses</h2>

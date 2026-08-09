@@ -23,6 +23,23 @@ def referral_request(user, request_obj, subject: str, body: str) -> None:
     )
 
 
+def referral_addendum(user, request_obj, subject: str, body: str) -> None:
+    """Tell a clinician something changed about a request they've received.
+
+    Its own wrapper rather than ``referral_request``: that one titles the row
+    "a new anonymized referral request" and dedupes, which would swallow the
+    second bell row (task #531).
+    """
+    notify(
+        user, Category.REFERRAL_REQUEST,
+        title=f"Referral request {request_obj.reference}, addendum",
+        body="The Referral Coordinator added information to this request.",
+        url=reverse("referrals:respond", args=[request_obj.reference]),
+        target=request_obj,
+        email_fn=lambda: emails.send_to_clinician(user, subject, body),
+    )
+
+
 def referral_held(request_obj) -> None:
     """Tell the Referral Coordinator a submission was held for review.
 
