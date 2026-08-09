@@ -22,7 +22,139 @@ from .models import (
 )
 
 
-class EventEditForm(forms.ModelForm):
+class PriceFieldsMixin(forms.Form):
+    """The event-price inputs, shared by the PC form and the faculty form.
+
+    Reuses the vocabulary the proposal form already established — Free / Fixed
+    amount / Sliding scale plus "covered by tuition" — so the school has one way
+    of describing a price. When the event's tiers are richer than a
+    :class:`~events.price_spec.PriceSpec` can hold, the block goes read-only
+    rather than offering a lossy edit (task #532).
+
+    Inherits ``forms.Form`` deliberately: ``DeclarativeFieldsMetaclass``
+    collects a base's fields via its ``declared_fields``, which a plain
+    ``object`` mixin does not have — its fields would be silently dropped.
+    """
+
+    #: Fields the price block owns. Callers use this to keep them out of any
+    #: loop that assumes a form field is an Event field.
+    PRICE_FIELDS = (
+        "fee_type", "fee_amount", "fee_sliding_min", "fee_sliding_max",
+        "tuition_covers",
+    )
+
+    fee_type = forms.ChoiceField(
+        required=False, label="Price",
+        choices=[("free", "Free"), ("fixed", "Fixed amount"),
+                 ("sliding", "Sliding scale")],
+        widget=forms.RadioSelect, initial="free",
+    )
+    fee_amount = forms.DecimalField(
+        required=False, max_digits=8, decimal_places=2, min_value=0,
+        label="Amount",
+        widget=forms.NumberInput(
+            attrs={"class": "input input-bordered w-full", "step": "0.01"},
+        ),
+    )
+    fee_sliding_min = forms.DecimalField(
+        required=False, max_digits=8, decimal_places=2, min_value=0,
+        label="Minimum (0 = none turned away)",
+        widget=forms.NumberInput(
+            attrs={"class": "input input-bordered w-full", "step": "0.01"},
+        ),
+    )
+    fee_sliding_max = forms.DecimalField(
+        required=False, max_digits=8, decimal_places=2, min_value=0,
+        label="Suggested amount",
+        widget=forms.NumberInput(
+            attrs={"class": "input input-bordered w-full", "step": "0.01"},
+        ),
+    )
+    tuition_covers = forms.BooleanField(
+        required=False, initial=True, label="Covered by School tuition",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
+    )
+
+    def init_price_fields(self, event):
+        """Prefill from ``event`` and decide whether the block is editable.
+
+        Call from ``__init__`` after ``super().__init__``.
+        """
+        from .price_spec import from_event, is_representable
+
+        self.price_readonly = event is not None and not is_representable(event)
+        self.price_tiers = []
+        if self.price_readonly:
+            self.price_tiers = list(event.price_tiers.all())
+            for name in self.PRICE_FIELDS:
+                self.fields[name].disabled = True
+            return
+        if event is None or self.is_bound:
+            return
+        spec = from_event(event)
+        if spec is None:
+            return
+        self.initial.setdefault("fee_type", spec.fee_type)
+        self.initial.setdefault("fee_amount", spec.amount)
+        self.initial.setdefault("fee_sliding_min", spec.sliding_min)
+        self.initial.setdefault("fee_sliding_max", spec.sliding_max)
+        self.initial.setdefault("tuition_covers", spec.tuition_covers)
+
+    def clean_price(self, data):
+        """Normalize the price inputs into ``data["price"]``.
+
+        Call from the concrete form's ``clean()``. Keeps only the inputs
+        matching the chosen type, mirroring ``EventProposalForm.clean``.
+        ``None`` means "the form did not offer an edit", which the callers
+        read as "leave the event's pricing alone".
+        """
+        from .price_spec import PriceSpec
+
+        data = data if data is not None else {}
+        if getattr(self, "price_readonly", False):
+            data["price"] = None
+            return data
+
+        fee_type = data.get("fee_type") or "free"
+        amount = data.get("fee_amount")
+        smin, smax = data.get("fee_sliding_min"), data.get("fee_sliding_max")
+
+        if fee_type == "free":
+            amount = smin = smax = None
+        elif fee_type == "fixed":
+            smin = smax = None
+            if amount is None:
+                self.add_error(
+                    "fee_amount",
+                    "Enter an amount, or choose Free / Sliding scale.",
+                )
+        else:
+            amount = None
+            if smax is None:
+                self.add_error("fee_sliding_max", "Enter a suggested amount.")
+            elif smin is not None and smin > smax:
+                self.add_error(
+                    "fee_sliding_min",
+                    "Minimum can't exceed the suggested amount.",
+                )
+
+        data["price"] = PriceSpec(
+            amount=amount, sliding_min=smin, sliding_max=smax,
+            tuition_covers=bool(data.get("tuition_covers")),
+        )
+        return data
+
+    def save_price(self, event):
+        """Apply the cleaned price to ``event``. No-op when read-only."""
+        from .price_spec import apply_to_event
+
+        spec = (self.cleaned_data or {}).get("price")
+        if spec is None:
+            return
+        apply_to_event(event, spec)
+
+
+class EventEditForm(PriceFieldsMixin, forms.ModelForm):
     """Faculty-facing edit form for an event's public content (PROG-7).
 
     Named for the whole page, not just the description: it has carried title,
@@ -60,6 +192,10 @@ class EventEditForm(forms.ModelForm):
         # a POST that omits it (the change-review dialog's re-post, a partial
         # form) must not fail validation.
         self.fields["ce_credits_basis"].required = False
+        self.init_price_fields(self.instance if self.instance.pk else None)
+
+    def clean(self):
+        return self.clean_price(super().clean())
 
     def clean_ce_credits_basis(self):
         return self.cleaned_data.get("ce_credits_basis") or CECreditBasis.TOTAL
@@ -584,138 +720,6 @@ def _build_speaker_formset():
 
 #: External-speaker formset for special-event proposals (name/email/affiliation/bio).
 ProposalSpeakerFormSet = _build_speaker_formset()
-
-
-class PriceFieldsMixin(forms.Form):
-    """The event-price inputs, shared by the PC form and the faculty form.
-
-    Reuses the vocabulary the proposal form already established — Free / Fixed
-    amount / Sliding scale plus "covered by tuition" — so the school has one way
-    of describing a price. When the event's tiers are richer than a
-    :class:`~events.price_spec.PriceSpec` can hold, the block goes read-only
-    rather than offering a lossy edit (task #532).
-
-    Inherits ``forms.Form`` deliberately: ``DeclarativeFieldsMetaclass``
-    collects a base's fields via its ``declared_fields``, which a plain
-    ``object`` mixin does not have — its fields would be silently dropped.
-    """
-
-    #: Fields the price block owns. Callers use this to keep them out of any
-    #: loop that assumes a form field is an Event field.
-    PRICE_FIELDS = (
-        "fee_type", "fee_amount", "fee_sliding_min", "fee_sliding_max",
-        "tuition_covers",
-    )
-
-    fee_type = forms.ChoiceField(
-        required=False, label="Price",
-        choices=[("free", "Free"), ("fixed", "Fixed amount"),
-                 ("sliding", "Sliding scale")],
-        widget=forms.RadioSelect, initial="free",
-    )
-    fee_amount = forms.DecimalField(
-        required=False, max_digits=8, decimal_places=2, min_value=0,
-        label="Amount",
-        widget=forms.NumberInput(
-            attrs={"class": "input input-bordered w-full", "step": "0.01"},
-        ),
-    )
-    fee_sliding_min = forms.DecimalField(
-        required=False, max_digits=8, decimal_places=2, min_value=0,
-        label="Minimum (0 = none turned away)",
-        widget=forms.NumberInput(
-            attrs={"class": "input input-bordered w-full", "step": "0.01"},
-        ),
-    )
-    fee_sliding_max = forms.DecimalField(
-        required=False, max_digits=8, decimal_places=2, min_value=0,
-        label="Suggested amount",
-        widget=forms.NumberInput(
-            attrs={"class": "input input-bordered w-full", "step": "0.01"},
-        ),
-    )
-    tuition_covers = forms.BooleanField(
-        required=False, initial=True, label="Covered by School tuition",
-        widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
-    )
-
-    def init_price_fields(self, event):
-        """Prefill from ``event`` and decide whether the block is editable.
-
-        Call from ``__init__`` after ``super().__init__``.
-        """
-        from .price_spec import from_event, is_representable
-
-        self.price_readonly = event is not None and not is_representable(event)
-        self.price_tiers = []
-        if self.price_readonly:
-            self.price_tiers = list(event.price_tiers.all())
-            for name in self.PRICE_FIELDS:
-                self.fields[name].disabled = True
-            return
-        if event is None or self.is_bound:
-            return
-        spec = from_event(event)
-        if spec is None:
-            return
-        self.initial.setdefault("fee_type", spec.fee_type)
-        self.initial.setdefault("fee_amount", spec.amount)
-        self.initial.setdefault("fee_sliding_min", spec.sliding_min)
-        self.initial.setdefault("fee_sliding_max", spec.sliding_max)
-        self.initial.setdefault("tuition_covers", spec.tuition_covers)
-
-    def clean_price(self, data):
-        """Normalize the price inputs into ``data["price"]``.
-
-        Call from the concrete form's ``clean()``. Keeps only the inputs
-        matching the chosen type, mirroring ``EventProposalForm.clean``.
-        ``None`` means "the form did not offer an edit", which the callers
-        read as "leave the event's pricing alone".
-        """
-        from .price_spec import PriceSpec
-
-        data = data if data is not None else {}
-        if getattr(self, "price_readonly", False):
-            data["price"] = None
-            return data
-
-        fee_type = data.get("fee_type") or "free"
-        amount = data.get("fee_amount")
-        smin, smax = data.get("fee_sliding_min"), data.get("fee_sliding_max")
-
-        if fee_type == "free":
-            amount = smin = smax = None
-        elif fee_type == "fixed":
-            smin = smax = None
-            if amount is None:
-                self.add_error(
-                    "fee_amount",
-                    "Enter an amount, or choose Free / Sliding scale.",
-                )
-        else:
-            amount = None
-            if smax is None:
-                self.add_error("fee_sliding_max", "Enter a suggested amount.")
-            elif smin is not None and smin > smax:
-                self.add_error(
-                    "fee_sliding_min",
-                    "Minimum can't exceed the suggested amount.",
-                )
-
-        data["price"] = PriceSpec(
-            amount=amount, sliding_min=smin, sliding_max=smax,
-            tuition_covers=bool(data.get("tuition_covers")),
-        )
-        return data
-
-    def save_price(self, event):
-        """Apply the cleaned price to ``event``. No-op when read-only."""
-        from .price_spec import apply_to_event
-
-        spec = (self.cleaned_data or {}).get("price")
-        if spec is None:
-            return
-        apply_to_event(event, spec)
 
 
 class ProgramEventForm(PriceFieldsMixin, forms.ModelForm):

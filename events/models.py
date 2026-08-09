@@ -1782,6 +1782,11 @@ class EventChangeRequest(models.Model):
     original_readings = models.TextField(blank=True)
     original_fee_note = models.TextField(blank=True)
 
+    #: Price is a related row, not an Event field, so it travels as a
+    #: ``PriceSpec`` dict rather than a column per value (task #532).
+    proposed_price = models.JSONField(null=True, blank=True)
+    original_price = models.JSONField(null=True, blank=True)
+
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="event_changes_reviewed",
@@ -1803,9 +1808,17 @@ class EventChangeRequest(models.Model):
     def field_changes(self):
         """List of ``(label, old, new)`` tuples for the changed fields, for the
         review queue + dialog diff display."""
+        from .price_spec import PriceSpec, label
         from .review import FIELD_LABELS
         out = []
         for f in self.changed_fields:
+            if f == "price":
+                out.append((
+                    FIELD_LABELS["price"],
+                    label(PriceSpec.from_dict(self.original_price)),
+                    label(PriceSpec.from_dict(self.proposed_price)),
+                ))
+                continue
             out.append((
                 FIELD_LABELS.get(f, f),
                 getattr(self, f"original_{f}"),
@@ -1814,12 +1827,22 @@ class EventChangeRequest(models.Model):
         return out
 
     def apply(self):
-        """Copy the proposed values onto the live event."""
+        """Copy the proposed values onto the live event.
+
+        Price is a related row rather than an Event field, so it is applied
+        through the shared spec instead of ``setattr`` (task #532).
+        """
         from django.utils import timezone
-        for f in self.changed_fields:
+
+        from .price_spec import PriceSpec, apply_to_event
+
+        scalar = [f for f in self.changed_fields if f != "price"]
+        for f in scalar:
             setattr(self.event, f, getattr(self, f"proposed_{f}"))
-        if self.changed_fields:
-            self.event.save(update_fields=list(self.changed_fields))
+        if scalar:
+            self.event.save(update_fields=scalar)
+        if "price" in self.changed_fields:
+            apply_to_event(self.event, PriceSpec.from_dict(self.proposed_price))
         self.applied_at = timezone.now()
 
     def approve(self, reviewer):

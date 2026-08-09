@@ -383,7 +383,13 @@ def event_edit(request, slug: str):
     # Snapshot the live reviewable values *before* binding — ModelForm validation
     # mutates ``event`` in place (construct_instance), so reading them afterwards
     # would compare the new value against itself.
-    original = {f: (getattr(event, f) or "") for f in REVIEWABLE_FIELDS}
+    from .price_spec import from_event
+
+    original = {
+        f: (getattr(event, f) or "")
+        for f in REVIEWABLE_FIELDS if f != "price"
+    }
+    original_price = from_event(event)
 
     form = EventEditForm(request.POST, instance=event)
     if not form.is_valid():
@@ -396,12 +402,19 @@ def event_edit(request, slug: str):
         })
 
     cd = form.cleaned_data
-    changed = [f for f in REVIEWABLE_FIELDS if (cd[f] or "") != original[f]]
+    changed = [
+        f for f in REVIEWABLE_FIELDS
+        if f != "price" and (cd[f] or "") != original[f]
+    ]
+    # cd["price"] is None for a read-only multi-tier event, meaning "untouched".
+    if cd.get("price") is not None and cd["price"] != original_price:
+        changed.append("price")
 
     # Events that don't carry the review expectation, or edits that touch no
     # reviewable field, save straight through as before.
     if not changed or not event.requires_change_review():
         form.save()
+        form.save_price(event)
         messages.success(request, "Changes saved.")
         return redirect("events:detail", slug=event.slug)
 
@@ -430,7 +443,8 @@ def event_edit(request, slug: str):
     # they're set separately.
     m2m_names = {f.name for f in Event._meta.many_to_many}
     nonreviewable = [
-        f for f in form.changed_data if f not in REVIEWABLE_FIELDS
+        f for f in form.changed_data
+        if f not in REVIEWABLE_FIELDS and f not in EventEditForm.PRICE_FIELDS
     ]
     concrete = [f for f in nonreviewable if f not in m2m_names]
     if concrete:
@@ -446,11 +460,19 @@ def event_edit(request, slug: str):
         if "description" in changed else 0.0
 
     def _make_request(status):
+        scalar = [f for f in changed if f != "price"]
+        extra = {}
+        if "price" in changed:
+            extra["proposed_price"] = cd["price"].to_dict()
+            extra["original_price"] = (
+                original_price.to_dict() if original_price else None
+            )
         return EventChangeRequest(
             event=event, proposed_by=request.user, status=status,
             changed_fields=changed, description_change_ratio=desc_ratio,
-            **{f"proposed_{f}": cd[f] for f in changed},
-            **{f"original_{f}": original[f] for f in changed},
+            **{f"proposed_{f}": cd[f] for f in scalar},
+            **{f"original_{f}": original[f] for f in scalar},
+            **extra,
         )
 
     if decision == "review":
