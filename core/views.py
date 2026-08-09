@@ -159,7 +159,8 @@ def calendar_events_json(request):
 
     qs = Session.objects.select_related("event")
     if not _is_staff(request.user):
-        qs = qs.filter(event__published=True)
+        from events.models import Event
+        qs = qs.filter(Event.public_now_q("event__"))
 
     start = _parse(start_param) if start_param else None
     end = _parse(end_param) if end_param else None

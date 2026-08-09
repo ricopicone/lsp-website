@@ -50,7 +50,7 @@
       <span class="text-sm text-base-content/70">
         {{ event.start_date|date:"M j" }}{% if event.end_date != event.start_date %} – {{ event.end_date|date:"M j, Y" }}{% else %}, {{ event.end_date|date:"Y" }}{% endif %}
       </span>
-      {% if not event.published %}
+      {% if not event.is_public_now %}
       <span class="badge badge-warning gap-1">Draft preview (staff only)</span>
       {% endif %}
     </div>

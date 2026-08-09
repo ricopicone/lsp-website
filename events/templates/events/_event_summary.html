@@ -225,7 +225,7 @@ show_access_info.{% endcomment %}
 
 {# ---------- Registration CTA ---------- #}
 <section class="pt-2">
-  {% if event.status == "open" and event.published %}
+  {% if event.status == "open" and event.is_public_now %}
     {% if user_registration %}
       <a href="{% url 'registrations:confirm' user_registration.id %}" class="btn btn-primary btn-lg">View your registration →</a>
     {% else %}

@@ -57,7 +57,7 @@ branded label with registration/live-aware messaging + a tech-check link.
         {% endif %}
       {% endif %}
     {% else %}
-      {% if event.status == "open" and event.published %}
+      {% if event.status == "open" and event.is_public_now %}
       <p class="mt-1 text-sm text-base-content/70">
         <a href="{% url 'registrations:register' event.slug %}" class="link">Register for details</a> to receive joining access.
       </p>

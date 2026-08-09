@@ -33,8 +33,8 @@
     {% csrf_token %}
     {# Carry every submitted value forward so the choice re-binds the full form. #}
     {% for field in form %}
-      {% if field.name == "record_video" %}
-        {% if field.value %}<input type="hidden" name="record_video" value="on">{% endif %}
+      {% if field.name == "record_video" or field.name == "tuition_covers" %}
+        {% if field.value %}<input type="hidden" name="{{ field.name }}" value="on">{% endif %}
       {% else %}
         <textarea name="{{ field.name }}" hidden>{{ field.value|default_if_none:"" }}</textarea>
       {% endif %}

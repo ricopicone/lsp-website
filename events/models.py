@@ -132,12 +132,11 @@ class Program(models.Model):
     def for_year(cls, academic_year: str):
         return cls.objects.filter(academic_year=academic_year).first()
 
-    @classmethod
-    def public_program_year_q(cls):
-        """Q expression for ``Event``-side filters: program is public now."""
-        from django.db.models import Q
-        from django.utils import timezone
-        return Q(program__published=True) | Q(program__publish_date__lte=timezone.now())
+    # NOTE: a ``public_program_year_q()`` lived here, written for Event-side
+    # filters and never called by anything — which is precisely how the listings
+    # went on reading the raw ``Event.published`` flag while ``is_public_now``
+    # said otherwise (task #532). ``Event.public_now_q()`` replaces it, covers
+    # the non-program types too, and has callers.
 
 
 def generate_pricing_code() -> str:
@@ -574,7 +573,7 @@ class Event(models.Model):
         status drives it."""
         import datetime as _dt
 
-        if not self.published:
+        if not self.is_public_now:
             return {"label": "Draft", "css": "badge-warning"}
         if self.end_date and self.end_date < _dt.date.today():
             return {"label": "Archived", "css": "badge-ghost"}
@@ -636,6 +635,32 @@ class Event(models.Model):
                 return self.program.is_public_now
             return self.published
         return self.published
+
+    @classmethod
+    def public_now_q(cls, prefix: str = ""):
+        """Q expression selecting exactly the rows where ``is_public_now`` is True.
+
+        The queryset counterpart of that property, and the reason it exists:
+        every listing that filtered on ``published=True`` hid a program event
+        whose Program was public (task #532). ``prefix`` lets a related
+        queryset filter through a FK —
+        ``Session.objects.filter(Event.public_now_q("event__"))``.
+        """
+        from django.db.models import Q
+        from django.utils import timezone
+
+        annual = Q(**{f"{prefix}event_type__in": sorted(cls.ANNUAL_PROGRAM_TYPES)})
+        has_program = Q(**{f"{prefix}program__isnull": False})
+        published = Q(**{f"{prefix}published": True})
+        program_public = (
+            Q(**{f"{prefix}program__published": True})
+            | Q(**{f"{prefix}program__publish_date__lte": timezone.now()})
+        )
+        return (
+            (annual & has_program & program_public)
+            | (annual & ~has_program & published)
+            | (~annual & published)
+        )
 
     # ---- Workgroup attachment (Stage 5) ----
 
@@ -1452,19 +1477,18 @@ class EventProposal(models.Model):
         }.get(self.location_kind, Event.Format.ONLINE)
 
     def _build_price_tier(self, event):
-        """Create a PriceTier on the minted event from the proposed fee."""
-        sliding = self.fee_sliding_min is not None or self.fee_sliding_max is not None
-        if not sliding and self.fee_amount is None and not self.tuition_covers:
-            return  # nothing specified
-        base = self.fee_amount
-        if base is None:
-            base = self.fee_sliding_max if self.fee_sliding_max is not None else Decimal("0")
-        PriceTier.objects.create(
-            event=event, audience=Audience.ALL, base_amount=base,
-            sliding_scale=sliding,
-            minimum_amount=(self.fee_sliding_min or Decimal("0")) if sliding else Decimal("0"),
-            covered_by_tuition=self.tuition_covers,
-        )
+        """Create a PriceTier on the minted event from the proposed fee.
+
+        Delegates to the shared price spec so this path and the PC's event
+        form cannot describe a price two different ways (task #532).
+        """
+        from .price_spec import PriceSpec, apply_to_event
+        apply_to_event(event, PriceSpec(
+            amount=self.fee_amount,
+            sliding_min=self.fee_sliding_min,
+            sliding_max=self.fee_sliding_max,
+            tuition_covers=self.tuition_covers,
+        ))
 
     def _build_meeting_series(self, event, reviewer):
         """Materialize the proposed recurring schedule into a MeetingSeries on the
@@ -1758,6 +1782,11 @@ class EventChangeRequest(models.Model):
     original_readings = models.TextField(blank=True)
     original_fee_note = models.TextField(blank=True)
 
+    #: Price is a related row, not an Event field, so it travels as a
+    #: ``PriceSpec`` dict rather than a column per value (task #532).
+    proposed_price = models.JSONField(null=True, blank=True)
+    original_price = models.JSONField(null=True, blank=True)
+
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="event_changes_reviewed",
@@ -1779,9 +1808,17 @@ class EventChangeRequest(models.Model):
     def field_changes(self):
         """List of ``(label, old, new)`` tuples for the changed fields, for the
         review queue + dialog diff display."""
+        from .price_spec import PriceSpec, label
         from .review import FIELD_LABELS
         out = []
         for f in self.changed_fields:
+            if f == "price":
+                out.append((
+                    FIELD_LABELS["price"],
+                    label(PriceSpec.from_dict(self.original_price)),
+                    label(PriceSpec.from_dict(self.proposed_price)),
+                ))
+                continue
             out.append((
                 FIELD_LABELS.get(f, f),
                 getattr(self, f"original_{f}"),
@@ -1790,12 +1827,22 @@ class EventChangeRequest(models.Model):
         return out
 
     def apply(self):
-        """Copy the proposed values onto the live event."""
+        """Copy the proposed values onto the live event.
+
+        Price is a related row rather than an Event field, so it is applied
+        through the shared spec instead of ``setattr`` (task #532).
+        """
         from django.utils import timezone
-        for f in self.changed_fields:
+
+        from .price_spec import PriceSpec, apply_to_event
+
+        scalar = [f for f in self.changed_fields if f != "price"]
+        for f in scalar:
             setattr(self.event, f, getattr(self, f"proposed_{f}"))
-        if self.changed_fields:
-            self.event.save(update_fields=list(self.changed_fields))
+        if scalar:
+            self.event.save(update_fields=scalar)
+        if "price" in self.changed_fields:
+            apply_to_event(self.event, PriceSpec.from_dict(self.proposed_price))
         self.applied_at = timezone.now()
 
     def approve(self, reviewer):

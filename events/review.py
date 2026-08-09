@@ -20,7 +20,7 @@ from difflib import SequenceMatcher
 #: Content fields whose change triggers the certify-or-submit dialog. Other
 #: edit-form fields (schedule_note, contact, record_video) are administrative
 #: and always apply immediately.
-REVIEWABLE_FIELDS = ("title", "description", "readings", "fee_note")
+REVIEWABLE_FIELDS = ("title", "description", "readings", "fee_note", "price")
 
 #: Human labels for the reviewable fields, used in the dialog + review queue.
 FIELD_LABELS = {
@@ -28,6 +28,7 @@ FIELD_LABELS = {
     "description": "Description",
     "readings": "Readings",
     "fee_note": "Fee note",
+    "price": "Price",
 }
 
 #: Above this fraction of the description changed, the dialog *recommends* the
@@ -49,9 +50,10 @@ def change_ratio(old: str, new: str) -> float:
     return 1.0 - SequenceMatcher(None, old, new).ratio()
 
 
-def changed_reviewable_fields(event, cleaned_data) -> list[str]:
-    """Reviewable fields whose submitted value differs from the live event."""
-    return [
-        f for f in REVIEWABLE_FIELDS
-        if f in cleaned_data and (cleaned_data[f] or "") != (getattr(event, f) or "")
-    ]
+# NOTE: a ``changed_reviewable_fields(event, cleaned_data)`` lived here and was
+# never called. It read ``getattr(event, f)`` at call time, but ``event_edit``
+# must snapshot the originals *before* binding — a ModelForm mutates the
+# instance in place — so it would have returned wrong answers for the one view
+# that could have used it. A dead helper that silently disagrees with the live
+# code is what produced task #532's bug in the first place (see
+# ``Program.public_program_year_q``), so it is gone rather than updated.

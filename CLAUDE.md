@@ -976,6 +976,60 @@ Done (see `git log` for specifics):
   surfaces keep their small chips, and CE stays out of `REVIEWABLE_FIELDS`.
   Design: `docs/superpowers/specs/2026-08-05-ce-logo-zoom-design.md`.
 
+- **A PC-created program event is born unregisterable** (task #532). The Program
+  Committee chair direct-created a late-addition seminar, set it to "Open for
+  registration", and reported that the listings still read "Draft". He had
+  missed no step: `Event.status` (Draft / Open / Closed) is the field on the
+  add-event form, while **visibility for an annual-program type cascades from
+  the owning `Program`** — which `Event.is_public_now` implements and *nothing
+  else honored*. The badge, the Register CTA, the location block, the draft
+  banner, the register gate, `upcoming.py` and the calendar feed all read the
+  raw `Event.published` boolean, so the seminar was simultaneously public (per
+  `is_public_now`, hence listed) and unregisterable (per the flag). The tell was
+  sitting in the file: **`Program.public_program_year_q()`, written for exactly
+  this cascade, was defined and never called from anywhere.** It stayed hidden
+  because all fifteen sibling 2026-27 events were script-imported with
+  `--publish`; only an event created through the *UI* exposes it, and
+  `ProgramEventForm` does not expose `published` while
+  `program_admin_special_event_publish` deliberately refuses program events —
+  so **no button existed for him to press**. Replaced by `Event.public_now_q()`,
+  which covers the non-program types too and has callers; the three querysets,
+  five instance sites and a `published_count` that no template ever read now go
+  through one predicate.
+  **Underneath it, a deeper divergence:** `EventProposal.approve()` mints a
+  *complete* event (price tier, meeting series, speakers) while
+  `program_admin_event_new` mints a *bare* one. The PC's special-event
+  direct-create had already solved this by routing through the proposal
+  pipeline; the program-event path never got that treatment, so the same
+  seminar also had **no price tier and no sessions** — unregisterable by two
+  independent mechanisms, since price tiers had no UI outside Django admin.
+  New `events/price_spec.py` is one definition of a price — the four values the
+  proposal form always collected — with `from_event` / `apply_to_event` /
+  `label`; `_build_price_tier` is refactored onto it so the paths cannot drift
+  again. `PriceFieldsMixin` puts the app's **existing** Free / Fixed / Sliding
+  vocabulary (`EventProposalForm.fee_type`) on the PC form and the faculty form.
+  Deliberately *not* `mint_program_tiers`' fixed/donation/per-session: that is a
+  one-off migration script's vocabulary, "donation" is just sliding-from-$0, and
+  per-session is not in the model at all (the script pre-multiplied rate ×
+  sessions into a fixed base) — adopting it would give the school two pricing
+  vocabularies for one model.
+  Price also joins `REVIEWABLE_FIELDS`, so a faculty price change routes through
+  the certify-or-submit dialog. It is a *related row*, not an `Event` field, so
+  it travels as a `PriceSpec` dict in two JSON columns and only `apply()` and
+  `field_changes()` branch. Two traps: the price inputs would otherwise land in
+  the view's `nonreviewable` list and reach
+  `event.save(update_fields=["fee_amount"])`, and the confirm dialog's
+  hidden-textarea re-post needed `tuition_covers` to follow the `record_video`
+  checkbox precedent. **Two safety properties are requirements, not notes:** the
+  spec addresses only the event-level `audience=ALL` tier, so an event with a
+  student rate or session-scoped tiers renders **read-only** and
+  `apply_to_event` *raises* rather than silently dropping a row; and a price
+  change never touches `Registration.quoted_amount`, so nobody already enrolled
+  is re-priced. Also deleted: `changed_reviewable_fields()`, dead *and* wrong
+  (it read the event after ModelForm binding had mutated it in place) — a dead
+  helper that silently disagrees with live code is what caused this bug.
+  Design: `docs/superpowers/specs/2026-08-09-program-event-pricing-and-cascade-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
