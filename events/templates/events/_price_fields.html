@@ -1,0 +1,75 @@
+{# Shared event-price block: PC event form + faculty edit form (task #532). #}
+<div class="space-y-3" data-price-block>
+  <span class="block text-xs uppercase tracking-wider text-base-content/60">Price</span>
+  <p class="text-xs text-base-content/50">
+    What checkout charges. The fee note above is the prose shown on the event page.
+  </p>
+
+  {% if form.price_readonly %}
+  <div class="rounded-lg border border-base-300 bg-base-200/40 p-3 space-y-2">
+    <p class="text-sm text-base-content/80">
+      This event has more than one price, so it's edited in the site admin.
+    </p>
+    <ul class="text-sm text-base-content/70 space-y-1">
+      {% for tier in form.price_tiers %}
+      <li>{{ tier.get_audience_display }}, ${{ tier.base_amount }}{% if tier.sliding_scale %}, sliding from ${{ tier.minimum_amount }}{% endif %}{% if tier.covered_by_tuition %}, covered by tuition{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% else %}
+  <div class="space-y-2">
+    {% for choice in form.fee_type %}
+    <label class="flex items-center gap-2 cursor-pointer text-sm">
+      {{ choice.tag }} <span>{{ choice.choice_label }}</span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div data-price-fixed>
+    <label for="{{ form.fee_amount.id_for_label }}" class="block text-xs text-base-content/60 mb-1">{{ form.fee_amount.label }}</label>
+    {{ form.fee_amount }}
+    {% if form.fee_amount.errors %}<p class="text-error text-xs mt-1">{{ form.fee_amount.errors|join:", " }}</p>{% endif %}
+  </div>
+
+  <div data-price-sliding class="grid grid-cols-2 gap-3">
+    <div>
+      <label for="{{ form.fee_sliding_min.id_for_label }}" class="block text-xs text-base-content/60 mb-1">{{ form.fee_sliding_min.label }}</label>
+      {{ form.fee_sliding_min }}
+      {% if form.fee_sliding_min.errors %}<p class="text-error text-xs mt-1">{{ form.fee_sliding_min.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div>
+      <label for="{{ form.fee_sliding_max.id_for_label }}" class="block text-xs text-base-content/60 mb-1">{{ form.fee_sliding_max.label }}</label>
+      {{ form.fee_sliding_max }}
+      {% if form.fee_sliding_max.errors %}<p class="text-error text-xs mt-1">{{ form.fee_sliding_max.errors|join:", " }}</p>{% endif %}
+    </div>
+  </div>
+
+  <label class="flex items-center gap-2 cursor-pointer text-sm">
+    {{ form.tuition_covers }} <span>{{ form.tuition_covers.label }}</span>
+  </label>
+  <p class="text-xs text-base-content/50">
+    Faculty and conveners may set alternative rates or waive the fee for
+    individual students who indicate financial need.
+  </p>
+  {% endif %}
+</div>
+
+<script>
+  (function () {
+    var block = document.querySelector("[data-price-block]");
+    if (!block) return;
+    var fixed = block.querySelector("[data-price-fixed]");
+    var sliding = block.querySelector("[data-price-sliding]");
+    if (!fixed || !sliding) return;
+    function sync() {
+      var checked = block.querySelector('input[name="fee_type"]:checked');
+      var value = checked ? checked.value : "free";
+      fixed.hidden = value !== "fixed";
+      sliding.hidden = value !== "sliding";
+    }
+    block.addEventListener("change", function (event) {
+      if (event.target.name === "fee_type") sync();
+    });
+    sync();
+  })();
+</script>

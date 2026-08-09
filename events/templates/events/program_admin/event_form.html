@@ -86,6 +86,10 @@
       </div>
 
       <div>
+        {% include "events/_price_fields.html" %}
+      </div>
+
+      <div>
         <label for="{{ form.contact.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">Contact</label>
         {{ form.contact }}
         <p class="text-xs text-base-content/50 mt-1">Public contact for questions about the event (email/phone).</p>

@@ -922,6 +922,7 @@ def program_admin_event_new(request, academic_year: str):
         form = ProgramEventForm(request.POST, program=program)
         if form.is_valid():
             event = form.save()
+            form.save_price(event)
             # Workgroup-primary: every PC-created event gets its generating
             # workgroup (offering → own group; PC-organized → the PC's group).
             event.ensure_workgroup()
@@ -951,7 +952,7 @@ def program_admin_event_edit(request, academic_year: str, slug: str):
     if request.method == "POST":
         form = ProgramEventForm(request.POST, instance=event, program=program)
         if form.is_valid():
-            form.save()
+            form.save_price(form.save())
             return redirect(
                 reverse("program_admin_event_edit", args=[academic_year, event.slug])
                 + "?saved=1#saved"
