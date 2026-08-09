@@ -1477,19 +1477,18 @@ class EventProposal(models.Model):
         }.get(self.location_kind, Event.Format.ONLINE)
 
     def _build_price_tier(self, event):
-        """Create a PriceTier on the minted event from the proposed fee."""
-        sliding = self.fee_sliding_min is not None or self.fee_sliding_max is not None
-        if not sliding and self.fee_amount is None and not self.tuition_covers:
-            return  # nothing specified
-        base = self.fee_amount
-        if base is None:
-            base = self.fee_sliding_max if self.fee_sliding_max is not None else Decimal("0")
-        PriceTier.objects.create(
-            event=event, audience=Audience.ALL, base_amount=base,
-            sliding_scale=sliding,
-            minimum_amount=(self.fee_sliding_min or Decimal("0")) if sliding else Decimal("0"),
-            covered_by_tuition=self.tuition_covers,
-        )
+        """Create a PriceTier on the minted event from the proposed fee.
+
+        Delegates to the shared price spec so this path and the PC's event
+        form cannot describe a price two different ways (task #532).
+        """
+        from .price_spec import PriceSpec, apply_to_event
+        apply_to_event(event, PriceSpec(
+            amount=self.fee_amount,
+            sliding_min=self.fee_sliding_min,
+            sliding_max=self.fee_sliding_max,
+            tuition_covers=self.tuition_covers,
+        ))
 
     def _build_meeting_series(self, event, reviewer):
         """Materialize the proposed recurring schedule into a MeetingSeries on the
