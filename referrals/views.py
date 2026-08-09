@@ -22,6 +22,7 @@ from django.views.decorators.http import require_POST
 from . import services
 from .forms import (
     AddClinicianForm,
+    AddendumForm,
     ClinicianEditForm,
     FollowupForm,
     MessageTemplateForm,
@@ -185,6 +186,46 @@ def record_response(request, reference):
     else:
         messages.error(request, "Couldn't record that response.")
     return redirect("referrals:detail", reference=reference)
+
+
+@coordinator_required
+def addendum(request, reference):
+    """Compose and send an addendum to a distributed request (task #531)."""
+    req = _get_request(reference)
+    sendable = (
+        req.status in (
+            ReferralRequest.Status.DISTRIBUTED, ReferralRequest.Status.REPLIED,
+        )
+        and not req.is_purged
+    )
+    if not sendable:
+        messages.error(
+            request,
+            f"Referral {req.reference} is not open for an addendum.",
+        )
+        return redirect("referrals:detail", reference=reference)
+    if request.method == "POST":
+        form = AddendumForm(request.POST, request_obj=req)
+        if form.is_valid():
+            record = services.send_addendum(
+                req,
+                form.cleaned_data["text"],
+                form.cleaned_data["audience"],
+                sent_by=request.user,
+                responses_due_at=form.cleaned_data["responses_due_at"],
+            )
+            messages.success(
+                request,
+                f"Addendum sent to {record.recipient_count} "
+                f"clinician{'' if record.recipient_count == 1 else 's'}.",
+            )
+            return redirect("referrals:detail", reference=reference)
+    else:
+        form = AddendumForm(request_obj=req)
+    return _render(request, "requests", "referrals/addendum.html", {
+        "req": req,
+        "form": form,
+    })
 
 
 @coordinator_required

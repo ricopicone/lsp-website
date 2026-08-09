@@ -1,0 +1,46 @@
+{% extends "referrals/base.html" %}
+{% block title %}Addendum · {{ req.reference }}{% endblock %}
+{% block tab_content %}
+<div class="max-w-3xl space-y-6">
+  <header class="space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="font-serif text-2xl text-base-content">Addendum — {{ req.reference }}</h2>
+      <a href="{% url 'referrals:detail' req.reference %}" class="btn btn-ghost btn-sm">← Back to the request</a>
+    </div>
+    <p class="text-sm text-base-content/70">
+      Tell the clinicians something that changed since the request went out. What
+      you write is emailed to them and shown on their respond page, so a clinician
+      who opens their link later sees it without going back to email.
+    </p>
+  </header>
+
+  <form method="post" class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
+    {% csrf_token %}
+    <label class="block space-y-1">
+      <span class="text-sm font-medium text-base-content">{{ form.text.label }}</span>
+      {{ form.text }}
+      <span class="block text-xs text-base-content/60">{{ form.text.help_text }}</span>
+      {% for error in form.text.errors %}<span class="block text-xs text-error">{{ error }}</span>{% endfor %}
+    </label>
+    <label class="block space-y-1">
+      <span class="text-sm font-medium text-base-content">{{ form.audience.label }}</span>
+      {{ form.audience }}
+      <span class="block text-xs text-base-content/60">
+        Clinicians added to the list since this request went out have never seen
+        it, so send to everyone only when a fresh look is worth it.
+      </span>
+      {% for error in form.audience.errors %}<span class="block text-xs text-error">{{ error }}</span>{% endfor %}
+    </label>
+    <label class="block space-y-1">
+      <span class="text-sm font-medium text-base-content">{{ form.responses_due_at.label }}</span>
+      {{ form.responses_due_at }}
+      <span class="block text-xs text-base-content/60">Leave this as it is unless the change deserves more time to answer.</span>
+      {% for error in form.responses_due_at.errors %}<span class="block text-xs text-error">{{ error }}</span>{% endfor %}
+    </label>
+    <div class="flex items-center gap-2">
+      <button class="btn btn-primary">Send addendum</button>
+      <a href="{% url 'referrals:detail' req.reference %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

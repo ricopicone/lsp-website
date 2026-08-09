@@ -35,6 +35,8 @@ urlpatterns = [
          name="record_response"),
     path(f"{_ADMIN}/<str:reference>/remove-response/<int:pk>/",
          views.remove_response, name="remove_response"),
+    path(f"{_ADMIN}/<str:reference>/addendum/", views.addendum,
+         name="addendum"),
     path(f"{_ADMIN}/<str:reference>/followup/", views.followup,
          name="followup"),
     path(f"{_ADMIN}/<str:reference>/close/", views.close, name="close"),

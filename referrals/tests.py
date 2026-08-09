@@ -437,6 +437,76 @@ def test_purge_redacts_addendum_text(listed):
     assert "sliding scale" not in addendum.text
 
 
+def test_coordinator_sends_an_addendum_from_the_page(
+    client, coordinator, listed, django_capture_on_commit_callbacks,
+):
+    req = make_request()
+    services.distribute(req)
+    mail.outbox.clear()
+    client.force_login(coordinator)
+    url = reverse("referrals:addendum", args=[req.reference])
+    assert client.get(url).status_code == 200
+
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = client.post(url, {
+            "text": "They are looking for a sliding scale.",
+            "audience": ReferralAddendum.Audience.DISTRIBUTED,
+        })
+    assert resp.status_code == 302
+    addendum = ReferralAddendum.objects.get(request=req)
+    assert addendum.sent_by == coordinator
+    assert addendum.recipient_count == 1
+    assert "sliding scale" in mail.outbox[0].body
+
+
+def test_addendum_page_forbidden_without_role(client, clinician, listed):
+    req = make_request()
+    services.distribute(req)
+    client.force_login(clinician)
+    assert client.get(
+        reverse("referrals:addendum", args=[req.reference]),
+    ).status_code == 403
+
+
+def test_unrecorded_audience_cannot_be_targeted(client, coordinator, listed):
+    """A request distributed before the recipient log existed can only go to
+    everyone — guessing the old set would be a fiction (task #531)."""
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    client.force_login(coordinator)
+    resp = client.post(
+        reverse("referrals:addendum", args=[req.reference]),
+        {"text": "Sliding scale.",
+         "audience": ReferralAddendum.Audience.DISTRIBUTED},
+    )
+    assert resp.status_code == 200  # redisplayed with an error
+    assert not ReferralAddendum.objects.exists()
+
+
+def test_addendum_shows_on_both_pages(client, coordinator, listed, clinician):
+    req = make_request()
+    services.distribute(req)
+    services.send_addendum(
+        req, "They are looking for a sliding scale.",
+        ReferralAddendum.Audience.ALL,
+    )
+
+    client.force_login(clinician)
+    page = client.get(reverse("referrals:respond", args=[req.reference]))
+    assert b"sliding scale" in page.content
+
+    client.force_login(coordinator)
+    page = client.get(reverse("referrals:detail", args=[req.reference]))
+    assert b"sliding scale" in page.content
+
+
+def test_addendum_page_refuses_a_closed_request(client, coordinator, listed):
+    req = make_request(status=ReferralRequest.Status.CLOSED)
+    client.force_login(coordinator)
+    resp = client.get(reverse("referrals:addendum", args=[req.reference]))
+    assert resp.status_code == 302  # bounced back to the detail page
+    assert not ReferralAddendum.objects.exists()
+
+
 # ---- Follow-up (step 5) ------------------------------------------------------
 
 

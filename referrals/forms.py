@@ -8,6 +8,7 @@ from accounts.models import User
 
 from .models import (
     MessageTemplate,
+    ReferralAddendum,
     ReferralListMember,
     ReferralResponse,
     ReferralSettings,
@@ -121,6 +122,72 @@ class RecordResponseForm(forms.Form):
     message = forms.CharField(
         required=False, widget=_textarea(2), label="Note",
     )
+
+
+class AddendumForm(forms.Form):
+    """Something to tell the clinicians after distribution (task #531)."""
+
+    text = forms.CharField(
+        label="What's changed", widget=_textarea(5),
+        help_text="Sent to the clinicians and shown on their respond page.",
+    )
+    audience = forms.ChoiceField(
+        label="Send to", choices=ReferralAddendum.Audience.choices,
+        widget=_SELECT,
+    )
+    responses_due_at = forms.DateTimeField(
+        required=False, label="Response deadline",
+        widget=forms.DateTimeInput(
+            attrs={"type": "date", "class": "input input-bordered w-full"},
+            format="%Y-%m-%d",
+        ),
+    )
+
+    def __init__(self, *args, request_obj=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.request_obj = request_obj
+        if request_obj is None:
+            return
+        reached = request_obj.distributed_to.filter(is_active=True).count()
+        everyone = ReferralListMember.objects.filter(is_active=True).count()
+        self.fields["audience"].choices = [
+            (
+                ReferralAddendum.Audience.DISTRIBUTED,
+                f"Only the clinicians this request went to ({reached})"
+                if reached
+                else "Only the clinicians this request went to "
+                     "(not recorded for this request)",
+            ),
+            (
+                ReferralAddendum.Audience.ALL,
+                f"Everyone on the referral list ({everyone})",
+            ),
+        ]
+        self.fields["audience"].initial = (
+            ReferralAddendum.Audience.DISTRIBUTED if reached
+            else ReferralAddendum.Audience.ALL
+        )
+        self.fields["responses_due_at"].initial = request_obj.responses_due_at
+
+    def clean_audience(self):
+        """An unrecorded audience cannot be targeted, whatever the POST says.
+
+        Requests distributed before the recipient log existed have nobody on
+        it, and guessing who they reached would be a fiction.
+        """
+        audience = self.cleaned_data["audience"]
+        if (
+            audience == ReferralAddendum.Audience.DISTRIBUTED
+            and self.request_obj is not None
+            and not self.request_obj.distributed_to.filter(
+                is_active=True,
+            ).exists()
+        ):
+            raise forms.ValidationError(
+                "This request has no recorded recipients, so an addendum can "
+                "only go to everyone on the referral list.",
+            )
+        return audience
 
 
 class FollowupForm(forms.Form):
