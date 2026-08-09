@@ -169,6 +169,11 @@ class ReferralRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     acknowledged_at = models.DateTimeField(null=True, blank=True)
     distributed_at = models.DateTimeField(null=True, blank=True)
+    distributed_to = models.ManyToManyField(
+        "ReferralListMember", blank=True, related_name="distributed_requests",
+        help_text="Clinicians who have received this request, whether by the "
+                  "original distribution or a later addendum.",
+    )
     responses_due_at = models.DateTimeField(null=True, blank=True)
     replied_at = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)

@@ -224,6 +224,21 @@ def test_distribute_emails_active_clinicians_anonymized(
     assert f"/referrals/{req.reference}/respond/" in msg.body
 
 
+def test_distribute_records_its_recipients(listed, clinician):
+    """Who a request went to has to be a recorded fact, or a later addendum
+    cannot target them (task #531)."""
+    req = make_request()
+    services.distribute(req)
+    assert list(req.distributed_to.all()) == [listed]
+
+    # A clinician added afterwards is not retroactively a recipient.
+    later = User.objects.create_user(email="later@example.com", password="pw")
+    later_listed = ReferralListMember.objects.create(
+        user=later, onboarded_at=timezone.now(),
+    )
+    assert later_listed not in req.distributed_to.all()
+
+
 def test_distribute_skips_inactive_members(listed):
     listed.is_active = False
     listed.save()

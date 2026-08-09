@@ -255,6 +255,7 @@ def distribute(req: ReferralRequest) -> int:
     req.responses_due_at = due
     req.status = ReferralRequest.Status.DISTRIBUTED
     req.save(update_fields=["distributed_at", "responses_due_at", "status"])
+    req.distributed_to.add(*members)
     return len(members)
 
 
