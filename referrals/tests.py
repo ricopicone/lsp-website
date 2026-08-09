@@ -261,15 +261,52 @@ def test_clinician_can_respond_and_update(client, listed, clinician):
     url = reverse("referrals:respond", args=[req.reference])
     assert client.get(url).status_code == 200
 
-    resp = client.post(url, {"available": "True", "message": "Happy to."})
+    resp = client.post(url, {"available": "on", "message": "Happy to."})
     assert resp.status_code == 302
     response = ReferralResponse.objects.get(request=req, member=listed)
     assert response.available and response.message == "Happy to."
+    assert response.recorded_by is None
 
-    client.post(url, {"available": "False", "message": ""})
+    # Editing the note keeps the single row (unique per request+member).
+    client.post(url, {"available": "on", "message": "By video only."})
     response.refresh_from_db()
-    assert not response.available
+    assert response.message == "By video only."
     assert ReferralResponse.objects.filter(request=req).count() == 1
+
+
+def test_unchecking_withdraws_the_response(client, listed, clinician):
+    """No unavailable answer exists: an unchecked box means no response on
+    file, so the row goes away (task #531)."""
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    client.force_login(clinician)
+    url = reverse("referrals:respond", args=[req.reference])
+    client.post(url, {"available": "on", "message": "Happy to."})
+    assert ReferralResponse.objects.filter(request=req).count() == 1
+
+    resp = client.post(url, {"message": ""}, follow=True)
+    assert ReferralResponse.objects.filter(request=req).count() == 0
+    assert any("withdrawn" in str(m) for m in resp.context["messages"])
+
+
+def test_unchecked_with_no_response_is_a_no_op(client, listed, clinician):
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    client.force_login(clinician)
+    url = reverse("referrals:respond", args=[req.reference])
+    resp = client.post(url, {"message": ""})
+    assert resp.status_code == 302
+    assert ReferralResponse.objects.filter(request=req).count() == 0
+
+
+def test_respond_page_offers_no_unavailable_option(client, listed, clinician):
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    client.force_login(clinician)
+    html = client.get(
+        reverse("referrals:respond", args=[req.reference]),
+    ).content.decode()
+    assert 'type="checkbox"' in html
+    assert 'type="radio"' not in html
+    assert "Not available" not in html
+    assert "you can simply ignore this request" in html
 
 
 def test_respond_blocked_when_closed(client, listed, clinician):
@@ -449,6 +486,43 @@ def test_coordinator_can_use_surface(client, coordinator):
     assert b"Referral list" in help_page.content
 
 
+def test_record_response_is_always_available(client, coordinator, listed):
+    """The coordinator's escape hatch records a response; there is no
+    availability question to answer any more (task #531)."""
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    client.force_login(coordinator)
+    resp = client.post(
+        reverse("referrals:record_response", args=[req.reference]),
+        {"member": listed.pk, "message": "By phone."},
+    )
+    assert resp.status_code == 302
+    response = ReferralResponse.objects.get(request=req, member=listed)
+    assert response.available
+    assert response.recorded_by == coordinator
+
+
+def test_coordinator_can_remove_a_response(client, coordinator, listed):
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    response = ReferralResponse.objects.create(request=req, member=listed)
+    client.force_login(coordinator)
+    resp = client.post(
+        reverse("referrals:remove_response", args=[req.reference, response.pk]),
+    )
+    assert resp.status_code == 302
+    assert not ReferralResponse.objects.filter(pk=response.pk).exists()
+
+
+def test_remove_response_forbidden_without_role(client, clinician, listed):
+    req = make_request(status=ReferralRequest.Status.DISTRIBUTED)
+    response = ReferralResponse.objects.create(request=req, member=listed)
+    client.force_login(clinician)
+    resp = client.post(
+        reverse("referrals:remove_response", args=[req.reference, response.pk]),
+    )
+    assert resp.status_code == 403
+    assert ReferralResponse.objects.filter(pk=response.pk).exists()
+
+
 def test_coordinator_actions_roundtrip(client, coordinator, listed):
     client.force_login(coordinator)
     req = make_request()
@@ -459,7 +533,7 @@ def test_coordinator_actions_roundtrip(client, coordinator, listed):
     # Record a manual response (escape hatch).
     client.post(
         reverse("referrals:record_response", args=[req.reference]),
-        {"member": listed.pk, "available": "True", "message": "By phone."},
+        {"member": listed.pk, "message": "By phone."},
     )
     response = ReferralResponse.objects.get(request=req, member=listed)
     assert response.recorded_by == coordinator

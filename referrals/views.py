@@ -172,7 +172,7 @@ def record_response(request, reference):
             request=req,
             member=form.cleaned_data["member"],
             defaults={
-                "available": form.cleaned_data["available"],
+                "available": True,
                 "message": form.cleaned_data["message"],
                 "recorded_by": request.user,
             },
@@ -184,6 +184,19 @@ def record_response(request, reference):
         )
     else:
         messages.error(request, "Couldn't record that response.")
+    return redirect("referrals:detail", reference=reference)
+
+
+@coordinator_required
+@require_POST
+def remove_response(request, reference, pk):
+    """Take a response off a request — the manual counterpart to a clinician
+    unchecking their own box (task #531)."""
+    req = _get_request(reference)
+    response = get_object_or_404(ReferralResponse, pk=pk, request=req)
+    member = str(response.member)
+    response.delete()
+    messages.success(request, f"Removed the response from {member}.")
     return redirect("referrals:detail", reference=reference)
 
 
@@ -437,16 +450,27 @@ def respond(request, reference):
             raise PermissionDenied
         form = RespondForm(request.POST, instance=existing)
         if form.is_valid():
-            response = form.save(commit=False)
-            response.request = req
-            response.member = member
-            response.recorded_by = None
-            response.save()
-            messages.success(
-                request,
-                "Thank you — your response was recorded and connected to "
-                f"referral {req.reference}.",
-            )
+            if form.cleaned_data["available"]:
+                response = form.save(commit=False)
+                response.request = req
+                response.member = member
+                response.recorded_by = None
+                response.save()
+                messages.success(
+                    request,
+                    "Thank you — your response was recorded and connected to "
+                    f"referral {req.reference}.",
+                )
+            else:
+                # An unchecked box is not an "unavailable" answer, it is no
+                # response on file (task #531).
+                if existing is not None:
+                    existing.delete()
+                messages.success(
+                    request,
+                    "Your response was withdrawn, you are no longer listed "
+                    f"as available for referral {req.reference}.",
+                )
             return redirect("referrals:respond", reference=reference)
     else:
         form = RespondForm(instance=existing) if can_respond else None
