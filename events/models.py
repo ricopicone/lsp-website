@@ -574,7 +574,7 @@ class Event(models.Model):
         status drives it."""
         import datetime as _dt
 
-        if not self.published:
+        if not self.is_public_now:
             return {"label": "Draft", "css": "badge-warning"}
         if self.end_date and self.end_date < _dt.date.today():
             return {"label": "Archived", "css": "badge-ghost"}

@@ -148,7 +148,7 @@ def _tuition_block_reason(user, event) -> str | None:
 @login_required
 def register_for_event(request, event_slug: str):
     event = get_object_or_404(Event, slug=event_slug)
-    if not (event.published and event.status == Event.Status.OPEN):
+    if not (event.is_public_now and event.status == Event.Status.OPEN):
         raise Http404("Registration not open for this event.")
 
     # Already-registered short-circuit: redirect to the existing reg's
