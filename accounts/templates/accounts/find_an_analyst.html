@@ -216,18 +216,9 @@
             syncPronounsOther();
           }
 
-          // Submit-once guard: the form posts and redirects, but a slow
-          // response invites repeated clicks — each of which would create a
-          // duplicate referral request. Disable the button on the first
-          // submit and show a sending state so it can't fire twice.
-          var submitting = false;
-          form.addEventListener("submit", function (e) {
-            if (submitting) { e.preventDefault(); return; }
-            submitting = true;
-            submitBtn.disabled = true;
-            submitBtn.classList.add("btn-disabled");
-            submitBtn.textContent = "Sending…";
-          });
+          // The submit-once guard that used to live here is now site-wide —
+          // static/js/submit-guard.js, task #545. Left in place this form
+          // would get both treatments.
 
           syncSteps();
         })();

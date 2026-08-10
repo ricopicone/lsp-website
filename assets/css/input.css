@@ -871,3 +871,44 @@
 .lsp-lightbox-caption {
   color: rgb(255 255 255 / 0.72);
 }
+
+/* Submit-once guard (task #545). Both classes are added by
+   static/js/submit-guard.js, so they are hand-written for the same reason as
+   `.hp-wrap`: the Tailwind v4 build scans templates only, and a utility class
+   written there would be stripped from the production bundle — silently, and
+   nowhere else. DaisyUI's own `loading loading-spinner` is out for the same
+   reason; it appears in no template, so it is not in the built CSS at all.
+
+   `.is-submitting` greys a button with a class rather than the `disabled`
+   attribute, which would drop a named submit button's name/value from the
+   POST. pointer-events stops the mouse; the guard's own flag stops the
+   keyboard. */
+.is-submitting {
+  opacity: 0.55;
+  pointer-events: none;
+  cursor: default;
+}
+
+.lsp-spinner {
+  display: inline-block;
+  flex: none;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.125em;
+  animation: lsp-spin 0.6s linear infinite;
+}
+
+@keyframes lsp-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Slowed, not stopped: a motionless spinner reads as "finished", which is the
+   opposite of what is happening. */
+@media (prefers-reduced-motion: reduce) {
+  .lsp-spinner {
+    animation-duration: 2.4s;
+  }
+}
