@@ -599,6 +599,10 @@
 
   <script src="{% static 'js/flourishes.js' %}" defer></script>
 
+  {# A form submits once (task #545). Unconditional: anonymous visitors post #}
+  {# forms too — signing in, signing up, donating, requesting a referral. #}
+  <script src="{% static 'js/submit-guard.js' %}" defer></script>
+
   {% if user|is_parletre_member and request.resolver_match.app_name == 'parletre' %}
   {# Global "who's online" heartbeat — fires on every Parlêtre page. #}
   <script src="{% static 'js/parletre-presence.js' %}" defer></script>

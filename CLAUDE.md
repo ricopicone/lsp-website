@@ -1030,6 +1030,53 @@ Done (see `git log` for specifics):
   helper that silently disagrees with live code is what caused this bug.
   Design: `docs/superpowers/specs/2026-08-09-program-event-pricing-and-cascade-design.md`.
 
+- **A form submits once** (task #545). The Referral Coordinator clicked **Send
+  addendum** twice and the clinicians got two copies. `send_addendum` mails
+  every clinician **synchronously**, so on a list of thirty-six that is seconds
+  in which the button looks untouched — and nothing about that is specific to
+  addenda. Every costly action here is a synchronous POST behind an ordinary
+  button, and the one place already bitten (the public referral request on
+  `find_an_analyst.html`) had answered it with a bespoke inline "Submit-once
+  guard" written for that form alone. New `static/js/submit-guard.js`, loaded
+  unconditionally from `base.html`, makes it the site's behavior: the first
+  submit locks the form, later ones are swallowed, every submit button in it
+  greys out and the pressed one shows a spinner.
+  **Two things are load-bearing.** The listener is on `document` in the
+  **bubble** phase, so it runs after a form's own handler — a form whose JS
+  already called `preventDefault` (the Parlêtre chat's WebSocket path, the
+  suggestions widget) arrives with `defaultPrevented` set and is skipped, so
+  the escape hatch is automatic rather than a list to maintain; a form that
+  only *conditionally* intercepts and this time falls through to a real POST
+  is guarded, which is right. And **it never sets the `disabled` attribute**:
+  the HTML form-submission algorithm fires `submit` *before* it constructs the
+  entry list, so disabling the pressed button inside a submit handler drops its
+  `name`/`value` from the POST. Twenty-eight buttons here carry a `name` — the
+  treasurer's Reconcile approve/decline pair, the tuition plan queue,
+  advancement, external-analyst and cartel decisions — so the obvious
+  implementation would have traded a double-send bug for a whole class of
+  silent no-op decisions. Buttons grey via a class (`pointer-events` stops the
+  mouse) and the second submit dies on a flag (the keyboard, where Enter in a
+  text field submits without touching a button). Every submit button in the
+  form is greyed, not just the pressed one: *Approve* then *Decline* is worse
+  than sending twice. `<a>` stays live, so Cancel still works.
+  `.is-submitting` and `.lsp-spinner` are hand-written in `input.css` beside
+  `.hp-wrap` for the reason `.hp-wrap` is — Tailwind v4 scans templates only,
+  so a class emitted from JavaScript is stripped from the **production** build
+  and nowhere else; DaisyUI's `loading loading-spinner` is out for the same
+  reason (zero templates use it, so it isn't in the built CSS at all). The
+  label is not swapped for "Sending…": re-flowing text moves more than the
+  spinner does, and the label is what names the action still in flight.
+  **No unlock-after-N-seconds failsafe** — it would re-open the double-send
+  window at precisely the moment the response is slowest, which is this bug;
+  the only reset is `pageshow`/`persisted`, since bfcache restores the DOM
+  spinner and all. Deliberately no server-side idempotency token (Rico,
+  2026-08-10): a nonce across 264 forms brings its own failure mode, a
+  legitimate slow submit rejected as a replay. Verified in a browser: three
+  clicks on a named submitter produce **one** POST still carrying
+  `decision=approve`; intercepted and GET forms untouched; a simulated bfcache
+  restore clears the lock. Design:
+  `docs/superpowers/specs/2026-08-10-submit-once-guard-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
