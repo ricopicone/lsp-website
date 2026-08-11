@@ -326,6 +326,26 @@ def test_rebill_notification_names_the_count_and_total(period, student):
     assert "200.00" in note.title or "200.00" in note.body
 
 
+def test_restore_notification_names_the_count_and_the_year(
+    period, student, committed,
+):
+    from notifications.categories import Category
+    from notifications.models import Notification
+    from payments.notifications import notify_coverage_restored
+
+    _quoted(student, "notify-restore")
+    # Pass the rows the function returned, as the decision view does — a stale
+    # in-memory copy would still read the old amount.
+    restored = coverage.apply_coverage(student, period)
+    notify_coverage_restored(student, period, restored)
+
+    note = Notification.objects.get(
+        recipient=student, category=Category.ACCOUNT_UPDATES,
+    )
+    assert "1 registration" in note.title
+    assert period.name in note.title
+
+
 def test_confirmation_page_explains_a_rebilled_registration(client, period, student):
     reg = _reg(student, _tier(_event("explain-me"), amount="200.00"))
     coverage.bill_skipped_coverage(student, period)
