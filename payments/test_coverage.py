@@ -346,6 +346,60 @@ def test_restore_notification_names_the_count_and_the_year(
     assert period.name in note.title
 
 
+# ---- view wiring -----------------------------------------------------------
+
+def test_member_decision_applies_coverage_and_notifies(period, student, client):
+    """Recording a paying decision covers the events already registered for."""
+    from notifications.models import Notification
+
+    reg = _quoted(student, "member-path")
+    client.force_login(student)
+    # URL names are unnamespaced (config/urls.py:163). The form posts the
+    # period slug; _resolve_tuition_period accepts current or upcoming.
+    client.post(reverse("tuition"),
+                {"status": "committed", "period": period.slug})
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("0")
+    assert reg.status == Registration.Status.PAID
+    assert Notification.objects.filter(
+        recipient=student, title__contains="now covered by your").exists()
+
+
+def test_treasurer_set_status_applies_coverage_silently(
+    period, student, client, staff_user,
+):
+    """The treasurer flips historical years in cleanup, so no member mail."""
+    from notifications.models import Notification
+
+    reg = _quoted(student, "treasurer-path")
+    client.force_login(staff_user)
+    client.post(
+        reverse("treasurer_tuition_set_status", args=[student.pk]),
+        {"status": "committed", "period": period.pk},
+    )
+
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("0")
+    assert reg.status == Registration.Status.PAID
+    assert not Notification.objects.filter(
+        recipient=student, title__contains="now covered by your").exists()
+
+
+def test_treasurer_skipping_does_not_auto_bill(period, student, client, staff_user):
+    """#485's staff-paths rule: retro-billing a cleanup pass would bill years
+    of events."""
+    reg = _reg(student, _tier(_event("staff-skip"), amount="200.00"))
+    client.force_login(staff_user)
+    client.post(
+        reverse("treasurer_tuition_set_status", args=[student.pk]),
+        {"status": "skipping", "period": period.pk},
+    )
+    reg.refresh_from_db()
+    assert reg.quoted_amount == Decimal("0")
+    assert reg.status == Registration.Status.PAID
+
+
 def test_confirmation_page_explains_a_rebilled_registration(client, period, student):
     reg = _reg(student, _tier(_event("explain-me"), amount="200.00"))
     coverage.bill_skipped_coverage(student, period)
