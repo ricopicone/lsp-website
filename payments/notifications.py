@@ -313,6 +313,27 @@ def notify_coverage_rebilled(user, period, registrations) -> None:
     )
 
 
+def notify_coverage_restored(user, period, registrations) -> None:
+    """Tell the member the events they were quoted a fee for are covered by
+    their tuition after all, because a paying decision is now on file
+    (task #561)."""
+    count = len(registrations)
+    plural = "registration" if count == 1 else "registrations"
+    notify(
+        user, Category.ACCOUNT_UPDATES,
+        title=(
+            f"{count} {plural} now covered by your {period.name} tuition, "
+            "at no cost."
+        ),
+        body=(
+            "Your tuition covers these events, so there is nothing to pay. "
+            "If you had started a payment for any of them, it was cancelled "
+            "and you were not charged."
+        ),
+        url=_account_tab_url(),
+    )
+
+
 def approval_reminder_inapp(event, pending_count: int) -> None:
     """Bell rows for event faculty (the cron paces the batched faculty email)."""
     url = reverse("events:detail", args=[event.slug]) + "?view=faculty"

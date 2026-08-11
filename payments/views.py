@@ -42,6 +42,7 @@ from .models import (
 )
 from .notifications import (
     notify_coverage_rebilled,
+    notify_coverage_restored,
     notify_plan_application_submitted,
 )
 from .operations import complete_payment
@@ -1812,6 +1813,14 @@ def treasurer_tuition_set_status(request, user_id: int):
             f"set {period.name} status to {_INLINE_TUITION_STATUSES[status]}."
         )
         enr.save(update_fields=("notes",))
+        # A covering decision prices that year's unpaid registrations at $0
+        # (task #561). Deliberately silent: the treasurer flips historical
+        # years during the ledger cleanup, and mailing members about
+        # registrations they had forgotten is not the point of that pass.
+        # Skipping still does not auto-bill here — that is #485's staff-paths
+        # rule, and retro-billing a cleanup pass would bill years of events.
+        if enr.covers_seminars:
+            coverage.apply_coverage(target, period)
     return _safe_next(request, "treasurer")
 
 
@@ -2414,16 +2423,21 @@ def tuition_decision(request):
                         user=request.user, tuition_period=period,
                         defaults={"status": status},
                     )
-                # Bill or restore the events tuition coverage paid for. A
-                # paying decision (committed / plan request) restores coverage,
-                # so committing returns their access without money moving.
+                # Bill or cover the events this year's tuition touches. A
+                # paying decision (committed / plan request) covers that year's
+                # registrations — including ones made before the decision was
+                # recorded (task #561) — so committing returns their access
+                # without money moving.
                 if status == "skipping":
                     billed = coverage.bill_skipped_coverage(request.user, period)
+                    restored = []
                 else:
                     billed = []
-                    coverage.unbill_skipped_coverage(request.user, period)
+                    restored = coverage.apply_coverage(request.user, period)
             if billed:
                 notify_coverage_rebilled(request.user, period, billed)
+            if restored:
+                notify_coverage_restored(request.user, period, restored)
             messages.success(request, "Your tuition decision has been recorded.")
         else:
             messages.error(request, "Please choose one of the listed options.")
