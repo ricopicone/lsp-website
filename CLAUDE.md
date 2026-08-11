@@ -1077,6 +1077,57 @@ Done (see `git log` for specifics):
   restore clears the lock. Design:
   `docs/superpowers/specs/2026-08-10-submit-once-guard-design.md`.
 
+- **Recording a covering decision covers the registrations** (task #561). A
+  member, after his tuition records were corrected: *"They all now say I am
+  registered but awaiting payment?"* A registration is priced **once, at
+  creation**, and both the pricing resolver (`_is_tuition_paying`, task #450
+  phase A) and the ledger (`period_for_event`) anchor coverage on the **event's
+  own** academic year. His four registrations were Sept–Oct 2026 events, so all
+  four belonged to **AY 2026–2027** — the year that had not started yet — and
+  each was created before any AY 2026–27 enrollment row existed, so each
+  correctly stored the regular fee. Recording the covering decision afterwards
+  changed nothing about them, for two independent reasons: `unbill_skipped_
+  coverage` selected **only** rows whose `quoted_explanation` equalled the task
+  #485 re-bill marker, and his said `'Standard All price.'`; and the status was
+  set from the treasurer's surface, where `treasurer_tuition_set_status` called
+  `coverage` on **neither** path. **The AY 2025–2026 edit that seemed to cause
+  it was a red herring** — it cannot reach an AY 2026–27 event. The general
+  case: **a member who registers before recording a covering decision keeps the
+  full quote forever**, because #485 built the restore as an undo for its own
+  billing rather than as an answer to "what does coverage owe this member now",
+  so the one case it could not reach is the one that happened.
+  New `coverage.apply_coverage` **replaces** `unbill_skipped_coverage` rather
+  than joining it: a re-billed row is a **strict subset** of the structural
+  predicate (covered tier, no pricing code, positive quote, AWAITING_PAYMENT or
+  PENDING_APPROVAL, event in the period), so keeping both would leave the two
+  directions able to disagree about what coverage bought — and matching the
+  marker string is exactly what made this invisible. `REBILLED_EXPLANATION`
+  survives as something written and read by humans; nothing matches on it. The
+  covering check is made **once per call**, not per row: the loop already pins
+  every candidate to the period, so one enrollment lookup *is*
+  `is_tuition_current` for all of them.
+  **Expiring the member's live Checkout sessions is load-bearing, not
+  tidying** — at the moment his rows would have gone to $0 he had three open
+  sessions worth **$1,360**, and a member returning to a stale tab pays for a
+  place they now hold for free, with `complete_payment`'s settle guard minting
+  no `Charge` against it, so the money lands as unattributed credit for the
+  treasurer to refund by hand. `stripe_sync.expire_open_sessions` already
+  existed for this hazard (written for cancel-then-re-register) and already
+  refuses to abandon a session Stripe reports as **paid**.
+  The two wirings are **deliberately asymmetric**. `tuition_decision` applies
+  coverage and notifies (`notify_coverage_restored`, built from the rows the
+  function *returns* — a stale in-memory copy still reads the old amount);
+  `treasurer_tuition_set_status` applies it **silently** (Rico, 2026-08-11),
+  because the treasurer is flipping historical years in the #443 cleanup. The
+  treasurer path still does **not** re-bill on skipping: #485's staff-paths
+  rule stands and matters more now, since retro-billing a cleanup pass would
+  bill years of events. A row with money actually on it is excluded by the
+  status filter — a fee genuinely paid is a refund conversation for the
+  treasurer, never a silent unwind. No migration, no backfill, no flag; the
+  four affected rows were repaired by hand on prod with these exact semantics
+  before the code existed. Design:
+  `docs/superpowers/specs/2026-08-11-apply-coverage-to-existing-registrations-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
