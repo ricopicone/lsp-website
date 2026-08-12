@@ -29,6 +29,7 @@ from payments.stripe_checkout import (
 
 from .forms import RegistrationForm
 from .models import Registration
+from .permissions import eligibility_block_reason
 from .services import apply_resolution, auto_apply_pinned_code, pinned_code_for
 
 logger = logging.getLogger(__name__)
@@ -168,6 +169,17 @@ def register_for_event(request, event_slug: str):
         return render(
             request, "registrations/blocked_tuition.html",
             {"event": event, "reason": block_reason},
+            status=403,
+        )
+
+    # Eligibility gate (task #566) — a members-only event admits members, a
+    # guest holding a code addressed to them, and the people running it.
+    # Deliberately after the already-registered short-circuit above: someone
+    # who enrolled while the event was open keeps their place.
+    if (reason := eligibility_block_reason(request.user, event)) is not None:
+        return render(
+            request, "registrations/blocked_members_only.html",
+            {"event": event, "reason": reason},
             status=403,
         )
 

@@ -138,3 +138,64 @@ def test_anonymous_is_blocked():
     from django.contrib.auth.models import AnonymousUser
 
     assert eligibility_block_reason(AnonymousUser(), _event()) is not None
+
+
+# --- The register view --------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_guest_gets_403_at_the_register_url(client):
+    event = _event()
+    client.force_login(_user("guest@example.org"))
+    resp = client.get(f"/events/{event.slug}/register/")
+    assert resp.status_code == 403
+    assert "limited to members" in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_member_reaches_the_register_page(client):
+    from events.models import Audience, PriceTier
+
+    event = _event()
+    PriceTier.objects.create(event=event, audience=Audience.ALL, base_amount=0)
+    client.force_login(_user("a@example.org", Profile.Role.ANALYST))
+    resp = client.get(f"/events/{event.slug}/register/")
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_guest_with_a_code_reaches_the_register_page(client):
+    from events.models import Audience, PriceTier
+
+    event = _event()
+    PriceTier.objects.create(event=event, audience=Audience.ALL, base_amount=0)
+    guest = _user("guest@example.org")
+    faculty = _user("f@example.org", Profile.Role.ANALYST)
+    _code(event, faculty, "GUEST1", restricted_to_user=guest)
+    client.force_login(guest)
+    resp = client.get(f"/events/{event.slug}/register/")
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_a_guest_who_already_registered_keeps_their_registration(client):
+    """Restricting an event later must not strand someone already enrolled."""
+    from events.models import Audience, PriceTier
+    from registrations.models import Registration
+
+    event = _event(
+        registration_eligibility=Event.RegistrationEligibility.MEMBERS_AND_GUESTS
+    )
+    tier = PriceTier.objects.create(event=event, audience=Audience.ALL, base_amount=0)
+    guest = _user("guest@example.org")
+    reg = Registration.objects.create(
+        user=guest, event=event, price_tier=tier, quoted_amount=0,
+        status=Registration.Status.PAID,
+    )
+    Event.objects.filter(pk=event.pk).update(
+        registration_eligibility=Event.RegistrationEligibility.MEMBERS_ONLY
+    )
+    client.force_login(guest)
+    resp = client.get(f"/events/{event.slug}/register/")
+    assert resp.status_code == 302
+    assert str(reg.id) in resp.url
