@@ -222,6 +222,16 @@ def test_event_page_keeps_the_register_button_for_a_member(client):
 
 
 @pytest.mark.django_db
+def test_event_page_offers_a_blocked_guest_no_link_to_the_wall(client):
+    """The access block's "Register for details" link is a registration link
+    too, and it led to the same 403."""
+    event = _event(format=Event.Format.ONLINE, access_info="Zoom link here")
+    client.force_login(_user("guest@example.org"))
+    content = client.get(f"/events/{event.slug}/").content.decode()
+    assert "Register for details" not in content
+
+
+@pytest.mark.django_db
 def test_anonymous_visitor_keeps_the_button_with_a_note(client):
     """The site can't tell a signed-out member from a stranger, so it must not
     turn one away at the door."""
