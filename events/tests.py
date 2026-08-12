@@ -504,3 +504,155 @@ def test_offering_leads_includes_faculty_without_duplicating_them():
 
     leads = offering_leads(event)
     assert leads.count(fac) == 1
+
+
+def test_approval_toggle_is_on_the_faculty_form_and_not_reviewable():
+    from events.forms import EventEditForm, ProgramEventForm
+    from events.review import REVIEWABLE_FIELDS
+
+    assert "requires_faculty_approval" in EventEditForm.Meta.fields
+    assert "requires_faculty_approval" in ProgramEventForm.Meta.fields
+    # Review protects content the PC approved; who may enrol is not that.
+    assert "requires_faculty_approval" not in REVIEWABLE_FIELDS
+
+
+def test_confirm_dialog_reposts_the_approval_checkbox():
+    """The change-review dialog re-posts every field as a hidden <textarea>,
+    which silently drops a checkbox — it has to follow the record_video
+    precedent or the toggle is eaten on exactly the events that route through
+    review (tasks #504, #532, #564)."""
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parent / "templates/events/event_edit_confirm.html"
+    assert "requires_faculty_approval" in src.read_text()
+
+
+def _approval_seminar(**kwargs):
+    """A published seminar requiring approval, with a tier and a workgroup."""
+    defaults = dict(
+        title="Gated Seminar", slug="gated-seminar",
+        event_type=Event.Type.SEMINAR,
+        start_date=date(2026, 9, 1), end_date=date(2027, 5, 1),
+        status=Event.Status.OPEN, published=True,
+        requires_faculty_approval=True,
+    )
+    e = Event.objects.create(**{**defaults, **kwargs})
+    PriceTier.objects.create(event=e, audience=Audience.ALL,
+                             base_amount=Decimal("50.00"))
+    e.ensure_workgroup()
+    return e
+
+
+def _pending_reg(event, email, amount="50.00"):
+    from registrations.models import Registration
+
+    return Registration.objects.create(
+        user=User.objects.create_user(email=email, password="pw"),
+        event=event, price_tier=event.price_tiers.first(),
+        quoted_amount=Decimal(amount),
+        status=Registration.Status.PENDING_APPROVAL,
+    )
+
+
+@pytest.mark.django_db
+def test_faculty_unticking_approval_releases_the_queue(
+    client, django_capture_on_commit_callbacks
+):
+    from registrations.models import Registration
+
+    staff = User.objects.create_user(
+        email="staff-rel@example.org", password="pw", is_staff=True
+    )
+    event = _approval_seminar()
+    pending = _pending_reg(event, "waiting@example.org")
+
+    client.force_login(staff)
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post(f"/events/{event.slug}/edit/", {
+            "title": event.title, "description": "", "readings": "",
+            "schedule_note": "", "contact": "", "fee_note": "",
+            "fee_type": "fixed", "fee_amount": "50.00",
+            # requires_faculty_approval omitted → unticked.
+        })
+
+    event.refresh_from_db()
+    pending.refresh_from_db()
+    assert event.requires_faculty_approval is False
+    assert pending.status == Registration.Status.AWAITING_PAYMENT
+
+
+@pytest.mark.django_db
+def test_ticking_approval_on_releases_nothing(client):
+    from registrations.models import Registration
+
+    staff = User.objects.create_user(
+        email="staff-on@example.org", password="pw", is_staff=True
+    )
+    event = _approval_seminar(requires_faculty_approval=False)
+    pending = _pending_reg(event, "still-waiting@example.org")
+
+    client.force_login(staff)
+    client.post(f"/events/{event.slug}/edit/", {
+        "title": event.title, "description": "", "readings": "",
+        "schedule_note": "", "contact": "", "fee_note": "",
+        "fee_type": "fixed", "fee_amount": "50.00",
+        "requires_faculty_approval": "on",
+    })
+
+    event.refresh_from_db()
+    pending.refresh_from_db()
+    assert event.requires_faculty_approval is True
+    assert pending.status == Registration.Status.PENDING_APPROVAL
+
+
+@pytest.mark.django_db
+def test_django_admin_save_does_not_release_the_queue():
+    """Staff paths don't fire the automation (#485's rule) — the raw admin is
+    the escape hatch, and a signal would let any script mail members."""
+    from registrations.models import Registration
+
+    event = _approval_seminar()
+    pending = _pending_reg(event, "admin-path@example.org")
+
+    event.requires_faculty_approval = False
+    event.save(update_fields=("requires_faculty_approval",))
+
+    pending.refresh_from_db()
+    assert pending.status == Registration.Status.PENDING_APPROVAL
+
+
+@pytest.mark.django_db
+def test_pc_form_unticking_approval_releases_the_queue(
+    client, django_capture_on_commit_callbacks
+):
+    """The PC's own form is the surface the chair actually uses (task #564)."""
+    from events.models import Program
+    from registrations.models import Registration
+
+    program = Program.objects.create(academic_year="2026-2027")
+    event = _approval_seminar(program=program)
+    pending = _pending_reg(event, "pc-waiting@example.org")
+    staff = User.objects.create_user(
+        email="pc-staff@example.org", password="pw", is_staff=True
+    )
+
+    client.force_login(staff)
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = client.post(
+            f"/program-admin/{program.academic_year}/events/{event.slug}/edit/", {
+                "title": event.title, "slug": event.slug,
+                "event_type": event.event_type,
+                "start_date": "2026-09-01", "end_date": "2027-05-01",
+                "format": event.format, "status": event.status,
+                "description": "", "readings": "", "schedule_note": "",
+                "contact": "", "fee_note": "", "access_info": "",
+                "fee_type": "fixed", "fee_amount": "50.00",
+                # requires_faculty_approval omitted → unticked.
+            },
+        )
+
+    assert resp.status_code == 302, resp.context["form"].errors if resp.context else resp
+    event.refresh_from_db()
+    pending.refresh_from_db()
+    assert event.requires_faculty_approval is False
+    assert pending.status == Registration.Status.AWAITING_PAYMENT
