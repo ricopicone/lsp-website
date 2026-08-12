@@ -265,3 +265,27 @@ def test_release_pending_approvals_routes_on_amount_and_is_idempotent(
     with django_capture_on_commit_callbacks(execute=True):
         assert release_pending_approvals(event, staff) == []
     assert mail.outbox == []
+
+
+# Literal template text isn't auto-escaped, so the apostrophe stays raw.
+NOTICE = "reviewed before it's confirmed"
+
+
+def test_register_page_discloses_approval(client):
+    """Nothing told a member their registration would be reviewed — they found
+    out on the confirmation page, after committing (task #564)."""
+    event = _approval_event()
+    client.force_login(_student())
+    body = client.get(
+        reverse("registrations:register", args=[event.slug])
+    ).content.decode()
+    assert NOTICE in body
+
+
+def test_register_page_silent_without_approval(client):
+    event = _approval_event(requires_approval=False)
+    client.force_login(_student())
+    body = client.get(
+        reverse("registrations:register", args=[event.slug])
+    ).content.decode()
+    assert NOTICE not in body
