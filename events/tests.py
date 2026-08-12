@@ -462,3 +462,45 @@ def test_members_only_event_hides_guest_note(client):
     e = _special_event(visibility=Event.Visibility.MEMBERS_ONLY)
     resp = client.get(f"/events/{e.slug}/")
     assert "Guests are welcome" not in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_offering_leads_includes_reading_group_conveners():
+    """A reading group's conveners hold ORGANIZER, not FACULTY (task #495), so
+    ``faculty_members()`` can't see them — but they run the offering and must
+    hear about anything that asks them to act (task #564)."""
+    from events.permissions import offering_leads
+    from workgroups.models import WorkgroupMembership
+
+    event = Event.objects.create(
+        title="Reading Freud", slug="rg-freud",
+        event_type=Event.Type.READING_GROUP,
+        start_date=date(2026, 9, 1), end_date=date(2027, 5, 1),
+    )
+    event.ensure_workgroup()
+    convener = User.objects.create_user(email="conv@x.test", password="x")
+    WorkgroupMembership.objects.create(
+        workgroup=event.workgroup, user=convener,
+        role=WorkgroupMembership.Role.ORGANIZER,
+        start_date=date(2026, 9, 1),
+    )
+
+    assert convener in offering_leads(event)
+    # faculty_members() answers "who teaches this" and is deliberately unchanged.
+    assert convener not in event.faculty_members()
+
+
+@pytest.mark.django_db
+def test_offering_leads_includes_faculty_without_duplicating_them():
+    from events.permissions import offering_leads
+
+    event = Event.objects.create(
+        title="Seminar", slug="sem-leads", event_type=Event.Type.SEMINAR,
+        start_date=date(2026, 9, 1), end_date=date(2027, 5, 1),
+    )
+    event.ensure_workgroup()
+    fac = User.objects.create_user(email="fac-leads@x.test", password="x")
+    event.add_faculty(fac)
+
+    leads = offering_leads(event)
+    assert leads.count(fac) == 1
