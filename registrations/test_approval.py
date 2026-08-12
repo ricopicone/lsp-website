@@ -199,3 +199,30 @@ def test_reminders_command_notifies_and_throttles(client):
     mail.outbox.clear()
     call_command("send_registration_reminders")
     assert mail.outbox == []
+
+
+def test_pending_notice_reaches_conveners_and_links_to_the_roster():
+    """The convener could always approve; nothing told them there was anything
+    to approve, and the bell's ?view=faculty URL redirected to the Workspace
+    Overview tab, which has no approve buttons (task #564)."""
+    from notifications.models import Notification
+    from payments import notifications as notify_payments
+    from workgroups.models import WorkgroupMembership
+
+    event = _approval_event(event_type=Event.Type.READING_GROUP)
+    convener = _student("conv@x.test")
+    WorkgroupMembership.objects.create(
+        workgroup=event.workgroup, user=convener,
+        role=WorkgroupMembership.Role.ORGANIZER, start_date=date(2026, 9, 1),
+    )
+    reg = Registration.objects.create(
+        user=_student(), event=event, price_tier=event.price_tiers.first(),
+        quoted_amount=Decimal("50.00"), status=Registration.Status.PENDING_APPROVAL,
+    )
+
+    mail.outbox.clear()
+    notify_payments.registration_pending(reg)
+
+    assert any(convener.email in m.to for m in mail.outbox)
+    bell = Notification.objects.get(recipient=convener)
+    assert bell.url.endswith("?tab=roster"), bell.url

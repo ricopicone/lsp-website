@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 
+from django.conf import settings
 from django.urls import reverse
 
 from notifications.categories import Category
@@ -187,12 +188,22 @@ def balance_reminder_inapp(user, balance) -> None:
 # --- Faculty-facing ---------------------------------------------------------
 
 def registration_pending(reg) -> None:
-    """Tell event faculty a registration needs approval. The batched faculty
-    email is unchanged; each faculty member also gets a bell row."""
+    """Tell whoever runs the offering a registration needs approval. The batched
+    email is unchanged; each of them also gets a bell row.
+
+    Two things were wrong here (task #564). The audience was
+    ``faculty_members()``, which filters ``role=FACULTY`` and so misses a
+    reading group's ORGANIZER conveners — who ``can_edit_event`` has always let
+    approve. And the bell pointed at ``?view=faculty``, but an offering's event
+    page redirects to its Workspace and drops the query string, landing them on
+    Overview with no approve buttons. Both now match the email, which was right.
+    """
+    from events.permissions import offering_leads
+
     event = reg.event
     who = reg.user.get_full_name() or reg.user.email
-    url = reverse("events:detail", args=[event.slug]) + "?view=faculty"
-    for faculty in event.faculty_members():
+    url = emails.faculty_tools_url(event).removeprefix(settings.SITE_BASE_URL)
+    for faculty in offering_leads(event):
         notify(
             faculty, Category.REGISTRATION_STATUS,
             title=f"Approval needed: {who} — {event.title}",
@@ -335,9 +346,13 @@ def notify_coverage_restored(user, period, registrations) -> None:
 
 
 def approval_reminder_inapp(event, pending_count: int) -> None:
-    """Bell rows for event faculty (the cron paces the batched faculty email)."""
-    url = reverse("events:detail", args=[event.slug]) + "?view=faculty"
-    for faculty in event.faculty_members():
+    """Bell rows for whoever runs the offering (the cron paces the batched
+    email). Same audience and same link as ``registration_pending`` — see the
+    two defects noted there (task #564)."""
+    from events.permissions import offering_leads
+
+    url = emails.faculty_tools_url(event).removeprefix(settings.SITE_BASE_URL)
+    for faculty in offering_leads(event):
         notify(
             faculty, Category.REGISTRATION_STATUS,
             title=f"{pending_count} registration(s) await your approval — {event.title}",
