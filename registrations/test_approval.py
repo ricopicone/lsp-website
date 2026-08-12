@@ -16,11 +16,13 @@ from registrations.models import Registration
 pytestmark = pytest.mark.django_db
 
 
-def _approval_event(amount="50.00"):
+def _approval_event(amount="50.00", *, requires_approval=True,
+                    event_type=Event.Type.SEMINAR):
     e = Event.objects.create(
-        title="Approval Seminar", slug="appr", event_type=Event.Type.SEMINAR,
+        title="Approval Seminar", slug="appr", event_type=event_type,
         start_date=date(2026, 9, 1), end_date=date(2027, 5, 1),
-        published=True, status=Event.Status.OPEN, requires_faculty_approval=True,
+        published=True, status=Event.Status.OPEN,
+        requires_faculty_approval=requires_approval,
     )
     PriceTier.objects.create(event=e, audience=Audience.ALL, base_amount=Decimal(amount))
     e.ensure_workgroup()
@@ -40,6 +42,41 @@ def _student(email="stu@x.test"):
     u.profile.role = Profile.Role.MEMBER
     u.profile.save()
     return u
+
+
+def test_turning_approval_on_grandfathers_existing_registrations(client):
+    """Flipping the flag on a running seminar is inert for everyone already in.
+
+    The flag is read only when a registration is *created*, so this holds by
+    construction — which is exactly why it's pinned here rather than left as an
+    emergent property of where the read happens to live (task #564).
+    """
+    event = _approval_event(requires_approval=False)
+    tier = event.price_tiers.first()
+    early = Registration.objects.create(
+        user=_student("early@x.test"), event=event, price_tier=tier,
+        quoted_amount=Decimal("50.00"), status=Registration.Status.AWAITING_PAYMENT,
+    )
+    paid = Registration.objects.create(
+        user=_student("paid@x.test"), event=event, price_tier=tier,
+        quoted_amount=Decimal("50.00"), status=Registration.Status.PAID,
+    )
+
+    event.requires_faculty_approval = True
+    event.save(update_fields=("requires_faculty_approval",))
+
+    early.refresh_from_db()
+    paid.refresh_from_db()
+    assert early.status == Registration.Status.AWAITING_PAYMENT
+    assert paid.status == Registration.Status.PAID
+
+    # ...but the next one through the door queues.
+    later = _student("later@x.test")
+    client.force_login(later)
+    client.post(reverse("registrations:register", args=[event.slug]),
+                {"price_tier": tier.pk})
+    assert (Registration.objects.get(user=later, event=event).status
+            == Registration.Status.PENDING_APPROVAL)
 
 
 def test_register_requires_approval_creates_pending_and_notifies_faculty(client):
