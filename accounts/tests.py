@@ -48,6 +48,49 @@ def test_login_page_is_context_aware_for_event_registration(client):
 
 
 @pytest.mark.django_db
+def test_login_page_does_not_promise_entry_to_a_members_only_event(client):
+    """The funnel must not tell a stranger a free account gets them into an
+    event it won't (task #566)."""
+    from datetime import date
+
+    from events.models import Event
+
+    e = Event.objects.create(
+        title="Members Evening", slug="members-evening",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        status=Event.Status.OPEN, published=True,
+        registration_eligibility=Event.RegistrationEligibility.MEMBERS_ONLY,
+    )
+    content = client.get(
+        f"/accounts/login/?next=/events/{e.slug}/register/"
+    ).content.decode()
+    assert "You don&#x27;t need to be a member" not in content
+    assert "limited to members" in content
+    # The account itself is still worth having, so the button stays.
+    assert "Create a free account" in content
+
+
+@pytest.mark.django_db
+def test_signup_page_says_a_members_only_event_is_members_only(client):
+    from datetime import date
+
+    from events.models import Event
+
+    e = Event.objects.create(
+        title="Members Evening", slug="members-evening",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        status=Event.Status.OPEN, published=True,
+        registration_eligibility=Event.RegistrationEligibility.MEMBERS_ONLY,
+    )
+    content = client.get(
+        f"/accounts/signup/?next=/events/{e.slug}/register/"
+    ).content.decode()
+    assert "limited to members" in content
+
+
+@pytest.mark.django_db
 def test_login_page_generic_for_unrelated_or_bad_next(client):
     for nxt in ["/events/", "/events/no-such-event/register/",
                 "https://evil.example/x", ""]:

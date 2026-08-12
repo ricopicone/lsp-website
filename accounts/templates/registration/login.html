@@ -56,7 +56,11 @@
   <div class="divider text-xs text-base-content/40">New to the School?</div>
 
   <a href="{% url 'signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="btn btn-outline btn-primary w-full">Create a free account</a>
+  {% if register_event and register_event.registration_eligibility == "members_only" %}
+  <p class="text-xs text-base-content/60 text-center">Registration for that event is limited to members of the School. An account is still free, and you can use one for other events.</p>
+  {% else %}
   <p class="text-xs text-base-content/60 text-center">Anyone can create a free account. You don't need to be a member{% if register_event %} to attend{% endif %}.</p>
+  {% endif %}
 
 </div>
 {% endblock %}
