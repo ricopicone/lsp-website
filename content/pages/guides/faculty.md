@@ -41,8 +41,14 @@ far.
 ## Your event page
 
 **Edit event** opens the page's content. Some fields take effect immediately:
-the schedule note, contact, CE credits, the guests-welcome note, and whether
-sessions may be recorded.
+the schedule note, contact, CE credits, who can register, and whether sessions
+may be recorded.
+
+**Who can register** is a real restriction, not a note. *Members and guests*,
+the default, lets anyone with a free account register and says so on the page.
+*Members only* turns non-members away at the registration page, and you can
+still admit one of them by hand with a pricing code addressed to them (see
+below).
 
 Changing the **title, description, readings, or fee note** of an event that
 came from an approved proposal is different. The School approved a particular
@@ -130,6 +136,11 @@ it's a small thing to ask of a guest.
 
 An unrestricted code with no use limit is a public discount. That's fine when
 you mean it, and worth avoiding when you mean to help one person.
+
+**If your event is set to Members only**, the code has to be pinned to them, so
+they need an account first. Ask them to create one, then pick them under *Only
+this person may use it*. An unrestricted code won't get a guest in, however few
+uses it has left.
 
 ### Spreading the fee over several payments
 

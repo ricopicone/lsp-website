@@ -58,6 +58,13 @@ stops new registrations. This is separate from *publishing* the event page,
 which controls public visibility and is managed in the Program Committee
 admin. Closing never cancels existing registrations.
 
+An event also carries a **Who can register** setting, edited on the event
+itself: *Members and guests*, or *Members only*. It turns non-members away at
+the registration page, and the faculty can let a particular one through with a
+pricing code addressed to them. It does not constrain you: comping seats
+someone whatever the setting says, and restricting an event later never
+disturbs a registration already taken.
+
 ## What lives elsewhere
 
 - **Recording an offline payment** (cash, check, alternate arrangement):
