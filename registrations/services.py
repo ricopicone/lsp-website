@@ -129,3 +129,31 @@ def comp_registration(reg, by, *, via: str = "admin") -> tuple[bool, bool]:
     except Exception:
         return True, False
     return True, True
+
+
+def release_pending_approvals(event, by) -> list[Registration]:
+    """Approve everything still waiting on an event (task #564).
+
+    Called when ``requires_faculty_approval`` is turned back off. Off has to be
+    the inverse of on: otherwise a queue the event no longer has a reason to
+    hold keeps nudging the faculty every three days, and clearing it means
+    deciding each row by hand to undo what was one checkbox to do.
+
+    Same side-effect chain as ``registrations.views.approve_registration``, so
+    the two cannot drift. Returns the rows it released — build any message from
+    these rather than from a copy read before the call, which still shows the
+    old status. Idempotent: ``approve()`` returns False on a row that is no
+    longer pending, so a second pass sends nothing.
+    """
+    released = []
+    for reg in event.registrations.filter(
+        status=Registration.Status.PENDING_APPROVAL
+    ).select_related("user", "event"):
+        if not reg.approve(by):
+            continue
+        if reg.needs_payment:
+            notify_payments.registration_approved(reg)
+        else:
+            notify_payments.registration_confirmed(reg)
+        released.append(reg)
+    return released

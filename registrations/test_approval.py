@@ -226,3 +226,42 @@ def test_pending_notice_reaches_conveners_and_links_to_the_roster():
     assert any(convener.email in m.to for m in mail.outbox)
     bell = Notification.objects.get(recipient=convener)
     assert bell.url.endswith("?tab=roster"), bell.url
+
+
+def test_release_pending_approvals_routes_on_amount_and_is_idempotent(
+    django_capture_on_commit_callbacks,
+):
+    """Off has to be the inverse of on (task #564)."""
+    from registrations.services import release_pending_approvals
+
+    event = _approval_event()
+    staff = _faculty(event)
+    free = Registration.objects.create(
+        user=_student("free@x.test"), event=event,
+        price_tier=event.price_tiers.first(),
+        quoted_amount=Decimal("0.00"), status=Registration.Status.PENDING_APPROVAL,
+    )
+    owing = Registration.objects.create(
+        user=_student("owing@x.test"), event=event,
+        price_tier=event.price_tiers.first(),
+        quoted_amount=Decimal("50.00"), status=Registration.Status.PENDING_APPROVAL,
+    )
+
+    mail.outbox.clear()
+    with django_capture_on_commit_callbacks(execute=True):
+        released = release_pending_approvals(event, staff)
+
+    assert {r.pk for r in released} == {free.pk, owing.pk}
+    free.refresh_from_db()
+    owing.refresh_from_db()
+    assert free.status == Registration.Status.PAID
+    assert owing.status == Registration.Status.AWAITING_PAYMENT
+    assert owing.approved_by == staff and owing.decided_at is not None
+    assert any(free.user.email in m.to for m in mail.outbox)
+    assert any(owing.user.email in m.to for m in mail.outbox)
+
+    # A second pass finds nothing pending and so sends nothing.
+    mail.outbox.clear()
+    with django_capture_on_commit_callbacks(execute=True):
+        assert release_pending_approvals(event, staff) == []
+    assert mail.outbox == []
