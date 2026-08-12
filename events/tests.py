@@ -384,18 +384,20 @@ def test_speaker_spotlight_defaults_off():
     assert e.speaker_spotlight is False
 
 
-def test_open_to_guests_is_on_edit_forms_and_not_reviewable():
+def test_registration_eligibility_is_on_edit_forms_and_not_reviewable():
     from events.forms import EventEditForm, ProgramEventForm
     from events.review import REVIEWABLE_FIELDS
 
-    assert "open_to_guests" in EventEditForm.Meta.fields
-    assert "open_to_guests" in ProgramEventForm.Meta.fields
+    assert "registration_eligibility" in EventEditForm.Meta.fields
+    assert "registration_eligibility" in ProgramEventForm.Meta.fields
     # Non-reviewable: applies immediately, skips the change-review dialog.
-    assert "open_to_guests" not in REVIEWABLE_FIELDS
+    # Review protects the content the PC approved; who may register is an
+    # operational decision the faculty and the PC make directly.
+    assert "registration_eligibility" not in REVIEWABLE_FIELDS
 
 
 @pytest.mark.django_db
-def test_staff_edit_toggles_open_to_guests_immediately(client):
+def test_staff_edit_sets_registration_eligibility_immediately(client):
     staff = User.objects.create_user(
         email="staff@example.org", password="pw", is_staff=True
     )
@@ -413,12 +415,39 @@ def test_staff_edit_toggles_open_to_guests_immediately(client):
         "schedule_note": "",
         "contact": "",
         "fee_note": "",
-        # record_video / speaker_spotlight / open_to_guests are checkboxes;
-        # omitting open_to_guests unchecks it.
+        "registration_eligibility": "members_only",
     })
     assert resp.status_code == 302
     e.refresh_from_db()
-    assert e.open_to_guests is False
+    assert (
+        e.registration_eligibility == Event.RegistrationEligibility.MEMBERS_ONLY
+    )
+
+
+@pytest.mark.django_db
+def test_an_edit_that_omits_eligibility_keeps_the_open_default(client):
+    """A choices field with a default is required by default on a ModelForm,
+    which would reject the change-review dialog's partial re-post."""
+    staff = User.objects.create_user(
+        email="staff2@example.org", password="pw", is_staff=True
+    )
+    e = Event.objects.create(
+        title="Special Evening", slug="special-evening-2",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        status=Event.Status.OPEN, published=True,
+    )
+    client.force_login(staff)
+    resp = client.post(f"/events/{e.slug}/edit/", {
+        "title": e.title, "description": "", "readings": "",
+        "schedule_note": "", "contact": "", "fee_note": "",
+    })
+    assert resp.status_code == 302
+    e.refresh_from_db()
+    assert (
+        e.registration_eligibility
+        == Event.RegistrationEligibility.MEMBERS_AND_GUESTS
+    )
 
 
 def _special_event(**kwargs):
@@ -443,8 +472,10 @@ def test_event_page_shows_guest_note_when_open_to_guests(client):
 
 
 @pytest.mark.django_db
-def test_event_page_hides_guest_note_when_flag_off(client):
-    e = _special_event(open_to_guests=False)
+def test_event_page_hides_guest_note_when_members_only(client):
+    e = _special_event(
+        registration_eligibility=Event.RegistrationEligibility.MEMBERS_ONLY
+    )
     resp = client.get(f"/events/{e.slug}/")
     assert "Guests are welcome" not in resp.content.decode()
 
@@ -461,7 +492,9 @@ def test_signed_in_viewer_gets_note_without_account_hint(client):
 
 
 @pytest.mark.django_db
-def test_members_only_event_hides_guest_note(client):
+def test_page_visibility_no_longer_drives_the_guest_note(client):
+    """The two axes are independent (task #566): ``visibility`` is who can see
+    the page, ``registration_eligibility`` is who can register. An event kept
+    off the public listings but open to any account holder says so."""
     e = _special_event(visibility=Event.Visibility.MEMBERS_ONLY)
-    resp = client.get(f"/events/{e.slug}/")
-    assert "Guests are welcome" not in resp.content.decode()
+    assert "Guests are welcome" in client.get(f"/events/{e.slug}/").content.decode()

@@ -13,6 +13,15 @@ def _copy_forward(apps, schema_editor):
     Event.objects.filter(open_to_guests=False).update(
         registration_eligibility="members_only"
     )
+    # A members-only *visibility* also carries over, once. Until now the
+    # guests-welcome note was suppressed for those events as well, so an
+    # existing one saying "members only" in the only way the site could say
+    # it should keep meaning that. Going forward the two axes are
+    # independent — visibility is who can see the page, eligibility is who
+    # can register — and this reconciliation does not repeat.
+    Event.objects.filter(visibility="members_only").update(
+        registration_eligibility="members_only"
+    )
 
 
 def _copy_back(apps, schema_editor):
