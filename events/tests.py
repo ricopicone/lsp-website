@@ -656,3 +656,16 @@ def test_pc_form_unticking_approval_releases_the_queue(
     pending.refresh_from_db()
     assert event.requires_faculty_approval is False
     assert pending.status == Registration.Status.AWAITING_PAYMENT
+
+
+@pytest.mark.django_db
+def test_faculty_edit_page_renders_the_approval_checkbox(client):
+    staff = User.objects.create_user(
+        email="staff-render@example.org", password="pw", is_staff=True
+    )
+    event = _approval_seminar(slug="render-seminar")
+    client.force_login(staff)
+    body = client.get(f"/events/{event.slug}/edit/").content.decode()
+    assert 'name="requires_faculty_approval"' in body
+    # Literal template text isn't auto-escaped, so the apostrophe stays raw.
+    assert "Review each registration before it's confirmed" in body
