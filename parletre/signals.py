@@ -10,7 +10,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.text import slugify
 
-from workgroups.models import Workgroup
+from workgroups.models import Workgroup, renamed
 
 from .models import Channel, ChannelCategory
 
@@ -45,6 +45,24 @@ def _category_for(kind):
     return cat
 
 
+#: How each channel's name and description are derived from the workgroup's
+#: name. One definition, read by both provisioning and renaming — two copies
+#: would drift, and the rename can only recognise an untouched channel by
+#: re-deriving what the *old* name produced.
+_DERIVED = {
+    Channel.Kind.FORUM: ("{name}", "Discussion for {name}."),
+    Channel.Kind.CHAT: ("{name} chat", "Chat for {name}."),
+    Channel.Kind.VIDEO: ("{name} video", "Video room for {name}."),
+}
+
+
+def derived_channel_text(kind, workgroup_name: str) -> tuple[str, str]:
+    """The ``(name, description)`` a channel of ``kind`` gets from a workgroup
+    called ``workgroup_name``. Name is capped at the field's 120 characters."""
+    name_tpl, desc_tpl = _DERIVED[kind]
+    return name_tpl.format(name=workgroup_name)[:120], desc_tpl.format(name=workgroup_name)
+
+
 def provision_channels(workgroup):
     """Ensure the workgroup has its Discuss (forum) + Chat + Video channels.
     Idempotent per kind — creates only the ones missing. The Video channel's room
@@ -53,27 +71,43 @@ def provision_channels(workgroup):
         return
     existing = set(workgroup.channels.values_list("kind", flat=True))
     category = _category_for(workgroup.kind)
-    if Channel.Kind.FORUM not in existing:
+    slug_suffix = {
+        Channel.Kind.FORUM: "", Channel.Kind.CHAT: "-chat", Channel.Kind.VIDEO: "-video",
+    }
+    for kind in (Channel.Kind.FORUM, Channel.Kind.CHAT, Channel.Kind.VIDEO):
+        if kind in existing:
+            continue
+        name, description = derived_channel_text(kind, workgroup.name)
         Channel.objects.create(
-            name=workgroup.name, slug=_unique_channel_slug(workgroup),
-            kind=Channel.Kind.FORUM, access=Channel.Access.WORKGROUP,
-            workgroup=workgroup, category=category,
-            description=f"Discussion for {workgroup.name}.",
+            name=name, slug=_unique_channel_slug(workgroup, slug_suffix[kind]),
+            kind=kind, access=Channel.Access.WORKGROUP,
+            workgroup=workgroup, category=category, description=description,
         )
-    if Channel.Kind.CHAT not in existing:
-        Channel.objects.create(
-            name=f"{workgroup.name} chat"[:120], slug=_unique_channel_slug(workgroup, "-chat"),
-            kind=Channel.Kind.CHAT, access=Channel.Access.WORKGROUP,
-            workgroup=workgroup, category=category,
-            description=f"Chat for {workgroup.name}.",
-        )
-    if Channel.Kind.VIDEO not in existing:
-        Channel.objects.create(
-            name=f"{workgroup.name} video"[:120], slug=_unique_channel_slug(workgroup, "-video"),
-            kind=Channel.Kind.VIDEO, access=Channel.Access.WORKGROUP,
-            workgroup=workgroup, category=category,
-            description=f"Video room for {workgroup.name}.",
-        )
+
+
+@receiver(renamed, dispatch_uid="parletre_rename_workgroup_channels")
+def rename_workgroup_channels(sender, workgroup, old_name, new_name, **kwargs):
+    """Follow a workgroup rename onto its auto-provisioned channels (task #568).
+
+    Only the name and description move — a channel's slug is its URL. Each field
+    is rewritten only if it still holds what the *old* workgroup name derived:
+    ``Channel.name`` is editable in Django admin, and a room somebody
+    deliberately renamed must not be silently reverted.
+    """
+    for channel in workgroup.channels.all():
+        if channel.kind not in _DERIVED:
+            continue
+        was_name, was_desc = derived_channel_text(channel.kind, old_name)
+        now_name, now_desc = derived_channel_text(channel.kind, new_name)
+        fields = []
+        if channel.name == was_name and channel.name != now_name:
+            channel.name = now_name
+            fields.append("name")
+        if channel.description == was_desc and channel.description != now_desc:
+            channel.description = now_desc
+            fields.append("description")
+        if fields:
+            channel.save(update_fields=fields)
 
 
 @receiver(post_save, sender=Workgroup, dispatch_uid="parletre_provision_workgroup_channel")

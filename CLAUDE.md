@@ -1188,6 +1188,63 @@ Done (see `git log` for specifics):
   migration is the `help_text`. Design:
   `docs/superpowers/specs/2026-08-12-registration-approval-toggle-design.md`.
 
+- **A retitled offering renames its workgroup** (task #568). Faculty reported
+  that his seminar's title edit "doesn't seem to be holding" — and that the
+  punctuation differed between the program listing and the seminar page. Both
+  were the same fact: **the title is stored twice**. `Event.ensure_workgroup`
+  snapshots `self.title[:120]` into `Workgroup.name` at creation
+  (`events/models.py:898`) and nothing ever re-derived it. The program listing
+  renders `Event.title`, so it showed his edit; but a seminar's event page
+  **redirects to its Workspace** (`events/views.py:298`), whose masthead renders
+  `workgroup.name` — so the page he was actually looking at showed the pre-edit
+  string, as did the three auto-provisioned Parlêtre channels, whose names *and*
+  descriptions are derived from the workgroup name in turn. Verified on prod:
+  `Event.title` carried the comma he asked for, `Workgroup.name` and all three
+  channels did not. His edit had landed the whole time.
+  The Changes tab being empty was a **red herring and is correct**:
+  `requires_change_review()` needs an approved originating proposal, and the
+  2026-27 program was script-imported (`from_proposal: []`), so a title edit
+  saves straight through and writes no `EventChangeRequest` — there are **zero**
+  rows site-wide.
+  The cascade hangs off **`Workgroup.save()`, not off the callers**: `name` has
+  several edit surfaces (the cartel details form, the Workspace Overview form,
+  Django admin) and a rule enforced at call sites only holds until the next one
+  forgets — the #532 lesson. `from_db` remembers the loaded name so `save` can
+  send the new **`workgroups.renamed`** signal carrying `old_name`, which a
+  listener needs to tell a *derived* string from a hand-edited one; the stored
+  name is re-tracked after every save so an instance created and then renamed in
+  one process (an import script) still cascades. `Workgroup.rename()` is the
+  convenience wrapper that skips an empty/unchanged write and returns whether
+  anything changed. Parlêtre listens and rewrites each channel's name and
+  description **only where it still equals what the old workgroup name derived**
+  — `Channel.name` is admin-editable, and a deliberately renamed room must not
+  be silently reverted; provisioning and renaming now share one
+  `derived_channel_text` definition rather than two that drift. Channel and
+  workgroup **slugs are never touched** — they're the URLs.
+  Which workgroup follows which title is decided by **`primary_event()`**, the
+  same event the Workspace features, not by whichever row was last saved: an
+  offering workgroup can carry several years' events, so editing a *past* term's
+  title must not rename a continuing seminar. That predicate is also the guard
+  that matters most — it returns `None` for non-offering kinds, so a special
+  event can never retitle the **Program Committee's** workgroup that it shares.
+  Unlike the billing side-effects of #485/#564, the sync deliberately **does**
+  fire on the staff paths (Django admin, the import scripts): renaming sends no
+  mail and charges nobody, and the stale copy is what faculty see. The `Event`
+  receiver skips any `save(update_fields=…)` that doesn't write `title`, which
+  is how the faculty edit form's non-reviewable partial save and
+  `EventChangeRequest.apply()` both stay cheap and correct.
+  `manage.py resync_workgroup_names` (`--dry-run`) is the one-time sweep for
+  rows that drifted before the sync existed; it calls
+  `sync_name_from_primary_event` rather than re-deriving the name itself.
+  A prod-wide scan for the stale string found exactly one drifted workgroup and
+  its three channels. Three `notifications.Notification` titles also hold it and
+  are **deliberately left alone** — they record what the event was called when
+  the member registered, and unlike the denormalized `Notification.url` (which
+  was *broken*) a historical title is not wrong. No migration, no flag. Titles
+  themselves still render plain: `inline_italics` covers description, readings,
+  and the notes, never `title`, so a lowercase-italic *or* isn't expressible —
+  the comma is the answer.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

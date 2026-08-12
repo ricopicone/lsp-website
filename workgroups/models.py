@@ -42,6 +42,15 @@ DEFAULT_WORKGROUP_FILE_QUOTA_BYTES = 200 * 1024 * 1024   # 200 MB per workgroup
 #: ``.save()``-based edits already fire the model signals, so they don't send it.
 roster_changed = Signal()
 
+#: Sent after a workgroup's display name changes (task #568). Anything that
+#: *derived* a string from the old name — Parlêtre's three auto-provisioned
+#: channels take both their name and description from it — listens here and
+#: re-derives. Carries the old name because a listener can only tell a derived
+#: value from a hand-edited one by checking what the old name would have
+#: produced. Kwargs: ``workgroup``, ``old_name``, ``new_name``. Sent only by
+#: ``Workgroup.rename``, so a bare ``name`` assignment does not cascade.
+renamed = Signal()
+
 #: Public titles some bodies give their stored leadership roles. The Board's
 #: Chair / Co-chair are the school's President / Vice President (tasks #368,
 #: #428) — a display relabel only, so the shared ``WorkgroupMembership.Role``
@@ -270,10 +279,38 @@ class Workgroup(models.Model):
     def __str__(self) -> str:
         return self.name
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        """Remember the stored name so ``save`` can tell a rename from a no-op.
+
+        A listener needs the *old* name to recognise the strings it derived
+        from it (task #568), and by the time ``save`` runs the attribute is
+        already the new one. Absent on a fresh instance, which is how a create
+        avoids sending :data:`renamed`.
+        """
+        obj = super().from_db(db, field_names, values)
+        obj._loaded_name = obj.name
+        return obj
+
     def save(self, *args, **kwargs):
         if not self.slug and self.name:
             self.slug = slugify(self.name)[:140]
+        # Only a save that actually writes ``name`` counts as a rename.
+        update_fields = kwargs.get("update_fields")
+        if len(args) >= 4:
+            update_fields = args[3]
+        wrote_name = update_fields is None or "name" in update_fields
+        old_name = getattr(self, "_loaded_name", None)
         super().save(*args, **kwargs)
+        # Track what's now stored, so an instance created and then renamed in
+        # the same process (an import script, a test) cascades on the second
+        # save even though ``from_db`` never ran for it.
+        self._loaded_name = self.name
+        if wrote_name and old_name is not None and old_name != self.name:
+            renamed.send(
+                sender=Workgroup, workgroup=self,
+                old_name=old_name, new_name=self.name,
+            )
 
     def clean(self):
         if _VISIBILITY_RANK[self.content_visibility] > _VISIBILITY_RANK[self.landing_visibility]:
@@ -580,6 +617,39 @@ class Workgroup(models.Model):
             event=term, audience=Audience.ALL, base_amount=Decimal(fee)
         )
         return term
+
+    def rename(self, new_name: str) -> bool:
+        """Set the display name, returning whether anything changed.
+
+        The cascade itself lives in :meth:`save` — every edit surface writes
+        ``name`` directly (the cartel details form, the Workspace Overview
+        form), so hanging it off the callers would only work until the next one
+        forgot. This is the convenience wrapper: it skips the empty/unchanged
+        write and reports back, so a caller can build its message from what
+        actually happened rather than from a stale copy.
+        """
+        new_name = (new_name or "").strip()
+        if not new_name or new_name == self.name:
+            return False
+        self.name = new_name
+        self.save(update_fields=["name"])
+        return True
+
+    def sync_name_from_primary_event(self) -> bool:
+        """Follow the featured event's title (task #568).
+
+        An offering's title is the name; the workgroup only ever held a copy of
+        it, snapshotted by ``Event.ensure_workgroup`` and never refreshed. The
+        title of a *past* term must not rename a continuing seminar, so the name
+        follows :meth:`primary_event` — the same event the Workspace features —
+        rather than whichever row was last saved. Returns ``False`` for a
+        non-offering workgroup, which is what keeps a special event from
+        retitling the Program Committee whose workgroup it shares.
+        """
+        event = self.primary_event()
+        if event is None:
+            return False
+        return self.rename(event.title[:120])   # name is max_length=120
 
     def primary_event(self):
         """For an offering workgroup (seminar / reading group), the Event to
