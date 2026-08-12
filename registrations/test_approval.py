@@ -289,3 +289,12 @@ def test_register_page_silent_without_approval(client):
         reverse("registrations:register", args=[event.slug])
     ).content.decode()
     assert NOTICE not in body
+
+
+def test_event_page_discloses_approval(client):
+    """The event page's own CTA carries it too. A seminar redirects to its
+    Workspace, so this uses a special event, which renders in place."""
+    event = _approval_event(event_type=Event.Type.SPECIAL_EVENT)
+    client.force_login(_student())
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+    assert NOTICE in body
