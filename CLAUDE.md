@@ -1128,6 +1128,66 @@ Done (see `git log` for specifics):
   before the code existed. Design:
   `docs/superpowers/specs/2026-08-11-apply-coverage-to-existing-registrations-design.md`.
 
+- **Turning registration approval on for a running seminar** (task #564). The
+  PC chair wanted `Event.requires_faculty_approval` on for a seminar that
+  already had registered students, and nobody knew what that would do to them.
+  The answer: nothing. The flag is read in exactly two places, both inside
+  registration *creation* (`registrations/views.py:74`, and `:178` for the
+  covered-by-tuition path), and nowhere else — so an `AWAITING_PAYMENT` row
+  stays payable and a `PAID` row stays paid, and only registrations made after
+  the flip queue. **That grandfathering is right and is kept**, but it was
+  nowhere stated: it is an emergent property of where the flag happens to be
+  read, the same shape of accident as #532's never-called
+  `Program.public_program_year_q()`, so it is now pinned by test and said out
+  loud in the help text. Retroactively re-queueing existing rows was rejected —
+  it takes a place from someone who was told they had it, and would need their
+  open Checkout sessions expired to be safe (#561's hazard).
+  **Off was not the inverse of on.** Pending rows survived the flag being
+  turned back off, `send_registration_reminders` kept nudging every three days
+  about a queue the event no longer had a reason to hold, and clearing it meant
+  deciding each row by hand to undo what was one checkbox to do. New
+  `registrations/services.py::release_pending_approvals`, beside
+  `comp_registration`, runs the same chain `approve_registration` does and
+  **returns the rows it released** so the message is built from what changed,
+  not a stale copy (#485/#561). It is idempotent because `approve()` returns
+  False on a non-pending row. Both edit views call it on the True→False
+  transition, reading the before-value **before the form binds** — `ModelForm`
+  mutates the instance in place, which is exactly what made
+  `changed_reviewable_fields()` silently wrong. **The Django admin deliberately
+  does not fire it** (#485's staff-paths rule): a `post_save` signal would let
+  any script that touches an event mail its registrants.
+  **Faculty now own the switch.** It was PC-only, so the person running the
+  seminar had to ask to change how their own registrations work. It joins
+  `EventEditForm`, gated by `can_edit_event` so a reading group's conveners get
+  it too, and **stays out of `REVIEWABLE_FIELDS`** — review protects content the
+  PC approved, and there is no prior value for them to have approved. The trap
+  is `event_edit_confirm.html`, which re-posts every field as a hidden
+  `<textarea>` and so silently eats a checkbox; it joins the
+  `record_video`/`tuition_covers` exception, or the toggle would be dropped on
+  exactly the events that route through change review.
+  **Two live defects surfaced on the way.** `registration_pending` notified
+  `Event.faculty_members()`, which filters `role=FACULTY` — but a reading
+  group's conveners hold ORGANIZER (#495), and `can_edit_event` has always let
+  them approve. So on a convener-led offering the bell reached nobody and the
+  email fell back to `SUPPORT_EMAIL`, the school's own inbox standing in for the
+  person who should have been asked; new `events/permissions.py::offering_leads`
+  is the audience for anything asking the people running an event to act, while
+  `faculty_members()` stays as it is because "who teaches this" drives bylines
+  and the roster. And the bell hardcoded `events:detail?view=faculty`, but an
+  offering's event page **redirects** to its Workspace and drops the query
+  string, landing faculty on Overview with no approve buttons; it now shares the
+  email's already-correct `faculty_tools_url`. No repair migration was needed
+  (`notification-url-denormalized`) because no event had ever carried the flag —
+  verified, not assumed.
+  Finally, the flag appeared in **no member-facing template**: the member learned
+  their registration was under review on the confirmation page, after committing.
+  One shared partial now says so on the event page's CTA, the register form, and
+  the covered-by-tuition confirm page, which needs it most — one click straight
+  to a pending row. The copy names no role, since a seminar's faculty and a
+  reading group's conveners both review and the member need not know which. Only
+  migration is the `help_text`. Design:
+  `docs/superpowers/specs/2026-08-12-registration-approval-toggle-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

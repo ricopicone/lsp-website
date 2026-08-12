@@ -45,6 +45,32 @@ def _faculty_view_url(event: Event) -> str:
     return reverse("events:detail", args=[event.slug]) + "?view=faculty"
 
 
+def _release_if_approval_turned_off(request, event, was_required: bool) -> None:
+    """Off is the inverse of on: unticking approval clears the queue it held.
+
+    ``was_required`` MUST be read before the form is bound — ModelForm
+    validation mutates the instance in place, so reading it afterwards compares
+    the new value against itself. That is the bug that made
+    ``changed_reviewable_fields()`` silently wrong (task #532).
+
+    Deliberately wired to the two edit forms rather than to a ``post_save``
+    signal: the Django admin is the raw escape hatch, and a signal would let
+    any script that touches an event mail its registrants (#485's staff-paths
+    rule).
+    """
+    if not (was_required and not event.requires_faculty_approval):
+        return
+    from registrations.services import release_pending_approvals
+
+    released = release_pending_approvals(event, request.user)
+    if released:
+        n = len(released)
+        messages.success(request, (
+            f"Approval turned off. {n} registration{'' if n == 1 else 's'} "
+            f"waiting {'was' if n == 1 else 'were'} approved and notified."
+        ))
+
+
 def event_summary_context(event, user) -> dict:
     """Context for the shared ``events/_event_summary.html`` partial (faculty,
     about, sessions, pricing, register/your-status CTA). Used by the standalone
@@ -390,6 +416,8 @@ def event_edit(request, slug: str):
         for f in REVIEWABLE_FIELDS if f != "price"
     }
     original_price = from_event(event)
+    # Not reviewable, but read here for the same reason (task #564).
+    was_required = event.requires_faculty_approval
 
     form = EventEditForm(request.POST, instance=event)
     if not form.is_valid():
@@ -416,6 +444,7 @@ def event_edit(request, slug: str):
         form.save()
         form.save_price(event)
         messages.success(request, "Changes saved.")
+        _release_if_approval_turned_off(request, event, was_required)
         return redirect("events:detail", slug=event.slug)
 
     decision = request.POST.get("decision")
@@ -454,6 +483,9 @@ def event_edit(request, slug: str):
     for f in nonreviewable:
         if f in m2m_names:
             getattr(event, f).set(cd[f])
+    # The toggle is non-reviewable, so it has just been applied above whichever
+    # way the reviewable half is routed.
+    _release_if_approval_turned_off(request, event, was_required)
 
     reviewer = is_change_reviewer(request.user)
     desc_ratio = change_ratio(original["description"], cd["description"]) \
@@ -974,9 +1006,11 @@ def program_admin_event_edit(request, academic_year: str, slug: str):
     event = get_object_or_404(Event, slug=slug, program=program)
 
     if request.method == "POST":
+        was_required = event.requires_faculty_approval    # before binding
         form = ProgramEventForm(request.POST, instance=event, program=program)
         if form.is_valid():
             form.save_price(form.save())
+            _release_if_approval_turned_off(request, event, was_required)
             return redirect(
                 reverse("program_admin_event_edit", args=[academic_year, event.slug])
                 + "?saved=1#saved"

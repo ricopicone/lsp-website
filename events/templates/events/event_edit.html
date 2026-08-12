@@ -101,6 +101,14 @@
     </label>
 
     <label class="flex items-start gap-2 cursor-pointer">
+      {{ form.requires_faculty_approval }}
+      <span class="label-text">
+        Review each registration before it's confirmed
+        <span class="block text-xs text-base-content/60">New registrations wait for you to approve them on the Roster tab. Anyone already registered keeps their place. Unticking this approves everyone still waiting.</span>
+      </span>
+    </label>
+
+    <label class="flex items-start gap-2 cursor-pointer">
       {{ form.speaker_spotlight }}
       <span class="label-text">
         Speaker spotlight

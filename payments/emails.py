@@ -285,12 +285,16 @@ def send_cancellation_email(registration: Registration, refund=None) -> None:
 # --- Faculty-approval flow ----------------------------------------------------
 
 def _faculty_recipients(event) -> list[str]:
-    """Emails of the event's faculty; falls back to support so nothing is lost."""
-    emails = [u.email for u in event.faculty_members() if u.email]
+    """Emails of whoever runs the offering; falls back to support so nothing
+    is lost. Conveners run a reading group without holding FACULTY, so this
+    asks ``offering_leads`` rather than ``faculty_members`` (task #564)."""
+    from events.permissions import offering_leads
+
+    emails = [u.email for u in offering_leads(event) if u.email]
     return emails or [settings.SUPPORT_EMAIL]
 
 
-def _faculty_tools_url(event) -> str:
+def faculty_tools_url(event) -> str:
     """Absolute URL to where faculty approve registrations (the Workspace
     Roster tab for offerings, else the event's faculty view)."""
     if event.workgroup_id and event.event_type in event.ANNUAL_PROGRAM_TYPES:
@@ -316,7 +320,7 @@ def send_registration_pending_notice(registration: Registration) -> None:
         {
             "registration": registration,
             "event": event,
-            "tools_url": _faculty_tools_url(event),
+            "tools_url": faculty_tools_url(event),
             "support_email": settings.SUPPORT_EMAIL,
         },
     )
@@ -360,7 +364,7 @@ def send_approval_reminder(event, pending_count: int) -> None:
         {
             "event": event,
             "pending_count": pending_count,
-            "tools_url": _faculty_tools_url(event),
+            "tools_url": faculty_tools_url(event),
             "support_email": settings.SUPPORT_EMAIL,
         },
     )

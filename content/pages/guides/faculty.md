@@ -12,8 +12,9 @@ three. (If you're looking to *register* for something rather than run it, see
 ## What's yours to decide
 
 **Yours:** the event page's description, readings, schedule note, contact line,
-CE credits, and guests-welcome note; the roster; approvals, if your event
-requires them; and **what any individual pays, and when**.
+CE credits, and guests-welcome note; the roster; whether registrations are
+reviewed before they're confirmed, and the approvals themselves; and **what any
+individual pays, and when**.
 
 **The Program Committee's:** the listed fee and its price tiers (built from
 the proposal they approved), publishing the page, opening and closing
@@ -57,8 +58,19 @@ The Roster tab lists every registration with the person's name, email, tier,
 amount, and status—*awaiting payment*, *paid*, *comped*, or *cancelled*.
 **Download CSV** gives you the same list for your own records.
 
-If your event was set up to require your approval, registrations arrive in a
-**Pending approvals** strip at the top, and nobody is charged until you approve.
+### Reviewing registrations before they're confirmed
+
+**Edit event** carries a tick box, *Review each registration before it's
+confirmed*. With it on, registrations arrive in a **Pending approvals** strip at
+the top of the Roster tab, and nobody is charged until you approve. You're
+emailed as each one comes in.
+
+You can turn it on or off at any point, including partway through a run. Turning
+it **on** only affects registrations made from then on, so anyone already
+registered keeps their place. Turning it **off** approves everyone still
+waiting, so the queue never outlives the decision that created it. The event page
+tells members that registrations are reviewed, so nobody is surprised by the
+wait.
 
 ## Fees, discounts, and scholarships
 

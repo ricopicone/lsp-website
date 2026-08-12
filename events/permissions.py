@@ -23,6 +23,33 @@ def _leads_offering(user, event) -> bool:
     return is_workgroup_lead(user, event.workgroup)
 
 
+def offering_leads(event) -> list:
+    """Everyone who runs this offering: its faculty, plus the lead-role members
+    of its own workgroup for the types where leading the group *is* running the
+    offering (a reading group's conveners hold ORGANIZER, not FACULTY — #495).
+
+    This is the audience for anything that asks the people running an event to
+    act. ``can_edit_event`` has always let a convener approve a registration;
+    the approval notice went to ``Event.faculty_members()`` alone, so on a
+    convener-led offering it reached nobody and fell back to the school's own
+    support address (task #564).
+
+    ``faculty_members()`` answers a different question — who *teaches* this —
+    and drives bylines, the roster, and the PC form's initial selection, so it
+    stays as it is.
+    """
+    people = list(event.faculty_members())
+    if event.event_type in LEAD_LED_EVENT_TYPES and event.workgroup_id:
+        seen = {u.pk for u in people}
+        for m in event.workgroup.memberships.serving().filter(
+            role__in=WorkgroupMembership.LEAD_ROLES,
+        ).select_related("user"):
+            if m.user.pk not in seen:
+                seen.add(m.user.pk)
+                people.append(m.user)
+    return people
+
+
 def _is_lsp_staff(user) -> bool:
     from core.access import has_staff_role
     from core.models import StaffRole

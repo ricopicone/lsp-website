@@ -166,6 +166,7 @@ class EventEditForm(PriceFieldsMixin, forms.ModelForm):
         fields = (
             "title", "description", "readings", "schedule_note", "contact",
             "fee_note", "record_video", "speaker_spotlight", "open_to_guests",
+            "requires_faculty_approval",
             "offers_ce", "ce_credits", "ce_credits_basis", "ce_note",
             "ce_organizations",
         )

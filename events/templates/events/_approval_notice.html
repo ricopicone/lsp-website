@@ -1,0 +1,9 @@
+{% comment %}Shown to a member before they register, when the event reviews
+registrations (task #564). Deliberately names no role: a seminar's faculty and a
+reading group's conveners both review, and the member doesn't need to know which.
+Included by the event page's CTA, the register form, and the tuition-covered
+confirm page — the last needs it most, being one click straight to a pending row.
+{% endcomment %}
+{% if event.requires_faculty_approval %}
+<p class="text-sm text-base-content/70 mt-2">Registration for this event is reviewed before it's confirmed, and you'll be emailed either way.</p>
+{% endif %}

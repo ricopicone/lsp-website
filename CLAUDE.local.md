@@ -1,9 +1,9 @@
-# Resuming task #504
+# Resuming task #564
 
-**Task:** Add a feature image to an event
+**Task:** Seminar registration pre-approval for existing seminar
 
 ## Description
-The biggest challenge here is making the layout work for most resolutions and shapes of images. This should be an option under the edit event page.
+I know we have a setting for this at creation, but I'm not sure what happens if we turn on that setting once the seminar already exists and has registered students. Review the code and suggest a way forward.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -56,10 +56,22 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
-- **registration-payment-plans** (architecture) — Task #501 SHIPPED+LIVE: a pricing code's installments count is ORTHOGONAL to pricing_mode; payments spread across the EVENT'S OWN RUN (never monthly-from-registration, never named terms); a plan registration reads PAID = enrolled while stil
-- **dues-cron-sends-balances-only** (reference) — lsp-dues-cron now runs ONLY the balance reminder (dues + tuition per-category reminders muted 2026-08-03) — and enabling the timer fires a catch-up batch immediately unless you touch the stamp file first
+- **coverage-does-not-reprice-existing-registrations** (architecture) — FIXED+LIVE 2026-08-11 (task #561) — coverage.apply_coverage now re-prices a year's unpaid registrations when a covering decision is recorded, on both the member and treasurer paths; a registration is still priced once at creation, and the AY that matters is the EVENT'S, not today's
+- **account-custodians** (reference) — Who holds which LSP accounts: Caroline Barensfeld = Google Workspace admin; BOTH domains are registered to Bret Fimiani with lspwixwebsite@gmail.com on all three contact roles — that mailbox gates the AWS transfer; and the AWS account has NO alternate contacts set
+- **old-wix-site-archive** (reference) — The old Wix site is archived off-Wix in s3://lsp-wix-archive-uswest2 (AWS account 493980123073, Glacier Deep Archive, 2026-08-10): 81 pages + 135 assets crawled from the still-published free wixsite.com URLs
+- **wix-account-holds-only-three-subscriptions** (reference) — Wix bills only 2 domains + the site plan — NOT Google Workspace, NOT Ascend. The site plan was CANCELLED 2026-08-10 (auto-renew off, expires Jun 16 2027); both domains are already unassigned, and the .org bills Oct 6 2026
+- **dues-cron-sends-balances-only** (reference) — lsp-dues-cron runs ONLY the balance reminder (dues + tuition per-category reminders muted 2026-08-03); the email was rewritten for the mid-migration ledger and awaits the treasurer's approval, and enabling the timer fires a catch-up batch i
+- **worktree-vs-main-path-trap** (gotcha) — Sessions run in a .claude-worktrees/<name> worktree — subagents report MAIN-repo paths (edits land in main), and a resumed worktree branch can be hundreds of commits stale, so fast-forward before reading any code
+- **submit-once-guard** (architecture) — Task #545 SHIPPED 2026-08-10: every POST form submits once via static/js/submit-guard.js with no opt-in — and it must never use the `disabled` attribute, because a disabled submitter is dropped from the POST
+- **program-event-visibility-cascades** (architecture) — Task #532 SHIPPED+LIVE 2026-08-09: a program event's visibility cascades from its Program via the new Event.public_now_q(), and events/price_spec.py is the one definition of a price — a PC-created event used to be born with no tier, no sess
+- **referral-addendum** (architecture) — Task #531 SHIPPED+LIVE 2026-08-08: an addendum is the referrals app's second outbound path to clinicians — "follow-up" was already taken by step 5 (to the requester), and distribution now logs who it reached so "only the clinicians this wen
+- **referral-response-is-a-checkbox** (decision) — Task #531 (Diana's first request): clinicians can no longer answer a referral "unavailable" at all — the respond form is one checkbox, unchecking withdraws the response, and 10 historical available=False rows survive on prod
+- **registration-payment-plans** (architecture) — Task #501 SHIPPED+LIVE: installments is ORTHOGONAL to pricing_mode, payments spread across the event's own run, and a pricing code now applies to an EXISTING registration (auto-applying when pinned to that member)
+- **webp-uploads-are-octet-stream** (gotcha) — FIXED+LIVE 2026-08-05 — the container ships no /etc/mime.types, so django-storages typed every .webp as octet-stream; settings now registers the type and the 12 existing objects were rewritten
+- **accreditor-art-bundles-the-statement** (gotcha) — SHIPPED+LIVE 2026-08-05 (task #506) — accreditor logo art bundles the mandated approval paragraph as a picture of text; it belongs in CEOrganization.statement, never as a logo row
+- **event-feature-image** (architecture) — Task #504 SHIPPED+LIVE 2026-08-05: an event's feature image is shape-normalized AT UPLOAD into a 1:1–2.5:1 range (the layout bounds both dimensions rather than fixing the height), stores two renders, and rides its own form/endpoint
+- **file-inputs-need-their-own-form** (gotcha) — A file input cannot live on EventEditForm — the change-review dialog re-posts it as hidden textareas and silently eats uploads; anything file-shaped needs its own form and endpoint (task #504)
 - **route53-staged-zone-is-pre-cutover-stale** (gotcha) — FIXED 2026-08-03 — the staged Route 53 zone (Z07184784MROHMIJPJLF) now matches live and is safe to flip to; it HAD pointed apex+www at Wix. The standing rule survives: re-diff both zones immediately before any nameserver flip
-- **account-custodians** (reference) — Who holds which LSP accounts: Caroline Barensfeld = Google Workspace admin; domains are managed in Wix but the .org's registrar of record is TUCOWS (Wix is reseller) while the .com's is Wix.com Ltd; lspwixwebsite@gmail.com mystery (Typeform
 - **lacanschool-com-redirect** (architecture) — lacanschool.com (separate Wix registration, Bret Fimiani) 301s to lacanschool.org with the path preserved via nginx lsp-dotcom.conf + its own LE cert — Wix forwarding could NOT do this
 - **payment-plan-is-manual-stripe-not-autopay** (architecture) — An approved payment plan auto-charges nothing (no Klarna/BNPL/Subscriptions) — the member hand-pays each installment via Stripe Checkout, the year stays ONE annual Charge, and due-date nudges shipped 2026-08-02
 - **program-committee-is-the-name** (convention) — In prose the body is the "Program Committee" — only the slug and docstrings say "programming-committee" (committees/0003 renamed it), so code is no evidence about the display name
@@ -110,7 +122,6 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **board-officer-titles** (convention) — Board Chair/Co-chair = President/Vice President: a display relabel (role_label) AND a synced governance record (Board roster is source of truth; syncs President/VP StaffRole + MoA leadership)
 - **document-inline-html-body** (architecture) — documents.Document now supports inline-HTML bodies (markdown, file optional) with a {{ annual_tuition }} token; used to de-PDF the Tuition Assistance doc (task #427)
 - **ci-test-suite-parallelized** (decision) — Task #426: CI/deploy time is ~all pytest; parallelized with pytest-xdist -n auto (4-core public runner). --no-migrations is NOT viable.
-- **worktree-vs-main-path-trap** (gotcha) — Sessions run in a .claude-worktrees/<name> worktree; subagents often report MAIN-repo absolute paths — edit the worktree path or edits land in main
 - **rendered-markdown-docs-gotchas** (gotcha) — In-repo markdown docs (core/docs/*.md, rendered via render_doc + shown in admin Help tabs): a +/-/* starting a wrapped line inside a list item silently becomes a nested bullet
 - **control-analyses-accounting** (architecture) — Task #415 SHIPPED + deployed: structured control-analysis requirement (clinical 2 / academic 3), 4-year/2-year sub-bars, School-analyst dropdown, external-analyst Meeting-of-Analysts approval
 - **formation-tab-doc-links** (architecture) — My LSP > Formation tab shows in-training members their track's formation-guidelines doc, configured via FormationSettings FKs
@@ -152,7 +163,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=504`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=564`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

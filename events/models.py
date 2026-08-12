@@ -491,9 +491,10 @@ class Event(models.Model):
     requires_faculty_approval = models.BooleanField(
         default=False,
         help_text=(
-            "If set, each registration must be approved by the event's faculty "
-            "before it's confirmed (future proposal-flow option). Default off; "
-            "all existing seminars are off."
+            "If set, each new registration waits for the event's faculty (or a "
+            "reading group's conveners) to approve it. Anyone already "
+            "registered keeps their place; unsetting it approves everyone "
+            "still waiting."
         ),
     )
     visibility = models.CharField(
