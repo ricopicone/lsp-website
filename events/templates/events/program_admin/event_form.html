@@ -146,12 +146,10 @@
       </div>
 
       <div class="space-y-1">
-        <label class="flex items-center gap-2 cursor-pointer">
-          {{ form.open_to_guests }}
-          <span class="text-sm">Open to guests (shows a non-members-welcome note on the event page)</span>
-        </label>
-        <p class="text-xs text-base-content/50 pl-7">{{ form.open_to_guests.help_text }}</p>
-        {% if form.open_to_guests.errors %}<p class="text-error text-xs pl-7">{{ form.open_to_guests.errors|join:", " }}</p>{% endif %}
+        <label class="text-sm" for="{{ form.registration_eligibility.id_for_label }}">Who can register</label>
+        {{ form.registration_eligibility }}
+        <p class="text-xs text-base-content/50">{{ form.registration_eligibility.help_text }}</p>
+        {% if form.registration_eligibility.errors %}<p class="text-error text-xs">{{ form.registration_eligibility.errors|join:", " }}</p>{% endif %}
       </div>
     </section>
 

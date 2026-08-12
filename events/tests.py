@@ -450,6 +450,32 @@ def test_an_edit_that_omits_eligibility_keeps_the_open_default(client):
     )
 
 
+@pytest.mark.django_db
+def test_eligibility_survives_the_change_review_repost():
+    """The confirm dialog carries non-reviewable fields forward as hidden
+    <textarea>s. A select survives that where a checkbox needs a special
+    case, and the failure would be silent: an eligibility change quietly
+    reverting on any event that routes through review (task #566)."""
+    from events.forms import EventEditForm
+
+    e = Event.objects.create(
+        title="Reviewed Seminar", slug="reviewed-seminar",
+        event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        status=Event.Status.OPEN, published=True,
+    )
+    form = EventEditForm(
+        data={
+            "title": e.title, "description": "", "readings": "",
+            "schedule_note": "", "contact": "", "fee_note": "",
+            "registration_eligibility": "members_only",
+        },
+        instance=e,
+    )
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["registration_eligibility"] == "members_only"
+
+
 def _special_event(**kwargs):
     defaults = dict(
         title="Special Evening", slug="special-evening",
@@ -462,7 +488,7 @@ def _special_event(**kwargs):
 
 
 @pytest.mark.django_db
-def test_event_page_shows_guest_note_when_open_to_guests(client):
+def test_event_page_shows_guest_note_when_open_to_guests_and_members(client):
     e = _special_event()
     resp = client.get(f"/events/{e.slug}/")
     content = resp.content.decode()

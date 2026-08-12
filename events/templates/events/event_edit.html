@@ -108,13 +108,16 @@
       </span>
     </label>
 
-    <label class="flex items-start gap-2 cursor-pointer">
-      {{ form.open_to_guests }}
-      <span class="label-text">
-        Open to guests
-        <span class="block text-xs text-base-content/60">Show a note on the event page that non-members are welcome to register. Messaging only, it doesn't restrict who can register.</span>
-      </span>
-    </label>
+    <div class="space-y-1">
+      <label class="label-text" for="{{ form.registration_eligibility.id_for_label }}">Who can register</label>
+      {{ form.registration_eligibility }}
+      <p class="text-xs text-base-content/60">
+        Members only limits registration to members of the School. Members and
+        guests lets anyone with a free account register, and shows a
+        guests-welcome note on the event page.
+      </p>
+      {% if form.registration_eligibility.errors %}<p class="text-error text-xs">{{ form.registration_eligibility.errors|join:", " }}</p>{% endif %}
+    </div>
 
     <section class="space-y-3 border-t border-base-300/60 pt-6">
       <h2 class="font-serif text-lg text-base-content">Continuing education</h2>
