@@ -38,7 +38,7 @@ Daily room, so nothing you do in rehearsal can touch the live one.
 | `speaker_spotlight` | Same as the real event |
 | `recording_mode` | Same as the real event |
 | `record_video` | Same as the real event |
-| `open_to_guests` | Same as the real event |
+| `registration_eligibility` | Same as the real event |
 | `published` / `status` | `True` / `open` — registration must really work |
 | one `Session` | **Scheduled at the rehearsal time**, so `is_live()` is genuinely true |
 

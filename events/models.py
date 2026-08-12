@@ -344,6 +344,13 @@ class Event(models.Model):
         PUBLIC = "public", _("Public")
         MEMBERS_ONLY = "members_only", _("Members only")
 
+    class RegistrationEligibility(models.TextChoices):
+        """Who may register (task #566) — orthogonal to ``Visibility``, which
+        is about who can *see* the page."""
+
+        MEMBERS_AND_GUESTS = "members_and_guests", _("Members and guests")
+        MEMBERS_ONLY = "members_only", _("Members only")
+
     #: Types that belong on /program/ rather than /events/.
     ANNUAL_PROGRAM_TYPES = frozenset({"seminar", "reading_group", "cartel"})
 
@@ -506,12 +513,15 @@ class Event(models.Model):
             "from anonymous visitors on public listings."
         ),
     )
-    open_to_guests = models.BooleanField(
-        default=True,
+    registration_eligibility = models.CharField(
+        max_length=20,
+        choices=RegistrationEligibility.choices,
+        default=RegistrationEligibility.MEMBERS_AND_GUESTS,
+        verbose_name="Who can register",
         help_text=(
-            "Non-members are welcome to register for this event. Shows a "
-            "guests-welcome note on the event page. This is messaging only; "
-            "it does not restrict who can register."
+            "Members only limits registration to members of the School. "
+            "Members and guests lets anyone with a free account register, "
+            "and shows a guests-welcome note on the event page."
         ),
     )
 

@@ -165,8 +165,8 @@ class EventEditForm(PriceFieldsMixin, forms.ModelForm):
         model = Event
         fields = (
             "title", "description", "readings", "schedule_note", "contact",
-            "fee_note", "record_video", "speaker_spotlight", "open_to_guests",
-            "requires_faculty_approval",
+            "fee_note", "record_video", "speaker_spotlight",
+            "requires_faculty_approval", "registration_eligibility",
             "offers_ce", "ce_credits", "ce_credits_basis", "ce_note",
             "ce_organizations",
         )
@@ -185,6 +185,9 @@ class EventEditForm(PriceFieldsMixin, forms.ModelForm):
             "ce_credits_basis": forms.Select(
                 attrs={"class": "select select-bordered select-sm"},
             ),
+            "registration_eligibility": forms.Select(
+                attrs={"class": "select select-bordered w-full"},
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -193,6 +196,10 @@ class EventEditForm(PriceFieldsMixin, forms.ModelForm):
         # a POST that omits it (the change-review dialog's re-post, a partial
         # form) must not fail validation.
         self.fields["ce_credits_basis"].required = False
+        # Same reasoning for eligibility: a choices field with a default is
+        # required by default on a ModelForm, which would break every POST
+        # that omits it — the old checkbox simply read as unticked.
+        self.fields["registration_eligibility"].required = False
         self.init_price_fields(self.instance if self.instance.pk else None)
 
     def clean(self):
@@ -200,6 +207,12 @@ class EventEditForm(PriceFieldsMixin, forms.ModelForm):
 
     def clean_ce_credits_basis(self):
         return self.cleaned_data.get("ce_credits_basis") or CECreditBasis.TOTAL
+
+    def clean_registration_eligibility(self):
+        return (
+            self.cleaned_data.get("registration_eligibility")
+            or Event.RegistrationEligibility.MEMBERS_AND_GUESTS
+        )
 
 
 class EventFeatureImageForm(forms.ModelForm):
@@ -761,7 +774,8 @@ class ProgramEventForm(PriceFieldsMixin, forms.ModelForm):
             "format", "status",
             "description", "readings", "schedule_note", "contact", "fee_note",
             "access_info",
-            "requires_faculty_approval", "record_video", "open_to_guests",
+            "requires_faculty_approval", "record_video",
+            "registration_eligibility",
         )
         widgets = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
@@ -793,12 +807,17 @@ class ProgramEventForm(PriceFieldsMixin, forms.ModelForm):
             ),
             "requires_faculty_approval": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "record_video": forms.CheckboxInput(attrs={"class": "checkbox"}),
-            "open_to_guests": forms.CheckboxInput(attrs={"class": "checkbox"}),
+            "registration_eligibility": forms.Select(
+                attrs={"class": "select select-bordered w-full"},
+            ),
         }
 
     def __init__(self, *args, program=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.program = program
+        # A choices field with a default is required by default on a
+        # ModelForm; the old checkbox it replaces simply read as unticked.
+        self.fields["registration_eligibility"].required = False
         # Narrow event_type choices to the annual-program-type set.
         self.fields["event_type"].choices = [
             (Event.Type.SEMINAR.value,       Event.Type.SEMINAR.label),
@@ -827,6 +846,12 @@ class ProgramEventForm(PriceFieldsMixin, forms.ModelForm):
 
     def clean(self):
         return self.clean_price(super().clean())
+
+    def clean_registration_eligibility(self):
+        return (
+            self.cleaned_data.get("registration_eligibility")
+            or Event.RegistrationEligibility.MEMBERS_AND_GUESTS
+        )
 
     def save(self, commit=True):
         instance = super().save(commit=False)

@@ -127,7 +127,18 @@ def event_summary_context(event, user) -> dict:
     # Above-the-fold preview for long session lists: the next few meetings
     # (the full table collapses behind a <details>).
     sessions_upcoming = [s for s in sessions if s.start_at >= _tz.now()][:3]
+    # Why this viewer can't register, if they can't (task #566). Anonymous
+    # visitors are left None on purpose: the site can't tell a signed-out
+    # member from a stranger, so they keep the button and the template shows
+    # them the restriction as a note instead.
+    from registrations.permissions import eligibility_block_reason
+
+    eligibility_reason = (
+        eligibility_block_reason(user, event)
+        if getattr(user, "is_authenticated", False) else None
+    )
     return {
+        "eligibility_reason": eligibility_reason,
         "event": event,
         "sessions": sessions,
         "sessions_upcoming": sessions_upcoming,

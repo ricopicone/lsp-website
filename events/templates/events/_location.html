@@ -58,9 +58,14 @@ branded label with registration/live-aware messaging + a tech-check link.
       {% endif %}
     {% else %}
       {% if event.status == "open" and event.is_public_now %}
+      {% if eligibility_reason %}
+      {# Don't offer a link that leads to the members-only wall (task #566). #}
+      <p class="mt-1 text-sm text-base-content/70">Joining details are shared with registered participants.</p>
+      {% else %}
       <p class="mt-1 text-sm text-base-content/70">
         <a href="{% url 'registrations:register' event.slug %}" class="link">Register for details</a> to receive joining access.
       </p>
+      {% endif %}
       {% elif event.status == "closed" %}
       <p class="mt-1 text-sm text-base-content/70">Registration is closed. Joining details are shared with registered participants.</p>
       {% else %}

@@ -1188,6 +1188,63 @@ Done (see `git log` for specifics):
   migration is the `help_text`. Design:
   `docs/superpowers/specs/2026-08-12-registration-approval-toggle-design.md`.
 
+- **An event says who may register** (task #566). `Event.open_to_guests` said,
+  in its own help text, that it "does not restrict who can register" — ticking
+  it printed a guests-welcome note and did nothing else. Every gate the site
+  had was about the registrant's obligations (the tuition decision) or the
+  event's state; none was about whether the event was for members. It is now
+  **`Event.registration_eligibility`**, *Members and guests* or *Members
+  only*, and the name change is the point: a field named for messaging is how
+  a restriction stays imaginary for a year. The flag had never once been
+  unticked — all 28 prod events sat at the default — so the migration cannot
+  change what any live event does, which makes the **default** the only
+  consequential choice, and it stays open.
+  **A guest is anyone `accounts.permissions.is_lsp_member` says isn't a
+  member** — the one definition, deliberately wider than a role check (it
+  admits Django staff, LSP Staff, and serving committee members whatever their
+  role, and excludes the resigned and removed standings), so all three
+  non-member roles are guests: Auditor, **Student, and Prospective Applicant**.
+  A second, narrower predicate was rejected: the site would then hold two
+  answers to "is this person a member".
+  **The escape hatch is a code addressed to a person.** A guest holding a live
+  `PricingCode` with `restricted_to_user` set to them registers normally,
+  because the faculty member who minted it made the decision (§4.1). An
+  *unrestricted* code does not open the door, however few uses it has left — a
+  code that can be forwarded is not a decision about a person — which narrows
+  the task #495 recipe on members-only events only, to one extra field on a
+  form faculty already use. Rejected: a code box on the blocked page (a
+  forwarded code admits any stranger) and staff-comp-only (faculty lose the
+  self-serve route). The gate also passes anyone the event already treats as
+  an insider (`can_edit_event` or `is_presenter`), or an outside speaker with a
+  linked login would be told "members only" about their own evening.
+  One predicate, `registrations.permissions.eligibility_block_reason`, shaped
+  exactly like `_tuition_block_reason` (a member-facing string blocks, None
+  admits), and **one enforcement point**, `register_for_event`, guarding right
+  after it. It sits *after* the already-registered short-circuit deliberately:
+  restricting an event later never disturbs a registration already taken, and
+  un-registering someone is the registrar's call, not a side effect of an edit
+  (the #485 staff-paths rule). Comp, the registrar console, and admin all
+  bypass it.
+  **The anonymous case is the one to get right**: the site cannot tell a
+  signed-out member from a stranger, so an anonymous visitor keeps the Register
+  button (it leads to login) under a note naming the restriction, while a
+  signed-in guest gets the note *instead of* the button — a button leading to a
+  403 is worse than no button. Two lines in the task #464 funnel promised what
+  a members-only event can't honor ("You don't need to be a member to attend")
+  and are now conditional.
+  `visibility` and eligibility stay **independent** — who can see the page
+  versus who can register, and `visibility` is admin-only, so they never appear
+  side by side in the faculty or PC UI. The event page's guest note keyed off
+  *both*, which was the old flag's emptiness showing through; eligibility drives
+  it alone now, and the migration carries a members-only visibility across
+  **once**, so an event that said members-only in the only way the site could
+  keeps meaning it. Also: the field is out of `REVIEWABLE_FIELDS` (review
+  protects the content the PC approved), and a test pins that its value
+  survives the confirm dialog's hidden-`<textarea>` re-post, where a select
+  needs no special case but a silent revert would be invisible. No flag, no
+  backfill. Design:
+  `docs/superpowers/specs/2026-08-12-registration-eligibility-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

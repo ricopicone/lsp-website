@@ -10,6 +10,9 @@
     {% else %}
     <h1 class="font-serif text-3xl text-base-content">Create an account</h1>
     {% endif %}
+    {% if register_event and register_event.registration_eligibility == "members_only" %}
+    <p class="text-sm text-base-content/70">Registration for {{ register_event.title }} is limited to members of the School.</p>
+    {% endif %}
     <p class="text-sm text-base-content/60">An account lets you register for events, pay online, and receive receipts. It doesn't make you a member of the School; membership is by <a href="{% url 'admissions:apply_start' %}" class="link link-primary">application</a>.</p>
   </header>
 
