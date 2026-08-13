@@ -119,7 +119,7 @@ def comp_registration(reg, by, *, via: str = "admin") -> tuple[bool, bool]:
         return False, True
     reg.status = Registration.Status.COMPED
     reg.staff_notes = (reg.staff_notes or "") + (
-        f"\n[{timezone.now().date().isoformat()}] Comped by {by.email} via {via}."
+        f"\n[{timezone.localdate().isoformat()}] Comped by {by.email} via {via}."
     )
     reg.save(update_fields=("status", "staff_notes"))
     from payments.charges import mint_comped_charge

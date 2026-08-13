@@ -72,7 +72,7 @@ def test_marking_a_profile_deceased_still_disables_the_account():
     """The sync itself must keep working — this guards the fix above from
     being over-broad."""
     user = User.objects.create_user(email="live@x.test", password=PW)
-    user.profile.deceased_on = timezone.now().date()
+    user.profile.deceased_on = timezone.localdate()
     user.profile.save(update_fields=["deceased_on"])
 
     user.refresh_from_db()

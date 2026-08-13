@@ -69,7 +69,7 @@ class Command(BaseCommand):
             self.stdout.write("No current DuesPeriod; nothing to do.")
             return
 
-        today = timezone.now().date()
+        today = timezone.localdate()
         if today <= period.due_date:
             self.stdout.write(
                 f"Period {period.name} not yet past due ({period.due_date}); "

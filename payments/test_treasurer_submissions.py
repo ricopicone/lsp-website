@@ -299,7 +299,7 @@ def test_approve_out_of_window_dues_payment_does_not_block_current_dues_pay(
     decade-old claim wrongly bound to 'current' would make the member's
     real /dues/ page think this year is already paid. With the FK left
     unbound, the pay form must still show."""
-    today = timezone.now().date()
+    today = timezone.localdate()
     _dues_period(
         name="Current AY dues", slug="current-ay-dues-strict",
         start_date=today - timedelta(days=180),

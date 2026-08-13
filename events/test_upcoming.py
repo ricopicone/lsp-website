@@ -20,7 +20,7 @@ from events.upcoming import landing_events
 
 def _event(title, *, days, event_type=Event.Type.SEMINAR, span=0, **kwargs):
     """A published event starting ``days`` from today, running ``span`` days."""
-    start = timezone.now().date() + timedelta(days=days)
+    start = timezone.localdate() + timedelta(days=days)
     return Event.objects.create(
         title=title,
         slug=title.lower().replace(" ", "-"),

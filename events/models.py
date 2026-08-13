@@ -747,7 +747,7 @@ class Event(models.Model):
         else:
             membership = WorkgroupMembership.objects.create(
                 workgroup=wg, user=user, role=WorkgroupMembership.Role.FACULTY,
-                start_date=timezone.now().date(),
+                start_date=timezone.localdate(),
             )
         if self.event_type == self.Type.SEMINAR:
             profile = getattr(user, "profile", None)

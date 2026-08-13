@@ -240,7 +240,7 @@ def registrar_note(request, reg_id: int):
     note = (request.POST.get("note") or "").strip()
     if note:
         reg.staff_notes = (reg.staff_notes or "") + (
-            f"\n[{timezone.now().date().isoformat()}] {note} "
+            f"\n[{timezone.localdate().isoformat()}] {note} "
             f"— {request.user.email} via registration admin."
         )
         reg.save(update_fields=("staff_notes",))

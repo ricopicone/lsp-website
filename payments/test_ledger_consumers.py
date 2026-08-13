@@ -17,7 +17,7 @@ pytestmark = pytest.mark.django_db
 
 def _current_dues_period():
     DuesPeriod.objects.all().delete()
-    today = timezone.now().date()
+    today = timezone.localdate()
     start = today.year if today.month >= 9 else today.year - 1
     return DuesPeriod.objects.create(
         name=f"AY {start}-{start + 1}", slug=f"ay-{start}-{start + 1}",

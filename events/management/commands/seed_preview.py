@@ -41,7 +41,7 @@ class Command(BaseCommand):
 
     def _seed_seminar(self, *, members_only: bool):
         slug = getattr(settings, "PREVIEW_TOUR_SEMINAR_SLUG", "preview-seminar")
-        today = timezone.now().date()
+        today = timezone.localdate()
         visibility = (
             Event.Visibility.MEMBERS_ONLY if members_only else Event.Visibility.PUBLIC
         )

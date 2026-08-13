@@ -23,7 +23,7 @@ def current_period(db):
     period = TuitionPeriod.current()
     if period is not None:
         return period
-    today = timezone.now().date()
+    today = timezone.localdate()
     return TuitionPeriod.objects.create(
         name="Test AY",
         slug="test-ay-tuition",

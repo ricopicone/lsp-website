@@ -399,7 +399,7 @@ class Profile(models.Model):
         actions read the same wherever they land)."""
         from django.utils import timezone
 
-        line = f"[{timezone.now().date()}] {text}"
+        line = f"[{timezone.localdate()}] {text}"
         self.notes = (self.notes + "\n" + line) if self.notes else line
         if save:
             self.save(update_fields=("notes",))

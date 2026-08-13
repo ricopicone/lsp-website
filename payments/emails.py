@@ -203,7 +203,7 @@ def send_tuition_reminder(user, period, *, enrollment=None) -> None:
     if enrollment is not None and (
         enrollment.status == enrollment.Status.PAYMENT_PLAN
     ):
-        installment = plans.due_installment(enrollment, timezone.now().date())
+        installment = plans.due_installment(enrollment, timezone.localdate())
         installment_total = enrollment.installments.count()
     with _recipient_timezone(user):
         body = render_to_string(
@@ -216,7 +216,7 @@ def send_tuition_reminder(user, period, *, enrollment=None) -> None:
                 "installment_total": installment_total,
                 "installment_overdue": (
                     installment is not None
-                    and installment.due_date < timezone.now().date()
+                    and installment.due_date < timezone.localdate()
                 ),
                 "support_email": settings.SUPPORT_EMAIL,
                 "site_base_url": settings.SITE_BASE_URL,

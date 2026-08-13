@@ -78,7 +78,7 @@ def _freeze(monkeypatch, iso_date):
 
     freezegun isn't a project dependency, so the command's own
     ``timezone.now`` reference is monkeypatched directly (it reads
-    ``timezone.now().date()``), mirroring test_tuition_reminder_dates.py.
+    ``timezone.localdate()``), mirroring test_tuition_reminder_dates.py.
     """
     frozen = timezone.make_aware(
         datetime.combine(date.fromisoformat(iso_date), datetime.min.time())

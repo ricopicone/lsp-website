@@ -66,7 +66,7 @@ class Command(BaseCommand):
                         from workgroups.models import WorkgroupMembership
                         WorkgroupMembership.objects.create(
                             workgroup=wg, user=user, role=committee_role,
-                            start_date=timezone.now().date(),
+                            start_date=timezone.localdate(),
                         )
 
         self.stdout.write(self.style.SUCCESS(

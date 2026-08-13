@@ -61,7 +61,7 @@ def landing(request):
     from accounts.models import Profile
     from workgroups.models import Visibility, Workgroup
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     upcoming = landing_events(request.user)
 
     # Grounded figures woven into the page (each rendered only when positive).

@@ -27,7 +27,7 @@ def treasurer(client):
 
 
 def _current_tuition_period():
-    today = timezone.now().date()
+    today = timezone.localdate()
     start = today.year if today.month >= 9 else today.year - 1
     return TuitionPeriod.objects.create(
         name=f"AY {start}-{start + 1} T", slug=f"t-{start}",

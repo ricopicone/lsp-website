@@ -21,7 +21,7 @@ class Command(BaseCommand):
     help = "Ensure Program rows exist for the current and next academic years."
 
     def handle(self, *args, **options):
-        today = timezone.now().date()
+        today = timezone.localdate()
         # The academic year starts in September. If we're past Sept 1 of
         # this calendar year, we're in <thisyear>-<thisyear+1>.
         if today.month >= 9:

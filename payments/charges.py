@@ -32,7 +32,7 @@ def sync_dues_charges(period) -> int:
     """
     from .dues import obligated_users_qs
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     if period.start_date > today:
         return 0
     have = set(
@@ -106,7 +106,7 @@ def sync_tuition_charges(user) -> None:
     if profile.standing in Profile.NON_MEMBER_STANDINGS or profile.deceased_on:
         return  # removed / resigned / deceased — never mint new tuition
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     enrollments = list(
         TuitionEnrollment.objects.filter(user=user)
         .select_related("tuition_period")
@@ -268,7 +268,7 @@ def mint_comped_charge(registration) -> Charge | None:
     )
     if existing is not None:
         return existing
-    today = timezone.now().date()
+    today = timezone.localdate()
     return Charge.objects.create(
         user_id=registration.user_id,
         category=Charge.Category.REGISTRATION,

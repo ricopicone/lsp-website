@@ -30,7 +30,7 @@ def current_period(db):
     period = DuesPeriod.current()
     if period is not None:
         return period
-    today = timezone.now().date()
+    today = timezone.localdate()
     return DuesPeriod.objects.create(
         name="Test AY",
         slug="test-ay",
@@ -225,14 +225,14 @@ def test_landing_no_banner_when_paid(client, member, current_period):
 
 def _set_period_due_in_past(period):
     """Pretend the period's due date is in the past so reminders fire."""
-    period.due_date = timezone.now().date() - timedelta(days=7)
+    period.due_date = timezone.localdate() - timedelta(days=7)
     period.save(update_fields=("due_date",))
 
 
 @pytest.mark.django_db
 def test_reminders_skipped_before_due_date(member, current_period):
     # Make sure due_date is in the future for this test.
-    current_period.due_date = timezone.now().date() + timedelta(days=30)
+    current_period.due_date = timezone.localdate() + timedelta(days=30)
     current_period.save()
     out = StringIO()
     call_command("send_dues_reminders", stdout=out)

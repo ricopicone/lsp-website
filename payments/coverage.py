@@ -81,7 +81,7 @@ def bill_skipped_coverage(user, period) -> list:
     """
     from registrations.models import Registration
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     changed = []
     for reg in covered_registrations(user, period):
         amount = retro_amount(reg.price_tier)
@@ -137,7 +137,7 @@ def apply_coverage(user, period) -> list:
     if not (enrollment and enrollment.covers_seminars):
         return []
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     changed = []
     rows = (
         Registration.objects

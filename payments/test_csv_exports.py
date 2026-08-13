@@ -208,7 +208,7 @@ def test_transactions_csv_type_filter(client, staff_user, random_user):
 
 
 def test_transactions_csv_date_range_filter(client, staff_user, random_user):
-    today = timezone.now().date()
+    today = timezone.localdate()
     old = Payment.objects.create(
         payment_type=Payment.Type.DUES, user=random_user,
         amount=Decimal("100.00"), status=Payment.Status.SUCCEEDED,

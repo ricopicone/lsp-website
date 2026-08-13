@@ -197,7 +197,7 @@ def treasurer_accounts(request):
     # A plan member carries the whole year as owed from the day they commit
     # (one annual charge, whatever the schedule), so "Owing" can't say whether
     # they're behind — the marker can. Batched, not per row.
-    plan_states = plans.plan_states(timezone.now().date())
+    plan_states = plans.plan_states(timezone.localdate())
     for r in rows:
         r["plan_state"] = plan_states.get(r["user"].id)
     q = (request.GET.get("q") or "").strip().lower()
@@ -747,7 +747,7 @@ def treasurer_member_detail(request, user_id: int):
             "member_options": _reconcile_member_options(),
             "unenrolled_tuition_periods": TuitionPeriod.objects.exclude(
                 enrollments__user=target),
-            "today": timezone.now().date(),
+            "today": timezone.localdate(),
             "dues_periods": DuesPeriod.objects.all(),  # newest first (Meta.ordering)
             "tuition_periods": TuitionPeriod.objects.all(),
             "current_dues_period_id": current_dues.id if current_dues else None,
@@ -820,7 +820,7 @@ def treasurer_charge_add(request, user_id: int):
         try:
             eff = date.fromisoformat(request.POST.get("effective_date", ""))
         except ValueError:
-            eff = timezone.now().date()
+            eff = timezone.localdate()
     note = (request.POST.get("note") or "").strip()
     charge = Charge.objects.create(
         user=target, category=category, amount=amount, effective_date=eff,
@@ -915,7 +915,7 @@ def treasurer_record_payment(request, user_id: int):
         return redirect("treasurer_member_detail", user_id=target.id)
 
     note = (f"Offline {category} payment recorded by treasurer "
-            f"{request.user.email} on {timezone.now().date()}.")
+            f"{request.user.email} on {timezone.localdate()}.")
     with transaction.atomic():
         kwargs = {}
         if category == Payment.Type.TUITION:
@@ -940,7 +940,7 @@ def treasurer_record_payment(request, user_id: int):
                         )
                         enr.notes = (
                             (enr.notes + "\n" if enr.notes else "")
-                            + f"[{timezone.now().date()}] Treasurer "
+                            + f"[{timezone.localdate()}] Treasurer "
                             f"({request.user.email}) set status to Committed "
                             f"while recording an offline tuition payment{was}."
                         )
@@ -964,7 +964,7 @@ def treasurer_record_payment(request, user_id: int):
                         enr = prior
                     enr.notes = (
                         (enr.notes + "\n" if enr.notes else "")
-                        + f"[{timezone.now().date()}] Treasurer "
+                        + f"[{timezone.localdate()}] Treasurer "
                         f"({request.user.email}) recorded a partial offline "
                         f"tuition payment of ${amount}; year not marked paid "
                         "in full."
@@ -1064,7 +1064,7 @@ def treasurer_payment_note(request, payment_id: int):
     if not note:
         messages.error(request, "Write a note first.")
         return _safe_next(request, "treasurer_payments")
-    line = (f"[{timezone.now().date()}] Note by treasurer "
+    line = (f"[{timezone.localdate()}] Note by treasurer "
             f"{request.user.email}: {note}")
     payment.notes = (payment.notes + "\n" + line) if payment.notes else line
     payment.save(update_fields=("notes",))
@@ -1189,7 +1189,7 @@ def treasurer_payment_split(request, payment_id: int):
     labels = dict(Payment.Type.choices)
     old_type, old_amount = payment.payment_type, payment.amount
     when = (payment.paid_at or payment.created_at).date()
-    today = timezone.now().date()
+    today = timezone.localdate()
     breakdown = ", ".join(f"${a} {labels[t]}" for t, a, _ in parts)
     extra_flash = ""
     with transaction.atomic():
@@ -1298,7 +1298,7 @@ def treasurer_payment_refund(request, payment_id: int):
 
     if family:
         audit = (
-            f"[{timezone.now().date()}] Refunded as part of the entire "
+            f"[{timezone.localdate()}] Refunded as part of the entire "
             f"original split charge by treasurer {request.user.email}."
         )
         for part in family:
@@ -1343,7 +1343,7 @@ def _record_offline_refund(payment: Payment, *, treasurer) -> None:
     the treasurer handles reimbursement manually."""
     payment.status = Payment.Status.REFUNDED
     audit = (
-        f"[{timezone.now().date()}] Offline refund recorded by treasurer "
+        f"[{timezone.localdate()}] Offline refund recorded by treasurer "
         f"{treasurer.email} (for accounting; reimbursement sent separately)."
     )
     payment.notes = (payment.notes + "\n" + audit) if payment.notes else audit
@@ -1388,7 +1388,7 @@ def _mint_settlement_charge(payment, amount, when, *, source, actor_label,
         effective_date=when,
         source=source,
         staff_adjusted=True,
-        notes=(f"[{timezone.now().date()}] Settlement charge inserted with "
+        notes=(f"[{timezone.localdate()}] Settlement charge inserted with "
                f"{cause} by {actor_label} — the original event fee was "
                "never recorded."),
     )
@@ -1426,7 +1426,7 @@ def _settle_registration_charge_only(request, payment, *, source, actor_label,
             source=source, actor_label=actor_label,
             cause=f"payment #{payment.pk}",
         )
-        audit = (f"[{timezone.now().date()}] Inserted a matching Registration "
+        audit = (f"[{timezone.localdate()}] Inserted a matching Registration "
                  f"charge by {actor_label}.")
         payment.notes = (
             (payment.notes + "\n" + audit) if payment.notes else audit)
@@ -1465,7 +1465,7 @@ def _create_split_child(parent, part_type, amount, when, *, source,
                      if part_type == Payment.Type.DUES else None),
         tuition_period=(_period_for(part_type, when)
                         if part_type == Payment.Type.TUITION else None),
-        notes=(f"[{timezone.now().date()}] Split from payment #{parent.pk} "
+        notes=(f"[{timezone.localdate()}] Split from payment #{parent.pk} "
                f"({original}) by {actor_label}; the original receipt covers "
                "the full amount."),
     )
@@ -1579,7 +1579,7 @@ def _unwind_installment(payment, installment, *, treasurer_email, cause,
     enrollment = installment.enrollment
     outcome = "unpaid again" if was_paid else "unlinked"
     review_note = (
-        f"[{timezone.now().date()}] Payment #{payment.id} "
+        f"[{timezone.localdate()}] Payment #{payment.id} "
         f"{cause} by {actor_label} "
         f"{treasurer_email}; installment "
         f"#{installment.sequence} {outcome} — review "
@@ -1662,7 +1662,7 @@ def treasurer_payment_assign(request, payment_id: int):
     with transaction.atomic():
         payment.user = target
         payment.source = Source.VERIFIED
-        audit = (f"[{timezone.now().date()}] Assigned to {target.email} by "
+        audit = (f"[{timezone.localdate()}] Assigned to {target.email} by "
                  f"treasurer {request.user.email}. (was {old_label})")
         payment.notes = (
             (payment.notes + "\n" + audit) if payment.notes else audit)
@@ -1744,7 +1744,7 @@ def treasurer_payment_retype(request, payment_id: int):
             tuition_period_post=request.POST.get("tuition_period"),
         )
         payment.source = Source.VERIFIED
-        audit = (f"[{timezone.now().date()}] Re-categorized "
+        audit = (f"[{timezone.localdate()}] Re-categorized "
                  f"{labels[old_type]} → {labels[new_type]} by treasurer "
                  f"{request.user.email}."
                  + (f" ({'; '.join(details)})" if details else ""))
@@ -1809,7 +1809,7 @@ def treasurer_tuition_set_status(request, user_id: int):
         )
         enr.notes = (
             (enr.notes + "\n" if enr.notes else "")
-            + f"[{timezone.now().date()}] Treasurer ({request.user.email}) "
+            + f"[{timezone.localdate()}] Treasurer ({request.user.email}) "
             f"set {period.name} status to {_INLINE_TUITION_STATUSES[status]}."
         )
         enr.save(update_fields=("notes",))
@@ -2309,7 +2309,7 @@ def _handle_charge_refunded(charge: dict) -> None:
         siblings = list(payment.split_parts.exclude(
             status=Payment.Status.REFUNDED))
         if siblings:
-            audit = (f"[{timezone.now().date()}] Refunded as part of the "
+            audit = (f"[{timezone.localdate()}] Refunded as part of the "
                      "entire original split charge (Stripe refund webhook).")
             for part in siblings:
                 part.status = Payment.Status.REFUNDED
@@ -2658,7 +2658,7 @@ def my_payment_retype(request, payment_id: int):
             tuition_period_post=request.POST.get("tuition_period"),
         )
         payment.source = Source.SELF_REPORTED
-        audit = (f"[{timezone.now().date()}] Re-categorized "
+        audit = (f"[{timezone.localdate()}] Re-categorized "
                  f"{labels[old_type]} → {labels[new_type]} by member "
                  f"{request.user.email}."
                  + (f" ({'; '.join(details)})" if details else ""))
@@ -2742,7 +2742,7 @@ def my_payment_split(request, payment_id: int):
     labels = dict(Payment.Type.choices)
     old_type, old_amount = payment.payment_type, payment.amount
     when = (payment.paid_at or payment.created_at).date()
-    today = timezone.now().date()
+    today = timezone.localdate()
     breakdown = ", ".join(f"${a} {labels[t]}" for t, a, _ in parts)
     extra_flash = ""
     with transaction.atomic():
@@ -2870,7 +2870,7 @@ def my_ledger_submission_create(request):
     except ValueError:
         messages.error(request, "Enter a valid date.")
         return redirect(_account_tab_url())
-    if claimed_date > timezone.now().date():
+    if claimed_date > timezone.localdate():
         messages.error(request, "The date can't be in the future.")
         return redirect(_account_tab_url())
     details = (request.POST.get("details") or "").strip()[:2000]
