@@ -59,7 +59,7 @@ def landing_events(user, limit: int = 4) -> list[Event]:
     tint their type badge, so a later date sitting above an earlier one reads as
     deliberate rather than broken.
     """
-    today = timezone.now().date()
+    today = timezone.localdate()
     base = _base_queryset(user, today)
 
     pinned = list(

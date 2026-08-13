@@ -284,8 +284,8 @@ def test_not_decision_exempt_still_shows_decision_form(client, db):
     if TuitionPeriod.current() is None:
         TuitionPeriod.objects.create(
             name="Test AY", slug="test-ay-notreqmet",
-            start_date=timezone.now().date(), decision_due_date=timezone.now().date(),
-            end_date=timezone.now().date(), tuition_amount=Decimal("800.00"),
+            start_date=timezone.localdate(), decision_due_date=timezone.localdate(),
+            end_date=timezone.localdate(), tuition_amount=Decimal("800.00"),
         )
     client.force_login(member)
     body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
@@ -346,8 +346,8 @@ def test_decision_form_posts_from_within_account_tab(client, db):
     if TuitionPeriod.current() is None:
         TuitionPeriod.objects.create(
             name="Test AY", slug="test-ay-decideacct",
-            start_date=timezone.now().date(), decision_due_date=timezone.now().date(),
-            end_date=timezone.now().date(), tuition_amount=Decimal("800.00"),
+            start_date=timezone.localdate(), decision_due_date=timezone.localdate(),
+            end_date=timezone.localdate(), tuition_amount=Decimal("800.00"),
         )
     client.force_login(member)
     resp = client.post(reverse("tuition"), {"status": "committed"})
@@ -440,9 +440,9 @@ def test_pending_plan_note_says_coverage_already_applies(client):
     if period is None:
         period = TuitionPeriod.objects.create(
             name="Test AY", slug="test-ay-planpending",
-            start_date=timezone.now().date(),
-            decision_due_date=timezone.now().date(),
-            end_date=timezone.now().date(), tuition_amount=Decimal("800.00"),
+            start_date=timezone.localdate(),
+            decision_due_date=timezone.localdate(),
+            end_date=timezone.localdate(), tuition_amount=Decimal("800.00"),
         )
     TuitionEnrollment.objects.create(
         user=member, tuition_period=period,

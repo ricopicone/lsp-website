@@ -102,7 +102,7 @@ def test_upcoming_returns_none_with_no_future_rows():
 
 def timezone_today() -> date:
     from django.utils import timezone
-    return timezone.now().date()
+    return timezone.localdate()
 
 
 # --------------------------------------------------------------- clean() ---

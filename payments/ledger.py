@@ -419,7 +419,7 @@ def collected_this_ay(today=None) -> dict:
     from django.db.models import Sum
     from django.utils import timezone
 
-    on = today or timezone.now().date()
+    on = today or timezone.localdate()
     period = DuesPeriod.current(on) or TuitionPeriod.current(on)
     if period is None:
         return {"window": None, "by_category": {}, "total": Decimal("0")}

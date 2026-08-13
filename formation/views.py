@@ -437,7 +437,7 @@ def _formation_money_context(request) -> dict:
         "submission_kind_choices": LedgerSubmission.Kind.choices,
         "my_submissions": list(
             LedgerSubmission.objects.filter(user=user).order_by("-created_at")),
-        "today": timezone.now().date(),
+        "today": timezone.localdate(),
     }
 
 

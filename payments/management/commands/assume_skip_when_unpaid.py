@@ -55,9 +55,9 @@ class Command(BaseCommand):
         commit = options["commit"]
         backfill_slugs = set(options["backfill_roster_for"])
         current = TuitionPeriod.current()
-        note = f"[assume-skip {timezone.now().date()}] no tuition payment on record"
+        note = f"[assume-skip {timezone.localdate()}] no tuition payment on record"
         proxy_note = (
-            f"[assume-skip {timezone.now().date()}] no enrollment on record; "
+            f"[assume-skip {timezone.localdate()}] no enrollment on record; "
             "skip assumed (roster proxied from current in-training students)"
         )
 

@@ -39,7 +39,7 @@ def _dues_period(start_year):
 
 
 def test_sync_dues_charges_mints_tiered_amounts_once():
-    year = timezone.now().date().year - 1
+    year = timezone.localdate().year - 1
     p = _dues_period(year)
     cand = _member("c@x.test", "candidate")
     an = _member("a@x.test", "analyst")
@@ -50,14 +50,14 @@ def test_sync_dues_charges_mints_tiered_amounts_once():
 
 
 def test_sync_dues_charges_skips_future_periods():
-    p = _dues_period(timezone.now().date().year + 2)
+    p = _dues_period(timezone.localdate().year + 2)
     _member("f@x.test")
     assert charges.sync_dues_charges(p) == 0
     assert Charge.objects.count() == 0
 
 
 def test_sync_dues_charges_skips_non_obligated_roles():
-    year = timezone.now().date().year - 1
+    year = timezone.localdate().year - 1
     p = _dues_period(year)
     _member("m@x.test", "member")  # not in DUES_OBLIGATED_ROLES
     assert charges.sync_dues_charges(p) == 0

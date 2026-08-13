@@ -23,7 +23,7 @@ class Command(BaseCommand):
     )
 
     def handle(self, *args, **options):
-        today = timezone.now().date()
+        today = timezone.localdate()
         if today.month >= 9:
             current_start = today.year
         else:

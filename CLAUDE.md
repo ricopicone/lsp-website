@@ -1302,6 +1302,47 @@ Done (see `git log` for specifics):
   and the notes, never `title`, so a lowercase-italic *or* isn't expressible —
   the comma is the answer.
 
+- **The date the school is in, not the one UTC is in** (task #571). Found while
+  investigating #568. `timezone.now()` is UTC-aware, so **`.date()` is the UTC
+  date** — while every plain `DateField` here (`end_date`, `due_date`, period
+  boundaries) is a date in the school's own timezone. Django sets the process
+  timezone to `settings.TIME_ZONE`, so `datetime.date.today()` is Pacific **on
+  the CI runner too**, and from 17:00 Pacific until midnight the two disagree by
+  a day. The live symptom was `event_list` filtering
+  `end_date__gte=timezone.now().date()`: **an event ending today dropped off
+  `/events/` seven hours early, every evening** (fixed first, in 039b975, to
+  unblock a deploy). `landing_events` had the same shape, so the landing page's
+  "Coming up" list lost it too.
+  All **56 remaining call sites** are now `timezone.localdate()` — every one of
+  them meant "today" to somebody in the school. The ones that could cost money
+  were `payments/charges.py`, `coverage.py`, `ledger.py` and `emails.py`, where
+  the boundary decides what is **owed, overdue, or covered**:
+  `sync_dues_charges` refuses a future period so next year's members don't show
+  as owing early, and on the UTC date **tomorrow already qualified**. The audit
+  stamps matter for a different reason — `[{date}] …` lines in `staff_notes` are
+  read by the treasurer as *when did this happen*, and after 5pm they said
+  tomorrow. Migrations keep what they were written with: they are historical and
+  already applied, so editing one changes nothing that has run.
+  **Tests were swept too, and not for tidiness:** a test building a date from
+  `timezone.now().date()` and asserting against code that uses `localdate()`
+  disagrees for those same seven hours, which is a flake that looks like a
+  regression in whatever branch is merging. `test_create_accepts_today` proved
+  it — it posts "today" to a view that rejects future dates, and after the sweep
+  it was posting *tomorrow*. It also caught the sweep's own gap: it says
+  `djtz.now().date()`, an aliased import the first pass missed, which is why the
+  guard matches `now().date()` rather than the module name.
+  **The guard is the point of the task**, not the substitution. This class of
+  bug fails CI only on runs started between 00:00 UTC and 17:00 Pacific, so a
+  green run earlier in the day proves nothing and the next instance lands
+  exactly the way this one did — looking like the fault of the branch that
+  happened to be merging. `core/test_local_dates.py` greps the tracked tree
+  (`git grep`, so sibling `.claude-worktrees` checkouts aren't swept) and fails
+  on any reintroduction; it was verified by reintroducing one. Beside it, four
+  behavioural tests freeze the clock at **00:30 UTC = 17:30 Pacific** and pin
+  the boundary directly, plus one test asserting that the frozen instant really
+  does straddle the date line — without it, the other four could pass while
+  proving nothing.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

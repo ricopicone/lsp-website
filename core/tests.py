@@ -219,7 +219,7 @@ def test_landing_page_pins_a_special_event_above_the_seminars(client):
     is a near-invisible grey, so colour alone can't separate the rows in both
     themes. Selection rules live in events/test_upcoming.py; this covers the
     view + template wiring."""
-    today = timezone.now().date()
+    today = timezone.localdate()
     for i in range(4):
         Event.objects.create(
             title=f"Buried Seminar {i}", slug=f"buried-seminar-{i}",

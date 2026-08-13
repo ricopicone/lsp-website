@@ -16,7 +16,7 @@ def current_period(db):
     period = DuesPeriod.current()
     if period is not None:
         return period
-    today = timezone.now().date()
+    today = timezone.localdate()
     return DuesPeriod.objects.create(
         name="Test AY", slug="test-ay",
         start_date=today - timedelta(days=60),

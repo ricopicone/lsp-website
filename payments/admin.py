@@ -91,7 +91,7 @@ class DuesPeriodAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description="Current?")
     def is_current(self, obj):
         from django.utils import timezone
-        today = timezone.now().date()
+        today = timezone.localdate()
         return obj.start_date <= today <= obj.end_date
 
 
@@ -116,7 +116,7 @@ class TuitionPeriodAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description="Current?")
     def is_current(self, obj):
         from django.utils import timezone
-        today = timezone.now().date()
+        today = timezone.localdate()
         return obj.start_date <= today <= obj.end_date
 
 

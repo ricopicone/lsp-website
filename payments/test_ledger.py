@@ -244,7 +244,7 @@ def test_dues_bucket_totals_and_rows(member):
 
 def test_dues_bucket_on_accounts_overview(member):
     """The batched roster carries the same dues bucket figures."""
-    today = timezone.now().date()
+    today = timezone.localdate()
     p = _dues_period(today.year if today.month >= 9 else today.year - 1)
     _charge(member, Charge.Category.DUES, "100", p.start_date, dues_period=p)
     _pay(member, Payment.Type.TUITION, "5000", WHEN)
@@ -420,7 +420,7 @@ def test_conflict_flag_credit_plus_skipping_year(member):
 def test_dues_state_for_current_period(member):
     # Build a dues period covering *today* — dues_state keys off
     # DuesPeriod.current(), which is date-sensitive.
-    today = timezone.now().date()
+    today = timezone.localdate()
     start = today.year if today.month >= 9 else today.year - 1
     p = _dues_period(start)
     c = _charge(member, Charge.Category.DUES, "100", p.start_date, dues_period=p)
@@ -441,7 +441,7 @@ def test_zero_amount_open_charge_reads_paid(member):
 
 def test_accounts_overview_rows_and_ordering(member):
     other = User.objects.create_user(email="lg2@x.test", password="x")
-    today = timezone.now().date()
+    today = timezone.localdate()
     start = today.year if today.month >= 9 else today.year - 1
     p = _dues_period(start)
     _charge(member, Charge.Category.DUES, "100", p.start_date, dues_period=p)
@@ -462,7 +462,7 @@ def test_accounts_overview_excludes_personas(member):
     persona = User.objects.create_user(email="persona-lg@x.test", password="x")
     persona.profile.is_persona = True
     persona.profile.save()
-    today = timezone.now().date()
+    today = timezone.localdate()
     start = today.year if today.month >= 9 else today.year - 1
     p = _dues_period(start)
     _charge(persona, Charge.Category.DUES, "100", p.start_date, dues_period=p)

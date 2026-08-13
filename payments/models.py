@@ -75,7 +75,7 @@ class DuesPeriod(models.Model):
     @classmethod
     def current(cls, on_date=None):
         """Return the DuesPeriod containing ``on_date`` (default today), or None."""
-        on = on_date or timezone.now().date()
+        on = on_date or timezone.localdate()
         return cls.objects.filter(start_date__lte=on, end_date__gte=on).first()
 
     def amount_for_role(self, role: str):
@@ -271,7 +271,7 @@ class Payment(models.Model):
 
     def add_note(self, text: str, *, save=True) -> None:
         """Append a dated line to the staff notes (mirrors ``Charge.add_note``)."""
-        line = f"[{timezone.now().date()}] {text}"
+        line = f"[{timezone.localdate()}] {text}"
         self.notes = (self.notes + "\n" + line) if self.notes else line
         if save:
             self.save(update_fields=("notes",))
@@ -419,7 +419,7 @@ class TuitionPeriod(models.Model):
     @classmethod
     def current(cls, on_date=None):
         """Return the TuitionPeriod containing ``on_date`` (default today), or None."""
-        on = on_date or timezone.now().date()
+        on = on_date or timezone.localdate()
         return cls.objects.filter(start_date__lte=on, end_date__gte=on).first()
 
     @classmethod
@@ -427,7 +427,7 @@ class TuitionPeriod(models.Model):
         """Return the earliest period whose start_date is after ``on_date``
         (default today), or None. Distinct from ``current()`` — a period
         already underway is not "upcoming"."""
-        on = on_date or timezone.now().date()
+        on = on_date or timezone.localdate()
         return cls.objects.filter(start_date__gt=on).order_by("start_date").first()
 
     def clean(self):
@@ -794,7 +794,7 @@ class Charge(models.Model):
 
     def add_note(self, text: str, *, save=True) -> None:
         """Append a dated line to the audit trail."""
-        line = f"[{timezone.now().date()}] {text}"
+        line = f"[{timezone.localdate()}] {text}"
         self.notes = (self.notes + "\n" + line) if self.notes else line
         if save:
             self.save(update_fields=("notes",))

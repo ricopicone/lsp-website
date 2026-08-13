@@ -69,7 +69,7 @@ class Command(BaseCommand):
             self.stdout.write("No current TuitionPeriod; nothing to do.")
             return
 
-        today = timezone.now().date()
+        today = timezone.localdate()
         if today < period.decision_due_date:
             self.stdout.write(
                 f"Period {period.name} decision-due is "

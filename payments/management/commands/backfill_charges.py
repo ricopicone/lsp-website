@@ -58,7 +58,7 @@ class Command(BaseCommand):
         self.stdout.write(msg)
 
     def _dues(self, dues_from: date):
-        today = timezone.now().date()
+        today = timezone.localdate()
         current = DuesPeriod.current()
         periods = DuesPeriod.objects.filter(
             start_date__gte=dues_from, start_date__lte=today,
@@ -142,7 +142,7 @@ class Command(BaseCommand):
     def _pre_ledger_dues_settlement(self, dues_from: date):
         """Old dues money (periods before the backfill window) would read as
         phantom credit in the fungible pot — mint matching settled charges."""
-        today = timezone.now().date()
+        today = timezone.localdate()
         rows = (
             Payment.objects.filter(
                 payment_type=Payment.Type.DUES,

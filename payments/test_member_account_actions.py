@@ -86,8 +86,8 @@ def test_add_dues_charge_binds_period_no_sync_double_mint(client, treasurer, mem
     from django.utils import timezone
 
     from payments import charges as charges_mod
-    y = timezone.now().date().year
-    start = y if timezone.now().date().month >= 9 else y - 1
+    y = timezone.localdate().year
+    start = y if timezone.localdate().month >= 9 else y - 1
     period = DuesPeriod.objects.create(
         name=f"AY {start}-{start + 1}", slug=f"ay-{start}-{start + 1}",
         start_date=date(start, 9, 1), due_date=date(start, 9, 30),
@@ -111,8 +111,8 @@ def test_add_dues_charge_binds_period_no_sync_double_mint(client, treasurer, mem
 def test_add_dues_charge_defaults_to_current_period(client, treasurer, member):
     """No explicit period posted -> falls back to the current DuesPeriod."""
     from django.utils import timezone
-    y = timezone.now().date().year
-    start = y if timezone.now().date().month >= 9 else y - 1
+    y = timezone.localdate().year
+    start = y if timezone.localdate().month >= 9 else y - 1
     period = DuesPeriod.objects.create(
         name=f"AY {start}-{start + 1}", slug=f"ay-{start}-{start + 1}",
         start_date=date(start, 9, 1), due_date=date(start, 9, 30),
@@ -130,8 +130,8 @@ def test_add_dues_charge_defaults_to_current_period(client, treasurer, member):
 def test_add_dues_charge_duplicate_period_rejected(client, treasurer, member):
     from django.contrib.messages import get_messages
     from django.utils import timezone
-    y = timezone.now().date().year
-    start = y if timezone.now().date().month >= 9 else y - 1
+    y = timezone.localdate().year
+    start = y if timezone.localdate().month >= 9 else y - 1
     period = DuesPeriod.objects.create(
         name=f"AY {start}-{start + 1}", slug=f"ay-{start}-{start + 1}",
         start_date=date(start, 9, 1), due_date=date(start, 9, 30),
@@ -155,8 +155,8 @@ def test_add_dues_charge_shows_in_dues_state(client, treasurer, member):
     from django.utils import timezone
 
     from payments import ledger
-    y = timezone.now().date().year
-    start = y if timezone.now().date().month >= 9 else y - 1
+    y = timezone.localdate().year
+    start = y if timezone.localdate().month >= 9 else y - 1
     period = DuesPeriod.objects.create(
         name=f"AY {start}-{start + 1}", slug=f"ay-{start}-{start + 1}",
         start_date=date(start, 9, 1), due_date=date(start, 9, 30),
@@ -233,8 +233,8 @@ def test_charge_update_rejects_adjust_on_waived(client, treasurer, member):
 
 def test_record_offline_dues_payment(client, treasurer, member):
     from django.utils import timezone
-    y = timezone.now().date().year
-    start = y if timezone.now().date().month >= 9 else y - 1
+    y = timezone.localdate().year
+    start = y if timezone.localdate().month >= 9 else y - 1
     DuesPeriod.objects.create(
         name=f"AY {start}-{start + 1}", slug=f"ay-{start}-{start + 1}",
         start_date=date(start, 9, 1), due_date=date(start, 9, 30),
@@ -257,8 +257,8 @@ def test_record_offline_tuition_payment_flips_enrollment(client, treasurer, memb
     from django.utils import timezone
 
     from payments.models import TuitionEnrollment
-    y = timezone.now().date().year
-    start = y if timezone.now().date().month >= 9 else y - 1
+    y = timezone.localdate().year
+    start = y if timezone.localdate().month >= 9 else y - 1
     TuitionPeriod.objects.create(
         name=f"AY {start}-{start + 1} T", slug=f"t-{start}",
         start_date=date(start, 9, 1), end_date=date(start + 1, 8, 31),
@@ -279,8 +279,8 @@ def test_record_offline_partial_tuition_payment_does_not_flip_enrollment(
     from django.utils import timezone
 
     from payments.models import Payment, TuitionEnrollment, TuitionInstallment
-    y = timezone.now().date().year
-    start = y if timezone.now().date().month >= 9 else y - 1
+    y = timezone.localdate().year
+    start = y if timezone.localdate().month >= 9 else y - 1
     TuitionPeriod.objects.create(
         name=f"AY {start}-{start + 1} T", slug=f"t-{start}",
         start_date=date(start, 9, 1), end_date=date(start + 1, 8, 31),
@@ -306,8 +306,8 @@ def test_record_offline_partial_tuition_payment_preserves_skipping_status(
     from django.utils import timezone
 
     from payments.models import TuitionEnrollment
-    y = timezone.now().date().year
-    start = y if timezone.now().date().month >= 9 else y - 1
+    y = timezone.localdate().year
+    start = y if timezone.localdate().month >= 9 else y - 1
     period = TuitionPeriod.objects.create(
         name=f"AY {start}-{start + 1} T", slug=f"t-{start}",
         start_date=date(start, 9, 1), end_date=date(start + 1, 8, 31),
@@ -328,8 +328,8 @@ def test_record_tuition_payment_over_skipping_appends_audit_note(
     from django.utils import timezone
 
     from payments.models import TuitionEnrollment
-    y = timezone.now().date().year
-    start = y if timezone.now().date().month >= 9 else y - 1
+    y = timezone.localdate().year
+    start = y if timezone.localdate().month >= 9 else y - 1
     period = TuitionPeriod.objects.create(
         name=f"AY {start}-{start + 1} T", slug=f"t-{start}",
         start_date=date(start, 9, 1), end_date=date(start + 1, 8, 31),
@@ -409,7 +409,7 @@ def test_decision_exempt_members_need_no_new_year_decision(client, treasurer, me
 
     from payments import ledger
     from payments.models import TuitionEnrollment, TuitionPeriod
-    today = djtz.now().date()
+    today = djtz.localdate()
     start = today.year if today.month >= 9 else today.year - 1
     # current period exists but the member has NO decision for it
     TuitionPeriod.objects.create(
@@ -444,7 +444,7 @@ def test_decision_exempt_via_paid_charges_no_enrollments_needs_no_new_year_decis
 
     from payments import ledger
     from payments.models import TuitionPeriod
-    today = djtz.now().date()
+    today = djtz.localdate()
     start = today.year if today.month >= 9 else today.year - 1
     # current period exists but the member has NO decision for it
     TuitionPeriod.objects.create(
