@@ -135,8 +135,9 @@ def test_create_rejects_negative_amount(client, member):
 
 def test_create_rejects_future_date(client, member):
     from django.utils import timezone as djtz
-    # Match the view's clock (timezone.localdate()) — date.today() is the
-    # local calendar day and disagrees around UTC midnight (flake).
+    # Match the view's clock (timezone.localdate()). Both are the local
+    # calendar day now; before #571 the view read the UTC date, so this
+    # disagreed with date.today() for seven hours each evening.
     tomorrow = (djtz.localdate() + timedelta(days=1)).isoformat()
     resp = client.post(
         reverse("my_ledger_submission_create"),
