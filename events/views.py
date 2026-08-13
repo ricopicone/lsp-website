@@ -169,7 +169,11 @@ def event_list(request):
     Members-only events are hidden from non-members — anonymous visitors and
     authenticated outside registrants (auditors) alike.
     """
-    today = timezone.now().date()
+    # localdate(), not timezone.now().date(): the latter is the *UTC* date, so
+    # from 17:00 Pacific an event whose end_date is today read as already over
+    # and dropped off this page seven hours early. ``end_date`` is a plain date
+    # in the school's own timezone, so it has to be compared against one.
+    today = timezone.localdate()
     events = (
         Event.objects.filter(Event.public_now_q(), end_date__gte=today)
         .exclude(event_type__in=Event.ANNUAL_PROGRAM_TYPES)
