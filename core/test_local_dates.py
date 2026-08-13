@@ -139,6 +139,7 @@ def test_no_production_or_test_code_uses_the_utc_date():
         and not line.split(":")[0].endswith(Path(__file__).name)
     ]
     assert not offenders, (
-        "Use timezone.localdate() — timezone.now().date() is the UTC date:\n"
-        + "\n".join(offenders)
+        "Use timezone.localdate() — the date off timezone.now() is UTC.\n"
+        "This matches prose as well as code, so spell it out in words rather "
+        "than weakening the pattern:\n" + "\n".join(offenders)
     )
