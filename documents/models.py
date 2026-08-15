@@ -206,7 +206,7 @@ class Document(models.Model):
 
     # ---- Revisions ----
 
-    def snapshot_revision(self, user=None, note: str = "") -> "DocumentRevision":
+    def snapshot_revision(self, user=None, note: str = "") -> DocumentRevision:
         """Record the state this document is in *now*, before it changes.
 
         Reads the row back from the database rather than trusting ``self``: a

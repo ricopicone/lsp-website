@@ -131,3 +131,52 @@ def test_restore_refuses_a_revision_from_another_document():
     rev = b.snapshot_revision()
     with pytest.raises(ValueError):
         restore_revision(a, rev)
+
+
+# ---- Django admin -------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_admin_save_writes_a_revision(rf):
+    """A PDF swapped in Django admin must land in the history too — a partial
+    history is worse than none, because it is trusted."""
+    from django.contrib.admin.sites import AdminSite
+
+    from documents.admin import DocumentAdmin
+
+    d = _doc(title="Before admin")
+    admin_user = User.objects.create_superuser(email="a@x.test", password="x")
+    request = rf.post("/admin/")
+    request.user = admin_user
+
+    instance = Document.objects.get(pk=d.pk)
+    instance.title = "After admin"
+    DocumentAdmin(Document, AdminSite()).save_model(
+        request, instance, form=None, change=True,
+    )
+
+    instance.refresh_from_db()
+    assert instance.title == "After admin"
+    rev = instance.revisions.get()
+    assert rev.title == "Before admin"
+    assert rev.saved_by_id == admin_user.pk
+
+
+@pytest.mark.django_db
+def test_admin_create_writes_no_revision(rf):
+    from django.contrib.admin.sites import AdminSite
+
+    from documents.admin import DocumentAdmin
+
+    admin_user = User.objects.create_superuser(email="a2@x.test", password="x")
+    request = rf.post("/admin/")
+    request.user = admin_user
+
+    fresh = Document(
+        title="New", slug="new-doc", category=Document.Category.REFERENCE,
+        body="text",
+    )
+    DocumentAdmin(Document, AdminSite()).save_model(
+        request, fresh, form=None, change=False,
+    )
+    assert fresh.revisions.count() == 0

@@ -46,6 +46,19 @@ class DocumentAdmin(admin.ModelAdmin):
     def is_current_display(self, obj: Document) -> bool:
         return obj.is_current
 
+    def save_model(self, request, obj, form, change):
+        """Record the prior state before an admin edit (task #592).
+
+        Deliberately unlike the staff-path rule of #485/#564: that rule stops
+        admin edits from mailing members or moving money, and a snapshot does
+        neither. What it prevents is a history reading "no revisions" while the
+        PDF has in fact been swapped. ``save_model`` is also the one admin hook
+        that knows who is acting.
+        """
+        if change:
+            obj.snapshot_revision(user=request.user, note="Edited in Django admin")
+        super().save_model(request, obj, form, change)
+
 
 @admin.register(DocumentAuthor)
 class DocumentAuthorAdmin(admin.ModelAdmin):
