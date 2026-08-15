@@ -9,5 +9,6 @@
   {% url 'staff_aphorisms' as aphorisms_url %}
   {% include "core/staff/admin/_section.html" with title="Aphorisms" body="The Lacanian aphorisms that rotate in the site footer." link_label="Manage aphorisms" link=aphorisms_url count=active_aphorisms count_label="active" %}
   {% include "core/staff/admin/_section.html" with title="Landing & about content" status="Planned" body="Edit the public landing copy and About pages." %}
-  {% include "core/staff/admin/_section.html" with title="Site documents" status="Planned" body="Manage shared documents and downloads surfaced across the site." %}
+  {% url 'documents_admin:index' as documents_url %}
+  {% include "core/staff/admin/_section.html" with title="Site documents" body="Replace a document's PDF or edit how it presents. Every save keeps the previous version." link_label="Manage documents" link=documents_url count=document_count count_label="documents" %}
 {% endblock %}

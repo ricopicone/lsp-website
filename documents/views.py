@@ -16,6 +16,7 @@ from django.shortcuts import get_object_or_404, render
 from core.access import gate_or_login
 
 from .models import Document, DocumentAuthor
+from .permissions import can_manage_documents
 
 
 def _with_authors(qs):
@@ -70,6 +71,7 @@ def detail(request, slug):
             "doc": doc,
             "older_versions": older,
             "content_visible": doc.content_visible_to(request.user),
+            "can_manage": can_manage_documents(request.user),
         },
     )
 

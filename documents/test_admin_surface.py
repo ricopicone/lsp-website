@@ -228,3 +228,39 @@ def test_revision_download_serves_the_old_pdf(client):
     )
     assert resp.status_code == 200
     assert b"%PDF" in b"".join(resp.streaming_content)
+
+
+# ---- The public deep link and the Web Coordinator card ------------------
+
+
+@pytest.mark.django_db
+def test_detail_shows_no_edit_link_to_a_member(client):
+    d = _doc()
+    client.force_login(_user())
+    body = client.get(d.get_absolute_url()).content
+    assert b"Edit document" not in body
+
+
+@pytest.mark.django_db
+def test_detail_shows_no_edit_link_to_anonymous(client):
+    d = _doc()
+    body = client.get(d.get_absolute_url()).content
+    assert b"Edit document" not in body
+
+
+@pytest.mark.django_db
+def test_detail_shows_the_edit_link_to_the_coordinator(client):
+    d = _doc()
+    client.force_login(_coordinator())
+    body = client.get(d.get_absolute_url()).content
+    assert b"Edit document" in body
+    assert reverse("documents_admin:edit", args=[d.slug]).encode() in body
+
+
+@pytest.mark.django_db
+def test_web_coordinator_card_links_to_the_document_list(client):
+    _doc()
+    client.force_login(_coordinator())
+    body = client.get(reverse("web_coordinator_admin")).content
+    assert reverse("documents_admin:index").encode() in body
+    assert b"Site documents" in body
