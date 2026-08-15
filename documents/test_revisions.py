@@ -76,3 +76,58 @@ def test_revision_file_points_at_the_same_object():
     rev = d.snapshot_revision()
     assert rev.file.name == d.file.name
     assert DocumentRevision.objects.count() == 1
+
+
+# ---- Restore ------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_restore_puts_prior_values_back():
+    from documents.services import restore_revision
+    d = _doc(title="Original", summary="Original summary")
+    rev = d.snapshot_revision()
+    d.title = "Replaced"
+    d.summary = "Replaced summary"
+    d.save()
+    restore_revision(d, rev)
+    d.refresh_from_db()
+    assert d.title == "Original"
+    assert d.summary == "Original summary"
+
+
+@pytest.mark.django_db
+def test_restore_puts_the_prior_file_back():
+    from documents.services import restore_revision
+    d = _doc()
+    original_name = d.file.name
+    rev = d.snapshot_revision()
+    d.file = SimpleUploadedFile("new.pdf", b"%PDF-1.4\nnew\n",
+                                content_type="application/pdf")
+    d.save()
+    assert d.file.name != original_name
+    restore_revision(d, rev)
+    d.refresh_from_db()
+    assert d.file.name == original_name
+
+
+@pytest.mark.django_db
+def test_restore_is_forward_only():
+    """Restoring is itself an edit: the pre-restore state becomes a revision."""
+    from documents.services import restore_revision
+    d = _doc(title="Original")
+    rev = d.snapshot_revision()
+    d.title = "Replaced"
+    d.save()
+    restore_revision(d, rev)
+    assert d.revisions.count() == 2
+    assert d.revisions.first().title == "Replaced"
+
+
+@pytest.mark.django_db
+def test_restore_refuses_a_revision_from_another_document():
+    from documents.services import restore_revision
+    a = _doc(slug="doc-a")
+    b = _doc(slug="doc-b", title="B")
+    rev = b.snapshot_revision()
+    with pytest.raises(ValueError):
+        restore_revision(a, rev)
