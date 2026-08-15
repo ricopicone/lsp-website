@@ -74,3 +74,48 @@ def test_can_manage_rejects_web_developer():
         key=StaffRole.WEB_DEVELOPER, defaults={"name": "Web Developer"},
     )[0].holders.add(u)
     assert can_manage_documents(u) is False
+
+
+# ---- The form -----------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_form_display_order_is_optional():
+    """A model field with a default but no blank=True lands on a ModelForm as
+    REQUIRED unless told otherwise (new-modelform-field-is-required-by-default)."""
+    from documents.forms import DocumentEditForm
+    d = _doc()
+    form = DocumentEditForm(
+        {"title": "T", "listing_visibility": "public",
+         "content_visibility": "public", "body": "text"},
+        instance=d,
+    )
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["display_order"] == 0
+
+
+@pytest.mark.django_db
+def test_form_rejects_public_contents_under_members_listing():
+    from documents.forms import DocumentEditForm
+    d = _doc()
+    form = DocumentEditForm(
+        {"title": "T", "listing_visibility": "members",
+         "content_visibility": "public", "display_order": 0},
+        instance=d,
+    )
+    assert not form.is_valid()
+    assert "content_visibility" in form.errors
+
+
+@pytest.mark.django_db
+def test_form_keeps_the_existing_file_when_none_uploaded():
+    from documents.forms import DocumentEditForm
+    d = _doc()
+    original = d.file.name
+    form = DocumentEditForm(
+        {"title": "Renamed", "listing_visibility": "public",
+         "content_visibility": "public", "display_order": 0},
+        instance=d,
+    )
+    assert form.is_valid(), form.errors
+    assert form.save().file.name == original
