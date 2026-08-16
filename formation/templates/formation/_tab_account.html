@@ -173,6 +173,9 @@ payments/treasurer/member_detail.html for the full picture with actions).
         {% endif %}
 
         {% if not decision_exempt %}
+        {# Anchored per year: the blocked-registration page names a year, so its link must land on that year's form (task #599). #}
+        <div id="decision-{{ tuition_period.slug }}" class="scroll-mt-24 space-y-4">
+        <h3 class="font-serif text-lg text-base-content">Your {{ tuition_period.name }} tuition decision</h3>
         {% if tuition_enrollment.status == "plan_requested" %}
         <div class="rounded-lg border border-base-300 bg-base-200/40 px-5 py-4 text-sm">
           Your payment plan application is with the Board. In the meantime your tuition covers seminar fees, just as it does for anyone paying tuition this year.
@@ -182,6 +185,9 @@ payments/treasurer/member_detail.html for the full picture with actions).
           {% csrf_token %}
           <fieldset class="space-y-2">
             <legend class="font-serif text-lg text-base-content mb-2">{{ tuition_form.status.label }}</legend>
+            <p class="text-xs text-base-content/60 mb-2">
+              {{ tuition_period.name }} ends {{ tuition_period.end_date|date:"F j, Y" }}.
+            </p>
             {% for radio in tuition_form.status %}
             <label class="flex items-start gap-3 cursor-pointer">
               {{ radio.tag }}
@@ -199,12 +205,13 @@ payments/treasurer/member_detail.html for the full picture with actions).
           <button type="submit" class="btn btn-primary">Record decision</button>
         </form>
         {% endif %}
+        </div>
         {% endif %}
         {% endif %}
 
         {% if owes_tuition and upcoming_period and not decision_exempt %}
         {# Next academic year's decision (task #450 phase A) — recorded ahead of time, mirroring the current-period block above. #}
-        <div class="rounded-lg border border-base-300 bg-base-200/30 p-5 space-y-4">
+        <div id="decision-{{ upcoming_period.slug }}" class="scroll-mt-24 rounded-lg border border-base-300 bg-base-200/30 p-5 space-y-4">
           <h3 class="font-serif text-lg text-base-content">Your {{ upcoming_period.name }} tuition decision</h3>
 
           {% if upcoming_enrollment %}

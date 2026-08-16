@@ -166,9 +166,14 @@ def register_for_event(request, event_slug: str):
     # Tuition gate (M7.5) — block special-event registration for in-training
     # students who haven't recorded a tuition decision or are skipping the year.
     if (block_reason := _tuition_block_reason(request.user, event)) is not None:
+        from payments.ledger import period_for_event
         return render(
             request, "registrations/blocked_tuition.html",
-            {"event": event, "reason": block_reason},
+            # The reason names an academic year; the period sends the link to
+            # that year's decision form rather than to the top of a page
+            # holding two of them (task #599).
+            {"event": event, "reason": block_reason,
+             "period": period_for_event(event)},
             status=403,
         )
 

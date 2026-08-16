@@ -405,7 +405,8 @@ def _formation_money_context(request) -> dict:
              if enrollment and r["enrollment"].pk == enrollment.pk), None),
         "tuition_installments": installments,
         "tuition_form": TuitionDecisionForm(
-            initial={"status": enrollment.status} if enrollment else {}
+            initial={"status": enrollment.status} if enrollment else {},
+            period=period,
         ),
         # pending Board payment-plan application, current period
         # (task #450 phase B)
@@ -419,6 +420,7 @@ def _formation_money_context(request) -> dict:
             initial={"status": upcoming_enrollment.status}
             if upcoming_enrollment else {},
             auto_id="id_upcoming_%s",
+            period=upcoming_period,
         ),
         # pending Board payment-plan application, upcoming period
         # (task #450 phase B)
