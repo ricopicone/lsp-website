@@ -1,0 +1,77 @@
+{% extends "core/staff/admin/_base.html" %}
+{% block admin_heading_title %}{{ doc.title }}{% endblock %}
+{% block admin_kicker %}Staff · Web Coordinator · Site documents{% endblock %}
+{% block admin_heading %}{{ doc.title }}{% endblock %}
+{% block admin_intro %}<a href="{% url 'documents_admin:index' %}" class="link">← All documents</a> &middot; <a href="{{ doc.get_absolute_url }}" class="link">View the public page</a>{% endblock %}
+{% block admin_after_header %}
+
+<div class="space-y-6 max-w-3xl">
+
+  <section class="rounded-xl border border-base-300 p-5 space-y-4">
+    <h2 class="font-serif text-lg text-base-content">Edit</h2>
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
+      {% csrf_token %}
+      {% for field in form %}
+      <div class="space-y-1">
+        <label class="block text-sm text-base-content/80" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}
+        <p class="text-xs text-base-content/55">{{ field.help_text }}</p>
+        {% endif %}
+        {% for error in field.errors %}
+        <p class="text-xs text-error">{{ error }}</p>
+        {% endfor %}
+      </div>
+      {% endfor %}
+      {% for error in form.non_field_errors %}
+      <p class="text-sm text-error">{{ error }}</p>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary">Save changes</button>
+    </form>
+  </section>
+
+  <section class="rounded-xl border border-base-300 p-5 space-y-3">
+    <h2 class="font-serif text-lg text-base-content">Revision history</h2>
+    {% if not rows %}
+    <p class="text-sm text-base-content/60">
+      No revisions yet. The next save will record the version in force now.
+    </p>
+    {% endif %}
+    {% for row in rows %}
+    <div class="border-t border-base-300/60 pt-3 space-y-2">
+      <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+        <span class="text-base-content">{{ row.revision.saved_at|date:"M j, Y, g:i a" }}</span>
+        <span class="text-base-content/60">
+          {% if row.revision.saved_by %}{{ row.revision.saved_by.get_full_name|default:row.revision.saved_by.email }}{% else %}Unknown{% endif %}
+        </span>
+        {% if row.revision.note %}
+        <span class="text-base-content/70">{{ row.revision.note }}</span>
+        {% endif %}
+      </div>
+      {% if row.changes %}
+      <ul class="text-xs text-base-content/65 space-y-1">
+        {% for c in row.changes %}
+        <li>
+          <span class="text-base-content/80">{{ c.label }}</span>:
+          {{ c.old|default:"—"|truncatechars:60 }} → {{ c.new|default:"—"|truncatechars:60 }}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <div class="flex flex-wrap items-center gap-3">
+        {% if row.revision.file %}
+        <a class="link text-xs" href="{% url 'documents_admin:revision_download' doc.slug row.revision.pk %}">
+          Download this version's PDF
+        </a>
+        {% endif %}
+        <form method="post" action="{% url 'documents_admin:restore' doc.slug row.revision.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-ghost btn-xs">Restore this version</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+</div>
+{% endblock %}

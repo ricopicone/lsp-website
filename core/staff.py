@@ -655,9 +655,12 @@ def admin_assistant_admin(request):
 @staff_role_required(StaffRole.WEB_COORDINATOR)
 def web_coordinator_admin(request):
     """Web Coordinator admin landing — site content tools (aphorisms + more)."""
+    from documents.models import Document
+
     return render(request, "core/staff/admin/web_coordinator.html", {
         "active_aphorisms": Aphorism.objects.filter(is_active=True).count(),
         "total_aphorisms": Aphorism.objects.count(),
+        "document_count": Document.objects.count(),
     })
 
 

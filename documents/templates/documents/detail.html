@@ -8,6 +8,12 @@
        class="text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">
       ← Documents
     </a>
+    {% if can_manage %}
+    <a href="{% url 'documents_admin:edit' doc.slug %}"
+       class="ml-4 text-base-content/60 hover:text-primary border-b border-dotted border-base-content/40">
+      Edit document
+    </a>
+    {% endif %}
   </nav>
 
   <header class="space-y-2">

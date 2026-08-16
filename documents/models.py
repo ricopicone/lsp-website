@@ -204,6 +204,24 @@ class Document(models.Model):
     def get_absolute_url(self) -> str:
         return reverse("documents:detail", args=[self.slug])
 
+    # ---- Revisions ----
+
+    def snapshot_revision(self, user=None, note: str = "") -> DocumentRevision:
+        """Record the state this document is in *now*, before it changes.
+
+        Reads the row back from the database rather than trusting ``self``: a
+        ``ModelForm`` mutates its instance in place during validation, which is
+        what made ``changed_reviewable_fields()`` silently wrong in #532.
+        Re-reading means no caller has to remember to snapshot before binding.
+        """
+        current = Document.objects.get(pk=self.pk)
+        rev = DocumentRevision(document=current, saved_by=user, note=note)
+        for name in SNAPSHOT_FIELDS:
+            setattr(rev, name, getattr(current, name))
+        rev.file = current.file.name or ""
+        rev.save()
+        return rev
+
     # ---- Visibility helpers ----
 
     def listing_visible_to(self, user) -> bool:
@@ -265,3 +283,77 @@ class DocumentAuthor(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} on {self.document}"
+
+
+#: The fields a revision snapshots — exactly the set the management form
+#: edits, so a restore can write every one of them back.
+SNAPSHOT_FIELDS = (
+    "title", "summary", "description", "notice", "body", "effective_date",
+    "listing_visibility", "content_visibility", "display_order",
+)
+
+
+class DocumentRevision(models.Model):
+    """A document's state *before* one save (task #592).
+
+    Each row reads "the document used to be this"; the current state always
+    lives on the ``Document``. That ordering means the first edit of an
+    already-seeded document captures its original for free, with no synthetic
+    baseline row.
+
+    ``file`` holds the storage key the document carried at the time. Django has
+    not deleted a replaced ``FileField`` target since 1.3, so the old object is
+    still in the bucket and two rows can point at one immutable file. Nothing
+    here copies or deletes it.
+    """
+
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, related_name="revisions",
+    )
+    title = models.CharField(max_length=200)
+    summary = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True)
+    notice = models.CharField(max_length=500, blank=True)
+    body = models.TextField(blank=True)
+    file = models.FileField(
+        upload_to="documents/%Y/", storage=private_storage, blank=True,
+    )
+    effective_date = models.DateField(null=True, blank=True)
+    listing_visibility = models.CharField(max_length=16, blank=True)
+    content_visibility = models.CharField(max_length=16, blank=True)
+    display_order = models.IntegerField(default=0)
+    saved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="document_revisions",
+    )
+    saved_at = models.DateTimeField(auto_now_add=True)
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ("-saved_at", "-pk")
+
+    def __str__(self) -> str:
+        return f"{self.title} @ {self.saved_at:%Y-%m-%d %H:%M}"
+
+    def changes_against(self, other) -> list[dict]:
+        """What changed between this snapshot and ``other`` — the state that
+        came after it (the next revision, or the live Document for the newest
+        one)."""
+        out = []
+        for name in SNAPSHOT_FIELDS:
+            old, new = getattr(self, name), getattr(other, name)
+            if old != new:
+                out.append({
+                    "field": name,
+                    "label": Document._meta.get_field(name).verbose_name,
+                    "old": old,
+                    "new": new,
+                })
+        old_file = self.file.name or ""
+        new_file = other.file.name or ""
+        if old_file != new_file:
+            out.append({
+                "field": "file", "label": "file",
+                "old": old_file, "new": new_file,
+            })
+        return out

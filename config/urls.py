@@ -142,6 +142,9 @@ urlpatterns = [
     path("", include("video.urls")),
     path("events/", include("events.urls")),
     path("documents/", include("documents.urls")),
+    # The document management surface lives under /admin-tools/, which the
+    # documents/ prefix above can't reach — hence its own module.
+    path("", include("documents.urls_admin")),
     path("works/", include("works.urls")),
     path("parletre/", include("parletre.urls")),
     path("notifications/", include("notifications.urls")),

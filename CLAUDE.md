@@ -1343,6 +1343,64 @@ Done (see `git log` for specifics):
   does straddle the date line — without it, the other four could pass while
   proving nothing.
 
+- **Replacing a document, and remembering what it was** (task #592). The board
+  sent new formation guidelines and there was no way to put them on the site
+  except the Django admin: find the row, upload into `file`, remember to fix
+  `effective_date` by hand. Two costs. **The prior file became unreachable** —
+  Django has not deleted a replaced `FileField` target since 1.3, so the old
+  PDF was still in the private bucket under its old key, but nothing pointed at
+  it, nothing recorded that a swap happened, and nothing said who did it. The
+  scholar guidelines had carried `effective_date=2023-01-09` since seeding.
+  And **documents were the one piece of editable site content with no home
+  under `/admin-tools/`** — the Web Coordinator admin had been rendering a
+  *Planned* card reading "Site documents" since it was built
+  (`web_coordinator.html:12`); this fills that slot. Not `superseded_by`,
+  which links two *different* `Document` rows, is public, and across 23
+  production documents **has never once been used**: it answers "a different
+  document replaced this one", not "this document's contents changed".
+  The surface is **role-based, not object-based** — a first cut put the editor
+  and the history on the public document page, which is the ergonomics the ask
+  described but the wrong shelf (Rico, 2026-08-15): every admin area here is
+  organised by the role that owns the work. So management lives at
+  `/admin-tools/web-coordinator/documents/`, and the public detail page keeps
+  exactly **one gated deep link**. That relocation is also what makes the
+  invisibility requirement *structural*: the history renders on an admin
+  template a non-holder cannot reach, rather than behind an `{% if %}` a later
+  edit could get wrong. Gated to `WEB_COORDINATOR` alone — pairing in the Web
+  Developer (the pattern `suggestions/permissions.py` uses) would grant a child
+  page to a role that 403s on its parent hub.
+  **A revision is the state *before* one save**, so each row reads "the
+  document used to be this" and the live state is never duplicated — which is
+  also why the 23 existing documents need no backfill: the first edit captures
+  the original for free. Snapshotting *after* each save would have needed a
+  synthetic baseline row or lost every original. "What changed" is computed,
+  not stored (`changes_against`, pairing each revision with its successor and
+  the newest with the live document). The file is **referenced, never copied**:
+  assigning the storage key points two rows at one immutable object.
+  `Document.snapshot_revision` **re-reads its own row from the database** rather
+  than trusting `self`. That is not defensive habit — a `ModelForm` mutates its
+  instance in place during validation, which is what made
+  `changed_reviewable_fields()` silently wrong in #532 and what #564 had to
+  work around by reading the before-value ahead of binding. Re-reading means no
+  call site has to remember the rule, and a test pins it directly.
+  **The Django admin deliberately *does* fire the snapshot**, departing from the
+  staff-paths rule of #485/#564 — that rule stops admin edits from mailing
+  members or moving money, and a snapshot does neither. What it prevents is a
+  history reading "no revisions" while the PDF has in fact been swapped, and a
+  partial history is worse than none because it is trusted. `save_model` is
+  also the one admin hook that knows who is acting.
+  Restore is **forward-only**: the current state is snapshotted before the old
+  one is written back, so restoring is itself an edit in the history and nothing
+  is destroyed. Two traps handled en route: `display_order` has a default but no
+  `blank=True`, so a `ModelForm` makes it **required**
+  (`new-modelform-field-is-required-by-default`); and `admin_sections` in
+  `core/staff/admin/_base.html` renders inside a two-column grid, so a table and
+  a form belong in `admin_after_header`. Identity fields — slug (the URL, with
+  no redirect), category, owning workgroup, authors, `superseded_by` — stay in
+  Django admin, as does creating a document. Verified in a browser at both
+  pages. Design:
+  `docs/superpowers/specs/2026-08-15-document-replacement-and-revisions-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

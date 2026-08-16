@@ -1,0 +1,41 @@
+{% extends "core/staff/admin/_base.html" %}
+{% block admin_heading_title %}Site documents{% endblock %}
+{% block admin_kicker %}Staff · Web Coordinator{% endblock %}
+{% block admin_heading %}Site documents{% endblock %}
+{% block admin_intro %}Replace a document's PDF or edit how it presents. Every save keeps the previous version, restorable from the document's own page.{% endblock %}
+{% block admin_after_header %}
+<section class="rounded-xl border border-base-300 overflow-x-auto">
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Document</th>
+        <th>Category</th>
+        <th>Effective</th>
+        <th>Visibility</th>
+        <th>Versions</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in documents %}
+      <tr>
+        <td class="font-medium text-base-content">{{ d.title }}</td>
+        <td class="text-base-content/70">{{ d.get_category_display }}</td>
+        <td class="text-base-content/70">
+          {% if d.effective_date %}{{ d.effective_date|date:"M j, Y" }}{% else %}<span class="text-base-content/40">—</span>{% endif %}
+        </td>
+        <td class="text-base-content/70">
+          {{ d.get_listing_visibility_display }} / {{ d.get_content_visibility_display }}
+        </td>
+        <td class="font-mono text-xs text-base-content/50">{{ d.revisions.count }}</td>
+        <td>
+          <a href="{% url 'documents_admin:edit' d.slug %}" class="link link-primary text-sm">Edit →</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="text-base-content/60">No documents yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
