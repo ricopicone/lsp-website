@@ -16,6 +16,8 @@ _PREFIX = "admin-tools/web-coordinator/documents/"
 urlpatterns = [
     path(_PREFIX, views_admin.index, name="index"),
     path(f"{_PREFIX}<slug:slug>/", views_admin.edit, name="edit"),
+    path(f"{_PREFIX}<slug:slug>/download/",
+         views_admin.current_download, name="current_download"),
     path(f"{_PREFIX}<slug:slug>/revisions/<int:pk>/download/",
          views_admin.revision_download, name="revision_download"),
     path(f"{_PREFIX}<slug:slug>/revisions/<int:pk>/restore/",
