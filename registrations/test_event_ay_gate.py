@@ -105,3 +105,22 @@ def test_plan_requested_is_covered(periods, student):
 
     assert _tuition_block_reason(student, event) is None
     assert _find_covered_tier(student, event) is not None
+
+
+@pytest.mark.django_db
+def test_blocked_page_links_to_that_years_decision_form(client, periods, student):
+    """The block names the event's academic year, so its link must land on
+    that year's form. A member joining for the new year met two identical
+    decision forms and filled the wrong one (task #599)."""
+    from django.urls import reverse
+
+    _p25, p26 = periods
+    event = Event.objects.create(
+        title="Fall3", slug="fall3", start_date=date(2026, 9, 15),
+        end_date=date(2027, 6, 1), status=Event.Status.OPEN, published=True,
+    )
+    client.force_login(student)
+    resp = client.get(reverse("registrations:register", args=[event.slug]))
+
+    assert resp.status_code == 403
+    assert f"#decision-{p26.slug}" in resp.content.decode()

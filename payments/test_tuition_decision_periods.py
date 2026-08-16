@@ -212,3 +212,36 @@ def test_setup_plan_for_upcoming_period_binds_to_upcoming_not_current(
     assert installments.count() == 2
     assert sum(i.amount for i in installments) == nxt.tuition_amount
     assert not TuitionInstallment.objects.filter(enrollment__tuition_period=cur).exists()
+
+
+# ---- The form says which year it is deciding (task #599) -------------------
+
+@pytest.mark.django_db
+def test_decision_form_names_its_academic_year():
+    """Two decision forms sit on the Account tab, one per year. Neither may
+    say 'this year': a member joining for the new year recorded a decision
+    and paid $2,500 against the year that was ending (task #599)."""
+    from datetime import date
+
+    from payments.forms import TuitionDecisionForm
+
+    period = TuitionPeriod.objects.create(
+        name="AY 2026–2027", slug="ay-2026-2027-x",
+        start_date=date(2026, 9, 1), decision_due_date=date(2026, 10, 31),
+        end_date=date(2027, 8, 31), tuition_amount=Decimal("2500"),
+    )
+    form = TuitionDecisionForm(period=period)
+
+    assert "AY 2026–2027" in form.fields["status"].label
+    labels = [label for _value, label in form.fields["status"].choices]
+    assert any("AY 2026–2027" in label for label in labels)
+    assert not any("this year" in label for label in labels)
+
+
+@pytest.mark.django_db
+def test_decision_form_without_a_period_still_validates():
+    """The POST path builds the form only to validate — no period, no labels."""
+    from payments.forms import TuitionDecisionForm
+
+    form = TuitionDecisionForm({"status": "skipping"})
+    assert form.is_valid(), form.errors

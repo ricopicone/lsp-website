@@ -8,7 +8,7 @@ equivalent this mirrors, and payments/ledger.py for the account math."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -452,3 +452,34 @@ def test_pending_plan_note_says_coverage_already_applies(client):
     body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
     assert "Your payment plan application is with the Board." in body
     assert "covers seminar fees" in body
+
+
+# ---- 8. Each decision form says which year it is (task #599) ----------------
+
+def test_both_decision_forms_name_their_year_and_anchor(client):
+    """A new member met two decision forms, only one of which named a year,
+    and filed her decision and $2,500 against the year that was ending."""
+    TuitionPeriod.objects.all().delete()
+    cur = TuitionPeriod.objects.create(
+        name="AY 2025–2026", slug="ay-2025-2026-t",
+        start_date=timezone.localdate() - timedelta(days=200),
+        decision_due_date=timezone.localdate() - timedelta(days=180),
+        end_date=timezone.localdate() + timedelta(days=15),
+        tuition_amount=Decimal("2500.00"),
+    )
+    upcoming = TuitionPeriod.objects.create(
+        name="AY 2026–2027", slug="ay-2026-2027-t",
+        start_date=timezone.localdate() + timedelta(days=16),
+        decision_due_date=timezone.localdate() + timedelta(days=76),
+        end_date=timezone.localdate() + timedelta(days=380),
+        tuition_amount=Decimal("2500.00"),
+    )
+    member = _user("twoforms@x.test")
+    client.force_login(member)
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+
+    assert f'id="decision-{cur.slug}"' in body
+    assert f'id="decision-{upcoming.slug}"' in body
+    assert body.count("AY 2025–2026") >= 1
+    assert body.count("AY 2026–2027") >= 1
+    assert "this academic year" not in body

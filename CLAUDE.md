@@ -1401,6 +1401,57 @@ Done (see `git log` for specifics):
   pages. Design:
   `docs/superpowers/specs/2026-08-15-document-replacement-and-revisions-design.md`.
 
+- **A decision form that never named its year** (task #599). A new
+  pre-candidate, admitted 2026-07-27: *"There's an error on the website when
+  trying to register, even though I have paid the tuition, and previously had
+  done the 'record your tuition decision'."* Not an error — the 403
+  `blocked_tuition.html` page, saying *"record your tuition decision for AY
+  2026–2027"*. She had recorded one, and paid $2,500 for it, **against AY
+  2025–2026**: her enrollment, its installment, the minted `Charge` and the
+  Stripe payment all sat on the year that ends 2026-08-31, a year she was
+  never a member of. The registration gate keys off the **event's** academic
+  year (`period_for_event`), so every 2026-27 seminar asked her for a decision
+  she believed she had made, while every 2025-26 event let her through.
+  **The Account tab renders two decision forms**, current and upcoming
+  (task #450 phase A). The upcoming one is headed *"Your AY 2026–2027 tuition
+  decision"* and posts `period=<slug>`; the current one had **no heading at
+  all** — its legend was the form's own field label, `"My decision for this
+  academic year"`, and its three options said *"this year"*
+  (`payments/forms.py:66-77`). In August "this academic year" means the year
+  about to end. It is also the form both prompts point at: `blocked_tuition`
+  linked to a bare `?tab=account`, and the walkthrough checklist anchors
+  `#decision`, which is the section, i.e. the top block. So the site named a
+  year, then sent her to an unlabeled form for a different one.
+  **Why only her.** Every other decision recorded since registration opened
+  (22 rows from 2026-07-23) landed correctly on AY 2026–2027, because those
+  members already had a 2025-26 row — the top block showed them a summary of a
+  decision already made, and they scrolled to the labeled one. A member with
+  no history is the case that meets two empty forms and fills the first.
+  The fix names the year in both places it was missing: `TuitionDecisionForm`
+  takes an optional `period` and rewrites the label and all three choices
+  through `choices_for(period)` (the POST path builds the form only to
+  validate, with no period, and the *values* never change, so validation
+  cannot depend on it); the current block gains the heading and an end-date
+  line the upcoming block's shape already implied. Each block is then
+  **anchored per year** (`#decision-<period.slug>`, the section's `#decision`
+  kept for the checklist), and `register_for_event` passes
+  `period_for_event(event)` to the blocked page so its link lands on the form
+  for the year it just named. Deliberately *not* reordering the blocks or
+  hiding the ending year: a member legitimately still records and pays 2025-26
+  through August.
+  **Her data was repaired on prod first** (enrollment 261 moved to AY
+  2026–2027). Moving it was enough on its own: `payments.signals` fires
+  `sync_tuition_charges` on enrollment save, which minted the AY 2026–2027
+  charge and voided the 2025-26 one by itself — the manual charge edit beside
+  it was redundant and had to be undone. Balance unchanged at −$50 (her dues
+  credit), `tuition_years_covered` still 1, no ledger conflict, and the
+  covered-by-tuition tier now resolves for the 2026-27 program. Left standing:
+  her $50 dues also filed under AY 2025–2026, which is harmless — the dues
+  bucket is category-scoped and oldest-first (#473), so it will cover her
+  2026-27 dues charge when one is minted. Also noted, not fixed:
+  `TuitionEnrollment.source` defaults to `STAFF` and `tuition_decision` never
+  overrides it, so a member's own decision reads as staff-recorded.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

@@ -76,6 +76,27 @@ class TuitionDecisionForm(forms.Form):
         required=True,
         label="My decision for this academic year",
     )
+
+    @staticmethod
+    def choices_for(period) -> list[tuple[str, str]]:
+        """The three choices, each naming ``period``'s academic year.
+
+        Two of these forms render on the Account tab from August onward, one
+        per year. Saying "this year" on both is how a member joining for the
+        new year recorded her decision, and paid, against the year that was
+        ending (task #599).
+        """
+        return [
+            ("committed",    f"I plan to pay tuition for {period.name}."),
+            ("payment_plan", (
+                f"I want to apply to the Board for a payment plan for "
+                f"{period.name}."
+            )),
+            ("skipping",     (
+                f"I'm skipping tuition for {period.name} "
+                "(I'll pay regular fees for any events I attend)."
+            )),
+        ]
     reasons = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={
@@ -87,6 +108,17 @@ class TuitionDecisionForm(forms.Form):
             "Board briefly about your circumstances."
         ),
     )
+
+    def __init__(self, *args, period=None, **kwargs):
+        """``period`` names the academic year in the label and the choices.
+
+        The POST path builds this form only to validate, with no period; the
+        values are unchanged either way, so validation never depends on it.
+        """
+        super().__init__(*args, **kwargs)
+        if period is not None:
+            self.fields["status"].label = f"My decision for {period.name}"
+            self.fields["status"].choices = self.choices_for(period)
 
     def clean(self):
         cleaned = super().clean()
