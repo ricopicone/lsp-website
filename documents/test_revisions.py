@@ -180,3 +180,16 @@ def test_admin_create_writes_no_revision(rf):
         request, fresh, form=None, change=False,
     )
     assert fresh.revisions.count() == 0
+
+
+@pytest.mark.django_db
+def test_restore_note_names_the_period_not_a_save():
+    """A revision's timestamp is when its state was replaced, so the auto-note
+    must not call it the moment the version was saved."""
+    from documents.services import restore_revision
+    d = _doc(title="Original")
+    rev = d.snapshot_revision()
+    d.title = "Replaced"
+    d.save()
+    restore_revision(d, rev)
+    assert "in force until" in d.revisions.first().note

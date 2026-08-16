@@ -20,9 +20,12 @@ def restore_revision(
     if revision.document_id != document.pk:
         raise ValueError("That revision belongs to a different document.")
 
+    # A revision's timestamp is when its state was *replaced*, so the note says
+    # "in force until" — the history page names versions by their period, and
+    # "saved <t>" would read as when that version began.
     when = timezone.localtime(revision.saved_at).strftime("%b %-d, %Y at %H:%M")
     document.snapshot_revision(
-        user=user, note=f"Before restoring the version saved {when}",
+        user=user, note=f"Before restoring the version in force until {when}",
     )
     for name in SNAPSHOT_FIELDS:
         setattr(document, name, getattr(revision, name))

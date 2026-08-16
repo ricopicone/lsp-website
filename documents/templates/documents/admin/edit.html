@@ -30,24 +30,49 @@
     </form>
   </section>
 
-  <section class="rounded-xl border border-base-300 p-5 space-y-3">
+  {% comment %}
+  Each row is a *version* — the state the document held for a period — not an
+  event. The buttons act on that stored state, so leading with the period is
+  what makes "this version" name the thing they act on.
+  {% endcomment %}
+  <section class="rounded-xl border border-base-300 p-5 space-y-4">
     <h2 class="font-serif text-lg text-base-content">Revision history</h2>
+
+    <div class="space-y-1">
+      <p class="text-sm">
+        <span class="text-base-content font-medium">Current version</span>
+        <span class="text-base-content/60">
+          &middot; in force since {{ current_since|date:"M j, Y, g:i a" }}
+        </span>
+      </p>
+      {% if doc.file %}
+      <a class="link text-xs" href="{% url 'documents_admin:current_download' doc.slug %}">
+        Download the current PDF
+      </a>
+      {% endif %}
+    </div>
+
     {% if not rows %}
-    <p class="text-sm text-base-content/60">
-      No revisions yet. The next save will record the version in force now.
+    <p class="text-sm text-base-content/60 border-t border-base-300/60 pt-4">
+      No earlier versions. The next save will record the one in force now.
     </p>
     {% endif %}
+
     {% for row in rows %}
-    <div class="border-t border-base-300/60 pt-3 space-y-2">
-      <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-        <span class="text-base-content">{{ row.revision.saved_at|date:"M j, Y, g:i a" }}</span>
-        <span class="text-base-content/60">
-          {% if row.revision.saved_by %}{{ row.revision.saved_by.get_full_name|default:row.revision.saved_by.email }}{% else %}Unknown{% endif %}
-        </span>
-        {% if row.revision.note %}
-        <span class="text-base-content/70">{{ row.revision.note }}</span>
+    <div class="border-t border-base-300/60 pt-4 space-y-2">
+      <p class="text-sm text-base-content">
+        {% if row.brief %}
+        Version in force briefly on {{ row.in_force_until|date:"M j, Y, g:i a" }}
+        {% else %}
+        Version in force {{ row.in_force_from|date:"M j, Y, g:i a" }}
+        &ndash; {{ row.in_force_until|date:"M j, Y, g:i a" }}
         {% endif %}
-      </div>
+      </p>
+      <p class="text-xs text-base-content/60">
+        Replaced by
+        {% if row.revision.saved_by %}{{ row.revision.saved_by.get_full_name|default:row.revision.saved_by.email }}{% else %}an unknown user{% endif %}{% if row.revision.note %}
+        &middot; <span class="text-base-content/75">{{ row.revision.note }}</span>{% endif %}
+      </p>
       {% if row.changes %}
       <ul class="text-xs text-base-content/65 space-y-1">
         {% for c in row.changes %}

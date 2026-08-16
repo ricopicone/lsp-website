@@ -264,3 +264,103 @@ def test_web_coordinator_card_links_to_the_document_list(client):
     body = client.get(reverse("web_coordinator_admin")).content
     assert reverse("documents_admin:index").encode() in body
     assert b"Site documents" in body
+
+
+# ---- The history reads as a list of versions ---------------------------
+
+
+@pytest.mark.django_db
+def test_revision_rows_carry_the_period_each_version_was_in_force():
+    """A row's stored state was in force from the previous save until its own."""
+    from documents.views_admin import revision_rows
+    d = _doc()
+    first = d.snapshot_revision()
+    d.title = "Second"
+    d.save()
+    second = d.snapshot_revision()
+
+    rows = revision_rows(d)
+    assert [r["revision"] for r in rows] == [second, first]
+    # Newest row: in force from the earlier save until its own.
+    assert rows[0]["in_force_from"] == first.saved_at
+    assert rows[0]["in_force_until"] == second.saved_at
+    # Oldest row reaches back to the document's creation.
+    assert rows[1]["in_force_from"] == d.created_at
+    assert rows[1]["in_force_until"] == first.saved_at
+
+
+@pytest.mark.django_db
+def test_current_version_dates_from_the_last_save(client):
+    d = _doc()
+    rev = d.snapshot_revision()
+    client.force_login(_coordinator())
+    resp = client.get(reverse("documents_admin:edit", args=[d.slug]))
+    assert resp.context["current_since"] == rev.saved_at
+
+
+@pytest.mark.django_db
+def test_current_version_dates_from_creation_when_never_edited(client):
+    d = _doc()
+    client.force_login(_coordinator())
+    resp = client.get(reverse("documents_admin:edit", args=[d.slug]))
+    assert resp.context["current_since"] == d.created_at
+
+
+@pytest.mark.django_db
+def test_edit_page_frames_rows_as_versions_in_force(client):
+    d = _doc()
+    d.snapshot_revision(note="New board copy")
+    client.force_login(_coordinator())
+    body = client.get(reverse("documents_admin:edit", args=[d.slug])).content
+    assert b"Current version" in body
+    assert b"in force" in body
+    assert b"Replaced by" in body
+
+
+@pytest.mark.django_db
+def test_current_download_serves_the_live_pdf(client):
+    """Its own gated endpoint: a Web Coordinator need not be an LSP member,
+    so the members-only public download can't be borrowed here."""
+    d = _doc(content_visibility=Document.Visibility.MEMBERS,
+             listing_visibility=Document.Visibility.MEMBERS)
+    client.force_login(_coordinator())
+    resp = client.get(reverse("documents_admin:current_download", args=[d.slug]))
+    assert resp.status_code == 200
+    assert b"%PDF" in b"".join(resp.streaming_content)
+
+
+@pytest.mark.django_db
+def test_current_download_is_gated(client):
+    d = _doc()
+    client.force_login(_user())
+    url = reverse("documents_admin:current_download", args=[d.slug])
+    assert client.get(url).status_code == 403
+
+
+@pytest.mark.django_db
+def test_a_version_replaced_within_the_minute_reads_as_brief(client):
+    """Upload then immediately fix a typo, and both ends of the range render
+    identically — a zero-width period reads as a bug, not as a brief version."""
+    d = _doc()
+    d.snapshot_revision()
+    client.force_login(_coordinator())
+    body = client.get(reverse("documents_admin:edit", args=[d.slug])).content
+    assert b"in force briefly on" in body
+
+
+@pytest.mark.django_db
+def test_a_version_held_over_time_shows_its_period(client):
+    from datetime import timedelta
+
+    from django.utils import timezone as djtz
+
+    d = _doc()
+    rev = d.snapshot_revision()
+    # auto_now_add fixes saved_at, so push it back to make a real span.
+    type(rev).objects.filter(pk=rev.pk).update(
+        saved_at=djtz.now() + timedelta(days=30),
+    )
+    client.force_login(_coordinator())
+    body = client.get(reverse("documents_admin:edit", args=[d.slug])).content
+    assert b"in force briefly on" not in body
+    assert b"Version in force" in body
