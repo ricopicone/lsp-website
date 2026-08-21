@@ -113,7 +113,7 @@ class Registration(models.Model):
     def __str__(self):
         return f"{self.user} → {self.event} ({self.get_status_display()}, ${self.quoted_amount})"
 
-    def cancel(self):
+    def cancel(self, *, refund: bool = True):
         """Cancel this registration. Refunds the payment if PAID.
 
         State machine:
@@ -122,6 +122,14 @@ class Registration(models.Model):
         - comped → CANCELLED (no payment exists)
         - paid → Stripe refund issued → REFUNDED
         - cancelled / refunded → idempotent no-op
+
+        ``refund=False`` releases the place without moving money. Removing
+        and refunding are two decisions and a staff removal states both
+        (task #627); it is also what makes a payment-plan or offline-paid
+        registration cancellable at all, since everything that refuses to
+        refund one — ``PlanRefundRequiresTreasurer``, and the RuntimeError
+        raised when no Stripe payment can be found — lives inside the refund
+        branch this skips.
 
         Pricing-code ``uses_remaining`` is restored when an active reg that
         consumed a use is cancelled, so the code is available to others (or
@@ -136,9 +144,9 @@ class Registration(models.Model):
         if self.status in (self.Status.CANCELLED, self.Status.REFUNDED):
             return None
 
-        refund = None
+        issued = None
         with transaction.atomic():
-            if self.status == self.Status.PAID:
+            if refund and self.status == self.Status.PAID:
                 from payments.refund import PlanRefundRequiresTreasurer
                 from payments.registration_plans import is_on_plan
 
@@ -161,7 +169,7 @@ class Registration(models.Model):
                         f"Registration {self.id} is PAID but has no SUCCEEDED Stripe "
                         f"payment — refund must be handled manually."
                     )
-                refund = refund_payment(payment)
+                issued = refund_payment(payment)
                 self.status = self.Status.REFUNDED
             else:
                 self.status = self.Status.CANCELLED
@@ -184,7 +192,7 @@ class Registration(models.Model):
                     max_uses__isnull=False,
                 ).update(uses_remaining=F("uses_remaining") + 1)
 
-        return refund
+        return issued
 
     @property
     def on_payment_plan(self) -> bool:
