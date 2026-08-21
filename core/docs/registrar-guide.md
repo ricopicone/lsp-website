@@ -45,6 +45,14 @@ existing notes and adds new ones.
   registration is confirmed with full access, the member receives the
   confirmation email, and the waived amount still appears on their ledger
   statement.
+- **Remove** — takes the person off the event: their place is released, they
+  drop off the roster, and they lose access. Removing and refunding are
+  separate choices. Where the site can refund cleanly, one card payment, you
+  are asked which you want and the safe option is preselected; where it
+  cannot, an offline payment, a payment plan, or more than one payment, the
+  place is still released and the treasurer is notified to settle the money.
+  Money left unrefunded shows as credit on the member's account. The member is
+  always emailed, with your reason if you give one.
 - **Add note** — appends a staff note without changing anything else.
 
 ## The Events tab
@@ -69,8 +77,9 @@ disturbs a registration already taken.
 
 - **Recording an offline payment** (cash, check, alternate arrangement):
   Treasurer Admin, or the Payment admin's "Apply payment success" action.
-- **Refunds and cancellations**: the member's own confirmation page
-  (self-service Stripe refund) or the Treasurer Admin.
+- **Refunding a payment on its own**, without removing anyone: the Treasurer
+  Admin. Members can also cancel their own registration from their
+  confirmation page.
 - **Adjusting a quoted amount**: the Django admin, per the manual-override
   workflow (REG-14).
 - **Pricing codes**: minted by faculty from their event page's faculty view.

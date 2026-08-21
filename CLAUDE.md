@@ -1587,6 +1587,64 @@ Done (see `git log` for specifics):
   Finally the dues Checkout line item names the period, or an early payment's
   receipt would not say which year it bought. No migration, no flag, no backfill.
 
+- **Removing a registration** (task #627). Faculty asked for a registrant to
+  be taken off a seminar and there was no button anywhere that did it. The
+  Registration Admin console could approve, decline, comp and annotate, and its
+  own guide sent the registrar away — *"Refunds and cancellations: the member's
+  own confirmation page or the Treasurer Admin"* — both of which are the wrong
+  hands. The member's page needs the *member* to act, and they had not asked to
+  leave; the Treasurer Admin refunds a *payment*, has no notion of releasing a
+  place, and for a registration awaiting payment there is no payment to act on.
+  So the only route was editing the row in the Django admin, which moves the
+  status and nothing else: no charge voided, no pricing-code use returned, no
+  open Checkout session expired, and no word to the member.
+  Almost the whole mechanism already existed — `Registration.cancel()`,
+  `void_registration_charge`, `refund_payment`, `PlanRefundRequiresTreasurer`.
+  What was missing was an entry point, and one separation. **`cancel()`
+  conflated releasing the place with returning the money**, which a registrar
+  has to decide separately, so it gains a single keyword, `cancel(*, refund=True)`
+  — the default leaves the member's self-cancel byte-identical, and `refund=False`
+  sets CANCELLED without calling Stripe. Writing a second staff-side cancel was
+  rejected; two implementations of one state machine drift, which is #532 and
+  #568 both. The keyword also does work beyond the obvious: **everything that
+  refuses to refund lives inside the branch it skips**, so a payment-plan or
+  offline-paid registration becomes removable at all, where today the place
+  stays occupied until a treasurer settles the money.
+  `registrations.services.remove_registration` orchestrates and implements
+  nothing, returning a `Removal` describing what actually happened so the view's
+  message is built from that rather than a stale copy (#485, #561, #564).
+  **The refund is asked for, never guessed** (Rico, 2026-08-21). The dialog
+  offers the choice only where `refundable_amount` resolves — exactly one
+  succeeded Stripe payment carrying an intent — and **defaults to not
+  refunding, because a Stripe refund cannot be un-issued while leaving the money
+  is one click from the treasurer's existing screen**. A missing or malformed
+  radio therefore cannot move money. Offline payments, plans and multi-payment
+  rows are not offered it and say so; the server catches `RuntimeError` (which
+  `RefundError` and `PlanRefundRequiresTreasurer` both subclass) and releases the
+  place anyway, because a refund the site will not issue must never strand a
+  registrant. **The charge is voided in every case**, so a paid row removed
+  without a refund deliberately leaves the member holding registration-category
+  credit (#473) — the honest reading, and the signal the treasurer acts on. It
+  is never silent: `removal_left_money` notifies the Treasurer role holders,
+  sharing `plan_cancel_needs_treasurer`'s holder lookup and its vacant-role
+  warning.
+  **The member is always emailed**, no opt-out — a place vanishing from someone's
+  account with no word is the failure this must not ship. `send_cancellation_email`
+  gains the registrar's optional reason and **drops its closing "If you'd like to
+  register again" line on any staff removal**: the site cannot tell a member who
+  withdrew from one who was withdrawn, and inviting someone the faculty just
+  removed to sign up again is the one thing that copy must not do.
+  Status is REFUNDED when money went back and CANCELLED otherwise; both are
+  already in `INACTIVE_ROSTER_STATUSES` and both are already excluded from the
+  one-active-registration constraint, so dropping off the roster, losing
+  `access_info`, and remaining able to re-register all come free. A removed plan
+  keeps its installment schedule for the treasurer, and cannot nudge anyone,
+  because `send_registration_reminders` filters plan rows on `status=PAID`.
+  Deliberately untouched: the Django admin and the faculty roster. Out of scope:
+  partial and pro-rated refunds, which stay the treasurer's judgment on the
+  treasurer's screen. No migration, no flag, no backfill. Design:
+  `docs/superpowers/specs/2026-08-21-registration-removal-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
