@@ -6,8 +6,8 @@
     <h1 class="font-serif text-2xl text-base-content">Welcome{% if invitation %}, {{ invitation.speaker.name }}{% endif %}</h1>
     <p class="text-sm text-base-content/70">
       Choose a password to activate your account{% if event %} for {{ event.title }}{% endif %}.
-      After signing in you'll land on the event page, where you can open the
-      meeting room when the event begins.
+      After signing in you'll land on the event page, where you'll find
+      {% if event and not event.uses_insite_room %}the joining details{% else %}the meeting room{% endif %}.
     </p>
   </header>
   <form method="post" class="space-y-4">
