@@ -1506,6 +1506,12 @@ Done (see `git log` for specifics):
   belongs to the *workgroup*, not the term. Known and accepted: setting the venue
   back to the site's room while leaving a stale link in Joining details shows
   both again — that is the faculty member's own data, not the site guessing.
+  **Two more instances of the same defect were found by grepping the remaining
+  "meeting room" copy** once the page and the email were fixed: the outside-
+  speaker invitation said "You will find the meeting room right there, no
+  separate link needed", and the activation page said they'd land where they can
+  open the room — both unconditional, so a special event on Zoom told its speaker
+  to look for a room it doesn't use. Both now branch on `uses_insite_room`.
   Verified in a browser at both venues with video genuinely on
   (`DJANGO_DAILY_ENABLED`, not `DAILY_ENABLED` — the env var and the setting have
   different names, and the first check was meaningless because of it). Design:
