@@ -246,3 +246,69 @@ def test_in_person_shows_venue_not_online(client):
     resp = client.get(reverse("events:detail", args=[e.slug]))
     assert b"Room 12, 123 Main St" in resp.content
     assert b"video meeting" not in resp.content
+
+
+# ---- Where online: the site's room, or somewhere else (task #624) --------
+#
+# The "Where" block offered a Join button for any online event, gated only on
+# the *global* daily_enabled, so a seminar meeting on Zoom showed its students
+# two doors — the Zoom link under "Your access details", and a button opening
+# an empty room.
+
+ZOOM = "https://zoom.example.com/j/424242"
+
+
+def _external(slug="zoomed"):
+    e = _event(slug=slug)
+    e.online_venue = Event.OnlineVenue.EXTERNAL
+    e.access_info = ZOOM
+    e.save(update_fields=["online_venue", "access_info"])
+    PriceTier.objects.create(
+        event=e, audience=Audience.ALL, base_amount=Decimal("0.00")
+    )
+    return e
+
+
+@daily_on
+def test_external_event_offers_no_join_button(client):
+    event = _external()
+    user = _member()
+    _register(user, event)
+    client.force_login(user)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+
+    assert "Join the meeting room" not in body
+    assert "no app to install" not in body
+    assert ZOOM in body  # the way in is the link, and it's still released
+
+
+@daily_on
+def test_external_event_offers_no_room_to_a_host_either(client):
+    """A host's "Open room (host)" button is the same empty room."""
+    event = _external(slug="zoomed-host")
+    host = _member("host@x.test")
+    host.is_staff = True
+    host.save(update_fields=["is_staff"])
+    client.force_login(host)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+
+    assert "Open room (host)" not in body
+    assert ZOOM in body
+
+
+@daily_on
+def test_insite_event_still_offers_the_room(client):
+    """The default path is untouched."""
+    event = _event(slug="insite-room")
+    PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal("0.00")
+    )
+    user = _member("insite@x.test")
+    _register(user, event)
+    client.force_login(user)
+
+    body = client.get(reverse("events:detail", args=[event.slug])).content.decode()
+
+    assert "no app to install" in body

@@ -105,6 +105,10 @@ def event_summary_context(event, user) -> dict:
     # would withhold the meeting details from the people leading the meeting.
     can_host = can_edit_event(user, event)
     daily_on = daily_enabled()
+    # Whether *this event* meets in the site's own room. An event meeting on
+    # Zoom must not also be offered the room, or the member gets two doors and
+    # one of them opens on an empty one (task #624).
+    meets_insite = daily_on and event.uses_insite_room
     # Real Daily presence in the event's room (people actually meeting now).
     # No provisioning: counts only an already-created room, else 0 (no API call).
     # Offering events meet in their workgroup's room; one-off events own theirs.
@@ -112,8 +116,8 @@ def event_summary_context(event, user) -> dict:
 
     owner = room_owner_for_event(event)  # read-only: never provisions
     room = getattr(owner, "video_room", None) if owner is not None else None
-    room_participants = room_participant_count(room) if daily_on else 0
-    room_participant_names = presence_names(room) if daily_on else []
+    room_participants = room_participant_count(room) if meets_insite else 0
+    room_participant_names = presence_names(room) if meets_insite else []
     from video.models import Recording
 
     recordings = [
@@ -148,6 +152,7 @@ def event_summary_context(event, user) -> dict:
         "user_registration": user_registration,
         "has_paid_registration": has_paid_registration,
         "daily_enabled": daily_on,
+        "meets_insite": meets_insite,
         "event_is_live": event.is_live(),
         "event_next_session_at": next_session.start_at if next_session else None,
         "can_host": can_host,

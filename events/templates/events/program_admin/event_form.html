@@ -33,7 +33,7 @@
       <h3 class="font-serif text-lg text-base-content border-b border-base-300 pb-1">Basics</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {% for field in form %}
-        {% if field.name == "title" or field.name == "slug" or field.name == "event_type" or field.name == "format" or field.name == "start_date" or field.name == "end_date" or field.name == "status" %}
+        {% if field.name == "title" or field.name == "slug" or field.name == "event_type" or field.name == "format" or field.name == "online_venue" or field.name == "start_date" or field.name == "end_date" or field.name == "status" %}
         <div>
           <label for="{{ field.id_for_label }}" class="block text-xs uppercase tracking-wider text-base-content/60 mb-1">{{ field.label }}</label>
           {{ field }}

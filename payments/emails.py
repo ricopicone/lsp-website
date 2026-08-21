@@ -98,8 +98,11 @@ def send_registration_confirmation(registration: Registration) -> None:
         Registration.Status.PAID,
         Registration.Status.COMPED,
     )
+    # Only when the event actually meets in the site's room: an in-person event
+    # was being mailed "join in your browser", and an event meeting on Zoom was
+    # offered two doors, one of them empty (task #624).
     room_url = ""
-    if has_access and daily_enabled():
+    if has_access and daily_enabled() and registration.event.uses_insite_room:
         room_url = settings.SITE_BASE_URL.rstrip("/") + reverse(
             "video:event_room", args=[registration.event.slug]
         )
