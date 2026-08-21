@@ -138,3 +138,45 @@ def test_cancel_still_refunds_by_default(paid_registration):
     assert issued is fake
     paid_registration.refresh_from_db()
     assert paid_registration.status == Registration.Status.REFUNDED
+
+
+# ---- Task 2: the treasurer handoff ---------------------------------------
+
+
+@pytest.fixture
+def treasurer(db):
+    from core.models import StaffRole
+
+    user = User.objects.create_user(email="treasurer@example.com")
+    role, _ = StaffRole.objects.get_or_create(
+        key=StaffRole.TREASURER, defaults={"name": "Treasurer"},
+    )
+    role.holders.add(user)
+    return user
+
+
+@pytest.mark.django_db
+def test_removal_left_money_notifies_the_treasurer(
+    paid_registration, staff_user, treasurer,
+):
+    from notifications.models import Notification
+    from payments.notifications import removal_left_money
+
+    removal_left_money(paid_registration, Decimal("300.00"), staff_user)
+
+    note = Notification.objects.filter(recipient=treasurer).first()
+    assert note is not None
+    assert "300.00" in note.body
+    assert paid_registration.user.email in note.body or (
+        paid_registration.user.get_full_name() in note.body
+    )
+
+
+@pytest.mark.django_db
+def test_removal_left_money_survives_a_vacant_treasurer_role(
+    paid_registration, staff_user,
+):
+    """No holder must not raise — the removal has already happened."""
+    from payments.notifications import removal_left_money
+
+    removal_left_money(paid_registration, Decimal("300.00"), staff_user)

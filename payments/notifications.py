@@ -93,23 +93,32 @@ def installment_reminder_inapp(installment) -> None:
     )
 
 
-def plan_cancel_needs_treasurer(registration) -> None:
-    """Tell the treasurer a payment-plan registrant asked to cancel (task
-    #501). The site deliberately refuses to decide the refund — a member who
-    attended part of an event is a pro-rating conversation, not a full
-    refund."""
+def _treasurer_holders(registration, what: str) -> list:
+    """Everyone holding the Treasurer role, or an empty list plus a warning.
+
+    A vacant role must never raise: by the time these are called the money
+    decision has already been handed over, and losing the notification is
+    better than unwinding what happened.
+    """
     from core.models import StaffRole
 
     role = StaffRole.objects.filter(key=StaffRole.TREASURER).first()
     holders = list(role.holders.all()) if role else []
     if not holders:
         log.warning(
-            "plan_cancel_needs_treasurer: no Treasurer role holder — "
-            "registration %s cancellation request unseen", registration.pk,
+            "%s: no Treasurer role holder — registration %s unseen",
+            what, registration.pk,
         )
-        return
+    return holders
+
+
+def plan_cancel_needs_treasurer(registration) -> None:
+    """Tell the treasurer a payment-plan registrant asked to cancel (task
+    #501). The site deliberately refuses to decide the refund — a member who
+    attended part of an event is a pro-rating conversation, not a full
+    refund."""
     who = registration.user.get_full_name() or registration.user.email
-    for user in holders:
+    for user in _treasurer_holders(registration, "plan_cancel_needs_treasurer"):
         notify(
             user, Category.ACCOUNT_UPDATES,
             title=f"Cancellation request on a payment plan: {who}",
@@ -117,6 +126,30 @@ def plan_cancel_needs_treasurer(registration) -> None:
                 f"{who} asked to cancel their registration for "
                 f'"{registration.event.title}" (${registration.quoted_amount} '
                 "on a payment plan). The refund needs your decision."
+            ),
+            url=reverse("treasurer_member_detail", args=[registration.user_id]),
+            target=registration, dedupe=True,
+        )
+
+
+def removal_left_money(registration, amount, by) -> None:
+    """A staff removal released the place but left settled money (task #627).
+
+    Either the registrar chose not to refund, or the site could not refund it
+    cleanly — an offline payment, a payment plan, or more than one payment.
+    The registration's charge is voided either way, so the member now reads as
+    holding credit in the registration bucket; this is what stops that being
+    silent.
+    """
+    who = registration.user.get_full_name() or registration.user.email
+    for user in _treasurer_holders(registration, "removal_left_money"):
+        notify(
+            user, Category.ACCOUNT_UPDATES,
+            title=f"Removed registration with money on it: {who}",
+            body=(
+                f'{who} was removed from "{registration.event.title}" by '
+                f"{by.email}. ${amount} they had already paid was not "
+                "refunded, so it now reads as credit on their account."
             ),
             url=reverse("treasurer_member_detail", args=[registration.user_id]),
             target=registration, dedupe=True,
