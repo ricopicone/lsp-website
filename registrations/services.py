@@ -6,6 +6,7 @@ Registration Admin console, so they cannot drift.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
 
 from django.db import transaction
@@ -157,3 +158,99 @@ def release_pending_approvals(event, by) -> list[Registration]:
             notify_payments.registration_confirmed(reg)
         released.append(reg)
     return released
+
+
+#: Statuses a registration cannot be removed from — it is already closed.
+TERMINAL_STATUSES = (
+    Registration.Status.CANCELLED,
+    Registration.Status.REFUNDED,
+    Registration.Status.DECLINED,
+)
+
+
+@dataclass(frozen=True)
+class Removal:
+    """What a removal actually did — build messages from this, never from a
+    copy of the registration read beforehand (#485, #561, #564)."""
+
+    removed: bool               #: False when the row was already terminal
+    refunded: bool              #: a Stripe refund was actually issued
+    refunded_amount: Decimal    #: what went back (0 when nothing did)
+    left_money: Decimal         #: settled money not refunded (0 when none)
+
+
+def remove_registration(reg, by, *, refund: bool = False, reason: str = "",
+                        via: str = "registration admin") -> Removal:
+    """Release a registrant's place (task #627).
+
+    Removing and refunding are two decisions and the caller states both. A
+    refund the site cannot issue never blocks the removal: an offline payment,
+    a payment plan, or more than one payment all release the place and hand the
+    money to the treasurer instead.
+
+    The registration's charge is voided in every case. For a paid row removed
+    without a refund that deliberately leaves the member holding credit in the
+    registration bucket, which is the honest reading — they paid, the
+    obligation is gone — and is the signal the treasurer acts on.
+    """
+    from payments.charges import void_registration_charge
+    from payments.models import Payment
+
+    if reg.status in TERMINAL_STATUSES:
+        return Removal(
+            removed=False, refunded=False,
+            refunded_amount=Decimal("0"), left_money=Decimal("0"),
+        )
+
+    # Read the money before the status moves; afterwards the reading changes.
+    settled = sum(
+        (p.amount for p in reg.payments.filter(status=Payment.Status.SUCCEEDED)),
+        Decimal("0"),
+    )
+
+    issued = None
+    if refund:
+        try:
+            issued = reg.cancel(refund=True)
+        except RuntimeError:
+            # RefundError (and PlanRefundRequiresTreasurer, which subclasses
+            # it) plus the bare RuntimeError cancel() raises when it can find
+            # no Stripe payment to refund. All of them mean the same thing
+            # here: the site will not move this money, but the place still
+            # goes. cancel() raises inside its atomic block, so nothing was
+            # written and the second call starts clean.
+            reg.cancel(refund=False)
+    else:
+        reg.cancel(refund=False)
+
+    refunded = issued is not None
+    left = Decimal("0") if refunded else settled
+
+    void_registration_charge(reg, f"Registration removed by {by.email}.")
+
+    if refunded:
+        outcome = f"Refunded ${settled}."
+    elif left:
+        outcome = f"${left} left unrefunded for the treasurer."
+    else:
+        outcome = "No money had settled."
+    line = (
+        f"\n[{timezone.localdate().isoformat()}] Removed by {by.email} "
+        f"via {via}. {outcome}"
+    )
+    if reason:
+        line += f" Reason: {reason}"
+    reg.staff_notes = (reg.staff_notes or "") + line
+    reg.save(update_fields=("staff_notes",))
+
+    notify_payments.registration_cancelled(
+        reg, refund=issued, reason=reason, staff_removed=True,
+    )
+    if left:
+        notify_payments.removal_left_money(reg, left, by)
+
+    return Removal(
+        removed=True, refunded=refunded,
+        refunded_amount=settled if refunded else Decimal("0"),
+        left_money=left,
+    )

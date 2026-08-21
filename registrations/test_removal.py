@@ -227,3 +227,141 @@ def test_cancellation_email_without_a_reason_has_no_blank_gap(
 
     send_cancellation_email(paid_registration, staff_removed=True)
     assert "\n\n\n" not in mailoutbox[0].body
+
+
+# ---- Task 4: the remove_registration service -----------------------------
+
+
+@pytest.fixture
+def comped_registration(event, tier, member):
+    reg = _reg(event, tier, member, Registration.Status.COMPED)
+    from payments.charges import mint_comped_charge
+    mint_comped_charge(reg)
+    return reg
+
+
+@pytest.mark.django_db
+def test_remove_awaiting_payment(awaiting_registration, staff_user, mailoutbox):
+    from registrations.services import remove_registration
+
+    out = remove_registration(awaiting_registration, staff_user)
+
+    assert out.removed and not out.refunded
+    assert out.left_money == Decimal("0")
+    awaiting_registration.refresh_from_db()
+    assert awaiting_registration.status == Registration.Status.CANCELLED
+    assert "Removed by registrar@example.com" in awaiting_registration.staff_notes
+
+
+@pytest.mark.django_db
+def test_remove_expires_an_open_checkout_session(awaiting_registration, staff_user):
+    """A stale tab must not pay for a place that no longer exists (#561)."""
+    from registrations.services import remove_registration
+
+    with patch("payments.stripe_sync.expire_open_sessions") as expire:
+        remove_registration(awaiting_registration, staff_user)
+    expire.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_remove_comped_voids_the_waived_charge(comped_registration, staff_user):
+    from payments.models import Charge
+    from registrations.services import remove_registration
+
+    remove_registration(comped_registration, staff_user)
+
+    assert not (
+        Charge.objects.filter(registration=comped_registration)
+        .exclude(status=Charge.Status.VOID)
+        .exists()
+    )
+
+
+@pytest.mark.django_db
+def test_remove_paid_with_refund(paid_registration, staff_user):
+    from registrations.services import remove_registration
+
+    with patch(
+        "payments.refund.stripe.Refund.create", return_value=_fake_refund(),
+    ) as create:
+        out = remove_registration(paid_registration, staff_user, refund=True)
+
+    create.assert_called_once()
+    assert out.refunded
+    assert out.refunded_amount == Decimal("300.00")
+    assert out.left_money == Decimal("0")
+    paid_registration.refresh_from_db()
+    assert paid_registration.status == Registration.Status.REFUNDED
+
+
+@pytest.mark.django_db
+def test_remove_paid_without_refund_leaves_credit(
+    paid_registration, staff_user, treasurer,
+):
+    from notifications.models import Notification
+    from registrations.services import remove_registration
+
+    with patch("payments.refund.stripe.Refund.create") as create:
+        out = remove_registration(paid_registration, staff_user, refund=False)
+
+    create.assert_not_called()
+    assert out.left_money == Decimal("300.00")
+    assert not out.refunded
+    paid_registration.refresh_from_db()
+    assert paid_registration.status == Registration.Status.CANCELLED
+    assert Notification.objects.filter(recipient=treasurer).exists()
+
+
+@pytest.mark.django_db
+def test_remove_offline_payment_still_releases_the_place(
+    offline_paid_registration, staff_user, treasurer,
+):
+    """A refund the site cannot issue must never block the removal."""
+    from registrations.services import remove_registration
+
+    out = remove_registration(offline_paid_registration, staff_user, refund=True)
+
+    assert out.removed and not out.refunded
+    assert out.left_money == Decimal("300.00")
+    offline_paid_registration.refresh_from_db()
+    assert offline_paid_registration.status == Registration.Status.CANCELLED
+
+
+@pytest.mark.django_db
+def test_remove_a_payment_plan_still_releases_the_place(
+    plan_registration, staff_user,
+):
+    from registrations.services import remove_registration
+
+    out = remove_registration(plan_registration, staff_user, refund=True)
+
+    assert out.removed and not out.refunded
+    plan_registration.refresh_from_db()
+    assert plan_registration.status == Registration.Status.CANCELLED
+    # The schedule survives for the treasurer to settle, and because
+    # send_registration_reminders filters plan rows on status=PAID, leaving
+    # it cannot nudge anyone.
+    assert plan_registration.installments.exists()
+
+
+@pytest.mark.django_db
+def test_remove_is_idempotent(awaiting_registration, staff_user, mailoutbox):
+    from registrations.services import remove_registration
+
+    remove_registration(awaiting_registration, staff_user)
+    before = len(mailoutbox)
+    out = remove_registration(awaiting_registration, staff_user)
+
+    assert not out.removed
+    assert len(mailoutbox) == before
+
+
+@pytest.mark.django_db
+def test_remove_records_the_reason_in_staff_notes(awaiting_registration, staff_user):
+    from registrations.services import remove_registration
+
+    remove_registration(
+        awaiting_registration, staff_user, reason="Faculty asked.",
+    )
+    awaiting_registration.refresh_from_db()
+    assert "Faculty asked." in awaiting_registration.staff_notes
