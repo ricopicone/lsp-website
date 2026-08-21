@@ -342,3 +342,44 @@ def test_online_venue_is_not_required_on_the_pc_form_either():
     form = ProgramEventForm()
     assert "online_venue" in ProgramEventForm.Meta.fields
     assert form.fields["online_venue"].required is False
+
+
+# ---- The speaker invitation ---------------------------------------------
+#
+# The same defect one surface out: the invitation told an outside speaker "the
+# meeting room is right there, no separate link needed", which is wrong for an
+# event meeting on Zoom.
+
+
+@pytest.mark.django_db
+def test_speaker_invitation_promises_the_room_only_for_an_insite_event(mailoutbox):
+    from events.models import Speaker
+    from events.speaker_invitations import send_invitation
+
+    event = _event(slug="insite-talk", format=Event.Format.ONLINE)
+    speaker = Speaker.objects.create(
+        name="A Speaker", email="speaker-insite@example.test"
+    )
+    send_invitation(speaker, event, "Please come.")
+
+    assert "no separate link needed" in mailoutbox[-1].body
+
+
+@pytest.mark.django_db
+def test_speaker_invitation_points_at_the_joining_details_when_external(mailoutbox):
+    from events.models import Speaker
+    from events.speaker_invitations import send_invitation
+
+    event = _event(
+        slug="external-talk", format=Event.Format.ONLINE,
+        online_venue=Event.OnlineVenue.EXTERNAL,
+        access_info="https://zoom.example.com/j/424242",
+    )
+    speaker = Speaker.objects.create(
+        name="B Speaker", email="speaker-external@example.test"
+    )
+    send_invitation(speaker, event, "Please come.")
+
+    body = mailoutbox[-1].body
+    assert "no separate link needed" not in body
+    assert "joining details" in body.lower()

@@ -10,11 +10,13 @@ Joining the meeting is simple. Once you have signed in, open the event page:
 
 {{ event_url }}
 
-You will find the meeting room right there, no separate link needed. When the
+{% if event.uses_insite_room %}You will find the meeting room right there, no separate link needed. When the
 event begins, a Join button appears on that page, that is where you and the
 attendees join. Attendees join the same way, they register and the button
 appears for them when the event starts, so if anyone asks how to join you can
-point them to that page.
+point them to that page.{% else %}This event meets on an external service, and the joining details are on that
+page. You will see them without registering. Attendees see them once they have
+registered, so if anyone asks how to join you can point them to that page.{% endif %}
 
 If you have any questions, reply to this email or contact us at {{ support_email }}.
 
