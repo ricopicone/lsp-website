@@ -1,9 +1,6 @@
-# Resuming task #625
+# Resuming task #628
 
-**Task:** Julien's email
-
-## Description
-He's asking if there's a way to pay now or if he has to wait until September 1 (which is when the charge officially lands). We should have a clear pathway to pay early right? Might need to open it
+**Task:** I just clicked "Done" on the wrong item which tore down a session that was doing a task ... it would have closed that task. Find the most recently closed task and reopen it
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -56,6 +53,8 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **online-venue-insite-vs-external** (architecture) — Task #624 SHIPPED+LIVE 2026-08-21: Event.online_venue says WHERE an online event meets (in-site room / external link) because format only ever said whether — a Zoom event used to show two doors and the confirmation email mailed in-person registrants a video-room link; the site's room stays the recommendation, with breakout groups the stated exception
+- **pay-button-hidden-by-decision-exemption** (architecture) — Task #625 SHIPPED 2026-08-21: the next-year tuition PAY form sat inside the decision block, so tuition_decision_exempt hid it — and since exemption fires at the fourth non-skipping enrollment, recording the fourth commitment is what removed the ability to pay it (9 members, $22,500); dues gained the same early-pay path
 - **decision-form-must-name-its-year** (gotcha) — Task #599 SHIPPED+LIVE 2026-08-16: the Account tab shows two tuition decision forms and the current-year one said only "this academic year", so a new member filed her decision and $2,500 under the year that was ending, then read as blocked from every 2026-27 event
 - **pushed-is-not-deployed** (gotcha) — Deploy only happens if the full CI test suite passes — a single failing test silently aborts the deploy, so a successful push to main does NOT mean prod updated. Verify the Deploy run goes green.
 - **admin-surfaces-are-role-based** (convention) — Admin UI here is organised by the ROLE that owns the work (/admin-tools/&lt;role&gt;/), never by the object being edited — a public object page gets at most a gated deep link; check the role landing pages for a "Planned" card before designing, the slot is often already reserved
@@ -170,7 +169,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=625`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=628`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

@@ -466,10 +466,11 @@ class Event(models.Model):
         max_length=20,
         choices=OnlineVenue.choices,
         default=OnlineVenue.INSITE,
-        help_text="Where an online or hybrid event meets. The site's own room "
-        "needs no link — registrants get a Join button. Choose the external "
-        "link to meet on Zoom or another service and put the link in the "
-        "access details below; the site then stops offering its own room.",
+        help_text="Where an online or hybrid event meets. The site's own room is "
+        "recommended for most meetings and needs no link — registrants get a "
+        "Join button. Choose the external link to meet on Zoom or another "
+        "service (recommended if you use breakout groups) and put the link in "
+        "the access details below; the site then stops offering its own room.",
     )
     access_info = models.TextField(
         blank=True,

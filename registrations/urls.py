@@ -25,6 +25,8 @@ urlpatterns = [
          name="registrar_comp"),
     path(f"{_ADMIN}/<int:reg_id>/note/", views_admin.registrar_note,
          name="registrar_note"),
+    path(f"{_ADMIN}/<int:reg_id>/remove/", views_admin.registrar_remove,
+         name="registrar_remove"),
     path(
         "events/<slug:event_slug>/register/",
         views.register_for_event,

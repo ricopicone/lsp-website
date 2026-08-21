@@ -258,11 +258,20 @@ def send_balance_reminder(user, balance) -> None:
     )
 
 
-def send_cancellation_email(registration: Registration, refund=None) -> None:
+def send_cancellation_email(
+    registration: Registration, refund=None, reason: str = "",
+    staff_removed: bool = False,
+) -> None:
     """Notify the participant that their registration was cancelled.
 
     Includes refund detail if ``refund`` (a Stripe ``Refund`` object or a
     dict-like with ``amount`` in cents) is provided.
+
+    ``staff_removed`` marks a removal the member did not ask for (task #627).
+    It drops the closing invitation to register again — the site cannot tell a
+    member who withdrew from one who was withdrawn, and inviting someone the
+    faculty just removed to sign up again is the one thing this copy must not
+    do. ``reason``, when the registrar gives one, is included.
     """
     refund_amount = None
     if refund is not None:
@@ -278,6 +287,8 @@ def send_cancellation_email(registration: Registration, refund=None) -> None:
             {
                 "registration": registration,
                 "refund_amount": refund_amount,
+                "reason": reason,
+                "staff_removed": staff_removed,
                 "support_email": settings.SUPPORT_EMAIL,
                 "site_base_url": settings.SITE_BASE_URL,
             },
