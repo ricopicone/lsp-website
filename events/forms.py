@@ -167,6 +167,7 @@ class EventEditForm(PriceFieldsMixin, forms.ModelForm):
             "title", "description", "readings", "schedule_note", "contact",
             "fee_note", "record_video", "speaker_spotlight",
             "requires_faculty_approval", "registration_eligibility",
+            "online_venue", "access_info",
             "offers_ce", "ce_credits", "ce_credits_basis", "ce_note",
             "ce_organizations",
         )
@@ -188,6 +189,10 @@ class EventEditForm(PriceFieldsMixin, forms.ModelForm):
             "registration_eligibility": forms.Select(
                 attrs={"class": "select select-bordered w-full"},
             ),
+            "online_venue": forms.Select(
+                attrs={"class": "select select-bordered w-full"},
+            ),
+            "access_info": forms.Textarea(attrs={"rows": 3, "cols": 80}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -200,6 +205,8 @@ class EventEditForm(PriceFieldsMixin, forms.ModelForm):
         # required by default on a ModelForm, which would break every POST
         # that omits it — the old checkbox simply read as unticked.
         self.fields["registration_eligibility"].required = False
+        # Same reasoning for the online venue (task #624).
+        self.fields["online_venue"].required = False
         self.init_price_fields(self.instance if self.instance.pk else None)
 
     def clean(self):
@@ -213,6 +220,9 @@ class EventEditForm(PriceFieldsMixin, forms.ModelForm):
             self.cleaned_data.get("registration_eligibility")
             or Event.RegistrationEligibility.MEMBERS_AND_GUESTS
         )
+
+    def clean_online_venue(self):
+        return self.cleaned_data.get("online_venue") or Event.OnlineVenue.INSITE
 
 
 class EventFeatureImageForm(forms.ModelForm):
@@ -771,7 +781,7 @@ class ProgramEventForm(PriceFieldsMixin, forms.ModelForm):
         fields = (
             "title", "slug", "event_type",
             "start_date", "end_date",
-            "format", "status",
+            "format", "online_venue", "status",
             "description", "readings", "schedule_note", "contact", "fee_note",
             "access_info",
             "requires_faculty_approval", "record_video",
@@ -818,6 +828,8 @@ class ProgramEventForm(PriceFieldsMixin, forms.ModelForm):
         # A choices field with a default is required by default on a
         # ModelForm; the old checkbox it replaces simply read as unticked.
         self.fields["registration_eligibility"].required = False
+        # Same for where an online event meets (task #624).
+        self.fields["online_venue"].required = False
         # Narrow event_type choices to the annual-program-type set.
         self.fields["event_type"].choices = [
             (Event.Type.SEMINAR.value,       Event.Type.SEMINAR.label),
@@ -852,6 +864,9 @@ class ProgramEventForm(PriceFieldsMixin, forms.ModelForm):
             self.cleaned_data.get("registration_eligibility")
             or Event.RegistrationEligibility.MEMBERS_AND_GUESTS
         )
+
+    def clean_online_venue(self):
+        return self.cleaned_data.get("online_venue") or Event.OnlineVenue.INSITE
 
     def save(self, commit=True):
         instance = super().save(commit=False)

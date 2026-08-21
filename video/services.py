@@ -92,6 +92,11 @@ def _desired_properties(owner) -> dict:
         "enable_chat": True,         # everyone can use text chat
         "enable_people_ui": True,    # participants panel + host mute/remove
         "enable_hand_raising": True,     # Q&A affordance; domain default is off
+        # Splitting a seminar into smaller groups (task #624). Prebuilt-only,
+        # and Daily requires an owner in the call to create them — is_owner is
+        # faculty / group leads, which is who should be splitting a class up.
+        # Daily documents the property as beta.
+        "enable_breakout_rooms": True,
         "enable_emoji_reactions": True,  # silent acknowledgement during a talk
         "enable_network_ui": True,       # participants can see their own connection
     }

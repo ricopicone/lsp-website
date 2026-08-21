@@ -1,5 +1,5 @@
 {% comment %}Context-aware "Where" block for an event. Expects: event,
-has_paid_registration, user_registration, daily_enabled, event_is_live,
+has_paid_registration, user_registration, meets_insite, event_is_live,
 event_next_session_at, can_host. In-person shows the venue; online shows a
 branded label with registration/live-aware messaging + a tech-check link.
 {% endcomment %}
@@ -16,14 +16,14 @@ branded label with registration/live-aware messaging + a tech-check link.
   {% endif %}
 
   {% if event.format != 'in_person' %}
-    {% if daily_enabled %}<p class="text-sm text-base-content/60">In your browser — no app to install.</p>{% endif %}
+    {% if meets_insite %}<p class="text-sm text-base-content/60">In your browser — no app to install.</p>{% endif %}
 
     {% comment %}Registrants join here; so do the people running the event
     (faculty, a special event's speakers, the PC, staff) — they never register
     or pay for their own event, so the registration gate must not hide the room
     from them. can_host mirrors can_edit_event.{% endcomment %}
     {% if has_paid_registration or can_host %}
-      {% if daily_enabled %}
+      {% if meets_insite %}
         {% if event_is_live or event_room_live or can_host %}
         {% if event_room_live %}
         <p class="mt-2 inline-flex items-center gap-2 text-sm text-success font-medium">
@@ -55,6 +55,14 @@ branded label with registration/live-aware messaging + a tech-check link.
           to join, point them to this page.
         </p>
         {% endif %}
+      {% elif not event.uses_insite_room %}
+      {% comment %}Meets on Zoom or another service (task #624): the link below
+      is the way in, so don't offer the site's room beside it. Keyed on the
+      event's own venue rather than meets_insite, which is also false when video
+      is switched off site-wide.{% endcomment %}
+      <p class="mt-1 text-sm text-base-content/70">
+        This event meets on an external service. Your joining details are below.
+      </p>
       {% endif %}
     {% else %}
       {% if event.status == "open" and event.is_public_now %}

@@ -359,6 +359,16 @@ class Event(models.Model):
         IN_PERSON = "in_person", _("In person")
         HYBRID = "hybrid", _("Hybrid")
 
+    class OnlineVenue(models.TextChoices):
+        """*Where* online, orthogonal to :class:`Format`'s *whether*.
+
+        A hybrid event gathers in a room and meets online, so this cannot be a
+        fourth ``Format`` choice without multiplying them (task #624).
+        """
+
+        INSITE = "insite", _("In the site's video room")
+        EXTERNAL = "external", _("External link (Zoom, etc.)")
+
     class Status(models.TextChoices):
         DRAFT = "draft", _("Draft")
         OPEN = "open", _("Open for registration")
@@ -451,6 +461,15 @@ class Event(models.Model):
         max_length=20,
         choices=Format.choices,
         default=Format.ONLINE,
+    )
+    online_venue = models.CharField(
+        max_length=20,
+        choices=OnlineVenue.choices,
+        default=OnlineVenue.INSITE,
+        help_text="Where an online or hybrid event meets. The site's own room "
+        "needs no link — registrants get a Join button. Choose the external "
+        "link to meet on Zoom or another service and put the link in the "
+        "access details below; the site then stops offering its own room.",
     )
     access_info = models.TextField(
         blank=True,
@@ -576,6 +595,21 @@ class Event(models.Model):
     def academic_year(self) -> str:
         """Academic-year label this event belongs to ("2025-2026")."""
         return academic_year_of(self.start_date)
+
+    @property
+    def uses_insite_room(self) -> bool:
+        """Whether this event meets in the site's own video room (task #624).
+
+        The one predicate: the event page, the confirmation email, and anything
+        else offering a Join button must ask this rather than re-deriving it
+        from ``access_info`` — a hybrid event carries its venue address there
+        *and* wants the room, so that guess silently takes the room away (#532's
+        lesson about a fact each surface re-derives).
+        """
+        return (
+            self.format != self.Format.IN_PERSON
+            and self.online_venue == self.OnlineVenue.INSITE
+        )
 
     @property
     def registration_badge(self) -> dict:
@@ -1337,6 +1371,7 @@ class EventProposal(models.Model):
 
     class LocationKind(models.TextChoices):
         ONLINE_INSITE = "online_insite", "Online — in-site video room"
+        ONLINE_EXTERNAL = "online_external", "Online — external link (Zoom, etc.)"
         IN_PERSON = "in_person", "In person"
         HYBRID = "hybrid", "Hybrid (in person + online)"
 
@@ -1346,7 +1381,9 @@ class EventProposal(models.Model):
     )
     location = models.CharField(
         max_length=300, blank=True,
-        help_text="Venue address (in person or hybrid). Leave blank when online.",
+        help_text="Venue address (in person or hybrid), or the meeting link for "
+        "an external online event. Optional — the link can be added to the event "
+        "later. Leave blank when meeting in the site's own video room.",
     )
     contact = models.CharField(
         max_length=200, blank=True, help_text="Contact email for this proposal.",
@@ -1480,6 +1517,13 @@ class EventProposal(models.Model):
         return ", ".join(missing)
 
     @property
+    def event_online_venue(self):
+        """The Event.OnlineVenue derived from the proposed location kind."""
+        if self.location_kind == self.LocationKind.ONLINE_EXTERNAL:
+            return Event.OnlineVenue.EXTERNAL
+        return Event.OnlineVenue.INSITE
+
+    @property
     def event_format(self):
         """The Event.Format derived from the proposed location kind."""
         return {
@@ -1586,7 +1630,8 @@ class EventProposal(models.Model):
             title=self.title[:200], slug=self._unique_event_slug(),
             event_type=self.event_type,
             start_date=start_date, end_date=end_date,
-            format=self.event_format, access_info=access_info,
+            format=self.event_format, online_venue=self.event_online_venue,
+            access_info=access_info,
             status=Event.Status.OPEN,
             published=(not is_offering and has_real_date),
             description=self.description, program=program,

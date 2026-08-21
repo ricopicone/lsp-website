@@ -127,6 +127,33 @@
       {% if form.registration_eligibility.errors %}<p class="text-error text-xs">{{ form.registration_eligibility.errors|join:", " }}</p>{% endif %}
     </div>
 
+    {# Where an online event meets, and the link if it's elsewhere (task #624). #}
+    <section class="space-y-3 border-t border-base-300/60 pt-6">
+      <h2 class="font-serif text-lg text-base-content">Where it meets</h2>
+
+      <div class="space-y-1">
+        <label class="label-text" for="{{ form.online_venue.id_for_label }}">Meeting place</label>
+        {{ form.online_venue }}
+        <p class="text-xs text-base-content/60">
+          The site's video room needs no link, a Join button appears here for
+          everyone registered once the meeting begins. Choose the external link
+          to meet on Zoom or another service, and put the link below.
+        </p>
+        {% if form.online_venue.errors %}<p class="text-error text-xs">{{ form.online_venue.errors|join:", " }}</p>{% endif %}
+      </div>
+
+      <div class="form-control space-y-1">
+        <label class="label-text" for="{{ form.access_info.id_for_label }}">Joining details</label>
+        {{ form.access_info }}
+        <p class="text-xs text-base-content/60">
+          The meeting link, passcode, dial-in, or room address. Shown to anyone
+          registered and paid, and included in their confirmation email. You and
+          your co-faculty see it without registering.
+        </p>
+        {% if form.access_info.errors %}<p class="text-error text-xs">{{ form.access_info.errors|join:", " }}</p>{% endif %}
+      </div>
+    </section>
+
     <section class="space-y-3 border-t border-base-300/60 pt-6">
       <h2 class="font-serif text-lg text-base-content">Continuing education</h2>
 
