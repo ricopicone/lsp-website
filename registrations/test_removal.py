@@ -180,3 +180,50 @@ def test_removal_left_money_survives_a_vacant_treasurer_role(
     from payments.notifications import removal_left_money
 
     removal_left_money(paid_registration, Decimal("300.00"), staff_user)
+
+
+# ---- Task 3: what the member is told -------------------------------------
+
+
+@pytest.mark.django_db
+def test_staff_removal_email_includes_the_reason(paid_registration, mailoutbox):
+    from payments.emails import send_cancellation_email
+
+    send_cancellation_email(
+        paid_registration,
+        reason="Removed at the faculty's request.",
+        staff_removed=True,
+    )
+    assert "Removed at the faculty's request." in mailoutbox[0].body
+
+
+@pytest.mark.django_db
+def test_staff_removal_email_does_not_invite_re_registration(
+    paid_registration, mailoutbox,
+):
+    """Inviting someone the faculty just removed to sign up again is the one
+    thing this copy must not do."""
+    from payments.emails import send_cancellation_email
+
+    send_cancellation_email(paid_registration, staff_removed=True)
+    assert "register again" not in mailoutbox[0].body
+
+
+@pytest.mark.django_db
+def test_self_cancel_email_still_invites_re_registration(
+    paid_registration, mailoutbox,
+):
+    from payments.emails import send_cancellation_email
+
+    send_cancellation_email(paid_registration)
+    assert "register again" in mailoutbox[0].body
+
+
+@pytest.mark.django_db
+def test_cancellation_email_without_a_reason_has_no_blank_gap(
+    paid_registration, mailoutbox,
+):
+    from payments.emails import send_cancellation_email
+
+    send_cancellation_email(paid_registration, staff_removed=True)
+    assert "\n\n\n" not in mailoutbox[0].body

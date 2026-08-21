@@ -60,12 +60,16 @@ def registration_declined(reg) -> None:
     )
 
 
-def registration_cancelled(reg, *, refund=None) -> None:
+def registration_cancelled(
+    reg, *, refund=None, reason: str = "", staff_removed: bool = False,
+) -> None:
     notify(
         reg.user, Category.REGISTRATION_STATUS,
         title=f"Registration cancelled: {reg.event.title}",
         url=reverse("events:detail", args=[reg.event.slug]), target=reg,
-        email_fn=lambda: emails.send_cancellation_email(reg, refund=refund),
+        email_fn=lambda: emails.send_cancellation_email(
+            reg, refund=refund, reason=reason, staff_removed=staff_removed,
+        ),
     )
 
 
