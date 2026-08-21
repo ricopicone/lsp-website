@@ -483,3 +483,149 @@ def test_both_decision_forms_name_their_year_and_anchor(client):
     assert body.count("AY 2025–2026") >= 1
     assert body.count("AY 2026–2027") >= 1
     assert "this academic year" not in body
+
+
+# ---- 9. The way to pay survives decision exemption (task #625) --------------
+
+def _four_year_landscape():
+    """Three finished years, a current year, and an upcoming one.
+
+    ``tuition_decision_exempt`` keys off four non-skipping enrollment rows,
+    and the fourth is typically the very commitment the member is trying to
+    pay, so the exemption arrives at the same moment the money is owed.
+    """
+    TuitionPeriod.objects.all().delete()
+    today = timezone.localdate()
+    old = [
+        TuitionPeriod.objects.create(
+            name=f"AY old {i}", slug=f"ay-old-625-{i}",
+            start_date=today - timedelta(days=1400 - i * 400),
+            decision_due_date=today - timedelta(days=1390 - i * 400),
+            end_date=today - timedelta(days=1100 - i * 400),
+            tuition_amount=Decimal("2000.00"),
+        )
+        for i in range(3)
+    ]
+    current = TuitionPeriod.objects.create(
+        name="AY 2025–2026", slug="ay-cur-625",
+        start_date=today - timedelta(days=200),
+        decision_due_date=today - timedelta(days=180),
+        end_date=today + timedelta(days=15),
+        tuition_amount=Decimal("2500.00"),
+    )
+    upcoming = TuitionPeriod.objects.create(
+        name="AY 2026–2027", slug="ay-next-625",
+        start_date=today + timedelta(days=16),
+        decision_due_date=today + timedelta(days=76),
+        end_date=today + timedelta(days=380),
+        tuition_amount=Decimal("2500.00"),
+    )
+    return old, current, upcoming
+
+
+def test_decision_exempt_member_can_still_pay_next_year(client):
+    """Nine members were committed to next year with an open $2,500 charge and
+    no button anywhere on the site: the exemption that silences the decision
+    form was hiding the block that carries the pay form too."""
+    from payments.ledger import tuition_decision_exempt
+
+    old, _current, upcoming = _four_year_landscape()
+    member = _user("exemptpay@x.test")
+    for p in old:
+        TuitionEnrollment.objects.create(
+            user=member, tuition_period=p,
+            status=TuitionEnrollment.Status.PAID_IN_FULL,
+        )
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=upcoming,
+        status=TuitionEnrollment.Status.COMMITTED,
+    )
+    assert tuition_decision_exempt(member) is True
+
+    client.force_login(member)
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+    squashed = " ".join(body.split())
+
+    assert reverse("tuition_pay_in_full") in squashed
+    assert f'name="period" value="{upcoming.slug}"' in squashed
+    assert f"Pay ${upcoming.tuition_amount} now" in squashed
+    # The exemption still silences the decision form itself, both years.
+    assert "Record decision" not in squashed
+
+
+def test_decision_exempt_member_with_no_next_year_row_sees_no_block(client):
+    """Nothing to decide and nothing to pay: the block stays gone rather than
+    rendering an empty heading."""
+    old, current, upcoming = _four_year_landscape()
+    member = _user("exemptempty@x.test")
+    for p in [*old, current]:
+        TuitionEnrollment.objects.create(
+            user=member, tuition_period=p,
+            status=TuitionEnrollment.Status.PAID_IN_FULL,
+        )
+    client.force_login(member)
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+
+    assert f'id="decision-{upcoming.slug}"' not in body
+    assert f"Your {upcoming.name} tuition decision" not in body
+
+
+def test_upcoming_payment_plan_installments_are_payable(client):
+    """An approved plan for next year had rows in the database and no table on
+    the page, so there was no way to pay those installments either."""
+    from payments.models import TuitionInstallment
+
+    _old, _current, upcoming = _four_year_landscape()
+    member = _user("upcominginst@x.test")
+    enrollment = TuitionEnrollment.objects.create(
+        user=member, tuition_period=upcoming,
+        status=TuitionEnrollment.Status.PAYMENT_PLAN,
+    )
+    first = TuitionInstallment.objects.create(
+        enrollment=enrollment, sequence=1,
+        due_date=upcoming.start_date, amount=Decimal("1250.00"),
+    )
+    second = TuitionInstallment.objects.create(
+        enrollment=enrollment, sequence=2,
+        due_date=upcoming.end_date, amount=Decimal("1250.00"),
+    )
+    client.force_login(member)
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+
+    assert f"My installments — {upcoming.name}" in body
+    assert reverse("tuition_pay_installment", args=[first.id]) in body
+    assert reverse("tuition_pay_installment", args=[second.id]) in body
+
+
+def test_account_tab_offers_next_years_dues_by_name(client):
+    """The Account tab is where members manage money, so the early-pay path has
+    to be here too, and named by year (task #625, following #599)."""
+    DuesPeriod.objects.all().delete()
+    today = timezone.localdate()
+    DuesPeriod.objects.create(
+        name="AY 2025–2026", slug="ay-2025-2026-acct",
+        start_date=today - timedelta(days=200),
+        due_date=today - timedelta(days=170),
+        end_date=today + timedelta(days=15),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"),
+    )
+    upcoming = DuesPeriod.objects.create(
+        name="AY 2026–2027", slug="ay-2026-2027-acct",
+        start_date=today + timedelta(days=16),
+        due_date=today + timedelta(days=46),
+        end_date=today + timedelta(days=380),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"),
+    )
+    member = _user("acctnextdues@x.test")
+    client.force_login(member)
+    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+    squashed = " ".join(body.split())
+
+    assert f'name="period" value="{upcoming.slug}"' in squashed
+    upcoming.refresh_from_db()
+    amount = upcoming.dues_amount_candidate
+    assert f"Pay ${amount} for {upcoming.name}" in squashed

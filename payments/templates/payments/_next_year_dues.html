@@ -1,0 +1,18 @@
+{# Next year's dues, payable before it starts (task #625). Named by year, never "next year", so the member knows what they are buying (task #599). #}
+{% if next_period %}
+<div class="rounded-lg border border-base-300 bg-base-200/40 p-5 space-y-3">
+  <h2 class="font-serif text-xl text-base-content">Pay ahead for {{ next_period.name }}</h2>
+  <p class="text-sm text-base-content/70">
+    {{ next_period.name }} annual membership:
+    <span class="text-primary font-semibold">${{ next_amount }}</span>.
+    It runs {{ next_period.start_date|date:"M j, Y" }} – {{ next_period.end_date|date:"M j, Y" }}
+    and is due by {{ next_period.due_date|date:"M j, Y" }}.
+    You can pay it now, no need to wait for it to start.
+  </p>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="period" value="{{ next_period.slug }}">
+    <button type="submit" class="btn btn-primary">Pay ${{ next_amount }} for {{ next_period.name }} →</button>
+  </form>
+</div>
+{% endif %}

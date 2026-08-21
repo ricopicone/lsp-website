@@ -171,11 +171,20 @@ def create_registration_installment_session(
 
 
 def create_dues_session(payment: Payment) -> stripe.checkout.Session:
-    """Build a Checkout Session for membership dues (REG-12)."""
+    """Build a Checkout Session for membership dues (REG-12).
+
+    The period name goes in the description because dues can now be paid for a
+    year that has not started (task #625) — without it the receipt for an
+    early payment would not say which year it bought.
+    """
+    year = payment.dues_period.name if payment.dues_period_id else None
+    description = "Annual membership in the Lacanian School of Psychoanalysis"
     return _make_session(
         payment=payment,
         product_name="LSP membership dues",
-        product_description="Annual membership in the Lacanian School of Psychoanalysis",
+        product_description=(
+            f"{description} — {year}" if year else description
+        ),
         success_path=reverse("payments:thanks", args=[payment.id]) + "?stripe=success",
         cancel_path="/?stripe=cancelled",
     )

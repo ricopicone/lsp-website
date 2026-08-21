@@ -257,6 +257,59 @@ def mint_registration_charge(payment) -> Charge | None:
     )
 
 
+def mint_dues_charge(payment) -> Charge | None:
+    """Mint the dues charge alongside an early dues payment (task #625).
+
+    ``sync_dues_charges`` refuses a period that has not started, deliberately —
+    next year's members must not read as owing before the year opens. But a
+    member who *chose* to pay early is not next year's members: without a
+    charge their money sits as loose dues credit until September, which is
+    exactly the reading that has confused members before. So the obligation is
+    minted by the money arriving rather than by the calendar, the same way
+    ``mint_registration_charge`` mints at settle instead of at registration.
+
+    Idempotent against the sync (and itself): a non-void dues charge for the
+    year is returned untouched, so the two paths can never double-mint. The
+    amount is the year's tier rate, not what was paid — a part payment does
+    not shrink the obligation. Restricted to members the sync would itself
+    have minted for, so a voluntary payment from a non-obligated member stays
+    a credit rather than becoming a debt they never owed.
+    """
+    from .dues import is_dues_obligated
+
+    period = payment.dues_period
+    if period is None or payment.amount <= 0 or payment.user_id is None:
+        return None
+    existing = (
+        Charge.objects.filter(
+            user_id=payment.user_id,
+            category=Charge.Category.DUES,
+            dues_period=period,
+        )
+        .exclude(status=Charge.Status.VOID)
+        .first()
+    )
+    if existing is not None:
+        return existing
+    if not is_dues_obligated(payment.user):
+        return None
+    amount = period.amount_for_role(payment.user.profile.role)
+    if amount is None:
+        return None
+    today = timezone.localdate()
+    return Charge.objects.create(
+        user_id=payment.user_id,
+        category=Charge.Category.DUES,
+        amount=amount,
+        effective_date=period.start_date,
+        dues_period=period,
+        source=(Source.VERIFIED if payment.method == Payment.Method.STRIPE
+                else Source.STAFF),
+        notes=f"[{today}] Minted from payment #{payment.pk} at settle "
+              f"({period.name}).",
+    )
+
+
 def mint_comped_charge(registration) -> Charge | None:
     """A comp is a waived charge — the comped value shows on the statement."""
     if not registration.quoted_amount or registration.quoted_amount <= 0:

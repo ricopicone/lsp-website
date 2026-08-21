@@ -78,6 +78,17 @@ class DuesPeriod(models.Model):
         on = on_date or timezone.localdate()
         return cls.objects.filter(start_date__lte=on, end_date__gte=on).first()
 
+    @classmethod
+    def upcoming(cls, on_date=None):
+        """Return the earliest period starting after ``on_date`` (default
+        today), or None. Mirrors :meth:`TuitionPeriod.upcoming` — a period
+        already underway is not "upcoming". This is what lets a member pay
+        next year's dues before it starts (task #625); the rollover command
+        keeps current + next on hand, so there is normally a row here.
+        """
+        on = on_date or timezone.localdate()
+        return cls.objects.filter(start_date__gt=on).order_by("start_date").first()
+
     def amount_for_role(self, role: str):
         """Return the dues amount owed by a user with the given Profile.role.
 

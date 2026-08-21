@@ -61,6 +61,11 @@ def complete_payment(payment: Payment) -> None:
             if settled:
                 from .charges import mint_registration_charge
                 mint_registration_charge(payment)
+        if payment.payment_type == Payment.Type.DUES and payment.dues_period_id:
+            # An early dues payment has no charge yet — sync_dues_charges
+            # refuses a year that has not started (task #625).
+            from .charges import mint_dues_charge
+            mint_dues_charge(payment)
         if payment.payment_type == Payment.Type.TUITION and payment.tuition_installment_id:
             _apply_tuition_payment_success(payment)
         if payment.registration_installment_id:

@@ -1452,6 +1452,135 @@ Done (see `git log` for specifics):
   `TuitionEnrollment.source` defaults to `STAFF` and `tuition_decision` never
   overrides it, so a member's own decision reads as staff-recorded.
 
+- **An online event says where online** (task #624). Gardner, teaching a seminar
+  this term, asked whether the site's video room was meant for class meetings —
+  he wants screen sharing and breakout groups and would rather stay on Zoom "to
+  minimize technical snags." The answer was *yes, but the site will fight you
+  about it*, which nobody knew because nothing could record the case.
+  `Event.access_info` has always carried an external link and released it to
+  paid registrants, but `Event.format` says *whether* people gather in a room
+  and never *which*: `EventProposal.LocationKind` offered in-site / in-person /
+  hybrid, and the mint writes `access_info=""` for online. So an event meeting
+  on Zoom showed its students **two doors, one opening on an empty room** —
+  `_event_summary.html` renders `_location.html` (a Join button gated only on
+  the *global* `daily_enabled()`, never consulting `access_info`) at line 101,
+  and "Your access details" with the Zoom link at line 122. The confirmation
+  email was worse: `payments/emails.py` set `room_url` on `has_access and
+  daily_enabled()` with **no format check at all**, so *in-person* registrants
+  were mailed "Join the meeting room (in your browser, no app to install)" —
+  a live defect independent of the ask, fixed by the same predicate.
+  New `Event.online_venue` (`insite` / `external`) is orthogonal to `format`, so
+  a hybrid event can gather in a room *and* meet on Zoom, and everything asks one
+  property, `uses_insite_room`. **Deriving it from `access_info` was designed and
+  rejected**: the mint writes a hybrid event's *venue address* there
+  (`models.py:1581`) and a hybrid event still wants the room, so the guess would
+  have silently taken the room from every hybrid event — #532's lesson about a
+  fact each surface re-derives. The same heuristic **is** safe run once, where it
+  can be inspected and never fires again, so the migration carries
+  `format == online AND access_info != ""` across to EXTERNAL (#566's precedent).
+  **Faculty own the venue; the PC owns the format.** Neither `access_info` nor
+  `format` was on `EventEditForm`, so the person teaching the seminar had to ask
+  the PC to set their own meeting link. `online_venue` and `access_info` join it
+  (gated by `can_edit_event`, so conveners get them too); `format` stays PC-only,
+  since whether an offering gathers in a room is a program-level fact. Both are
+  out of `REVIEWABLE_FIELDS` — review protects the description the PC approved,
+  and a meeting link was never approved content. A `<select>` and a `<textarea>`
+  both survive the confirm dialog's hidden re-post (only checkboxes need the
+  exception list), pinned by test. `EventProposal.LocationKind` gains
+  `ONLINE_EXTERNAL`, and the mint's existing `access_info = self.location if
+  location_kind != ONLINE_INSITE` line carries the link with no change;
+  `location` stays optional, because faculty proposing in spring rarely have
+  autumn's Zoom link. **The trap the spec predicted and the first pass still hit
+  in one of two places:** a choices-plus-default field is required by default on
+  a ModelForm, and applying `required=False` to `EventEditForm` alone broke six
+  `ProgramEventForm` tests.
+  **Breakout rooms are now on** (`enable_breakout_rooms` in
+  `_desired_properties`, which #475 made the single source of truth `ensure_room`
+  reconciles against, so existing rooms pick it up at next join with no
+  backfill). Daily requires Prebuilt (what we run) and an *owner* in the call;
+  `is_owner` is `can_edit_event` / `is_workgroup_lead`, so faculty and leads get
+  the control. Daily documents it as beta. Screen sharing needed nothing — it was
+  always Prebuilt's default. The faculty guide's access section is rewritten as
+  two paths with what each gives and costs.
+  **The Workspace Meet tab deliberately stays** for an external event: the room
+  belongs to the *workgroup*, not the term. Known and accepted: setting the venue
+  back to the site's room while leaving a stale link in Joining details shows
+  both again — that is the faculty member's own data, not the site guessing.
+  **Two more instances of the same defect were found by grepping the remaining
+  "meeting room" copy** once the page and the email were fixed: the outside-
+  speaker invitation said "You will find the meeting room right there, no
+  separate link needed", and the activation page said they'd land where they can
+  open the room — both unconditional, so a special event on Zoom told its speaker
+  to look for a room it doesn't use. Both now branch on `uses_insite_room`.
+  Verified in a browser at both venues with video genuinely on
+  (`DJANGO_DAILY_ENABLED`, not `DAILY_ENABLED` — the env var and the setting have
+  different names, and the first check was meaningless because of it). Design:
+  `docs/superpowers/specs/2026-08-20-online-venue-and-zoom-path-design.md`.
+
+- **Paying before the year starts** (task #625). A candidate wrote in: *"how to
+  submit payment on the new website? It seems that perhaps the portal is not
+  available until Sep 1 but I would like to pay now."* He was right, and the
+  reason was one clause. The Account tab's next-year tuition block is guarded
+  `{% if owes_tuition and upcoming_period and not decision_exempt %}`, and that
+  block holds the **pay** form as well as the decision form — while the decision
+  form *inside* it already carried its own `{% if not decision_exempt %}`. The
+  inner guard was the one that meant something; the outer copy of it took the
+  pay button with it. And `tuition_decision_exempt` fires at **four non-skipping
+  enrollment rows** (`payments/ledger.py:463`), which for him were three paid
+  years plus the AY 2026–2027 `committed` row itself — so **recording the fourth
+  commitment is what removed his ability to pay it**. The current-year block's
+  pay button is *not* gated that way, so the button would have reappeared by
+  itself on September 1 when the year became `current()`: "not available until
+  Sep 1" was literally true and entirely accidental. Measured on prod before
+  touching anything: **9 members committed to AY 2026–2027 with an open $2,500
+  charge and no button anywhere on the site, $22,500** — the treasurer among
+  them, which is why writing to him hadn't helped either — against 2 committed
+  members who could pay, the two cohorts differing by nothing but how many
+  enrollment rows they happened to have. The backend was never broken:
+  `_resolve_tuition_period` already accepted the upcoming slug and
+  `test_pay_in_full_for_upcoming_period_binds_to_upcoming_not_current` already
+  pinned it. Nothing was missing but the button.
+  The guard becomes a **view flag**, `show_upcoming_tuition`, precisely so the
+  two conditions stop looking alike: the block renders when there is something
+  to decide **or** something to pay (`upcoming_enrollment or not
+  decision_exempt`), so an exempt member with no row for next year still gets
+  nothing rather than an empty heading. Also found and filled: `upcoming_
+  installments` was computed in the view and rendered by no template, so an
+  **approved plan for next year** would have had rows in the database and no way
+  to pay them — inert today, but four plan applications are pending with the
+  Board.
+  **Dues had the same shape and no fix at all.** `/dues/` was hardwired to
+  `DuesPeriod.current()`, there was no `DuesPeriod.upcoming()`, and
+  `dues_already_paid.html` told members outright that "The next cycle opens
+  after that" — the sentence that reads as *the portal is not available until
+  Sep 1*. Dues now mirrors tuition: `DuesPeriod.upcoming()`, a
+  `_resolve_dues_period` validating a POSTed slug against `{current, upcoming}`
+  (an unknown slug falls back to current rather than binding money to an
+  arbitrary year), and the offer rendered on `/dues/`, on the paid-up page, and
+  on the Account tab — **each naming its year**, per #599.
+  Two traps, both money-shaped. `dues_state` is hardwired to
+  `DuesPeriod.current()` (`payments/ledger.py:247`), so the already-paid
+  short-circuit, left unscoped, told a **paid-up** member that next year was
+  settled too and swallowed the very POST they had just asked for — this bug's
+  own dead end, rebuilt inside its fix; the guard is now per-period, with the
+  FK-bound `has_dues_payment_for` carrying it for any year but the current one.
+  And an early payment has **no charge**, because `sync_dues_charges` refuses a
+  year that has not started, deliberately — next year's members must not read as
+  owing early. But a member who *chose* to pay early is not next year's members,
+  and without a charge their money sits as loose dues credit for as long as the
+  gap runs. So `mint_dues_charge` mints at **settle**, from `complete_payment`
+  (the one chokepoint the Stripe webhook and the treasurer's "Apply payment
+  success" both route through), exactly as `mint_registration_charge` already
+  does one function above it: the obligation is created by money arriving rather
+  than by a calendar, and the bulk refusal stays untouched for everyone who has
+  not paid. It bills the **year's tier rate, not the amount paid** (a part
+  payment must not shrink the obligation), returns any existing non-void row so
+  the sync and the settle path can never double-mint, and mints only for members
+  `sync_dues_charges` would itself have covered, so a voluntary payment from a
+  non-obligated member stays a credit rather than a debt they never owed.
+  Finally the dues Checkout line item names the period, or an early payment's
+  receipt would not say which year it bought. No migration, no flag, no backfill.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

@@ -209,8 +209,9 @@ payments/treasurer/member_detail.html for the full picture with actions).
         {% endif %}
         {% endif %}
 
-        {% if owes_tuition and upcoming_period and not decision_exempt %}
+        {% if show_upcoming_tuition %}
         {# Next academic year's decision (task #450 phase A) — recorded ahead of time, mirroring the current-period block above. #}
+        {# The guard is a view flag, not `not decision_exempt`: exemption must silence the decision form below, never the pay form above it (task #625). #}
         <div id="decision-{{ upcoming_period.slug }}" class="scroll-mt-24 rounded-lg border border-base-300 bg-base-200/30 p-5 space-y-4">
           <h3 class="font-serif text-lg text-base-content">Your {{ upcoming_period.name }} tuition decision</h3>
 
@@ -229,6 +230,36 @@ payments/treasurer/member_detail.html for the full picture with actions).
               <input type="hidden" name="period" value="{{ upcoming_period.slug }}">
               <button type="submit" class="btn btn-primary">Pay ${{ upcoming_period.tuition_amount }} now →</button>
             </form>
+            <p class="text-xs text-base-content/60">You can pay ahead of {{ upcoming_period.name }}, no need to wait for it to start.</p>
+          </div>
+          {% endif %}
+
+          {% if upcoming_installments %}
+          {# An approved plan for next year had rows in the database and no table on the page (task #625). #}
+          <div class="rounded-lg border border-base-300 p-5 space-y-3">
+            <h3 class="font-serif text-lg text-base-content">My installments — {{ upcoming_period.name }}</h3>
+            <table class="table table-sm">
+              <thead><tr><th>#</th><th>Due</th><th class="text-right">Amount</th><th></th></tr></thead>
+              <tbody>
+                {% for inst in upcoming_installments %}
+                <tr>
+                  <td>{{ inst.sequence }}</td>
+                  <td class="whitespace-nowrap">{{ inst.due_date|date:"M j, Y" }}</td>
+                  <td class="text-right whitespace-nowrap">${{ inst.amount }}</td>
+                  <td class="text-right">
+                    {% if inst.paid %}
+                      <span class="badge badge-success badge-sm">Paid {{ inst.paid_at|date:"M j" }}</span>
+                    {% else %}
+                      <form method="post" action="{% url 'tuition_pay_installment' inst.id %}" class="contents">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary btn-xs">Pay →</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
             <p class="text-xs text-base-content/60">You can pay ahead of {{ upcoming_period.name }}, no need to wait for it to start.</p>
           </div>
           {% endif %}
@@ -282,6 +313,22 @@ payments/treasurer/member_detail.html for the full picture with actions).
             <form method="post" action="{% url 'dues' %}">
               {% csrf_token %}
               <button type="submit" class="btn btn-primary">Pay ${{ dues_amount }} dues →</button>
+            </form>
+          </div>
+          {% endif %}
+
+          {% if next_dues_period %}
+          {# Next year's dues, payable before it starts (task #625), named by year (task #599). #}
+          <div class="rounded-lg border border-base-300 bg-base-200/30 p-5 space-y-3">
+            <h3 class="font-serif text-lg text-base-content">Pay ahead for {{ next_dues_period.name }}</h3>
+            <p class="text-sm text-base-content/70">
+              ${{ next_dues_amount }}, due by {{ next_dues_period.due_date|date:"M j, Y" }}.
+              You can pay it now, no need to wait for it to start.
+            </p>
+            <form method="post" action="{% url 'dues' %}">
+              {% csrf_token %}
+              <input type="hidden" name="period" value="{{ next_dues_period.slug }}">
+              <button type="submit" class="btn btn-primary">Pay ${{ next_dues_amount }} for {{ next_dues_period.name }} →</button>
             </form>
           </div>
           {% endif %}

@@ -289,7 +289,7 @@ def _formation_money_context(request) -> dict:
     from django.utils import timezone
 
     from payments import ledger
-    from payments.dues import is_dues_obligated
+    from payments.dues import has_dues_payment_for, is_dues_obligated
     from payments.forms import TuitionDecisionForm
     from payments.models import (
         DuesPeriod,
@@ -372,6 +372,18 @@ def _formation_money_context(request) -> dict:
         dues_period.amount_for_role(profile.role) if dues_period is not None else None
     )
     dues_paid = acct["dues_state"] in ("paid", "waived")
+    # Next year's dues, payable before it starts (task #625). Same per-year
+    # double-payment guard as /dues/, so paying ahead neither settles this
+    # year nor lets next year be paid twice.
+    next_dues_period = DuesPeriod.upcoming()
+    next_dues_amount = (
+        next_dues_period.amount_for_role(profile.role)
+        if next_dues_period is not None else None
+    )
+    if next_dues_amount is not None and has_dues_payment_for(
+        user, next_dues_period,
+    ):
+        next_dues_period = next_dues_amount = None
 
     # --- Period lists for the statement's re-categorize modal (dues/tuition
     # year selectors) — the modal itself defaults to "Auto (from payment
@@ -414,6 +426,17 @@ def _formation_money_context(request) -> dict:
         "tuition_stripe_status": request.GET.get("stripe"),
         # upcoming year's decision (task #450 phase A)
         "upcoming_period": upcoming_period,
+        # The next year's block carries the *pay* form as well as the decision
+        # form, so it must not be gated on decision exemption the way the
+        # form inside it is: exemption arrives with the fourth non-skipping
+        # enrollment, which is usually the very year still to be paid, and
+        # gating the block hid the only way to pay it (task #625). An exempt
+        # member with no row for next year has nothing to decide and nothing
+        # to pay, so the block stays gone rather than rendering empty.
+        "show_upcoming_tuition": bool(
+            profile.owes_tuition and upcoming_period
+            and (upcoming_enrollment or not decision_exempt)
+        ),
         "upcoming_enrollment": upcoming_enrollment,
         "upcoming_installments": upcoming_installments,
         "upcoming_tuition_form": TuitionDecisionForm(
@@ -431,6 +454,8 @@ def _formation_money_context(request) -> dict:
         "dues_obligated": dues_obligated,
         "dues_amount": dues_amount,
         "dues_paid": dues_paid,
+        "next_dues_period": next_dues_period,
+        "next_dues_amount": next_dues_amount,
         # statement actions (retype/split/note modals)
         "tuition_periods": tuition_periods,
         "dues_periods": dues_periods,

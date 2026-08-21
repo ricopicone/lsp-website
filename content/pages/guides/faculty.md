@@ -211,19 +211,49 @@ faculty-led, so you appear as an *organizer* on your group's roster rather than
 as faculty, and the tools sit in the same place: your group's Workspace, Roster
 tab.
 
-## Access details, the room, and recordings
+## Where your class meets
 
-**Access details**—the room, the address, or a meeting link—are set with the
-event and shown to anyone registered. You and your co-faculty see them without
-registering, since you're the ones running the meeting. If they're wrong or
-missing, ask the Program Committee.
+You choose, on your event's **Edit** page, under *Where it meets*. Both options
+work; pick the one you'd rather run.
 
-If the event meets **in the site's own video room (recommended)**, there's nothing to send:
-the join button on the event page and on your Workspace's **Meet** tab is the
-way in, and it appears for registrants when the meeting is live.
+### In the site's own video room
+
+There's no link to send. A **Join** button appears on the event page for
+everyone who's registered, once the meeting begins, and you can open the room
+from that same page any time before. Point anyone who asks how to join at the
+event page.
+
+It runs in the browser with nothing to install. You can share your screen. As a
+host you can mute, turn off a camera, or remove someone, and you can **break the
+class into smaller groups** from inside the room, then bring everyone back.
+Breakout rooms are new, so try them once before you need them in class.
 
 **Recording is opt-in.** Nothing records itself. A host starts the recording
 from inside the room, and only when recording is enabled for your group.
+
+Before a first meeting, you and your students can check camera and microphone
+at **Test your video & audio**, linked from the event page.
+
+### On Zoom, or another service
+
+Set *Meeting place* to **External link**, and put the link, with any passcode,
+in **Joining details** just below it. The site then stops offering its own room
+for that event.
+
+Your students get that link on the event page and in their confirmation email,
+once they've registered and paid. You and your co-faculty see it without
+registering. You can change it at any point in the term.
+
+What you give up by meeting elsewhere: the site can't show a Join button or say
+who's in the room, and recordings stay wherever your service puts them rather
+than arriving in Works.
+
+### Anything else
+
+If your event meets **in person**, the address goes in *Joining details* too,
+and the Program Committee sets the venue on each session. If the format itself
+is wrong, online where it should be in person or hybrid, ask the Program
+Committee.
 
 ## Who to ask
 
