@@ -213,20 +213,20 @@ tab.
 
 ## Where your class meets
 
-You choose, on your event's **Edit** page, under *Where it meets*. Both options
-work; pick the one you'd rather run.
+You choose, on your event's **Edit** page, under *Where it meets*. **The site's
+own room is the recommendation for most meetings.** The one exception is
+breakout groups: if splitting the class into smaller groups is part of how you
+teach, use Zoom.
 
-### In the site's own video room
+### In the site's own video room (recommended)
 
 There's no link to send. A **Join** button appears on the event page for
 everyone who's registered, once the meeting begins, and you can open the room
 from that same page any time before. Point anyone who asks how to join at the
 event page.
 
-It runs in the browser with nothing to install. You can share your screen. As a
-host you can mute, turn off a camera, or remove someone, and you can **break the
-class into smaller groups** from inside the room, then bring everyone back.
-Breakout rooms are new, so try them once before you need them in class.
+It runs in the browser with nothing to install. You can share your screen, and
+as a host you can mute, turn off a camera, or remove someone.
 
 **Recording is opt-in.** Nothing records itself. A host starts the recording
 from inside the room, and only when recording is enabled for your group.
@@ -235,6 +235,10 @@ Before a first meeting, you and your students can check camera and microphone
 at **Test your video & audio**, linked from the event page.
 
 ### On Zoom, or another service
+
+**Recommended if you use breakout groups.** The site's room can split into
+smaller groups too, but that part is new here, so for a class that relies on it
+Zoom is the steadier choice for now.
 
 Set *Meeting place* to **External link**, and put the link, with any passcode,
 in **Joining details** just below it. The site then stops offering its own room

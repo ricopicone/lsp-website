@@ -135,9 +135,11 @@
         <label class="label-text" for="{{ form.online_venue.id_for_label }}">Meeting place</label>
         {{ form.online_venue }}
         <p class="text-xs text-base-content/60">
-          The site's video room needs no link, a Join button appears here for
-          everyone registered once the meeting begins. Choose the external link
-          to meet on Zoom or another service, and put the link below.
+          The site's video room is recommended for most meetings, and needs no
+          link, a Join button appears here for everyone registered once the
+          meeting begins. Choose the external link to meet on Zoom or another
+          service, and put the link below. If you use breakout groups, Zoom is
+          recommended for now.
         </p>
         {% if form.online_venue.errors %}<p class="text-error text-xs">{{ form.online_venue.errors|join:", " }}</p>{% endif %}
       </div>
