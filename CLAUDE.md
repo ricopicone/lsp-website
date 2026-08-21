@@ -1501,7 +1501,13 @@ Done (see `git log` for specifics):
   `is_owner` is `can_edit_event` / `is_workgroup_lead`, so faculty and leads get
   the control. Daily documents it as beta. Screen sharing needed nothing — it was
   always Prebuilt's default. The faculty guide's access section is rewritten as
-  two paths with what each gives and costs.
+  two paths with what each gives and costs. **The site's own room stays the
+  recommendation for most meetings, with breakout groups the stated exception**
+  (Rico, 2026-08-21): the room can split into groups, but that part is new, so a
+  class that depends on breakouts is pointed at Zoom rather than sold a beta.
+  The guide, the faculty form's help text, and the field's `help_text` all carry
+  the same recommendation, since the form is where the choice is actually made
+  and neutral copy there would leave the guide's recommendation unread.
   **The Workspace Meet tab deliberately stays** for an external event: the room
   belongs to the *workgroup*, not the term. Known and accepted: setting the venue
   back to the site's room while leaving a stale link in Joining details shows
