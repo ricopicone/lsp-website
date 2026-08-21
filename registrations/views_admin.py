@@ -26,7 +26,7 @@ from payments import notifications as notify_payments
 
 from .models import Registration
 from .permissions import can_administer_registrations
-from .services import comp_registration
+from .services import comp_registration, remove_registration
 
 PAGE_SIZE = 50
 
@@ -230,6 +230,41 @@ def registrar_comp(request, reg_id: int):
         messages.warning(request, "Comped, but the confirmation email failed.")
     else:
         messages.warning(request, "Only awaiting-payment registrations can be comped.")
+    return _back(request)
+
+
+@registrar_required
+@require_POST
+def registrar_remove(request, reg_id: int):
+    """Take a registrant off an event (task #627).
+
+    Removing and refunding are two decisions: the refund only happens where
+    the form says ``refund=yes``, so a missing or malformed radio can never
+    move money. Where the site cannot refund cleanly the place is still
+    released and the treasurer is notified.
+    """
+    reg = get_object_or_404(Registration, pk=reg_id)
+    who, title = reg.user.email, reg.event.title
+    out = remove_registration(
+        reg, request.user,
+        refund=request.POST.get("refund") == "yes",
+        reason=(request.POST.get("reason") or "").strip(),
+    )
+    if not out.removed:
+        messages.warning(request, "That registration was already closed.")
+    elif out.refunded:
+        messages.success(
+            request,
+            f"Removed {who} from {title} and refunded ${out.refunded_amount}.",
+        )
+    elif out.left_money:
+        messages.success(
+            request,
+            f"Removed {who} from {title}. The ${out.left_money} already paid "
+            "was not refunded, and the treasurer has been notified.",
+        )
+    else:
+        messages.success(request, f"Removed {who} from {title}.")
     return _back(request)
 
 

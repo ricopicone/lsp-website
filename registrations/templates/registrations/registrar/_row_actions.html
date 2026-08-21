@@ -49,6 +49,56 @@ next_url (where the POST redirects back to).
   </form>
   {% endif %}
 
+  {% if r.is_removable %}
+  <button type="button" class="btn btn-ghost btn-xs text-error" title="Remove from event"
+          aria-label="Remove from event"
+          onclick="document.getElementById('remove-{{ idp }}-{{ r.id }}').showModal()">{% icon "user-minus" %}</button>
+  <dialog id="remove-{{ idp }}-{{ r.id }}" class="modal">
+    <div class="modal-box max-w-sm whitespace-normal text-left">
+      <h3 class="font-serif text-lg mb-2">Remove from event</h3>
+      <p class="text-sm text-base-content/70 mb-3">
+        Take {{ r.user.get_full_name|default:r.user.email }} off
+        {{ r.event.title }}? Their place is released, they drop off the roster,
+        and they lose access. They are emailed either way.
+      </p>
+      <form method="post" action="{% url 'registrations:registrar_remove' r.id %}" class="space-y-2">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next_url }}">
+
+        {% if r.refundable_amount %}
+        <div class="bg-base-200 rounded p-2 space-y-1 text-sm">
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="radio" name="refund" value="no" class="radio radio-xs mt-1" checked>
+            <span>Remove without refunding, the treasurer settles the
+              ${{ r.refundable_amount }} separately</span>
+          </label>
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="radio" name="refund" value="yes" class="radio radio-xs mt-1">
+            <span>Remove and refund ${{ r.refundable_amount }} to the card</span>
+          </label>
+        </div>
+        {% elif r.settled_amount %}
+        <p class="text-xs text-base-content/60 bg-base-200 rounded p-2">
+          ${{ r.settled_amount }} has been paid on this registration, and the
+          site cannot refund it automatically. The place is released and the
+          treasurer is notified to settle the money.
+        </p>
+        {% endif %}
+
+        <textarea name="reason" rows="2" maxlength="500"
+                  class="textarea textarea-bordered w-full text-sm"
+                  placeholder="Reason (optional, included in the email)"></textarea>
+        <div class="modal-action mt-2">
+          <button type="submit" class="btn btn-error btn-sm">Remove</button>
+          <button type="button" class="btn btn-ghost btn-sm"
+                  onclick="document.getElementById('remove-{{ idp }}-{{ r.id }}').close()">Cancel</button>
+        </div>
+      </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+  {% endif %}
+
   <button type="button" class="btn btn-ghost btn-xs {% if r.staff_notes %}text-info{% endif %}"
           title="{% if r.staff_notes %}Staff notes (has notes){% else %}Add staff note{% endif %}"
           aria-label="Staff notes"

@@ -79,10 +79,27 @@ def offline_paid_registration(event, tier, member):
 
 
 @pytest.fixture
-def plan_registration(event, tier, member):
+def offline_paid_registration_other_member(event, tier):
+    """A second member, because the partial unique constraint allows only one
+    active registration per (user, event)."""
+    other = User.objects.create_user(email="offline@example.com")
+    reg = _reg(event, tier, other, Registration.Status.PAID)
+    Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION, registration=reg, user=other,
+        amount=Decimal("300.00"), status=Payment.Status.SUCCEEDED,
+        method=Payment.Method.OFFLINE,
+    )
+    return reg
+
+
+@pytest.fixture
+def plan_registration(event, tier):
+    """Its own member: only one active registration per (user, event) is
+    allowed, and some tests want this alongside another paid row."""
     from payments.registration_plans import build_schedule
 
-    reg = _reg(event, tier, member, Registration.Status.PAID)
+    payer = User.objects.create_user(email="plan@example.com")
+    reg = _reg(event, tier, payer, Registration.Status.PAID)
     build_schedule(reg, 3)
     return reg
 
@@ -365,3 +382,119 @@ def test_remove_records_the_reason_in_staff_notes(awaiting_registration, staff_u
     )
     awaiting_registration.refresh_from_db()
     assert "Faculty asked." in awaiting_registration.staff_notes
+
+
+# ---- Task 5: the console surface -----------------------------------------
+
+
+@pytest.fixture
+def registrar(db):
+    from core.models import StaffRole
+
+    u = User.objects.create_user(email="console@example.com")
+    StaffRole.objects.get(key=StaffRole.REGISTRAR).holders.add(u)
+    return u
+
+
+@pytest.mark.django_db
+def test_registrar_can_remove(client, registrar, awaiting_registration):
+    from django.urls import reverse
+
+    client.force_login(registrar)
+    resp = client.post(
+        reverse("registrations:registrar_remove", args=[awaiting_registration.id]),
+        {"refund": "no", "reason": "Faculty request."},
+    )
+    assert resp.status_code == 302
+    awaiting_registration.refresh_from_db()
+    assert awaiting_registration.status == Registration.Status.CANCELLED
+
+
+@pytest.mark.django_db
+def test_registrar_remove_can_refund(client, registrar, paid_registration):
+    from django.urls import reverse
+
+    client.force_login(registrar)
+    with patch(
+        "payments.refund.stripe.Refund.create", return_value=_fake_refund(),
+    ) as create:
+        client.post(
+            reverse("registrations:registrar_remove", args=[paid_registration.id]),
+            {"refund": "yes"},
+        )
+    create.assert_called_once()
+    paid_registration.refresh_from_db()
+    assert paid_registration.status == Registration.Status.REFUNDED
+
+
+@pytest.mark.django_db
+def test_remove_defaults_to_not_refunding(client, registrar, paid_registration):
+    """A missing radio must never move money."""
+    from django.urls import reverse
+
+    client.force_login(registrar)
+    with patch("payments.refund.stripe.Refund.create") as create:
+        client.post(
+            reverse("registrations:registrar_remove", args=[paid_registration.id]),
+            {},
+        )
+    create.assert_not_called()
+    paid_registration.refresh_from_db()
+    assert paid_registration.status == Registration.Status.CANCELLED
+
+
+@pytest.mark.django_db
+def test_non_registrar_gets_404(client, member, awaiting_registration):
+    from django.urls import reverse
+
+    client.force_login(member)
+    resp = client.post(
+        reverse("registrations:registrar_remove", args=[awaiting_registration.id]),
+        {"refund": "no"},
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_remove_button_renders_for_a_live_row(client, registrar, awaiting_registration):
+    from django.urls import reverse
+
+    client.force_login(registrar)
+    body = client.get(reverse("registrations:registrar")).content.decode()
+    assert f"remove-row-{awaiting_registration.id}" in body
+
+
+@pytest.mark.django_db
+def test_remove_button_absent_on_a_closed_row(client, registrar, event, tier, member):
+    from django.urls import reverse
+
+    reg = _reg(event, tier, member, Registration.Status.CANCELLED)
+    client.force_login(registrar)
+    body = client.get(
+        reverse("registrations:registrar") + "?status=all"
+    ).content.decode()
+    assert f"remove-row-{reg.id}" not in body
+
+
+@pytest.mark.django_db
+def test_refund_radio_only_where_the_site_can_refund(
+    paid_registration, offline_paid_registration_other_member, plan_registration,
+):
+    """A refundable row offers the choice; an offline payment, a plan, or more
+    than one payment all send the money to the treasurer instead."""
+    assert paid_registration.refundable_amount == Decimal("300.00")
+    assert offline_paid_registration_other_member.refundable_amount is None
+    assert offline_paid_registration_other_member.settled_amount == Decimal("300.00")
+    assert plan_registration.refundable_amount is None
+
+
+@pytest.mark.django_db
+def test_remove_dialog_offers_the_refund_choice(client, registrar, paid_registration):
+    from django.urls import reverse
+
+    client.force_login(registrar)
+    body = client.get(
+        reverse("registrations:registrar") + "?status=all"
+    ).content.decode()
+    assert f'id="remove-row-{paid_registration.id}"' in body
+    assert "Remove and refund $300.00 to the card" in body

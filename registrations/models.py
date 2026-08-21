@@ -203,6 +203,51 @@ class Registration(models.Model):
         return is_on_plan(self)
 
     @property
+    def is_removable(self) -> bool:
+        """Whether the console's Remove button applies (task #627). False for
+        the three statuses that already closed the row."""
+        from .services import TERMINAL_STATUSES
+        return self.status not in TERMINAL_STATUSES
+
+    @property
+    def refundable_amount(self):
+        """What the site could refund on its own, or ``None``.
+
+        Set only where exactly one succeeded Stripe payment settled this
+        registration and it carries a payment intent. A plan, an offline
+        payment, or more than one payment all return ``None`` — the money is
+        the treasurer's to settle, so the console must not offer the choice.
+        """
+        from payments.models import Payment
+        from payments.registration_plans import is_on_plan
+
+        if is_on_plan(self):
+            return None
+        succeeded = list(self.payments.filter(status=Payment.Status.SUCCEEDED))
+        if len(succeeded) != 1:
+            return None
+        payment = succeeded[0]
+        if payment.method != Payment.Method.STRIPE:
+            return None
+        if not payment.stripe_payment_intent_id:
+            return None
+        return payment.amount
+
+    @property
+    def settled_amount(self):
+        """Money already received against this registration, refundable or
+        not — what a removal would leave behind if it does not refund."""
+        from decimal import Decimal
+
+        from payments.models import Payment
+        return sum(
+            (p.amount for p in self.payments.filter(
+                status=Payment.Status.SUCCEEDED,
+            )),
+            Decimal("0"),
+        )
+
+    @property
     def needs_payment(self) -> bool:
         """Approved (or normal) but unpaid — a Stripe payment is still due."""
         return self.status == self.Status.AWAITING_PAYMENT and self.quoted_amount > 0
