@@ -2013,6 +2013,27 @@ def _handle_checkout_expired(session) -> None:
         )
 
 
+def _resolve_dues_period(request):
+    """Resolve the target DuesPeriod from an optional POST ``period`` slug.
+
+    Mirrors :func:`_resolve_tuition_period` (task #450 phase B): only the
+    current period and the next-by-start_date upcoming period are valid
+    targets, and an unknown or stale slug falls back to current rather than
+    binding money to an arbitrary year. This is what lets a member pay next
+    year's dues ahead of September (task #625).
+    """
+    from .models import DuesPeriod
+
+    period = DuesPeriod.current()
+    requested = request.POST.get("period", "")
+    if requested:
+        allowed = {
+            p.slug: p for p in (period, DuesPeriod.upcoming()) if p is not None
+        }
+        period = allowed.get(requested, period)
+    return period
+
+
 @login_required
 def dues_pay(request):
     """Membership dues entry point (REG-12) — tiered by role per DuesPeriod.
@@ -2023,24 +2044,33 @@ def dues_pay(request):
     """
     from . import ledger
     from .dues import has_dues_payment_for
-    from .models import DuesPeriod
 
-    period = DuesPeriod.current()
+    period = _resolve_dues_period(request)
 
-    # Already paid for the current cycle — show a friendly status panel.
+    # Already paid for this cycle — show a friendly status panel.
     # Two checks: the unified-ledger state (covered/waived by the sweep) OR a
     # direct FK-bound dues payment for this period. The direct check is the
     # double-payment guard — it must hold even when no charge has been minted
     # yet (state None) or when backfilled older charges eat the pot (state
     # "unpaid" despite this year's dues literally being paid).
+    #
+    # ``dues_state`` is hardwired to DuesPeriod.current() (payments/ledger.py),
+    # so it may only speak for the current year: left unscoped it would tell a
+    # paid-up member that next year is already settled and swallow the early
+    # payment they just asked to make (task #625). The FK-bound check is the
+    # per-year one and carries the guard for any other period.
+    from .models import DuesPeriod
+
     if period is not None and (
-        ledger.member_account(request.user)["dues_state"] in ("paid", "waived")
-        or has_dues_payment_for(request.user, period)
+        has_dues_payment_for(request.user, period)
+        or (period == DuesPeriod.current()
+            and ledger.member_account(request.user)["dues_state"]
+            in ("paid", "waived"))
     ):
         return render(
             request,
             "payments/dues_already_paid.html",
-            {"period": period},
+            _next_year_dues_offer(request.user, {"period": period}),
         )
 
     role = request.user.profile.role
@@ -2075,8 +2105,30 @@ def dues_pay(request):
     return render(
         request,
         "payments/dues.html",
-        {"amount": amount, "period": period},
+        _next_year_dues_offer(
+            request.user, {"amount": amount, "period": period},
+        ),
     )
+
+
+def _next_year_dues_offer(user, context: dict) -> dict:
+    """Add ``next_period`` / ``next_amount`` when next year's dues are open to
+    this member and not already paid (task #625).
+
+    The double-payment guard is per year, so paying next year early neither
+    marks this year settled nor lets next year be paid twice.
+    """
+    from .dues import has_dues_payment_for
+    from .models import DuesPeriod
+
+    upcoming = DuesPeriod.upcoming()
+    amount = (
+        upcoming.amount_for_role(user.profile.role)
+        if upcoming is not None else None
+    )
+    if amount is None or has_dues_payment_for(user, upcoming):
+        return context
+    return {**context, "next_period": upcoming, "next_amount": amount}
 
 
 def _settings_dues_amount_for_role(role: str) -> Decimal | None:

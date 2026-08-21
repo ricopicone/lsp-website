@@ -14,8 +14,9 @@
 
   <p class="text-sm text-base-content/60">
     Period runs {{ period.start_date|date:"M j, Y" }} – {{ period.end_date|date:"M j, Y" }}.
-    The next cycle opens after that.
   </p>
+
+  {% include "payments/_next_year_dues.html" %}
 
   <p>
     <a href="{% url 'core:landing' %}" class="link link-hover text-base-content/70">← Back to home</a>

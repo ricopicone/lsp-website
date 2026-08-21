@@ -1452,6 +1452,70 @@ Done (see `git log` for specifics):
   `TuitionEnrollment.source` defaults to `STAFF` and `tuition_decision` never
   overrides it, so a member's own decision reads as staff-recorded.
 
+- **Paying before the year starts** (task #625). A candidate wrote in: *"how to
+  submit payment on the new website? It seems that perhaps the portal is not
+  available until Sep 1 but I would like to pay now."* He was right, and the
+  reason was one clause. The Account tab's next-year tuition block is guarded
+  `{% if owes_tuition and upcoming_period and not decision_exempt %}`, and that
+  block holds the **pay** form as well as the decision form — while the decision
+  form *inside* it already carried its own `{% if not decision_exempt %}`. The
+  inner guard was the one that meant something; the outer copy of it took the
+  pay button with it. And `tuition_decision_exempt` fires at **four non-skipping
+  enrollment rows** (`payments/ledger.py:463`), which for him were three paid
+  years plus the AY 2026–2027 `committed` row itself — so **recording the fourth
+  commitment is what removed his ability to pay it**. The current-year block's
+  pay button is *not* gated that way, so the button would have reappeared by
+  itself on September 1 when the year became `current()`: "not available until
+  Sep 1" was literally true and entirely accidental. Measured on prod before
+  touching anything: **9 members committed to AY 2026–2027 with an open $2,500
+  charge and no button anywhere on the site, $22,500** — the treasurer among
+  them, which is why writing to him hadn't helped either — against 2 committed
+  members who could pay, the two cohorts differing by nothing but how many
+  enrollment rows they happened to have. The backend was never broken:
+  `_resolve_tuition_period` already accepted the upcoming slug and
+  `test_pay_in_full_for_upcoming_period_binds_to_upcoming_not_current` already
+  pinned it. Nothing was missing but the button.
+  The guard becomes a **view flag**, `show_upcoming_tuition`, precisely so the
+  two conditions stop looking alike: the block renders when there is something
+  to decide **or** something to pay (`upcoming_enrollment or not
+  decision_exempt`), so an exempt member with no row for next year still gets
+  nothing rather than an empty heading. Also found and filled: `upcoming_
+  installments` was computed in the view and rendered by no template, so an
+  **approved plan for next year** would have had rows in the database and no way
+  to pay them — inert today, but four plan applications are pending with the
+  Board.
+  **Dues had the same shape and no fix at all.** `/dues/` was hardwired to
+  `DuesPeriod.current()`, there was no `DuesPeriod.upcoming()`, and
+  `dues_already_paid.html` told members outright that "The next cycle opens
+  after that" — the sentence that reads as *the portal is not available until
+  Sep 1*. Dues now mirrors tuition: `DuesPeriod.upcoming()`, a
+  `_resolve_dues_period` validating a POSTed slug against `{current, upcoming}`
+  (an unknown slug falls back to current rather than binding money to an
+  arbitrary year), and the offer rendered on `/dues/`, on the paid-up page, and
+  on the Account tab — **each naming its year**, per #599.
+  Two traps, both money-shaped. `dues_state` is hardwired to
+  `DuesPeriod.current()` (`payments/ledger.py:247`), so the already-paid
+  short-circuit, left unscoped, told a **paid-up** member that next year was
+  settled too and swallowed the very POST they had just asked for — this bug's
+  own dead end, rebuilt inside its fix; the guard is now per-period, with the
+  FK-bound `has_dues_payment_for` carrying it for any year but the current one.
+  And an early payment has **no charge**, because `sync_dues_charges` refuses a
+  year that has not started, deliberately — next year's members must not read as
+  owing early. But a member who *chose* to pay early is not next year's members,
+  and without a charge their money sits as loose dues credit for as long as the
+  gap runs. So `mint_dues_charge` mints at **settle**, from `complete_payment`
+  (the one chokepoint the Stripe webhook and the treasurer's "Apply payment
+  success" both route through), exactly as `mint_registration_charge` already
+  does one function above it: the obligation is created by money arriving rather
+  than by a calendar, and the bulk refusal stays untouched for everyone who has
+  not paid. It bills the **year's tier rate, not the amount paid** (a part
+  payment must not shrink the obligation), returns any existing non-void row so
+  the sync and the settle path can never double-mint, and mints only for members
+  `sync_dues_charges` would itself have covered, so a voluntary payment from a
+  non-obligated member stays a credit rather than a debt they never owed.
+  Finally the dues Checkout line item names the period, or an early payment's
+  receipt would not say which year it bought. No migration, no flag, no backfill.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

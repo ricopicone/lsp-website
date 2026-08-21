@@ -1,9 +1,9 @@
-# Resuming task #564
+# Resuming task #625
 
-**Task:** Seminar registration pre-approval for existing seminar
+**Task:** Julien's email
 
 ## Description
-I know we have a setting for this at creation, but I'm not sure what happens if we turn on that setting once the seminar already exists and has registered students. Review the code and suggest a way forward.
+He's asking if there's a way to pay now or if he has to wait until September 1 (which is when the charge officially lands). We should have a clear pathway to pay early right? Might need to open it
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -56,6 +56,14 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **decision-form-must-name-its-year** (gotcha) — Task #599 SHIPPED+LIVE 2026-08-16: the Account tab shows two tuition decision forms and the current-year one said only "this academic year", so a new member filed her decision and $2,500 under the year that was ending, then read as blocked from every 2026-27 event
+- **pushed-is-not-deployed** (gotcha) — Deploy only happens if the full CI test suite passes — a single failing test silently aborts the deploy, so a successful push to main does NOT mean prod updated. Verify the Deploy run goes green.
+- **admin-surfaces-are-role-based** (convention) — Admin UI here is organised by the ROLE that owns the work (/admin-tools/&lt;role&gt;/), never by the object being edited — a public object page gets at most a gated deep link; check the role landing pages for a "Planned" card before designing, the slot is often already reserved
+- **document-replacement-and-revisions** (architecture) — Task #592 SHIPPED+LIVE 2026-08-15: documents are replaced at /admin-tools/web-coordinator/documents/ (role-based, Web Coordinator only) with a restorable history that reads as a list of VERSIONS, not events — a revision is the state BEFORE a save, so no backfill was needed, and Django admin edits snapshot too
+- **local-date-not-utc-date** (convention) — Task #571 SHIPPED 2026-08-12: the date off timezone.now() is UTC while every DateField here is a school-timezone date — they disagree from 17:00 Pacific (on the CI runner too), so all 57 call sites are timezone.localdate() and core/test_local_dates.py guards it
+- **offering-title-is-stored-twice** (architecture) — Task #568 SHIPPED 2026-08-12: an offering's title is copied onto Workgroup.name (and three Parlêtre channel names/descriptions) at creation — and since a seminar's event page REDIRECTS to its Workspace, that stale copy is the page faculty actually see, so a title edit that landed read as one that hadn't
+- **registration-eligibility-has-teeth** (architecture) — Task #566 SHIPPED+LIVE 2026-08-12: Event.registration_eligibility (Members and guests / Members only) replaced the messaging-only open_to_guests — a guest is the complement of is_lsp_member (Student and Prospective Applicant included), only a code addressed by name gets one in, and an anonymous visitor keeps the Register button
+- **approval-toggle-grandfathers-and-releases** (architecture) — Task #564 SHIPPED 2026-08-12: Event.requires_faculty_approval is read only when a registration is CREATED, so flipping it on a running seminar is inert for everyone already in; unticking it now approves whoever is waiting, faculty (not just the PC) own the switch, and conveners were never being notified at all
 - **coverage-does-not-reprice-existing-registrations** (architecture) — FIXED+LIVE 2026-08-11 (task #561) — coverage.apply_coverage now re-prices a year's unpaid registrations when a covering decision is recorded, on both the member and treasurer paths; a registration is still priced once at creation, and the AY that matters is the EVENT'S, not today's
 - **account-custodians** (reference) — Who holds which LSP accounts: Caroline Barensfeld = Google Workspace admin; BOTH domains are registered to Bret Fimiani with lspwixwebsite@gmail.com on all three contact roles — that mailbox gates the AWS transfer; and the AWS account has NO alternate contacts set
 - **old-wix-site-archive** (reference) — The old Wix site is archived off-Wix in s3://lsp-wix-archive-uswest2 (AWS account 493980123073, Glacier Deep Archive, 2026-08-10): 81 pages + 135 assets crawled from the still-published free wixsite.com URLs
@@ -146,7 +154,6 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **email-from-names** (convention) — All mail shows a friendly From: DEFAULT_FROM_EMAIL is wrapped with EMAIL_FROM_NAME ("Lacanian School of Psychoanalysis"). Per-type senders use core.email.school_from(name) — e.g. referral mail is "LSP Referral Coordinator". DEFAULT_FROM_ADD
 - **works-video** (architecture) — Works supports member video upload (direct-to-S3 presigned POST) + gated streaming (private S3 presigned range URLs, no transcoding). Per-file cap + on/off in the Web Developer admin. nginx 1100M kept for the no-JS fallback.
 - **formation-url-collision** (gotcha) — /formation/ belongs to the member-facing admissions formation hub (with /formation/demande/ etc.). The task #259 public "Formation" content page was moved to /about/formation/ to stop it shadowing the hub. Don't move it back.
-- **pushed-is-not-deployed** (gotcha) — Deploy only happens if the full CI test suite passes — a single failing test silently aborts the deploy, so a successful push to main does NOT mean prod updated. Verify the Deploy run goes green.
 - **tailwind-classes-set-in-python** (gotcha) — Tailwind v4 scans templates only — CSS classes set in Python (form widget attrs) must also appear in some .html or they're dropped from the prod build
 - **site-theme-modern-vs-classic** (decision) — Task #259: the old-site artwork/serif look is now an opt-in "wix"/Classic site-theme; default is Modern. Cookie-driven, footer switch.
 - **old-site-artwork-and-style** (decision) — Task #259: section-landing artwork heroes + Playfair/Cinzel fonts + tuned silk palette; artwork gated on copyright (multiple artists, ../wix-files)
@@ -163,7 +170,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=564`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=625`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.
