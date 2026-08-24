@@ -687,3 +687,38 @@ def test_decision_exempt_ids_matches_the_per_member_predicate(member):
     assert by_enrollment.id in batched
     assert by_payment.id in batched
     assert not_exempt.id not in batched
+
+
+def test_voided_charge_within_the_cap_is_not_requirement_met(member):
+    """A within-the-requirement year whose charge was voided must NOT read as
+    "Requirement met" — that badge means *beyond* the four-year cap, and
+    conflating the two made a treasurer-voided year look settled (task #655).
+    """
+    tp = _tuition_period(2024, "2000")
+    TuitionEnrollment.objects.create(
+        user=member, tuition_period=tp,
+        status=TuitionEnrollment.Status.COMMITTED, source="staff")
+    Charge.objects.filter(
+        user=member, category=Charge.Category.TUITION, tuition_period=tp,
+    ).update(status=Charge.Status.VOID, staff_adjusted=True)
+
+    row = next(r for r in ledger.member_account(member)["tuition_rows"]
+               if r["period"].slug == "t-2024")
+    assert row["state"] == "no_charge"
+    assert row["pct"] is None
+
+
+def test_beyond_cap_year_still_reads_met_when_it_carries_a_charge(member):
+    """The cap decides "met", but a live charge always wins over it — a fifth
+    year that really was billed must show its own paid/unpaid state."""
+    periods = [_tuition_period(2021 + i, "2000") for i in range(5)]
+    for tp in periods:
+        TuitionEnrollment.objects.create(
+            user=member, tuition_period=tp,
+            status=TuitionEnrollment.Status.COMMITTED, source="staff")
+    _charge(member, Charge.Category.TUITION, "2000", date(2025, 9, 1),
+            tuition_period=periods[4], staff_adjusted=True)
+
+    by_slug = {r["period"].slug: r["state"]
+               for r in ledger.member_account(member)["tuition_rows"]}
+    assert by_slug["t-2025"] == "unpaid"

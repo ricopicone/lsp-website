@@ -29,6 +29,11 @@ def is_parletre_member(user) -> bool:
 _ICON_PATHS = {
     # --- treasurer admin actions (task #439) ---
     "check": '<path d="M20 6 9 17l-5-5"/>',
+    "trash": (
+        '<path d="M3 6h18"/>'
+        '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>'
+        '<path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'
+    ),
     "undo": (
         '<path d="M9 14 4 9l5-5"/>'
         '<path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/>'

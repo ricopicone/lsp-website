@@ -27,7 +27,7 @@ from django.views.decorators.http import require_POST
 
 from registrations.models import Registration
 
-from . import coverage
+from . import charges, coverage
 from .forms import DonationForm, TuitionDecisionForm
 from .models import (
     Charge,
@@ -1813,6 +1813,10 @@ def treasurer_tuition_set_status(request, user_id: int):
             f"set {period.name} status to {_INLINE_TUITION_STATUSES[status]}."
         )
         enr.save(update_fields=("notes",))
+        # The charge follows the decision — including back from a void the
+        # treasurer applied earlier, which the ordinary sync will not undo
+        # (task #655). Scoped to this year; other years keep their voids.
+        charges.reconcile_tuition_year(target, period, by=request.user.email)
         # A covering decision prices that year's unpaid registrations at $0
         # (task #561). Deliberately silent: the treasurer flips historical
         # years during the ledger cleanup, and mailing members about
@@ -1821,6 +1825,55 @@ def treasurer_tuition_set_status(request, user_id: int):
         # rule, and retro-billing a cleanup pass would bill years of events.
         if enr.covers_seminars:
             coverage.apply_coverage(target, period)
+    return _safe_next(request, "treasurer")
+
+
+@login_required
+@user_passes_test(_is_staff)
+@require_POST
+def treasurer_tuition_remove(request, user_id: int):
+    """Delete a stray tuition-decision row (treasurer history repair).
+
+    Reconstructing a member's history leaves years that should not be on the
+    books at all — a decision recorded for a year they were never in, or one
+    past the point the requirement was met. Every other correction was
+    available in this table; removing the row was not (task #655).
+
+    Guarded: a year with money swept against it is not a stray row, it is
+    history. Those stay, and the treasurer adjusts or voids the charge
+    instead.
+    """
+    from payments import ledger
+
+    target = get_object_or_404(User, pk=user_id)
+    period = TuitionPeriod.objects.filter(
+        pk=_int_or_none(request.POST.get("period"))).first()
+    if period is None:
+        messages.error(request, "Choose a valid academic year.")
+        return _safe_next(request, "treasurer")
+    row = next(
+        (r for r in ledger.member_account(target)["tuition_rows"]
+         if r["period"] == period),
+        None,
+    )
+    if row is None:
+        messages.error(request, f"No {period.name} tuition decision on file.")
+        return _safe_next(request, "treasurer")
+    if row["state"] in ("paid", "partial"):
+        messages.error(
+            request,
+            f"{period.name} has tuition money paid against it, so the year "
+            "can't be removed. Adjust or void that year's charge instead.",
+        )
+        return _safe_next(request, "treasurer")
+    with transaction.atomic():
+        TuitionEnrollment.objects.filter(
+            user=target, tuition_period=period).delete()
+        # The post_delete sync skips staff-adjusted rows and frozen members,
+        # so void this year's charge explicitly — same override the decision
+        # buttons use.
+        charges.reconcile_tuition_year(target, period, by=request.user.email)
+    messages.success(request, f"Removed the {period.name} tuition decision.")
     return _safe_next(request, "treasurer")
 
 
