@@ -197,8 +197,8 @@ def reconcile_tuition_year(user, period, *, by: str = "") -> None:
     if owed is None:
         if live is not None:
             live.status = Charge.Status.VOID
-            live.add_note(f"[{today}] Voided{who} — the year no longer carries "
-                          "a tuition obligation.", save=False)
+            live.add_note(f"Voided{who} — the year no longer carries a "
+                          "tuition obligation.", save=False)
             live.staff_adjusted = True
             live.save(update_fields=("status", "staff_adjusted", "notes"))
         return
@@ -210,8 +210,8 @@ def reconcile_tuition_year(user, period, *, by: str = "") -> None:
         # Amount left alone: on a frozen/transitioned member this row IS the
         # reconstructed history, and a treasurer's adjustment outranks the rate.
         voided.status = Charge.Status.OPEN
-        voided.add_note(f"[{today}] Revived{who} — the {period.name} tuition "
-                        "decision was re-recorded.", save=False)
+        voided.add_note(f"Revived{who} — the {period.name} tuition decision "
+                        "was re-recorded.", save=False)
         voided.save(update_fields=("status", "notes"))
         return
     Charge.objects.create(

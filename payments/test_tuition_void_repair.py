@@ -80,7 +80,11 @@ def test_recommitting_revives_a_treasurer_voided_charge(client, treasurer, membe
     assert c is not None, "the voided year's charge must come back"
     assert c.status == Charge.Status.OPEN
     assert c.amount == Decimal("2000")
-    assert "Revived" in c.notes
+    # ``add_note`` stamps the date itself — the audit line must carry exactly
+    # one, and must name who did it.
+    revived = [ln for ln in c.notes.splitlines() if "Revived" in ln]
+    assert len(revived) == 1
+    assert re.fullmatch(r"\[\d{4}-\d{2}-\d{2}\] Revived by treasurer .+", revived[0])
 
 
 def test_recommitting_mints_when_the_charge_row_is_gone(client, treasurer, member):
