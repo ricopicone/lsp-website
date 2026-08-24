@@ -162,6 +162,71 @@ def sync_tuition_charges(user) -> None:
         c.save(update_fields=("status", "notes"))
 
 
+def reconcile_tuition_year(user, period, *, by: str = "") -> None:
+    """Force ``user``'s tuition charge for ``period`` to match the decision on
+    record — overriding ``staff_adjusted`` and the transitioned-member freeze.
+
+    :func:`sync_tuition_charges` deliberately never touches a staff-adjusted
+    row and skips transitioned members outright. Both rules left a voided
+    tuition year unrepairable: re-recording the decision minted nothing and
+    revived nothing, and a VOID charge is hidden from the statement, so no
+    screen offered an undo (task #655). This is the explicit, per-year,
+    staff-clicked override that closes that loop.
+
+    Scoped to ``period`` on purpose — a deliberate void on some *other* year
+    is not collateral damage of repairing this one.
+    """
+    from .models import TuitionEnrollment
+
+    today = timezone.localdate()
+    enrollments = list(
+        TuitionEnrollment.objects.filter(user=user)
+        .select_related("tuition_period")
+        .order_by("tuition_period__start_date")
+    )
+    # Owed = a non-skipping decision inside the four-year cap. The cap still
+    # governs: re-recording a fifth year must not conjure a charge.
+    owed = _owed_periods(enrollments).get(period.id)
+
+    rows = list(Charge.objects.filter(
+        user=user, category=Charge.Category.TUITION, tuition_period=period,
+    ).order_by("id"))
+    live = next((c for c in rows if c.status != Charge.Status.VOID), None)
+    who = f" by treasurer {by}" if by else ""
+
+    if owed is None:
+        if live is not None:
+            live.status = Charge.Status.VOID
+            live.add_note(f"[{today}] Voided{who} — the year no longer carries "
+                          "a tuition obligation.", save=False)
+            live.staff_adjusted = True
+            live.save(update_fields=("status", "staff_adjusted", "notes"))
+        return
+
+    if live is not None:
+        return                              # already billed — nothing to repair
+    voided = next((c for c in rows if c.status == Charge.Status.VOID), None)
+    if voided is not None:
+        # Amount left alone: on a frozen/transitioned member this row IS the
+        # reconstructed history, and a treasurer's adjustment outranks the rate.
+        voided.status = Charge.Status.OPEN
+        voided.add_note(f"[{today}] Revived{who} — the {period.name} tuition "
+                        "decision was re-recorded.", save=False)
+        voided.save(update_fields=("status", "notes"))
+        return
+    Charge.objects.create(
+        user=user,
+        category=Charge.Category.TUITION,
+        amount=period.tuition_amount or Decimal("0"),
+        effective_date=period.start_date,
+        tuition_period=period,
+        source=owed.source,
+        staff_adjusted=True,
+        notes=f"[{today}] Minted{who} from the re-recorded {period.name} "
+              "tuition decision.",
+    )
+
+
 def tuition_charge_conflicts() -> list[dict]:
     """Staff-adjusted tuition charges that disagree with the enrollment-derived
     expectation. Batched for the Reconcile tab."""

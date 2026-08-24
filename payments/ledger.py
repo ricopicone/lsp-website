@@ -168,8 +168,12 @@ def member_account(user) -> dict:
     )
     tuition_overpaid = max(total_tuition_paid - tuition_obligation, Decimal("0"))
 
-    # Per-year tuition decisions with the charge's sweep state. A non-skipping
-    # enrollment with no non-void charge is beyond the 4-year cap → "met".
+    # Per-year tuition decisions with the charge's sweep state. "met" means
+    # the year sits BEYOND the four-year cap, so it was never owed — that is
+    # a question for :func:`_owed_periods`, not for whether a charge happens
+    # to exist. A year inside the cap with nothing billed is "no_charge"
+    # (voided or never minted), which is a repair the treasurer should see
+    # rather than a settled year (task #655).
     charge_by_tp = {c.tuition_period_id: c for c in charges
                     if c.category == Charge.Category.TUITION and c.tuition_period_id}
     enrollments = list(
@@ -177,6 +181,9 @@ def member_account(user) -> dict:
         .select_related("tuition_period")
         .order_by("-tuition_period__start_date")
     )
+    from .charges import _owed_periods  # local: charges imports back from here
+    # ``_owed_periods`` wants oldest-first; the rows above are newest-first.
+    owed_period_ids = set(_owed_periods(reversed(enrollments)))
     tuition_rows = []
     skipping = []
     for e in enrollments:
@@ -187,7 +194,10 @@ def member_account(user) -> dict:
         else:
             c = charge_by_tp.get(e.tuition_period_id)
             if c is None:
-                state = "met"
+                # A live charge always wins over the cap: a year that really
+                # was billed shows its own state, capped or not.
+                state = ("no_charge" if e.tuition_period_id in owed_period_ids
+                         else "met")
             elif c.status == Charge.Status.WAIVED:
                 state = "waived"
             else:

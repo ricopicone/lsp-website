@@ -1773,6 +1773,23 @@ Phase 2 plan for milestone IDs):**
   minted via `manage.py backfill_charges`; `manage.py audit_ledger` is the
   read-only parity check. `user_paid_for_period` is retired. See
   `tuition-cumulative-ledger` memory.
+- **Repairing a voided tuition year** (task #655). Voiding a charge stamps
+  `staff_adjusted=True`, and `sync_tuition_charges` never touches a
+  staff-adjusted row (nor a transitioned member's frozen history) — so a
+  treasurer-voided year could not be brought back: re-recording the decision
+  minted nothing and revived nothing, and `member_account` hides VOID charges,
+  so no screen offered an undo (Reopen accepts only WAIVED). The treasurer's
+  tuition decision buttons now call the new
+  `payments.charges.reconcile_tuition_year(user, period, by=…)`, an explicit
+  per-year override that revives/mints/voids that year's charge past
+  `staff_adjusted` and the freeze, scoped to the clicked year so deliberate
+  voids elsewhere survive; the four-year cap still governs. The **"Requirement
+  met"** badge now means *beyond the cap* (asked of `_owed_periods`) rather
+  than "no charge exists" — a within-cap year with nothing billed gets its own
+  warning-toned **"No charge"** state, and the Committed button is live on it
+  so the repair is one click. A tuition row can also be **removed** outright
+  (`treasurer_tuition_remove`) for a year that should never have been on the
+  books, refused once tuition money has swept against it.
 
 ## Open items (M7 wrap-up)
 
