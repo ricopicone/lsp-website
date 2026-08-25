@@ -1645,6 +1645,37 @@ Done (see `git log` for specifics):
   treasurer's screen. No migration, no flag, no backfill. Design:
   `docs/superpowers/specs/2026-08-21-registration-removal-design.md`.
 
+- **Recording ingest survives a missed webhook** (task #475). The 2026-08-25
+  tech check for Working with Masochism recorded fine — Daily wrote a 30-second,
+  3-participant recording to our own bucket — and the site never heard about it.
+  The webhook was registered at `https://app.lacanschool.org/video/webhooks/daily/`,
+  which has 301'd to the apex since the 2026-07-22 URL cutover, and **POSTs
+  don't follow redirects**. `/payments/webhooks/` was exempted from that
+  redirect for exactly this reason; this endpoint was missed, so every recording
+  since the cutover was lost, and Daily's registration had gone
+  `state=FAILED, failedCount=4, retryType=circuit-breaker` — the breaker was
+  open, so it had stopped retrying and would never have recovered on its own.
+  **Fixed on the Daily side** by re-pointing the registration at the apex
+  (`POST /v1/webhooks/{uuid}`); the hmac is unchanged, so
+  `DAILY_WEBHOOK_SECRET` still verifies, and state reset to ACTIVE. The
+  tech-check recording was backfilled by replaying it through
+  `ingest_recording_event`.
+  The durable half is that **recording ingest was webhook-only**, with no
+  recovery path — the exact hole `reconcile_stripe_pending` fills on the
+  payments side (#474), never inherited by video. New
+  `services.reconcile_recordings` + `manage.py reconcile_daily_recordings`
+  (paged, `--room`, `--dry-run`) re-ingests through the *same webhook handler*
+  rather than building rows itself, so a recovered recording is
+  indistinguishable from a delivered one — including the `record_video`
+  visibility default and its notification, which fires late rather than never.
+  It refuses three things deliberately: a recording Daily hasn't `finished`
+  (the webhook still owns it, and reconciling would race the real delivery), a
+  row already READY (re-ingesting would reset a visibility a host had widened),
+  and a DELETED row (`purge_old_recordings` marks those; if the Daily-side
+  delete failed the recording is still listed, and re-ingesting would resurrect
+  a row whose S3 object is gone). **Recovery is not publication:** a recovered
+  recording lands at `owners`/`owners` like any other. No migration, no flag.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

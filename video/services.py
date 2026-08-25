@@ -344,6 +344,90 @@ def ingest_recording_event(event_type: str, payload: dict):
     return rec
 
 
+#: Daily caps ``GET /v1/recordings`` at 100 per page. ``RECONCILE_MAX_PAGES`` is
+#: a runaway-loop backstop, not a real limit on how much we're willing to
+#: recover — 20 pages is 2000 recordings, far past any plausible backlog.
+RECORDINGS_PAGE_SIZE = 100
+RECONCILE_MAX_PAGES = 20
+
+
+def reconcile_recordings(
+    *, room_name: str | None = None, dry_run: bool = False,
+    max_pages: int = RECONCILE_MAX_PAGES,
+) -> tuple[int, int, int]:
+    """Recover recordings Daily has but the site never learned about (task #475).
+
+    ``ingest_recording_event`` is the only path that creates a ``Recording``
+    row, and it runs solely off the webhook — so a delivery that fails loses the
+    recording permanently as far as the site is concerned. The file sits in our
+    own bucket with nothing pointing at it: unlistable, unwatchable, and
+    undeletable through the UI. That is not hypothetical. The 2026-07-22 URL
+    cutover left the webhook registered on ``app.lacanschool.org``, which 301s,
+    and POSTs don't follow redirects — every recording between then and
+    2026-08-25 was lost this way, and Daily's circuit breaker had given up
+    retrying long before anyone noticed.
+
+    Re-ingests through that same webhook handler rather than building rows here,
+    so a reconciled recording is indistinguishable from a delivered one. That
+    includes the ``record_video`` visibility default and its "recording ready"
+    notification, which for a recovered recording fires late rather than never —
+    the right trade, since the alternative is a second creation path that drifts
+    from the first.
+
+    Returns ``(created, updated, skipped)``.
+    """
+    from .models import Recording
+
+    created = updated = skipped = 0
+    after: str | None = None
+    for _ in range(max_pages):
+        page = daily.list_recordings(
+            limit=RECORDINGS_PAGE_SIZE, starting_after=after, room_name=room_name
+        )
+        rows = page.get("data") or []
+        if not rows:
+            break
+        for item in rows:
+            rec_id = item.get("id")
+            if not rec_id:
+                continue
+            # Anything Daily hasn't finished writing still belongs to the
+            # webhook — reconciling it would race the real delivery.
+            if item.get("status") != "finished":
+                skipped += 1
+                continue
+            existing = Recording.objects.filter(daily_recording_id=rec_id).first()
+            # DELETED means we purged it deliberately (``purge_old_recordings``).
+            # If the Daily-side delete failed, the recording is still listed
+            # here — re-ingesting would resurrect a row whose S3 object is gone.
+            if existing is not None and existing.status in (
+                Recording.Status.READY, Recording.Status.DELETED
+            ):
+                skipped += 1
+                continue
+            if dry_run:
+                if existing is None:
+                    created += 1
+                else:
+                    updated += 1
+                continue
+            ingest_recording_event("recording.ready-to-download", {
+                "recording_id": rec_id,
+                "room_name": item.get("room_name") or "",
+                "start_ts": item.get("start_ts"),
+                "s3key": item.get("s3key") or "",
+                "duration": item.get("duration"),
+            })
+            if existing is None:
+                created += 1
+            else:
+                updated += 1
+        if len(rows) < RECORDINGS_PAGE_SIZE:
+            break
+        after = rows[-1].get("id")
+    return created, updated, skipped
+
+
 def can_enter(owner, user) -> bool:
     """Whether ``user`` may join the room (the access primitive). ``owner`` is a
     Workgroup or a one-off Event that owns its own room."""
