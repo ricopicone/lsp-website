@@ -103,6 +103,25 @@ def get_recording(recording_id: str) -> dict | None:
     raise DailyError(f"get_recording({recording_id}) -> {resp.status_code}: {resp.text}")
 
 
+def list_recordings(
+    *, limit: int = 100, starting_after: str | None = None, room_name: str | None = None
+) -> dict:
+    """One page of the account's cloud recordings, newest first.
+
+    Daily caps ``limit`` at 100 and pages with ``starting_after`` (a recording
+    id). Returns the raw envelope — ``{"total_count": N, "data": [...]}``.
+    """
+    params: dict = {"limit": limit}
+    if starting_after:
+        params["starting_after"] = starting_after
+    if room_name:
+        params["room_name"] = room_name
+    resp = requests.get(_url("recordings"), headers=_headers(), params=params, timeout=20)
+    if resp.status_code == 200:
+        return resp.json()
+    raise DailyError(f"list_recordings() -> {resp.status_code}: {resp.text}")
+
+
 def recording_access_link(recording_id: str) -> str | None:
     """A temporary, playable URL for a recording stored on Daily (or our bucket
     with allow_api_access). ``None`` if the recording isn't available."""
