@@ -233,6 +233,19 @@ admitting. `_desired_properties` reads `enable_knocking` off the owner
 `False` and only a personal room can opt in; `ensure_room` reconciles on the next
 join, so toggling it needs no backfill.
 
+**Verified against the live Daily API on prod (2026-08-29)**, which is worth
+recording because the check itself went wrong first. Daily *abbreviates* meeting
+token claims in the JWT — `knocking` becomes `k`, `enable_prejoin_ui` becomes
+`epui`, `start_video_off` becomes `vo` — so a script looking for a claim named
+`knocking` finds nothing and reports a no-op on a feature that works. The real
+signal is the opposite one: Daily **rejects** an unknown token property with
+HTTP 400 `invalid property name`, confirmed by probing `enable_knocking`,
+`require_knocking`, `knock` and `auto_admit`, all four of which 400. So a token
+that mints at all carries every property you sent, and a missing claim means you
+are looking for the wrong name. Measured: a baseline token claims
+`['d','iat','o','r','u']`; adding `knocking` adds `k`; the owner's token does
+not carry it.
+
 Default off, because an invitation is already a decision about a person and most
 meetings should not make it twice. It composes with the invariant rather than
 replacing it: presence still gates the door, and knocking adds a second,
