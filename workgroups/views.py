@@ -326,19 +326,21 @@ def workgroup_detail(request, slug):
     # the sole remaining lead.
     can_leave = wg.can_leave(request.user)
 
-    # Office hours of whoever runs this offering (task #687). Shown to the
-    # roster; ``viewer_is_member`` gates only the Join button, because a roster
-    # can include guests (task #566) and a button that 403s is worse than none.
+    # Office hours of whoever runs this offering (task #687). Posted hours admit
+    # this offering's roster, members or not, so the Join button follows the
+    # roster; a viewer who is neither reads the note without a button that 403s.
     office_hours = []
+    can_join_office_hours = False
     if primary_event is not None and (is_member or roster_visible):
         from video.services_personal import offering_hours
 
         office_hours = offering_hours(primary_event)
+        can_join_office_hours = is_member or is_lsp_member(request.user)
 
     context = {
         "workgroup": wg,
         "office_hours": office_hours,
-        "viewer_is_member": is_lsp_member(request.user),
+        "can_join_office_hours": can_join_office_hours,
         "can_view_content": can_view,
         "is_member": is_member,
         "roster_visible": roster_visible,

@@ -122,9 +122,48 @@ def may_be_admitted(room: PersonalRoom, user) -> bool:
     """
     if invitation_for(room, user) is not None:
         return True
-    # Posted office hours open the door to members; "by appointment" advertises
-    # without admitting anyone, which is what makes the label mean something.
-    return bool(room.admits_members and eligible_for_room(user))
+    # Posted office hours open the door; "by appointment" advertises without
+    # admitting anyone, which is what makes the label mean something.
+    if not room.admits_members:
+        return False
+    return eligible_for_room(user) or on_a_led_roster(room.user, user)
+
+
+def on_a_led_roster(owner, user) -> bool:
+    """Is ``user`` on the roster of a seminar or reading group ``owner`` leads?
+
+    Posted office hours admit LSP members outright, but a roster can include
+    people who are not members — an Auditor or a Student who registered
+    (task #566) — and those are exactly the students office hours are for. They
+    are shown the hours on the Workspace, so the door has to open for them too,
+    or the faculty member has to invite the non-member half of the class by hand
+    and again next term.
+
+    Reading the roster rather than a list of invitations is what makes this
+    maintain itself: someone who registers late is let in, and someone who
+    withdraws stops being let in, with nothing for the faculty member to keep in
+    step.
+
+    Every offering lead holds a *stored* membership in ``LEAD_ROLES``
+    (``Event.add_faculty`` writes one, and ``faculty_members()`` reads it back),
+    so the "who leads this" side needs no derivation; the visitor's side goes
+    through ``Workgroup.is_member``, which already knows a seminar's roster is
+    its current term's paid and comped registrants.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return False
+    from workgroups.models import Workgroup, WorkgroupMembership
+
+    led = (
+        WorkgroupMembership.objects.serving()
+        .filter(
+            user=owner,
+            role__in=WorkgroupMembership.LEAD_ROLES,
+            workgroup__kind__in=Workgroup.OFFERING_KINDS,
+        )
+        .select_related("workgroup")
+    )
+    return any(membership.workgroup.is_member(user) for membership in led)
 
 
 def can_enter_personal(room: PersonalRoom, user, *, invitation=None) -> bool:

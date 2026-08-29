@@ -154,7 +154,10 @@ its office hours, and its live invitations.
             {% if invitation.is_guest %}<span class="badge badge-ghost badge-sm ml-1">Guest link</span>{% endif %}
           </p>
           {% if invitation.note %}<p class="text-xs text-base-content/55">{{ invitation.note }}</p>{% endif %}
-          <p class="text-xs text-base-content/45">Until {{ invitation.expires_at|date:"F j, Y" }}</p>
+          <p class="text-xs text-base-content/45">
+            {% if invitation.expires_at %}Until {{ invitation.expires_at|date:"F j, Y" }}
+            {% else %}Until you revoke it{% endif %}
+          </p>
         </div>
         <form method="post" action="{% url 'video:room_invite_revoke' invitation.pk %}">
           {% csrf_token %}

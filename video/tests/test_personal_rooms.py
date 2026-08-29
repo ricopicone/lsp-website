@@ -366,3 +366,130 @@ def test_the_token_carries_knocking_for_everyone_but_the_owner(monkeypatch):
     personal.room_context(_Req(), room, is_owner=False, guest_name="Jane")
     assert minted[-1]["knocking"] is True
     assert minted[-1]["user_name"] == "Jane"
+
+
+# ---- posted hours admit the class, members or not -----------------------
+
+def _seminar_led_by(teacher, slug="sem-roster"):
+    from datetime import date
+
+    from events.models import Event
+
+    event = Event.objects.create(
+        title="Seminar on the Letter", slug=slug, event_type=Event.Type.SEMINAR,
+        start_date=date(2026, 9, 1), end_date=date(2027, 5, 1),
+    )
+    wg = event.ensure_workgroup()
+    event.add_faculty(teacher)
+    return event, wg
+
+
+def _post_hours(room):
+    room.office_hours = PersonalRoom.OfficeHours.POSTED
+    room.hours_note = "Thursdays 3-4pm Pacific"
+    room.save()
+    return room
+
+
+def test_a_non_member_on_the_roster_walks_in_during_posted_hours(present):
+    """The case that made re-inviting a chore: an Auditor or Student registered
+    for the seminar is shown the hours, so the door has to open for them."""
+    from registrations.models import Registration
+
+    from .factories import register
+
+    teacher = member("teacher@example.com")
+    event, _wg = _seminar_led_by(teacher)
+    student = non_member("auditor@example.com")
+    register(student, event, status=Registration.Status.PAID)
+
+    room = _post_hours(room_for(teacher))
+    present["live"] = True
+    assert personal.can_enter_personal(room, student) is True
+
+
+def test_the_roster_rule_needs_posted_hours(present):
+    from registrations.models import Registration
+
+    from .factories import register
+
+    teacher = member("teacher2@example.com")
+    event, _wg = _seminar_led_by(teacher, slug="sem-appt")
+    student = non_member("auditor2@example.com")
+    register(student, event, status=Registration.Status.PAID)
+
+    room = room_for(teacher)
+    present["live"] = True
+    assert personal.can_enter_personal(room, student) is False  # office hours off
+
+    room.office_hours = PersonalRoom.OfficeHours.APPOINTMENT
+    room.hours_note = "Write to me"
+    room.save()
+    assert personal.can_enter_personal(room, student) is False
+
+
+def test_a_non_member_off_the_roster_still_stays_out(present):
+    teacher = member("teacher3@example.com")
+    _seminar_led_by(teacher, slug="sem-out")
+    room = _post_hours(room_for(teacher))
+    present["live"] = True
+    assert personal.can_enter_personal(room, non_member("stranger@example.com")) is False
+
+
+def test_only_offerings_you_lead_count(present):
+    """Being on someone's roster admits you to *their* room, not to the room of
+    another member who happens to be on it too."""
+    from registrations.models import Registration
+
+    from .factories import register
+
+    teacher = member("teacher4@example.com")
+    bystander = member("bystander@example.com")
+    event, _wg = _seminar_led_by(teacher, slug="sem-lead")
+    student = non_member("auditor4@example.com")
+    register(student, event, status=Registration.Status.PAID)
+    register(bystander, event, status=Registration.Status.PAID)
+
+    room = _post_hours(room_for(bystander))
+    present["live"] = True
+    assert personal.can_enter_personal(room, student) is False
+
+
+def test_the_roster_rule_still_waits_for_the_owner(present):
+    from registrations.models import Registration
+
+    from .factories import register
+
+    teacher = member("teacher5@example.com")
+    event, _wg = _seminar_led_by(teacher, slug="sem-wait")
+    student = non_member("auditor5@example.com")
+    register(student, event, status=Registration.Status.PAID)
+
+    room = _post_hours(room_for(teacher))
+    present["live"] = False
+    assert personal.can_enter_personal(room, student) is False
+
+
+# ---- an account-bound invitation does not expire ------------------------
+
+def test_an_account_bound_invitation_has_no_expiry(present):
+    owner, invited = member(), member("invited@example.com")
+    room = room_for(owner)
+    inv = RoomInvitation.objects.create(room=room, invited_user=invited, expires_at=None)
+    present["live"] = True
+
+    assert inv.expires_at is None
+    assert inv.is_expired() is False
+    assert inv.is_live is True
+    assert personal.can_enter_personal(room, invited) is True
+
+    # Revoking is how it ends.
+    inv.revoke()
+    assert personal.can_enter_personal(room, invited) is False
+
+
+def test_live_finds_never_expiring_invitations():
+    room = room_for(member())
+    RoomInvitation.objects.create(room=room, invited_user=member("i@example.com"),
+                                  expires_at=None)
+    assert room.invitations.live().count() == 1

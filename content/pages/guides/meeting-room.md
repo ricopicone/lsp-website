@@ -45,7 +45,8 @@ Either way they don't need an account, and they don't need to sign in.
 You can add a short note that your guest sees on the way in, for example
 "Our interview, Thursday at 2".
 
-Invitations last a month. To end one early, press **Revoke**.
+An invitation to someone with an account lasts until you **Revoke** it. A guest
+link lasts a month, since it's a secret sitting in someone's inbox.
 
 ## Letting people in one at a time
 
@@ -71,8 +72,9 @@ If you teach a seminar or convene a reading group, you can tell members when
 they can find you. In the settings, choose one of three:
 
 - **Not shown**—nothing appears anywhere. This is the default.
-- **Posted hours**—your note is shown, and any LSP member can come in while
-  you're in the room.
+- **Posted hours**—your note is shown, and people can come in while you're in
+  the room: any LSP member, and anyone registered for a seminar or reading
+  group you lead, whether or not they're a member.
 - **By appointment only**—your note is shown, but nobody can join uninvited.
   You invite them when you've agreed a time.
 
@@ -84,6 +86,10 @@ Your hours appear on the Workspace of each seminar or reading group you lead,
 so your students see them, and on your directory page, where they're visible to
 members only. They're never shown publicly.
 
+You don't need to invite your class. Posted hours read your roster directly, so
+someone who registers late is let in and someone who withdraws isn't, with
+nothing for you to keep in step.
+
 Posted hours don't commit you to anything: the room still opens only when you
 open it, and you can change or withdraw them at any time.
 
@@ -91,7 +97,8 @@ open it, and you can change or withdraw them at any time.
 
 Meeting rooms are for members of the School. Auditors, students, applicants,
 and anyone with a free account don't get a room of their own, but they can be
-invited into yours.
+invited into yours, and they can come to your office hours if they're
+registered for something you lead.
 
 ## If something goes wrong
 

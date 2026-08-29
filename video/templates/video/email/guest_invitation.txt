@@ -17,4 +17,4 @@ soon as it does.
 This is a private meeting room, and it is separate from the meeting rooms used
 for the School's seminars and events.
 
-The link works until {{ expires_at|date:"F j, Y" }}.
+{% if expires_at %}The link works until {{ expires_at|date:"F j, Y" }}.{% endif %}

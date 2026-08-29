@@ -240,14 +240,19 @@ class InvitationForm(forms.Form):
         common = {
             "room": self.room,
             "note": (self.cleaned_data.get("note") or "").strip(),
-            "expires_at": RoomInvitation.default_expiry(),
         }
         if recipient.user is not None:
-            return RoomInvitation.objects.create(invited_user=recipient.user, **common)
+            # No expiry: it names a person who has to sign in, so it is not a
+            # secret that can be forwarded, and a class should not need
+            # re-inviting term after term. Revoking is how it ends.
+            return RoomInvitation.objects.create(
+                invited_user=recipient.user, expires_at=None, **common
+            )
         return RoomInvitation.objects.create(
             token=RoomInvitation.new_token(),
             guest_name=recipient.name,
             guest_email=recipient.email,
+            expires_at=RoomInvitation.default_expiry(),
             **common,
         )
 
