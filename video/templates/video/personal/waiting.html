@@ -1,0 +1,24 @@
+{% extends "core/base.html" %}
+{% block title %}{% if refused.waiting %}Waiting for {{ host }}{% else %}Private meeting room{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto px-4 py-16 space-y-5 text-center">
+  <h1 class="font-serif text-2xl text-base-content">
+    {% if refused.waiting %}Not started yet{% else %}A private meeting room{% endif %}
+  </h1>
+  <p class="text-base-content/70">{{ refused.message }}</p>
+  {% if refused.waiting %}
+  <p class="text-sm text-base-content/55">
+    Leave this page open, it will let you in as soon as {{ host }} is in the room.
+  </p>
+  <a href="{{ request.get_full_path }}" class="btn btn-primary btn-sm">Check again</a>
+  {% else %}
+  <p class="text-sm text-base-content/55">
+    If you were expecting to join a seminar or an event, its meeting room is on the
+    event's own page.
+  </p>
+  <a href="/" class="btn btn-ghost btn-sm">Back to the site</a>
+  {% endif %}
+</div>
+{% include "video/personal/_waiting_poll.html" %}
+{% endblock %}

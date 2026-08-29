@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 
 from . import daily, services
-from .models import DailyRoom, Recording
+from .models import DailyRoom, PersonalRoom, Recording, RoomInvitation
 
 
 @admin.register(DailyRoom)
@@ -64,3 +64,22 @@ class RecordingAdmin(admin.ModelAdmin):
             rec.delete()
             n += 1
         self.message_user(request, f"Deleted {n} recording(s).", messages.WARNING)
+
+
+@admin.register(PersonalRoom)
+class PersonalRoomAdmin(admin.ModelAdmin):
+    list_display = ("user", "slug", "office_hours", "recording_mode", "created_at")
+    list_filter = ("office_hours", "recording_mode")
+    search_fields = ("user__email", "user__first_name", "user__last_name", "slug")
+    readonly_fields = ("slug", "created_at")
+    autocomplete_fields = ("user",)
+
+
+@admin.register(RoomInvitation)
+class RoomInvitationAdmin(admin.ModelAdmin):
+    list_display = ("room", "display_name", "is_guest", "expires_at", "revoked_at")
+    list_filter = ("revoked_at",)
+    search_fields = (
+        "room__user__email", "invited_user__email", "guest_name", "guest_email",
+    )
+    readonly_fields = ("token", "created_at", "last_used_at")

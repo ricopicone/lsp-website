@@ -28,7 +28,7 @@ def test_available_tabs_candidate_full_order():
     keys = [k for k, _ in available_tabs(u)]
     assert keys == [
         "formation", "groups", "events", "works",
-        "account", "proposals", "profile",
+        "account", "room", "proposals", "profile",
     ]
 
 

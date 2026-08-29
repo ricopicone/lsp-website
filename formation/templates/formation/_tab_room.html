@@ -1,0 +1,134 @@
+{% comment %}
+The member's private meeting room (task #687). Everything that can change who
+gets into the room is on this one tab: the room itself, its recording setting,
+its office hours, and its live invitations.
+{% endcomment %}
+<div class="space-y-10">
+
+  <section class="space-y-4">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="font-serif text-xl text-base-content">Your private meeting room</h2>
+        <p class="mt-1 max-w-prose text-sm text-base-content/60">
+          A meeting room of your own, for office hours, interviews, and conversations
+          that are not a seminar. It is separate from the meeting rooms used for the
+          School's seminars and events, and no one can be in it unless you are.
+        </p>
+      </div>
+      <a href="{% url 'video:my_room' %}" class="btn btn-primary btn-sm">Open my room</a>
+    </div>
+    <p class="rounded-xl border border-base-300/60 bg-base-200/40 p-4 text-sm text-base-content/75">
+      This room is for the work of the School, for example office hours, interviews,
+      and committee conversations. Please do not use it for clinical work with analysands.
+    </p>
+  </section>
+
+  <section class="space-y-4">
+    <h2 class="font-serif text-xl text-base-content">Who can join</h2>
+    <p class="max-w-prose text-sm text-base-content/60">
+      Invite an LSP member by name, or anyone else by email address. If their email
+      already has an account here they sign in as themselves, otherwise you get a link
+      to send them. Either way, they can only join while you are in the room.
+    </p>
+
+    <form method="post" action="{% url 'video:room_invite' %}"
+          class="grid gap-4 rounded-xl border border-base-300/60 bg-base-100 p-5 sm:grid-cols-2">
+      {% csrf_token %}
+      <div class="sm:col-span-2">
+        <label for="{{ room_invite_form.member.id_for_label }}" class="label">
+          <span class="label-text">{{ room_invite_form.member.label }}</span>
+        </label>
+        {{ room_invite_form.member }}
+      </div>
+      <div>
+        <label for="{{ room_invite_form.email.id_for_label }}" class="label">
+          <span class="label-text">{{ room_invite_form.email.label }}</span>
+        </label>
+        {{ room_invite_form.email }}
+      </div>
+      <div>
+        <label for="{{ room_invite_form.name.id_for_label }}" class="label">
+          <span class="label-text">{{ room_invite_form.name.label }}</span>
+        </label>
+        {{ room_invite_form.name }}
+      </div>
+      <div class="sm:col-span-2">
+        <label for="{{ room_invite_form.note.id_for_label }}" class="label">
+          <span class="label-text">{{ room_invite_form.note.label }}</span>
+        </label>
+        {{ room_invite_form.note }}
+      </div>
+      <label class="flex items-center gap-2 text-sm text-base-content/70 sm:col-span-2">
+        {{ room_invite_form.send_email }}
+        <span>{{ room_invite_form.send_email.label }}</span>
+      </label>
+      <div class="sm:col-span-2">
+        <button type="submit" class="btn btn-primary btn-sm">Invite</button>
+      </div>
+    </form>
+
+    {% if room_invitations %}
+    <ul class="divide-y divide-base-300/50 rounded-xl border border-base-300/60 bg-base-100">
+      {% for invitation in room_invitations %}
+      <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div class="min-w-0">
+          <p class="font-medium text-base-content">
+            {{ invitation.display_name }}
+            {% if invitation.is_guest %}<span class="badge badge-ghost badge-sm ml-1">Guest link</span>{% endif %}
+          </p>
+          {% if invitation.note %}<p class="text-xs text-base-content/55">{{ invitation.note }}</p>{% endif %}
+          <p class="text-xs text-base-content/45">Until {{ invitation.expires_at|date:"F j, Y" }}</p>
+          {% if invitation.share_url %}
+          <input type="text" readonly value="{{ invitation.share_url }}"
+                 class="input input-bordered input-xs mt-2 w-full max-w-md font-mono text-xs"
+                 onclick="this.select()" aria-label="Invitation link for {{ invitation.display_name }}">
+          {% endif %}
+        </div>
+        <form method="post" action="{% url 'video:room_invite_revoke' invitation.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-ghost btn-xs">Revoke</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-base-content/55">No one is invited to your room at the moment.</p>
+    {% endif %}
+  </section>
+
+  <section class="space-y-4">
+    <h2 class="font-serif text-xl text-base-content">Office hours</h2>
+    <p class="max-w-prose text-sm text-base-content/60">
+      Tell members when they can find you. Posted hours let any LSP member join while
+      you are in the room, by appointment shows the note without opening the door, and
+      nothing is shown until you choose one.
+    </p>
+
+    <form method="post" action="{% url 'video:room_settings' %}"
+          class="grid gap-4 rounded-xl border border-base-300/60 bg-base-100 p-5 sm:grid-cols-2">
+      {% csrf_token %}
+      <div>
+        <label for="{{ room_settings_form.office_hours.id_for_label }}" class="label">
+          <span class="label-text">{{ room_settings_form.office_hours.label }}</span>
+        </label>
+        {{ room_settings_form.office_hours }}
+      </div>
+      <div>
+        <label for="{{ room_settings_form.recording_mode.id_for_label }}" class="label">
+          <span class="label-text">{{ room_settings_form.recording_mode.label }}</span>
+        </label>
+        {{ room_settings_form.recording_mode }}
+      </div>
+      <div class="sm:col-span-2">
+        <label for="{{ room_settings_form.hours_note.id_for_label }}" class="label">
+          <span class="label-text">{{ room_settings_form.hours_note.label }}</span>
+        </label>
+        {{ room_settings_form.hours_note }}
+        <p class="mt-1 text-xs text-base-content/50">{{ room_settings_form.hours_note.help_text }}</p>
+      </div>
+      <div class="sm:col-span-2">
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+      </div>
+    </form>
+  </section>
+</div>

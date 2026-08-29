@@ -21,7 +21,14 @@
   </div>
 
   {# ---- Availability ---- #}
-  {% if can_manage %}
+  {% if recording.is_personal %}
+  {% comment %}A private meeting room has no roster, so two of the six settings
+  would silently mean "nobody" (task #687). It stays owner-only.{% endcomment %}
+  <p class="text-sm text-base-content/60">
+    This was recorded in your private meeting room, so only you can watch it.
+    Download it if you want to share it.
+  </p>
+  {% elif can_manage %}
   <form method="post" action="{% url 'video:recording_availability' recording.pk %}"
         class="rounded-lg border border-base-300 bg-base-100 p-3 space-y-3">
     {% csrf_token %}

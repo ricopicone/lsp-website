@@ -384,7 +384,7 @@ class PersonalRoom(models.Model):
 
     class RecordingMode(models.TextChoices):
         OFF = "off", "No recording"
-        ON_DEMAND = "on_demand", "I can record (off until I press Record)"
+        ON_DEMAND = "on_demand", "I can record"
 
     class OfficeHours(models.TextChoices):
         """Whether the door is open, not merely how it is labelled.
@@ -395,8 +395,8 @@ class PersonalRoom(models.Model):
         """
 
         OFF = "off", "Not shown"
-        POSTED = "posted", "Posted hours (members may join while I'm in the room)"
-        APPOINTMENT = "appointment", "By appointment (shown, but no one can join uninvited)"
+        POSTED = "posted", "Posted hours, members may join"
+        APPOINTMENT = "appointment", "By appointment only"
 
     user = models.OneToOneField(
         "accounts.User", on_delete=models.CASCADE, related_name="personal_room",
@@ -539,6 +539,12 @@ class RoomInvitation(models.Model):
 
         self.last_used_at = timezone.now()
         self.save(update_fields=["last_used_at"])
+
+    @classmethod
+    def new_token(cls) -> str:
+        """A fresh guest secret. Here rather than in the form, so every caller
+        that mints one reaches the same generator."""
+        return _invitation_token()
 
     @classmethod
     def default_expiry(cls, now=None):

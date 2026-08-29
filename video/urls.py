@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, views_personal
 
 app_name = "video"
 
@@ -16,6 +16,18 @@ urlpatterns = [
     ),
     path("video/recordings/<int:pk>/delete/", views.recording_delete, name="recording_delete"),
     path("video/webhooks/daily/", views.recording_webhook, name="recording_webhook"),
+    # Private meeting rooms (task #687). The guest route is listed before the
+    # member route so "g" can never be read as a room slug.
+    path("video/my-room/", views_personal.my_room, name="my_room"),
+    path("video/my-room/settings/", views_personal.room_settings, name="room_settings"),
+    path("video/my-room/invite/", views_personal.room_invite, name="room_invite"),
+    path(
+        "video/my-room/invite/<int:pk>/revoke/",
+        views_personal.room_invite_revoke, name="room_invite_revoke",
+    ),
+    path("meet/g/<slug:token>/", views_personal.guest_room, name="guest_room"),
+    path("meet/<slug:slug>/", views_personal.personal_room, name="personal_room"),
+    path("meet/<slug:slug>/presence/", views_personal.room_presence, name="room_presence"),
     path("groups/<slug:slug>/room/", views.workgroup_room, name="workgroup_room"),
     path("events/<slug:slug>/room/", views.event_room, name="event_room"),
 ]

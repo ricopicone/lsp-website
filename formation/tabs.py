@@ -49,6 +49,10 @@ def available_tabs(user, *, account=None):
     if show_account:
         tabs.append(("account", "Account"))
     if member:
+        # A private meeting room is a member thing (task #687); the same
+        # is_lsp_member gate services_personal.eligible_for_room uses, so the tab
+        # and the room agree about who has one.
+        tabs.append(("room", "Meeting room"))
         tabs.append(("proposals", "Proposals"))
     if member and getattr(settings, "SUGGESTIONS_ENABLED", False):
         tabs.append(("suggestions", "Suggestions"))
