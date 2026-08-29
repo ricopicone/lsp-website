@@ -97,7 +97,10 @@ def _desired_properties(owner) -> dict:
     props = {
         "enable_recording": recording,
         "enable_prejoin_ui": True,   # device/mic/camera check before joining
-        "enable_knocking": False,    # token-gated, not knock-to-enter
+        # Off for every group room: they are token-gated, and a seminar does not
+        # hold its students at the door. A personal room may opt in
+        # (PersonalRoom.waiting_room), which is why this is read off the owner.
+        "enable_knocking": bool(getattr(owner, "waiting_room", False)),
         "enable_chat": True,         # everyone can use text chat
         "enable_people_ui": True,    # participants panel + host mute/remove
         "enable_hand_raising": True,     # Q&A affordance; domain default is off
@@ -214,7 +217,7 @@ def token_exp_for(event, now=None) -> int | None:
 
 def mint_token(
     room: DailyRoom, user, *, is_owner: bool = False, start_off: bool = False,
-    exp: int | None = None,
+    exp: int | None = None, knocking: bool = False,
 ) -> str:
     """A short-lived meeting token for ``user`` to join ``room``.
 
@@ -230,7 +233,7 @@ def mint_token(
         name = name or getattr(user, "email", "") or ""
     return daily.create_meeting_token(
         room_name=room.name, user_name=name[:255], is_owner=is_owner, exp=exp,
-        start_audio_off=start_off, start_video_off=start_off,
+        start_audio_off=start_off, start_video_off=start_off, knocking=knocking,
     )
 
 

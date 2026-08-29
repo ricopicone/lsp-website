@@ -306,3 +306,63 @@ def test_a_dead_invitation_handed_in_directly_still_does_not_admit(present):
     assert personal.can_enter_personal(room, None, invitation=inv) is True
     inv.revoke()
     assert personal.can_enter_personal(room, None, invitation=inv) is False
+
+
+# ---- the waiting room ---------------------------------------------------
+
+@daily_on
+def test_waiting_room_is_off_by_default_and_opts_the_room_in():
+    """``enable_knocking`` is off for every group room and stays that way; only
+    a personal room can carry it, because only it has the attribute."""
+    from video.services import _desired_properties
+
+    room = personal.personal_room_for(member(), create=True)
+    assert room.waiting_room is False
+    assert _desired_properties(room)["enable_knocking"] is False
+
+    room.waiting_room = True
+    assert _desired_properties(room)["enable_knocking"] is True
+
+
+@daily_on
+def test_a_group_room_never_knocks():
+    from video.services import _desired_properties
+    from workgroups.models import Workgroup
+
+    wg = Workgroup.objects.create(name="A cartel", slug="a-cartel",
+                                  kind=Workgroup.Kind.CARTEL)
+    assert _desired_properties(wg)["enable_knocking"] is False
+
+
+@daily_on
+def test_the_token_carries_knocking_for_everyone_but_the_owner(monkeypatch):
+    """A token normally *bypasses* knocking, so the room property alone would be
+    inert here — every join on this site is token-minted."""
+    minted = []
+    monkeypatch.setattr(
+        "video.daily.create_meeting_token",
+        lambda **kw: minted.append(kw) or "tok",
+    )
+    monkeypatch.setattr(
+        "video.daily.get_room",
+        lambda name: {"url": f"https://lsp.daily.co/{name}", "config": {}},
+    )
+    monkeypatch.setattr("video.daily.update_room", lambda name, props: None)
+
+    owner = member()
+    room = room_for(owner)
+    room.waiting_room = True
+    room.save()
+
+    class _Req:
+        user = owner
+
+    personal.room_context(_Req(), room, is_owner=True)
+    assert minted[-1]["knocking"] is False
+
+    personal.room_context(_Req(), room, is_owner=False)
+    assert minted[-1]["knocking"] is True
+
+    personal.room_context(_Req(), room, is_owner=False, guest_name="Jane")
+    assert minted[-1]["knocking"] is True
+    assert minted[-1]["user_name"] == "Jane"
