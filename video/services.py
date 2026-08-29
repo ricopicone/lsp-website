@@ -52,11 +52,20 @@ def _is_event(owner) -> bool:
     return isinstance(owner, Event)
 
 
+def _is_personal(owner) -> bool:
+    from .models import PersonalRoom
+
+    return isinstance(owner, PersonalRoom)
+
+
 def _room_name(owner) -> str:
     if _is_workgroup(owner):
         prefix = ROOM_PREFIX
     elif _is_event(owner):
         prefix = f"{ROOM_PREFIX}event-"
+    elif _is_personal(owner):
+        # The slug is already opaque and carries its own "pr-" marker.
+        prefix = ROOM_PREFIX
     else:
         prefix = f"{ROOM_PREFIX}ch-"
     return f"{prefix}{owner.slug}"[:128]
@@ -169,6 +178,8 @@ def ensure_room(owner) -> DailyRoom | None:
             owner_kwarg = {"workgroup": owner}
         elif _is_event(owner):
             owner_kwarg = {"event": owner}
+        elif _is_personal(owner):
+            owner_kwarg = {"personal_room": owner}
         else:
             owner_kwarg = {"channel": owner}
         room = DailyRoom.objects.create(

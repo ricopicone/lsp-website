@@ -1,0 +1,295 @@
+"""A member's private meeting room (task #687).
+
+The invariant under test throughout: *nobody but the owner is in a personal room
+unless the owner is in it* — for every kind of entrant, with no exception for the
+site-technical roles.
+"""
+from __future__ import annotations
+
+import datetime as _dt
+
+import pytest
+from django.utils import timezone
+
+from accounts.models import Profile, User
+from core.models import StaffRole
+from video import services_personal as personal
+from video.models import DailyRoom, PersonalRoom, RoomInvitation
+
+from .factories import daily_on
+
+pytestmark = pytest.mark.django_db
+
+
+def member(email="member@example.com", *, first="Ada", last="Lovelace"):
+    u = User.objects.create_user(email=email, password="x", first_name=first, last_name=last)
+    u.profile.role = Profile.Role.ANALYST
+    u.profile.save()
+    return u
+
+
+def grant(user, key):
+    """Give ``user`` a StaffRole. The rows are seeded by a data migration, so
+    this gets the existing one rather than creating a duplicate key."""
+    role, _ = StaffRole.objects.get_or_create(key=key, defaults={"name": key})
+    role.holders.add(user)
+    return role
+
+
+def non_member(email="outsider@example.com"):
+    u = User.objects.create_user(email=email, password="x")
+    u.profile.role = Profile.Role.EXTERNAL
+    u.profile.save()
+    return u
+
+
+def room_for(user):
+    room = personal.personal_room_for(user, create=True)
+    # A DailyRoom row is what presence is read against; provisioning it here
+    # keeps these tests off the Daily API entirely.
+    DailyRoom.objects.create(
+        personal_room=room, name=f"lsp-{room.slug}",
+        url=f"https://lsp.daily.co/lsp-{room.slug}", provider_created=True,
+    )
+    return room
+
+
+@pytest.fixture
+def present(monkeypatch):
+    """Control whether the room's owner is 'in the room'."""
+    state = {"live": False}
+
+    def _count(daily_room):
+        return 1 if state["live"] else 0
+
+    monkeypatch.setattr("video.services.room_participant_count", _count)
+    return state
+
+
+# ---- who gets a room ----------------------------------------------------
+
+def test_member_gets_a_room_lazily():
+    u = member()
+    assert personal.personal_room_for(u) is None
+    room = personal.personal_room_for(u, create=True)
+    assert room is not None
+    assert personal.personal_room_for(u, create=True).pk == room.pk
+
+
+def test_non_member_gets_no_room():
+    assert personal.personal_room_for(non_member(), create=True) is None
+
+
+def test_room_defaults_are_closed():
+    room = personal.personal_room_for(member(), create=True)
+    assert room.recording_mode == PersonalRoom.RecordingMode.OFF
+    assert room.office_hours == PersonalRoom.OfficeHours.OFF
+    assert not room.advertises_hours
+    assert not room.admits_members
+
+
+def test_slug_is_opaque_not_the_directory_handle():
+    """Daily's room name rides in the iframe URL, where a guest can read it."""
+    u = member(first="Ada", last="Lovelace")
+    room = personal.personal_room_for(u, create=True)
+    assert room.slug.startswith("pr-")
+    assert "ada" not in room.slug and "lovelace" not in room.slug
+
+
+# ---- the invariant ------------------------------------------------------
+
+def test_owner_always_enters_their_own_room(present):
+    u = member()
+    room = room_for(u)
+    present["live"] = False
+    assert personal.can_enter_personal(room, u) is True
+
+
+def test_invited_user_waits_until_the_owner_is_present(present):
+    owner, guest = member(), member("invited@example.com")
+    room = room_for(owner)
+    RoomInvitation.objects.create(
+        room=room, invited_user=guest, expires_at=personal.new_expiry(),
+    )
+    present["live"] = False
+    assert personal.can_enter_personal(room, guest) is False
+    present["live"] = True
+    assert personal.can_enter_personal(room, guest) is True
+
+
+def test_uninvited_member_is_refused_even_when_the_owner_is_present(present):
+    room = room_for(member())
+    present["live"] = True
+    assert personal.can_enter_personal(room, member("stranger@example.com")) is False
+
+
+def test_guest_invitation_waits_for_the_owner_too(present):
+    room = room_for(member())
+    inv = RoomInvitation.objects.create(
+        room=room, token="tok-abc", guest_name="Applicant",
+        expires_at=personal.new_expiry(),
+    )
+    present["live"] = False
+    assert personal.can_enter_personal(room, None, invitation=inv) is False
+    present["live"] = True
+    assert personal.can_enter_personal(room, None, invitation=inv) is True
+
+
+def test_an_unprovisioned_room_has_no_one_in_it():
+    """No DailyRoom row means presence can't be read — and must read as absent,
+    not as an unguarded room."""
+    room = personal.personal_room_for(member(), create=True)
+    assert personal.owner_present(room) is False
+
+
+# ---- the site-technical exception --------------------------------------
+
+@pytest.mark.parametrize("role", [StaffRole.WEB_COORDINATOR, StaffRole.WEB_DEVELOPER])
+def test_site_technical_roles_are_refused_a_personal_room(present, role):
+    """They enter and moderate every other meeting on the site. A personal room
+    is private even from staff, the promise task #360 made for private channels.
+    """
+    room = room_for(member())
+    tech = member("tech@example.com")
+    grant(tech, role)
+    present["live"] = True
+    assert personal.can_enter_personal(room, tech) is False
+
+
+# ---- invitations --------------------------------------------------------
+
+def test_expired_and_revoked_invitations_are_refused(present):
+    owner, invited = member(), member("invited@example.com")
+    room = room_for(owner)
+    present["live"] = True
+
+    expired = RoomInvitation.objects.create(
+        room=room, invited_user=invited,
+        expires_at=timezone.now() - _dt.timedelta(minutes=1),
+    )
+    assert personal.can_enter_personal(room, invited) is False
+    expired.delete()
+
+    live = RoomInvitation.objects.create(
+        room=room, invited_user=invited, expires_at=personal.new_expiry(),
+    )
+    assert personal.can_enter_personal(room, invited) is True
+    live.revoke()
+    assert personal.can_enter_personal(room, invited) is False
+
+
+def test_guest_lookup_ignores_dead_tokens():
+    room = room_for(member())
+    RoomInvitation.objects.create(
+        room=room, token="dead", guest_name="X",
+        expires_at=timezone.now() - _dt.timedelta(seconds=1),
+    )
+    assert personal.guest_invitation("dead") is None
+    assert personal.guest_invitation("") is None
+
+
+def test_an_invitation_is_reusable():
+    """Not single-use: office hours and a rescheduled interview both want the
+    same link twice, and link-scanners pre-click these."""
+    room = room_for(member())
+    inv = RoomInvitation.objects.create(
+        room=room, token="tok", guest_name="X", expires_at=personal.new_expiry(),
+    )
+    inv.touch()
+    assert personal.guest_invitation("tok").pk == inv.pk
+
+
+def test_an_invitation_is_one_kind_or_the_other():
+    from django.db.utils import IntegrityError
+
+    room = room_for(member())
+    with pytest.raises(IntegrityError):
+        RoomInvitation.objects.create(
+            room=room, invited_user=member("both@example.com"), token="t",
+            expires_at=personal.new_expiry(),
+        )
+
+
+# ---- office hours -------------------------------------------------------
+
+def test_posted_hours_admit_members_appointment_does_not(present):
+    owner = member()
+    room = room_for(owner)
+    walk_in = member("student@example.com")
+    present["live"] = True
+
+    room.office_hours = PersonalRoom.OfficeHours.APPOINTMENT
+    room.hours_note = "Write to me"
+    room.save()
+    assert room.advertises_hours is True
+    assert personal.can_enter_personal(room, walk_in) is False
+
+    room.office_hours = PersonalRoom.OfficeHours.POSTED
+    room.hours_note = "Thursdays 3-4pm Pacific"
+    room.save()
+    assert personal.can_enter_personal(room, walk_in) is True
+
+
+def test_posted_hours_do_not_admit_a_non_member(present):
+    """An offering's roster can include guests (task #566); the hours are shown
+    to them, the door is not opened to them."""
+    room = room_for(member())
+    room.office_hours = PersonalRoom.OfficeHours.POSTED
+    room.hours_note = "Thursdays"
+    room.save()
+    present["live"] = True
+    assert personal.can_enter_personal(room, non_member()) is False
+
+
+def test_posted_hours_still_wait_for_the_owner(present):
+    room = room_for(member())
+    room.office_hours = PersonalRoom.OfficeHours.POSTED
+    room.hours_note = "Thursdays"
+    room.save()
+    present["live"] = False
+    assert personal.can_enter_personal(room, member("student@example.com")) is False
+
+
+def test_hours_with_no_note_are_not_advertised():
+    room = personal.personal_room_for(member(), create=True)
+    room.office_hours = PersonalRoom.OfficeHours.POSTED
+    room.save()
+    assert room.advertises_hours is False
+    assert personal.hours_for(room.user) is None
+
+
+# ---- the room's Daily config -------------------------------------------
+
+@daily_on
+def test_recording_is_off_by_default_in_the_room_config():
+    from video.services import _desired_properties, _room_name
+
+    room = personal.personal_room_for(member(), create=True)
+    assert _desired_properties(room)["enable_recording"] is False
+    assert _room_name(room) == f"lsp-{room.slug}"
+
+    room.recording_mode = PersonalRoom.RecordingMode.ON_DEMAND
+    assert _desired_properties(room)["enable_recording"] == "cloud"
+
+
+# ---- recordings ---------------------------------------------------------
+
+def test_a_personal_recording_belongs_to_its_member_and_not_to_site_staff():
+    from video.models import Recording
+
+    owner = member()
+    room = room_for(owner)
+    tech = member("tech2@example.com")
+    grant(tech, StaffRole.WEB_COORDINATOR)
+
+    rec = Recording.objects.create(
+        daily_recording_id="r1", room=room.video_room,
+        status=Recording.Status.READY,
+    )
+    assert rec.is_personal is True
+    assert rec.can_manage(owner) is True
+    assert rec.can_manage(tech) is False
+    # OWNERS by default, and the member is the only one it means.
+    assert rec.content_visible_to(owner) is True
+    assert rec.content_visible_to(tech) is False
+    assert rec.content_visible_to(member("nobody@example.com")) is False
