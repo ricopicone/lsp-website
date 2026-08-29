@@ -141,10 +141,16 @@ note            CharField(blank)     shown on the doorstep
 created_at / expires_at / revoked_at / last_used_at
 ```
 
-A check constraint requires exactly one of `invited_user` / `token`. Both kinds
-expire (default 30 days) and both are revocable; an invitation is reusable within
-its window, since office hours and a rescheduled interview both want the same
-link twice, and revocation is the way to end one early.
+A check constraint requires exactly one of `invited_user` / `token`. Both are
+revocable and both are reusable, since office hours and a rescheduled interview
+want the same link twice.
+
+**They do not share a lifetime** (amended 2026-08-29). A **guest link** expires
+in 30 days: it is a bearer secret sitting in an inbox, and anyone holding it is
+admitted. An **account-bound invitation never expires** (`expires_at` null) and
+ends only when revoked: it names a person who has to sign in, so it cannot be
+forwarded into someone else's hands, and a 30-day life meant re-inviting the
+same people term after term. Revoking is the one way either ends early.
 
 **Internal.** The member picks accounts — members and non-members alike, so an
 applicant being interviewed is reachable by name rather than by secret link — and
@@ -185,12 +191,22 @@ second audience concept would have to be defined, stored and explained, and the
 presence gate already puts the faculty member in the room with the People panel
 in front of them. The member controls the door by controlling the mode.
 
-That leaves one seam, and it is handled rather than left: an offering's roster
-can include guests (task #566 — a registered non-member), so on the Workspace the
-hours are shown to the whole roster but the **Join button is rendered only to
-members**. A guest reads the note and writes to the faculty member, which is what
-the note is for. A button that leads to a refusal is worse than no button — the
-rule task #566 settled for the Register CTA.
+**Amended after review (Rico, 2026-08-29): posted hours also admit the roster of
+any offering the member leads, whether or not those people are LSP members.** The
+first cut showed an offering's roster the hours while opening the door only to
+members, on the grounds that a button leading to a refusal is worse than no
+button. That reasoning was right about the button and wrong about the door: the
+registered Auditors and Students it excluded are precisely the people office
+hours are for, and reaching them meant inviting the non-member half of a class by
+hand, and again next term. `on_a_led_roster` closes it, and reading the roster
+rather than a list of invitations is what makes it maintain itself — a late
+registration is admitted and a withdrawal is not, with nothing to keep in step.
+The "who leads this" side needs no derivation, since every offering lead holds a
+stored `LEAD_ROLES` membership (`Event.add_faculty` writes one and
+`faculty_members()` reads it back); the visitor's side goes through
+`Workgroup.is_member`, which already knows a seminar's roster is its current
+term's paid and comped registrants. The Join button now follows the roster too,
+so the button and the door finally agree.
 
 The setting is open to any member, not gated to `is_faculty`, though the ask
 names faculty. The Workspace surface is already faculty-shaped, since it renders

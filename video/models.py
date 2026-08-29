@@ -452,7 +452,9 @@ class RoomInvitationQuerySet(models.QuerySet):
         from django.utils import timezone
 
         now = now or timezone.now()
-        return self.filter(revoked_at__isnull=True, expires_at__gt=now)
+        return self.filter(revoked_at__isnull=True).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+        )
 
 
 class RoomInvitation(models.Model):
@@ -476,9 +478,12 @@ class RoomInvitation(models.Model):
     personal room unless the owner is in it.
     """
 
-    #: Long enough for a scheduled interview to be arranged and rescheduled,
-    #: short enough that a room does not accumulate a standing list of everyone
-    #: its owner has ever met.
+    #: How long a *guest link* lives. Long enough for a scheduled interview to
+    #: be arranged and rescheduled, short enough that a secret sitting in an
+    #: inbox does not stay good forever. An invitation bound to an account gets
+    #: no expiry at all (``expires_at`` null) — it names a person who has to
+    #: sign in, so it is not a bearer secret, and re-inviting a whole class term
+    #: after term is the annoyance that made this distinction worth drawing.
     DEFAULT_TTL_DAYS = 30
 
     room = models.ForeignKey(
@@ -495,7 +500,10 @@ class RoomInvitation(models.Model):
         max_length=200, blank=True, help_text="Shown to the person you invited.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
+    expires_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the invitation stops working. Blank means it lasts until revoked.",
+    )
     revoked_at = models.DateTimeField(null=True, blank=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
 
@@ -529,6 +537,8 @@ class RoomInvitation(models.Model):
     def is_expired(self, now=None) -> bool:
         from django.utils import timezone
 
+        if self.expires_at is None:
+            return False
         return (now or timezone.now()) >= self.expires_at
 
     @property
