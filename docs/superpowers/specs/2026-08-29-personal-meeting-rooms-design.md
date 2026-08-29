@@ -215,6 +215,29 @@ and "alternate Tuesdays after seminar, or write to me" are both things a faculty
 member will want to say, and a scheduler that cannot express the second is worse
 than a sentence that expresses both. No calendar feed, no booking.
 
+## A waiting room, off by default
+
+Added after review (Rico, 2026-08-29). Presence answers *has the meeting
+started*; it does not answer *is the host ready for me now*. During office hours
+those come apart — the host is in the room, mid-conversation with someone else,
+and the next arrival should wait. `PersonalRoom.waiting_room` holds arrivals on
+Daily's knock screen until the host admits them one at a time.
+
+**Both halves are required, and this is the part that is easy to get wrong.**
+The room property `enable_knocking` alone is inert here: a participant holding a
+meeting token *bypasses* the knock screen by default, and every join on this site
+is token-minted, so nobody would ever have knocked. The meeting token must also
+carry `knocking: true`. The owner's token never does — they are the one
+admitting. `_desired_properties` reads `enable_knocking` off the owner
+(`getattr(owner, "waiting_room", False)`), so every group room keeps today's
+`False` and only a personal room can opt in; `ensure_room` reconciles on the next
+join, so toggling it needs no backfill.
+
+Default off, because an invitation is already a decision about a person and most
+meetings should not make it twice. It composes with the invariant rather than
+replacing it: presence still gates the door, and knocking adds a second,
+per-person approval behind it.
+
 ## Recording
 
 `recording_mode` defaults to **`"off"`**, against the `"on_demand"` default every

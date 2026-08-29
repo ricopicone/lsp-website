@@ -19,6 +19,7 @@
     <p>
       {% if not recording_available %}Recording is turned off for this room.{% else %}Not recorded by default,
       you can start recording from the in-call controls.{% endif %}
+      {% if waiting_room %}{% if is_owner %}People wait until you admit them, you will see the request in the call.{% else %}Your host will let you in.{% endif %}{% endif %}
       {% if is_owner %} {{ personal_use_policy }}{% endif %}
     </p>
     <a href="{% url 'video:system_check' %}" class="link">Test your video &amp; audio</a>

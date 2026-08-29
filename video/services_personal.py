@@ -186,11 +186,15 @@ def room_context(request, room: PersonalRoom, *, is_owner: bool, guest_name: str
     if daily_room is None:
         return {"room_unavailable": True}
     user = getattr(request, "user", None)
+    # The owner never knocks: they are the one admitting.
+    knocking = room.waiting_room and not is_owner
     try:
         if guest_name:
-            token = _guest_token(daily_room, guest_name)
+            token = _guest_token(daily_room, guest_name, knocking=knocking)
         else:
-            token = services.mint_token(daily_room, user, is_owner=is_owner)
+            token = services.mint_token(
+                daily_room, user, is_owner=is_owner, knocking=knocking
+            )
     except Exception:  # noqa: BLE001 — degrade to the unavailable state
         logger.exception("Daily token mint failed for personal room %s", room.slug)
         return {"room_unavailable": True}
@@ -200,10 +204,11 @@ def room_context(request, room: PersonalRoom, *, is_owner: bool, guest_name: str
         "is_owner": is_owner,
         "recording_available": room.recording_mode != PersonalRoom.RecordingMode.OFF,
         "personal_room": room,
+        "waiting_room": room.waiting_room,
     }
 
 
-def _guest_token(daily_room, guest_name: str) -> str:
+def _guest_token(daily_room, guest_name: str, *, knocking: bool = False) -> str:
     """A non-owner token carrying the display name a guest gave us.
 
     ``services.mint_token`` derives the name from a ``User``, and a guest has
@@ -218,6 +223,7 @@ def _guest_token(daily_room, guest_name: str) -> str:
     exp = int(time.time()) + settings.DAILY_TOKEN_TTL_MINUTES * 60
     return daily_api.create_meeting_token(
         room_name=daily_room.name, user_name=guest_name[:255], is_owner=False, exp=exp,
+        knocking=knocking,
     )
 
 

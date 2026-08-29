@@ -413,6 +413,14 @@ class PersonalRoom(models.Model):
     office_hours = models.CharField(
         max_length=16, choices=OfficeHours.choices, default=OfficeHours.OFF,
     )
+    waiting_room = models.BooleanField(
+        default=False,
+        help_text=(
+            "Hold arrivals on a waiting screen until you let them in, one at a "
+            "time. Off by default: an invitation is already a decision about a "
+            "person, so most meetings do not need to make it twice."
+        ),
+    )
     hours_note = models.CharField(
         max_length=200, blank=True,
         help_text="Free text, e.g. 'Thursdays 3-4pm Pacific' or 'after seminar, or write to me'.",

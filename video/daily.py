@@ -164,7 +164,7 @@ def verify_webhook(timestamp: str, raw_body: bytes, signature: str) -> bool:
 def create_meeting_token(
     *, room_name: str, user_name: str = "", is_owner: bool = False,
     exp: int | None = None, start_audio_off: bool = False,
-    start_video_off: bool = False,
+    start_video_off: bool = False, knocking: bool = False,
 ) -> str:
     """Mint a short-lived meeting token scoped to ``room_name``.
 
@@ -172,8 +172,17 @@ def create_meeting_token(
     timestamp after which the token is rejected. ``start_audio_off`` /
     ``start_video_off`` join the participant muted / camera-off (a soft speaker
     spotlight — they can turn them back on).
+
+    ``knocking`` holds the participant on the waiting screen until an owner
+    admits them. It is needed *because* a token normally bypasses knocking: the
+    room's ``enable_knocking`` alone lets anyone holding a token walk straight
+    in, which is everyone here, since every join on this site is token-minted.
+    Both halves are therefore required, and the owner's own token never carries
+    it — they are the one doing the admitting.
     """
     props: dict = {"room_name": room_name, "is_owner": is_owner}
+    if knocking:
+        props["knocking"] = True
     if user_name:
         props["user_name"] = user_name
     if exp is not None:

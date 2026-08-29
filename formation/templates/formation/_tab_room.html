@@ -206,6 +206,16 @@ its office hours, and its live invitations.
         {{ room_settings_form.hours_note }}
         <p class="mt-1 text-xs text-base-content/50">{{ room_settings_form.hours_note.help_text }}</p>
       </div>
+      <label class="flex items-start gap-2 text-sm text-base-content/80 sm:col-span-2">
+        {{ room_settings_form.waiting_room }}
+        <span>
+          {{ room_settings_form.waiting_room.label }}
+          <span class="block text-xs text-base-content/50">
+            Arrivals wait on a doorstep screen until you admit them, so you can finish
+            one conversation before the next begins.
+          </span>
+        </span>
+      </label>
       <div class="sm:col-span-2">
         <button type="submit" class="btn btn-primary btn-sm">Save</button>
       </div>

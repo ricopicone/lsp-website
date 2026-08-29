@@ -19,7 +19,7 @@ class PersonalRoomSettingsForm(forms.ModelForm):
 
     class Meta:
         model = PersonalRoom
-        fields = ("recording_mode", "office_hours", "hours_note")
+        fields = ("recording_mode", "office_hours", "hours_note", "waiting_room")
         widgets = {
             "recording_mode": forms.Select(attrs={"class": _SELECT}),
             "office_hours": forms.Select(attrs={"class": _SELECT}),
@@ -27,11 +27,13 @@ class PersonalRoomSettingsForm(forms.ModelForm):
                 "class": _INPUT,
                 "placeholder": "Thursdays 3-4pm Pacific",
             }),
+            "waiting_room": forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
         }
         labels = {
             "recording_mode": "Recording",
             "office_hours": "Office hours",
             "hours_note": "When (or how to arrange it)",
+            "waiting_room": "Let people in one at a time",
         }
         help_texts = {
             "hours_note": (
