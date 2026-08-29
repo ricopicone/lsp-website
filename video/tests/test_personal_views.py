@@ -191,7 +191,7 @@ def test_inviting_a_member_notifies_them(client, stub_daily):
 
     owner, invited = member(), member("invited@example.com")
     client.force_login(owner)
-    resp = client.post(reverse("video:room_invite"), {"member": invited.pk})
+    resp = client.post(reverse("video:room_invite"), {"members": [invited.pk]})
     assert resp.status_code == 302
     invitation = RoomInvitation.objects.get()
     assert invitation.invited_user == invited
@@ -203,7 +203,7 @@ def test_inviting_an_unknown_email_makes_a_guest_link(client, stub_daily, mailou
     owner = member()
     client.force_login(owner)
     client.post(reverse("video:room_invite"), {
-        "email": "stranger@example.com", "name": "A Stranger", "send_email": "on",
+        "others": "A Stranger <stranger@example.com>", "send_email": "on",
     })
     invitation = RoomInvitation.objects.get()
     assert invitation.is_guest
@@ -218,7 +218,7 @@ def test_inviting_a_known_email_binds_to_that_account(client, stub_daily):
     owner = member()
     applicant = non_member("applicant@example.com")
     client.force_login(owner)
-    client.post(reverse("video:room_invite"), {"email": applicant.email, "name": "App"})
+    client.post(reverse("video:room_invite"), {"others": f"App <{applicant.email}>"})
     invitation = RoomInvitation.objects.get()
     assert invitation.invited_user == applicant
     assert invitation.token is None
@@ -341,3 +341,93 @@ def test_a_personal_recording_cannot_be_made_public_by_a_hand_rolled_post(client
     assert resp.status_code == 403
     rec.refresh_from_db()
     assert rec.content_visibility == Recording.Visibility.OWNERS
+
+
+# ---- inviting: the email is optional -------------------------------------
+
+def test_a_name_alone_makes_a_guest_link_and_sends_nothing(client, stub_daily, mailoutbox):
+    """The email only ever sends the invitation; it gates nothing, since a guest
+    link admits whoever opens it."""
+    client.force_login(member())
+    resp = client.post(reverse("video:room_invite"), {"others": "A Stranger"})
+    assert resp.status_code == 302
+    invitation = RoomInvitation.objects.get()
+    assert invitation.is_guest
+    assert invitation.guest_name == "A Stranger"
+    assert invitation.guest_email == ""
+    assert mailoutbox == []
+
+
+def test_an_email_with_no_name_still_binds_to_a_known_account(client, stub_daily):
+    owner = member()
+    applicant = non_member("applicant2@example.com")
+    client.force_login(owner)
+    client.post(reverse("video:room_invite"), {"others": applicant.email})
+    assert RoomInvitation.objects.get().invited_user == applicant
+
+
+def test_an_unknown_email_with_no_name_asks_for_one(client, stub_daily):
+    client.force_login(member())
+    client.post(reverse("video:room_invite"), {"others": "nobody@example.com"})
+    assert not RoomInvitation.objects.exists()
+
+
+def test_nothing_at_all_is_refused(client, stub_daily):
+    client.force_login(member())
+    client.post(reverse("video:room_invite"), {"others": "   "})
+    assert not RoomInvitation.objects.exists()
+
+
+def test_the_member_picker_lists_names_not_addresses(client, stub_daily):
+    from video.forms_personal import InvitationForm
+
+    owner = member()
+    member("Pickable@example.com", first="Ada", last="Lovelace")
+    room = personal.personal_room_for(owner, create=True)
+    labels = [str(label) for _value, label in InvitationForm(room=room).fields["members"].choices]
+    assert "Ada Lovelace" in labels
+    assert not any("@" in label for label in labels if label != "Choose a member…")
+
+
+def test_several_people_are_invited_at_once(client, stub_daily):
+    owner = member()
+    a = member("a@example.com", first="Ann", last="Alpha")
+    b = member("b@example.com", first="Ben", last="Beta")
+    client.force_login(owner)
+    client.post(reverse("video:room_invite"), {
+        "members": [a.pk, b.pk],
+        "others": "Jane Doe <jane@example.com>\nJust A Name\n",
+    })
+    invitations = RoomInvitation.objects.all()
+    assert invitations.count() == 4
+    assert {i.invited_user for i in invitations if i.invited_user} == {a, b}
+    guests = {(i.guest_name, i.guest_email) for i in invitations if i.is_guest}
+    assert guests == {("Jane Doe", "jane@example.com"), ("Just A Name", "")}
+
+
+def test_the_same_person_ticked_and_typed_is_one_invitation(client, stub_daily):
+    owner = member()
+    a = member("a@example.com", first="Ann", last="Alpha")
+    client.force_login(owner)
+    client.post(reverse("video:room_invite"), {
+        "members": [a.pk], "others": f"Ann Alpha <{a.email}>",
+    })
+    assert RoomInvitation.objects.count() == 1
+
+
+def test_personas_are_not_offered(client, stub_daily):
+    from video.forms_personal import InvitationForm
+
+    owner = member()
+    persona = member("persona@example.com", first="Persona", last="Chair")
+    persona.profile.is_persona = True
+    persona.profile.save()
+    room = personal.personal_room_for(owner, create=True)
+    labels = [str(label) for _v, label in InvitationForm(room=room).fields["members"].choices]
+    assert "Persona Chair" not in labels
+
+
+def test_a_malformed_address_is_reported_not_swallowed(client, stub_daily):
+    client.force_login(member())
+    client.post(reverse("video:room_invite"), {"others": "Jane <not-an-address>"})
+    assert not RoomInvitation.objects.exists()

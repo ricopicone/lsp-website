@@ -152,24 +152,49 @@ def room_invite(request):
         for error in form.errors.values():
             messages.error(request, error[0])
         return redirect(_hub_url())
-    if form.already_invited():
-        messages.info(request, "They already have a live invitation to your room.")
-        return redirect(_hub_url())
 
-    invitation = form.build()
-    if form.cleaned_data.get("send_email") or not invitation.is_guest:
-        from . import notifications_personal as notify_room
+    from . import notifications_personal as notify_room
 
-        notify_room.send_invitation(invitation)
-    if invitation.is_guest:
+    send_email = form.cleaned_data.get("send_email")
+    invited, already = [], []
+    for recipient in form.cleaned_data["recipients"]:
+        if form.already_invited(recipient):
+            already.append(recipient.label)
+            continue
+        invitation = form.build(recipient)
+        # An account holder is always told; a guest link is mailed only when the
+        # member gave an address and asked us to send it.
+        if send_email or not invitation.is_guest:
+            notify_room.send_invitation(invitation)
+        invited.append(invitation)
+
+    if invited:
         messages.success(
             request,
-            f"Invitation created for {invitation.display_name}. Copy the link below "
-            f"and send it to them.",
+            f"{_and_list([i.display_name for i in invited])} invited to your room.",
         )
-    else:
-        messages.success(request, f"{invitation.display_name} was invited to your room.")
+        # Only a guest has a link to hand over, so name them rather than telling
+        # someone to copy a link for a member who signs in as themselves.
+        guests = [i.display_name for i in invited if i.is_guest]
+        if guests:
+            noun = "link" if len(guests) == 1 else "links"
+            messages.info(
+                request, f"Copy the {noun} below to send to {_and_list(guests)}."
+            )
+    if already:
+        messages.info(
+            request,
+            f"{_and_list(already)} already had a live invitation, so nothing changed.",
+        )
     return redirect(_hub_url())
+
+
+def _and_list(names) -> str:
+    """"a", "a and b", "a, b and c" — the message names everyone it acted on."""
+    names = list(names)
+    if len(names) <= 1:
+        return names[0] if names else ""
+    return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
 @login_required
