@@ -259,6 +259,13 @@ and the Program Committee sets the venue on each session. If the format itself
 is wrong, online where it should be in person or hybrid, ask the Program
 Committee.
 
+## Meeting students outside class
+
+Your seminar's meeting room is for the class. For office hours and one-to-one
+conversations you have a **private meeting room** of your own, and you can post
+office hours that appear on your Workspace for your students to see. See
+[Your private meeting room](/guides/meeting-room/).
+
 ## Who to ask
 
 - **Program Committee**—fees and tiers, dates, publishing, opening or
