@@ -293,3 +293,16 @@ def test_a_personal_recording_belongs_to_its_member_and_not_to_site_staff():
     assert rec.content_visible_to(owner) is True
     assert rec.content_visible_to(tech) is False
     assert rec.content_visible_to(member("nobody@example.com")) is False
+
+
+def test_a_dead_invitation_handed_in_directly_still_does_not_admit(present):
+    """The access primitive re-checks a caller-supplied invitation rather than
+    trusting it, so a caller that forgot to filter ``live()`` can't subvert it."""
+    room = room_for(member())
+    inv = RoomInvitation.objects.create(
+        room=room, token="tok-dead", guest_name="X", expires_at=personal.new_expiry(),
+    )
+    present["live"] = True
+    assert personal.can_enter_personal(room, None, invitation=inv) is True
+    inv.revoke()
+    assert personal.can_enter_personal(room, None, invitation=inv) is False
