@@ -65,7 +65,9 @@ def personal_room(request, slug):
 
     invitation = personal.invitation_for(room, request.user)
     try:
-        personal.check_entry(room, request.user)
+        # Hand the invitation over rather than letting check_entry re-query it;
+        # it re-validates liveness either way (_invitation_admits).
+        personal.check_entry(room, request.user, invitation=invitation)
     except personal.EntryRefused as refused:
         return _refused(request, room, refused, poll_url=_presence_url(room))
 

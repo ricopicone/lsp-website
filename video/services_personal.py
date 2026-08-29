@@ -143,8 +143,19 @@ def can_enter_personal(room: PersonalRoom, user, *, invitation=None) -> bool:
     """
     if getattr(user, "is_authenticated", False) and user.pk == room.user_id:
         return True
-    admitted = invitation is not None or may_be_admitted(room, user)
+    admitted = _invitation_admits(invitation) or may_be_admitted(room, user)
     return bool(admitted and owner_present(room))
+
+
+def _invitation_admits(invitation) -> bool:
+    """Whether a caller-supplied invitation still opens the door.
+
+    Re-checked here rather than trusted, so the access primitive cannot be
+    subverted by a caller that fetched an invitation without filtering
+    ``live()`` — the check costs nothing (``is_live`` reads fields already
+    loaded) and means no future call site has to remember the rule.
+    """
+    return invitation is not None and invitation.is_live
 
 
 def check_entry(room: PersonalRoom, user, *, invitation=None) -> None:
@@ -152,7 +163,7 @@ def check_entry(room: PersonalRoom, user, *, invitation=None) -> None:
     says which of the two refusals it is."""
     if getattr(user, "is_authenticated", False) and user.pk == room.user_id:
         return
-    if invitation is None and not may_be_admitted(room, user):
+    if not _invitation_admits(invitation) and not may_be_admitted(room, user):
         raise EntryRefused("This is a private meeting room, and you have not been invited to it.")
     if not owner_present(room):
         raise EntryRefused(
