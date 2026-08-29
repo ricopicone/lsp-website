@@ -26,46 +26,95 @@ its office hours, and its live invitations.
   <section class="space-y-4">
     <h2 class="font-serif text-xl text-base-content">Who can join</h2>
     <p class="max-w-prose text-sm text-base-content/60">
-      Invite an LSP member by name, or anyone else by email address. If their email
-      already has an account here they sign in as themselves, otherwise you get a link
-      to send them. Either way, they can only join while you are in the room.
+      Tick any LSP members, and type anyone else, one per line. Add an email and we
+      will send them the link, or leave it out and copy the link yourself. Either way,
+      they can only join while you are in the room.
     </p>
 
     <form method="post" action="{% url 'video:room_invite' %}"
-          class="grid gap-4 rounded-xl border border-base-300/60 bg-base-100 p-5 sm:grid-cols-2">
+          class="space-y-5 rounded-xl border border-base-300/60 bg-base-100 p-5">
       {% csrf_token %}
-      <div class="sm:col-span-2">
-        <label for="{{ room_invite_form.member.id_for_label }}" class="label">
-          <span class="label-text">{{ room_invite_form.member.label }}</span>
-        </label>
-        {{ room_invite_form.member }}
+
+      {% if room_invite_form.non_field_errors %}
+      {% for error in room_invite_form.non_field_errors %}
+      <p class="text-sm text-error">{{ error }}</p>
+      {% endfor %}
+      {% endif %}
+
+      <div class="space-y-2">
+        <span class="label-text">{{ room_invite_form.members.label }}</span>
+        <input type="search" id="member-filter" autocomplete="off"
+               class="input input-bordered input-sm w-full"
+               placeholder="Type a name to filter…"
+               aria-controls="member-list"
+               aria-label="Filter the member list by name">
+        <div id="member-list"
+             class="max-h-56 overflow-y-auto rounded-lg border border-base-300/60 p-1">
+          {% for choice in room_invite_form.members %}
+          <label class="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-base-200/60"
+                 data-member-name="{{ choice.choice_label|lower }}">
+            {{ choice.tag }}
+            <span>{{ choice.choice_label }}</span>
+          </label>
+          {% empty %}
+          <p class="px-2 py-1.5 text-sm text-base-content/55">No other members yet.</p>
+          {% endfor %}
+          <p id="member-empty" hidden class="px-2 py-1.5 text-sm text-base-content/55">
+            No members match that.
+          </p>
+        </div>
       </div>
+
       <div>
-        <label for="{{ room_invite_form.email.id_for_label }}" class="label">
-          <span class="label-text">{{ room_invite_form.email.label }}</span>
+        <label for="{{ room_invite_form.others.id_for_label }}" class="label">
+          <span class="label-text">{{ room_invite_form.others.label }}</span>
         </label>
-        {{ room_invite_form.email }}
+        {{ room_invite_form.others }}
+        <p class="mt-1 text-xs text-base-content/50">{{ room_invite_form.others.help_text }}</p>
+        {% for error in room_invite_form.others.errors %}
+        <p class="mt-1 text-xs text-error">{{ error }}</p>
+        {% endfor %}
       </div>
+
       <div>
-        <label for="{{ room_invite_form.name.id_for_label }}" class="label">
-          <span class="label-text">{{ room_invite_form.name.label }}</span>
-        </label>
-        {{ room_invite_form.name }}
-      </div>
-      <div class="sm:col-span-2">
         <label for="{{ room_invite_form.note.id_for_label }}" class="label">
           <span class="label-text">{{ room_invite_form.note.label }}</span>
         </label>
         {{ room_invite_form.note }}
       </div>
-      <label class="flex items-center gap-2 text-sm text-base-content/70 sm:col-span-2">
+
+      <label class="flex items-center gap-2 text-sm text-base-content/70">
         {{ room_invite_form.send_email }}
         <span>{{ room_invite_form.send_email.label }}</span>
       </label>
-      <div class="sm:col-span-2">
-        <button type="submit" class="btn btn-primary btn-sm">Invite</button>
-      </div>
+
+      <button type="submit" class="btn btn-primary btn-sm">Invite</button>
     </form>
+
+    <script>
+      {% comment %}Live filter over the member checkboxes. Eighty names is more
+      than anyone wants to scroll, and a ticked member stays visible so a
+      selection can't be hidden by a later keystroke.{% endcomment %}
+      (function () {
+        var box = document.getElementById('member-filter');
+        var list = document.getElementById('member-list');
+        var empty = document.getElementById('member-empty');
+        if (!box || !list) return;
+        var rows = list.querySelectorAll('[data-member-name]');
+        box.addEventListener('input', function () {
+          var q = box.value.trim().toLowerCase();
+          var shown = 0;
+          rows.forEach(function (row) {
+            var input = row.querySelector('input');
+            var match = !q || row.getAttribute('data-member-name').indexOf(q) !== -1;
+            var keep = match || (input && input.checked);
+            row.hidden = !keep;
+            if (keep) shown++;
+          });
+          if (empty) empty.hidden = shown > 0;
+        });
+      })();
+    </script>
 
     {% if room_invitations %}
     <ul class="divide-y divide-base-300/50 rounded-xl border border-base-300/60 bg-base-100">
@@ -78,19 +127,50 @@ its office hours, and its live invitations.
           </p>
           {% if invitation.note %}<p class="text-xs text-base-content/55">{{ invitation.note }}</p>{% endif %}
           <p class="text-xs text-base-content/45">Until {{ invitation.expires_at|date:"F j, Y" }}</p>
-          {% if invitation.share_url %}
-          <input type="text" readonly value="{{ invitation.share_url }}"
-                 class="input input-bordered input-xs mt-2 w-full max-w-md font-mono text-xs"
-                 onclick="this.select()" aria-label="Invitation link for {{ invitation.display_name }}">
-          {% endif %}
         </div>
         <form method="post" action="{% url 'video:room_invite_revoke' invitation.pk %}">
           {% csrf_token %}
           <button type="submit" class="btn btn-ghost btn-xs">Revoke</button>
         </form>
       </li>
+      {% if invitation.share_url %}
+      <li class="px-4 pb-3 -mt-1">
+        <div class="flex items-center gap-2">
+          <input type="text" readonly value="{{ invitation.share_url }}"
+                 class="input input-bordered input-sm w-full font-mono text-xs"
+                 onclick="this.select()"
+                 aria-label="Invitation link for {{ invitation.display_name }}">
+          <button type="button" class="btn btn-sm btn-outline shrink-0"
+                  data-copy-link="{{ invitation.share_url }}">
+            <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+              <rect x="9" y="9" width="12" height="12" rx="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            <span data-copy-label>Copy</span>
+          </button>
+        </div>
+      </li>
+      {% endif %}
       {% endfor %}
     </ul>
+    <script>
+      (function () {
+        if (!navigator.clipboard) return;
+        document.querySelectorAll('[data-copy-link]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            navigator.clipboard.writeText(btn.getAttribute('data-copy-link')).then(function () {
+              var label = btn.querySelector('[data-copy-label]');
+              if (!label) return;
+              var prev = label.textContent;
+              label.textContent = 'Copied';
+              setTimeout(function () { label.textContent = prev; }, 1500);
+            });
+          });
+        });
+      })();
+    </script>
     {% else %}
     <p class="text-sm text-base-content/55">No one is invited to your room at the moment.</p>
     {% endif %}
