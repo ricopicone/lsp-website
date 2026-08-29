@@ -42,14 +42,22 @@ its office hours, and its live invitations.
       {% endif %}
 
       <div class="space-y-2">
-        <span class="label-text">{{ room_invite_form.members.label }}</span>
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="label-text">{{ room_invite_form.members.label }}</span>
+          <span id="member-count" class="text-xs text-base-content/50" aria-live="polite"></span>
+        </div>
         <input type="search" id="member-filter" autocomplete="off"
                class="input input-bordered input-sm w-full"
                placeholder="Type a name to filter…"
                aria-controls="member-list"
                aria-label="Filter the member list by name">
+        {% comment %}Compact by default: eighty names is a wall above the rest of
+        the form. Typing raises the cap, since a filtered list is short. The
+        expanded height is set inline rather than by swapping a Tailwind class —
+        a class only ever emitted from JavaScript is stripped from the
+        production build (tailwind-classes-set-in-python).{% endcomment %}
         <div id="member-list"
-             class="max-h-56 overflow-y-auto rounded-lg border border-base-300/60 p-1">
+             class="max-h-32 overflow-y-auto rounded-lg border border-base-300/60 p-1">
           {% for choice in room_invite_form.members %}
           <label class="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-base-200/60"
                  data-member-name="{{ choice.choice_label|lower }}">
@@ -99,20 +107,40 @@ its office hours, and its live invitations.
         var box = document.getElementById('member-filter');
         var list = document.getElementById('member-list');
         var empty = document.getElementById('member-empty');
+        var count = document.getElementById('member-count');
         if (!box || !list) return;
-        var rows = list.querySelectorAll('[data-member-name]');
-        box.addEventListener('input', function () {
+        var rows = Array.prototype.slice.call(list.querySelectorAll('[data-member-name]'));
+
+        function tally() {
+          if (!count) return;
+          var n = rows.filter(function (row) {
+            var input = row.querySelector('input');
+            return input && input.checked;
+          }).length;
+          count.textContent = n ? n + ' selected' : '';
+        }
+
+        function apply() {
           var q = box.value.trim().toLowerCase();
           var shown = 0;
           rows.forEach(function (row) {
             var input = row.querySelector('input');
             var match = !q || row.getAttribute('data-member-name').indexOf(q) !== -1;
+            // A ticked member stays visible whatever is typed, so a selection
+            // can never be hidden by a later keystroke.
             var keep = match || (input && input.checked);
             row.hidden = !keep;
             if (keep) shown++;
           });
           if (empty) empty.hidden = shown > 0;
-        });
+          // Filtering shortens the list, so let it breathe; clearing the box
+          // returns it to the compact cap the stylesheet sets.
+          list.style.maxHeight = q ? '24rem' : '';
+        }
+
+        box.addEventListener('input', apply);
+        list.addEventListener('change', tally);
+        tally();
       })();
     </script>
 
