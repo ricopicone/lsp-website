@@ -1676,6 +1676,97 @@ Done (see `git log` for specifics):
   a row whose S3 object is gone). **Recovery is not publication:** a recovered
   recording lands at `owners`/`owners` like any other. No migration, no flag.
 
+- **A private meeting room for every member** (task #687). Diana asked for
+  "office hours" so faculty could meet seminar members outside the seminar room,
+  and application interviews had the same shape: two people, no group, no event.
+  Every room the site had belonged to a *group* — a `Workgroup`, a Parlêtre
+  `Channel`, or a one-off `Event` — so there was nowhere for a conversation
+  between two people to happen.
+  **`video.PersonalRoom` is a fourth `DailyRoom` owner**, and owning the room
+  rather than being it is what keeps the change small: it supplies `.slug` and
+  `.recording_mode`, which is the entire duck-typed protocol
+  `services._room_name` and `_desired_properties` read, so neither grows a
+  branch. Rejected: a `user` column on `DailyRoom` with the settings on
+  `Profile` (five polymorphic sites gain a fourth arm, and `Profile` is already
+  long); and **a one-member `Workgroup` each**, which the project's own "add a
+  group feature to `Workgroup` first" rule points at — it would have inherited
+  the room, roster and Meet tab free, and also minted a Parlêtre channel per
+  member, listed eighty personal workgroups under `/groups/`, and carried a
+  roster whose meaning is wrong for an hour-long interview guest. The rule is
+  about group features; this is the case it does not fit. Rooms are created
+  lazily on first visit, so there is no backfill and no migration of data.
+  **The invariant is the feature: nobody but the owner is in a personal room
+  unless the owner is in it.** It holds for every entrant without exception — an
+  invited member, an invited account holder, an anonymous guest, a member walking
+  in during posted hours — so a leaked or forwarded link cannot put a stranger
+  alone in someone's room; the worst it does is show a doorstep saying the
+  meeting has not started. Presence is already implemented
+  (`services.presence_map`, one account-wide `GET /presence` cached ~20s), so the
+  doorstep polls and a guest may wait up to about half a minute past the host's
+  arrival. Rejected: **priming the cache** when the owner's token is minted (they
+  may never clear the prejoin screen, and a doorstep that says "your host is
+  here" when nobody is, is worse than one that lags); **a scheduled window per
+  invitation**, which reads "expires after the meeting time" literally but needs
+  a scheduling form and is live whether or not the host ever arrives; and
+  **Daily's `enable_knocking`**, the native shape of this, which gates on the
+  *room URL* rather than on anything we issue, making that URL a permanent bearer
+  secret.
+  **The site-technical roles are excluded**, departing from
+  `services.is_site_technical`, which lets the Web Coordinator and Web Developer
+  enter and moderate every other meeting so someone can help when an event goes
+  wrong. This is the exception for the reason `can_enter_channel` already makes
+  it for Parlêtre private channels: a private channel is private even from staff
+  (task #360). Said out loud in `can_enter_personal` and pinned by test, because
+  it is the omission a later reader is most likely to "fix".
+  **One `RoomInvitation`, two kinds**, exactly one of `invited_user` / `token`
+  set by check constraint — the style `video_room_exactly_one_owner` already
+  uses. An account holder is invited by name and signs in as themselves (so an
+  applicant, who already has an account, needs no secret link); anyone else gets
+  `/meet/g/<token>/`. Neither kind is single-use and **GET mints nothing**: link
+  scanners pre-click links on exactly the addresses this gets mailed to
+  (`auth-email-scanner-and-reset-gotchas`), so the token mint sits behind the
+  POST, which also carries the display name the guest will appear under. There is
+  deliberately **no picker listing every account** — that would hand any member a
+  roster of everyone who ever signed up — so the picker holds LSP members (already
+  public in the directory) and everyone else is reached by email address,
+  resolved to an account when one exists.
+  **Office hours are three modes, default off**: `posted` advertises *and* admits
+  LSP members while the owner is in the room; `appointment` advertises without
+  admitting anyone, which is what makes the label mean something rather than
+  being sign-writing on an open door; `off` does neither. Advertised on the
+  Workspace of each offering the member leads — via
+  `events.permissions.offering_leads`, not `faculty_members()`, so a reading
+  group's conveners are included (the defect task #564 had to fix in the approval
+  notice) — and on their directory profile to signed-in members only, mirroring
+  `_availability_rows`; a public page would advertise a private room and a weekly
+  schedule to the open internet. An offering's roster can include guests
+  (task #566), so the hours are shown to the roster while the **Join button is
+  rendered only to members**: a button leading to a refusal is worse than no
+  button. `hours_note` is free text, not a structured recurrence — "alternate
+  Tuesdays after seminar, or write to me" is a thing faculty will want to say, and
+  a scheduler that cannot express it is worse than a sentence that expresses both.
+  **Recording defaults `off`**, against the `on_demand` every other room kind
+  carries: this room holds application interviews, and a Record button does not
+  belong in one unasked. Two things in `video/models.py` had to change or a
+  personal recording would have been broken on arrival. `Recording._can_host`
+  resolves through the event, then the workgroup, then falls back to
+  `is_site_technical` — with neither, **the member could not watch their own
+  recording while the Web Coordinator could**. And a personal recording is
+  **owner-only with no availability form**, enforced in the view as well as the
+  template: two of the six visibility settings are defined by roster membership,
+  and a personal room has no roster, so they would silently mean "nobody".
+  Surfaces: a **My LSP → Meeting room tab**, which the avatar menu picks up free
+  because it renders `my_lsp_tabs`; `/video/my-room/`; `/meet/<slug>/`; and
+  `/meet/g/<token>/`. **Parlêtre deliberately gets nothing**: the natural surface
+  is a call button on a private chat, and private chats are hard off in production
+  (`PARLETRE_PRIVATE_CHATS_ENABLED`, task #360), so the work would ship invisible.
+  Standing copy on the room page, the invitation email and the guest doorstep says
+  it is separate from the seminar and event rooms, and that the room is for the
+  work of the School and not for clinical work with analysands. Verified in a
+  browser end to end at every entrance. No backfill, no flag beyond the
+  `DAILY_ENABLED` one the video app already has. Design:
+  `docs/superpowers/specs/2026-08-29-personal-meeting-rooms-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

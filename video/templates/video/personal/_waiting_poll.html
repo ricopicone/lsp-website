@@ -1,0 +1,20 @@
+{% comment %}
+Polls the room's presence endpoint and reloads once the host arrives. The
+presence map is cached ~20s account-wide, so a host who just joined may take up
+to about half a minute to register; the manual button is the no-JS path and the
+impatient path both.
+{% endcomment %}
+{% if poll_url %}
+<script>
+  (function () {
+    var url = "{{ poll_url|escapejs }}";
+    function check() {
+      fetch(url, { headers: { "Accept": "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) { if (data && data.live) { window.location.reload(); } })
+        .catch(function () {});
+    }
+    setInterval(check, 15000);
+  })();
+</script>
+{% endif %}

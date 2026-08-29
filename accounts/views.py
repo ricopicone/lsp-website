@@ -387,9 +387,26 @@ def directory_detail(request, slug: str):
                     # Members-only: which LSP functions this analyst is open for.
                     "availability": _availability_rows(profile, request.user),
                     "availability_note": _availability_note(profile, request.user),
+                    # Members-only: their advertised office hours (task #687).
+                    "office_hours": _office_hours(profile, request.user),
                 },
             )
     raise Http404("Member not found")
+
+
+def _office_hours(profile, user):
+    """This member's advertised office hours, for a signed-in LSP member.
+
+    ``None`` for anonymous visitors and for non-member account holders: a public
+    page would advertise a private room and a weekly schedule to the open
+    internet. Mirrors ``_availability_rows`` right down to the shape.
+    """
+    from accounts.permissions import is_lsp_member
+    from video.services_personal import hours_for
+
+    if not is_lsp_member(user):
+        return None
+    return hours_for(profile.user)
 
 
 def _availability_rows(profile, user):

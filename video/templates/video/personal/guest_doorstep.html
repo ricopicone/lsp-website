@@ -1,0 +1,47 @@
+{% extends "core/base.html" %}
+{% block title %}Join {{ host }}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto px-4 py-12 space-y-6">
+  <div class="space-y-2 text-center">
+    <h1 class="font-serif text-2xl text-base-content">{{ host }} invited you to a meeting</h1>
+    <p class="text-sm text-base-content/60">
+      This is a private meeting room at the Lacanian School of Psychoanalysis. It is
+      separate from the meeting rooms used for the School's seminars and events.
+    </p>
+  </div>
+
+  {% if invitation.note %}
+  <p class="rounded-xl border border-base-300/60 bg-base-200/40 p-4 text-sm text-base-content/80">
+    {{ invitation.note }}
+  </p>
+  {% endif %}
+
+  {% if refused and refused.waiting or not live %}
+  <div class="rounded-xl border border-base-300/60 bg-base-200/40 p-4 text-center space-y-1">
+    <p class="text-sm font-medium text-base-content">{{ host }} has not started the meeting yet.</p>
+    <p class="text-xs text-base-content/55">
+      Leave this page open, it will let you in as soon as they are in the room.
+    </p>
+  </div>
+  {% endif %}
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div>
+      <label for="{{ form.display_name.id_for_label }}" class="label">
+        <span class="label-text">{{ form.display_name.label }}</span>
+      </label>
+      {{ form.display_name }}
+      <p class="mt-1 text-xs text-base-content/50">This is how you will appear to {{ host }}.</p>
+      {% for error in form.display_name.errors %}
+      <p class="mt-1 text-xs text-error">{{ error }}</p>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn btn-primary w-full">
+      {% if live %}Join the meeting{% else %}Try to join{% endif %}
+    </button>
+  </form>
+</div>
+{% include "video/personal/_waiting_poll.html" %}
+{% endblock %}

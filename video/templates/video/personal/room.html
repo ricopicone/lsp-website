@@ -1,0 +1,27 @@
+{% extends "core/base.html" %}
+{% block title %}{{ room_title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-6 space-y-4">
+  <div class="flex items-center justify-between gap-3">
+    <div class="min-w-0">
+      <h1 class="font-serif text-2xl text-base-content truncate">{{ room_title }}</h1>
+      <p class="text-xs text-base-content/50">
+        A private meeting room, separate from the meeting rooms for the School's seminars and events.
+      </p>
+    </div>
+    {% if back_url %}<a href="{{ back_url }}" class="btn btn-ghost btn-sm">← Back</a>{% endif %}
+  </div>
+
+  {% include "video/_embed.html" with room_url=room_url room_token=token back_url=back_url auto_record=auto_record %}
+
+  <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-base-content/50">
+    <p>
+      {% if not recording_available %}Recording is turned off for this room.{% else %}Not recorded by default,
+      you can start recording from the in-call controls.{% endif %}
+      {% if is_owner %} {{ personal_use_policy }}{% endif %}
+    </p>
+    <a href="{% url 'video:system_check' %}" class="link">Test your video &amp; audio</a>
+  </div>
+</div>
+{% endblock %}

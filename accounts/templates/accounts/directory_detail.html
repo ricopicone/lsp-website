@@ -115,6 +115,14 @@
   </section>
   {% endif %}
 
+  {% if office_hours %}
+  <section class="space-y-3 pt-6 border-t border-base-300/60">
+    <h2 class="font-serif text-xl text-base-content">Office hours</h2>
+    <p class="text-xs text-base-content/50">Visible to members.</p>
+    {% include "video/_office_hours.html" with hours_room=office_hours can_join=True %}
+  </section>
+  {% endif %}
+
   {% if works %}
   <section class="space-y-4 pt-6 border-t border-base-300/60">
     <h2 class="font-serif text-xl text-base-content">Selected works</h2>

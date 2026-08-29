@@ -1,0 +1,39 @@
+{% comment %}
+One member's advertised office hours. Shared by the Workspace overview and the
+directory profile, so the two surfaces can't drift.
+
+``person`` is passed only where several people's hours appear together (the
+Workspace); the directory page names the member already, so passing it there
+would print "Office hours" twice under its own heading.
+
+``can_join`` is the LSP-member test, not the roster test: an offering's roster
+can include guests (task #566), who should read the note and write to the
+faculty member rather than meet a button that 403s.
+{% endcomment %}
+<div class="rounded-xl border border-base-300/60 bg-base-200/40 p-4 space-y-2">
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <div class="min-w-0">
+      {% if person %}
+      <p class="font-medium text-base-content">{{ person.get_full_name }}</p>
+      {% endif %}
+      <p class="text-base-content/80">
+        {{ hours_room.hours_note }}
+        {% if hours_room.office_hours == "appointment" %}
+        <span class="badge badge-ghost badge-sm ml-1 align-middle">By appointment</span>
+        {% endif %}
+      </p>
+    </div>
+    {% if hours_room.admits_members and can_join %}
+    <a href="{% url 'video:personal_room' hours_room.slug %}" class="btn btn-sm btn-outline">
+      Go to their room
+    </a>
+    {% endif %}
+  </div>
+  <p class="text-xs text-base-content/45">
+    {% if hours_room.admits_members %}
+    A private meeting room, you can join while they are in it.
+    {% else %}
+    Write to them to arrange a time.
+    {% endif %}
+  </p>
+</div>

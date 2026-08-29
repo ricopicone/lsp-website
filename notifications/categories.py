@@ -65,6 +65,7 @@ class Category(models.TextChoices):
     GROUP_DECISION = "group_decision", _("Group decisions & minutes")
     GROUP_RECORDING = "group_recording", _("Meeting recordings ready")
     EVENT_CHANGE_REVIEW = "event_change_review", _("Event content change reviews")
+    MEETING_ROOM_INVITE = "meeting_room_invite", _("Private meeting room invitations")
 
     # --- Referrals ---------------------------------------------------------
     REFERRAL_REQUEST = "referral_request", _("Referral requests")
@@ -246,6 +247,13 @@ CATEGORY_META: dict[str, CategoryMeta] = {
         SECTION_GROUPS, _("Membership changes"),
         _("When you're added to or removed from a group."),
         default_email=_E.OFF,
+    ),
+    # An invitation to someone's private meeting room (task #687). Email
+    # defaults ON, for the reason the meeting reminder's does: an invitation you
+    # only ever see in the bell reaches you after the meeting. Not locked.
+    _C.MEETING_ROOM_INVITE: _M(
+        SECTION_GROUPS, _("Private meeting room invitations"),
+        _("When a member invites you into their private meeting room."),
     ),
     _C.GROUP_MEETING: _M(
         SECTION_GROUPS, _("Meetings scheduled"),

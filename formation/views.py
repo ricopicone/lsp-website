@@ -158,6 +158,8 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
     elif active == "works":
         from works.queries import my_works_qs
         ctx["works"] = my_works_qs(user)
+    elif active == "room":
+        ctx.update(_formation_room_context(request))
     elif active == "proposals":
         from events.models import EventProposal
         ctx["proposals"] = (
@@ -173,6 +175,32 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
         ctx["profile_next"] = _formation_url("profile")
 
     return ctx
+
+
+def _formation_room_context(request):
+    """The Meeting room tab (task #687): the member's private room, its settings
+    and its live invitations. The room is created on first visit, which is what
+    makes this tab the provisioning point."""
+    from video.forms_personal import InvitationForm, PersonalRoomSettingsForm
+    from video.notifications_personal import invitation_url
+    from video.services_personal import personal_room_for
+
+    room = personal_room_for(request.user, create=True)
+    if room is None:
+        return {"personal_room": None}
+    invitations = list(
+        room.invitations.live().select_related("invited_user").order_by("-created_at")
+    )
+    for invitation in invitations:
+        # Only a guest invitation has a link to hand over; an account holder
+        # follows the ordinary room URL after signing in.
+        invitation.share_url = invitation_url(invitation) if invitation.is_guest else ""
+    return {
+        "personal_room": room,
+        "room_settings_form": PersonalRoomSettingsForm(instance=room),
+        "room_invite_form": InvitationForm(room=room),
+        "room_invitations": invitations,
+    }
 
 
 def _has_money_history(user) -> bool:

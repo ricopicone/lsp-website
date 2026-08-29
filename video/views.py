@@ -126,6 +126,11 @@ def recording_availability(request, pk):
     rec = get_object_or_404(Recording, pk=pk)
     if not rec.can_manage(request.user):
         raise PermissionDenied("You can't manage this recording.")
+    if rec.is_personal:
+        # A personal room has no roster, so two of the six settings would mean
+        # "nobody" (task #687). Enforced here rather than only in the template,
+        # so a hand-rolled POST can't widen a private meeting's recording.
+        raise PermissionDenied("A private meeting room's recording stays private.")
     valid = set(Recording.Visibility.values)
     listing = request.POST.get("listing_visibility") or rec.listing_visibility
     content = request.POST.get("content_visibility") or rec.content_visibility

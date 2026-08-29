@@ -26,6 +26,18 @@
   <section class="lsp-prose max-w-none">{{ workgroup.description_html }}</section>
   {% endif %}
 
+  {% if office_hours %}
+  {% comment %}Office hours of whoever runs this offering (task #687) — Diana's
+  ask, so the audience is the students of this class. Shown to the roster; the
+  Join button only to members, since a roster can include guests.{% endcomment %}
+  <section class="space-y-3">
+    <h2 class="font-serif text-xl text-base-content">Office hours</h2>
+    {% for person, hours_room in office_hours %}
+    {% include "video/_office_hours.html" with person=person hours_room=hours_room can_join=viewer_is_member %}
+    {% endfor %}
+  </section>
+  {% endif %}
+
   {% if cartel %}{% include "cartels/_overview.html" %}{% endif %}
 
   {% if roster_visible %}
