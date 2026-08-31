@@ -110,7 +110,7 @@ def guest_invitation(token: str) -> RoomInvitation | None:
     if not token:
         return None
     return RoomInvitation.objects.live().filter(token=token).select_related(
-        "room", "room__user"
+        "personal_room", "personal_room__user"
     ).first()
 
 

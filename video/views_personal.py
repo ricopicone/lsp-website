@@ -88,7 +88,7 @@ def guest_room(request, token):
     invitation = personal.guest_invitation(token)
     if invitation is None:
         return render(request, "video/personal/guest_invalid.html", status=404)
-    room = invitation.room
+    room = invitation.personal_room
 
     if request.method != "POST":
         return _doorstep(request, invitation, GuestJoinForm(
@@ -200,7 +200,7 @@ def _and_list(names) -> str:
 @login_required
 @require_POST
 def room_invite_revoke(request, pk):
-    invitation = get_object_or_404(RoomInvitation, pk=pk, room__user=request.user)
+    invitation = get_object_or_404(RoomInvitation, pk=pk, personal_room__user=request.user)
     invitation.revoke()
     messages.success(request, f"{invitation.display_name}'s invitation was revoked.")
     return redirect(_hub_url())
@@ -241,7 +241,7 @@ def _refused(request, room, refused, *, poll_url=""):
 
 
 def _doorstep(request, invitation, form, *, refused=None):
-    room = invitation.room
+    room = invitation.personal_room
     live = personal.owner_present(room)
     return render(
         request, "video/personal/guest_doorstep.html",

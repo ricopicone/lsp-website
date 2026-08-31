@@ -28,7 +28,7 @@ def _absolute(path: str) -> str:
 def invitation_url(invitation) -> str:
     if invitation.is_guest:
         return _absolute(reverse("video:guest_room", args=[invitation.token]))
-    return _absolute(reverse("video:personal_room", args=[invitation.room.slug]))
+    return _absolute(reverse("video:personal_room", args=[invitation.personal_room.slug]))
 
 
 def _host_name(room) -> str:
@@ -37,7 +37,7 @@ def _host_name(room) -> str:
 
 def invited_user(invitation) -> None:
     """Bell + email for someone who has an account."""
-    room = invitation.room
+    room = invitation.personal_room
     host = _host_name(room)
     notify(
         invitation.invited_user,
@@ -54,7 +54,7 @@ def invited_guest(invitation) -> None:
     """Email a guest their secret link, when the member gave us an address."""
     if not invitation.guest_email:
         return
-    room = invitation.room
+    room = invitation.personal_room
     context = {
         "host": _host_name(room),
         "guest_name": invitation.guest_name,

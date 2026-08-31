@@ -458,9 +458,11 @@ class RoomInvitationQuerySet(models.QuerySet):
 
 
 class RoomInvitation(models.Model):
-    """Someone the member has let into their personal room.
+    """Someone a room has been opened to.
 
-    Two kinds, exactly one of which is set — the constraint style ``DailyRoom``
+    Three **targets**, exactly one of which is set (task #694) — a member's
+    ``personal_room``, a ``workgroup``, or a one-off ``event`` that owns its own
+    room — and within that, two **kinds**, exactly one of which is set — the constraint style ``DailyRoom``
     already uses for its owners:
 
     * **internal** — ``invited_user``, an account (member or not, so an applicant
@@ -478,7 +480,14 @@ class RoomInvitation(models.Model):
     personal room unless the owner is in it.
     """
 
-    #: How long a *guest link* lives. Long enough for a scheduled interview to
+    #: How long a *personal* room's guest link lives. A group's invitations never
+    #: expire, of either kind (``video.invitations.Target.default_expiry``): the
+    #: presence gate means a link alone never opens an empty room, and a group's
+    #: live list sits on its own Meet tab where every lead can revoke it. A flat
+    #: TTL is what made a speaker invitation lapse before the event it was issued
+    #: for (``events.speaker_invitations.invitation_expiry``).
+    #:
+    #: Long enough for a scheduled interview to
     #: be arranged and rescheduled, short enough that a secret sitting in an
     #: inbox does not stay good forever. An invitation bound to an account gets
     #: no expiry at all (``expires_at`` null) — it names a person who has to
@@ -486,8 +495,27 @@ class RoomInvitation(models.Model):
     #: after term is the annoyance that made this distinction worth drawing.
     DEFAULT_TTL_DAYS = 30
 
-    room = models.ForeignKey(
-        PersonalRoom, on_delete=models.CASCADE, related_name="invitations",
+    personal_room = models.ForeignKey(
+        PersonalRoom, null=True, blank=True, on_delete=models.CASCADE,
+        related_name="invitations",
+    )
+    workgroup = models.ForeignKey(
+        "workgroups.Workgroup", null=True, blank=True, on_delete=models.CASCADE,
+        related_name="room_invitations",
+    )
+    #: A one-off event that owns its own room. An *offering* event (seminar,
+    #: reading group, cartel) meets in its workgroup's room, so it is never the
+    #: target — see ``video.invitations.target_for_event``.
+    event = models.ForeignKey(
+        "events.Event", null=True, blank=True, on_delete=models.CASCADE,
+        related_name="room_invitations",
+    )
+    #: Which of a group's several leads opened the door. Implied by the owner for
+    #: a personal room; the only record of it for a group, and what the guest
+    #: email replies to.
+    invited_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="issued_room_invitations",
     )
     invited_user = models.ForeignKey(
         "accounts.User", null=True, blank=True, on_delete=models.CASCADE,
@@ -519,6 +547,17 @@ class RoomInvitation(models.Model):
                 ),
                 name="video_invitation_exactly_one_kind",
             ),
+            models.CheckConstraint(
+                condition=(
+                    Q(personal_room__isnull=False, workgroup__isnull=True,
+                      event__isnull=True)
+                    | Q(personal_room__isnull=True, workgroup__isnull=False,
+                        event__isnull=True)
+                    | Q(personal_room__isnull=True, workgroup__isnull=True,
+                        event__isnull=False)
+                ),
+                name="video_invitation_exactly_one_target",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -527,6 +566,13 @@ class RoomInvitation(models.Model):
     @property
     def is_guest(self) -> bool:
         return self.token is not None
+
+    @property
+    def target_object(self):
+        """What this invitation is *to* — a PersonalRoom, a Workgroup, or a
+        one-off Event. ``video.invitations.target_of`` wraps it in the adapter
+        that knows how each of the three behaves."""
+        return self.personal_room or self.workgroup or self.event
 
     @property
     def display_name(self) -> str:

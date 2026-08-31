@@ -238,7 +238,7 @@ class InvitationForm(forms.Form):
     def build(self, recipient) -> RoomInvitation:
         """Create the invitation for one recipient (internal or guest)."""
         common = {
-            "room": self.room,
+            "personal_room": self.room,
             "note": (self.cleaned_data.get("note") or "").strip(),
         }
         if recipient.user is not None:
