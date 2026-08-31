@@ -462,8 +462,8 @@ class RoomInvitation(models.Model):
 
     Three **targets**, exactly one of which is set (task #694) — a member's
     ``personal_room``, a ``workgroup``, or a one-off ``event`` that owns its own
-    room — and within that, two **kinds**, exactly one of which is set — the constraint style ``DailyRoom``
-    already uses for its owners:
+    room — and within that, two **kinds**, exactly one of which is set. Both are
+    check constraints, the style ``DailyRoom`` already uses for its owners:
 
     * **internal** — ``invited_user``, an account (member or not, so an applicant
       being interviewed is reachable by name rather than by secret link). They

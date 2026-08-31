@@ -80,7 +80,7 @@ def test_invited_user_is_held_at_the_door_then_admitted(client, stub_daily, pres
     room = room_for(owner)
     invited = member("invited@example.com")
     RoomInvitation.objects.create(
-        room=room, invited_user=invited, expires_at=personal.new_expiry(),
+        personal_room=room, invited_user=invited, expires_at=personal.new_expiry(),
     )
     client.force_login(invited)
     url = reverse("video:personal_room", args=[room.slug])
@@ -128,7 +128,7 @@ def test_the_owner_visiting_their_own_slug_is_sent_to_my_room(client, stub_daily
 
 def guest_invite(room, **kwargs):
     return RoomInvitation.objects.create(
-        room=room, token="secret-token", guest_name="Jane Doe",
+        personal_room=room, token="secret-token", guest_name="Jane Doe",
         expires_at=personal.new_expiry(), **kwargs
     )
 

@@ -109,7 +109,7 @@ def test_invited_user_waits_until_the_owner_is_present(present):
     owner, guest = member(), member("invited@example.com")
     room = room_for(owner)
     RoomInvitation.objects.create(
-        room=room, invited_user=guest, expires_at=personal.new_expiry(),
+        personal_room=room, invited_user=guest, expires_at=personal.new_expiry(),
     )
     present["live"] = False
     assert personal.can_enter_personal(room, guest) is False
@@ -126,7 +126,7 @@ def test_uninvited_member_is_refused_even_when_the_owner_is_present(present):
 def test_guest_invitation_waits_for_the_owner_too(present):
     room = room_for(member())
     inv = RoomInvitation.objects.create(
-        room=room, token="tok-abc", guest_name="Applicant",
+        personal_room=room, token="tok-abc", guest_name="Applicant",
         expires_at=personal.new_expiry(),
     )
     present["live"] = False
@@ -164,14 +164,14 @@ def test_expired_and_revoked_invitations_are_refused(present):
     present["live"] = True
 
     expired = RoomInvitation.objects.create(
-        room=room, invited_user=invited,
+        personal_room=room, invited_user=invited,
         expires_at=timezone.now() - _dt.timedelta(minutes=1),
     )
     assert personal.can_enter_personal(room, invited) is False
     expired.delete()
 
     live = RoomInvitation.objects.create(
-        room=room, invited_user=invited, expires_at=personal.new_expiry(),
+        personal_room=room, invited_user=invited, expires_at=personal.new_expiry(),
     )
     assert personal.can_enter_personal(room, invited) is True
     live.revoke()
@@ -181,7 +181,7 @@ def test_expired_and_revoked_invitations_are_refused(present):
 def test_guest_lookup_ignores_dead_tokens():
     room = room_for(member())
     RoomInvitation.objects.create(
-        room=room, token="dead", guest_name="X",
+        personal_room=room, token="dead", guest_name="X",
         expires_at=timezone.now() - _dt.timedelta(seconds=1),
     )
     assert personal.guest_invitation("dead") is None
@@ -193,7 +193,7 @@ def test_an_invitation_is_reusable():
     same link twice, and link-scanners pre-click these."""
     room = room_for(member())
     inv = RoomInvitation.objects.create(
-        room=room, token="tok", guest_name="X", expires_at=personal.new_expiry(),
+        personal_room=room, token="tok", guest_name="X", expires_at=personal.new_expiry(),
     )
     inv.touch()
     assert personal.guest_invitation("tok").pk == inv.pk
@@ -205,7 +205,7 @@ def test_an_invitation_is_one_kind_or_the_other():
     room = room_for(member())
     with pytest.raises(IntegrityError):
         RoomInvitation.objects.create(
-            room=room, invited_user=member("both@example.com"), token="t",
+            personal_room=room, invited_user=member("both@example.com"), token="t",
             expires_at=personal.new_expiry(),
         )
 
@@ -300,7 +300,7 @@ def test_a_dead_invitation_handed_in_directly_still_does_not_admit(present):
     trusting it, so a caller that forgot to filter ``live()`` can't subvert it."""
     room = room_for(member())
     inv = RoomInvitation.objects.create(
-        room=room, token="tok-dead", guest_name="X", expires_at=personal.new_expiry(),
+        personal_room=room, token="tok-dead", guest_name="X", expires_at=personal.new_expiry(),
     )
     present["live"] = True
     assert personal.can_enter_personal(room, None, invitation=inv) is True
@@ -475,7 +475,7 @@ def test_the_roster_rule_still_waits_for_the_owner(present):
 def test_an_account_bound_invitation_has_no_expiry(present):
     owner, invited = member(), member("invited@example.com")
     room = room_for(owner)
-    inv = RoomInvitation.objects.create(room=room, invited_user=invited, expires_at=None)
+    inv = RoomInvitation.objects.create(personal_room=room, invited_user=invited, expires_at=None)
     present["live"] = True
 
     assert inv.expires_at is None
@@ -490,6 +490,6 @@ def test_an_account_bound_invitation_has_no_expiry(present):
 
 def test_live_finds_never_expiring_invitations():
     room = room_for(member())
-    RoomInvitation.objects.create(room=room, invited_user=member("i@example.com"),
+    RoomInvitation.objects.create(personal_room=room, invited_user=member("i@example.com"),
                                   expires_at=None)
     assert room.invitations.live().count() == 1
