@@ -58,6 +58,10 @@ every Join open the same room.{% endcomment %}
   <p class="text-sm text-base-content/55">No meetings scheduled. Use <strong>Meet Now</strong> to start one, or add a cadence on the Schedule tab.</p>
   {% endif %}
 
+  {% if room_invite_panel %}
+  {% include "video/_invitations_panel.html" with panel=room_invite_panel %}
+  {% endif %}
+
   {% if recordings %}
   <section class="space-y-2">
     <h3 class="font-serif text-lg text-base-content/80 border-b border-base-300/60 pb-1">Recordings</h3>

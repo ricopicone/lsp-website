@@ -433,8 +433,11 @@ def test_send_tuition_reminders_holds_before_decision_due(current_period, mailou
     from django.core.management import call_command
 
     _mk_candidate("f@x.test")
-    # Force decision_due_date into the future.
-    current_period.decision_due_date = current_period.end_date
+    # Force decision_due_date into the future. Not ``end_date``: the current
+    # period's last day is a real date on the calendar, and on it the guard
+    # (``today < decision_due_date``) is false, so this asserted the opposite of
+    # its own name for one day a year.
+    current_period.decision_due_date = timezone.localdate() + timedelta(days=30)
     current_period.save()
 
     call_command("send_tuition_reminders", stdout=StringIO())

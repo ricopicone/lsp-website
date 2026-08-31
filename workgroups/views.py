@@ -443,9 +443,27 @@ def workgroup_detail(request, slug):
         context["can_upload_files"] = is_member        # archive viewers: read-only
         context["support_email"] = settings.SUPPORT_EMAIL
     elif active == "meet" and daily_on and is_member:
+        from django.urls import reverse as _reverse
         from django.utils import timezone as _tz
 
+        from video import invitations as _invitations
         from video.models import Recording
+
+        # Leads may invite someone from outside the group into its room
+        # (task #694). ``may_invite`` inside panel_context is services.is_owner,
+        # the same predicate that grants the moderator flag, so the panel and the
+        # host controls always agree about who runs the meeting.
+        context["room_invite_panel"] = _invitations.panel_context(
+            _invitations.target_for(wg), user=request.user,
+            post_url=_reverse("video:workgroup_invite", args=[wg.slug]),
+            heading="Who else can join",
+            intro=(
+                "Invite someone from outside the group into this room. Tick any LSP "
+                "members, and type anyone else, one per line. Add an email and we will "
+                "send them the link, or leave it out and copy the link yourself. Either "
+                "way, they can only join while someone is already in the room."
+            ),
+        )
 
         now = _tz.now()
         # Upcoming + still-ongoing meetings, soonest first (ongoing has a

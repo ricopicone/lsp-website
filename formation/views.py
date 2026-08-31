@@ -181,25 +181,29 @@ def _formation_room_context(request):
     """The Meeting room tab (task #687): the member's private room, its settings
     and its live invitations. The room is created on first visit, which is what
     makes this tab the provisioning point."""
+    from django.urls import reverse
+
     from video.forms_personal import PersonalRoomSettingsForm
-    from video.notifications_personal import invitation_url
+    from video.invitations import panel_context, target_for
     from video.services_personal import personal_room_for
 
     room = personal_room_for(request.user, create=True)
     if room is None:
         return {"personal_room": None}
-    invitations = list(
-        room.invitations.live().select_related("invited_user").order_by("-created_at")
-    )
-    for invitation in invitations:
-        # Only a guest invitation has a link to hand over; an account holder
-        # follows the ordinary room URL after signing in.
-        invitation.share_url = invitation_url(invitation) if invitation.is_guest else ""
     return {
         "personal_room": room,
         "room_settings_form": PersonalRoomSettingsForm(instance=room),
-        "room_invite_form": InvitationForm(room=room),
-        "room_invitations": invitations,
+        "room_invite_panel": panel_context(
+            target_for(room), user=request.user,
+            post_url=reverse("video:room_invite"),
+            heading="Who can join",
+            intro=(
+                "Tick any LSP members, and type anyone else, one per line. Add an "
+                "email and we will send them the link, or leave it out and copy the "
+                "link yourself. Either way, they can only join while you are in the "
+                "room."
+            ),
+        ),
     }
 
 

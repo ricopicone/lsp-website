@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_personal
+from . import views, views_invitations, views_personal
 
 app_name = "video"
 
@@ -21,13 +21,31 @@ urlpatterns = [
     path("video/my-room/", views_personal.my_room, name="my_room"),
     path("video/my-room/settings/", views_personal.room_settings, name="room_settings"),
     path("video/my-room/invite/", views_personal.room_invite, name="room_invite"),
+    # Invitations into any room (task #694). Revoke is one endpoint for all
+    # three targets; ``may_invite`` is what differs between them.
     path(
-        "video/my-room/invite/<int:pk>/revoke/",
-        views_personal.room_invite_revoke, name="room_invite_revoke",
+        "video/invitations/<int:pk>/revoke/",
+        views_invitations.invitation_revoke, name="invitation_revoke",
     ),
-    path("meet/g/<slug:token>/", views_personal.guest_room, name="guest_room"),
+    path(
+        "video/invitations/<int:pk>/presence/",
+        views_invitations.invitation_presence, name="invitation_presence",
+    ),
+    path(
+        "meet/g/<slug:token>/presence/",
+        views_invitations.guest_presence, name="guest_presence",
+    ),
+    path("meet/g/<slug:token>/", views_invitations.guest_room, name="guest_room"),
     path("meet/<slug:slug>/", views_personal.personal_room, name="personal_room"),
     path("meet/<slug:slug>/presence/", views_personal.room_presence, name="room_presence"),
     path("groups/<slug:slug>/room/", views.workgroup_room, name="workgroup_room"),
+    path(
+        "groups/<slug:slug>/room/invite/",
+        views_invitations.workgroup_invite, name="workgroup_invite",
+    ),
     path("events/<slug:slug>/room/", views.event_room, name="event_room"),
+    path(
+        "events/<slug:slug>/room/invite/",
+        views_invitations.event_invite, name="event_invite",
+    ),
 ]

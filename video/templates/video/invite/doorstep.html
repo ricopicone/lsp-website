@@ -1,0 +1,68 @@
+{% extends "core/base.html" %}
+{% comment %}The doorstep for someone invited into a group's meeting room
+(task #694). Serves both entrances: an anonymous guest, who is asked for the
+name they will appear under, and a signed-in invitee, who is not. Either way it
+says the same thing when the room is empty, and polls until it is not.
+{% endcomment %}
+{% block title %}Join {{ target_label }}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto px-4 py-12 space-y-6">
+  <div class="space-y-2 text-center">
+    <h1 class="font-serif text-2xl text-base-content">
+      {% if inviter %}{{ inviter }} invited you to a meeting{% else %}A meeting at the School{% endif %}
+    </h1>
+    <p class="text-sm text-base-content/60">
+      You have been invited into the meeting room of {{ target_label }}, at the
+      Lacanian School of Psychoanalysis. You can join once the meeting has started.
+    </p>
+  </div>
+
+  {% if invitation.note %}
+  <p class="rounded-xl border border-base-300/60 bg-base-200/40 p-4 text-sm text-base-content/80">
+    {{ invitation.note }}
+  </p>
+  {% endif %}
+
+  {% if not live %}
+  <div class="rounded-xl border border-base-300/60 bg-base-200/40 p-4 text-center space-y-1">
+    <p class="text-sm font-medium text-base-content">
+      The meeting in {{ target_label }} has not started yet.
+    </p>
+    <p class="text-xs text-base-content/55">
+      Leave this page open, it will let you in as soon as someone is in the room.
+    </p>
+  </div>
+  {% endif %}
+
+  {% if form %}
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div>
+      <label for="{{ form.display_name.id_for_label }}" class="label">
+        <span class="label-text">{{ form.display_name.label }}</span>
+      </label>
+      {{ form.display_name }}
+      <p class="mt-1 text-xs text-base-content/50">
+        This is how you will appear to the others in the room.
+      </p>
+      {% for error in form.display_name.errors %}
+      <p class="mt-1 text-xs text-error">{{ error }}</p>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn btn-primary w-full">
+      {% if live %}Join the meeting{% else %}Try to join{% endif %}
+    </button>
+  </form>
+  {% else %}
+  <div class="text-center">
+    <a href="{{ request.get_full_path }}" class="btn btn-primary btn-sm">Check again</a>
+  </div>
+  {% endif %}
+
+  {% if back_url %}
+  <p class="text-center"><a href="{{ back_url }}" class="link text-xs text-base-content/55">Back</a></p>
+  {% endif %}
+</div>
+{% include "video/personal/_waiting_poll.html" %}
+{% endblock %}

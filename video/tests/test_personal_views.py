@@ -228,7 +228,7 @@ def test_revoking_is_scoped_to_your_own_room(client, stub_daily):
     room = room_for(member())
     invitation = guest_invite(room)
     client.force_login(member("someone.else@example.com"))
-    resp = client.post(reverse("video:room_invite_revoke", args=[invitation.pk]))
+    resp = client.post(reverse("video:invitation_revoke", args=[invitation.pk]))
     assert resp.status_code == 404
     invitation.refresh_from_db()
     assert invitation.revoked_at is None
@@ -385,7 +385,8 @@ def test_the_member_picker_lists_names_not_addresses(client, stub_daily):
     owner = member()
     member("Pickable@example.com", first="Ada", last="Lovelace")
     room = personal.personal_room_for(owner, create=True)
-    labels = [str(label) for _value, label in InvitationForm(target=target_for(room)).fields["members"].choices]
+    field = InvitationForm(target=target_for(room)).fields["members"]
+    labels = [str(label) for _value, label in field.choices]
     assert "Ada Lovelace" in labels
     assert not any("@" in label for label in labels if label != "Choose a member…")
 
@@ -425,7 +426,8 @@ def test_personas_are_not_offered(client, stub_daily):
     persona.profile.is_persona = True
     persona.profile.save()
     room = personal.personal_room_for(owner, create=True)
-    labels = [str(label) for _v, label in InvitationForm(target=target_for(room)).fields["members"].choices]
+    field = InvitationForm(target=target_for(room)).fields["members"]
+    labels = [str(label) for _v, label in field.choices]
     assert "Persona Chair" not in labels
 
 

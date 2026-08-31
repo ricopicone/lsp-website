@@ -1,14 +1,9 @@
 """Forms for a member's private meeting room (task #687)."""
 from __future__ import annotations
 
-import re
-from typing import NamedTuple
-
 from django import forms
-from django.core.exceptions import ValidationError
-from django.core.validators import EmailValidator
 
-from .models import PersonalRoom, RoomInvitation
+from .models import PersonalRoom
 
 _INPUT = "input input-bordered w-full"
 _SELECT = "select select-bordered w-full"

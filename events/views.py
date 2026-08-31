@@ -353,8 +353,35 @@ def event_detail(request, slug: str):
         ).select_related("user")
         context["pricing_code_form"] = PricingCodeForm()
         context["existing_codes"] = event.pricing_codes.order_by("-created_at")
+        context["room_invite_panel"] = _room_invite_panel(request, event)
 
     return render(request, "events/event_detail.html", context)
+
+
+def _room_invite_panel(request, event):
+    """The room-invitation panel for a one-off event (task #694), or None.
+
+    Context-gated rather than template-gated, because
+    ``events/_faculty_tools.html`` is included by the Workspace roster tab as
+    well: an *offering* meets in its workgroup's room and is invited to from the
+    Meet tab, so it must not grow a second, wrong invite form here.
+    """
+    from video import invitations as video_invitations
+
+    target = video_invitations.target_for_event(event)
+    if not isinstance(target, video_invitations.EventTarget):
+        return None
+    return video_invitations.panel_context(
+        target, user=request.user,
+        post_url=reverse("video:event_invite", args=[event.slug]),
+        heading="Who else can join",
+        intro=(
+            "Invite someone from outside the event into its meeting room, an "
+            "outside speaker's colleague, say, or an interpreter. Tick any LSP "
+            "members, and type anyone else, one per line. They can only join "
+            "while someone is already in the room."
+        ),
+    )
 
 
 def _absolute(url: str) -> str:

@@ -311,3 +311,29 @@ def guest_token(daily_room, guest_name: str, **kwargs) -> str:
         room_name=daily_room.name, user_name=guest_name[:255], is_owner=False,
         exp=exp, **kwargs,
     )
+
+
+# ---- the management panel -----------------------------------------------
+
+def panel_context(target, *, user, post_url, heading, intro):
+    """Context for ``video/_invitations_panel.html``, or None when ``user`` may
+    not invite. One shared partial rather than one per surface: two copies of a
+    form's validation and copy drift.
+    """
+    if not target.may_invite(user):
+        return None
+    from .forms_invitations import InvitationForm
+    from .notifications_invitations import invitation_url
+
+    rows = list(target.live_invitations().order_by("-created_at"))
+    for row in rows:
+        # Only a guest has a link to hand over; an account holder follows the
+        # ordinary room URL after signing in.
+        row.share_url = invitation_url(row) if row.is_guest else ""
+    return {
+        "form": InvitationForm(target=target),
+        "invitations": rows,
+        "post_url": post_url,
+        "heading": heading,
+        "intro": intro,
+    }
