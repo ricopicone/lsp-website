@@ -24,7 +24,8 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from . import services_personal as personal
-from .forms_personal import GuestJoinForm, InvitationForm, PersonalRoomSettingsForm
+from .forms_invitations import GuestJoinForm, InvitationForm
+from .forms_personal import PersonalRoomSettingsForm
 from .models import PersonalRoom, RoomInvitation
 
 logger = logging.getLogger("video")
@@ -147,7 +148,9 @@ def room_invite(request):
     room = personal.personal_room_for(request.user, create=True)
     if room is None:
         raise Http404("Private meeting rooms are for members of the School.")
-    form = InvitationForm(request.POST, room=room)
+    from .invitations import target_for
+
+    form = InvitationForm(request.POST, target=target_for(room))
     if not form.is_valid():
         for error in form.errors.values():
             messages.error(request, error[0])
@@ -161,7 +164,7 @@ def room_invite(request):
         if form.already_invited(recipient):
             already.append(recipient.label)
             continue
-        invitation = form.build(recipient)
+        invitation = form.build(recipient, by=request.user)
         # An account holder is always told; a guest link is mailed only when the
         # member gave an address and asked us to send it.
         if send_email or not invitation.is_guest:

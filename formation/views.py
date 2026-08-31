@@ -181,7 +181,7 @@ def _formation_room_context(request):
     """The Meeting room tab (task #687): the member's private room, its settings
     and its live invitations. The room is created on first visit, which is what
     makes this tab the provisioning point."""
-    from video.forms_personal import InvitationForm, PersonalRoomSettingsForm
+    from video.forms_personal import PersonalRoomSettingsForm
     from video.notifications_personal import invitation_url
     from video.services_personal import personal_room_for
 

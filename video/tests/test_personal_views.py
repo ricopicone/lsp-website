@@ -379,12 +379,13 @@ def test_nothing_at_all_is_refused(client, stub_daily):
 
 
 def test_the_member_picker_lists_names_not_addresses(client, stub_daily):
-    from video.forms_personal import InvitationForm
+    from video.forms_invitations import InvitationForm
+    from video.invitations import target_for
 
     owner = member()
     member("Pickable@example.com", first="Ada", last="Lovelace")
     room = personal.personal_room_for(owner, create=True)
-    labels = [str(label) for _value, label in InvitationForm(room=room).fields["members"].choices]
+    labels = [str(label) for _value, label in InvitationForm(target=target_for(room)).fields["members"].choices]
     assert "Ada Lovelace" in labels
     assert not any("@" in label for label in labels if label != "Choose a member…")
 
@@ -416,14 +417,15 @@ def test_the_same_person_ticked_and_typed_is_one_invitation(client, stub_daily):
 
 
 def test_personas_are_not_offered(client, stub_daily):
-    from video.forms_personal import InvitationForm
+    from video.forms_invitations import InvitationForm
+    from video.invitations import target_for
 
     owner = member()
     persona = member("persona@example.com", first="Persona", last="Chair")
     persona.profile.is_persona = True
     persona.profile.save()
     room = personal.personal_room_for(owner, create=True)
-    labels = [str(label) for _v, label in InvitationForm(room=room).fields["members"].choices]
+    labels = [str(label) for _v, label in InvitationForm(target=target_for(room)).fields["members"].choices]
     assert "Persona Chair" not in labels
 
 

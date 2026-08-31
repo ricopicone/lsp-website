@@ -87,3 +87,40 @@ def test_a_group_room_gains_no_daily_lobby():
     from video import services
 
     assert services._desired_properties(group())["enable_knocking"] is False
+
+
+# ---- the form -----------------------------------------------------------
+
+def test_the_picker_leaves_out_people_already_on_the_roster():
+    from video.forms_invitations import InvitationForm
+
+    wg = group()
+    inside = user("inside@example.com")
+    outside = user("outside@example.com")
+    wg.add_member(inside)
+    form = InvitationForm(target=inv.target_for(wg))
+    choices = set(form.fields["members"].queryset.values_list("pk", flat=True))
+    assert outside.pk in choices
+    assert inside.pk not in choices
+
+
+def test_building_a_group_invitation_records_the_inviter_and_no_expiry():
+    from video.forms_invitations import InvitationForm, Recipient
+
+    wg = group()
+    lead = user("lead@example.com")
+    guest = user("guest@example.com")
+    form = InvitationForm(target=inv.target_for(wg))
+    invitation = form.build(Recipient(user=guest, name="", email=""), by=lead)
+    assert invitation.workgroup == wg
+    assert invitation.expires_at is None
+    assert invitation.invited_by == lead
+
+
+def test_a_group_guest_link_does_not_expire_either():
+    from video.forms_invitations import InvitationForm, Recipient
+
+    form = InvitationForm(target=inv.target_for(group()))
+    invitation = form.build(Recipient(user=None, name="Jane Doe", email=""))
+    assert invitation.is_guest
+    assert invitation.expires_at is None
