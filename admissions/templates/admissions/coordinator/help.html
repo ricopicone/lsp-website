@@ -19,6 +19,14 @@
 
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content">The journey of an application</h2>
+    {% if not applications_open %}
+    <p class="text-sm text-base-content/80 rounded-lg border border-warning/40 bg-warning/10 p-3">
+      The site is <strong>not taking applications</strong> right now. The apply
+      page sends people to <a href="mailto:{{ applications_email }}" class="link link-primary">{{ applications_email }}</a>
+      instead, so no new application will appear here until it is switched back
+      on. Everything already open below carries on as normal.
+    </p>
+    {% endif %}
     <ol class="list-decimal pl-5 text-sm text-base-content/80 space-y-1.5">
       <li><strong>Submitted.</strong> Someone applies. They receive an
         acknowledgment (automatically, or you send it — see Settings).</li>

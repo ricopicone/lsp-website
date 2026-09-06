@@ -349,6 +349,15 @@ RECORDING_RETENTION_DAYS = env.int("DJANGO_RECORDING_RETENTION_DAYS", default=36
 # reachable at /accounts/survey/ for testing. Flip via DJANGO_SURVEY_ENABLED.
 SURVEY_ENABLED = env.bool("SURVEY_ENABLED", default=False)
 
+# Applications (apply-to-join): when False the front door is closed — /apply/
+# shows the tracks and the Applications Coordinator's address instead of the
+# submit buttons, and /apply/<track>/ redirects there. Everything already in
+# flight keeps running (the applicant's status page, the coordinator console,
+# the Meeting's review queue, the analyst interviews). On by default so dev and
+# the tests exercise the real flow; set DJANGO_APPLICATIONS_ENABLED=false on
+# the host to close it (task #717).
+APPLICATIONS_ENABLED = env.bool("DJANGO_APPLICATIONS_ENABLED", default=True)
+
 # Limited-preview onboarding tour: a dismissible task checklist (every page) plus
 # contextual hints (e.g. on the profile photo chooser) that guide a small
 # preview cohort through their first tasks. Off by default; flip

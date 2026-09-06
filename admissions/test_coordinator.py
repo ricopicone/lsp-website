@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 
 import pytest
+from django.conf import settings
 from django.core import mail
 from django.test import override_settings
 from django.urls import reverse
@@ -286,3 +287,21 @@ def test_help_page_renders_and_is_tabbed(client, coordinator):
     assert reverse("admissions:coordinator_help") in (
         client.get(reverse("admissions:coordinator_dashboard")).content.decode()
     )
+
+
+# ---- Applications closed (task #717) -----------------------------------
+
+
+@override_settings(APPLICATIONS_ENABLED=False)
+def test_help_says_the_site_is_not_taking_applications(client, coordinator):
+    resp = client.get(reverse("admissions:coordinator_help"))
+    assert resp.status_code == 200
+    assert b"not taking applications" in resp.content
+    assert settings.APPLICATIONS_EMAIL.encode() in resp.content
+
+
+def test_help_says_nothing_of_the_sort_while_the_site_is_taking_them(
+    client, coordinator
+):
+    resp = client.get(reverse("admissions:coordinator_help"))
+    assert b"not taking applications" not in resp.content

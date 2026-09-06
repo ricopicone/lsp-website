@@ -13,8 +13,10 @@ imports them from this module.
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -30,6 +32,7 @@ from .forms import (
     InterviewReportForm,
 )
 from .models import Application, ApplicationInterview
+from .permissions import applications_open
 from .services import accept_application, reject_application
 
 # Eligibility copy shown on each track's page (from the formation guidelines).
@@ -69,14 +72,26 @@ def apply_start(request):
             {"key": k, "label": Application.Track(k).label, "eligibility": v}
             for k, v in TRACK_ELIGIBILITY.items()
         ],
+        "applications_open": applications_open(),
+        "applications_email": settings.APPLICATIONS_EMAIL,
     })
 
 
-@login_required
 def apply(request, track):
-    """Submit an application for ``track``."""
+    """Submit an application for ``track``.
+
+    Login-gated by hand rather than by decorator: the closed-door check has to
+    run *first*, so a stale bookmark doesn't ask a stranger to make an account
+    for a form that is no longer there.
+    """
     if track not in Application.Track.values:
         raise PermissionDenied
+    # The front door is shut: the buttons are gone, but this URL is guessable
+    # and sits in browser histories, so guard the POST as well as the GET.
+    if not applications_open():
+        return redirect("admissions:apply_start")
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
     if Application.objects.filter(applicant=request.user).exists():
         return redirect("admissions:status")
 

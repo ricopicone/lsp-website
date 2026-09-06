@@ -1857,6 +1857,45 @@ Done (see `git log` for specifics):
   academic year's final day, which was the day this shipped. Design:
   `docs/superpowers/specs/2026-08-31-group-room-external-invitations-design.md`.
 
+- **The front door closes, the house stays open** (task #717). The Applications
+  Coordinator wants to rework how the School takes applications, so new ones
+  stop arriving through the site. What makes this small rather than a teardown
+  is that **only the applicant-facing intake is gated**: `/apply/` and
+  `/apply/<track>/`. Cecile's coordinator console, the Meeting's read-only
+  review queue, the analyst interview pages and every applicant's own
+  `/apply/status/` are untouched, so the **three applications live on prod**
+  when this shipped, two of them mid-interview, finish on the site exactly as
+  they would have. Closing those too would have moved two interviews off-site
+  for no gain.
+  `APPLICATIONS_ENABLED` **defaults to True**, unlike the `SURVEY_ENABLED` /
+  `SUGGESTIONS_ENABLED` flags it otherwise mirrors: the whole admissions suite
+  exercises the real flow, so an off-by-default flag would have meant editing
+  every existing intake test to say what it already says. Prod carries
+  `DJANGO_APPLICATIONS_ENABLED=false` in the host `.env`, which is also what
+  makes reopening an env var rather than a deploy. One predicate,
+  `admissions.permissions.applications_open()`, so the two views cannot drift
+  (the #532 lesson).
+  **The POST is guarded, not just the button.** `apply` redirects to
+  `apply_start` on both methods — the submit buttons are gone but the URL is
+  guessable and sits in browser histories, and nothing may mint an
+  `Application` while the door is shut. Both views keep their
+  existing-application redirect **ahead** of the gate, so an applicant in
+  flight is never shown the closed page.
+  **All six "Apply to join" links still point at `/apply/`** (landing,
+  `/about/the-school/`, signup, the avatar menu, event pages, the members-only
+  registration block): one page owns the message, no link goes dead, and a
+  `mailto:` in six places would have been six places to edit when the flow
+  reopens. The page keeps both track cards and their eligibility bullets, which
+  come from the formation guidelines and are true either way, so a prospective
+  applicant can still self-assess before writing; only the "Apply — <track>"
+  buttons go, replaced by one block giving `settings.APPLICATIONS_EMAIL` (which
+  already existed and already defaulted to the right address, so no literal).
+  Found while building: the coordinator console's own Help page opens the
+  application lifecycle with "Submitted. Someone applies", which with the door
+  shut describes something that cannot happen to the one person who most needs
+  to know it — so that page carries the note while the flag is off, and drops
+  it when the flag comes back. No migration, no backfill, no data touched.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

@@ -4,13 +4,35 @@
 <div class="space-y-8 max-w-3xl">
   <header class="space-y-2">
     <h1 class="font-serif text-3xl text-base-content tracking-tight">Apply to join</h1>
+    {% if applications_open %}
     <p class="text-base-content/70">
       The Lacanian School of Psychoanalysis offers two formations. Choose the one
       you're applying to — you'll submit a letter of intent and a CV, then have
       two interviews with Analysts of the School before the Meeting of the
       Analysts reviews your application.
     </p>
+    {% else %}
+    <p class="text-base-content/70">
+      The Lacanian School of Psychoanalysis offers two formations. Applications
+      are made by writing to the Applications Coordinator, who will ask you for
+      a letter of intent and a CV and arrange two interviews with Analysts of
+      the School, before the Meeting of the Analysts reviews your application.
+    </p>
+    {% endif %}
   </header>
+
+  {% if not applications_open %}
+  <section class="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-2">
+    <h2 class="font-serif text-xl text-base-content">
+      Write to the Applications Coordinator
+    </h2>
+    <p class="text-sm text-base-content/70">
+      To apply to either formation, write to LSP Applications at
+      <a href="mailto:{{ applications_email }}" class="link link-primary">{{ applications_email }}</a>,
+      saying which formation you are applying to.
+    </p>
+  </section>
+  {% endif %}
 
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     {% for t in tracks %}
@@ -19,9 +41,11 @@
       <ul class="text-sm text-base-content/70 space-y-1 list-disc pl-5 flex-1">
         {% for e in t.eligibility %}<li>{{ e }}</li>{% endfor %}
       </ul>
+      {% if applications_open %}
       <a href="{% url 'admissions:apply' t.key %}" class="btn btn-primary btn-sm self-start">
         Apply — {{ t.label }}
       </a>
+      {% endif %}
     </section>
     {% endfor %}
   </div>

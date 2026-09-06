@@ -1,9 +1,6 @@
-# Resuming task #694
+# Resuming task #717
 
-**Task:** Add external invitations for all group meeting rooms.
-
-## Description
-Use a very similar if not identical approach that we used for personal meeting rooms. External invitations can be managed by leaders of the group (e.g., president of the board on the board, faculty of a seminar, etc.). We have a leader definition already.
+**Task:** Disable application interface for now (Applications Coordinator Cecile wants to work on it) and replace with instructions to directly contact her at LSP Applications <applications@lacanschool.org>
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -56,6 +53,8 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **re-virtual-office-diana-cuello-2026-08-21-1322-pt-rico-commits-to-building-the-confidential-meeting-room-perhaps-this-weekend** (reference) — Re: Virtual office (Diana Cuello, 2026-08-21 13:22 PT) — Rico commits to building the confidential meeting room, "perhaps this weekend"
+- **group-room-external-invitations** (architecture) — Task #694 SHIPPED+LIVE 2026-08-31: RoomInvitation went polymorphic over three targets (personal room / workgroup / one-off event) and a guest is never the first one in a group's room, so a leaked link only reaches a doorstep; group invitations never expire, and an offering event is never its own target
 - **personal-meeting-rooms** (architecture) — Task #687 SHIPPED 2026-08-29: every member gets a private Daily room (My LSP > Meeting room); the invariant is that nobody but the owner is in it unless the owner is in it, so a leaked invitation link only reaches a doorstep, and the Web Coordinator/Developer are deliberately locked out
 - **url-cutover-broke-post-webhooks** (gotcha) — The app→apex 301 silently killed every POST webhook not exempted from it — TWO were missed (Daily recordings, Parlêtre reply-by-email), both now fixed by re-pointing the provider at the apex; SNS scores an unfollowed 301 as a DELIVERED notification, so delivery metrics cannot detect this
 - **registration-removal-asks-about-the-refund** (architecture) — Task #627 SHIPPED 2026-08-21: the registrar console can now remove a registrant — removing and refunding are two decisions, cancel() gained a refund keyword, and skipping the refund is what makes a plan or offline-paid registration cancellable at all
@@ -175,7 +174,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=694`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=717`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.
