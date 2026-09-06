@@ -9,6 +9,7 @@ assignment and the accept/reject decision stay on the Meeting's review surface
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -24,7 +25,7 @@ from .forms import (
     MessageTemplateForm,
 )
 from .models import AdmissionsSettings, Application, MessageTemplate
-from .permissions import coordinator_required
+from .permissions import applications_open, coordinator_required
 
 #: (key, label) for the console tabs, in display order. Availability is the
 #: coordinator's other surface (the analyst-availability table) — same role.
@@ -109,7 +110,10 @@ def invite(request, pk):
 @coordinator_required
 def help_view(request):
     """How-to documentation for the Applications Coordinator console."""
-    return _render(request, "help", "admissions/coordinator/help.html", {})
+    return _render(request, "help", "admissions/coordinator/help.html", {
+        "applications_open": applications_open(),
+        "applications_email": settings.APPLICATIONS_EMAIL,
+    })
 
 
 @coordinator_required

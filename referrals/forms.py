@@ -10,6 +10,7 @@ from .models import (
     MessageTemplate,
     ReferralAddendum,
     ReferralListMember,
+    ReferralRequest,
     ReferralResponse,
     ReferralSettings,
 )
@@ -25,6 +26,22 @@ def _textarea(rows: int) -> forms.Textarea:
             "textarea textarea-bordered w-full font-sans text-sm leading-relaxed"
         ),
     })
+
+
+def _date_input() -> forms.DateTimeInput:
+    return forms.DateTimeInput(
+        attrs={"type": "date", "class": "input input-bordered w-full"},
+        format="%Y-%m-%d",
+    )
+
+
+def _end_of_named_day(due):
+    """A date input gives midnight, which would close the window at the start
+    of the day the email tells clinicians to respond by. Read a bare date as
+    the end of that day."""
+    if due is not None and (due.hour, due.minute, due.second) == (0, 0, 0):
+        due = due.replace(hour=23, minute=59, second=59)
+    return due
 
 
 class ReferralSettingsForm(forms.ModelForm):
@@ -136,11 +153,7 @@ class AddendumForm(forms.Form):
         widget=_SELECT,
     )
     responses_due_at = forms.DateTimeField(
-        required=False, label="Response deadline",
-        widget=forms.DateTimeInput(
-            attrs={"type": "date", "class": "input input-bordered w-full"},
-            format="%Y-%m-%d",
-        ),
+        required=False, label="Response deadline", widget=_date_input(),
     )
 
     def __init__(self, *args, request_obj=None, **kwargs):
@@ -170,13 +183,7 @@ class AddendumForm(forms.Form):
         self.fields["responses_due_at"].initial = request_obj.responses_due_at
 
     def clean_responses_due_at(self):
-        """A date input gives midnight, which would close the window at the
-        start of the day the email tells clinicians to respond by. Read a
-        bare date as the end of that day."""
-        due = self.cleaned_data["responses_due_at"]
-        if due is not None and (due.hour, due.minute, due.second) == (0, 0, 0):
-            due = due.replace(hour=23, minute=59, second=59)
-        return due
+        return _end_of_named_day(self.cleaned_data["responses_due_at"])
 
     def clean_audience(self):
         """An unrecorded audience cannot be targeted, whatever the POST says.
@@ -197,6 +204,50 @@ class AddendumForm(forms.Form):
                 "only go to everyone on the referral list.",
             )
         return audience
+
+
+class RequestEditForm(forms.ModelForm):
+    """The intake fields, editable by the coordinator (task #684).
+
+    The clinicians' respond page and the distribution email both read these
+    fields off the record, so a scrub — the requester's name in their own
+    description, say — has to land here and not on a copy of the outgoing
+    email.
+    """
+
+    class Meta:
+        model = ReferralRequest
+        fields = [
+            "name", "pronouns", "email", "location", "language",
+            "modalities", "additional_information",
+        ]
+        labels = {
+            "name": "Name (withheld from clinicians)",
+            "email": "Email (withheld from clinicians)",
+            "language": "Preferred language",
+            "modalities": "Preferred modalities",
+            "additional_information": "For the Referral Coordinator",
+        }
+        widgets = {
+            "name": _TEXT_INPUT,
+            "pronouns": _TEXT_INPUT,
+            "email": forms.EmailInput(attrs={"class": "input input-bordered w-full"}),
+            "location": _TEXT_INPUT,
+            "language": _TEXT_INPUT,
+            "modalities": _TEXT_INPUT,
+            "additional_information": _textarea(8),
+        }
+
+
+class DistributeForm(forms.Form):
+    """The one choice on the distribute preview: when responses are due."""
+
+    responses_due_at = forms.DateTimeField(
+        required=False, label="Responses due", widget=_date_input(),
+    )
+
+    def clean_responses_due_at(self):
+        return _end_of_named_day(self.cleaned_data["responses_due_at"])
 
 
 class FollowupForm(forms.Form):

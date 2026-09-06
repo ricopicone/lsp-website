@@ -1,4 +1,5 @@
-"""Who may run the Applications Coordinator console.
+"""Who may run the Applications Coordinator console, and whether the site is
+taking applications at all.
 
 The coordinator is an officer of the Meeting of Analysts (a workgroup role)
 who facilitates admissions — triage, staffing interviewers, chasing reports —
@@ -10,10 +11,21 @@ from __future__ import annotations
 
 from functools import wraps
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 
 from workgroups.permissions import is_applications_coordinator
+
+
+def applications_open() -> bool:
+    """Whether the site is taking new applications.
+
+    One definition, read by both applicant-side views: when it is False the
+    apply flow is closed and the Applications Coordinator takes applications
+    directly. Nothing already in flight is affected.
+    """
+    return bool(getattr(settings, "APPLICATIONS_ENABLED", True))
 
 
 def can_coordinate_applications(user) -> bool:

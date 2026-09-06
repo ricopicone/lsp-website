@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.conf import settings as django_settings
 from django.urls import reverse
@@ -221,20 +221,42 @@ def send_acknowledgment(req: ReferralRequest) -> None:
     req.save(update_fields=["acknowledged_at", "status"])
 
 
-def distribute(req: ReferralRequest) -> int:
-    """Step 3: the anonymized request to every active list member.
+#: The fewest days a clinician is ever given, however late a request is
+#: distributed. The deadline counts from receipt (task #706), so without a
+#: floor a request distributed after the window had elapsed would mail a
+#: deadline already in the past.
+MIN_RESPONSE_DAYS = 3
 
-    Each clinician is reached individually (bell + email via the
-    notifications center) so their response attributes to them. Returns the
-    number of clinicians notified.
+
+def _end_of_local_day(day) -> datetime:
+    """The last second of ``day`` in the school's timezone, as an aware
+    datetime — the moment a "respond by <date>" deadline actually closes."""
+    return timezone.make_aware(datetime.combine(day, time(23, 59, 59)))
+
+
+def default_response_deadline(req: ReferralRequest, config=None, now=None):
+    """When responses to ``req`` are due if nobody chooses otherwise.
+
+    The window counts from the day the referral was *received* — the
+    coordinator's ask (task #706): her processing delay should not be the
+    analysand's wait. Received Aug 24 with a ten-day window is due at the end
+    of Sept 3, whether Distribute is pressed on the 24th or the 27th. The
+    receipt date is the school's local date, not the UTC one
+    (local-date-not-utc-date). Floored at ``MIN_RESPONSE_DAYS`` from today so
+    a late distribution never names a date already gone.
     """
-    _refuse_if_suppressed(req, "distribute")
-    config = ReferralSettings.load()
-    members = list(
-        ReferralListMember.objects.filter(is_active=True)
-        .select_related("user")
-    )
-    due = timezone.now() + timedelta(days=config.response_window_days)
+    config = config or ReferralSettings.load()
+    now = now or timezone.now()
+    received = timezone.localdate(req.created_at)
+    candidate = received + timedelta(days=config.response_window_days)
+    floor = timezone.localdate(now) + timedelta(days=MIN_RESPONSE_DAYS)
+    return _end_of_local_day(max(candidate, floor))
+
+
+def render_distribution(req: ReferralRequest, due) -> tuple[str, str]:
+    """The distribution message as the clinicians will receive it — name and
+    email withheld. Shared by ``distribute`` and the coordinator's preview so
+    what she sees is what is sent. Returns ``(subject, body)``."""
     tpl = MessageTemplate.get(MessageTemplate.Key.DISTRIBUTION)
     context = {
         "reference": req.reference,
@@ -248,8 +270,28 @@ def distribute(req: ReferralRequest) -> int:
             reverse("referrals:respond", args=[req.reference]),
         ),
     }
-    subject = render_template(tpl.subject, context)
-    body = render_template(tpl.body, context)
+    return render_template(tpl.subject, context), render_template(tpl.body, context)
+
+
+def distribute(req: ReferralRequest, responses_due_at=None) -> int:
+    """Step 3: the anonymized request to every active list member.
+
+    Each clinician is reached individually (bell + email via the
+    notifications center) so their response attributes to them.
+    ``responses_due_at`` is the coordinator's chosen deadline from the preview
+    page; absent, it is ``default_response_deadline``. Returns the number of
+    clinicians notified.
+    """
+    _refuse_if_suppressed(req, "distribute")
+    config = ReferralSettings.load()
+    members = list(
+        ReferralListMember.objects.filter(is_active=True)
+        .select_related("user")
+    )
+    due = timezone.localtime(
+        responses_due_at or default_response_deadline(req, config),
+    )
+    subject, body = render_distribution(req, due)
     for member in members:
         notifications.referral_request(member.user, req, subject, body)
     req.distributed_at = timezone.now()

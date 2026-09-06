@@ -1897,6 +1897,87 @@ Done (see `git log` for specifics):
   new `Category.EVENT_REMINDER` (Registration & payments section, email
   default ON, member-adjustable). No host change needed.
 
+- **Editing a referral before it goes out, and a deadline that counts from
+  receipt** (tasks #684 and #706). The Referral Coordinator wrote in: *"This
+  referral request has the person's name in the description. How do I remove
+  it before sending it out?"* She couldn't. The intake fields were rendered
+  read-only on the request page, and Distribute was a bare POST button, so the
+  only way to scrub a description was the Django admin she doesn't have. Two
+  requests sat undistributed for over a week waiting on it. The second ask, in
+  the same thread: *"I need the 10 day waiting period to start from the date
+  the referral was received"*, with the example received Aug 24, due Sept 4,
+  *"so the analysand is not waiting longer due to (most often) my delay in
+  receiving and processing the request."*
+  **The scrub has to land on the record, not on a copy of the outgoing
+  email**: the clinicians' respond page renders the same
+  `additional_information` the distribution email carries, so an edit made
+  only in a compose box would have mailed a clean description and shown the
+  name on the site. Hence a plain Edit page (`referrals:edit`,
+  `RequestEditForm` over the seven intake fields) rather than an editable
+  message body. Every save with a change appends an audit line naming the
+  fields to `coordinator_notes` via the existing `_audit_note`, so the
+  original is not kept but the fact of the edit is; the coordinator's inquiry
+  email still holds what was submitted. It is available at every status but
+  redacted, and **held is the status that matters**: `release()` distributes
+  at once when distribution is automatic, so the scrub must be possible
+  before Release. (Prod runs all three steps in review mode today, verified.)
+  **Distribute is now a preview**: GET renders the message exactly as each
+  clinician will receive it, through a new `services.render_distribution`
+  that `distribute()` itself uses, so what she sees is what is sent; POST
+  sends. That answers her follow-up ("if I click Distribute, will I be able to
+  edit the description?") with a page that shows the problem and links to the
+  fix. One trap: a bare-button POST has an empty body, and `request.POST or
+  None` reads that as *unbound*, so the first cut rendered the preview instead
+  of sending on exactly the POST every existing test makes. Bind on method.
+  **The deadline is `services.default_response_deadline`**: the school-local
+  date received (`timezone.localdate(created_at)`, since an evening submission
+  is already tomorrow in UTC) plus the window, at the end of that day,
+  floored at `MIN_RESPONSE_DAYS = 3` from today so a request distributed after
+  its window has elapsed never mails a date already gone. The preview shows
+  the date in an editable field, sharing the addendum form's end-of-day
+  reading of a bare date input. Her example lands on Sept 3 rather than her
+  Sept 4 (she is in Eastern time, or counts from the day after); the field on
+  the page is the answer to that. The window setting's help text and the
+  guide now say the window counts from receipt.
+- **The front door closes, the house stays open** (task #717). The Applications
+  Coordinator wants to rework how the School takes applications, so new ones
+  stop arriving through the site. What makes this small rather than a teardown
+  is that **only the applicant-facing intake is gated**: `/apply/` and
+  `/apply/<track>/`. Cecile's coordinator console, the Meeting's read-only
+  review queue, the analyst interview pages and every applicant's own
+  `/apply/status/` are untouched, so the **three applications live on prod**
+  when this shipped, two of them mid-interview, finish on the site exactly as
+  they would have. Closing those too would have moved two interviews off-site
+  for no gain.
+  `APPLICATIONS_ENABLED` **defaults to True**, unlike the `SURVEY_ENABLED` /
+  `SUGGESTIONS_ENABLED` flags it otherwise mirrors: the whole admissions suite
+  exercises the real flow, so an off-by-default flag would have meant editing
+  every existing intake test to say what it already says. Prod carries
+  `DJANGO_APPLICATIONS_ENABLED=false` in the host `.env`, which is also what
+  makes reopening an env var rather than a deploy. One predicate,
+  `admissions.permissions.applications_open()`, so the two views cannot drift
+  (the #532 lesson).
+  **The POST is guarded, not just the button.** `apply` redirects to
+  `apply_start` on both methods — the submit buttons are gone but the URL is
+  guessable and sits in browser histories, and nothing may mint an
+  `Application` while the door is shut. Both views keep their
+  existing-application redirect **ahead** of the gate, so an applicant in
+  flight is never shown the closed page.
+  **All six "Apply to join" links still point at `/apply/`** (landing,
+  `/about/the-school/`, signup, the avatar menu, event pages, the members-only
+  registration block): one page owns the message, no link goes dead, and a
+  `mailto:` in six places would have been six places to edit when the flow
+  reopens. The page keeps both track cards and their eligibility bullets, which
+  come from the formation guidelines and are true either way, so a prospective
+  applicant can still self-assess before writing; only the "Apply — <track>"
+  buttons go, replaced by one block giving `settings.APPLICATIONS_EMAIL` (which
+  already existed and already defaulted to the right address, so no literal).
+  Found while building: the coordinator console's own Help page opens the
+  application lifecycle with "Submitted. Someone applies", which with the door
+  shut describes something that cannot happen to the one person who most needs
+  to know it — so that page carries the note while the flag is off, and drops
+  it when the flag comes back. No migration, no backfill, no data touched.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

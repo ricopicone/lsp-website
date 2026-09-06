@@ -5,8 +5,10 @@ from __future__ import annotations
 import datetime
 
 import pytest
+from django.conf import settings
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 
 from accounts.models import MembershipTenure, Profile, User
@@ -120,6 +122,70 @@ def test_second_application_redirects_to_status(client):
     client.force_login(guest)
     assert client.get(reverse("admissions:apply", args=["analyst"])).status_code == 302
     assert client.get(reverse("admissions:apply_start")).status_code == 302
+
+
+# ---- Applications closed (task #717) -----------------------------------
+#
+# While the Applications Coordinator reworks intake, the front door is shut:
+# no new applications, but everything already in flight keeps running.
+
+
+@override_settings(APPLICATIONS_ENABLED=False)
+def test_closed_apply_start_gives_the_coordinators_address(client):
+    resp = client.get(reverse("admissions:apply_start"))
+    assert resp.status_code == 200
+    assert settings.APPLICATIONS_EMAIL.encode() in resp.content
+    assert b"Apply \xe2\x80\x94" not in resp.content  # no "Apply —" track buttons
+
+
+@override_settings(APPLICATIONS_ENABLED=False)
+def test_closed_apply_start_keeps_the_tracks_and_eligibility(client):
+    resp = client.get(reverse("admissions:apply_start"))
+    assert b"Analyst" in resp.content and b"Scholar" in resp.content
+    assert b"personal Lacanian analysis" in resp.content
+
+
+@override_settings(APPLICATIONS_ENABLED=False)
+def test_closed_apply_form_redirects_to_the_start_page(client):
+    client.force_login(_user("closed1@x.test"))
+    resp = client.get(reverse("admissions:apply", args=["analyst"]))
+    assert resp.status_code == 302
+    assert resp["Location"] == reverse("admissions:apply_start")
+
+
+@override_settings(APPLICATIONS_ENABLED=False)
+def test_closed_apply_form_does_not_send_a_stranger_to_the_login_wall(client):
+    # A stale bookmark shouldn't ask someone to make an account for a form
+    # that isn't there any more.
+    resp = client.get(reverse("admissions:apply", args=["scholar"]))
+    assert resp["Location"] == reverse("admissions:apply_start")
+
+
+@override_settings(APPLICATIONS_ENABLED=False)
+def test_closed_apply_post_creates_no_application(client):
+    guest = _user("closed2@x.test")
+    client.force_login(guest)
+    resp = client.post(reverse("admissions:apply", args=["analyst"]), {
+        "background": Application.Background.CLINICAL,
+        "eligibility_note": "PsyD, licensed LCSW",
+        "letter_of_intent": "I wish to study Lacan.",
+        "cv": _cv(),
+    })
+    assert resp.status_code == 302
+    assert not Application.objects.filter(applicant=guest).exists()
+
+
+@override_settings(APPLICATIONS_ENABLED=False)
+def test_closed_door_does_not_strand_an_applicant_already_in_flight(client):
+    guest = _user("closed3@x.test", role=Profile.Role.PROSPECTIVE_APPLICANT)
+    Application.objects.create(
+        applicant=guest, track=Application.Track.ANALYST, letter_of_intent="x",
+        status=Application.Status.INTERVIEWING,
+    )
+    client.force_login(guest)
+    start = client.get(reverse("admissions:apply_start"))
+    assert start["Location"] == reverse("admissions:status")
+    assert client.get(reverse("admissions:status")).status_code == 200
 
 
 # ---- Reviewer flow -----------------------------------------------------
