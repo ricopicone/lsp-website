@@ -38,6 +38,7 @@ class Category(models.TextChoices):
     # --- Registration & payments ----------------------------------------
     REGISTRATION_STATUS = "registration_status", _("Registration updates")
     REGISTRATION_CONFIRMED = "registration_confirmed", _("Registration confirmation")
+    EVENT_REMINDER = "event_reminder", _("Event starting tomorrow")
     PAYMENT_RECEIPT = "payment_receipt", _("Payment receipts")
     DUES_REMINDER = "dues_reminder", _("Dues reminders")
     TUITION_REMINDER = "tuition_reminder", _("Tuition reminders")
@@ -183,6 +184,14 @@ CATEGORY_META: dict[str, CategoryMeta] = {
         SECTION_PAYMENTS, _("Registration confirmation"),
         _("Your confirmation and access details. Always emailed."),
         email_locked=True,
+    ),
+    # The day-before reminder to confirmed registrants (task #716): the joining
+    # details again, the day they are needed. Email defaults ON (a reminder
+    # seen only in the bell is little use) but is not locked.
+    _C.EVENT_REMINDER: _M(
+        SECTION_PAYMENTS, _("Event starting tomorrow"),
+        _("A reminder the day before each session of an event you're "
+          "registered for, with how to join."),
     ),
     _C.PAYMENT_RECEIPT: _M(
         SECTION_PAYMENTS, _("Payment receipts"),

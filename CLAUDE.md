@@ -1880,6 +1880,22 @@ Done (see `git log` for specifics):
   and the send page for a hand-written email. Sends pace through
   `ThrottledSender`. New plain-text filter `user_datetime_text` for email
   bodies. Guides updated (faculty, registrar).
+  **Follow-up (same day):** every registrant-facing surface now says how to
+  join. The confirmation *page* (`registrations:confirm`) renders the event
+  page's "Where" block + access details once paid (it used to say "access
+  details have been emailed"); the approved and payment-reminder emails carry
+  `_joining_note_unpaid.txt` (the in-site instructions in full, since they
+  are no secret; "details once your registration is complete" for an external
+  link or a venue); the installment reminder carries the full block. And a
+  **day-before session reminder** now exists — nothing had reminded an
+  event's registrants at all (the "starting soon" reminders cover
+  `WorkgroupMeeting`s, and event sessions are not mirrored there):
+  `send_meeting_reminders` (the host's 5-minute timer) gained a second pass
+  over `Session`s starting within `--session-lead-hours` (24) whose event is
+  published, stamping `Session.reminder_sent_at`; `payments.notifications.
+  session_reminder()` bells + emails every paid/comped registrant under the
+  new `Category.EVENT_REMINDER` (Registration & payments section, email
+  default ON, member-adjustable). No host change needed.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

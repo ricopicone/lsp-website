@@ -13,7 +13,8 @@ Your place in the event is confirmed, this is only about the remaining
 payments. If your circumstances have changed, reply and we'll sort something
 out.
 
-Questions? Reply to this email, it goes to {{ support_email }}.
+How to join
+{% include "events/email/_joining_block.txt" %}Questions? Reply to this email, it goes to {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
 {% endautoescape %}

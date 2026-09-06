@@ -13,7 +13,7 @@ Complete your registration here:
 Your place isn't held until payment is complete, so please pay at your earliest
 convenience.
 
-Questions? Reply to this email — it goes to {{ support_email }}.
+{% include "events/email/_joining_note_unpaid.txt" %}Questions? Reply to this email — it goes to {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
 {% endautoescape %}

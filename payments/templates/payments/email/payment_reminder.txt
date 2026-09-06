@@ -11,7 +11,7 @@ Complete your registration here:
 Your place isn't held until payment is complete. If you no longer wish to
 attend, you can ignore this — or reply to let us know.
 
-Questions? Reply to this email — it goes to {{ support_email }}.
+{% include "events/email/_joining_note_unpaid.txt" %}Questions? Reply to this email — it goes to {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
 {% endautoescape %}

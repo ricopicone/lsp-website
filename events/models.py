@@ -1107,6 +1107,11 @@ class Session(models.Model):
         default=0,
         help_text="Stable ordering within an event.",
     )
+    reminder_sent_at = models.DateTimeField(
+        null=True, blank=True, editable=False,
+        help_text="When the day-before reminder went to this session's "
+        "registrants (task #716); null until sent.",
+    )
 
     class Meta:
         ordering = ("event", "sequence", "start_at")

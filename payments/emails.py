@@ -339,12 +339,15 @@ def send_registration_pending_notice(registration: Registration) -> None:
 
 def send_registration_approved(registration: Registration) -> None:
     """Tell the registrant their registration was approved and payment is due."""
+    from events.joining import joining_details
+
     subject = f"Approved — complete your registration: {registration.event.title}"
     with _recipient_timezone(registration.user):
         body = render_to_string(
             "payments/email/registration_approved.txt",
             {
                 "registration": registration,
+                "joining": joining_details(registration.event),
                 "confirm_url": _confirm_url(registration),
                 "support_email": settings.SUPPORT_EMAIL,
             },
@@ -383,12 +386,15 @@ def send_approval_reminder(event, pending_count: int) -> None:
 
 def send_payment_reminder(registration: Registration) -> None:
     """Remind an approved registrant to complete payment."""
+    from events.joining import joining_details
+
     subject = f"Reminder: complete your registration — {registration.event.title}"
     with _recipient_timezone(registration.user):
         body = render_to_string(
             "payments/email/payment_reminder.txt",
             {
                 "registration": registration,
+                "joining": joining_details(registration.event),
                 "confirm_url": _confirm_url(registration),
                 "support_email": settings.SUPPORT_EMAIL,
             },
@@ -398,6 +404,8 @@ def send_payment_reminder(registration: Registration) -> None:
 
 def send_installment_reminder(installment) -> None:
     """Nudge a registrant about the next payment on their plan (task #501)."""
+    from events.joining import joining_details
+
     from . import registration_plans
 
     registration = installment.registration
@@ -410,11 +418,42 @@ def send_installment_reminder(installment) -> None:
             "payments/email/installment_reminder.txt",
             {
                 "registration": registration,
+                "joining": joining_details(registration.event),
                 "installment": installment,
                 "total": registration.installments.count(),
                 "outstanding": registration_plans.outstanding(registration),
                 "confirm_url": _confirm_url(registration),
                 "support_email": settings.SUPPORT_EMAIL,
+            },
+        )
+    _send(subject=subject, body=body, to=[registration.user.email])
+
+
+def send_session_reminder(registration: Registration, session) -> None:
+    """The day-before reminder to a confirmed registrant (task #716): when the
+    session begins, in their timezone, and how to join — the same joining
+    block the confirmation carried, on the day it is needed."""
+    import dataclasses
+
+    from events.joining import joining_details
+
+    event = registration.event
+    total = event.sessions.count()
+    # The block's own "the button appears at …" line would repeat the start
+    # time this email leads with, so it is dropped here.
+    joining = dataclasses.replace(joining_details(event), next_start_at=None)
+    subject = f"Tomorrow: {event.title}"
+    with _recipient_timezone(registration.user):
+        body = render_to_string(
+            "payments/email/session_reminder.txt",
+            {
+                "registration": registration,
+                "event": event,
+                "session": session,
+                "total_sessions": total,
+                "joining": joining,
+                "support_email": settings.SUPPORT_EMAIL,
+                "site_base_url": settings.SITE_BASE_URL,
             },
         )
     _send(subject=subject, body=body, to=[registration.user.email])

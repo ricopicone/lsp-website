@@ -1,0 +1,7 @@
+{% if joining.kind == "insite" %}Where it meets: online, in the site's own video meeting room. Once your registration is complete, a "Join the meeting room" button appears on the event page when the event begins. There is no separate meeting link.
+{{ joining.event_url }}
+{% elif joining.kind == "in_person" %}Where it meets: in person. The venue details are on the event page once your registration is complete.
+{{ joining.event_url }}
+{% else %}Where it meets: online. The joining details are on the event page, and in your confirmation email, once your registration is complete.
+{{ joining.event_url }}
+{% endif %}

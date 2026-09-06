@@ -281,10 +281,17 @@ def register_for_event(request, event_slug: str):
 def registration_confirm(request, reg_id: int):
     reg = get_object_or_404(Registration, pk=reg_id, user=request.user)
     auto_apply_pinned_code(reg)
+    from events.views import event_summary_context
+
     return render(
         request,
         "registrations/register_confirm.html",
         {
+            # The event page's "Where" block (Join button, tech check, venue)
+            # renders here too once the place is confirmed (task #716), so the
+            # page a member lands on after paying shows the way in rather than
+            # saying it was emailed.
+            **event_summary_context(reg.event, request.user),
             "registration": reg,
             # Lets the page say *why* a formerly covered place now wants money
             # (task #485) without duplicating the marker string in a template.

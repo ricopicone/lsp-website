@@ -20,11 +20,15 @@ from workgroups.models import WorkgroupMeeting
 
 
 class Command(BaseCommand):
-    help = "Email members a reminder ~15 minutes before their meetings."
+    help = ("Email members a reminder ~15 minutes before their meetings, and "
+            "event registrants the day before each session.")
 
     def add_arguments(self, parser):
         parser.add_argument("--lead-minutes", type=int, default=15,
                             help="How far ahead of start to remind.")
+        parser.add_argument("--session-lead-hours", type=int, default=24,
+                            help="How far ahead of an event session to remind "
+                                 "its registrants (task #716).")
         parser.add_argument("--dry-run", action="store_true",
                             help="Report without sending or stamping.")
 
@@ -61,4 +65,42 @@ class Command(BaseCommand):
         verb = "would remind for" if dry else "reminded for"
         self.stdout.write(self.style.SUCCESS(
             f"{verb} {meetings} meeting(s)" + ("" if dry else f", {people} member-notice(s)")
+        ))
+        self._remind_sessions(now, opts["session_lead_hours"], dry)
+
+    def _remind_sessions(self, now, lead_hours: int, dry: bool) -> None:
+        """Event sessions (task #716): the day-before reminder to confirmed
+        registrants. Rides this command because the host already runs it every
+        five minutes; a session is reminded once, stamped on the row, and only
+        while its event is published and still has someone to tell."""
+        from events.models import Session
+        from payments import notifications as notify_payments
+
+        due = (
+            Session.objects
+            .filter(
+                reminder_sent_at__isnull=True,
+                start_at__gt=now,
+                start_at__lte=now + timedelta(hours=lead_hours),
+                event__published=True,
+            )
+            .select_related("event")
+            .order_by("start_at")
+        )
+        sessions = people = 0
+        for session in due:
+            if dry:
+                self.stdout.write(
+                    f"would remind registrants: {session} @ {session.start_at:%Y-%m-%d %H:%M}"
+                )
+                sessions += 1
+                continue
+            people += notify_payments.session_reminder(session)
+            session.reminder_sent_at = now
+            session.save(update_fields=["reminder_sent_at"])
+            sessions += 1
+        verb = "would remind for" if dry else "reminded for"
+        self.stdout.write(self.style.SUCCESS(
+            f"{verb} {sessions} event session(s)"
+            + ("" if dry else f", {people} registrant-notice(s)")
         ))

@@ -234,7 +234,10 @@ from inside the room, and only when recording is enabled for your group.
 Before a first meeting, you and your students can check camera and microphone
 at **Test your video & audio**, linked from the event page.
 
-**Reminding everyone how to join.** Registrants sometimes write to ask for a
+**Reminding everyone how to join.** Everyone with a confirmed registration
+gets the joining details in their confirmation email, and again in a reminder
+the day before each session, with the start time in their own timezone.
+Registrants still sometimes write to ask for a
 meeting link. Rather than answering one by one, use **Email joining
 instructions** at the top of the Roster tab. It emails everyone with a
 confirmed registration a short note in your words, and the site adds the

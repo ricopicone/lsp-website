@@ -74,12 +74,27 @@
   </div>
   {% elif registration.status == "paid" %}
   <p class="text-base-content/80">
-    Payment received — you're all set. Access details have been emailed.
+    Payment received — you're all set. Your confirmation has been emailed.
   </p>
   {% elif registration.status == "declined" %}
   <div role="alert" class="alert">
     <span>The faculty were unable to approve this registration.{% if registration.decline_reason %} Note: {{ registration.decline_reason }}{% endif %}</span>
   </div>
+  {% endif %}
+
+  {% if has_paid_registration %}
+  <section class="space-y-2">
+    <h2 class="font-serif text-xl text-base-content">Where it meets</h2>
+    {% include "events/_location.html" %}
+    {% if show_access_info %}
+    <div role="alert" class="alert alert-success">
+      <div>
+        <h3 class="font-medium mb-1">Your access details</h3>
+        <p class="whitespace-pre-wrap text-sm">{{ event.access_info }}</p>
+      </div>
+    </div>
+    {% endif %}
+  </section>
   {% endif %}
 
   {% if pending_code %}

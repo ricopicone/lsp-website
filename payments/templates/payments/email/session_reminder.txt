@@ -1,0 +1,14 @@
+{% load tz_filters %}{% autoescape off %}{{ registration.user.first_name|default:"Hello" }},
+
+A reminder that "{{ event.title }}"{% if total_sessions > 1 %} (session {{ session.sequence }} of {{ total_sessions }}{% if session.title %}: {{ session.title }}{% endif %}){% endif %} begins
+{{ session.start_at|user_datetime_text }} and runs until {{ session.end_at|user_datetime_text }}.
+{% if session.location %}
+Location: {{ session.location }}
+{% endif %}
+How to join
+{% include "events/email/_joining_block.txt" %}Questions? Reply to this email — it goes to {{ support_email }}.
+You can turn these reminders off in your notification settings.
+
+— Lacanian School of Psychoanalysis
+{{ site_base_url }}
+{% endautoescape %}
