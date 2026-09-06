@@ -28,6 +28,7 @@ urlpatterns = [
     path(f"{_ADMIN}/clinicians/<int:pk>/onboard/", views.clinician_onboard,
          name="clinician_onboard"),
     path(f"{_ADMIN}/<str:reference>/", views.detail, name="detail"),
+    path(f"{_ADMIN}/<str:reference>/edit/", views.edit, name="edit"),
     path(f"{_ADMIN}/<str:reference>/ack/", views.send_ack, name="send_ack"),
     path(f"{_ADMIN}/<str:reference>/distribute/", views.distribute,
          name="distribute"),
