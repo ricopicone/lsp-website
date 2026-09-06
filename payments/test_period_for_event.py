@@ -7,11 +7,12 @@ import pytest
 from events.models import Event
 from payments.ledger import period_for_event
 from payments.models import TuitionPeriod
+from payments.testing import make_period
 
 
 @pytest.mark.django_db
 def test_event_resolves_to_its_ay_period():
-    p26 = TuitionPeriod.objects.create(
+    p26 = make_period(TuitionPeriod, 
         name="AY 2026–2027", slug="t26", start_date=date(2026, 9, 1),
         decision_due_date=date(2026, 10, 31), end_date=date(2027, 8, 31),
         tuition_amount=Decimal("2500"),

@@ -11,6 +11,7 @@ from django.utils import timezone
 from accounts.models import User
 from events.models import Audience, Event, PriceTier, PricingCode
 from events.pricing import PriceResolution, PricingError, resolve_price
+from payments.testing import make_period
 
 
 @pytest.fixture
@@ -37,7 +38,7 @@ def tuition_period_2026(db):
     TuitionPeriod.current() happens to be on the day tests run."""
     from payments.models import TuitionPeriod
 
-    return TuitionPeriod.objects.create(
+    return make_period(TuitionPeriod, 
         name="AY 2026–2027", slug="ay-2026-2027-test",
         start_date=date(2026, 9, 1), decision_due_date=date(2026, 10, 31),
         end_date=date(2027, 8, 31), tuition_amount=Decimal("800.00"),
@@ -135,7 +136,7 @@ def test_covered_by_tuition_keys_on_the_events_academic_year(event, regular_user
     assert result.amount == Decimal("100.00")
 
     # Now the member also has a covers-seminars enrollment for 2026-27: covered.
-    new_period = TuitionPeriod.objects.create(
+    new_period = make_period(TuitionPeriod, 
         name="AY 2026–2027", slug="ay-2026-2027-test",
         start_date=date(2026, 9, 1), decision_due_date=date(2026, 10, 31),
         end_date=date(2027, 8, 31), tuition_amount=Decimal("800.00"),

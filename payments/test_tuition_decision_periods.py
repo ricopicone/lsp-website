@@ -10,6 +10,7 @@ from payments.models import (
     TuitionPeriod,
     TuitionPlanApplication,
 )
+from payments.testing import make_period
 
 User = get_user_model()
 
@@ -47,6 +48,10 @@ def test_member_can_record_upcoming_year_decision(client):
 def cur_period(db):
     import datetime
     today = datetime.date.today()
+    # The view falls back to TuitionPeriod.current(), which is .first() by pk:
+    # the clock-seeded period (payments/0006) covers today from Sept 1 and
+    # would win over this one, so make this the only current period.
+    TuitionPeriod.objects.filter(start_date__lte=today, end_date__gte=today).delete()
     return TuitionPeriod.objects.create(
         name="Cur", slug="cur-plan", start_date=today.replace(month=1, day=1),
         decision_due_date=today, end_date=today.replace(month=12, day=31),
@@ -225,7 +230,7 @@ def test_decision_form_names_its_academic_year():
 
     from payments.forms import TuitionDecisionForm
 
-    period = TuitionPeriod.objects.create(
+    period = make_period(TuitionPeriod, 
         name="AY 2026–2027", slug="ay-2026-2027-x",
         start_date=date(2026, 9, 1), decision_due_date=date(2026, 10, 31),
         end_date=date(2027, 8, 31), tuition_amount=Decimal("2500"),

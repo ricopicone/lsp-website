@@ -18,6 +18,7 @@ from django.utils import timezone
 
 from accounts.models import Profile, User
 from payments.models import Charge, DuesPeriod, Payment
+from payments.testing import make_period
 
 pytestmark = pytest.mark.django_db
 
@@ -43,7 +44,7 @@ def periods(db):
         dues_amount_candidate=Decimal("100"),
         dues_amount_analyst=Decimal("150"),
     )
-    upcoming = DuesPeriod.objects.create(
+    upcoming = make_period(DuesPeriod, 
         name="AY 2026–2027", slug="ay-2026-2027-x",
         start_date=today + timedelta(days=16),
         due_date=today + timedelta(days=46),
