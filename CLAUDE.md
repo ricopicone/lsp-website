@@ -1766,32 +1766,6 @@ Done (see `git log` for specifics):
   browser end to end at every entrance. No backfill, no flag beyond the
   `DAILY_ENABLED` one the video app already has. Design:
   `docs/superpowers/specs/2026-08-29-personal-meeting-rooms-design.md`.
-- **Telling registrants how to join** (task #716). The day before her special
-  event, Stephanie Swales got a worried email from a registrant who thought she
-  needed to send a meeting link; nothing had told registrants that the Join
-  button on the event page *is* the link, and the confirmation email offered
-  only a bare room URL. **`events/joining.py` is the one description of how an
-  event is joined** — `joining_details(event)` reads the format and
-  `online_venue` and yields `insite` / `external` / `in_person` /
-  `online_unknown` (video switched off) — and the one text block
-  (`events/email/_joining_block.txt`) is rendered by the confirmation email,
-  the new bulk email, and the send page's preview, so no surface re-derives the
-  venue (#624's lesson). **`/events/<slug>/joining-instructions/`** emails every
-  paid or comped registrant (a plan reads PAID; awaiting/pending/cancelled are
-  not sent a door they can't open) a note the sender edits, with the joining
-  block underneath; a **Sign as** choice (me / the School) is the answer to
-  "who is it from" and also sets the Reply-To — faculty and presenters default
-  to themselves, registrar-console operators to the School. Gate is
-  `can_edit_event` *or* `can_administer_registrations`. Each batch is a
-  `JoiningInstructionsSend` row (read-only in Django admin) so the page and the
-  faculty tools say "last sent by … to N". Entry points: a card in
-  `_faculty_tools.html` (the event page's faculty view *and* the seminar
-  Workspace Roster tab, hidden for in-person events), a per-row link on the
-  registrar Events tab, and a **Copy email addresses** button on both the roster
-  and the send page for a hand-written email. Sends pace through
-  `ThrottledSender`. New plain-text filter `user_datetime_text` for email
-  bodies. Guides updated (faculty, registrar).
-
 - **Inviting someone into a group's meeting room** (task #694). Every room the
   site had admitted exactly one population: its own. A `Workgroup` room is gated
   by `Workgroup.is_member` and a one-off event's by a paid registration or
@@ -1881,6 +1855,31 @@ Done (see `git log` for specifics):
   the period's `end_date` and so asserted the opposite of its own name on the
   academic year's final day, which was the day this shipped. Design:
   `docs/superpowers/specs/2026-08-31-group-room-external-invitations-design.md`.
+- **Telling registrants how to join** (task #716). The day before her special
+  event, Stephanie Swales got a worried email from a registrant who thought she
+  needed to send a meeting link; nothing had told registrants that the Join
+  button on the event page *is* the link, and the confirmation email offered
+  only a bare room URL. **`events/joining.py` is the one description of how an
+  event is joined** — `joining_details(event)` reads the format and
+  `online_venue` and yields `insite` / `external` / `in_person` /
+  `online_unknown` (video switched off) — and the one text block
+  (`events/email/_joining_block.txt`) is rendered by the confirmation email,
+  the new bulk email, and the send page's preview, so no surface re-derives the
+  venue (#624's lesson). **`/events/<slug>/joining-instructions/`** emails every
+  paid or comped registrant (a plan reads PAID; awaiting/pending/cancelled are
+  not sent a door they can't open) a note the sender edits, with the joining
+  block underneath; a **Sign as** choice (me / the School) is the answer to
+  "who is it from" and also sets the Reply-To — faculty and presenters default
+  to themselves, registrar-console operators to the School. Gate is
+  `can_edit_event` *or* `can_administer_registrations`. Each batch is a
+  `JoiningInstructionsSend` row (read-only in Django admin) so the page and the
+  faculty tools say "last sent by … to N". Entry points: a card in
+  `_faculty_tools.html` (the event page's faculty view *and* the seminar
+  Workspace Roster tab, hidden for in-person events), a per-row link on the
+  registrar Events tab, and a **Copy email addresses** button on both the roster
+  and the send page for a hand-written email. Sends pace through
+  `ThrottledSender`. New plain-text filter `user_datetime_text` for email
+  bodies. Guides updated (faculty, registrar).
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
