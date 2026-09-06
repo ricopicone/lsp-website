@@ -202,6 +202,11 @@ def test_landing_page_renders(client):
 
 
 def test_landing_page_lists_upcoming_events(client, event_with_sessions):
+    # The fixture's fixed September 2026 start is in the past once the clock
+    # passes it; the landing page lists what hasn't started yet.
+    event_with_sessions.start_date = timezone.localdate() + timedelta(days=1)
+    event_with_sessions.end_date = event_with_sessions.start_date + timedelta(days=30)
+    event_with_sessions.save()
     response = client.get(reverse("core:landing"))
     assert b"Lacan Seminar XI" in response.content
 

@@ -37,11 +37,39 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
   </div>
   {% endif %}
 
+  {# Joining instructions (task #716) #}
+  {% if event.format != 'in_person' %}
+  <div class="rounded-lg border border-base-300 bg-base-100 p-4 space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h3 class="font-serif text-lg text-base-content">Tell registrants how to join</h3>
+        <p class="text-sm text-base-content/70">
+          {% if event.uses_insite_room %}There's no meeting link to send: the Join button appears on the event page when the event begins.{% else %}This event meets on an external service; the email carries its joining details.{% endif %}
+          Email everyone with a confirmed registration a reminder, with a note from you.
+        </p>
+        {% with last=event.joining_sends.first %}{% if last %}
+        <p class="text-xs text-base-content/60">Last sent {{ last.sent_at|date:"M j, Y" }} by {{ last.sent_by.get_full_name|default:"a staff member" }} to {{ last.recipient_count }}.</p>
+        {% endif %}{% endwith %}
+      </div>
+      <a href="{% url 'events:joining_instructions' event.slug %}" class="btn btn-primary btn-sm whitespace-nowrap">Email joining instructions</a>
+    </div>
+  </div>
+  {% endif %}
+
   {# Roster #}
   <div class="space-y-3">
     <div class="flex flex-wrap items-baseline justify-between gap-3">
       <h3 class="font-serif text-lg text-base-content">Roster <span class="text-base-content/60 text-sm font-normal">({{ registrations|length }})</span></h3>
-      <a href="{% url 'events:roster_csv' event.slug %}" class="btn btn-sm btn-ghost">Download CSV</a>
+      <div class="flex flex-wrap items-center gap-2">
+        {% if registrations %}
+        <button type="button" class="btn btn-sm btn-ghost" data-copy-roster-emails
+                data-emails="{% for reg in registrations %}{{ reg.user.email }}{% if not forloop.last %}, {% endif %}{% endfor %}"
+                title="Copy every address on the roster, comma separated, for your own email program">
+          <span data-copy-label>Copy email addresses</span>
+        </button>
+        {% endif %}
+        <a href="{% url 'events:roster_csv' event.slug %}" class="btn btn-sm btn-ghost">Download CSV</a>
+      </div>
     </div>
     {% if registrations %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
@@ -123,6 +151,26 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
     </div>
   </div>
   {% endif %}
+<script>
+  (function () {
+    var btn = document.querySelector('[data-copy-roster-emails]');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var text = btn.getAttribute('data-emails');
+      var done = function () {
+        var label = btn.querySelector('[data-copy-label]');
+        var prev = label.textContent;
+        label.textContent = 'Copied';
+        setTimeout(function () { label.textContent = prev; }, 1500);
+      };
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(done, function () { window.prompt('Copy these addresses:', text); });
+      } else {
+        window.prompt('Copy these addresses:', text);
+      }
+    });
+  })();
+</script>
 </div>
 
 {% if room_invite_panel %}

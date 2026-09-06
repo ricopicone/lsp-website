@@ -1,0 +1,163 @@
+{% extends "core/base.html" %}
+{% load tz_filters %}
+{% block title %}Joining instructions · {{ event.title }} · LSP{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-8">
+
+  <header class="space-y-1">
+    <h1 class="font-serif text-3xl text-base-content">Email joining instructions</h1>
+    <p class="text-base-content/70">{{ event.title }}</p>
+    <p class="text-sm">
+      <a href="{{ back_url }}" class="link link-hover text-base-content/70">← Back to the roster</a>
+    </p>
+  </header>
+
+  <section class="rounded-lg border border-base-300 bg-base-100 p-4 space-y-2 text-sm">
+    <h2 class="font-medium text-base-content">What the email will say about joining</h2>
+    {% if joining.kind == "insite" %}
+    <p class="text-base-content/70">
+      This event meets in the site's video room{% if joining.hybrid %} (and in person){% endif %}.
+      Registrants are told there is no separate link: a <strong>Join the meeting room</strong>
+      button appears on the event page when the event begins{% if joining.next_start_at %},
+      {{ joining.next_start_at|user_datetime }}{% endif %}.
+    </p>
+    {% elif joining.kind == "external" %}
+    <p class="text-base-content/70">
+      This event meets on an external service. Registrants get the joining details
+      from the event's <em>Joining details</em> field{% if not joining.access_info %},
+      <strong class="text-warning">which is currently empty</strong>. Set the link on the
+      <a href="{% url 'events:edit' event.slug %}" class="link">edit page</a> before sending{% endif %}.
+    </p>
+    {% elif joining.kind == "in_person" %}
+    <p class="text-base-content/70">This event meets in person. Registrants get the venue from the event's <em>Joining details</em> field.</p>
+    {% else %}
+    <p class="text-base-content/70">This event meets online, but the site's video room is switched off, so registrants are told details will follow on the event page.</p>
+    {% endif %}
+    <p class="text-xs text-base-content/60">To change where the event meets, use <a href="{% url 'events:edit' event.slug %}" class="link">Edit event</a>.</p>
+  </section>
+
+  <section class="space-y-2">
+    <div class="flex flex-wrap items-baseline justify-between gap-3">
+      <h2 class="font-serif text-lg text-base-content">Recipients <span class="text-base-content/60 text-sm font-normal">({{ recipients|length }})</span></h2>
+      {% if addresses %}
+      <button type="button" class="btn btn-ghost btn-sm" data-copy-addresses>
+        <span data-copy-label>Copy email addresses</span>
+      </button>
+      {% endif %}
+    </div>
+    <p class="text-sm text-base-content/70">
+      Everyone with a paid or complimentary registration. People still awaiting
+      approval or payment are not included.
+    </p>
+    {% if recipients %}
+    <details class="text-sm">
+      <summary class="cursor-pointer text-base-content/70">Show the list</summary>
+      <ul class="mt-2 columns-1 sm:columns-2 text-base-content/80">
+        {% for reg in recipients %}
+        <li>{{ reg.user.get_full_name|default:reg.user.email }} <span class="text-base-content/50">· {{ reg.user.email }}</span></li>
+        {% endfor %}
+      </ul>
+    </details>
+    <textarea id="joining-addresses" class="textarea textarea-bordered w-full text-xs font-mono" rows="2" readonly
+              aria-label="Recipient email addresses, comma separated">{{ addresses|join:", " }}</textarea>
+    <p class="text-xs text-base-content/60">Addresses are here if you'd rather write from your own email. Use Bcc.</p>
+    {% else %}
+    <p class="text-sm text-base-content/60">No confirmed registrations yet.</p>
+    {% endif %}
+  </section>
+
+  {% if last_send %}
+  <p class="text-sm text-base-content/70 rounded-lg bg-base-200/60 p-3">
+    Last sent {{ last_send.sent_at|user_datetime }} by
+    {{ last_send.sent_by.get_full_name|default:"a staff member" }} to
+    {{ last_send.recipient_count }} registrant{{ last_send.recipient_count|pluralize }}.
+  </p>
+  {% endif %}
+
+  {% if recipients %}
+  <form method="post" class="space-y-6" onsubmit="return confirm('Send joining instructions to {{ recipients|length }} registrant{{ recipients|length|pluralize }} now?');">
+    {% csrf_token %}
+
+    <div class="form-control space-y-1">
+      <label for="id_message" class="label-text">
+        <h2 class="font-serif text-lg text-base-content">Your message</h2>
+      </label>
+      <textarea id="id_message" name="message" rows="5" maxlength="4000"
+                class="textarea textarea-bordered w-full">{{ message }}</textarea>
+      <p class="text-xs text-base-content/60">
+        Edit freely. The joining details below it are added by the site and
+        match where the event meets.
+      </p>
+    </div>
+
+    <fieldset class="space-y-2">
+      <legend class="font-serif text-lg text-base-content">Sign as</legend>
+      <label class="flex items-start gap-2 text-sm">
+        <input type="radio" name="sign_as" value="me" class="radio radio-sm mt-0.5" {% if sign_as == "me" %}checked{% endif %}>
+        <span><strong>{{ sender_name }}</strong> <span class="text-base-content/60">· replies come to you</span></span>
+      </label>
+      <label class="flex items-start gap-2 text-sm">
+        <input type="radio" name="sign_as" value="school" class="radio radio-sm mt-0.5" {% if sign_as == "school" %}checked{% endif %}>
+        <span><strong>Lacanian School of Psychoanalysis</strong> <span class="text-base-content/60">· replies go to the School's mailbox</span></span>
+      </label>
+    </fieldset>
+
+    <div class="space-y-1">
+      <h2 class="font-serif text-lg text-base-content">Preview</h2>
+      <p class="text-xs text-base-content/60">Subject: How to join: {{ event.title }}. Times are shown in each recipient's own timezone.</p>
+      <pre id="joining-preview" class="whitespace-pre-wrap rounded-lg border border-base-300 bg-base-200/40 p-4 text-sm font-sans text-base-content/80"
+           data-message="{{ message }}"
+           data-sig-me="{{ sender_name }}"
+           data-sig-school="Lacanian School of Psychoanalysis">{{ preview }}</pre>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3">
+      <button type="submit" class="btn btn-primary">Send to {{ recipients|length }} registrant{{ recipients|length|pluralize }}</button>
+      <a href="{{ back_url }}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+  {% endif %}
+
+</div>
+<script>
+  (function () {
+    var copyBtn = document.querySelector('[data-copy-addresses]');
+    var box = document.getElementById('joining-addresses');
+    if (copyBtn && box) {
+      copyBtn.addEventListener('click', function () {
+        var done = function () {
+          var label = copyBtn.querySelector('[data-copy-label]');
+          var prev = label.textContent;
+          label.textContent = 'Copied';
+          setTimeout(function () { label.textContent = prev; }, 1500);
+        };
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(box.value).then(done, function () { box.select(); });
+        } else {
+          box.select();
+          try { document.execCommand('copy'); done(); } catch (e) {}
+        }
+      });
+    }
+    // Live preview: the message and the signature are the only parts that
+    // change, so swap those in the rendered text rather than re-rendering.
+    var pre = document.getElementById('joining-preview');
+    var msg = document.getElementById('id_message');
+    if (!pre || !msg) return;
+    var base = pre.textContent;
+    var origMsg = pre.getAttribute('data-message');
+    var sigs = { me: pre.getAttribute('data-sig-me'), school: pre.getAttribute('data-sig-school') };
+    var initialSig = (document.querySelector('input[name=sign_as]:checked') || {}).value || 'me';
+    function render() {
+      var text = base;
+      var current = msg.value.trim();
+      if (origMsg) text = text.replace(origMsg, current || '');
+      var chosen = (document.querySelector('input[name=sign_as]:checked') || {}).value || initialSig;
+      text = text.replace('— ' + sigs[initialSig], '— ' + sigs[chosen]);
+      pre.textContent = text;
+    }
+    msg.addEventListener('input', render);
+    document.querySelectorAll('input[name=sign_as]').forEach(function (r) { r.addEventListener('change', render); });
+  })();
+</script>
+{% endblock %}

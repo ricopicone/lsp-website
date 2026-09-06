@@ -1,0 +1,28 @@
+{% load tz_filters %}{% if joining.kind == "insite" %}{% if joining.hybrid %}This event meets in person and online. To attend online, use the site's video meeting room.{% else %}This event meets online in the site's own video meeting room.{% endif %}
+
+There is no separate meeting link. When the event begins, open the event page, sign in, and click "Join the meeting room":
+{{ joining.event_url }}
+{% if joining.next_start_at %}
+The button appears there at the start time: {{ joining.next_start_at|user_datetime_text }}.
+{% endif %}
+It runs in your browser, with no app to install. You can test your camera and microphone ahead of time here:
+{{ joining.system_check_url }}
+{% if joining.hybrid and joining.access_info %}
+To attend in person:
+{{ joining.access_info }}
+{% endif %}{% elif joining.kind == "external" %}{% if joining.hybrid %}This event meets in person and online. {% else %}This event meets online. {% endif %}Joining details:
+{{ joining.access_info|default:"(The joining link has not been set yet. It will be shared before the event.)" }}
+
+Event page:
+{{ joining.event_url }}
+{% elif joining.kind == "in_person" %}This event meets in person.
+{% if joining.access_info %}
+{{ joining.access_info }}
+{% endif %}
+Event page:
+{{ joining.event_url }}
+{% else %}This event meets online. Joining details will be shared before the event on the event page:
+{{ joining.event_url }}
+{% if joining.access_info %}
+{{ joining.access_info }}
+{% endif %}{% endif %}

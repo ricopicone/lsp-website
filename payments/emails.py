@@ -89,23 +89,19 @@ def _recipient_timezone(user) -> contextlib.AbstractContextManager:
 
 def send_registration_confirmation(registration: Registration) -> None:
     """Send the confirmation email (REG-9), releasing access_info if PAID/COMPED."""
-    from django.urls import reverse
 
-    from video.services import daily_enabled
+    from events.joining import joining_details
 
     subject = f"Registration confirmed: {registration.event.title}"
     has_access = registration.status in (
         Registration.Status.PAID,
         Registration.Status.COMPED,
     )
-    # Only when the event actually meets in the site's room: an in-person event
-    # was being mailed "join in your browser", and an event meeting on Zoom was
-    # offered two doors, one of them empty (task #624).
-    room_url = ""
-    if has_access and daily_enabled() and registration.event.uses_insite_room:
-        room_url = settings.SITE_BASE_URL.rstrip("/") + reverse(
-            "video:event_room", args=[registration.event.slug]
-        )
+    # The joining block is the one description of how an event is joined
+    # (events/joining.py, task #716): the site's room, the external link, or
+    # the venue, per the event's format and venue. Before it, this email
+    # mailed in-person registrants "join in your browser" (task #624) and told
+    # nobody that the Join button on the event page is the link.
     with _recipient_timezone(registration.user):
         body = render_to_string(
             "payments/email/confirmation.txt",
@@ -113,7 +109,7 @@ def send_registration_confirmation(registration: Registration) -> None:
                 "registration": registration,
                 "is_comp": registration.status == Registration.Status.COMPED,
                 "has_access": has_access,
-                "room_url": room_url,
+                "joining": joining_details(registration.event) if has_access else None,
                 "support_email": settings.SUPPORT_EMAIL,
                 "site_base_url": settings.SITE_BASE_URL,
             },

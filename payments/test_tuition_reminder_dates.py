@@ -12,13 +12,14 @@ from django.utils import timezone
 
 from payments.management.commands import send_tuition_reminders
 from payments.models import TuitionEnrollment, TuitionPeriod
+from payments.testing import make_period
 
 User = get_user_model()
 
 
 @pytest.fixture
 def period(db):
-    return TuitionPeriod.objects.create(
+    return make_period(TuitionPeriod, 
         name="AY 2026–2027", slug="ay-2026-2027-tuition",
         start_date=date(2026, 9, 1), decision_due_date=date(2026, 10, 31),
         payment_due_date=date(2026, 11, 30), end_date=date(2027, 8, 31),
