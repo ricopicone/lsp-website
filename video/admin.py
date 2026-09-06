@@ -77,9 +77,13 @@ class PersonalRoomAdmin(admin.ModelAdmin):
 
 @admin.register(RoomInvitation)
 class RoomInvitationAdmin(admin.ModelAdmin):
-    list_display = ("room", "display_name", "is_guest", "expires_at", "revoked_at")
-    list_filter = ("revoked_at",)
+    list_display = (
+        "target_object", "display_name", "is_guest", "invited_by", "expires_at",
+        "revoked_at",
+    )
+    list_filter = ("revoked_at", "workgroup", "event")
+    raw_id_fields = ("personal_room", "workgroup", "event", "invited_user", "invited_by")
     search_fields = (
-        "room__user__email", "invited_user__email", "guest_name", "guest_email",
+        "personal_room__user__email", "invited_user__email", "guest_name", "guest_email",
     )
     readonly_fields = ("token", "created_at", "last_used_at")

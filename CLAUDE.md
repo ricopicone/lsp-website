@@ -1792,6 +1792,96 @@ Done (see `git log` for specifics):
   `ThrottledSender`. New plain-text filter `user_datetime_text` for email
   bodies. Guides updated (faculty, registrar).
 
+- **Inviting someone into a group's meeting room** (task #694). Every room the
+  site had admitted exactly one population: its own. A `Workgroup` room is gated
+  by `Workgroup.is_member` and a one-off event's by a paid registration or
+  `can_edit_event`, with no third answer, so a discussant a committee wants to
+  hear from once, an outside speaker's interpreter, or a candidate the Board is
+  meeting had no way in short of being put on a roster, which also hands them the
+  group's Parlêtre channel, its files and its minutes. Task #687 had built the
+  missing mechanism for a *different* room; this carries it across.
+  **`RoomInvitation` becomes polymorphic over three targets** — `personal_room`
+  (the field formerly called `room`), `workgroup`, and `event` — with a
+  `video_invitation_exactly_one_target` check constraint beside the existing
+  kind constraint, the style `DailyRoom` already uses one file up. Every existing
+  row is personal, so the constraint holds the moment the rename lands: no data
+  migration, no backfill. **The rename is the whole risk of the migration** —
+  `makemigrations` does not detect it non-interactively and generates a
+  remove-plus-add that would silently discard every existing invitation's room,
+  so `0010` is hand-written. Rejected: pointing the invitation at `DailyRoom`
+  (rooms are provisioned lazily by a Daily API call, so issuing an invitation
+  would force provisioning and fail whenever Daily is unreachable, and a personal
+  invitation legitimately exists before any room does); and a second
+  `GroupRoomInvitation` model, which buys an untouched shipped path at the price
+  of a second copy of one state machine — the #532/#568 lesson, and the reason
+  #627 gave `cancel()` a keyword rather than writing a second cancel.
+  **The invariant is #687's, restated for a room with no single owner: a guest is
+  never the first one in the room.** It binds every entrant `can_enter` does not
+  already admit, so a forwarded link reaches a doorstep saying the meeting has
+  not started, never an empty room. "Someone is in it" is
+  `room_participant_count` read from the **existing** `DailyRoom` row, never
+  through `ensure_room`, which would provision a room for a group that has never
+  met and turn a doorstep GET into a write. Only members and already-admitted
+  guests can be in the room, so the count cannot be manufactured: the first guest
+  to arrive finds zero and waits. Rejected: **gating on a scheduled meeting's
+  window**, which reads most literally as "expires after the meeting time" but
+  locks a guest out of exactly the ad-hoc *Meet Now* meeting they were invited
+  to; and no gate at all.
+  **Group invitations never expire, of either kind** (Rico, 2026-08-31), where a
+  personal guest link keeps its 30 days. Safe here in a way it would not be
+  alone: the presence gate means a link by itself never opens an empty room, and
+  a group's live list sits on its own Meet tab where every lead can revoke it. A
+  flat TTL is what made a speaker invitation lapse eleven days before its event
+  (`events.speaker_invitations.invitation_expiry`).
+  **Who may invite is `services.is_owner`** — the site's one definition of "runs
+  this meeting", already what grants the moderator flag and the Record button —
+  so the invite panel and the host controls cannot disagree about who runs a
+  meeting. It admits the Web Coordinator and Web Developer, which grants them
+  nothing new (they already enter and moderate every group room), and is the
+  opposite of the exclusion `can_enter_personal` makes, because a *private* room
+  is private even from staff. A personal target's `may_invite` is still its own
+  member alone, pinned by test, since revoke is now **one endpoint for all three
+  targets** (`/video/invitations/<pk>/revoke/`); it refuses with 404 rather than
+  403, which is what the personal endpoint it replaces did, so a stranger is not
+  told that invitation *n* exists.
+  Everything else that differs by target is answered by one adapter in the new
+  `video/invitations.py` — the FK kwarg, the label, who counts as present,
+  `may_invite`, the room URL, who to leave out of the picker — so no call site
+  branches. One rule inside it is load-bearing: an **offering** event meets in
+  its *workgroup's* room, so `target_for_event` resolves through
+  `services.room_owner_for_event` and only a one-off event is ever its own
+  target; without that a seminar's page would mint invitations bound to a room
+  the event does not own, admitting nobody. The picker's exclusions read
+  `participants()`, not `active_members()`, or a seminar's registrants and a
+  committee's ex-officio officers would be offered as though they were outsiders
+  (`active-members-vs-participants`).
+  Four entrances, all reaching the same check: a member (unchanged); an
+  account-bound invitee at the **same** room URL, via a fallback `_render_room`
+  runs only after `can_enter` refuses, so someone both invited and a member is
+  admitted as a member; an anonymous guest at `/meet/g/<token>/`, whose route and
+  URL name are unchanged because links have been mailed, and whose **GET mints
+  nothing** (scanners pre-click these); and a poll answered to the **invitation**
+  rather than the room, so knowing a workgroup slug does not let anyone probe a
+  committee's live state. A guest is never `is_owner`, and at a
+  `speaker_spotlight` event still goes through `spotlight_start_off` and
+  `token_exp_for`, so they join muted like every other attendee on a token
+  covering the event's window. Group rooms gain no Daily lobby:
+  `enable_knocking` reads `waiting_room` off the owner, which only a
+  `PersonalRoom` has.
+  The invite form and live list are **one partial** extracted from
+  `formation/_tab_room.html`, rendered on the Workspace Meet tab, on a one-off
+  event's faculty tools, and on My LSP → Meeting room. On the event page it is
+  **context-gated, not template-gated**: `_faculty_tools.html` is included by the
+  Workspace roster tab as well, so an offering must not grow a second, wrong
+  invite form beside its workgroup's. #687's "not for clinical work with
+  analysands" line is deliberately not carried over — it exists because a
+  personal room belongs to one clinician. Verified in a browser end to end: the
+  doorstep, the panel, a real invite POST, and the rendered guest email. Fixed en
+  route, unrelated: a tuition-reminder test that forced `decision_due_date` to
+  the period's `end_date` and so asserted the opposite of its own name on the
+  academic year's final day, which was the day this shipped. Design:
+  `docs/superpowers/specs/2026-08-31-group-room-external-invitations-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

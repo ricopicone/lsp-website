@@ -8,7 +8,7 @@
     <h1 class="font-serif text-2xl text-base-content truncate">
       {% if event %}{{ event.title }}{% else %}{{ workgroup.name }}{% endif %}
     </h1>
-    <a href="{{ back_url }}" class="btn btn-ghost btn-sm">← Back</a>
+    {% if back_url %}<a href="{{ back_url }}" class="btn btn-ghost btn-sm">← Back</a>{% endif %}
   </div>
 
   {% include "video/_embed.html" with room_url=room_url room_token=token back_url=back_url auto_record=auto_record %}

@@ -172,3 +172,12 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
   })();
 </script>
 </div>
+
+{% if room_invite_panel %}
+{% comment %}A one-off event's own meeting room takes invitations (task #694).
+Supplied by the event page only: an offering meets in its workgroup's room, and
+this partial is shared with the Workspace roster tab.{% endcomment %}
+<div class="mt-8 max-w-2xl">
+  {% include "video/_invitations_panel.html" with panel=room_invite_panel %}
+</div>
+{% endif %}

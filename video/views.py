@@ -196,8 +196,26 @@ def recording_webhook(request):
 
 def _render_room(request, room_owner, *, event=None, back_url="/"):
     # room_owner is a Workgroup or (for one-off events) the Event itself.
+    invitation = None
     if not services.can_enter(room_owner, request.user):
-        raise PermissionDenied("You don't have access to this meeting room.")
+        # Someone the group's own rules refuse may still hold an invitation
+        # (task #694) — and then the invariant applies: a guest is never the
+        # first one in the room.
+        from . import invitations as inv
+        from .views_invitations import doorstep_for_invitee
+
+        target = inv.target_for(room_owner)
+        invitation = inv.invitation_for(target, request.user)
+        try:
+            inv.check_entry(target, request.user, invitation=invitation)
+        except inv.EntryRefused as refused:
+            if not refused.waiting:
+                raise PermissionDenied(
+                    "You don't have access to this meeting room."
+                ) from None
+            return doorstep_for_invitee(
+                request, invitation, target, back_url=back_url
+            )
 
     # The template's workgroup context is only for the meeting-room title fallback;
     # an event-owned room has no workgroup, but always passes ``event``.
@@ -226,6 +244,8 @@ def _render_room(request, room_owner, *, event=None, back_url="/"):
             {"workgroup": wg, "event": event, "back_url": back_url},
         )
 
+    if invitation is not None:
+        invitation.touch()
     recording_available = getattr(room_owner, "recording_mode", "on_demand") != "off"
     return render(
         request,
