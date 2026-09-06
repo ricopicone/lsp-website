@@ -22,7 +22,8 @@
           <td>
             <a href="{% url 'events:detail' e.slug %}" class="link link-hover">{{ e.title }}</a>
             {% if not e.published %}<span class="badge badge-warning badge-xs align-middle ml-1">Unpublished</span>{% endif %}
-            <div class="text-xs text-base-content/60">{{ e.get_event_type_display }}</div>
+            <div class="text-xs text-base-content/60">{{ e.get_event_type_display }}
+              · <a href="{% url 'events:joining_instructions' e.slug %}" class="link link-hover">Joining instructions</a></div>
           </td>
           <td class="whitespace-nowrap text-xs">{{ e.start_date|date:"M j, Y" }}</td>
           <td><span class="badge badge-sm {{ e.registration_badge.css }}">{{ e.registration_badge.label }}</span></td>

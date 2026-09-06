@@ -1,0 +1,9 @@
+{% autoescape off %}{{ recipient.first_name|default:"Hello" }},
+
+{{ message }}
+
+{% include "events/email/_joining_block.txt" %}Questions? Reply to this email.
+
+— {{ signature }}
+{{ site_base_url }}
+{% endautoescape %}

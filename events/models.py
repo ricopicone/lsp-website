@@ -1923,3 +1923,34 @@ class EventChangeRequest(models.Model):
         self.reviewed_at = timezone.now()
         self.review_note = note
         self.save()
+
+
+class JoiningInstructionsSend(models.Model):
+    """One batch of joining instructions emailed to an event's registrants
+    (task #716). Recorded so the send page and the faculty tools can say "last
+    sent by … on …" and nobody mails the roster twice for want of knowing."""
+
+    class SignAs(models.TextChoices):
+        ME = "me", _("The sender, by name")
+        SCHOOL = "school", _("The School")
+
+    event = models.ForeignKey(
+        Event, on_delete=models.CASCADE, related_name="joining_sends"
+    )
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    sent_at = models.DateTimeField()
+    recipient_count = models.PositiveIntegerField(default=0)
+    message = models.TextField(blank=True)
+    sign_as = models.CharField(max_length=10, choices=SignAs.choices, default=SignAs.ME)
+
+    class Meta:
+        ordering = ("-sent_at",)
+
+    def __str__(self) -> str:
+        return (
+            f"{self.event.title}: joining instructions to {self.recipient_count} "
+            f"({self.sent_at:%Y-%m-%d})"
+        )

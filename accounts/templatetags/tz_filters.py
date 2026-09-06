@@ -138,6 +138,25 @@ def user_datetime(value, show_year=False):
     )
 
 
+@register.filter
+def user_datetime_text(value):
+    """Plain-text sibling of ``user_datetime`` for email bodies: the full
+    date + time in the active timezone with the Pacific equivalent in
+    parentheses, and no markup."""
+    if value is None:
+        return ""
+    active = timezone.get_current_timezone()
+    local = value.astimezone(active)
+    date_str = local.strftime("%a, %b ") + str(local.day) + f", {local.year}"
+    time_str = local.strftime("%I:%M %p").lstrip("0")
+    abbr = _tz_abbr(value, active)
+    text = f"{date_str}, {time_str} {abbr}"
+    pt = value.astimezone(PT)
+    if pt.strftime("%Z") != abbr:
+        text += f" ({_hover_title(value)})"
+    return text
+
+
 @register.simple_tag(takes_context=True)
 def user_tz_name(context):
     """Return the active timezone's IANA name as a string.

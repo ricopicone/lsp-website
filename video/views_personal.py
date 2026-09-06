@@ -24,8 +24,10 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from . import services_personal as personal
-from .forms_personal import GuestJoinForm, InvitationForm, PersonalRoomSettingsForm
-from .models import PersonalRoom, RoomInvitation
+from .forms_invitations import GuestJoinForm, InvitationForm
+from .forms_personal import PersonalRoomSettingsForm
+from .models import PersonalRoom
+from .views_invitations import _and_list
 
 logger = logging.getLogger("video")
 
@@ -76,8 +78,13 @@ def personal_room(request, slug):
     return _render_personal(request, room, context, back_url="/")
 
 
-def guest_room(request, token):
-    """The guest doorstep, and the join it POSTs to.
+def personal_guest_room(request, invitation):
+    """The guest doorstep for a *personal* room, and the join it POSTs to.
+
+    Reached from ``views_invitations.guest_room``, which owns ``/meet/g/<token>/``
+    for every target and hands a personal one here — this room's refusal copy
+    names the host, and its rule is the stricter one (the owner specifically must
+    be present, not merely somebody).
 
     GET renders and mints nothing. Email link-scanners pre-click links on
     exactly the addresses this gets mailed to
@@ -85,10 +92,7 @@ def guest_room(request, token):
     deliberately not single-use, a GET that minted a Daily token would put a
     scanner in the room.
     """
-    invitation = personal.guest_invitation(token)
-    if invitation is None:
-        return render(request, "video/personal/guest_invalid.html", status=404)
-    room = invitation.room
+    room = invitation.personal_room
 
     if request.method != "POST":
         return _doorstep(request, invitation, GuestJoinForm(
@@ -147,13 +151,15 @@ def room_invite(request):
     room = personal.personal_room_for(request.user, create=True)
     if room is None:
         raise Http404("Private meeting rooms are for members of the School.")
-    form = InvitationForm(request.POST, room=room)
+    from .invitations import target_for
+
+    form = InvitationForm(request.POST, target=target_for(room))
     if not form.is_valid():
         for error in form.errors.values():
             messages.error(request, error[0])
         return redirect(_hub_url())
 
-    from . import notifications_personal as notify_room
+    from . import notifications_invitations as notify_room
 
     send_email = form.cleaned_data.get("send_email")
     invited, already = [], []
@@ -161,7 +167,7 @@ def room_invite(request):
         if form.already_invited(recipient):
             already.append(recipient.label)
             continue
-        invitation = form.build(recipient)
+        invitation = form.build(recipient, by=request.user)
         # An account holder is always told; a guest link is mailed only when the
         # member gave an address and asked us to send it.
         if send_email or not invitation.is_guest:
@@ -186,23 +192,6 @@ def room_invite(request):
             request,
             f"{_and_list(already)} already had a live invitation, so nothing changed.",
         )
-    return redirect(_hub_url())
-
-
-def _and_list(names) -> str:
-    """"a", "a and b", "a, b and c" — the message names everyone it acted on."""
-    names = list(names)
-    if len(names) <= 1:
-        return names[0] if names else ""
-    return f"{', '.join(names[:-1])} and {names[-1]}"
-
-
-@login_required
-@require_POST
-def room_invite_revoke(request, pk):
-    invitation = get_object_or_404(RoomInvitation, pk=pk, room__user=request.user)
-    invitation.revoke()
-    messages.success(request, f"{invitation.display_name}'s invitation was revoked.")
     return redirect(_hub_url())
 
 
@@ -241,7 +230,7 @@ def _refused(request, room, refused, *, poll_url=""):
 
 
 def _doorstep(request, invitation, form, *, refused=None):
-    room = invitation.room
+    room = invitation.personal_room
     live = personal.owner_present(room)
     return render(
         request, "video/personal/guest_doorstep.html",

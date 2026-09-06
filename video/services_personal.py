@@ -29,23 +29,10 @@ import logging
 from django.utils import timezone
 
 from . import services
+from .invitations import EntryRefused, guest_token  # noqa: F401 — re-exported
 from .models import PersonalRoom, RoomInvitation
 
 logger = logging.getLogger("video")
-
-
-class EntryRefused(Exception):
-    """Why someone may not join a personal room right now.
-
-    ``waiting`` distinguishes the two refusals a doorstep must render very
-    differently: *you may come in once the host arrives* (True) from *this is not
-    your room* (False).
-    """
-
-    def __init__(self, message: str, *, waiting: bool = False):
-        super().__init__(message)
-        self.message = message
-        self.waiting = waiting
 
 
 def eligible_for_room(user) -> bool:
@@ -110,7 +97,7 @@ def guest_invitation(token: str) -> RoomInvitation | None:
     if not token:
         return None
     return RoomInvitation.objects.live().filter(token=token).select_related(
-        "room", "room__user"
+        "personal_room", "personal_room__user"
     ).first()
 
 
@@ -229,7 +216,7 @@ def room_context(request, room: PersonalRoom, *, is_owner: bool, guest_name: str
     knocking = room.waiting_room and not is_owner
     try:
         if guest_name:
-            token = _guest_token(daily_room, guest_name, knocking=knocking)
+            token = guest_token(daily_room, guest_name, knocking=knocking)
         else:
             token = services.mint_token(
                 daily_room, user, is_owner=is_owner, knocking=knocking
@@ -245,25 +232,6 @@ def room_context(request, room: PersonalRoom, *, is_owner: bool, guest_name: str
         "personal_room": room,
         "waiting_room": room.waiting_room,
     }
-
-
-def _guest_token(daily_room, guest_name: str, *, knocking: bool = False) -> str:
-    """A non-owner token carrying the display name a guest gave us.
-
-    ``services.mint_token`` derives the name from a ``User``, and a guest has
-    none, so this is the one place that reaches the Daily client directly.
-    """
-    import time
-
-    from django.conf import settings
-
-    from . import daily as daily_api
-
-    exp = int(time.time()) + settings.DAILY_TOKEN_TTL_MINUTES * 60
-    return daily_api.create_meeting_token(
-        room_name=daily_room.name, user_name=guest_name[:255], is_owner=False, exp=exp,
-        knocking=knocking,
-    )
 
 
 # ---- office hours -------------------------------------------------------

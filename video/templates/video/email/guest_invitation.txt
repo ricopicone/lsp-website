@@ -1,7 +1,8 @@
 Hello{% if guest_name %} {{ guest_name }}{% endif %},
 
-{{ host }} has invited you to a meeting in their private meeting room on the
-Lacanian School of Psychoanalysis website.
+{% if is_personal %}{{ host }} has invited you to a meeting in their private meeting
+room on the Lacanian School of Psychoanalysis website.{% else %}{{ host }} has invited you to a meeting of {{ room_name }}, in its
+meeting room on the Lacanian School of Psychoanalysis website.{% endif %}
 {% if note %}
 {{ note }}
 {% endif %}
@@ -10,11 +11,11 @@ Join here:
 {{ join_url }}
 
 You do not need an account. Open the link at the time you agreed, enter your
-name, and you will be able to join once {{ host }} is in the room. If the
+name, and you will be able to join{% if is_personal %} once {{ host }} is in the room{% else %} once the meeting has started{% endif %}. If the
 meeting has not started yet, the page will tell you so and will let you in as
 soon as it does.
 
-This is a private meeting room, and it is separate from the meeting rooms used
-for the School's seminars and events.
-
-{% if expires_at %}The link works until {{ expires_at|date:"F j, Y" }}.{% endif %}
+{% if is_personal %}This is a private meeting room, and it is separate from the meeting rooms used
+for the School's seminars and events.{% else %}This is the meeting room of {{ room_name }}, and it is private to that group.{% endif %}
+{% if expires_at %}
+The link works until {{ expires_at|date:"F j, Y" }}.{% endif %}

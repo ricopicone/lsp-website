@@ -11,6 +11,7 @@ from django.urls import reverse
 
 from accounts.models import Profile, User
 from documents.models import Document, DocumentAuthor
+from payments.testing import make_period
 
 
 def _doc(**kwargs) -> Document:
@@ -338,7 +339,7 @@ def _html_doc(**kwargs) -> Document:
 def _current_tuition_period(amount):
     from payments.models import TuitionPeriod
 
-    return TuitionPeriod.objects.create(
+    return make_period(TuitionPeriod, 
         name="AY 2026–2027",
         slug="ay-2026-2027",
         start_date=date(2026, 7, 1),

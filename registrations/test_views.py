@@ -13,6 +13,7 @@ from django.utils import timezone
 from accounts import antibot
 from accounts.models import EmailVerification, User
 from events.models import Audience, Event, PriceTier, PricingCode
+from payments.testing import make_period
 from registrations.models import Registration
 
 
@@ -561,7 +562,7 @@ def tuition_period_2026(db):
     A), so a decision must be recorded against *this* period, not whatever
     TuitionPeriod.current() happens to be on the day tests run."""
     from payments.models import TuitionPeriod
-    return TuitionPeriod.objects.create(
+    return make_period(TuitionPeriod, 
         name="AY 2026–2027", slug="ay-2026-2027-test",
         start_date=date(2026, 9, 1), decision_due_date=date(2026, 10, 31),
         end_date=date(2027, 8, 31), tuition_amount=Decimal("800.00"),

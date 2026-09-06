@@ -16,6 +16,7 @@ from django.contrib.auth import get_user_model
 
 from payments import plans
 from payments.models import TuitionEnrollment, TuitionInstallment, TuitionPeriod
+from payments.testing import make_period
 
 User = get_user_model()
 
@@ -24,7 +25,7 @@ TODAY = date(2026, 11, 15)
 
 @pytest.fixture
 def period(db):
-    return TuitionPeriod.objects.create(
+    return make_period(TuitionPeriod, 
         name="AY 2026–2027", slug="ay-2026-2027-tuition",
         start_date=date(2026, 9, 1), decision_due_date=date(2026, 10, 31),
         payment_due_date=date(2026, 11, 30), end_date=date(2027, 8, 31),

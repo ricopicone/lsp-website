@@ -1,20 +1,9 @@
-# Resuming task #687
+# Resuming task #694
 
-**Task:** Feature: Private video room for each member.
+**Task:** Add external invitations for all group meeting rooms.
 
 ## Description
-Inspiration from email:
-The new website has a built-in web video conferencing tool that might suit you well. Recently, Diana requested an "office hours" functionality so faculty can meet with seminar members outside of the regular seminar "room." I can make it so each member of the school has a private room to which they can invite others. I think this would solve both issues, "office hours," and interviews.
-
----
-
-Design this feature so each member (not non-member users) has a private meeting room. This is pretty straightforward with the current daily.co integration, but here are some considerations:
-* Should probably appear in the avatar user menu. Maybe also in Parletre? Probably.
-* Invitations: Internal user picker (member and non-member users) and external (no user) anonymous invitations. The latter via secret url that expires after the meeting time? Some subtlety in how external invitations work.
-* We don't want this to confuse people about the seminar/event rooms. This should be clearly marked as a private meeting room.
-* We should mention in the instructions that this service is for LSP meetings only and not to be used for other purposes (e.g., meeting with analysands)
-* We should allow recording settings to be adjusted by the member (allow/disallow recording, for instance)
-* Make a faculty office hours feature where they can advertise to users planned open office hours or make them by appointment (or disable office hours display altogether, which should be default)
+Use a very similar if not identical approach that we used for personal meeting rooms. External invitations can be managed by leaders of the group (e.g., president of the board on the board, faculty of a seminar, etc.). We have a leader definition already.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -67,6 +56,7 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **personal-meeting-rooms** (architecture) — Task #687 SHIPPED 2026-08-29: every member gets a private Daily room (My LSP > Meeting room); the invariant is that nobody but the owner is in it unless the owner is in it, so a leaked invitation link only reaches a doorstep, and the Web Coordinator/Developer are deliberately locked out
 - **url-cutover-broke-post-webhooks** (gotcha) — The app→apex 301 silently killed every POST webhook not exempted from it — TWO were missed (Daily recordings, Parlêtre reply-by-email), both now fixed by re-pointing the provider at the apex; SNS scores an unfollowed 301 as a DELIVERED notification, so delivery metrics cannot detect this
 - **registration-removal-asks-about-the-refund** (architecture) — Task #627 SHIPPED 2026-08-21: the registrar console can now remove a registrant — removing and refunding are two decisions, cancel() gained a refund keyword, and skipping the refund is what makes a plan or offline-paid registration cancellable at all
 - **online-venue-insite-vs-external** (architecture) — Task #624 SHIPPED+LIVE 2026-08-21: Event.online_venue says WHERE an online event meets (in-site room / external link) because format only ever said whether — a Zoom event used to show two doors and the confirmation email mailed in-person registrants a video-room link; the site's room stays the recommendation, with breakout groups the stated exception
@@ -185,7 +175,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=687`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=694`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

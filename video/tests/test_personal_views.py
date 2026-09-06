@@ -80,7 +80,7 @@ def test_invited_user_is_held_at_the_door_then_admitted(client, stub_daily, pres
     room = room_for(owner)
     invited = member("invited@example.com")
     RoomInvitation.objects.create(
-        room=room, invited_user=invited, expires_at=personal.new_expiry(),
+        personal_room=room, invited_user=invited, expires_at=personal.new_expiry(),
     )
     client.force_login(invited)
     url = reverse("video:personal_room", args=[room.slug])
@@ -128,7 +128,7 @@ def test_the_owner_visiting_their_own_slug_is_sent_to_my_room(client, stub_daily
 
 def guest_invite(room, **kwargs):
     return RoomInvitation.objects.create(
-        room=room, token="secret-token", guest_name="Jane Doe",
+        personal_room=room, token="secret-token", guest_name="Jane Doe",
         expires_at=personal.new_expiry(), **kwargs
     )
 
@@ -228,7 +228,7 @@ def test_revoking_is_scoped_to_your_own_room(client, stub_daily):
     room = room_for(member())
     invitation = guest_invite(room)
     client.force_login(member("someone.else@example.com"))
-    resp = client.post(reverse("video:room_invite_revoke", args=[invitation.pk]))
+    resp = client.post(reverse("video:invitation_revoke", args=[invitation.pk]))
     assert resp.status_code == 404
     invitation.refresh_from_db()
     assert invitation.revoked_at is None
@@ -379,12 +379,14 @@ def test_nothing_at_all_is_refused(client, stub_daily):
 
 
 def test_the_member_picker_lists_names_not_addresses(client, stub_daily):
-    from video.forms_personal import InvitationForm
+    from video.forms_invitations import InvitationForm
+    from video.invitations import target_for
 
     owner = member()
     member("Pickable@example.com", first="Ada", last="Lovelace")
     room = personal.personal_room_for(owner, create=True)
-    labels = [str(label) for _value, label in InvitationForm(room=room).fields["members"].choices]
+    field = InvitationForm(target=target_for(room)).fields["members"]
+    labels = [str(label) for _value, label in field.choices]
     assert "Ada Lovelace" in labels
     assert not any("@" in label for label in labels if label != "Choose a member…")
 
@@ -416,14 +418,16 @@ def test_the_same_person_ticked_and_typed_is_one_invitation(client, stub_daily):
 
 
 def test_personas_are_not_offered(client, stub_daily):
-    from video.forms_personal import InvitationForm
+    from video.forms_invitations import InvitationForm
+    from video.invitations import target_for
 
     owner = member()
     persona = member("persona@example.com", first="Persona", last="Chair")
     persona.profile.is_persona = True
     persona.profile.save()
     room = personal.personal_room_for(owner, create=True)
-    labels = [str(label) for _v, label in InvitationForm(room=room).fields["members"].choices]
+    field = InvitationForm(target=target_for(room)).fields["members"]
+    labels = [str(label) for _v, label in field.choices]
     assert "Persona Chair" not in labels
 
 
