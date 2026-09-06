@@ -16,7 +16,12 @@
 
   {# --- The request -------------------------------------------------- #}
   <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-3">
-    <h2 class="font-serif text-xl text-base-content">Request</h2>
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="font-serif text-xl text-base-content">Request</h2>
+      {% if not req.is_purged %}
+      <a href="{% url 'referrals:edit' req.reference %}" class="btn btn-sm btn-ghost">Edit</a>
+      {% endif %}
+    </div>
     <dl class="grid gap-x-8 gap-y-2 sm:grid-cols-2 text-sm">
       <div><dt class="text-base-content/60">Name <span class="text-xs">(withheld from clinicians)</span></dt><dd class="font-medium">{{ req.name }}</dd></div>
       <div><dt class="text-base-content/60">Email <span class="text-xs">(withheld from clinicians)</span></dt><dd class="font-medium">{% if req.email %}<a href="mailto:{{ req.email }}" class="link">{{ req.email }}</a>{% else %}—{% endif %}</dd></div>
@@ -92,11 +97,9 @@
           {% endif %}
         </div>
         {% if not req.is_purged %}
-        <form method="post" action="{% url 'referrals:distribute' req.reference %}">{% csrf_token %}
-          <button class="btn btn-sm {% if req.distributed_at %}btn-ghost{% else %}btn-primary{% endif %}">
-            {% if req.distributed_at %}Redistribute{% else %}Distribute{% endif %}
-          </button>
-        </form>
+        <a href="{% url 'referrals:distribute' req.reference %}" class="btn btn-sm {% if req.distributed_at %}btn-ghost{% else %}btn-primary{% endif %}">
+          {% if req.distributed_at %}Redistribute{% else %}Distribute{% endif %}
+        </a>
         {% endif %}
       </li>
       <li class="flex flex-wrap items-center justify-between gap-2">

@@ -1,0 +1,56 @@
+{% extends "referrals/base.html" %}
+{% block title %}Edit · {{ req.reference }}{% endblock %}
+{% block tab_content %}
+<div class="max-w-3xl space-y-6">
+  <header class="space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="font-serif text-2xl text-base-content">Edit request {{ req.reference }}</h2>
+      <a href="{% url 'referrals:detail' req.reference %}" class="btn btn-ghost btn-sm">← Back to the request</a>
+    </div>
+    <p class="text-sm text-base-content/70">
+      What the requester submitted, as the site holds it. Clinicians receive
+      everything here except the name and email, in the distribution email and
+      on their respond page, so anything you remove or reword here is removed
+      for them too. A note of each edit is kept in the request's notes.
+    </p>
+    {% if req.distributed_at %}
+    <p class="text-sm text-warning">
+      This request has already been sent to the referral list. Editing changes
+      what the respond page shows from now on, but not the email clinicians
+      already have; send an addendum if they need to know.
+    </p>
+    {% endif %}
+  </header>
+
+  <form method="post" class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert-error py-2 text-sm">{{ form.non_field_errors|join:" " }}</div>
+    {% endif %}
+    <div class="grid gap-4 sm:grid-cols-2">
+      {% for field in form %}
+      {% if field.name != "additional_information" %}
+      <label class="block space-y-1">
+        <span class="text-sm font-medium text-base-content">{{ field.label }}</span>
+        {{ field }}
+        {% for error in field.errors %}<span class="block text-xs text-error">{{ error }}</span>{% endfor %}
+      </label>
+      {% endif %}
+      {% endfor %}
+    </div>
+    <label class="block space-y-1">
+      <span class="text-sm font-medium text-base-content">{{ form.additional_information.label }}</span>
+      {{ form.additional_information }}
+      <span class="block text-xs text-base-content/60">
+        Sent to clinicians as written. Take out anything that would identify
+        the requester, such as their own name.
+      </span>
+      {% for error in form.additional_information.errors %}<span class="block text-xs text-error">{{ error }}</span>{% endfor %}
+    </label>
+    <div class="flex items-center gap-2">
+      <button class="btn btn-primary">Save changes</button>
+      <a href="{% url 'referrals:detail' req.reference %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

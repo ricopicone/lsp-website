@@ -59,7 +59,9 @@ class ReferralSettings(models.Model):
     )
     response_window_days = models.PositiveSmallIntegerField(
         default=10,
-        help_text="How long clinicians have to respond after distribution.",
+        help_text="How long clinicians have to respond, counted from the day "
+        "the request was received (not the day it was distributed). You can "
+        "change the date on each request before sending.",
     )
     retention_months = models.PositiveSmallIntegerField(
         default=12,

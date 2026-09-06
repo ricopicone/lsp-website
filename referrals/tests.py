@@ -248,14 +248,16 @@ def test_distribute_skips_inactive_members(listed):
 
 
 def test_distribution_window_respects_settings(listed):
+    """The window counts from the day the request was received, at the end
+    of the day it lands on (task #706)."""
     config = ReferralSettings.load()
     config.response_window_days = 21
     config.save()
     req = make_request()
     services.distribute(req)
     req.refresh_from_db()
-    delta = req.responses_due_at - req.distributed_at
-    assert timedelta(days=20, hours=23) < delta < timedelta(days=21, hours=1)
+    received = timezone.localdate(req.created_at)
+    assert timezone.localdate(req.responses_due_at) == received + timedelta(days=21)
 
 
 # ---- Respond page (step 4) --------------------------------------------------
