@@ -1881,6 +1881,48 @@ Done (see `git log` for specifics):
   `ThrottledSender`. New plain-text filter `user_datetime_text` for email
   bodies. Guides updated (faculty, registrar).
 
+- **Editing a referral before it goes out, and a deadline that counts from
+  receipt** (tasks #684 and #706). The Referral Coordinator wrote in: *"This
+  referral request has the person's name in the description. How do I remove
+  it before sending it out?"* She couldn't. The intake fields were rendered
+  read-only on the request page, and Distribute was a bare POST button, so the
+  only way to scrub a description was the Django admin she doesn't have. Two
+  requests sat undistributed for over a week waiting on it. The second ask, in
+  the same thread: *"I need the 10 day waiting period to start from the date
+  the referral was received"*, with the example received Aug 24, due Sept 4,
+  *"so the analysand is not waiting longer due to (most often) my delay in
+  receiving and processing the request."*
+  **The scrub has to land on the record, not on a copy of the outgoing
+  email**: the clinicians' respond page renders the same
+  `additional_information` the distribution email carries, so an edit made
+  only in a compose box would have mailed a clean description and shown the
+  name on the site. Hence a plain Edit page (`referrals:edit`,
+  `RequestEditForm` over the seven intake fields) rather than an editable
+  message body. Every save with a change appends an audit line naming the
+  fields to `coordinator_notes` via the existing `_audit_note`, so the
+  original is not kept but the fact of the edit is; the coordinator's inquiry
+  email still holds what was submitted. It is available at every status but
+  redacted, and **held is the status that matters**: `release()` distributes
+  at once when distribution is automatic, so the scrub must be possible
+  before Release. (Prod runs all three steps in review mode today, verified.)
+  **Distribute is now a preview**: GET renders the message exactly as each
+  clinician will receive it, through a new `services.render_distribution`
+  that `distribute()` itself uses, so what she sees is what is sent; POST
+  sends. That answers her follow-up ("if I click Distribute, will I be able to
+  edit the description?") with a page that shows the problem and links to the
+  fix. One trap: a bare-button POST has an empty body, and `request.POST or
+  None` reads that as *unbound*, so the first cut rendered the preview instead
+  of sending on exactly the POST every existing test makes. Bind on method.
+  **The deadline is `services.default_response_deadline`**: the school-local
+  date received (`timezone.localdate(created_at)`, since an evening submission
+  is already tomorrow in UTC) plus the window, at the end of that day,
+  floored at `MIN_RESPONSE_DAYS = 3` from today so a request distributed after
+  its window has elapsed never mails a date already gone. The preview shows
+  the date in an editable field, sharing the addendum form's end-of-day
+  reading of a bare date input. Her example lands on Sept 3 rather than her
+  Sept 4 (she is in Eastern time, or counts from the day after); the field on
+  the page is the answer to that. The window setting's help text and the
+  guide now say the window counts from receipt.
 - **The front door closes, the house stays open** (task #717). The Applications
   Coordinator wants to rework how the School takes applications, so new ones
   stop arriving through the site. What makes this small rather than a teardown

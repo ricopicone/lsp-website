@@ -1,6 +1,12 @@
-# Resuming task #717
+# Resuming task #684
 
-**Task:** Disable application interface for now (Applications Coordinator Cecile wants to work on it) and replace with instructions to directly contact her at LSP Applications <applications@lacanschool.org>
+**Task:** In the referral coordinator admin interface, make referral fields editable by referral coordinator before sending out
+**Next action:** Make referral fields editable by the coordinator in the admin interface before distribution (Rico promised Diana Cuello this on 2026-08-27, 'hopefully today'). Then reply to Diana (dianacuellophd@gmail.com) that it is live and answer her 2026-08-31 question: does clicking Distribute let her edit the description? Referrals 0824 and 0804 are held waiting to be de-identified. Do together with task 706 (10-day clock from receipt date), which touches the same code.
+
+## Description
+They should be able to scrub them manually if needed.
+
+[2026-09-03] (from the sweep) Diana Cuello followed up 2026-08-31 09:17 EDT and again 2026-09-03 13:34 EDT ('waiting to deidentify the 0804 referral'). No reply from Rico after his 2026-08-27 promise appears in the thread.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -174,7 +180,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=717`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=684`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

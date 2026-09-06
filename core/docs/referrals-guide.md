@@ -45,10 +45,18 @@ Click a reference to open the request. You'll find everything the requester
 shared, the three sending steps with their buttons, the clinician responses
 as they arrive, and a private notes box only you can see.
 
+- **Edit**—on the Request box. Change anything the requester submitted
+  before it goes out: most often to take their own name out of the
+  description, since clinicians receive everything except the name and email
+  fields. What you save here is what the distribution email carries and what
+  the clinicians' respond page shows, and each edit leaves a line in the
+  notes. A held request can be edited before you release it.
 - **Send acknowledgment**—sends your process reply (or resends it).
-- **Distribute**—sends the anonymized request to every *active* clinician
-  on the referral list, with a respond-by date and a link to respond on the
-  site. Each clinician is emailed individually.
+- **Distribute**—opens a preview of the anonymized request exactly as each
+  *active* clinician on the referral list will receive it, with the
+  respond-by date it will name. Send from there, or go back and edit the
+  request first. Each clinician is emailed individually, with a link to
+  respond on the site.
 - **Record a response manually**—the escape hatch for a clinician who
   replies to you by email or in person: pick their name and their details
   flow into the follow-up like any other response. A clinician who is not
@@ -104,7 +112,13 @@ Each sending step has its own switch:
 
 Change these anytime, per step. The **response window** (how long
 clinicians have to respond, shown in the distribution email) and the
-**retention period** are here too.
+**retention period** are here too. The window counts from the day the
+request was *received*, not the day you press Distribute, so a delay in
+processing doesn't lengthen the requester's wait: received on the 24th with
+a ten-day window, responses are due at the end of the day on the 3rd. If a
+request is distributed so late that the date has passed, clinicians are
+given three days instead. Either way the Distribute page shows the date and
+lets you change it for that request.
 
 ## Privacy
 

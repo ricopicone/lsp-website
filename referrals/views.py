@@ -24,11 +24,13 @@ from .forms import (
     AddClinicianForm,
     AddendumForm,
     ClinicianEditForm,
+    DistributeForm,
     FollowupForm,
     MessageTemplateForm,
     NotesForm,
     RecordResponseForm,
     ReferralSettingsForm,
+    RequestEditForm,
     RespondForm,
 )
 from .models import (
@@ -144,23 +146,103 @@ def send_ack(request, reference):
 
 
 @coordinator_required
-@require_POST
 def distribute(request, reference):
+    """Step 3, with a look first: GET previews the message exactly as the
+    clinicians will receive it and the deadline it will name; POST sends.
+
+    The preview is the coordinator's chance to catch the requester's name in
+    their own description (task #684) — the Edit link scrubs it on the record,
+    which is what the respond page reads too. The deadline defaults to the
+    receipt-anchored one (task #706) and can be moved.
+    """
     req = _get_request(reference)
-    count = services.distribute(req)
-    if count:
-        messages.success(
-            request,
-            f"Distributed {req.reference} to {count} clinician"
-            f"{'s' if count != 1 else ''} on the referral list.",
+    if req.is_purged:
+        messages.error(request, f"Referral {req.reference} has been redacted.")
+        return redirect("referrals:detail", reference=reference)
+    # A bare-button POST has an empty body, which ``request.POST or None``
+    # would read as "unbound": bind on method, not on content.
+    form = DistributeForm(request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        count = services.distribute(
+            req, responses_due_at=form.cleaned_data["responses_due_at"],
         )
-    else:
-        messages.warning(
+        if count:
+            messages.success(
+                request,
+                f"Distributed {req.reference} to {count} clinician"
+                f"{'s' if count != 1 else ''} on the referral list.",
+            )
+        else:
+            messages.warning(
+                request,
+                "The referral list has no active clinicians — nothing was sent. "
+                "Add clinicians on the Referral list page first.",
+            )
+        return redirect("referrals:detail", reference=reference)
+    default_due = services.default_response_deadline(req)
+    if not form.is_bound:
+        form.fields["responses_due_at"].initial = timezone.localtime(default_due)
+    subject, body = services.render_distribution(
+        req, timezone.localtime(default_due),
+    )
+    return _render(request, "requests", "referrals/distribute.html", {
+        "req": req,
+        "form": form,
+        "subject": subject,
+        "body": body,
+        "recipient_count": ReferralListMember.objects.filter(
+            is_active=True,
+        ).count(),
+        "default_due": default_due,
+        "config": ReferralSettings.load(),
+    })
+
+
+@coordinator_required
+def edit(request, reference):
+    """Edit what the requester submitted (task #684).
+
+    The coordinator's case: the person put their own name in the description,
+    which the site would have sent to the whole referral list and shown on the
+    respond page. Any status but redacted — a held request must be editable
+    *before* Release, which distributes at once when that step is automatic.
+    Every save with a change leaves an audit line in the notes.
+    """
+    req = _get_request(reference)
+    if req.is_purged:
+        messages.error(
             request,
-            "The referral list has no active clinicians — nothing was sent. "
-            "Add clinicians on the Referral list page first.",
+            f"Referral {req.reference} has been redacted and cannot be edited.",
         )
-    return redirect("referrals:detail", reference=reference)
+        return redirect("referrals:detail", reference=reference)
+    form = RequestEditForm(request.POST or None, instance=req)
+    if request.method == "POST" and form.is_valid():
+        changed = [
+            _FIELD_WORDS.get(name, name) for name in form.changed_data
+        ]
+        req = form.save(commit=False)
+        if changed:
+            _audit_note(req, request, f"Edited the request ({', '.join(changed)})")
+            req.save()
+            messages.success(
+                request,
+                f"Saved {req.reference}. The edited wording is what clinicians "
+                "receive and see on the site from now on.",
+            )
+        else:
+            messages.info(request, "Nothing changed.")
+        return redirect("referrals:detail", reference=reference)
+    return _render(request, "requests", "referrals/edit.html", {
+        "req": req,
+        "form": form,
+    })
+
+
+#: How an edited field is named in the audit line.
+_FIELD_WORDS = {
+    "additional_information": "details",
+    "modalities": "modalities",
+}
 
 
 @coordinator_required

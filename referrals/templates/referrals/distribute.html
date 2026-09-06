@@ -1,0 +1,55 @@
+{% extends "referrals/base.html" %}
+{% block title %}Distribute · {{ req.reference }}{% endblock %}
+{% block tab_content %}
+<div class="max-w-3xl space-y-6">
+  <header class="space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="font-serif text-2xl text-base-content">Distribute {{ req.reference }}</h2>
+      <a href="{% url 'referrals:detail' req.reference %}" class="btn btn-ghost btn-sm">← Back to the request</a>
+    </div>
+    <p class="text-sm text-base-content/70">
+      This is the message each of the {{ recipient_count }} active
+      clinician{{ recipient_count|pluralize }} on the referral list will
+      receive, exactly as it will read. The requester's name and email are
+      withheld. If anything in it would identify the requester, such as their
+      own name in the description,
+      <a href="{% url 'referrals:edit' req.reference %}" class="link">edit the request</a>
+      first and come back.
+    </p>
+    {% if req.distributed_at %}
+    <p class="text-sm text-warning">
+      Already distributed {{ req.distributed_at|date:"M j, Y" }}. Sending again
+      reaches every active clinician a second time.
+    </p>
+    {% endif %}
+  </header>
+
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-2">
+    <p class="text-xs font-medium text-base-content/60">Subject</p>
+    <p class="text-sm font-medium">{{ subject }}</p>
+    <p class="text-xs font-medium text-base-content/60 pt-2">Body</p>
+    <pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed">{{ body }}</pre>
+  </section>
+
+  <form method="post" class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
+    {% csrf_token %}
+    <label class="block space-y-1 sm:max-w-xs">
+      <span class="text-sm font-medium text-base-content">{{ form.responses_due_at.label }}</span>
+      {{ form.responses_due_at }}
+      <span class="block text-xs text-base-content/60">
+        {{ config.response_window_days }} day{{ config.response_window_days|pluralize }}
+        from the day the request was received ({{ req.created_at|date:"M j" }}),
+        and never fewer than a few days from today. Change it if this request
+        deserves a different window.
+      </span>
+      {% for error in form.responses_due_at.errors %}<span class="block text-xs text-error">{{ error }}</span>{% endfor %}
+    </label>
+    <div class="flex items-center gap-2">
+      <button class="btn btn-primary">
+        {% if req.distributed_at %}Send again{% else %}Send{% endif %} to {{ recipient_count }} clinician{{ recipient_count|pluralize }}
+      </button>
+      <a href="{% url 'referrals:edit' req.reference %}" class="btn btn-ghost">Edit the request</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
