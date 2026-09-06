@@ -234,6 +234,17 @@ from inside the room, and only when recording is enabled for your group.
 Before a first meeting, you and your students can check camera and microphone
 at **Test your video & audio**, linked from the event page.
 
+**Reminding everyone how to join.** Registrants sometimes write to ask for a
+meeting link. Rather than answering one by one, use **Email joining
+instructions** at the top of the Roster tab. It emails everyone with a
+confirmed registration a short note in your words, and the site adds the
+joining details underneath, matched to where your event meets: the Join
+button on the event page for the site's room, or your link for Zoom. You
+choose whether it's signed by you (replies come to you) or by the School
+(replies go to the School's mailbox), and you see the whole email before it
+goes. The roster also has **Copy email addresses**, if you'd rather write from
+your own email program.
+
 ### On Zoom, or another service
 
 **Recommended if you use breakout groups.** The site's room can split into

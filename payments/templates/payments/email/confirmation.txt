@@ -10,13 +10,8 @@ Amount:          ${{ registration.quoted_amount }}
 Status:          {{ registration.get_status_display }}
 Event runs:      {{ registration.event.start_date|date:"M j, Y" }} – {{ registration.event.end_date|date:"M j, Y" }}
 
-{% if has_access and room_url %}Join the meeting room (in your browser, no app to install):
-{{ room_url }}
-
-{% endif %}{% if has_access and registration.event.access_info %}Access details:
-{{ registration.event.access_info }}
-
-{% endif %}Questions or anything wrong? Reply to this email — it goes to {{ support_email }}.
+{% if has_access %}How to join
+{% include "events/email/_joining_block.txt" %}{% endif %}Questions or anything wrong? Reply to this email — it goes to {{ support_email }}.
 
 — Lacanian School of Psychoanalysis
 {{ site_base_url }}

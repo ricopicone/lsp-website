@@ -9,6 +9,7 @@ from .models import (
     EventFeatureImage,
     EventMemberSpeaker,
     EventProposal,
+    JoiningInstructionsSend,
     PriceTier,
     PricingCode,
     Program,
@@ -45,6 +46,20 @@ class EventChangeRequestAdmin(admin.ModelAdmin):
     search_fields = ("event__title", "proposed_by__email")
     autocomplete_fields = ("event", "proposed_by", "reviewed_by")
     readonly_fields = ("created_at", "applied_at")
+
+
+@admin.register(JoiningInstructionsSend)
+class JoiningInstructionsSendAdmin(admin.ModelAdmin):
+    """Audit trail of joining-instruction batches (task #716); sends happen
+    from the event's faculty tools, never from here."""
+    list_display = ("event", "sent_at", "sent_by", "recipient_count", "sign_as")
+    list_filter = ("sign_as",)
+    search_fields = ("event__title", "sent_by__email")
+    autocomplete_fields = ("event", "sent_by")
+    readonly_fields = ("event", "sent_by", "sent_at", "recipient_count", "message", "sign_as")
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(EventProposal)

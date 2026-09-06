@@ -1499,3 +1499,91 @@ def speaker_invitation_accept(request, token):
     return render(request, "events/speaker_invitation_accept.html", {
         "form": form, "invitation": inv, "event": event,
     })
+
+
+# ---- Joining instructions (task #716) -----------------------------------
+
+
+def _can_send_joining(user, event) -> bool:
+    """Who may email an event's registrants how to join: whoever runs the
+    event (``can_edit_event``: faculty, a special event's presenters, the PC,
+    staff) and whoever operates the registrar console."""
+    from registrations.permissions import can_administer_registrations
+
+    return can_edit_event(user, event) or can_administer_registrations(user)
+
+
+def event_joining_instructions(request, slug: str):
+    """Email every paid/comped registrant how to join (task #716).
+
+    Stephanie Swales' registrants asked her for a meeting link the day before
+    her event: nothing had told them the Join button on the event page *is*
+    the link. GET shows who will receive it, an editable message, and a
+    preview built from the same joining block the confirmation email uses;
+    POST sends. The "sign as" choice decides whose voice it's in and where a
+    reply lands.
+    """
+    from .joining import (
+        default_message,
+        joining_details,
+        joining_recipients,
+        recipient_addresses,
+        render_joining_email,
+        send_joining_instructions,
+        signature_for,
+    )
+    from .models import JoiningInstructionsSend
+
+    event = get_object_or_404(Event, slug=slug)
+    if not _can_send_joining(request.user, event):
+        return gate_or_login(request)
+
+    recipients = list(joining_recipients(event))
+    signs_own_event = event.is_faculty(request.user) or event.is_presenter(request.user)
+    default_sign_as = (
+        JoiningInstructionsSend.SignAs.ME if signs_own_event
+        else JoiningInstructionsSend.SignAs.SCHOOL
+    )
+    message = default_message(event)
+    sign_as = default_sign_as
+
+    if request.method == "POST":
+        message = (request.POST.get("message") or "").strip()
+        sign_as = request.POST.get("sign_as") or default_sign_as
+        if sign_as not in JoiningInstructionsSend.SignAs.values:
+            sign_as = default_sign_as
+        if not recipients:
+            messages.warning(
+                request,
+                "No one has a confirmed registration yet, so there is nobody to email.",
+            )
+        else:
+            n = send_joining_instructions(
+                event, sender=request.user, message=message, sign_as=sign_as,
+            )
+            messages.success(
+                request,
+                f"Joining instructions sent to {n} registrant{'s' if n != 1 else ''}.",
+            )
+            return redirect(reverse("events:joining_instructions", args=[event.slug]))
+
+    # Preview in the sender's own timezone, addressed to a sample recipient.
+    signature, reply_to = signature_for(event, request.user, sign_as)
+    sample = recipients[0].user if recipients else request.user
+    preview = render_joining_email(
+        event, recipient=sample, message=message, signature=signature,
+    )
+    return render(request, "events/joining_instructions.html", {
+        "event": event,
+        "joining": joining_details(event),
+        "recipients": recipients,
+        "addresses": recipient_addresses(event),
+        "message": message,
+        "sign_as": sign_as,
+        "signs_own_event": signs_own_event,
+        "sender_name": request.user.get_full_name().strip() or request.user.email,
+        "reply_to": reply_to,
+        "preview": preview,
+        "last_send": event.joining_sends.select_related("sent_by").first(),
+        "back_url": _faculty_view_url(event),
+    })

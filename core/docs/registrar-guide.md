@@ -61,6 +61,16 @@ One row per event in the current and upcoming academic year, with
 registration counts by status and an **Open registration / Close
 registration** button.
 
+Each row also links to **Joining instructions**: a page that emails everyone
+with a paid or complimentary registration how to join, with an editable note
+on top. The site adds the joining details itself, matched to where the event
+meets (the Join button on the event page for the site's video room, or the
+event's external link), so the email never says the wrong thing about the
+venue. Sign it as yourself or as the School; the choice also decides where a
+reply lands. The same page lists the recipients' addresses to copy, for an
+email you'd rather send by hand. The event's faculty and presenters have the
+same button on their Roster tab.
+
 Opening registration is what lets members register (and pay); closing it
 stops new registrations. This is separate from *publishing* the event page,
 which controls public visibility and is managed in the Program Committee
