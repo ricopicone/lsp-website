@@ -6,6 +6,24 @@
   </div>
   {% endif %}
 
+  {% comment %}The event's own settings live on the event, not here: this tab
+  edits the workgroup. Name the state and point at the page that carries the
+  control.{% endcomment %}
+  {% if primary_event and can_edit_offering %}
+  <section class="space-y-2 rounded-xl border border-base-300/60 bg-base-100 p-5">
+    <div class="space-y-0.5">
+      <h3 class="font-medium text-base-content">Registration and event details</h3>
+      <p class="text-xs text-base-content/50">These belong to the event, so they are edited on its own page.</p>
+    </div>
+    <p class="text-sm text-base-content/70">
+      Registration for this {{ workgroup.get_kind_display|lower }} is {% if primary_event.status == "open" %}open{% elif primary_event.status == "closed" %}closed{% else %}not yet open{% endif %}.
+      Open or close it, and edit the title, description, readings, and fee, on
+      <a href="{% url 'events:edit' primary_event.slug %}" class="link">Edit event</a>.
+      You can also open or close it from the Roster tab.
+    </p>
+  </section>
+  {% endif %}
+
   {% if overview_form %}
   <section class="space-y-4 rounded-xl border border-base-300/60 bg-base-100 p-5">
     <div class="space-y-0.5">

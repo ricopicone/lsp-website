@@ -3,7 +3,8 @@ tuition + groups on one tabbed page)."""
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
+from datetime import timezone as tz
 from decimal import Decimal
 
 import pytest
@@ -237,113 +238,143 @@ def test_add_work_view_preselects_kind_from_query(client):
     assert resp.context["form"].initial.get("kind") == "palimpsest"
 
 
-# ---- tuition four-year progress -------------------------------------------
-
-def test_tuition_progress_counts_paid_and_projects_to_four_years(current_period):
-    from formation.views import _tuition_progress
-    from payments.models import Payment, TuitionInstallment
-
-    member = _user("prog@x.test", role=Profile.Role.CANDIDATE)
-    enr = TuitionEnrollment.objects.create(
-        user=member, tuition_period=current_period,
-        status=TuitionEnrollment.Status.PAYMENT_PLAN,
-    )
-    full = current_period.tuition_amount
-    half = (full / 2).quantize(Decimal("0.01"))
-    inst = TuitionInstallment.objects.create(
-        enrollment=enr, sequence=1, due_date=current_period.start_date,
-        amount=half, paid=True,
-    )
-    TuitionInstallment.objects.create(
-        enrollment=enr, sequence=2, due_date=current_period.start_date, amount=full - half,
-    )
-    Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=member, amount=half,
-        status=Payment.Status.SUCCEEDED, tuition_installment=inst,
-    )
-    ctx = _tuition_progress(member)
-    assert ctx["tuition_years_started"] == 1
-    assert len(ctx["tuition_slots"]) == 4          # one started + three projected
-    assert sum(sl["paid"] for sl in ctx["tuition_slots"]) == half
-    # Goal = this year's amount + 3 projected years at the current rate.
-    assert sum(sl["goal"] for sl in ctx["tuition_slots"]) == full * 4
+# ---- tuition years on the Account tab -------------------------------------
+#
+# The member's per-year tuition table is the ledger's own reading
+# (``payments.ledger.member_account``'s ``tuition_rows``) — the same rows the
+# treasurer sees. Task #723: it used to be a second, independent computation
+# that bucketed money by payment date, capped the display at the four earliest
+# buckets, and priced an unbound year at the *current* rate, so it disagreed
+# with the ledger for 21 of the 64 members with tuition history.
 
 
-def test_tuition_progress_counts_payments_without_installments(current_period):
-    """The bug fix: a SUCCEEDED tuition payment with no TuitionInstallment
-    (ledger/Stripe import, reconcile, offline) still counts toward progress."""
-    from formation.views import _tuition_progress
+def _account_ctx(client, member):
+    client.force_login(member)
+    resp = client.get(reverse("formation:formation") + "?tab=account")
+    assert resp.status_code == 200
+    return resp.context
+
+
+def _tuition_year(name, slug, start_year, amount):
+    return TuitionPeriod.objects.create(
+        name=name, slug=slug,
+        start_date=date(start_year, 9, 1),
+        decision_due_date=date(start_year, 8, 31),
+        end_date=date(start_year + 1, 8, 31),
+        tuition_amount=Decimal(amount))
+
+
+def _tuition_payment(member, amount, when, period=None):
     from payments.models import Payment
 
-    member = _user("noinst@x.test", role=Profile.Role.CANDIDATE)
-    # No enrollment, no installment — just a tuition payment dated to this year.
-    Payment.objects.create(
-        payment_type=Payment.Type.TUITION, user=member,
-        amount=current_period.tuition_amount,
-        status=Payment.Status.SUCCEEDED,
-        paid_at=timezone.make_aware(
-            datetime.combine(current_period.start_date, time(12, 0))
-        ),
-    )
-    ctx = _tuition_progress(member)
-    assert ctx["tuition_years_started"] == 1
-    assert (sum(sl["paid"] for sl in ctx["tuition_slots"])
-            == current_period.tuition_amount)
-    assert sum(1 for s in ctx["tuition_slots"] if s["projected"]) == 3
+    p = Payment.objects.create(
+        payment_type=Payment.Type.TUITION, user=member, amount=Decimal(amount),
+        status=Payment.Status.SUCCEEDED, tuition_period=period)
+    Payment.objects.filter(pk=p.pk).update(paid_at=when)
+    return p
 
 
-def test_tuition_progress_fills_cumulatively_not_per_year(db):
-    """Tuition progress is a single cumulative pot swept oldest-first, not a
-    per-AY bar fill (task #468 follow-up). Four enrolled years, each $800, with
-    an uneven payment history that still totals the full four-year goal, must
-    show every year fully covered — the overpayment on one year flows into the
-    year that was underpaid, instead of being lost."""
-    from formation.views import _tuition_progress
-    from payments.models import Payment
+def test_account_tab_tuition_rows_are_the_ledger_rows(client, db):
+    """Garret Barnwell's shape (task #723): a skipping year, four paying years,
+    and one $100 payment bound to the skipped year. The old computation read
+    that payment as a fifth started year, which pushed AY 2026–2027 off the
+    end of a four-slot display and re-labelled every bar."""
+    from payments import ledger
 
+    TuitionPeriod.objects.all().delete()
+    member = _user("barnwell@x.test", role=Profile.Role.CANDIDATE)
+    years = {
+        2022: (_tuition_year("AY 2022-2023", "t22", 2022, "2000"),
+               TuitionEnrollment.Status.SKIPPING),
+        2023: (_tuition_year("AY 2023-2024", "t23", 2023, "2000"),
+               TuitionEnrollment.Status.PAYMENT_PLAN),
+        2024: (_tuition_year("AY 2024-2025", "t24", 2024, "2000"),
+               TuitionEnrollment.Status.PAID_IN_FULL),
+        2025: (_tuition_year("AY 2025-2026", "t25", 2025, "2500"),
+               TuitionEnrollment.Status.PAID_IN_FULL),
+        2026: (_tuition_year("AY 2026-2027", "t26", 2026, "2500"),
+               TuitionEnrollment.Status.COMMITTED),
+    }
+    for period, status in years.values():
+        TuitionEnrollment.objects.create(
+            user=member, tuition_period=period, status=status, source="staff")
+    # $9,000, one payment bound to the skipped year, the rest unbound.
+    _tuition_payment(member, "100", datetime(2023, 8, 22, 12, tzinfo=tz.utc),
+                     period=years[2022][0])
+    _tuition_payment(member, "8900", datetime(2026, 5, 22, 12, tzinfo=tz.utc))
+
+    ctx = _account_ctx(client, member)
+    rows = ctx["acct"]["tuition_rows"]
+    assert [r["period"].name for r in rows] == [
+        "AY 2026-2027", "AY 2025-2026", "AY 2024-2025", "AY 2023-2024",
+        "AY 2022-2023",
+    ]
+    by_year = {r["period"].name: r for r in rows}
+    # The skipped year is shown, as skipping — not as a paid year.
+    assert by_year["AY 2022-2023"]["state"] == "skipping"
+    # The most recent year is on the page rather than pushed off the end.
+    assert by_year["AY 2026-2027"]["state"] == "paid"
+    assert by_year["AY 2026-2027"]["covered"] == Decimal("2500.00")
+    assert ctx["acct"]["tuition_years_covered"] == 4
+    # And the page renders exactly what the ledger says, nowhere else.
+    assert rows == ledger.member_account(member)["tuition_rows"]
+
+    page = client.get(reverse("formation:formation") + "?tab=account").content
+    assert b"AY 2022-2023" in page          # the skipped year is on the page
+    assert b"Skipping this year" in page
+    # Read-only: the member gets the treasurer's table, never their buttons.
+    assert b"tuition decision to Skipping?" not in page
+
+
+def test_account_tab_tuition_money_fills_years_oldest_first(client, db):
+    """The cumulative sweep survives (task #468): an overpaid year flows into
+    an underpaid one instead of being trapped in the year it was dated to."""
+    TuitionPeriod.objects.all().delete()
     member = _user("cumul@x.test", role=Profile.Role.CANDIDATE)
-    periods = []
-    for start_year in (2021, 2022, 2023, 2024):
-        p = TuitionPeriod.objects.create(
-            name=f"AY {start_year}-{start_year + 1} cumul",
-            slug=f"cumul-{start_year}",
-            start_date=date(start_year, 9, 1),
-            decision_due_date=date(start_year, 8, 31),
-            end_date=date(start_year + 1, 8, 31),
-            tuition_amount=Decimal("800"))
-        periods.append(p)
+    periods = [_tuition_year(f"AY {y}-{y + 1}", f"cumul-{y}", y, "800")
+               for y in (2021, 2022, 2023, 2024)]
+    for p in periods:
         TuitionEnrollment.objects.create(
             user=member, tuition_period=p,
             status=TuitionEnrollment.Status.PAID_IN_FULL)
-
-    # Uneven: first year double-paid, second year unpaid, last two exact.
-    # Total = 3200 = four years of $800.
+    # Uneven: first year double-paid, second unpaid, last two exact. $3,200.
     for period, amount in zip(periods, ["1600", "0", "800", "800"]):
-        if amount == "0":
-            continue
-        Payment.objects.create(
-            payment_type=Payment.Type.TUITION, user=member,
-            amount=Decimal(amount), status=Payment.Status.SUCCEEDED,
-            tuition_period=period)
+        if amount != "0":
+            _tuition_payment(member, amount,
+                             datetime(period.start_date.year, 10, 1, 12, tzinfo=tz.utc),
+                             period=period)
 
-    ctx = _tuition_progress(member)
-    slots = ctx["tuition_slots"]
-    assert len(slots) == 4
-    assert sum(sl["paid"] for sl in slots) == Decimal("3200")
-    assert all(sl["pct"] == 100 for sl in slots)       # every year fully covered
-    assert all(sl["paid"] == Decimal("800") for sl in slots)
+    rows = _account_ctx(client, member)["acct"]["tuition_rows"]
+    assert len(rows) == 4
+    assert all(r["state"] == "paid" for r in rows)
+    assert all(r["pct"] == 100 for r in rows)
 
 
-def test_skipping_year_is_not_one_of_the_four(current_period):
-    from formation.views import _tuition_progress
+def test_account_tab_shows_no_tuition_years_without_enrollments(client, db):
+    """Tuition money with no enrollment on record is credit, not a year. The
+    treasurer's page reads the same way, so the member is not shown a year the
+    School has no decision for."""
+    TuitionPeriod.objects.all().delete()
+    _tuition_year("AY 2023-2024", "noenrol-23", 2023, "2000")
+    member = _user("noenrol@x.test", role=Profile.Role.CANDIDATE)
+    _tuition_payment(member, "1000", datetime(2024, 1, 3, 12, tzinfo=tz.utc))
 
+    ctx = _account_ctx(client, member)
+    assert ctx["acct"]["tuition_rows"] == []
+    # The money is still theirs and still visible: it reads as credit.
+    assert ctx["acct"]["credit"] == Decimal("1000.00")
+    assert ctx["show_money_tab"] is True
+
+
+def test_skipping_year_is_shown_as_skipping(client, current_period):
     member = _user("skip@x.test", role=Profile.Role.CANDIDATE)
     TuitionEnrollment.objects.create(
         user=member, tuition_period=current_period,
         status=TuitionEnrollment.Status.SKIPPING,
     )
-    ctx = _tuition_progress(member)
-    assert ctx["tuition_years_started"] == 0
+    rows = _account_ctx(client, member)["acct"]["tuition_rows"]
+    assert [r["state"] for r in rows] == ["skipping"]
+    assert rows[0]["pct"] is None       # a skipping year has no fill bar
 
 
 # ---- dues section (now on the unified "My account" tab, task #439) --------

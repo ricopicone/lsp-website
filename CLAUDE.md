@@ -1978,6 +1978,102 @@ Done (see `git log` for specifics):
   to know it — so that page carries the note while the flag is off, and drops
   it when the flag comes back. No migration, no backfill, no data touched.
 
+- **Faculty close their own registration** (task #721). The Program Committee
+  chair asked how to close registration for the Freud Reading Group, and the
+  honest answer was that he couldn't. `Event.status` (Draft / Open / Closed) is
+  already the one thing every registration surface reads — the register view's
+  gate (`registrations/views.py:152`), the event page's CTA, the listing badge —
+  but the only two ways to flip it were the **Registrar console**'s Events tab
+  (gated to the `registrar` StaffRole, the Web Coordinator, and the serving PC)
+  and the PC's per-program bulk view. A reading group's conveners hold none of
+  those, so the people running an offering had to ask someone else to stop it
+  taking people. The mechanism was complete; it had no entry point.
+  New `events/registration_status.py::set_registration_status` is **the one
+  definition of what open and close mean** — open flips DRAFT *or* CLOSED to
+  OPEN (so the first opening and a reopening are the same action, matching the
+  console), close flips OPEN to CLOSED, and anything else, an unknown action
+  included, returns `None` so a caller can tell a real flip from a
+  double-pressed button. `registrar_event_toggle` is refactored onto it, so the
+  console and the faculty control cannot drift about what the words mean (the
+  #532/#568 lesson). The PC's bulk view stays as it is: it is a queryset
+  `update()` over a whole program and never touches one event.
+  **Its own endpoint, deliberately not a field on `EventEditForm`.** Status is
+  an action, not content: as a form field it would be a choices-plus-default
+  field (required by default — `new-modelform-field-is-required-by-default`),
+  would need a *Draft* option no faculty member should be setting, and would
+  ride `event_edit_confirm.html`'s hidden re-post. Its own form and endpoint is
+  the #504 / #716 pattern, and it also makes the absence of `status` from
+  `REVIEWABLE_FIELDS` structural rather than remembered — review protects a
+  description the PC approved, and whether registration is open was never
+  approved content. Gated by `can_edit_event`, which already resolves for a
+  reading group's conveners through `is_workgroup_lead` (#495), so no new
+  predicate. POST only, with a host-validated `next` so the button returns you
+  to whichever page you pressed it on.
+  **One partial, three surfaces.** `events/_registration_status.html` renders on
+  the event edit page (in a Registration section *below* the main form — HTML
+  forbids nested forms, which is what put it there rather than beside *Who can
+  register*), and in `_faculty_tools.html`, which is both the event page's
+  faculty view and the seminar/reading-group Workspace **Roster** tab where
+  conveners actually work. The Workspace **Settings** tab carries a pointer
+  only, no control: that tab edits the *Workgroup*, and an Event field there is
+  exactly what the CE-credits work (#486) deliberately avoided, so it names the
+  current state and links to *Edit event*. It is gated on `primary_event` and
+  `can_edit_offering`, so a cartel's or committee's Settings tab is untouched.
+  Copy is member-facing, so commas rather than em dashes, and it says what
+  closing does *not* do: it does not hide the page, and it does not remove
+  anyone already registered. Both guides updated — the faculty guide moves
+  opening and closing out of the Program Committee's column into the faculty's
+  own and gains a section; the registrar guide says the offering's own people
+  now have the same control.
+  Noted, not fixed: `Event.registration_opens` / `registration_closes` are
+  declared and read by **nothing** — a scheduled window that has never existed,
+  the same shape as #532's never-called `public_program_year_q()`. No migration,
+  no backfill, no flag.
+
+- **The Account tab's tuition years were a second opinion** (task #723). A
+  member wrote in that his account dashboard showed the wrong academic years
+  and $100 less than the tracker. The treasurer's page and the member's Account
+  tab were answering the same question from **two independent
+  implementations**, on the same page: the template printed
+  `acct.tuition_years_covered` ("4 of 4 years covered", from
+  `payments/ledger.py`) directly above four bars built by
+  `formation.views._tuition_progress`, which bucketed tuition money by academic
+  year off the **payment's date** when no period was bound, took
+  `sorted(paid_by_ay)[:4]` — the **earliest four** buckets — and priced a
+  bucket with no period at the **current** rate. So one $100 payment bound to
+  AY 2022–2023, a year he had recorded as **skipping**, resurrected that year
+  as a slot (the skipping enrollment itself is excluded, so it appeared with no
+  decision attached), which pushed AY 2026–2027 off the end and re-labelled
+  every bar beneath it. His $100 was the whole mechanism.
+  **Measured on prod before designing** (the #625 lesson): **21 of the 64
+  members with tuition history** saw a panel that disagreed with the ledger —
+  one was shown four years from 2015–2020 while the ledger had her skipping
+  every year on record; another saw phantom years at $2,500 apiece that no
+  enrollment backs.
+  The fix is to delete the second implementation. The member's panel now
+  renders `ledger.member_account`'s own `tuition_rows` through
+  **`payments/templates/payments/_tuition_years_table.html`**, extracted from
+  the treasurer's member page and shared by both, so the two cannot drift
+  again; `actions=True` adds the treasurer's per-year buttons and the member
+  gets the same four columns read-only. The view already computed `acct` one
+  screen above the call it was making, so this removes a second pass of queries
+  as well. The cumulative oldest-first sweep task #468 asked for is **kept**,
+  not lost — `_charge_states` already covers a category's charges oldest-first
+  out of that category's money (#473), so an overpaid year still flows into an
+  underpaid one; what goes is the parallel arithmetic around it.
+  **Two consequences, both deliberate.** A skipping year is now *shown*, as
+  skipping — his own complaint was that it "isn't reflected" — and a year with
+  tuition money but **no enrollment row** shows no bar at all, because the
+  ledger builds years from the decisions on record; that money reads as credit
+  on the statement below, exactly as the treasurer already sees it, and the fix
+  for it is recording the year, not a second guess in the UI. The panel moved
+  **out of the Tuition/Dues two-column grid to full width**, verified in a
+  browser: inside the half-width column the table's Status column — the fill
+  bar, the only part that carries the numbers — was clipped, and
+  `overflow-x-auto` hid it behind a scrollbar. No migration, no backfill, no
+  flag; nothing about what is owed or paid changes, only which years the member
+  is shown.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

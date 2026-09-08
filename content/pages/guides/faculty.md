@@ -12,13 +12,13 @@ three. (If you're looking to *register* for something rather than run it, see
 ## What's yours to decide
 
 **Yours:** the event page's description, readings, schedule note, contact line,
-CE credits, and guests-welcome note; the roster; whether registrations are
-reviewed before they're confirmed, and the approvals themselves; and **what any
-individual pays, and when**.
+CE credits, and guests-welcome note; the roster; whether registration is open;
+whether registrations are reviewed before they're confirmed, and the approvals
+themselves; and **what any individual pays, and when**.
 
 **The Program Committee's:** the listed fee and its price tiers (built from
-the proposal they approved), publishing the page, opening and closing
-registration, the access details, and who is listed as faculty.
+the proposal they approved), publishing the page, the access details, and who is
+listed as faculty.
 
 **The treasurer's:** refunds, payments made by check or cash, and anything
 already paid.
@@ -63,6 +63,19 @@ substantial change waits.
 The Roster tab lists every registration with the person's name, email, tier,
 amount, and status—*awaiting payment*, *paid*, *comped*, or *cancelled*.
 **Download CSV** gives you the same list for your own records.
+
+### Opening and closing registration
+
+You decide when your offering stops taking people. **Edit event** carries a
+**Registration** panel with one button, *Close registration*, and the same
+button sits at the top of the Roster tab. Closing takes the Register button off
+the event page. Nobody new can sign up, and you can reopen it whenever you like.
+
+Closing changes nothing for anyone already registered: they keep their place,
+their access, and any payment they've made. It is also separate from
+*publishing* the page, which the Program Committee controls, so a closed event
+stays readable, it just says *Registration is closed*. If someone should be let
+in after you've closed, ask the registrar or the Program Committee to comp them.
 
 ### Reviewing registrations before they're confirmed
 
@@ -282,8 +295,8 @@ office hours that appear on your Workspace for your students to see. See
 
 ## Who to ask
 
-- **Program Committee**—fees and tiers, dates, publishing, opening or
-  closing registration, access details, faculty listings.
+- **Program Committee**—fees and tiers, dates, publishing, access details,
+  faculty listings.
 - **Treasurer**—refunds, checks and cash, anything already paid.
 - **Anything else**, or something that looks broken:
   [website@lacanschool.org](mailto:website@lacanschool.org).

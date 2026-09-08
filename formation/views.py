@@ -9,8 +9,6 @@ already a member.
 
 from __future__ import annotations
 
-from decimal import Decimal
-
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -370,7 +368,6 @@ def _formation_money_context(request) -> dict:
                 user=user, tuition_period=period,
                 status=TuitionPlanApplication.Status.PENDING,
             ).first()
-    progress = _tuition_progress(user)
 
     # --- Tuition (upcoming year, task #450 phase A) — the next-by-start_date
     # future period, so a member can record next year's decision ahead of
@@ -429,7 +426,7 @@ def _formation_money_context(request) -> dict:
     show_money_tab = (
         profile.owes_tuition or dues_obligated
         or has_payments
-        or progress["tuition_years_started"] > 0
+        or bool(acct["tuition_rows"])
     )
 
     return {
@@ -480,7 +477,6 @@ def _formation_money_context(request) -> dict:
         # pending Board payment-plan application, upcoming period
         # (task #450 phase B)
         "upcoming_tuition_plan_application": upcoming_tuition_plan_application,
-        **progress,
         # dues
         "dues_period": dues_period,
         "dues_obligated": dues_obligated,
@@ -497,105 +493,6 @@ def _formation_money_context(request) -> dict:
         "my_submissions": list(
             LedgerSubmission.objects.filter(user=user).order_by("-created_at")),
         "today": timezone.localdate(),
-    }
-
-
-def _tuition_progress(user) -> dict:
-    """The member's progress toward the four years of tuition required for full
-    standing.
-
-    A year is "started" if the member has a non-skipping enrollment *or* any
-    successful tuition payment dated to it. Progress is driven by **actual
-    SUCCEEDED tuition payments** — not installment flags — so ledger-imported,
-    Stripe-imported, reconciled, and offline payments all count, even when no
-    ``TuitionInstallment`` was ever created. Each started year is one of the
-    four slots (goal = that year's amount; a partially-paid year counts its
-    remainder as still owed); years not yet started are projected at the
-    current rate so there's always a four-slot goal to fill."""
-    from payments.models import Payment, TuitionEnrollment, TuitionPeriod
-
-    required = 4
-
-    def ay_of(d):
-        """Academic-year start year for a date (the AY begins in September)."""
-        return d.year if d.month >= 9 else d.year - 1
-
-    # Goal + name per academic year, and which years count as started.
-    period_by_ay: dict[int, object] = {}
-    paid_by_ay: dict[int, Decimal] = {}
-
-    # 1) Successful tuition payments → paid, bucketed by academic year (via the
-    #    linked period when present, else the payment date).
-    payments = (
-        Payment.objects
-        .filter(user=user, payment_type=Payment.Type.TUITION,
-                status=Payment.Status.SUCCEEDED)
-        .select_related(
-            "tuition_period", "tuition_installment__enrollment__tuition_period",
-        )
-    )
-    for p in payments:
-        # Prefer the member's explicit AY assignment, then the installment's
-        # period, then the payment date.
-        period = p.tuition_period
-        if period is None:
-            inst = p.tuition_installment
-            if inst is not None and inst.enrollment_id:
-                period = inst.enrollment.tuition_period
-        ay = ay_of(period.start_date) if period else ay_of(p.paid_at or p.created_at)
-        if period is not None:
-            period_by_ay.setdefault(ay, period)
-        paid_by_ay[ay] = paid_by_ay.get(ay, Decimal("0")) + p.amount
-
-    # 2) Non-skipping enrollments mark a year started (even if nothing paid yet).
-    for enr in (
-        TuitionEnrollment.objects.filter(user=user)
-        .exclude(status=TuitionEnrollment.Status.SKIPPING)
-        .select_related("tuition_period")
-    ):
-        ay = ay_of(enr.tuition_period.start_date)
-        period_by_ay.setdefault(ay, enr.tuition_period)
-        paid_by_ay.setdefault(ay, Decimal("0"))
-
-    current = (
-        TuitionPeriod.current()
-        or TuitionPeriod.objects.order_by("-start_date").first()
-    )
-    rate = (current.tuition_amount if current else None) or Decimal("0")
-
-    # One cumulative pot of tuition money, swept oldest-first: each started
-    # year fills to its goal before the remainder overflows into the next
-    # (task #468 follow-up). This mirrors the ledger's oldest-first coverage
-    # sweep, so an uneven payment history — a lump sum, or one year overpaid
-    # and another underpaid — fills the bars consecutively instead of trapping
-    # (and losing) money inside the academic year it was dated to.
-    pot = sum(paid_by_ay.values(), Decimal("0"))
-    slots = []
-    total_goal = Decimal("0")
-    for ay in sorted(paid_by_ay)[:required]:
-        period = period_by_ay.get(ay)
-        goal = (period.tuition_amount if period else rate) or Decimal("0")
-        paid = min(goal, pot) if goal else pot
-        pot -= paid
-        pct = int(paid / goal * 100) if goal else 0
-        slots.append({
-            "label": period.name if period else f"{ay}–{ay + 1}",
-            "goal": goal, "paid": paid, "remaining": max(goal - paid, Decimal("0")),
-            "pct": pct, "projected": False,
-        })
-        total_goal += goal
-
-    started = len(slots)
-    for _ in range(started, required):
-        slots.append({
-            "label": "Future year", "goal": rate, "paid": Decimal("0"),
-            "remaining": rate, "pct": 0, "projected": True,
-        })
-        total_goal += rate
-
-    return {
-        "tuition_slots": slots,
-        "tuition_years_started": started,
     }
 
 
