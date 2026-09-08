@@ -1,0 +1,27 @@
+{% comment %}Open or close registration for one event (Event.status), for the
+people running it. Shared by the event edit page and _faculty_tools.html (the
+event page's faculty view and the Workspace Roster tab). Expects: event.
+Publishing the page is a separate decision, made elsewhere.{% endcomment %}
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <p class="text-sm text-base-content/70">
+    {% if event.status == "open" %}
+    <span class="font-medium text-base-content">Registration is open.</span>
+    Members can register from the event page.
+    {% elif event.status == "closed" %}
+    <span class="font-medium text-base-content">Registration is closed.</span>
+    Nobody new can register. Anyone already registered keeps their place.
+    {% else %}
+    <span class="font-medium text-base-content">Registration has not opened.</span>
+    Nobody can register yet.
+    {% endif %}
+  </p>
+  <form method="post" action="{% url 'events:registration_status' event.slug %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    {% if event.status == "open" %}
+    <button name="action" value="close" class="btn btn-sm btn-outline whitespace-nowrap">Close registration</button>
+    {% else %}
+    <button name="action" value="open" class="btn btn-sm btn-primary whitespace-nowrap">Open registration</button>
+    {% endif %}
+  </form>
+</div>

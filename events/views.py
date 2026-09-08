@@ -747,6 +747,45 @@ def _resequence_and_sync_dates(event):
 
 @login_required
 @require_POST
+def event_registration_status(request, slug: str):
+    """Faculty / conveners / PC / staff open or close registration for one event.
+
+    Its own endpoint rather than a field on ``EventEditForm``: this is an action,
+    not content, so it must neither ride the change-review dialog's hidden-field
+    re-post nor need a Draft option in a faculty-facing dropdown. The flip
+    itself is ``registration_status.set_registration_status``, shared with the
+    Registrar console.
+    """
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    from .registration_status import set_registration_status
+
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to edit this event.")
+
+    new_status = set_registration_status(event, request.POST.get("action"))
+    if new_status == Event.Status.OPEN:
+        messages.success(request, "Registration is open. Members can register now.")
+    elif new_status == Event.Status.CLOSED:
+        messages.success(request, "Registration is closed. Nobody new can register.")
+    else:
+        messages.warning(
+            request,
+            f"No change, registration is already "
+            f"{event.get_status_display().lower()}.",
+        )
+
+    nxt = request.POST.get("next") or ""
+    if nxt and url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return redirect(nxt)
+    return redirect("events:edit", slug=event.slug)
+
+
+@login_required
+@require_POST
 def event_edit_schedule(request, slug: str):
     """Faculty/PC/staff edit the sessions (date + start/end + location) of a
     standalone one-off event. Isolated from the content edit form + review loop
