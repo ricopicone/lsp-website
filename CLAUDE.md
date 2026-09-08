@@ -2030,6 +2030,50 @@ Done (see `git log` for specifics):
   the same shape as #532's never-called `public_program_year_q()`. No migration,
   no backfill, no flag.
 
+- **The Account tab's tuition years were a second opinion** (task #723). A
+  member wrote in that his account dashboard showed the wrong academic years
+  and $100 less than the tracker. The treasurer's page and the member's Account
+  tab were answering the same question from **two independent
+  implementations**, on the same page: the template printed
+  `acct.tuition_years_covered` ("4 of 4 years covered", from
+  `payments/ledger.py`) directly above four bars built by
+  `formation.views._tuition_progress`, which bucketed tuition money by academic
+  year off the **payment's date** when no period was bound, took
+  `sorted(paid_by_ay)[:4]` — the **earliest four** buckets — and priced a
+  bucket with no period at the **current** rate. So one $100 payment bound to
+  AY 2022–2023, a year he had recorded as **skipping**, resurrected that year
+  as a slot (the skipping enrollment itself is excluded, so it appeared with no
+  decision attached), which pushed AY 2026–2027 off the end and re-labelled
+  every bar beneath it. His $100 was the whole mechanism.
+  **Measured on prod before designing** (the #625 lesson): **21 of the 64
+  members with tuition history** saw a panel that disagreed with the ledger —
+  one was shown four years from 2015–2020 while the ledger had her skipping
+  every year on record; another saw phantom years at $2,500 apiece that no
+  enrollment backs.
+  The fix is to delete the second implementation. The member's panel now
+  renders `ledger.member_account`'s own `tuition_rows` through
+  **`payments/templates/payments/_tuition_years_table.html`**, extracted from
+  the treasurer's member page and shared by both, so the two cannot drift
+  again; `actions=True` adds the treasurer's per-year buttons and the member
+  gets the same four columns read-only. The view already computed `acct` one
+  screen above the call it was making, so this removes a second pass of queries
+  as well. The cumulative oldest-first sweep task #468 asked for is **kept**,
+  not lost — `_charge_states` already covers a category's charges oldest-first
+  out of that category's money (#473), so an overpaid year still flows into an
+  underpaid one; what goes is the parallel arithmetic around it.
+  **Two consequences, both deliberate.** A skipping year is now *shown*, as
+  skipping — his own complaint was that it "isn't reflected" — and a year with
+  tuition money but **no enrollment row** shows no bar at all, because the
+  ledger builds years from the decisions on record; that money reads as credit
+  on the statement below, exactly as the treasurer already sees it, and the fix
+  for it is recording the year, not a second guess in the UI. The panel moved
+  **out of the Tuition/Dues two-column grid to full width**, verified in a
+  browser: inside the half-width column the table's Status column — the fill
+  bar, the only part that carries the numbers — was clipped, and
+  `overflow-x-auto` hid it behind a scrollbar. No migration, no backfill, no
+  flag; nothing about what is owed or paid changes, only which years the member
+  is shown.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
