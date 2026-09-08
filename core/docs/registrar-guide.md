@@ -76,6 +76,10 @@ stops new registrations. This is separate from *publishing* the event page,
 which controls public visibility and is managed in the Program Committee
 admin. Closing never cancels existing registrations.
 
+The event's own faculty and conveners have the same control, on **Edit event**
+and at the top of their Roster tab, so an offering can close its own
+registration without going through you.
+
 An event also carries a **Who can register** setting, edited on the event
 itself: *Members and guests*, or *Members only*. It turns non-members away at
 the registration page, and the faculty can let a particular one through with a

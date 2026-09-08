@@ -319,23 +319,19 @@ def registrar_events(request):
 @registrar_required
 @require_POST
 def registrar_event_toggle(request, pk: int):
-    """Open or close registration for one event. Mirrors the PC bulk view's
-    convention (events/views.py program_admin_registration_bulk): open flips
-    DRAFT or CLOSED → OPEN; close flips OPEN → CLOSED. Publishing
+    """Open or close registration for one event. The flip itself is
+    ``events.registration_status.set_registration_status``, shared with the
+    faculty-facing control on the event edit page and the roster, so the two
+    surfaces cannot disagree about what open and close mean. Publishing
     (Event.published) is a separate decision made elsewhere."""
     from events.models import Event
+    from events.registration_status import set_registration_status
 
     event = get_object_or_404(Event, pk=pk)
-    action = request.POST.get("action")
-    if action == "open" and event.status in (
-        Event.Status.DRAFT, Event.Status.CLOSED,
-    ):
-        event.status = Event.Status.OPEN
-        event.save(update_fields=("status",))
+    new_status = set_registration_status(event, request.POST.get("action"))
+    if new_status == Event.Status.OPEN:
         messages.success(request, f"Registration opened for {event.title}.")
-    elif action == "close" and event.status == Event.Status.OPEN:
-        event.status = Event.Status.CLOSED
-        event.save(update_fields=("status",))
+    elif new_status == Event.Status.CLOSED:
         messages.success(request, f"Registration closed for {event.title}.")
     else:
         messages.warning(

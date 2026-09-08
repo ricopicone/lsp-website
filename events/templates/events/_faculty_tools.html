@@ -7,6 +7,11 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
     New to these tools? <a href="/guides/faculty/" class="link">Running a seminar or reading group</a> explains the roster, approvals, and how to extend a discount or a scholarship.
   </p>
 
+  {# Open or close registration, from where the roster is actually read #}
+  <div class="rounded-lg border border-base-300 bg-base-100 p-4">
+    {% include "events/_registration_status.html" %}
+  </div>
+
   {# Pending approvals (only when the event requires faculty approval) #}
   {% if pending_registrations %}
   <div class="space-y-3">

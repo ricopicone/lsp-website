@@ -1,12 +1,7 @@
-# Resuming task #684
+# Resuming task #721
 
-**Task:** In the referral coordinator admin interface, make referral fields editable by referral coordinator before sending out
-**Next action:** Make referral fields editable by the coordinator in the admin interface before distribution (Rico promised Diana Cuello this on 2026-08-27, 'hopefully today'). Then reply to Diana (dianacuellophd@gmail.com) that it is live and answer her 2026-08-31 question: does clicking Distribute let her edit the description? Referrals 0824 and 0804 are held waiting to be de-identified. Do together with task 706 (10-day clock from receipt date), which touches the same code.
-
-## Description
-They should be able to scrub them manually if needed.
-
-[2026-09-03] (from the sweep) Diana Cuello followed up 2026-08-31 09:17 EDT and again 2026-09-03 13:34 EDT ('waiting to deidentify the 0804 referral'). No reply from Rico after his 2026-08-27 promise appears in the thread.
+**Task:** Close registration for the Freud Reading Group on lacanschool.org (or tell Nathan Lupo how)
+**Next action:** Close Freud Reading Group registration on the LSP site, or reply to Nathan Lupo with the control's location
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -59,6 +54,11 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **re-instructions-to-participants-stephanie-swales-rico-2026-09-06-0156-pdt-0856-utc** (reference) — Re: Instructions to participants (Stephanie Swales → Rico, 2026-09-06 01:56 PDT / 08:56 UTC)
+- **joining-instructions-said-once** (architecture) — Task #716 SHIPPED+LIVE 2026-09-05: events/joining.py + events/email/_joining_block.txt are the ONE description of how an event is joined (insite / external / in_person / online_unknown), rendered by the confirmation email AND page, the unpaid reminders (gated note), the installment reminder, the new day-before session reminder (Category.EVENT_REMINDER, rides the 5-min send_meeting_reminders timer), and the "Email joining instructions" page (/events/<slug>/joining-instructions/, Sign as me/School sets Reply-To) — any new join-telling surface renders the block, never re-derives the venue
+- **applications-closed-on-prod** (status) — Task #717 SHIPPED+LIVE 2026-09-05: the site takes no new applications — /apply/ names the Applications Coordinator instead — but ONLY the intake is gated; everything in flight, including Cecile's console, still runs
+- **referral-edit-and-receipt-deadline** (architecture) — Tasks #684/#706 SHIPPED+LIVE 2026-09-05: the Referral Coordinator can edit a request's intake fields (the scrub lands on the record because the clinicians' respond page reads the same field the email carries), Distribute is a preview page before sending, and the response window counts from the school-local receipt date with a 3-day floor
+- **test-db-must-not-depend-on-the-clock** (gotcha) — FIXED 2026-09-05 (task #716) — payments/0004+0006 seed a dues + tuition period named for TODAY's academic year, so on Sept 1 23 tests hand-creating "AY 2026–2027" collided on unique name/slug; fixed with payments.testing.make_period (adopt the seeded row), NOT a conftest that deletes or renames the seed — 16 other tests need the seeded row current, and a renamed seed makes two current periods where the seed wins
 - **re-virtual-office-diana-cuello-2026-08-21-1322-pt-rico-commits-to-building-the-confidential-meeting-room-perhaps-this-weekend** (reference) — Re: Virtual office (Diana Cuello, 2026-08-21 13:22 PT) — Rico commits to building the confidential meeting room, "perhaps this weekend"
 - **group-room-external-invitations** (architecture) — Task #694 SHIPPED+LIVE 2026-08-31: RoomInvitation went polymorphic over three targets (personal room / workgroup / one-off event) and a guest is never the first one in a group's room, so a leaked link only reaches a doorstep; group invitations never expire, and an offering event is never its own target
 - **personal-meeting-rooms** (architecture) — Task #687 SHIPPED 2026-08-29: every member gets a private Daily room (My LSP > Meeting room); the invariant is that nobody but the owner is in it unless the owner is in it, so a leaked invitation link only reaches a doorstep, and the Web Coordinator/Developer are deliberately locked out
@@ -180,7 +180,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=684`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=721`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

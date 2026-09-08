@@ -216,6 +216,19 @@
     <button type="submit" class="btn btn-primary">Save</button>
   </form>
 
+  {% comment %}Its own form (HTML forbids nesting) — an action, not a field on
+  the edit form, so it applies at once and never rides the change-review
+  re-post.{% endcomment %}
+  <section class="space-y-3 border-t border-base-300/60 pt-6">
+    <h2 class="font-serif text-lg text-base-content">Registration</h2>
+    {% include "events/_registration_status.html" %}
+    <p class="text-xs text-base-content/60">
+      Closing registration takes the Register button off the event page. It does
+      not hide the page, and it does not remove anyone who has already
+      registered. You can reopen it here at any time.
+    </p>
+  </section>
+
   {# Its own form (HTML forbids nesting) — posts to the CE-organization view. #}
   <section class="space-y-3 border-t border-base-300/60 pt-6">
     <h2 class="font-serif text-lg text-base-content">Add a CE organization</h2>
