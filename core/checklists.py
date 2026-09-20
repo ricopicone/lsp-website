@@ -739,7 +739,9 @@ def _proposals_walkthrough() -> Checklist:
         ChecklistTask(id="prop_track", label="Track it on your Proposals tab",
                       detail="Under review, approved with a link to the event, or "
                              "declined with a note so you can revise and resubmit.",
-                      resolve_url=_proposals_tab_url, manual=True, visit_ticks=True,
+                      # A hand tick: it shares the first step's URL, so a visit
+                      # tick would mark it done on arrival.
+                      resolve_url=_proposals_tab_url, manual=True,
                       route=(PROP_TAB_HOP, PROP_AVATAR_HOP)),
     ])
 

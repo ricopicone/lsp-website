@@ -386,6 +386,8 @@ def test_proposals_walkthrough_links_and_routes(rf, faculty_user):
     assert _resolved(faculty_user, rf, "prop_new", "proposals")["url"] == "/propose/"
     assert tasks["prop_tab"].visit_ticks is True
     assert tasks["prop_new"].visit_ticks is True
+    # Shares the first step's URL, so it must not tick on arrival.
+    assert tasks["prop_track"].visit_ticks is False
     # Routes: from anywhere the avatar; on the hub the Proposals tab; on the
     # tab the New proposal button; on the form the section, then the buttons.
     hub = _rf_request(rf, faculty_user, "/formation/?tab=groups")
