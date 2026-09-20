@@ -2127,6 +2127,25 @@ Done (see `git log` for specifics):
   Groups → your seminar → Roster tab) rather than only linking there; the
   multi-hop route-hint design for showing that path in place is specced
   separately.
+  **Route hints (same day, approved and built):** a step can now carry a
+  `route` of `Hop`s (`core/checklists.py`), each a page pattern (path only,
+  or path+query, or `*` as the fallback), an element selector, and one
+  sentence; page and selector may be callables of the request so a route
+  names the viewer's own seminar. `ChecklistTask.hop_for(request)` picks the
+  first matching hop, falling through a hop whose selector can't resolve (no
+  offering) so the fallback still points at the menu. **The choice of which
+  step's hop to show is made on the client**: the server renders one hidden
+  popover per step that has a hop on this page (`core/_tour_hop.html`, from
+  `base.html`), and the card script, which alone knows the manual ticks,
+  activates the first unfinished step's through `lspTourHint`, now with
+  `session: true` (dismiss for the session) and a minimized-card guard.
+  Anchors are `data-tour` attributes on the avatar, the My LSP links and hub
+  tabs, the group cards, the Workspace tabs and Edit event button, the
+  faculty panel (code form, joining button, registration-status form), and
+  the Meet tab's test link, pinned by `core/test_tour_anchors.py`. The three
+  older single-hint walkthroughs are untouched. A route or a hint, never
+  both (`__post_init__` refuses). Spec:
+  `docs/superpowers/specs/2026-09-20-walkthrough-route-hints-design.md`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

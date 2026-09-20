@@ -1,0 +1,18 @@
+{% comment %}
+One route hop's popover, hidden. Rendered once per step that has a hop on this
+page; the card script activates the first unfinished one (only the client
+knows which manual steps are ticked). See the route-hints spec.
+{% endcomment %}
+<div id="lsp-hop-{{ task.id }}" data-wt-hop="{{ task.id }}"
+     data-hop-selector="{{ task.hop.selector }}" data-hop-placement="{{ task.hop.placement }}"
+     data-hop-index="{{ task.hop.index }}"
+     class="hidden fixed z-50 w-64 card bg-primary text-primary-content shadow-xl"
+     role="dialog" aria-label="Tip">
+  <div class="card-body p-3 gap-2">
+    <p class="text-sm leading-snug">{{ task.hop.text|safe }}</p>
+    <div class="text-right">
+      <button type="button" class="btn btn-xs lsp-tour-ok">Got it</button>
+    </div>
+  </div>
+  <span class="lsp-tour-arrow" aria-hidden="true"></span>
+</div>

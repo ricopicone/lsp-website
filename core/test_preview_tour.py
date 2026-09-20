@@ -112,3 +112,26 @@ def test_card_marks_visit_ticking_steps_and_scrolls_its_list(client, settings):
     # A manual tick that is done must win on background too, or the check
     # renders primary-content on transparent (invisible).
     assert "#lsp-preview-tour button.lsp-tour-tick--done" in body
+
+
+@pytest.mark.django_db
+def test_card_renders_a_hidden_hop_per_step_that_has_one(client, settings):
+    """One hidden popover per step with a hop on this page; the card script
+    activates the first unfinished one (route-hints spec)."""
+    settings.PREVIEW_TOUR_ENABLED = True
+    settings.PREVIEW_TOUR_PUBLIC = True
+    from django.contrib.auth import get_user_model
+
+    user = get_user_model().objects.create_user(email="hop@example.com", password="x")
+    client.force_login(user)
+    client.cookies["lsp_walkthrough"] = "faculty"
+    body = client.get("/guides/faculty/").content.decode()
+    # Off the route, every faculty step's hop is the avatar fallback.
+    assert 'data-wt-hop="fac_workspace"' in body
+    assert 'data-wt-hop="fac_room"' in body
+    assert 'data-hop-selector="[data-tour=avatar]"' in body
+    assert 'id="lsp-hop-fac_workspace"' in body
+    assert "Open your menu" in body
+    # The card script wires the hop through the shared hint helper, session-scoped.
+    assert "lsp-wt-hop:" in body
+    assert "session: true" in body

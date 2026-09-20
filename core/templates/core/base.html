@@ -468,6 +468,8 @@
       </div>
     </div>
   </div>
+  {# Route hops: one hidden popover per step that has a hop on this page; the card script activates the first unfinished one. #}
+  {% for task in preview_tour_tasks %}{% if task.hop %}{% include "core/_tour_hop.html" with task=task %}{% endif %}{% endfor %}
   <script>
     // Reusable contextual hint: pulse a target element and float a popover
     // (server-rendered, so its classes survive Tailwind purge) anchored beneath
@@ -477,7 +479,11 @@
       var btn = document.querySelector(opts.target);
       var pop = document.querySelector(opts.popover);
       if (!btn || !pop) return;
-      try { if (localStorage.getItem(opts.key) === "done") return; } catch (e) {}
+      // Route hops dismiss for the session only; the older single hints for good.
+      var store = opts.session ? sessionStorage : localStorage;
+      try { if (store.getItem(opts.key) === "done") return; } catch (e) {}
+      // A minimized card means "not now": no popover either.
+      try { if (opts.minimizedKey && sessionStorage.getItem(opts.minimizedKey) === "1") return; } catch (e) {}
       var above = opts.placement === "above";
       var arrow = pop.querySelector(".lsp-tour-arrow");
       if (above && arrow) { arrow.style.top = "auto"; arrow.style.bottom = "-6px"; }
@@ -490,7 +496,7 @@
       function dismiss() {
         pop.classList.add("hidden");
         btn.classList.remove("lsp-tour-pulse");
-        try { localStorage.setItem(opts.key, "done"); } catch (e) {}
+        try { store.setItem(opts.key, "done"); } catch (e) {}
         window.removeEventListener("resize", place);
         window.removeEventListener("scroll", place, true);
       }
@@ -560,6 +566,15 @@
           try { localStorage.removeItem(key(tid)); } catch (e) {}
           paint(li, false);
         });
+        // Route hops dismissed this session come back too.
+        try {
+          var prefix = "lsp-wt-hop:" + wid + ":", gone = [];
+          for (var i = 0; i < sessionStorage.length; i++) {
+            var k = sessionStorage.key(i);
+            if (k && k.indexOf(prefix) === 0) gone.push(k);
+          }
+          gone.forEach(function (k) { sessionStorage.removeItem(k); });
+        } catch (e) {}
       }
 
       // Starting from "Guided walkthrough" sets a one-shot cookie so a (re)start
@@ -611,6 +626,25 @@
         });
         if (next) list.scrollTop = Math.max(0, next.offsetTop - list.offsetTop - 4);
       }
+
+      // Route hint: activate the hop of the first unfinished step that has
+      // one on this page. Server-side "done" ignores manual ticks, so this
+      // choice has to be made here, after the ticks are painted.
+      var hopTask = null;
+      root.querySelectorAll("li[data-wt-task]").forEach(function (li) {
+        if (hopTask) return;
+        var t = li.querySelector(".lsp-tour-tick");
+        if (t && !t.classList.contains("lsp-tour-tick--done")) hopTask = li.getAttribute("data-wt-task");
+      });
+      var hopPop = hopTask && document.querySelector('[data-wt-hop="' + hopTask + '"]');
+      if (hopPop && window.lspTourHint) lspTourHint({
+        target: hopPop.getAttribute("data-hop-selector"),
+        popover: "#" + hopPop.id,
+        key: "lsp-wt-hop:" + wid + ":" + hopTask + ":" + hopPop.getAttribute("data-hop-index"),
+        placement: hopPop.getAttribute("data-hop-placement"),
+        session: true,
+        minimizedKey: "lsp-wt-min",
+      });
 
       var restartBtn = document.getElementById("lsp-tour-restart");
       if (restartBtn) restartBtn.addEventListener("click", function () {
