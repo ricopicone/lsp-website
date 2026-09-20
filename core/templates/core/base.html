@@ -445,7 +445,7 @@
         </div>
 
         {# The list scrolls on its own (overscroll-contain keeps the page still) and opens at the first unfinished step. #}
-        <ul id="lsp-tour-list" class="space-y-2.5 overscroll-contain pr-1" style="max-height: calc(100vh - 11rem); overflow-y: auto;">
+        <ul id="lsp-tour-list" class="space-y-2.5 overscroll-contain pr-1" style="max-height: min(20rem, 100vh - 11rem); overflow-y: auto;">
           {# Tasks come from the active walkthrough (core.checklists). Auto tasks tick from real data; manual tasks tick client-side (localStorage), applied by the script below. #}
           {% for task in preview_tour_tasks %}
           <li class="flex items-start gap-3" data-wt-task="{{ task.id }}"{% if task.manual %} data-wt-manual="1"{% endif %}{% if task.visit_ticks %} data-wt-visit="1"{% endif %}>

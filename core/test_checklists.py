@@ -204,3 +204,24 @@ def test_faculty_open_steps_tick_on_visit_but_close_and_reopen_does_not():
 def test_resolved_task_carries_visit_ticks(rf, faculty_user):
     assert _resolved(faculty_user, rf, "fac_workspace")["visit_ticks"] is True
     assert _resolved(faculty_user, rf, "fac_status")["visit_ticks"] is False
+
+
+@pytest.mark.django_db
+def test_faculty_code_step_unticks_when_the_only_code_is_revoked(rf, faculty_user):
+    """Rico minted a code for the demo, revoked it, and the step stayed ticked:
+    a revoked code is not a code they can hand to anyone."""
+    from django.utils import timezone
+
+    from events.models import Event, PricingCode
+    from workgroups.models import WorkgroupMembership
+
+    ev = _offering("revoked-seminar", Event.Type.SEMINAR, (2026, 9, 1), (2999, 5, 1))
+    _lead(ev, faculty_user, WorkgroupMembership.Role.FACULTY)
+    code = PricingCode.objects.create(
+        event=ev, code="GONE", issued_by=faculty_user,
+        pricing_mode=PricingCode.Mode.FULL_PRICE, amount_or_percent=0,
+    )
+    assert _resolved(faculty_user, rf, "fac_code")["done"] is True
+    code.valid_until = timezone.now()
+    code.save()
+    assert _resolved(faculty_user, rf, "fac_code")["done"] is False

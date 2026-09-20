@@ -416,8 +416,19 @@ def _fac_joining_url(request):
 
 
 def _fac_code_done(user, request):
+    """A live code the viewer minted. A revoked (expired) one doesn't count:
+    the step is "have a code you could hand to someone", and revoking it is
+    how the demo resets."""
+    from django.db.models import Q
+    from django.utils import timezone
+
     event = _my_offering(request)
-    return bool(event and event.pricing_codes.filter(issued_by=user).exists())
+    if event is None:
+        return False
+    return event.pricing_codes.filter(
+        Q(valid_until__isnull=True) | Q(valid_until__gt=timezone.now()),
+        issued_by=user,
+    ).exists()
 
 
 def _faculty_walkthrough() -> Checklist:
