@@ -2159,6 +2159,11 @@ Done (see `git log` for specifics):
   attach step in `approve()` all excluded reading groups, so a convener
   proposing next year's term would have spawned a second workgroup beside
   the first (`events/0054`; the attach now sits above the per-type branch).
+  The form's CE note hardcoded one accreditor (GPPA), a May 15 deadline and
+  a named convener; it now says "an accrediting organization, an APA-approved
+  sponsor or another accreditor" and points at the Program Committee (Rico,
+  2026-09-20), with the form overriding `offers_ce`'s help text so no
+  migration was needed.
   **Known gap, deliberately not built yet:** submitting a proposal notifies
   nobody and neither does a decision — there is no proposal notification
   category (only `CARTEL_PROPOSAL`); the guide says to check the Proposals

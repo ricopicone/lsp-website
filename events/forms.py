@@ -566,6 +566,10 @@ class EventProposalForm(forms.ModelForm):
         self.fields["end_date"].label = "End date"
         self.fields["location_kind"].label = "Location"
         self.fields["offers_ce"].label = "Offer CE credits"
+        self.fields["offers_ce"].help_text = (
+            "You apply to an accrediting organization separately; the School "
+            "records the credits once approved."
+        )
         self.fields["ce_credits"].label = "Credits you expect to offer"
         self.fields["ce_credits_basis"].label = "Counted"
         # Meaningless without a count, and always defaulted, so never required.

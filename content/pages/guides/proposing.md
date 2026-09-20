@@ -39,7 +39,10 @@ tab lists everything you have saved or submitted, with its status, and a
   ceiling. Whether **tuition covers** it for tuition-paying members. The fee
   you propose becomes the listed price if approved; only the Program
   Committee can change it afterwards.
-- **CE credits**, if you offer them, with the number and the basis.
+- **CE credits**, if you offer them, with the number and the basis. The
+  accreditation itself is yours to arrange with an accrediting organization,
+  an APA-approved sponsor or another accreditor; send the Program Committee
+  the approval when you have it.
 - **Readings**, one citation per line. They appear on the event page as a
   reading list.
 

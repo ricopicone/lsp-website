@@ -675,3 +675,14 @@ def test_continue_field_offers_reading_groups_too(client):
     cartel = build_workgroup(Workgroup.Kind.CARTEL, name="C", slug="c")
     offered = set(EventProposalForm().fields["continues_seminar"].queryset)
     assert rg in offered and sem in offered and cartel not in offered
+
+
+def test_propose_form_ce_note_names_no_accreditor_date_or_person(client):
+    """The CE note used to hardcode one accreditor, a May 15 deadline, and a
+    named convener (Rico, 2026-09-20: other organizations exist, and names
+    and dates go stale)."""
+    client.force_login(_member())
+    body = client.get(reverse("propose_event")).content.decode()
+    for stale in ("GPPA", "Pittsburgh", "May 15", "Diana Cuello"):
+        assert stale not in body, stale
+    assert "accrediting organization" in body
