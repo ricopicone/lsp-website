@@ -56,7 +56,7 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
         <p class="text-xs text-base-content/60">Last sent {{ last.sent_at|date:"M j, Y" }} by {{ last.sent_by.get_full_name|default:"a staff member" }} to {{ last.recipient_count }}.</p>
         {% endif %}{% endwith %}
       </div>
-      <a href="{% url 'events:joining_instructions' event.slug %}" class="btn btn-primary btn-sm whitespace-nowrap">Email joining instructions</a>
+      <a href="{% url 'events:joining_instructions' event.slug %}" class="btn btn-primary btn-sm whitespace-nowrap" data-tour="joining-instructions">Email joining instructions</a>
     </div>
   </div>
   {% endif %}
@@ -114,7 +114,7 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
   {# Mint pricing code #}
   <div class="space-y-3">
     <h3 class="font-serif text-lg text-base-content">Generate a pricing code</h3>
-    <form method="post" action="{% url 'events:generate_code' event.slug %}" class="space-y-4 max-w-xl">
+    <form method="post" action="{% url 'events:generate_code' event.slug %}" class="space-y-4 max-w-xl" data-tour="generate-code">
       {% csrf_token %}
       {% for field in pricing_code_form %}
       <div class="form-control">

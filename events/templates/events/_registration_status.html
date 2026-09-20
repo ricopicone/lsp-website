@@ -15,7 +15,7 @@ Publishing the page is a separate decision, made elsewhere.{% endcomment %}
     Nobody can register yet.
     {% endif %}
   </p>
-  <form method="post" action="{% url 'events:registration_status' event.slug %}">
+  <form method="post" action="{% url 'events:registration_status' event.slug %}" data-tour="registration-status">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ request.get_full_path }}">
     {% if event.status == "open" %}

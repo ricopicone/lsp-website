@@ -80,7 +80,7 @@
           <a href="{% url 'login' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary btn-sm">Log in to join</a>
           {% endif %}
           {% if can_edit_offering and primary_event %}
-          <a href="{% url 'events:edit' primary_event.slug %}" class="btn btn-ghost btn-sm">Edit event</a>
+          <a href="{% url 'events:edit' primary_event.slug %}" class="btn btn-ghost btn-sm" data-tour="edit-event">Edit event</a>
           {% endif %}
         </nav>
       </div>
@@ -91,7 +91,7 @@
   <div role="tablist"
        class="no-scrollbar -mx-1 flex gap-1 overflow-x-auto border-b border-base-300/60 px-1">
     {% for key, label in tabs %}
-    <a href="?tab={{ key }}" role="tab"
+    <a href="?tab={{ key }}" role="tab" data-tour="ws-tab-{{ key }}"
        class="relative shrink-0 px-3.5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors
               {% if key == active_tab %}text-primary{% else %}text-base-content/55 hover:text-base-content{% endif %}">
       {{ label }}

@@ -37,6 +37,51 @@ def _no_url(request) -> str | None:  # default for tasks with no link
     return None
 
 
+def _call_or_value(value, request):
+    return value(request) if callable(value) else value
+
+
+@dataclass(frozen=True)
+class Hop:
+    """One leg of a route: on ``page``, pulse ``selector`` and say ``text``.
+
+    ``page`` / ``selector`` may be callables of the request so a route can
+    name the viewer's own seminar. ``page == "*"`` matches everywhere and is
+    the fallback that points back at the menu from any page off the route.
+    A page string with a query must match path+query; without, path only.
+    """
+
+    page: object          # str | Callable[[request], str | None]
+    selector: object      # str | Callable[[request], str | None]
+    text: str
+    placement: str = "below"
+
+    def matches(self, request) -> bool:
+        try:
+            page = _call_or_value(self.page, request)
+        except NoReverseMatch:
+            return False
+        if not page:
+            return False
+        if page == "*":
+            return True
+        if "?" in page:
+            query = request.META.get("QUERY_STRING", "")
+            here = request.path + ("?" + query if query else "")
+            return here == page
+        return request.path == page
+
+    def resolved(self, request, index: int) -> dict | None:
+        try:
+            selector = _call_or_value(self.selector, request)
+        except NoReverseMatch:
+            return None
+        if not selector:
+            return None
+        return {"selector": selector, "text": self.text,
+                "placement": self.placement, "index": index}
+
+
 @dataclass(frozen=True)
 class ChecklistTask:
     id: str
@@ -55,6 +100,27 @@ class ChecklistTask:
     hint_text: str = ""
     hint_placement: str = "below"
     hint_key: str = ""
+    # A route: ordered hops, the last usually ``page="*"`` (the fallback). The
+    # card shows the first matching hop of the first unfinished step.
+    route: tuple = ()
+
+    def __post_init__(self):
+        if self.route and self.hint_selector:
+            raise ValueError(f"task {self.id}: a route or a hint, not both")
+
+    def hop_for(self, request) -> dict | None:
+        """The first hop of this task's route that matches the current page."""
+        if request is None:
+            return None
+        for index, hop in enumerate(self.route):
+            if not hop.matches(request):
+                continue
+            resolved = hop.resolved(request, index)
+            # A hop whose selector can't resolve (no offering to name) falls
+            # through to the next, so the fallback still points at the menu.
+            if resolved is not None:
+                return resolved
+        return None
 
     def key(self) -> str:
         return self.hint_key or f"lsp-tour-{self.id}-hint"
@@ -75,6 +141,7 @@ class ChecklistTask:
             "done": done,
             "manual": self.manual,
             "visit_ticks": self.manual and self.visit_ticks,
+            "hop": self.hop_for(request),
             "hint_selector": self.hint_selector,
             "hint_text": self.hint_text,
             "hint_placement": self.hint_placement,
@@ -431,44 +498,114 @@ def _fac_code_done(user, request):
     ).exists()
 
 
+def _fac_workspace_path(request):
+    event = _my_offering(request)
+    if event is None or event.workgroup_id is None:
+        return None
+    return _rev("workgroups:detail", event.workgroup.slug)
+
+
+def _fac_card_selector(request):
+    event = _my_offering(request)
+    if event is None or event.workgroup_id is None:
+        return None
+    return f'[data-tour=group-card][data-tour-slug="{event.workgroup.slug}"]'
+
+
+def _fac_meet_url(request):
+    path = _fac_workspace_path(request)
+    return f"{path}?tab=meet" if path else None
+
+
+def _formation_path(request):
+    return _rev("formation:formation")
+
+
+# Shared hops. The route reads back to front: the most specific page first,
+# the avatar menu last as the fallback from any page off the route.
+MENU_TEXT = "Open your menu, then <strong>My LSP</strong>, then <strong>Groups</strong>."
+AVATAR_HOP = Hop(page="*", selector="[data-tour=avatar]", text=MENU_TEXT)
+CARD_HOP = Hop(page=_my_groups_url, selector=_fac_card_selector,
+               text="<strong>This is your seminar.</strong> Open it.")
+ROSTER_TAB_HOP = Hop(page=_fac_workspace_path, selector="[data-tour=ws-tab-roster]",
+                     text="Your roster, approvals, and codes live on the "
+                          "<strong>Roster</strong> tab.")
+EDIT_BUTTON_HOP = Hop(page=_fac_workspace_path, selector="[data-tour=edit-event]",
+                      text="<strong>Edit event</strong> opens the page's content.")
+
+
 def _faculty_walkthrough() -> Checklist:
     return Checklist("faculty", "Run your seminar", [
         ChecklistTask(id="fac_workspace", label="Open your seminar's Workspace",
                       detail="Your avatar menu (top right), then My LSP, then "
                              "Groups, then your seminar. It opens on Overview; "
                              "look along the tab menu.",
-                      resolve_url=_fac_workspace_url, manual=True, visit_ticks=True),
+                      resolve_url=_fac_workspace_url, manual=True, visit_ticks=True,
+                      route=(CARD_HOP, AVATAR_HOP)),
         ChecklistTask(id="fac_roster", label="Open the Roster tab",
                       detail="On your Workspace, the Roster tab: who has "
                              "registered, pending approvals, and your codes.",
-                      resolve_url=_fac_roster_url, manual=True, visit_ticks=True),
+                      resolve_url=_fac_roster_url, manual=True, visit_ticks=True,
+                      route=(ROSTER_TAB_HOP, CARD_HOP, AVATAR_HOP)),
         ChecklistTask(id="fac_edit", label="Open Edit event",
                       detail="Roster tab, then the Edit event button: description, "
                              "readings, CE credits, who can register, where it meets.",
-                      resolve_url=_fac_edit_url, manual=True, visit_ticks=True),
+                      resolve_url=_fac_edit_url, manual=True, visit_ticks=True,
+                      route=(EDIT_BUTTON_HOP, CARD_HOP, AVATAR_HOP)),
         ChecklistTask(id="fac_status", label="Close and reopen registration",
                       detail="Edit event, then the Registration panel at the "
                              "bottom. The same button sits at the top of the Roster tab.",
-                      resolve_url=_fac_edit_url, manual=True),
+                      resolve_url=_fac_edit_url, manual=True,
+                      route=(
+                          Hop(page=_fac_edit_url, selector="[data-tour=registration-status]",
+                              text="Close registration here. The button then reads "
+                                   "<strong>Open registration</strong>, so you can reopen."),
+                          Hop(page=_fac_workspace_path, selector="[data-tour=edit-event]",
+                              text="<strong>Edit event</strong>, then the Registration "
+                                   "panel at the bottom."),
+                          CARD_HOP, AVATAR_HOP)),
         ChecklistTask(id="fac_code", label="Mint a pricing code",
                       detail="Roster tab, then Generate a pricing code. Pin it to "
                              "one person, or leave it open with one use. Revoke "
                              "it under Existing codes.",
-                      resolve_url=_fac_roster_url, is_done=_fac_code_done),
+                      resolve_url=_fac_roster_url, is_done=_fac_code_done,
+                      route=(
+                          Hop(page=_fac_roster_url, selector="[data-tour=generate-code]",
+                              text="Mint a code here. It appears under "
+                                   "<strong>Existing codes</strong>."),
+                          ROSTER_TAB_HOP, CARD_HOP, AVATAR_HOP)),
         ChecklistTask(id="fac_joining", label="Preview the joining instructions",
                       detail="Roster tab, then Email joining instructions at the "
                              "top. You see the whole email before anything goes.",
-                      resolve_url=_fac_joining_url, manual=True, visit_ticks=True),
+                      resolve_url=_fac_joining_url, manual=True, visit_ticks=True,
+                      route=(
+                          Hop(page=_fac_roster_url, selector="[data-tour=joining-instructions]",
+                              text="<strong>Email joining instructions</strong> shows the "
+                                   "whole email before anything goes."),
+                          ROSTER_TAB_HOP, CARD_HOP, AVATAR_HOP)),
         ChecklistTask(id="fac_video", label="Test your video & audio",
                       detail="Your Workspace, Meet tab, then Test your video & "
                              "audio: a throwaway room for camera and microphone.",
                       resolve_url=lambda r: _rev("video:system_check"),
-                      manual=True, visit_ticks=True),
+                      manual=True, visit_ticks=True,
+                      route=(
+                          Hop(page=_fac_meet_url, selector="[data-tour=meet-system-check]",
+                              text="<strong>Test your setup</strong> opens a throwaway room "
+                                   "for camera and microphone."),
+                          Hop(page=_fac_workspace_path, selector="[data-tour=ws-tab-meet]",
+                              text="The <strong>Meet</strong> tab has the test link."),
+                          CARD_HOP, AVATAR_HOP)),
         ChecklistTask(id="fac_room", label="Find your private meeting room",
                       detail="Avatar menu, then My LSP, then Meeting room. For "
                              "office hours and one-to-one conversations.",
                       resolve_url=lambda r: _rev("video:my_room"),
-                      manual=True, visit_ticks=True),
+                      manual=True, visit_ticks=True,
+                      route=(
+                          Hop(page=_formation_path, selector="[data-tour=my-lsp-room]",
+                              text="Your private room is the <strong>Meeting room</strong> tab."),
+                          Hop(page="*", selector="[data-tour=avatar]",
+                              text="Open your menu, then <strong>My LSP</strong>, then "
+                                   "<strong>Meeting room</strong>."))),
     ])
 
 

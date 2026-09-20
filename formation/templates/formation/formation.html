@@ -20,7 +20,7 @@
   <div role="tablist"
        class="no-scrollbar -mx-1 flex gap-1 overflow-x-auto border-b border-base-300/60 px-1">
     {% for key, label in formation_tabs %}
-    <a href="?tab={{ key }}" role="tab"
+    <a href="?tab={{ key }}" role="tab" data-tour="my-lsp-{{ key }}"
        class="relative shrink-0 px-3.5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors
               {% if key == active_tab %}text-primary{% else %}text-base-content/55 hover:text-base-content{% endif %}">
       {{ label }}
