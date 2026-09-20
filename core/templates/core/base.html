@@ -491,7 +491,12 @@
       function place() {
         var r = btn.getBoundingClientRect();
         pop.style.top = (above ? r.top - pop.offsetHeight - 10 : r.bottom + 10) + "px";
-        pop.style.left = Math.max(8, r.left) + "px";
+        // Keep the popover inside the viewport: an anchor at the far right (the
+        // avatar) would otherwise push it off the edge. The arrow tracks the
+        // anchor so the popover still points at it.
+        var left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8));
+        pop.style.left = left + "px";
+        if (arrow) arrow.style.left = Math.max(12, Math.min(r.left - left + 12, pop.offsetWidth - 24)) + "px";
       }
       function dismiss() {
         pop.classList.add("hidden");
