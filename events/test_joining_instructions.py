@@ -337,3 +337,21 @@ def test_confirmation_email_withholds_joining_until_paid(event, mailoutbox, _dai
     body = mailoutbox[-1].body
     assert "How to join" not in body
     assert "Join the meeting room" not in body
+
+
+@pytest.mark.django_db
+def test_default_message_mentions_no_separate_link_only_for_the_site_room(_daily_on):
+    from events.joining import default_message
+
+    insite = _event(slug="insite", format=Event.Format.ONLINE,
+                    online_venue=Event.OnlineVenue.INSITE)
+    assert "separate meeting link" in default_message(insite)
+
+    zoom = _event(slug="zoom", format=Event.Format.ONLINE,
+                  online_venue=Event.OnlineVenue.EXTERNAL,
+                  access_info="https://zoom.us/j/1")
+    assert "separate meeting link" not in default_message(zoom)
+    assert "The details are below" in default_message(zoom)
+
+    room = _event(slug="room", format=Event.Format.IN_PERSON)
+    assert "separate meeting link" not in default_message(room)

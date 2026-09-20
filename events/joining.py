@@ -105,9 +105,13 @@ def recipient_addresses(event) -> list[str]:
 
 def default_message(event) -> str:
     """The editable part of the email, prefilled. Faculty rewrite it freely."""
+    no_link = (
+        "You don't need a separate meeting link. "
+        if joining_details(event).kind == "insite" else ""
+    )
     return (
         f"A reminder about how to join \"{event.title}\". "
-        "You don't need a separate meeting link. The details are below. "
+        f"{no_link}The details are below. "
         "Looking forward to seeing you there."
     )
 

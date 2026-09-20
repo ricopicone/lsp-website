@@ -45,6 +45,11 @@ class ChecklistTask:
     resolve_url: Callable[[object], str | None] = _no_url
     is_done: Callable[[object, object], bool] = _never
     manual: bool = False
+    # A manual step whose whole content is "open this page": the card ticks it
+    # when the member lands on its URL (task #749). Off for a step whose page
+    # proves nothing on its own (close-and-reopen registration lives on the
+    # same page as "open Edit event").
+    visit_ticks: bool = False
     # Optional contextual hint (a pulsing anchor + popover) on the task's page.
     hint_selector: str = ""
     hint_text: str = ""
@@ -69,6 +74,7 @@ class ChecklistTask:
             "url": url,
             "done": done,
             "manual": self.manual,
+            "visit_ticks": self.manual and self.visit_ticks,
             "hint_selector": self.hint_selector,
             "hint_text": self.hint_text,
             "hint_placement": self.hint_placement,
@@ -383,6 +389,13 @@ def _my_groups_url(request):
     return _rev("formation:formation", query="tab=groups")
 
 
+def _fac_workspace_url(request):
+    event = _my_offering(request)
+    if event is None or event.workgroup_id is None:
+        return _my_groups_url(request)
+    return _rev("workgroups:detail", event.workgroup.slug)
+
+
 def _fac_roster_url(request):
     event = _my_offering(request)
     if event is None or event.workgroup_id is None:
@@ -409,14 +422,17 @@ def _fac_code_done(user, request):
 
 def _faculty_walkthrough() -> Checklist:
     return Checklist("faculty", "Run your seminar", [
-        ChecklistTask(id="fac_roster", label="Open your Roster tab",
-                      detail="Your seminar's Workspace, Roster tab: who has "
-                             "registered, pending approvals, and your codes.",
-                      resolve_url=_fac_roster_url, manual=True),
+        ChecklistTask(id="fac_workspace", label="Open your seminar's Workspace",
+                      detail="It opens on Overview. Look along the tab menu: "
+                             "Discuss, Files, Schedule, Meet, Roster, Settings.",
+                      resolve_url=_fac_workspace_url, manual=True, visit_ticks=True),
+        ChecklistTask(id="fac_roster", label="Open the Roster tab",
+                      detail="Who has registered, pending approvals, and your codes.",
+                      resolve_url=_fac_roster_url, manual=True, visit_ticks=True),
         ChecklistTask(id="fac_edit", label="Open Edit event",
                       detail="Description, readings, CE credits, who can "
                              "register, and where your class meets.",
-                      resolve_url=_fac_edit_url, manual=True),
+                      resolve_url=_fac_edit_url, manual=True, visit_ticks=True),
         ChecklistTask(id="fac_status", label="Close and reopen registration",
                       detail="The Registration panel on Edit event, and the "
                              "same button at the top of the Roster tab.",
@@ -428,14 +444,16 @@ def _faculty_walkthrough() -> Checklist:
         ChecklistTask(id="fac_joining", label="Preview the joining instructions",
                       detail="Email joining instructions, at the top of the Roster "
                              "tab, shows you the whole email before anything goes.",
-                      resolve_url=_fac_joining_url, manual=True),
+                      resolve_url=_fac_joining_url, manual=True, visit_ticks=True),
         ChecklistTask(id="fac_video", label="Test your video & audio",
                       detail="A throwaway room to check camera and microphone.",
-                      resolve_url=lambda r: _rev("video:system_check"), manual=True),
+                      resolve_url=lambda r: _rev("video:system_check"),
+                      manual=True, visit_ticks=True),
         ChecklistTask(id="fac_room", label="Find your private meeting room",
                       detail="For office hours and one-to-one conversations, "
                              "separate from the seminar room.",
-                      resolve_url=lambda r: _rev("video:my_room"), manual=True),
+                      resolve_url=lambda r: _rev("video:my_room"),
+                      manual=True, visit_ticks=True),
     ])
 
 

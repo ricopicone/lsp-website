@@ -89,3 +89,26 @@ def test_starting_a_walkthrough_signals_a_fresh_start(client):
     # uses to clear remembered ticks (so re-clicking restarts).
     assert resp.cookies["lsp_walkthrough"].value == "applications_coordinator"
     assert resp.cookies["lsp_wt_fresh"].value == "applications_coordinator"
+
+
+@pytest.mark.django_db
+def test_card_marks_visit_ticking_steps_and_scrolls_its_list(client, settings):
+    """The card's list scrolls on its own (it cut off mid-list on the faculty
+    walkthrough) and a step that ticks on visit says so in the markup, so the
+    script can tick it when the member lands on its page."""
+    settings.PREVIEW_TOUR_ENABLED = True
+    settings.PREVIEW_TOUR_PUBLIC = True
+    from django.contrib.auth import get_user_model
+
+    user = get_user_model().objects.create_user(email="fac@example.com", password="x")
+    client.force_login(user)
+    client.cookies["lsp_walkthrough"] = "faculty"
+    body = client.get("/guides/faculty/").content.decode()
+    assert 'data-wt-task="fac_workspace" data-wt-manual="1" data-wt-visit="1"' in body
+    assert 'data-wt-task="fac_status" data-wt-manual="1"' in body
+    assert 'data-wt-task="fac_status" data-wt-manual="1" data-wt-visit' not in body
+    assert 'id="lsp-tour-list"' in body
+    assert "overflow-y: auto" in body
+    # A manual tick that is done must win on background too, or the check
+    # renders primary-content on transparent (invisible).
+    assert "#lsp-preview-tour button.lsp-tour-tick--done" in body

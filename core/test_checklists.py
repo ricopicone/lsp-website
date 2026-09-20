@@ -114,6 +114,9 @@ def test_faculty_walkthrough_links_to_the_viewers_own_seminar(rf, faculty_user):
     ev = _offering("my-seminar-2026-27", Event.Type.SEMINAR, (2026, 9, 1), (2027, 5, 1))
     _lead(ev, faculty_user, WorkgroupMembership.Role.FACULTY)
 
+    assert _resolved(faculty_user, rf, "fac_workspace")["url"] == (
+        f"/groups/{ev.workgroup.slug}/"
+    )
     assert _resolved(faculty_user, rf, "fac_roster")["url"] == (
         f"/groups/{ev.workgroup.slug}/?tab=roster"
     )
@@ -178,3 +181,26 @@ def test_faculty_walkthrough_sends_nothing(rf, faculty_user):
     The joining-instructions step stops at the preview page."""
     for task in get_checklist("faculty").tasks:
         assert "send" not in task.label.lower()
+
+
+def test_faculty_walkthrough_starts_on_the_workspace_overview():
+    ids = [t.id for t in get_checklist("faculty").tasks]
+    assert ids[:2] == ["fac_workspace", "fac_roster"]
+
+
+def test_faculty_open_steps_tick_on_visit_but_close_and_reopen_does_not():
+    """Landing on a step's page is doing it (Rico, 2026-09-20) — except for
+    the one step whose page proves nothing on its own."""
+    tasks = {t.id: t for t in get_checklist("faculty").tasks}
+    assert tasks["fac_workspace"].visit_ticks is True
+    assert tasks["fac_roster"].visit_ticks is True
+    assert tasks["fac_edit"].visit_ticks is True
+    assert tasks["fac_joining"].visit_ticks is True
+    assert tasks["fac_status"].visit_ticks is False
+    assert tasks["fac_code"].visit_ticks is False   # auto step; ticks from data
+
+
+@pytest.mark.django_db
+def test_resolved_task_carries_visit_ticks(rf, faculty_user):
+    assert _resolved(faculty_user, rf, "fac_workspace")["visit_ticks"] is True
+    assert _resolved(faculty_user, rf, "fac_status")["visit_ticks"] is False

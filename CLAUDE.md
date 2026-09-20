@@ -2101,6 +2101,20 @@ Done (see `git log` for specifics):
   would sit in every faculty member's My groups, and their own seminar is the
   better practice ground. No slides: the walkthrough card is the on-screen
   agenda, and the run-of-show is a doc.
+  **Follow-up from Rico's dry run (2026-09-20):** manual steps were never
+  ticked by the site, so "Open X" steps read as undone after being done.
+  `ChecklistTask.visit_ticks` marks a manual step whose whole content is
+  opening a page; the card ticks it when the member lands on that path+query
+  (six of the faculty steps; close-and-reopen stays a hand tick because it
+  shares Edit event's URL). Two card defects fixed while there: the `button`
+  rule for manual ticks outranked `.lsp-tour-tick--done` on background, so a
+  ticked manual step's check was primary-content on transparent (invisible);
+  and the list had no scroll of its own, so an eight-step walkthrough cut off
+  and the page scrolled behind it — `#lsp-tour-list` now scrolls, contains
+  overscroll, and opens at the first unfinished step. The walkthrough starts
+  on the Workspace Overview (tab menu) with the Roster tab as step 2. And
+  `joining.default_message` says "you don't need a separate meeting link" only
+  when the event meets in the site's room.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
