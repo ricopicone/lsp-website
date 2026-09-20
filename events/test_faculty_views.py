@@ -745,3 +745,76 @@ def test_code_recipient_picker_help_text_names_the_external_case():
 
     help_text = PricingCodeForm().fields["restricted_to_user"].help_text
     assert "free account" in help_text
+
+
+# --- Revoking a code (task #749 follow-up) -----------------------------------
+# Faculty could mint a code but not take it back: the Existing codes table was
+# read-only and only the Django admin could touch a row. Revoking sets the
+# expiry to now, which is_redeemable already honors, so both the typed-in path
+# and a pinned code's auto-apply refuse it from then on.
+
+def _mint(event, faculty_member, **kw):
+    kw.setdefault("code", "TAKEBACK")
+    kw.setdefault("pricing_mode", PricingCode.Mode.PERCENT_OFF)
+    kw.setdefault("amount_or_percent", Decimal("50"))
+    return PricingCode.objects.create(event=event, issued_by=faculty_member, **kw)
+
+
+def test_revoke_code_forbidden_for_random_user(client, event, faculty_member, random_user):
+    code = _mint(event, faculty_member)
+    client.force_login(random_user)
+    response = client.post(reverse("events:revoke_code", args=[event.slug, code.pk]))
+    assert response.status_code == 403
+    code.refresh_from_db()
+    assert code.is_redeemable() is True
+
+
+def test_revoke_code_makes_it_unredeemable(client, event, faculty_member):
+    code = _mint(event, faculty_member)
+    assert code.is_redeemable() is True
+    client.force_login(faculty_member)
+    response = client.post(reverse("events:revoke_code", args=[event.slug, code.pk]))
+    assert response.status_code == 302
+    # A seminar's faculty tools live on its Workspace Roster tab.
+    assert response.url.endswith("?tab=roster")
+    code.refresh_from_db()
+    assert code.is_redeemable() is False
+    assert code.is_revoked is True
+
+
+def test_revoke_code_refuses_a_code_from_another_event(client, event, faculty_member):
+    other = Event.objects.create(
+        title="Other", slug="other", start_date=date(2026, 9, 1),
+        end_date=date(2026, 12, 15), published=True, status=Event.Status.OPEN,
+    )
+    stray = PricingCode.objects.create(
+        event=other, issued_by=faculty_member, code="STRAY",
+        pricing_mode=PricingCode.Mode.PERCENT_OFF, amount_or_percent=Decimal("10"),
+    )
+    client.force_login(faculty_member)
+    response = client.post(reverse("events:revoke_code", args=[event.slug, stray.pk]))
+    assert response.status_code == 404
+    stray.refresh_from_db()
+    assert stray.is_redeemable() is True
+
+
+def test_revoke_code_is_post_only(client, event, faculty_member):
+    code = _mint(event, faculty_member)
+    client.force_login(faculty_member)
+    response = client.get(reverse("events:revoke_code", args=[event.slug, code.pk]))
+    assert response.status_code == 405
+    code.refresh_from_db()
+    assert code.is_redeemable() is True
+
+
+def test_existing_codes_table_offers_revoke_and_marks_revoked(client, event, faculty_member):
+    live = _mint(event, faculty_member, code="LIVE")
+    gone = _mint(event, faculty_member, code="GONE")
+    client.force_login(faculty_member)
+    client.post(reverse("events:revoke_code", args=[event.slug, gone.pk]))
+    body = client.get(
+        event.workgroup.get_absolute_url() + "?tab=roster"
+    ).content.decode()
+    assert reverse("events:revoke_code", args=[event.slug, live.pk]) in body
+    assert reverse("events:revoke_code", args=[event.slug, gone.pk]) not in body
+    assert "Revoked" in body

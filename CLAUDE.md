@@ -2115,6 +2115,18 @@ Done (see `git log` for specifics):
   on the Workspace Overview (tab menu) with the Roster tab as step 2. And
   `joining.default_message` says "you don't need a separate meeting link" only
   when the event meets in the site's room.
+  **Second follow-up (2026-09-20):** faculty could mint a code but not take it
+  back — the Existing codes table was read-only and only the Django admin
+  could touch a row. `events:revoke_code` (POST, `can_edit_event`, 404 for a
+  code from another event) sets `valid_until` to now, which `is_redeemable`
+  already honors on the typed-in path *and* on a pinned code's auto-apply, so
+  there is no second kill switch and no migration; `PricingCode.is_revoked` is
+  the read side, and the row greys out with a Revoked badge. A registration
+  that already redeemed the code keeps its price (the treasurer's to unwind).
+  Step descriptions now name the navigation path (avatar menu → My LSP →
+  Groups → your seminar → Roster tab) rather than only linking there; the
+  multi-hop route-hint design for showing that path in place is specced
+  separately.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

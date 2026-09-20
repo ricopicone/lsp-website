@@ -1306,6 +1306,14 @@ class PricingCode(models.Model):
         if self.amount_or_percent < 0:
             raise ValidationError({"amount_or_percent": "Cannot be negative."})
 
+    @property
+    def is_revoked(self) -> bool:
+        """Past its expiry — set by hand, or by the faculty Revoke button, which
+        expires a code on the spot rather than adding a second kill switch."""
+        from django.utils import timezone
+
+        return bool(self.valid_until and timezone.now() > self.valid_until)
+
     def is_redeemable(self, *, user=None, now=None) -> bool:
         """True if this code can currently be redeemed (optionally by ``user``)."""
         from django.utils import timezone

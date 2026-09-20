@@ -210,6 +210,14 @@ is a judgment.
 step, and the access details reach them exactly as they would a paying
 registrant.
 
+### Taking a code back
+
+Each row under **Existing codes** has a **Revoke** button. Revoking expires
+the code on the spot, so nobody can redeem it from then on, whether by typing
+it in or by its applying itself to the person it was pinned to. Anyone who
+already used it keeps the price they were quoted; if that needs undoing, it's
+the treasurer's.
+
 ### What a code can't do
 
 - **Change the listed fee for everyone.** That's the Program Committee, and

@@ -137,18 +137,29 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Code</th><th>Mode</th><th>Value</th><th>Payments</th><th>Uses left</th><th>Expires</th><th>For</th></tr>
+          <tr><th>Code</th><th>Mode</th><th>Value</th><th>Payments</th><th>Uses left</th><th>Expires</th><th>For</th><th></th></tr>
         </thead>
         <tbody>
         {% for code in existing_codes %}
-          <tr>
-            <td><code class="badge badge-ghost font-mono">{{ code.code }}</code></td>
+          <tr{% if code.is_revoked %} class="text-base-content/45"{% endif %}>
+            <td><code class="badge badge-ghost font-mono{% if code.is_revoked %} line-through{% endif %}">{{ code.code }}</code></td>
             <td>{{ code.get_pricing_mode_display }}</td>
             <td class="whitespace-nowrap">{% if code.pricing_mode == "full_price" %}—{% else %}{{ code.amount_or_percent }}{% if code.pricing_mode == "percent_off" %}%{% else %} USD{% endif %}{% endif %}</td>
             <td class="whitespace-nowrap">{% if code.installments > 1 %}{{ code.installments }}{% else %}—{% endif %}</td>
             <td>{% if code.max_uses is None %}∞{% else %}{{ code.uses_remaining }}{% endif %}</td>
             <td class="whitespace-nowrap">{% if code.valid_until %}{{ code.valid_until|date:"M j, Y" }}{% else %}—{% endif %}</td>
             <td class="text-base-content/70">{% if code.restricted_to_user %}{{ code.restricted_to_user.email }}{% else %}anyone{% endif %}</td>
+            <td class="whitespace-nowrap text-right">
+              {% if code.is_revoked %}
+              <span class="badge badge-ghost badge-sm">Revoked</span>
+              {% else %}
+              <form method="post" action="{% url 'events:revoke_code' event.slug code.pk %}" style="display:contents"
+                    onsubmit="return confirm('Revoke code {{ code.code|escapejs }}? Nobody can redeem it from now on. Anyone who already used it keeps their price.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-xs">Revoke</button>
+              </form>
+              {% endif %}
+            </td>
           </tr>
         {% endfor %}
         </tbody>

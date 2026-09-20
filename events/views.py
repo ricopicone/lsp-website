@@ -917,6 +917,26 @@ def event_generate_code(request, slug: str):
     return redirect(_faculty_view_url(event))
 
 
+@require_POST
+def event_revoke_code(request, slug: str, pk: int):
+    """Take back a pricing code (task #749 follow-up). Same gate as minting.
+
+    Sets ``valid_until`` to now, which ``is_redeemable`` already honors on the
+    typed-in path and on a pinned code's auto-apply, so no second validity
+    rule. A registration that already redeemed the code keeps its price: money
+    quoted is the treasurer's to unwind, never a side effect of a button.
+    """
+    event = get_object_or_404(Event, slug=slug)
+    if not can_edit_event(request.user, event):
+        return HttpResponseForbidden("You don't have permission to revoke codes for this event.")
+    code = get_object_or_404(PricingCode, pk=pk, event=event)
+    if not code.is_revoked:
+        code.valid_until = timezone.now()
+        code.save(update_fields=["valid_until"])
+        messages.success(request, f"Code {code.code} revoked. Nobody can redeem it from now on.")
+    return redirect(_faculty_view_url(event))
+
+
 # --- Program Committee admin --------------------------------------------
 
 

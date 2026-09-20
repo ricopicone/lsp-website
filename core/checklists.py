@@ -423,35 +423,39 @@ def _fac_code_done(user, request):
 def _faculty_walkthrough() -> Checklist:
     return Checklist("faculty", "Run your seminar", [
         ChecklistTask(id="fac_workspace", label="Open your seminar's Workspace",
-                      detail="It opens on Overview. Look along the tab menu: "
-                             "Discuss, Files, Schedule, Meet, Roster, Settings.",
+                      detail="Your avatar menu (top right), then My LSP, then "
+                             "Groups, then your seminar. It opens on Overview; "
+                             "look along the tab menu.",
                       resolve_url=_fac_workspace_url, manual=True, visit_ticks=True),
         ChecklistTask(id="fac_roster", label="Open the Roster tab",
-                      detail="Who has registered, pending approvals, and your codes.",
+                      detail="On your Workspace, the Roster tab: who has "
+                             "registered, pending approvals, and your codes.",
                       resolve_url=_fac_roster_url, manual=True, visit_ticks=True),
         ChecklistTask(id="fac_edit", label="Open Edit event",
-                      detail="Description, readings, CE credits, who can "
-                             "register, and where your class meets.",
+                      detail="Roster tab, then the Edit event button: description, "
+                             "readings, CE credits, who can register, where it meets.",
                       resolve_url=_fac_edit_url, manual=True, visit_ticks=True),
         ChecklistTask(id="fac_status", label="Close and reopen registration",
-                      detail="The Registration panel on Edit event, and the "
-                             "same button at the top of the Roster tab.",
+                      detail="Edit event, then the Registration panel at the "
+                             "bottom. The same button sits at the top of the Roster tab.",
                       resolve_url=_fac_edit_url, manual=True),
         ChecklistTask(id="fac_code", label="Mint a pricing code",
-                      detail="On the Roster tab, under Generate a pricing code. "
-                             "Pin it to one person, or leave it open with one use.",
+                      detail="Roster tab, then Generate a pricing code. Pin it to "
+                             "one person, or leave it open with one use. Revoke "
+                             "it under Existing codes.",
                       resolve_url=_fac_roster_url, is_done=_fac_code_done),
         ChecklistTask(id="fac_joining", label="Preview the joining instructions",
-                      detail="Email joining instructions, at the top of the Roster "
-                             "tab, shows you the whole email before anything goes.",
+                      detail="Roster tab, then Email joining instructions at the "
+                             "top. You see the whole email before anything goes.",
                       resolve_url=_fac_joining_url, manual=True, visit_ticks=True),
         ChecklistTask(id="fac_video", label="Test your video & audio",
-                      detail="A throwaway room to check camera and microphone.",
+                      detail="Your Workspace, Meet tab, then Test your video & "
+                             "audio: a throwaway room for camera and microphone.",
                       resolve_url=lambda r: _rev("video:system_check"),
                       manual=True, visit_ticks=True),
         ChecklistTask(id="fac_room", label="Find your private meeting room",
-                      detail="For office hours and one-to-one conversations, "
-                             "separate from the seminar room.",
+                      detail="Avatar menu, then My LSP, then Meeting room. For "
+                             "office hours and one-to-one conversations.",
                       resolve_url=lambda r: _rev("video:my_room"),
                       manual=True, visit_ticks=True),
     ])
