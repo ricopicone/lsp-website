@@ -1,6 +1,7 @@
 ---
 title: Running a seminar or reading group
 summary: Your tools for the event page, the roster, and per-person pricing, including discounts, scholarships, and payment plans.
+checklist: faculty
 ---
 
 If you teach a seminar or convene a reading group, the site hands you a small

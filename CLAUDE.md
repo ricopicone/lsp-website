@@ -2074,6 +2074,34 @@ Done (see `git log` for specifics):
   flag; nothing about what is owed or paid changes, only which years the member
   is shown.
 
+- **A walkthrough for the people who run seminars** (task #749). The faculty
+  training was framed on `/guides/faculty/`, and the guide was the one member
+  guide with no walkthrough behind it. The `faculty` checklist
+  (`core/checklists.py`) is seven steps in the guide's own order — Roster tab,
+  Edit event, close and reopen registration, mint a pricing code, preview the
+  joining instructions, test video, find the private room — and **every step
+  links to the offering the viewer runs**: `_my_offering` resolves a serving
+  lead-role membership on a seminar or reading-group workgroup (faculty *or*
+  organizer, so a convener gets it too) to that group's `primary_event`,
+  preferring a current term. So the walkthrough that frames the training on
+  the sandbox is the same one a faculty member runs afterwards on their real
+  seminar, and it is safe there: no step sends anything, the joining step
+  stops at that page's preview, and the code step auto-ticks on a
+  `PricingCode.issued_by` the viewer, which goes nowhere until handed out. A
+  viewer running nothing gets links to their groups page. Walkthroughs are
+  already on and public on prod (`DJANGO_PREVIEW_TOUR_PUBLIC=true`), so the
+  guide's Start button appears with the code alone.
+  **The demo sandbox is data, not code:** *Practice Seminar (sandbox)* on prod
+  (`practice-seminar-sandbox`, event 34) is an unpublished seminar with no
+  Program (so `is_public_now` is False and nothing lists it), its workgroup
+  set `private`/`private` so `/groups/seminars/` hides it from members, Rico
+  and the seed `Persona Faculty` as faculty, a $200 tier, six sessions, and
+  four persona registrations whose email the persona backend drops. Deliberately
+  **not** a shared practice seminar for all 23 faculty (Rico, 2026-09-19): it
+  would sit in every faculty member's My groups, and their own seminar is the
+  better practice ground. No slides: the walkthrough card is the on-screen
+  agenda, and the run-of-show is a doc.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

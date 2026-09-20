@@ -118,3 +118,9 @@ def test_faculty_guide_is_public_and_points_at_the_member_guide(client):
     r = client.get(reverse("guide_detail", args=["faculty"]))
     assert r.status_code == 200
     assert reverse("guide_detail", args=["seminars"]) in r.content.decode()
+
+
+def test_faculty_guide_offers_the_faculty_walkthrough():
+    from content.guides import get_guide
+
+    assert get_guide("faculty").checklist == "faculty"

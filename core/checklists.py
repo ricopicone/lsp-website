@@ -338,6 +338,107 @@ def _analyst_interviews_walkthrough() -> Checklist:
     ])
 
 
+# --- Faculty: run your own seminar or reading group (task #749) --------------
+# Every step links to the OFFERING THE VIEWER RUNS, so the walkthrough that
+# frames the faculty training is the same one a faculty member runs afterwards
+# on their real seminar. No step sends anything: the joining-instructions step
+# stops at that page's preview, and the pricing-code step mints a code that
+# goes nowhere until they hand it to someone.
+
+def _my_offering(request):
+    """The seminar or reading group the viewer runs — a serving lead-role
+    membership (faculty on a seminar, organizer on a reading group) on an
+    offering workgroup, resolved to that group's featured event. Prefers a
+    current offering (soonest start), else the most recently ended. None if
+    they run nothing."""
+    from django.utils import timezone
+
+    from workgroups.models import Workgroup, WorkgroupMembership, serving_membership_q
+
+    user = getattr(request, "user", None)
+    if not getattr(user, "is_authenticated", False):
+        return None
+    workgroups = (
+        Workgroup.objects
+        .filter(
+            serving_membership_q("memberships__"),
+            kind__in=Workgroup.OFFERING_KINDS,
+            memberships__user=user,
+            memberships__role__in=WorkgroupMembership.LEAD_ROLES,
+        )
+        .distinct()
+        .prefetch_related("events")
+    )
+    events = [e for e in (wg.primary_event() for wg in workgroups) if e is not None]
+    if not events:
+        return None
+    today = timezone.localdate()
+    current = [e for e in events if e.end_date and e.end_date >= today]
+    if current:
+        return min(current, key=lambda e: e.start_date)
+    return max(events, key=lambda e: e.end_date or e.start_date)
+
+
+def _my_groups_url(request):
+    return _rev("formation:formation", query="tab=groups")
+
+
+def _fac_roster_url(request):
+    event = _my_offering(request)
+    if event is None or event.workgroup_id is None:
+        return _my_groups_url(request)
+    return _rev("workgroups:detail", event.workgroup.slug, query="tab=roster")
+
+
+def _fac_edit_url(request):
+    event = _my_offering(request)
+    return _rev("events:edit", event.slug) if event else _my_groups_url(request)
+
+
+def _fac_joining_url(request):
+    event = _my_offering(request)
+    if event is None:
+        return _my_groups_url(request)
+    return _rev("events:joining_instructions", event.slug)
+
+
+def _fac_code_done(user, request):
+    event = _my_offering(request)
+    return bool(event and event.pricing_codes.filter(issued_by=user).exists())
+
+
+def _faculty_walkthrough() -> Checklist:
+    return Checklist("faculty", "Run your seminar", [
+        ChecklistTask(id="fac_roster", label="Open your Roster tab",
+                      detail="Your seminar's Workspace, Roster tab: who has "
+                             "registered, pending approvals, and your codes.",
+                      resolve_url=_fac_roster_url, manual=True),
+        ChecklistTask(id="fac_edit", label="Open Edit event",
+                      detail="Description, readings, CE credits, who can "
+                             "register, and where your class meets.",
+                      resolve_url=_fac_edit_url, manual=True),
+        ChecklistTask(id="fac_status", label="Close and reopen registration",
+                      detail="The Registration panel on Edit event, and the "
+                             "same button at the top of the Roster tab.",
+                      resolve_url=_fac_edit_url, manual=True),
+        ChecklistTask(id="fac_code", label="Mint a pricing code",
+                      detail="On the Roster tab, under Generate a pricing code. "
+                             "Pin it to one person, or leave it open with one use.",
+                      resolve_url=_fac_roster_url, is_done=_fac_code_done),
+        ChecklistTask(id="fac_joining", label="Preview the joining instructions",
+                      detail="Email joining instructions, at the top of the Roster "
+                             "tab, shows you the whole email before anything goes.",
+                      resolve_url=_fac_joining_url, manual=True),
+        ChecklistTask(id="fac_video", label="Test your video & audio",
+                      detail="A throwaway room to check camera and microphone.",
+                      resolve_url=lambda r: _rev("video:system_check"), manual=True),
+        ChecklistTask(id="fac_room", label="Find your private meeting room",
+                      detail="For office hours and one-to-one conversations, "
+                             "separate from the seminar room.",
+                      resolve_url=lambda r: _rev("video:my_room"), manual=True),
+    ])
+
+
 # Registry: walkthrough id -> factory (so URLs/checks resolve at request time).
 CHECKLISTS: dict[str, Callable[[], Checklist]] = {
     "profile": _profile_walkthrough,
@@ -346,6 +447,7 @@ CHECKLISTS: dict[str, Callable[[], Checklist]] = {
     "cartels": _cartels_walkthrough,
     "my_formation": _formation_walkthrough,
     "tuition_dues": _tuition_dues_walkthrough,
+    "faculty": _faculty_walkthrough,
     "applications_coordinator": _applications_coordinator_walkthrough,
     "analyst_interviews": _analyst_interviews_walkthrough,
 }
