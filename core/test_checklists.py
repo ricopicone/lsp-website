@@ -11,7 +11,7 @@ from core.checklists import CHECKLISTS, get_checklist
 def test_registry_has_a_walkthrough_per_guide():
     assert set(CHECKLISTS) == {
         "profile", "seminars", "parletre", "cartels", "my_formation", "tuition_dues",
-        "faculty",
+        "faculty", "proposals",
         # Admin walkthroughs — started from the console, not a guide page.
         "applications_coordinator", "analyst_interviews",
     }
@@ -94,10 +94,10 @@ def _lead(event, user, role):
     )
 
 
-def _resolved(user, rf, task_id):
+def _resolved(user, rf, task_id, wid="faculty"):
     request = rf.get("/")
     request.user = user
-    task = next(t for t in get_checklist("faculty").tasks if t.id == task_id)
+    task = next(t for t in get_checklist(wid).tasks if t.id == task_id)
     return task.resolved(user, request)
 
 
@@ -183,9 +183,10 @@ def test_faculty_walkthrough_sends_nothing(rf, faculty_user):
         assert "send" not in task.label.lower()
 
 
-def test_faculty_walkthrough_starts_on_the_workspace_overview():
+def test_faculty_walkthrough_starts_on_the_workspace_overview_then_walks_the_tabs():
     ids = [t.id for t in get_checklist("faculty").tasks]
-    assert ids[:2] == ["fac_workspace", "fac_roster"]
+    assert ids[:7] == ["fac_workspace", "fac_discuss", "fac_chat", "fac_meet",
+                       "fac_files", "fac_roster", "fac_settings"]
 
 
 def test_faculty_open_steps_tick_on_visit_but_close_and_reopen_does_not():
@@ -343,3 +344,75 @@ def test_every_faculty_step_has_a_fallback_hop():
     for task in get_checklist("faculty").tasks:
         assert task.route, task.id
         assert task.route[-1].page == "*", task.id
+
+
+@pytest.mark.django_db
+def test_faculty_tab_steps_link_to_each_tab_and_route_through_it(rf, faculty_user):
+    from events.models import Event
+    from workgroups.models import WorkgroupMembership
+
+    ev = _offering("tabbed-seminar", Event.Type.SEMINAR, (2026, 9, 1), (2999, 5, 1))
+    _lead(ev, faculty_user, WorkgroupMembership.Role.FACULTY)
+    slug = ev.workgroup.slug
+    tasks = {t.id: t for t in get_checklist("faculty").tasks}
+    for key in ("discuss", "chat", "meet", "files", "settings"):
+        task = tasks[f"fac_{key}"]
+        assert task.visit_ticks is True
+        url = _resolved(faculty_user, rf, f"fac_{key}")["url"]
+        assert url == f"/groups/{slug}/?tab={key}"
+        on_workspace = _rf_request(rf, faculty_user, f"/groups/{slug}/")
+        assert task.hop_for(on_workspace)["selector"] == f"[data-tour=ws-tab-{key}]"
+
+
+# --- Proposals walkthrough --------------------------------------------------
+
+def _proposal(user, status, **kw):
+    from events.models import Event, EventProposal
+
+    kw.setdefault("event_type", Event.Type.SEMINAR)
+    kw.setdefault("title", "A proposal")
+    return EventProposal.objects.create(proposed_by=user, status=status, **kw)
+
+
+@pytest.mark.django_db
+def test_proposals_walkthrough_links_and_routes(rf, faculty_user):
+    tasks = {t.id: t for t in get_checklist("proposals").tasks}
+    assert [t.id for t in get_checklist("proposals").tasks] == [
+        "prop_tab", "prop_new", "prop_describe", "prop_when_where", "prop_fee",
+        "prop_save", "prop_submit", "prop_track",
+    ]
+    tab_url = _resolved(faculty_user, rf, "prop_tab", "proposals")["url"]
+    assert tab_url == "/formation/?tab=proposals"
+    assert _resolved(faculty_user, rf, "prop_new", "proposals")["url"] == "/propose/"
+    assert tasks["prop_tab"].visit_ticks is True
+    assert tasks["prop_new"].visit_ticks is True
+    # Routes: from anywhere the avatar; on the hub the Proposals tab; on the
+    # tab the New proposal button; on the form the section, then the buttons.
+    hub = _rf_request(rf, faculty_user, "/formation/?tab=groups")
+    assert tasks["prop_tab"].hop_for(hub)["selector"] == "[data-tour=my-lsp-proposals]"
+    tab = _rf_request(rf, faculty_user, "/formation/?tab=proposals")
+    assert tasks["prop_new"].hop_for(tab)["selector"] == "[data-tour=new-proposal]"
+    form = _rf_request(rf, faculty_user, "/propose/")
+    assert tasks["prop_describe"].hop_for(form)["selector"] == "[data-tour=proposal-type]"
+    assert tasks["prop_save"].hop_for(form)["selector"] == "[data-tour=proposal-save]"
+    assert tasks["prop_submit"].hop_for(form)["selector"] == "[data-tour=proposal-submit]"
+    # On the hub the Proposals tab is the next hop; anywhere else, the menu.
+    assert tasks["prop_submit"].hop_for(hub)["selector"] == "[data-tour=my-lsp-proposals]"
+    assert tasks["prop_submit"].hop_for(_rf_request(rf, faculty_user, "/"))["selector"] == (
+        "[data-tour=avatar]")
+
+
+@pytest.mark.django_db
+def test_proposals_save_and_submit_steps_tick_from_the_viewers_proposals(rf, faculty_user):
+    from events.models import EventProposal
+
+    assert _resolved(faculty_user, rf, "prop_save", "proposals")["done"] is False
+    assert _resolved(faculty_user, rf, "prop_submit", "proposals")["done"] is False
+    p = _proposal(faculty_user, EventProposal.Status.SAVED)
+    assert _resolved(faculty_user, rf, "prop_save", "proposals")["done"] is True
+    assert _resolved(faculty_user, rf, "prop_submit", "proposals")["done"] is False
+    p.status = EventProposal.Status.PROPOSED
+    p.save()
+    assert _resolved(faculty_user, rf, "prop_submit", "proposals")["done"] is True
+    # A submitted proposal counts as "saved" too (it had to be).
+    assert _resolved(faculty_user, rf, "prop_save", "proposals")["done"] is True

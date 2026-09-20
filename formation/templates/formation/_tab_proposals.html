@@ -1,7 +1,7 @@
 {# Proposals tab — the member's event proposals (events.EventProposal). #}
 <div class="space-y-6">
   <div class="flex items-center justify-end">
-    <a href="{% url 'propose_event' %}" class="btn btn-primary btn-sm">＋ New proposal</a>
+    <a href="{% url 'propose_event' %}" class="btn btn-primary btn-sm" data-tour="new-proposal">＋ New proposal</a>
   </div>
 
   {% if proposals %}

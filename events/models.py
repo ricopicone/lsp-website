@@ -1404,8 +1404,10 @@ class EventProposal(models.Model):
     )
     continues_seminar = models.ForeignKey(
         "workgroups.Workgroup", on_delete=models.SET_NULL, null=True, blank=True,
-        limit_choices_to={"kind": "seminar"}, related_name="seminar_proposals",
-        help_text="Optional: propose a new yearly term of this existing seminar.",
+        limit_choices_to={"kind__in": ("seminar", "reading_group")},
+        related_name="seminar_proposals",
+        help_text="Optional: propose a new yearly term of this existing seminar "
+                  "or reading group.",
     )
     faculty = models.ManyToManyField(
         settings.AUTH_USER_MODEL, blank=True, related_name="proposed_seminars",
@@ -1664,12 +1666,16 @@ class EventProposal(models.Model):
                 end_at=self.proposed_datetime + timedelta(hours=2), sequence=1,
                 location=self.location,
             )
+        # Continuing an offering (seminar or reading group) → attach its
+        # existing standing workgroup so ensure_workgroup() adds a new term
+        # rather than spawning a fresh one beside it.
+        if (
+            self.event_type in Event.ANNUAL_PROGRAM_TYPES
+            and self.continues_seminar_id and event.workgroup_id is None
+        ):
+            event.workgroup_id = self.continues_seminar_id
+            event.save(update_fields=["workgroup"])
         if self.event_type == Event.Type.SEMINAR:
-            # Continuing seminar → attach its existing standing workgroup so
-            # ensure_workgroup() adds a new term rather than spawning a fresh one.
-            if self.continues_seminar_id and event.workgroup_id is None:
-                event.workgroup_id = self.continues_seminar_id
-                event.save(update_fields=["workgroup"])
             # set_faculty() calls ensure_workgroup(), creating the standing
             # SEMINAR workgroup (+ its channel) for a brand-new seminar.
             event.set_faculty(list(self.faculty.all()))

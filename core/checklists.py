@@ -534,6 +534,17 @@ EDIT_BUTTON_HOP = Hop(page=_fac_workspace_path, selector="[data-tour=edit-event]
                       text="<strong>Edit event</strong> opens the page's content.")
 
 
+def _fac_tab_url(key: str):
+    def resolve(request):
+        path = _fac_workspace_path(request)
+        return f"{path}?tab={key}" if path else _my_groups_url(request)
+    return resolve
+
+
+def _tab_hop(key: str, text: str) -> Hop:
+    return Hop(page=_fac_workspace_path, selector=f"[data-tour=ws-tab-{key}]", text=text)
+
+
 def _faculty_walkthrough() -> Checklist:
     return Checklist("faculty", "Run your seminar", [
         ChecklistTask(id="fac_workspace", label="Open your seminar's Workspace",
@@ -542,11 +553,39 @@ def _faculty_walkthrough() -> Checklist:
                              "look along the tab menu.",
                       resolve_url=_fac_workspace_url, manual=True, visit_ticks=True,
                       route=(CARD_HOP, AVATAR_HOP)),
+        ChecklistTask(id="fac_discuss", label="Open the Discuss tab",
+                      detail="The seminar's own discussion board, for questions and "
+                             "readings between sessions. Only your group sees it.",
+                      resolve_url=_fac_tab_url("discuss"), manual=True, visit_ticks=True,
+                      route=(_tab_hop("discuss", "<strong>Discuss</strong> is the group's "
+                                      "message board."), CARD_HOP, AVATAR_HOP)),
+        ChecklistTask(id="fac_chat", label="Open the Chat tab",
+                      detail="A live chat for the group, in the browser.",
+                      resolve_url=_fac_tab_url("chat"), manual=True, visit_ticks=True,
+                      route=(_tab_hop("chat", "<strong>Chat</strong> is the group's live "
+                                      "chat."), CARD_HOP, AVATAR_HOP)),
+        ChecklistTask(id="fac_meet", label="Open the Meet tab",
+                      detail="The seminar's video room: open it any time, see who is in "
+                             "it, and find recordings.",
+                      resolve_url=_fac_tab_url("meet"), manual=True, visit_ticks=True,
+                      route=(_tab_hop("meet", "<strong>Meet</strong> is the seminar's "
+                                      "video room."), CARD_HOP, AVATAR_HOP)),
+        ChecklistTask(id="fac_files", label="Open the Files tab",
+                      detail="Shared files for the group, kept in versions. Members only.",
+                      resolve_url=_fac_tab_url("files"), manual=True, visit_ticks=True,
+                      route=(_tab_hop("files", "<strong>Files</strong> holds what the "
+                                      "group shares."), CARD_HOP, AVATAR_HOP)),
         ChecklistTask(id="fac_roster", label="Open the Roster tab",
                       detail="On your Workspace, the Roster tab: who has "
                              "registered, pending approvals, and your codes.",
                       resolve_url=_fac_roster_url, manual=True, visit_ticks=True,
                       route=(ROSTER_TAB_HOP, CARD_HOP, AVATAR_HOP)),
+        ChecklistTask(id="fac_settings", label="Open the Settings tab",
+                      detail="Meeting reminders, video recording, the annual term, and "
+                             "who holds which role.",
+                      resolve_url=_fac_tab_url("settings"), manual=True, visit_ticks=True,
+                      route=(_tab_hop("settings", "<strong>Settings</strong>: reminders, "
+                                      "recording, and roles."), CARD_HOP, AVATAR_HOP)),
         ChecklistTask(id="fac_edit", label="Open Edit event",
                       detail="Roster tab, then the Edit event button: description, "
                              "readings, CE credits, who can register, where it meets.",
@@ -609,6 +648,102 @@ def _faculty_walkthrough() -> Checklist:
     ])
 
 
+# --- Proposals: propose a seminar, reading group, or special event ----------
+# Any LSP member may propose. The form saves incomplete work; Submit needs
+# the dates (or a TBD date for a special event) and sends it to the Program
+# Committee's queue. The two auto steps read the viewer's own proposals.
+
+def _proposals_tab_url(request):
+    return _rev("formation:formation", query="tab=proposals")
+
+
+def _propose_url(request):
+    return _rev("propose_event")
+
+
+def _my_proposals(user):
+    from events.models import EventProposal
+
+    return EventProposal.objects.filter(proposed_by=user)
+
+
+def _prop_saved_done(user, request):
+    return _my_proposals(user).exists()
+
+
+def _prop_submitted_done(user, request):
+    from events.models import EventProposal
+
+    return _my_proposals(user).exclude(status=EventProposal.Status.SAVED).exists()
+
+
+PROPOSALS_MENU_TEXT = ("Open your menu, then <strong>My LSP</strong>, then "
+                       "<strong>Proposals</strong>.")
+PROP_AVATAR_HOP = Hop(page="*", selector="[data-tour=avatar]", text=PROPOSALS_MENU_TEXT)
+PROP_TAB_HOP = Hop(page=_formation_path, selector="[data-tour=my-lsp-proposals]",
+                   text="Your proposals live on the <strong>Proposals</strong> tab.")
+PROP_NEW_HOP = Hop(page=_proposals_tab_url, selector="[data-tour=new-proposal]",
+                   text="<strong>New proposal</strong> opens the form.")
+
+
+def _form_hop(anchor: str, text: str) -> Hop:
+    return Hop(page=_propose_url, selector=f"[data-tour={anchor}]", text=text)
+
+
+def _proposals_walkthrough() -> Checklist:
+    return Checklist("proposals", "Propose an event", [
+        ChecklistTask(id="prop_tab", label="Open your Proposals tab",
+                      detail="Avatar menu, then My LSP, then Proposals: everything you "
+                             "have saved or submitted, with its status.",
+                      resolve_url=_proposals_tab_url, manual=True, visit_ticks=True,
+                      route=(PROP_TAB_HOP, PROP_AVATAR_HOP)),
+        ChecklistTask(id="prop_new", label="Start a new proposal",
+                      detail="The New proposal button. The form adapts to the type "
+                             "you pick.",
+                      resolve_url=_propose_url, manual=True, visit_ticks=True,
+                      route=(PROP_NEW_HOP, PROP_TAB_HOP, PROP_AVATAR_HOP)),
+        ChecklistTask(id="prop_describe", label="Pick the type and describe it",
+                      detail="Seminar, reading group, or special event; a title; about "
+                             "250 words on the focus, the rationale, and the format.",
+                      resolve_url=_propose_url, manual=True,
+                      route=(_form_hop("proposal-type", "Start with the "
+                                       "<strong>type</strong>; the form adapts to it."),
+                             PROP_NEW_HOP, PROP_TAB_HOP, PROP_AVATAR_HOP)),
+        ChecklistTask(id="prop_when_where", label="Say when and where",
+                      detail="Start and end dates and a meeting schedule (or TBD), and "
+                             "whether it meets in the site's room, on Zoom, or in person.",
+                      resolve_url=_propose_url, manual=True,
+                      route=(_form_hop("proposal-dates", "The <strong>dates</strong> are "
+                                       "what a submission needs; the schedule can wait."),
+                             PROP_NEW_HOP, PROP_TAB_HOP, PROP_AVATAR_HOP)),
+        ChecklistTask(id="prop_fee", label="Set the fee, CE, and readings",
+                      detail="Free, a fixed amount, or a sliding scale; whether tuition "
+                             "covers it; CE credits; and one citation per line.",
+                      resolve_url=_propose_url, manual=True,
+                      route=(_form_hop("proposal-fee", "The <strong>fee</strong> you propose "
+                                       "becomes the listed price if approved."),
+                             PROP_NEW_HOP, PROP_TAB_HOP, PROP_AVATAR_HOP)),
+        ChecklistTask(id="prop_save", label="Save it for later",
+                      detail="A saved proposal can be incomplete. Nobody sees it but you.",
+                      resolve_url=_propose_url, is_done=_prop_saved_done,
+                      route=(_form_hop("proposal-save", "<strong>Save for later</strong> "
+                                       "keeps a draft only you can see."),
+                             PROP_NEW_HOP, PROP_TAB_HOP, PROP_AVATAR_HOP)),
+        ChecklistTask(id="prop_submit", label="Submit it for review",
+                      detail="Sends it to the Program Committee. You can still edit "
+                             "until they decide.",
+                      resolve_url=_proposals_tab_url, is_done=_prop_submitted_done,
+                      route=(_form_hop("proposal-submit", "<strong>Submit for review</strong> "
+                                       "sends it to the Program Committee."),
+                             PROP_TAB_HOP, PROP_AVATAR_HOP)),
+        ChecklistTask(id="prop_track", label="Track it on your Proposals tab",
+                      detail="Under review, approved with a link to the event, or "
+                             "declined with a note so you can revise and resubmit.",
+                      resolve_url=_proposals_tab_url, manual=True, visit_ticks=True,
+                      route=(PROP_TAB_HOP, PROP_AVATAR_HOP)),
+    ])
+
+
 # Registry: walkthrough id -> factory (so URLs/checks resolve at request time).
 CHECKLISTS: dict[str, Callable[[], Checklist]] = {
     "profile": _profile_walkthrough,
@@ -618,6 +753,7 @@ CHECKLISTS: dict[str, Callable[[], Checklist]] = {
     "my_formation": _formation_walkthrough,
     "tuition_dues": _tuition_dues_walkthrough,
     "faculty": _faculty_walkthrough,
+    "proposals": _proposals_walkthrough,
     "applications_coordinator": _applications_coordinator_walkthrough,
     "analyst_interviews": _analyst_interviews_walkthrough,
 }

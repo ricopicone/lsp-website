@@ -124,3 +124,17 @@ def test_faculty_guide_offers_the_faculty_walkthrough():
     from content.guides import get_guide
 
     assert get_guide("faculty").checklist == "faculty"
+
+
+def test_proposing_guide_offers_the_proposals_walkthrough():
+    from content.guides import get_guide
+
+    guide = get_guide("proposing")
+    assert guide is not None
+    assert guide.checklist == "proposals"
+
+
+@pytest.mark.django_db
+def test_proposing_guide_renders(client):
+    body = client.get(reverse("guide_detail", args=["proposing"])).content.decode()
+    assert "Submit for review" in body

@@ -2146,6 +2146,23 @@ Done (see `git log` for specifics):
   older single-hint walkthroughs are untouched. A route or a hint, never
   both (`__post_init__` refuses). Spec:
   `docs/superpowers/specs/2026-09-20-walkthrough-route-hints-design.md`.
+  **Same day, after the dry run:** the faculty walkthrough walks every
+  Workspace tab in tab order (Discuss, Chat, Meet, Files, Roster, Settings;
+  13 steps, each visit-ticking through `_fac_tab_url`/`_tab_hop`). And a
+  **proposals guide + walkthrough** (`content/pages/guides/proposing.md`,
+  checklist `proposals`, 8 steps) for next year's program: Proposals tab →
+  New proposal → the form (anchors `proposal-type`/`-dates`/`-fee`/`-save`/
+  `-submit`) → track. Two auto steps read the viewer's own `EventProposal`
+  rows (any row = saved; any non-SAVED row = submitted). Found and fixed
+  while writing it: **"Continue an existing seminar" was seminars-only** —
+  `limit_choices_to`, the form queryset, the `data-types` row gate and the
+  attach step in `approve()` all excluded reading groups, so a convener
+  proposing next year's term would have spawned a second workgroup beside
+  the first (`events/0054`; the attach now sits above the per-type branch).
+  **Known gap, deliberately not built yet:** submitting a proposal notifies
+  nobody and neither does a decision — there is no proposal notification
+  category (only `CARTEL_PROPOSAL`); the guide says to check the Proposals
+  tab.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

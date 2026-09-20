@@ -552,13 +552,15 @@ class EventProposalForm(forms.ModelForm):
         )
 
         self.fields["continues_seminar"].required = False
-        self.fields["continues_seminar"].label = "Continue an existing seminar"
+        self.fields["continues_seminar"].label = (
+            "Continue an existing seminar or reading group"
+        )
         self.fields["continues_seminar"].help_text = (
-            "Seminars only: pick the seminar to run another year of, or leave "
-            "blank for a brand-new one."
+            "Pick the seminar or reading group to run another year of, so the new "
+            "term joins its Workspace, or leave blank for a brand-new one."
         )
         self.fields["continues_seminar"].queryset = (
-            Workgroup.objects.filter(kind=Workgroup.Kind.SEMINAR).order_by("name")
+            Workgroup.objects.filter(kind__in=Workgroup.OFFERING_KINDS).order_by("name")
         )
         self.fields["start_date"].label = "Start date"
         self.fields["end_date"].label = "End date"

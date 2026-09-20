@@ -631,3 +631,47 @@ def test_special_event_requires_date_unless_tbd(client):
     })
     assert resp.status_code == 200  # re-rendered with an error
     assert not EventProposal.objects.filter(title="No Date").exists()
+
+
+def test_approve_continuing_reading_group_adds_term_to_its_workgroup(client):
+    """A reading group can be continued like a seminar (Rico, 2026-09-20):
+    before this the field was seminars-only, so a convener proposing next
+    year's term would have spawned a second workgroup beside the first."""
+    from workgroups.models import Workgroup, WorkgroupMembership
+
+    convener = _member("convener@x.test")
+    pc = _pc_member()
+    start, end = _future()
+    first = EventProposal.objects.create(
+        proposed_by=convener, title="Freud Reading Group",
+        event_type=Event.Type.READING_GROUP, start_date=start, end_date=end,
+    )
+    first.faculty.add(convener)
+    first_event = first.approve(pc)
+    wg = first_event.workgroup
+    assert wg.kind == Workgroup.Kind.READING_GROUP
+
+    start2, end2 = _future(start_days=400, end_days=600)
+    cont = EventProposal.objects.create(
+        proposed_by=convener, title="Freud Reading Group, year two",
+        event_type=Event.Type.READING_GROUP, start_date=start2, end_date=end2,
+        continues_seminar=wg,
+    )
+    cont.faculty.add(convener)
+    new_event = cont.approve(pc)
+    assert new_event.workgroup_id == wg.id
+    assert wg.events.count() == 2
+    assert WorkgroupMembership.objects.filter(
+        workgroup=wg, user=convener, role=WorkgroupMembership.Role.ORGANIZER,
+    ).count() == 1
+
+
+def test_continue_field_offers_reading_groups_too(client):
+    from events.forms import EventProposalForm
+    from workgroups.models import Workgroup, build_workgroup
+
+    rg = build_workgroup(Workgroup.Kind.READING_GROUP, name="RG", slug="rg")
+    sem = build_workgroup(Workgroup.Kind.SEMINAR, name="Sem", slug="sem")
+    cartel = build_workgroup(Workgroup.Kind.CARTEL, name="C", slug="c")
+    offered = set(EventProposalForm().fields["continues_seminar"].queryset)
+    assert rg in offered and sem in offered and cartel not in offered

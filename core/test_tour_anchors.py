@@ -15,6 +15,9 @@ from workgroups.models import WorkgroupMembership
 @pytest.fixture
 def faculty(db):
     user = get_user_model().objects.create_user(email="anchor@example.com", password="x")
+    # An LSP member: the Proposals tab and /propose/ are member-gated.
+    user.profile.role = "analyst"
+    user.profile.save()
     ev = Event.objects.create(
         title="Anchored", slug="anchored", event_type=Event.Type.SEMINAR,
         start_date=date(2026, 9, 1), end_date=date(2999, 5, 1), published=True,
@@ -73,3 +76,14 @@ def test_meet_tab_carries_system_check_anchor(client, faculty, settings):
     user, ev = faculty
     body = _get(client, user, f"/groups/{ev.workgroup.slug}/?tab=meet")
     assert 'data-tour="meet-system-check"' in body
+
+
+def test_proposals_tab_and_form_carry_anchors(client, faculty):
+    user, _ = faculty
+    body = _get(client, user, "/formation/?tab=proposals")
+    assert 'data-tour="my-lsp-proposals"' in body
+    assert 'data-tour="new-proposal"' in body
+    body = _get(client, user, "/propose/")
+    for anchor in ("proposal-type", "proposal-dates", "proposal-fee",
+                   "proposal-save", "proposal-submit"):
+        assert f'data-tour="{anchor}"' in body, anchor

@@ -40,7 +40,7 @@
     {% endif %}
 
     {# ---- Basics (all types) ---- #}
-    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.event_type %}</div>
+    <div data-types="seminar reading_group special_event" data-tour="proposal-type">{% include "events/_proposal_field.html" with field=form.event_type %}</div>
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.title %}</div>
     <div data-types="seminar reading_group special_event" class="space-y-1">
       <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium">{{ form.description.label }}</label>
@@ -66,7 +66,7 @@
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.contact %}</div>
 
     {# ---- Seminar continuation ---- #}
-    <div data-types="seminar">{% include "events/_proposal_field.html" with field=form.continues_seminar %}</div>
+    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.continues_seminar %}</div>
 
     {# ---- Conveners / internal speakers ---- #}
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.faculty %}</div>
@@ -117,7 +117,7 @@
     <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.honoraria_estimate %}</div>
 
     {# ---- Term dates (offerings) — sit just above the meeting schedule ---- #}
-    <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.start_date %}</div>
+    <div data-types="seminar reading_group" data-tour="proposal-dates">{% include "events/_proposal_field.html" with field=form.start_date %}</div>
     <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.end_date %}</div>
 
     {# ---- Meeting schedule (seminars & reading groups) ---- #}
@@ -149,7 +149,7 @@
 
     {# ---- Fee ---- #}
     <div data-types="seminar reading_group special_event" class="rounded-lg border border-base-300/60 p-3 space-y-3">
-      {% include "events/_proposal_field.html" with field=form.fee_type %}
+      <div data-tour="proposal-fee">{% include "events/_proposal_field.html" with field=form.fee_type %}</div>
       <div id="fee-fixed">{% include "events/_proposal_field.html" with field=form.fee_amount %}</div>
       <div id="fee-sliding" class="grid grid-cols-2 gap-3">
         {% include "events/_proposal_field.html" with field=form.fee_sliding_min %}
@@ -228,8 +228,8 @@
       {% else %}
       <a href="{% url 'my_proposals' %}" class="btn btn-ghost btn-sm">Cancel</a>
       <div class="flex gap-2">
-        <button type="submit" name="action" value="save" class="btn btn-ghost btn-sm">Save for later</button>
-        <button type="submit" name="action" value="submit" class="btn btn-primary btn-sm">
+        <button type="submit" name="action" value="save" class="btn btn-ghost btn-sm" data-tour="proposal-save">Save for later</button>
+        <button type="submit" name="action" value="submit" class="btn btn-primary btn-sm" data-tour="proposal-submit">
           {% if editing and editing.status == "declined" %}Resubmit for review{% else %}Submit for review{% endif %}
         </button>
       </div>
