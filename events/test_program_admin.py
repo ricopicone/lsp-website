@@ -632,3 +632,31 @@ def test_publish_and_registration_toggles_accept_a_working_day(client, pc_member
     e.refresh_from_db()
     assert e.published is True
     assert e.status == Event.Status.OPEN
+
+
+@pytest.mark.django_db
+def test_standalone_new_reads_as_creation_not_a_proposal(client, pc_member):
+    """The PC's direct-create form shares the member proposal form, but its
+    copy must not address a proposer awaiting review."""
+    client.force_login(pc_member)
+    body = client.get(reverse("program_admin_special_event_new")).content.decode()
+    assert "relevance of your proposal" not in body
+    assert "you&#x27;re proposing" not in body
+    assert "for this proposal" not in body
+    assert "You&#x27;re counted as a convener" not in body
+    assert "Proposed date" not in body
+    # Review-only inputs, meaningless once the PC is the author.
+    assert 'name="speaker_arrangement"' not in body
+    assert 'name="honoraria_estimate"' not in body
+    assert "Shown on the event page" in body
+
+
+@pytest.mark.django_db
+def test_member_propose_form_keeps_its_proposal_copy(client):
+    u = User.objects.create_user(email="m@x.test", password="x")
+    u.profile.role = "analyst"
+    u.profile.save()
+    client.force_login(u)
+    body = client.get("/propose/").content.decode()
+    assert "relevance of your proposal" in body
+    assert 'name="speaker_arrangement"' in body

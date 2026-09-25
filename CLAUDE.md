@@ -2193,7 +2193,14 @@ Done (see `git log` for specifics):
   `data-types` attributes are untouched. URL names keep their
   `special_event` spelling. The PC guide now says the PC makes all four
   types. Verified in a browser that all four types show the one-off fields.
-  No flag, no backfill. Design:
+  **Follow-up, the same day:** the direct-create page had still read as a
+  proposal. Its description guidance asked the author to justify "the
+  relevance of your proposal to the Mission of the School". So
+  `EventProposalForm.use_direct_create_copy()` re-voices the labels and help
+  texts, and the template branches the description, readings and CE notes on
+  `direct_create`. The two review-only inputs (`speaker_arrangement`,
+  `honoraria_estimate`, which reach no event) are dropped from the PC's form.
+  The member form keeps its wording; a test pins both. No flag, no backfill. Design:
   `docs/superpowers/specs/2026-09-24-pc-standalone-event-types-design.md`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run

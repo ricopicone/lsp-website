@@ -1340,17 +1340,10 @@ def program_admin_special_event_new(request):
 
     special = Event.Type.SPECIAL_EVENT
 
-    def _offer_standalone_types(form):
-        # Constrain the choices to the PC-owned standalone types, so an offering
-        # can't be created here (both the template's type-adaptive display and
-        # POST validation honor this). The member form never offers the three
-        # PC-curated ones; this view is the only place they appear.
-        form.fields["event_type"].choices = Event.pc_owned_choices()
-
     if request.method == "POST":
         publish = request.POST.get("action") == "publish"
         form = EventProposalForm(request.POST)
-        _offer_standalone_types(form)
+        form.use_direct_create_copy()
         form.require_complete = True
         speakers = ProposalSpeakerFormSet(request.POST, prefix="speakers")
         if form.is_valid() and speakers.is_valid():
@@ -1381,7 +1374,7 @@ def program_admin_special_event_new(request):
             return redirect("events:edit", slug=event.slug)
     else:
         form = EventProposalForm(initial={"event_type": special.value})
-        _offer_standalone_types(form)
+        form.use_direct_create_copy()
         speakers = ProposalSpeakerFormSet(prefix="speakers")
     return render(request, "events/propose_event.html", {
         "form": form, "speakers": speakers, "direct_create": True,

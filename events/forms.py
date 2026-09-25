@@ -644,6 +644,30 @@ class EventProposalForm(forms.ModelForm):
     def clean_ce_credits_basis(self):
         return self.cleaned_data.get("ce_credits_basis") or CECreditBasis.TOTAL
 
+    #: Inputs that only inform the PC's review of a member proposal; they reach
+    #: no event, so the PC's own direct-create form drops them.
+    REVIEW_ONLY_FIELDS = ("speaker_arrangement", "honoraria_estimate")
+
+    def use_direct_create_copy(self):
+        """Re-voice the form for the PC creating a standalone event directly
+        (task #756 follow-up): the PC is the author, not a proposer awaiting
+        review, so the proposal-facing labels and help texts are replaced and
+        the review-only inputs removed. Offers every PC-owned type."""
+        self.fields["event_type"].choices = Event.pc_owned_choices()
+        self.fields["event_type"].help_text = ""
+        for name in self.REVIEW_ONLY_FIELDS:
+            self.fields.pop(name, None)
+        self.fields["proposed_datetime"].label = "Date & time"
+        self.fields["date_tbd"].label = "Date/time TBD"
+        self.fields["contact"].help_text = (
+            "Shown on the event page as the address for questions. Optional."
+        )
+        self.fields["offers_ce"].help_text = ""  # the CE note below the field says it
+        self.fields["faculty"].label = "LSP speakers"
+        self.fields["faculty"].help_text = (
+            "Members presenting at this event. Their bios come from their profiles."
+        )
+
     def clean_proposed_datetime(self):
         """Interpret the naive datetime-local input in the editor's own timezone
         (the request's active tz = their Profile.timezone), like the rest of the
