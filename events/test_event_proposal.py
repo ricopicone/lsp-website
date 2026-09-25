@@ -705,3 +705,43 @@ def test_member_cannot_propose_a_pc_curated_type(client):
     })
     assert resp.status_code == 200  # invalid choice → re-render
     assert not EventProposal.objects.filter(title="Sneaky Assembly").exists()
+
+
+def test_approved_seminar_makes_its_proposer_faculty_even_when_unlisted():
+    """The form says "You're a convener already" and its picker lists only
+    existing faculty, so a first-time proposer can't pick themselves — the
+    approval must count them (task #756 follow-up)."""
+    member = _member("first@x.test")
+    start, end = _future()
+    p = EventProposal.objects.create(
+        proposed_by=member, event_type=Event.Type.SEMINAR, title="Unlisted",
+        start_date=start, end_date=end, status=EventProposal.Status.PROPOSED,
+    )
+    event = p.approve(_pc_member())
+    assert member in event.faculty_members()
+    member.profile.refresh_from_db()
+    assert member.profile.is_faculty is True
+
+
+def test_approved_reading_group_keeps_its_proposer_beside_co_conveners():
+    from workgroups.permissions import is_workgroup_lead
+
+    member = _member("rg-lead@x.test")
+    co = _faculty("rg-co@x.test")
+    start, end = _future()
+    p = EventProposal.objects.create(
+        proposed_by=member, event_type=Event.Type.READING_GROUP, title="Two Leads",
+        start_date=start, end_date=end, status=EventProposal.Status.PROPOSED,
+    )
+    p.faculty.add(co)
+    event = p.approve(_pc_member())
+    assert is_workgroup_lead(member, event.workgroup)
+    assert is_workgroup_lead(co, event.workgroup)
+
+
+def test_convener_field_wording_follows_the_event_type(client):
+    client.force_login(_member("words@x.test"))
+    body = client.get("/propose/").content.decode()
+    assert "(seminars / reading groups)" not in body
+    assert "Co-conveners" in body
+    assert "LSP speakers" in body

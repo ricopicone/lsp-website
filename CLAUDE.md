@@ -2200,7 +2200,18 @@ Done (see `git log` for specifics):
   texts, and the template branches the description, readings and CE notes on
   `direct_create`. The two review-only inputs (`speaker_arrangement`,
   `honoraria_estimate`, which reach no event) are dropped from the PC's form.
-  The member form keeps its wording; a test pins both. No flag, no backfill. Design:
+  The member form keeps its wording; a test pins both. **A second follow-up**
+  came from the convener field's help, "Add any co-conveners (seminars /
+  reading groups) or internal LSP speakers (special events)". The
+  parentheticals named event types, not groups of people. The field now
+  renders "Co-conveners" or "LSP speakers" for the selected type. Its claim
+  "You're counted as a convener" was **false**. `approve()` made only the
+  *listed* people faculty, the picker lists existing faculty only, so a
+  first-time seminar proposer couldn't pick themselves and got a seminar with
+  no faculty, and a reading-group proposer was a convener only when nobody
+  else was listed. `approve()` now always counts the proposer for an
+  offering. This was latent: prod had no approved offering proposals, since
+  the 2026–27 program was script-imported. No flag, no backfill. Design:
   `docs/superpowers/specs/2026-09-24-pc-standalone-event-types-design.md`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run

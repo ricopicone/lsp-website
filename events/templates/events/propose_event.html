@@ -75,7 +75,19 @@
     <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.continues_seminar %}</div>
 
     {# ---- Conveners / internal speakers ---- #}
-    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.faculty %}</div>
+    {# One field, two meanings: an offering's co-conveners, or the LSP members presenting at a one-off event (display-only speakers, never faculty). #}
+    <div data-types="seminar reading_group special_event" class="space-y-1">
+      <label for="{{ form.faculty.id_for_label }}" class="block text-sm font-medium">
+        <span data-types="seminar reading_group">Co-conveners</span><span data-types="special_event">LSP speakers</span>
+      </label>
+      {{ form.faculty }}
+      <p data-types="seminar reading_group" class="text-xs text-base-content/60">Other
+        faculty convening with you. You're a convener already, and teaching a
+        seminar confers faculty standing.</p>
+      <p data-types="special_event" class="text-xs text-base-content/60">Members
+        presenting at this event. Their bios come from their profiles.</p>
+      {% if form.faculty.errors %}<p class="text-error text-xs mt-1">{{ form.faculty.errors|join:", " }}</p>{% endif %}
+    </div>
 
     {# ---- External speakers (special events) ---- #}
     <div data-types="special_event" class="space-y-2">

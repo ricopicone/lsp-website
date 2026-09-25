@@ -551,12 +551,10 @@ class EventProposalForm(forms.ModelForm):
             profile__is_faculty=True, is_active=True,
         ).order_by("last_name", "first_name")
         self.fields["faculty"].label_from_instance = _member_name
-        self.fields["faculty"].label = "Additional conveners / internal speakers"
-        self.fields["faculty"].help_text = (
-            "You're counted as a convener. Add any co-conveners (seminars / reading "
-            "groups) or internal LSP speakers (special events) — their bios come from "
-            "their profiles. Teaching a seminar confers faculty standing."
-        )
+        # Label and help differ by event type, so the template renders them
+        # (see propose_event.html); these are only the no-JS fallback.
+        self.fields["faculty"].label = "Co-conveners or LSP speakers"
+        self.fields["faculty"].help_text = ""
 
         self.fields["continues_seminar"].required = False
         self.fields["continues_seminar"].label = (
@@ -663,10 +661,6 @@ class EventProposalForm(forms.ModelForm):
             "Shown on the event page as the address for questions. Optional."
         )
         self.fields["offers_ce"].help_text = ""  # the CE note below the field says it
-        self.fields["faculty"].label = "LSP speakers"
-        self.fields["faculty"].help_text = (
-            "Members presenting at this event. Their bios come from their profiles."
-        )
 
     def clean_proposed_datetime(self):
         """Interpret the naive datetime-local input in the editor's own timezone

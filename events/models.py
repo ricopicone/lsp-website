@@ -1686,17 +1686,20 @@ class EventProposal(models.Model):
         ):
             event.workgroup_id = self.continues_seminar_id
             event.save(update_fields=["workgroup"])
+        # The proposer always convenes an offering they proposed: the form's
+        # picker holds only *additional* conveners and lists existing faculty
+        # alone, so a first-time proposer cannot pick themselves.
+        conveners = list(self.faculty.all())
+        if self.proposed_by_id and self.proposed_by not in conveners:
+            conveners.insert(0, self.proposed_by)
         if self.event_type == Event.Type.SEMINAR:
             # set_faculty() calls ensure_workgroup(), creating the standing
             # SEMINAR workgroup (+ its channel) for a brand-new seminar.
-            event.set_faculty(list(self.faculty.all()))
+            event.set_faculty(conveners)
         elif self.event_type == Event.Type.READING_GROUP:
             from workgroups.models import WorkgroupMembership
 
             wg = event.ensure_workgroup()
-            conveners = list(self.faculty.all())
-            if not conveners and self.proposed_by_id:
-                conveners = [self.proposed_by]
             for u in conveners:
                 WorkgroupMembership.objects.get_or_create(
                     workgroup=wg, user=u,
