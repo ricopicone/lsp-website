@@ -529,6 +529,13 @@ class EventProposalForm(forms.ModelForm):
         from workgroups.models import Workgroup
 
         self.fields["event_type"].label = "Type of event"
+        # The model also allows the PC-curated types (task #756); a member's
+        # form offers only what a member may propose. The PC's direct-create
+        # view widens this again.
+        proposable = {t.value for t in EventProposal.PROPOSABLE_TYPES}
+        self.fields["event_type"].choices = [
+            c for c in self.fields["event_type"].choices if c[0] in proposable
+        ]
         # datetime-local needs the value in this exact format to prefill on edit.
         self.fields["proposed_datetime"].input_formats = ["%Y-%m-%dT%H:%M"]
         self.fields["proposed_datetime"].label = "Proposed date & time"

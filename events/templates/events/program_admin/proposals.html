@@ -105,12 +105,13 @@
 
   <section class="space-y-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h2 class="font-serif text-xl text-base-content">Special events</h2>
-      <a href="{% url 'program_admin_special_event_new' %}" class="btn btn-primary btn-sm whitespace-nowrap">+ New special event</a>
+      <h2 class="font-serif text-xl text-base-content">Standalone events</h2>
+      <a href="{% url 'program_admin_special_event_new' %}" class="btn btn-primary btn-sm whitespace-nowrap">+ New standalone event</a>
     </div>
     <p class="max-w-2xl text-sm text-base-content/60">
-      Standalone events the PC organizes (not part of any program). Create one,
-      edit its content, and publish it when it's ready.
+      Special events, Days of Assembly, Working Days, and Scholarly Seminars:
+      the events the PC organizes outside any program. Create one, edit its
+      content, and publish it when it's ready.
     </p>
     {% if special_events %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
@@ -121,6 +122,7 @@
           <tr>
             <td class="font-medium">
               <a href="{% url 'events:detail' e.slug %}" class="link link-hover">{{ e.title }}</a>
+              <span class="badge badge-outline badge-sm align-middle ml-1">{{ e.get_event_type_display }}</span>
             </td>
             <td class="text-xs text-base-content/70 whitespace-nowrap">{{ e.start_date|date:"M j, Y" }}</td>
             <td>
@@ -168,7 +170,7 @@
       </table>
     </div>
     {% else %}
-    <p class="py-2 text-sm text-base-content/55">No special events yet.</p>
+    <p class="py-2 text-sm text-base-content/55">No standalone events yet.</p>
     {% endif %}
   </section>
 </div>

@@ -1285,10 +1285,12 @@ def program_admin_proposals(request):
     )
     pending = [p for p in proposals if p.status == EventProposal.Status.PROPOSED]
     decided = [p for p in proposals if p.status != EventProposal.Status.PROPOSED]
-    # Standalone special events get their management home here — the PC creates,
-    # edits, and publishes them from this tab (they aren't part of any program).
+    # Standalone events (special events, Days of Assembly, Working Days, the
+    # Scholarly Seminar Series) get their management home here — the PC
+    # creates, edits, and publishes them from this tab (they aren't part of any
+    # program).
     special_events = list(
-        Event.objects.filter(event_type=Event.Type.SPECIAL_EVENT)
+        Event.objects.filter(event_type__in=Event.PC_OWNED_TYPES)
         .order_by("-start_date", "title")
     )
     return _pc_admin_render(request, "proposals", "events/program_admin/proposals.html", {
@@ -1320,7 +1322,9 @@ def proposal_decide(request, pk: int):
 
 @login_required
 def program_admin_special_event_new(request):
-    """PC direct-create a special event.
+    """PC direct-create a standalone event: a special event, Day of Assembly,
+    Working Day, or Scholarly Seminar Series (``Event.PC_OWNED_TYPES``; the
+    last three were Django-admin-only until task #756).
 
     Reuses the member proposal form + ``EventProposal.approve()`` pipeline so the
     minting (price tier, first session, speakers, workgroup provenance) is never
@@ -1336,15 +1340,17 @@ def program_admin_special_event_new(request):
 
     special = Event.Type.SPECIAL_EVENT
 
-    def _lock_to_special(form):
-        # Constrain the choices so only special events can be created here (both
-        # the template's type-adaptive display and POST validation honor this).
-        form.fields["event_type"].choices = [(special.value, special.label)]
+    def _offer_standalone_types(form):
+        # Constrain the choices to the PC-owned standalone types, so an offering
+        # can't be created here (both the template's type-adaptive display and
+        # POST validation honor this). The member form never offers the three
+        # PC-curated ones; this view is the only place they appear.
+        form.fields["event_type"].choices = Event.pc_owned_choices()
 
     if request.method == "POST":
         publish = request.POST.get("action") == "publish"
         form = EventProposalForm(request.POST)
-        _lock_to_special(form)
+        _offer_standalone_types(form)
         form.require_complete = True
         speakers = ProposalSpeakerFormSet(request.POST, prefix="speakers")
         if form.is_valid() and speakers.is_valid():
@@ -1375,7 +1381,7 @@ def program_admin_special_event_new(request):
             return redirect("events:edit", slug=event.slug)
     else:
         form = EventProposalForm(initial={"event_type": special.value})
-        _lock_to_special(form)
+        _offer_standalone_types(form)
         speakers = ProposalSpeakerFormSet(prefix="speakers")
     return render(request, "events/propose_event.html", {
         "form": form, "speakers": speakers, "direct_create": True,
@@ -1385,13 +1391,13 @@ def program_admin_special_event_new(request):
 @login_required
 @require_POST
 def program_admin_special_event_publish(request, slug: str):
-    """PC publishes / unpublishes a standalone special event (its live/draft
-    lever is ``Event.published``). Filtered to special events so a program event,
+    """PC publishes / unpublishes a standalone event (its live/draft lever is
+    ``Event.published``). Filtered to the PC-owned types so a program event,
     whose visibility cascades from its Program, can't be toggled here."""
     if not _is_pc_or_staff(request.user):
         raise Http404()
     event = get_object_or_404(
-        Event, slug=slug, event_type=Event.Type.SPECIAL_EVENT,
+        Event, slug=slug, event_type__in=Event.PC_OWNED_TYPES,
     )
     publish = request.POST.get("action") == "publish"
     if event.published != publish:
@@ -1418,7 +1424,7 @@ def program_admin_special_event_registration(request, slug: str):
     if not _is_pc_or_staff(request.user):
         raise Http404()
     event = get_object_or_404(
-        Event, slug=slug, event_type=Event.Type.SPECIAL_EVENT,
+        Event, slug=slug, event_type__in=Event.PC_OWNED_TYPES,
     )
     action = request.POST.get("action")
     if action == "open":

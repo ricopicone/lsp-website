@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% block title %}{% if editing %}Edit proposal{% else %}Propose an event: a seminar, reading group, or special event{% endif %} · LSP{% endblock %}
+{% block title %}{% if direct_create %}New standalone event{% elif editing %}Edit proposal{% else %}Propose an event: a seminar, reading group, or special event{% endif %} · LSP{% endblock %}
 {% block content %}
 <div class="max-w-2xl space-y-8">
   <header class="space-y-2">
@@ -7,11 +7,12 @@
     <p class="text-sm">
       <a href="{% url 'program_admin_proposals' %}" class="link link-hover text-base-content/60">← Proposals</a>
     </p>
-    <h1 class="font-serif text-3xl text-base-content">New special event</h1>
+    <h1 class="font-serif text-3xl text-base-content">New standalone event</h1>
     <p class="text-base-content/70">
-      Create a special event directly. Save it as a draft, or publish it now —
-      publishing makes it live on the site immediately (a date/time TBD event
-      stays a draft until it has a date).
+      Create a special event, Day of Assembly, Working Day, or Scholarly Seminar
+      directly. Save it as a draft, or publish it now. Publishing makes it live
+      on the site immediately, and an event whose date is still TBD stays a draft
+      until it has one.
     </p>
     {% else %}
     <p class="flex items-center justify-between text-sm">
@@ -267,8 +268,12 @@
       showRow(schedFields, checked && checked.value === "set");
     }
 
+    // Every PC-organized one-off type (task #756) takes the special-event
+    // fields, so data-types="special_event" reads as "any standalone event".
+    var STANDALONE = ["special_event", "day_of_assembly", "working_day", "scholarly_seminar"];
     function sync() {
       var t = sel ? sel.value : "";
+      if (STANDALONE.indexOf(t) !== -1) { t = "special_event"; }
       document.querySelectorAll("[data-types]").forEach(function (el) {
         el.style.display = el.getAttribute("data-types").split(" ").indexOf(t) === -1 ? "none" : "";
       });

@@ -2169,6 +2169,33 @@ Done (see `git log` for specifics):
   category (only `CARTEL_PROPOSAL`); the guide says to check the Proposals
   tab.
 
+- **The PC creates every standalone event type** (task #756). The Program
+  Committee chair asked how to create a Day of Assembly or a Working Day, and
+  the answer was the Django admin. Everything downstream already handled all
+  four `Event.PC_OWNED_TYPES` (the PC's workgroup, their own meeting room, the
+  calendar, presenters through `member_speakers`). The missing piece was
+  creating them. **+ New special event** pinned the proposal form to
+  `special_event`, `EventProposal.event_type` offered only the three
+  member-proposable types, and the Proposals tab's list plus its publish and
+  registration endpoints filtered on `SPECIAL_EVENT`, so an admin-made Day of
+  Assembly had no home in the PC's admin. The special-event path is widened
+  rather than duplicated. `EventProposal.event_type` gains the three
+  PC-curated types (a migration that only changes choices, `0055`).
+  `EventProposalForm` narrows its choices back to `PROPOSABLE_TYPES` by
+  default, so a member's propose and edit forms still offer three types, and
+  this is enforced when the POST validates, not only when the page renders.
+  The direct-create view (still `_is_pc_or_staff`) offers
+  `Event.pc_owned_choices()`. `approve()` needed no change, because its
+  non-offering branch was already type-neutral. The list becomes
+  **Standalone events**, with a type badge on each row, and both row actions
+  accept any PC-owned type while still refusing program events (#532). The
+  form's JS normalizes every one-off type to `special_event`, so the
+  `data-types` attributes are untouched. URL names keep their
+  `special_event` spelling. The PC guide now says the PC makes all four
+  types. Verified in a browser that all four types show the one-off fields.
+  No flag, no backfill. Design:
+  `docs/superpowers/specs/2026-09-24-pc-standalone-event-types-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

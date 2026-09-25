@@ -686,3 +686,22 @@ def test_propose_form_ce_note_names_no_accreditor_date_or_person(client):
     for stale in ("GPPA", "Pittsburgh", "May 15", "Diana Cuello"):
         assert stale not in body, stale
     assert "accrediting organization" in body
+
+
+def test_member_cannot_propose_a_pc_curated_type(client):
+    """Days of Assembly, Working Days and the Scholarly Seminar Series are the
+    PC's to create (task #756) — the model allows them now, the member form
+    must not."""
+    member = _member("doa@x.test")
+    client.force_login(member)
+    page = client.get("/propose/").content
+    assert b'value="day_of_assembly"' not in page
+    assert b'value="working_day"' not in page
+    assert b'value="scholarly_seminar"' not in page
+    resp = client.post("/propose/", {
+        **_MGMT, "action": "submit", "location_kind": "online_insite",
+        "event_type": Event.Type.DAY_OF_ASSEMBLY, "title": "Sneaky Assembly",
+        "description": "x", "proposed_datetime": "2030-11-05T18:00",
+    })
+    assert resp.status_code == 200  # invalid choice → re-render
+    assert not EventProposal.objects.filter(title="Sneaky Assembly").exists()

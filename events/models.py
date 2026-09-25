@@ -912,6 +912,12 @@ class Event(models.Model):
         "special_event", "day_of_assembly", "working_day", "scholarly_seminar",
     })
 
+    @classmethod
+    def pc_owned_choices(cls):
+        """The PC-owned types as ``(value, label)`` choices, in ``Type`` order
+        (special event first) — what the PC's direct-create form offers."""
+        return [(t.value, t.label) for t in cls.Type if t.value in cls.PC_OWNED_TYPES]
+
     def ensure_workgroup(self):
         """Ensure this event has a generating workgroup, and return it.
 
@@ -1355,8 +1361,10 @@ class EventProposal(models.Model):
         APPROVED = "approved", _("Approved")
         DECLINED = "declined", _("Declined")
 
-    #: Event types a member may propose (others — Days of Assembly, Working Days,
-    #: the Scholarly Seminar Series — stay PC/Board-curated in admin).
+    #: Event types a member may propose. The other PC-organized types — Days of
+    #: Assembly, Working Days, the Scholarly Seminar Series — are the Program
+    #: Committee's to create, through its direct-create form (task #756), so the
+    #: field's choices below are wider than what the member form offers.
     PROPOSABLE_TYPES = (
         Event.Type.SEMINAR,
         Event.Type.READING_GROUP,
@@ -1373,6 +1381,9 @@ class EventProposal(models.Model):
             (Event.Type.SEMINAR, "Seminar"),
             (Event.Type.READING_GROUP, "Reading group"),
             (Event.Type.SPECIAL_EVENT, "Special event"),
+            (Event.Type.DAY_OF_ASSEMBLY, "Day of Assembly"),
+            (Event.Type.WORKING_DAY, "Working Day"),
+            (Event.Type.SCHOLARLY_SEMINAR, "Scholarly Seminar Series"),
         ],
         default=Event.Type.SEMINAR,
         help_text="What kind of event you're proposing.",

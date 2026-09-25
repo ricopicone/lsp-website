@@ -17,7 +17,8 @@ This admin gives you four tabs:
   scheduled publish date).
 - **Proposals**: review event proposals submitted by members; approve
   one to mint it into a program, or decline it with a note. This tab is
-  also where you **create and manage special events** directly.
+  also where you **create and manage standalone events** directly:
+  special events, Days of Assembly, Working Days, and Scholarly Seminars.
 - **Changes**: review faculty edits to the content of already-approved
   events, and see the history of self-certified and administrative
   changes.
@@ -94,9 +95,8 @@ add a new one attached to this program.
 > Special events, Days of Assembly, Working Days, and Scholarly
 > Seminars are **not** part of the publishable annual program—they're
 > standalone events on `/events/`, each with its own live/draft state.
-> You still create and manage **special events** here in the PC admin,
-> from the **Proposals** tab (see below); the other standalone types are
-> set up in Django admin.
+> You create and manage all four here in the PC admin, from the
+> **Proposals** tab (see below).
 
 ---
 
@@ -158,11 +158,14 @@ seminar confers faculty standing, granted automatically on approval.
 - **Decided**: a table of already-approved and declined proposals, with
   a link to the minted event.
 
-### Creating a special event directly
+### Creating a standalone event directly
 
-You don't have to wait for a proposal. Click **+ New special event** at
-the top of this tab to create one yourself. It opens the same event form
-(pre-set to a special event), and when you save you choose:
+You don't have to wait for a proposal. Click **+ New standalone event**
+to create one yourself. It opens the event form set to a special event;
+change **Type of event** to make a **Day of Assembly**, a **Working
+Day**, or a **Scholarly Seminar Series** instead. Members can't propose
+those three, so this is the only place they're made. When you save you
+choose:
 
 - **Create & publish**: the event goes live on `/events/` immediately
   (unless its date is still TBD, in which case it's held as a draft).
@@ -173,13 +176,15 @@ This is a shortcut for the PC only: it creates and approves the event in
 one step (the admin is the authority). A special event a *member*
 proposes still comes through the **Pending** queue for review.
 
-### Managing special events
+### Managing standalone events
 
-The **Special events** list at the bottom of this tab is the home for
-every standalone special event. Each row shows a **Live** or **Draft**
-badge and lets you **Edit** its content or **Publish / Unpublish** it —
-so a draft can be taken live (or pulled back) whenever you're ready,
-without touching Django admin.
+The **Standalone events** list at the bottom of this tab is the home for
+every special event, Day of Assembly, Working Day, and Scholarly
+Seminar. Each row shows its type, a **Live** or **Draft** badge, and
+whether registration is open, and lets you **Edit** its content,
+**Open / Close registration**, or **Publish / Unpublish** it, so a
+draft can be taken live (or pulled back) whenever you're ready, without
+touching Django admin.
 
 ---
 
@@ -243,13 +248,14 @@ immediately and don't appear here.
 4. For a seminar or reading group, open the program and edit the minted
    event if anything needs polishing, then publish the program.
 
-### "I want to put on a special event (a one-off talk, screening, etc.)."
+### "I want to put on a special event, a Day of Assembly, or a Working Day."
 
-1. Go to the **Proposals** tab and click **+ New special event**.
-2. Fill in the form (title, date/time, description, fee, speakers…).
+1. Go to the **Proposals** tab and click **+ New standalone event**.
+2. Pick the **Type of event**, then fill in the form (title, date/time,
+   description, fee, speakers…).
 3. Click **Create & publish** to put it live now, or **Save as draft**
    to hold it until you're ready.
-4. A draft appears in the **Special events** list; click **Publish**
+4. A draft appears in the **Standalone events** list; click **Publish**
    there when it's ready to announce.
 
 ### "Faculty want to change a published seminar's description."

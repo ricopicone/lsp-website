@@ -540,4 +540,95 @@ def test_proposals_tab_lists_special_events(client, pc_member):
     resp = client.get(reverse("program_admin_proposals"))
     assert resp.status_code == 200
     assert b"Standalone Talk" in resp.content
-    assert b"New special event" in resp.content
+    assert b"New standalone event" in resp.content
+
+
+# --- Days of Assembly, Working Days, Scholarly Seminars (task #756) -----
+
+
+@pytest.mark.django_db
+def test_standalone_new_offers_every_pc_owned_type(client, pc_member):
+    client.force_login(pc_member)
+    body = client.get(reverse("program_admin_special_event_new")).content
+    for t in ("special_event", "day_of_assembly", "working_day", "scholarly_seminar"):
+        assert f'value="{t}"'.encode() in body
+    assert b'value="reading_group"' not in body
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("etype", ["day_of_assembly", "working_day", "scholarly_seminar"])
+def test_standalone_new_mints_pc_owned_type(client, pc_member, etype):
+    from workgroups.models import Workgroup
+
+    client.force_login(pc_member)
+    resp = client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(
+            event_type=etype, title="The Assembly", fee_type="fixed", fee_amount="20",
+        ),
+    )
+    assert resp.status_code == 302
+    e = Event.objects.get(title="The Assembly")
+    assert e.event_type == etype
+    assert e.published is True
+    assert e.program is None
+    assert e.sessions.exists()
+    assert e.price_tiers.exists()
+    # PC-organized: provenance on the Program Committee's workgroup.
+    assert e.workgroup is not None
+    assert e.workgroup.kind == Workgroup.Kind.COMMITTEE
+
+
+@pytest.mark.django_db
+def test_standalone_new_forbidden_for_non_pc_member(client):
+    u = User.objects.create_user(email="member@x.test", password="x")
+    u.profile.role = "analyst"
+    u.profile.save()
+    client.force_login(u)
+    resp = client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(event_type="day_of_assembly"),
+    )
+    assert resp.status_code == 404
+    assert not Event.objects.exists()
+
+
+@pytest.mark.django_db
+def test_proposals_tab_lists_every_standalone_type(client, pc_member, program):
+    for i, t in enumerate(("day_of_assembly", "working_day", "scholarly_seminar")):
+        Event.objects.create(
+            title=f"Standalone {t}", slug=f"sa-{i}", event_type=t,
+            start_date=date(2030, 11, 5), end_date=date(2030, 11, 5),
+        )
+    Event.objects.create(
+        title="Program Seminar", slug="prog-sem", event_type=Event.Type.SEMINAR,
+        start_date=date(2030, 9, 1), end_date=date(2031, 5, 1), program=program,
+    )
+    client.force_login(pc_member)
+    body = client.get(reverse("program_admin_proposals")).content
+    assert b"Standalone day_of_assembly" in body
+    assert b"Standalone working_day" in body
+    assert b"Standalone scholarly_seminar" in body
+    assert b"Day of Assembly" in body          # the type badge
+    assert b"Program Seminar" not in body
+
+
+@pytest.mark.django_db
+def test_publish_and_registration_toggles_accept_a_working_day(client, pc_member):
+    e = Event.objects.create(
+        title="Work", slug="wd-toggle", event_type=Event.Type.WORKING_DAY,
+        start_date=date(2030, 11, 5), end_date=date(2030, 11, 5),
+        published=False, status=Event.Status.DRAFT,
+    )
+    client.force_login(pc_member)
+    client.post(
+        reverse("program_admin_special_event_publish", args=[e.slug]),
+        {"action": "publish"},
+    )
+    client.post(
+        reverse("program_admin_special_event_registration", args=[e.slug]),
+        {"action": "open"},
+    )
+    e.refresh_from_db()
+    assert e.published is True
+    assert e.status == Event.Status.OPEN
