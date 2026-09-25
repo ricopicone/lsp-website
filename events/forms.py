@@ -569,7 +569,19 @@ class EventProposalForm(forms.ModelForm):
         )
         self.fields["start_date"].label = "Start date"
         self.fields["end_date"].label = "End date"
-        self.fields["location_kind"].label = "Location"
+        self.fields["location_kind"].label = "Where it meets"
+        self.fields["location_kind"].help_text = ""
+        # The site's own room is the recommendation (task #624): registrants
+        # join from the event page, with no link to send.
+        LK = EventProposal.LocationKind
+        self.fields["location_kind"].choices = [
+            (LK.ONLINE_INSITE, "Online, in the site's own video room (recommended)"),
+            (LK.ONLINE_EXTERNAL, "Online, on another platform (Zoom, etc.)"),
+            (LK.IN_PERSON, "In person"),
+            (LK.HYBRID, "Hybrid (in person, plus the site's video room)"),
+        ]
+        # Label and help follow the kind; the template renders both variants.
+        self.fields["location"].help_text = ""
         self.fields["offers_ce"].label = "Offer CE credits"
         self.fields["offers_ce"].help_text = (
             "You apply to an accrediting organization separately; the School "
@@ -661,6 +673,28 @@ class EventProposalForm(forms.ModelForm):
             "Shown on the event page as the address for questions. Optional."
         )
         self.fields["offers_ce"].help_text = ""  # the CE note below the field says it
+        # Not an EventProposal field: the view writes it onto the minted Event.
+        # Initial follows the chosen type (members only for Days of Assembly
+        # and Working Days); the page's JS keeps it in step until touched.
+        etype = self.data.get("event_type") or self.initial.get("event_type")
+        self.fields["registration_eligibility"] = forms.ChoiceField(
+            required=False,
+            label="Who can register",
+            choices=Event.RegistrationEligibility.choices,
+            initial=Event.default_registration_eligibility(etype),
+            help_text=(
+                "Members only limits registration to members of the School. "
+                "Days of Assembly and Working Days start as members only."
+            ),
+        )
+
+    def registration_eligibility_choice(self) -> str:
+        """The direct-create form's "Who can register" answer, falling back to
+        the type's default when blank or absent."""
+        value = self.cleaned_data.get("registration_eligibility")
+        if value in Event.RegistrationEligibility.values:
+            return value
+        return Event.default_registration_eligibility(self.cleaned_data.get("event_type"))
 
     def clean_proposed_datetime(self):
         """Interpret the naive datetime-local input in the editor's own timezone

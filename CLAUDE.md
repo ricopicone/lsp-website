@@ -2211,7 +2211,21 @@ Done (see `git log` for specifics):
   no faculty, and a reading-group proposer was a convener only when nobody
   else was listed. `approve()` now always counts the proposer for an
   offering. This was latent: prod had no approved offering proposals, since
-  the 2026–27 program was script-imported. No flag, no backfill. Design:
+  the 2026–27 program was script-imported. **Third follow-up:** Days of
+  Assembly and Working Days are members-only gatherings, but every event was
+  born `members_and_guests`, and the PC's form didn't offer the field.
+  `Event.default_registration_eligibility(type)` (from
+  `MEMBERS_ONLY_BY_DEFAULT_TYPES`) is now applied by `approve()`. The PC's
+  form shows "Who can register", and its JS follows the type until the PC
+  picks a value. It is a default, not a rule (Rico, 2026-09-25), and it
+  sets registration only, never `visibility`. The form's **Where it meets**
+  now recommends the site's own room and names Zoom. The details box had
+  been JS-hidden for the external option, so there was nowhere to enter the
+  link. It now shows, labeled "Meeting link and details" or "Venue
+  address". `approve()` copies only a venue address onto the first
+  Session, because a session's location is published through the public
+  calendar feed (`core/views.py`), while the link belongs in the
+  registrants-only `access_info`. No flag, no backfill. Design:
   `docs/superpowers/specs/2026-09-24-pc-standalone-event-types-design.md`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run

@@ -164,8 +164,20 @@ You don't have to wait for a proposal. Click **+ New standalone event**
 to create one yourself. It opens the event form set to a special event;
 change **Type of event** to make a **Day of Assembly**, a **Working
 Day**, or a **Scholarly Seminar Series** instead. Members can't propose
-those three, so this is the only place they're made. When you save you
-choose:
+those three, so this is the only place they're made.
+
+- **Who can register** starts as *Members only* for a Day of Assembly
+  or a Working Day, and *Members and guests* otherwise. Change it here if
+  one event needs to differ, or later on the event's edit page. It
+  controls registration only: the event still appears on the site for
+  everyone.
+- **Where it meets**: the site's own video room is recommended, since
+  registrants join from the event page and there's no link to send. For
+  Zoom or another platform, choose *Online, on another platform* and put
+  the link (and any passcode) in **Meeting link and details**. Only
+  registrants see it.
+
+When you save you choose:
 
 - **Create & publish**: the event goes live on `/events/` immediately
   (unless its date is still TBD, in which case it's held as a draft).

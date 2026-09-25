@@ -745,3 +745,14 @@ def test_convener_field_wording_follows_the_event_type(client):
     assert "(seminars / reading groups)" not in body
     assert "Co-conveners" in body
     assert "LSP speakers" in body
+
+
+def test_approve_mints_a_day_of_assembly_members_only():
+    """The type's default lives on approve(), not only on the PC's view."""
+    p = EventProposal.objects.create(
+        proposed_by=_pc_member("pc-doa@x.test"),
+        event_type=Event.Type.DAY_OF_ASSEMBLY, title="Assembly",
+        status=EventProposal.Status.PROPOSED, date_tbd=True,
+    )
+    event = p.approve(_pc_member("pc-doa2@x.test"))
+    assert event.registration_eligibility == Event.RegistrationEligibility.MEMBERS_ONLY

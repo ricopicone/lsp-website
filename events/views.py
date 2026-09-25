@@ -1354,9 +1354,13 @@ def program_admin_special_event_new(request):
                 event = proposal.approve(request.user)
                 has_real_date = bool(proposal.proposed_datetime) and not proposal.date_tbd
                 want_published = publish and has_real_date
-                if event.published != want_published:
+                eligibility = form.registration_eligibility_choice()
+                if (event.published, event.registration_eligibility) != (
+                    want_published, eligibility,
+                ):
                     event.published = want_published
-                    event.save(update_fields=["published"])
+                    event.registration_eligibility = eligibility
+                    event.save(update_fields=["published", "registration_eligibility"])
             if publish and not has_real_date:
                 messages.warning(
                     request,

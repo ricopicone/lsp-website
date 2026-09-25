@@ -67,9 +67,28 @@
     <div data-types="special_event" id="datetime-row">{% include "events/_proposal_field.html" with field=form.proposed_datetime %}</div>
 
     {# ---- Location ---- #}
-    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.location_kind %}</div>
-    <div data-types="seminar reading_group special_event" id="location-detail-row">{% include "events/_proposal_field.html" with field=form.location %}</div>
+    <div data-types="seminar reading_group special_event">
+      {% include "events/_proposal_field.html" with field=form.location_kind %}
+      <p id="location-kind-insite-note" class="mt-1 text-xs text-base-content/60">Registrants
+        join from the event page once they've registered. There's no link to send.</p>
+    </div>
+    <div data-types="seminar reading_group special_event" id="location-detail-row" class="space-y-1">
+      <label for="{{ form.location.id_for_label }}" class="block text-sm font-medium">
+        <span data-location-for="online_external">Meeting link and details</span><span data-location-for="in_person hybrid">Venue address</span>
+      </label>
+      {{ form.location }}
+      <p data-location-for="online_external" class="text-xs text-base-content/60">The
+        Zoom (or other) link, with any passcode. Only registrants see it. You can
+        add it later on the event's edit page.</p>
+      <p data-location-for="in_person hybrid" class="text-xs text-base-content/60">Shown
+        on the event page.</p>
+      {% if form.location.errors %}<p class="text-error text-xs mt-1">{{ form.location.errors|join:", " }}</p>{% endif %}
+    </div>
     <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.contact %}</div>
+
+    {% if direct_create %}
+    <div data-types="special_event" id="eligibility-row">{% include "events/_proposal_field.html" with field=form.registration_eligibility %}</div>
+    {% endif %}
 
     {# ---- Seminar continuation ---- #}
     <div data-types="seminar reading_group">{% include "events/_proposal_field.html" with field=form.continues_seminar %}</div>
@@ -302,6 +321,16 @@
     // Every PC-organized one-off type (task #756) takes the special-event
     // fields, so data-types="special_event" reads as "any standalone event".
     var STANDALONE = ["special_event", "day_of_assembly", "working_day", "scholarly_seminar"];
+    // "Who can register" (PC direct-create only) follows the type's default —
+    // members only for Days of Assembly and Working Days — until the PC picks.
+    var MEMBERS_ONLY_TYPES = ["day_of_assembly", "working_day"];
+    var elig = document.getElementById("id_registration_eligibility");
+    var eligTouched = false;
+    if (elig) { elig.addEventListener("change", function () { eligTouched = true; }); }
+    function syncEligibility() {
+      if (!elig || eligTouched || !sel) { return; }
+      elig.value = MEMBERS_ONLY_TYPES.indexOf(sel.value) !== -1 ? "members_only" : "members_and_guests";
+    }
     function sync() {
       var t = sel ? sel.value : "";
       if (STANDALONE.indexOf(t) !== -1) { t = "special_event"; }
@@ -317,15 +346,21 @@
       // Branching: hide the datetime picker when the date is TBD (special events).
       if (t === "special_event" && dtRow) { showRow(dtRow, !(tbd && tbd.checked)); }
       // Branching: the venue/address only applies to in-person & hybrid.
+      // Branching: the details box holds a venue address (in person, hybrid)
+      // or the meeting link (another platform); the site's own room needs none.
+      var kind = locKind ? locKind.value : "";
       if (locRow) {
-        var needsVenue = locKind && (locKind.value === "in_person" || locKind.value === "hybrid");
         // locRow is also governed by data-types; only force-hide within visible types.
         if (locRow.getAttribute("data-types").split(" ").indexOf(t) !== -1) {
-          showRow(locRow, needsVenue);
+          showRow(locRow, kind !== "online_insite" && kind !== "");
         }
+        locRow.querySelectorAll("[data-location-for]").forEach(function (el) {
+          showRow(el, el.getAttribute("data-location-for").split(" ").indexOf(kind) !== -1);
+        });
       }
+      showRow(document.getElementById("location-kind-insite-note"), kind === "online_insite");
     }
-    if (sel) { sel.addEventListener("change", sync); }
+    if (sel) { sel.addEventListener("change", sync); sel.addEventListener("change", syncEligibility); }
     if (tbd) { tbd.addEventListener("change", sync); }
     if (locKind) { locKind.addEventListener("change", sync); }
     feeRadios.forEach(function (r) { r.addEventListener("change", syncFee); });

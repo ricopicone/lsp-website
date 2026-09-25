@@ -912,6 +912,17 @@ class Event(models.Model):
         "special_event", "day_of_assembly", "working_day", "scholarly_seminar",
     })
 
+    #: Types whose registration defaults to members only: a Day of Assembly and
+    #: a Working Day are the School's own gatherings. A default, not a rule —
+    #: the "Who can register" field can still open one to guests.
+    MEMBERS_ONLY_BY_DEFAULT_TYPES = frozenset({"day_of_assembly", "working_day"})
+
+    @classmethod
+    def default_registration_eligibility(cls, event_type) -> str:
+        if event_type in cls.MEMBERS_ONLY_BY_DEFAULT_TYPES:
+            return cls.RegistrationEligibility.MEMBERS_ONLY
+        return cls.RegistrationEligibility.MEMBERS_AND_GUESTS
+
     @classmethod
     def pc_owned_choices(cls):
         """The PC-owned types as ``(value, label)`` choices, in ``Type`` order
@@ -1661,6 +1672,9 @@ class EventProposal(models.Model):
             access_info=access_info,
             status=Event.Status.OPEN,
             published=(not is_offering and has_real_date),
+            registration_eligibility=Event.default_registration_eligibility(
+                self.event_type,
+            ),
             description=self.description, program=program,
             readings="\n".join(r.citation for r in self.readings.all()),
             contact=self.contact,
@@ -1675,7 +1689,15 @@ class EventProposal(models.Model):
             Session.objects.create(
                 event=event, start_at=self.proposed_datetime,
                 end_at=self.proposed_datetime + timedelta(hours=2), sequence=1,
-                location=self.location,
+                # A venue address only: for an external online event ``location``
+                # holds the meeting link, which belongs to the registrants-only
+                # access_info — a session's location is published (calendar feed).
+                location=(
+                    self.location
+                    if self.location_kind in (self.LocationKind.IN_PERSON,
+                                              self.LocationKind.HYBRID)
+                    else ""
+                ),
             )
         # Continuing an offering (seminar or reading group) → attach its
         # existing standing workgroup so ensure_workgroup() adds a new term

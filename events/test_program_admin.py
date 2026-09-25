@@ -660,3 +660,98 @@ def test_member_propose_form_keeps_its_proposal_copy(client):
     body = client.get("/propose/").content.decode()
     assert "relevance of your proposal" in body
     assert 'name="speaker_arrangement"' in body
+
+
+# --- Members-only by default for Days of Assembly / Working Days ---------
+
+
+@pytest.mark.django_db
+def test_standalone_new_offers_who_can_register(client, pc_member):
+    client.force_login(pc_member)
+    body = client.get(reverse("program_admin_special_event_new")).content.decode()
+    assert 'name="registration_eligibility"' in body
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("etype,expected", [
+    ("day_of_assembly", "members_only"),
+    ("working_day", "members_only"),
+    ("special_event", "members_and_guests"),
+    ("scholarly_seminar", "members_and_guests"),
+])
+def test_standalone_eligibility_defaults_by_type(client, pc_member, etype, expected):
+    client.force_login(pc_member)
+    client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(event_type=etype, title="Defaulted"),
+    )
+    assert Event.objects.get(title="Defaulted").registration_eligibility == expected
+
+
+@pytest.mark.django_db
+def test_standalone_eligibility_choice_overrides_the_default(client, pc_member):
+    client.force_login(pc_member)
+    client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(
+            event_type="working_day", title="Open Day",
+            registration_eligibility="members_and_guests",
+        ),
+    )
+    e = Event.objects.get(title="Open Day")
+    assert e.registration_eligibility == "members_and_guests"
+
+
+@pytest.mark.django_db
+def test_eligibility_default_never_touches_visibility(client, pc_member):
+    client.force_login(pc_member)
+    client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(event_type="day_of_assembly", title="Seen"),
+    )
+    assert Event.objects.get(title="Seen").visibility == Event.Visibility.PUBLIC
+
+
+# --- Meeting platform on the direct-create form -------------------------
+
+
+@pytest.mark.django_db
+def test_standalone_new_recommends_the_sites_own_room(client, pc_member):
+    client.force_login(pc_member)
+    body = client.get(reverse("program_admin_special_event_new")).content.decode()
+    assert "site&#x27;s own video room (recommended)" in body
+    assert "Zoom" in body
+    assert 'id="location-detail-row"' in body
+
+
+@pytest.mark.django_db
+def test_external_platform_link_reaches_registrants_only(client, pc_member):
+    """The details box carries a Zoom link to the event's joining details
+    (released to registrants), never onto the session, whose location the
+    public calendar feed publishes."""
+    link = "https://zoom.us/j/123 passcode 456"
+    client.force_login(pc_member)
+    client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(
+            title="On Zoom", location_kind="online_external", location=link,
+        ),
+    )
+    e = Event.objects.get(title="On Zoom")
+    assert e.online_venue == Event.OnlineVenue.EXTERNAL
+    assert e.access_info == link
+    assert e.sessions.get().location == ""
+
+
+@pytest.mark.django_db
+def test_in_person_venue_lands_on_the_session(client, pc_member):
+    client.force_login(pc_member)
+    client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(
+            title="In the Room", location_kind="in_person", location="12 Main St",
+        ),
+    )
+    e = Event.objects.get(title="In the Room")
+    assert e.format == Event.Format.IN_PERSON
+    assert e.sessions.get().location == "12 Main St"
