@@ -345,7 +345,10 @@ def test_plan_readers():
 def test_due_installment_prefers_the_oldest_overdue():
     from payments import registration_plans
     member = _user()
-    event = _event()
+    # Pinned, not relative to today: the schedule is spread across the event's
+    # run from the fixed build date below, so a floating end date moved the
+    # installments a day for every day the clock advanced.
+    event = _event(start_date=date(2026, 9, 8), end_date=date(2026, 11, 30))
     tier = _tier(event)
     reg = _registration(member, event, tier, "300.00")
     registration_plans.build_schedule(reg, 3, today=date(2026, 9, 1))
