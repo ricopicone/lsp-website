@@ -2024,3 +2024,36 @@ class JoiningInstructionsSend(models.Model):
             f"{self.event.title}: joining instructions to {self.recipient_count} "
             f"({self.sent_at:%Y-%m-%d})"
         )
+
+
+class EventRSVP(models.Model):
+    """A member saying they'll attend a Day of Assembly or Working Day (task
+    #756). Members attend those without registering, so an RSVP admits no one
+    and gates nothing: it is how the Program Committee knows who is coming,
+    and — for a hybrid gathering — who is coming in person. Withdrawing deletes
+    the row."""
+
+    class Attendance(models.TextChoices):
+        IN_PERSON = "in_person", _("In person")
+        ONLINE = "online", _("Online")
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="rsvps")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="event_rsvps",
+    )
+    attendance = models.CharField(
+        max_length=20, choices=Attendance.choices,
+        help_text="How they'll attend. Asked only of a hybrid event; otherwise "
+        "it follows the event's format.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("user__last_name", "user__first_name")
+        constraints = [
+            models.UniqueConstraint(fields=("event", "user"), name="events_one_rsvp_per_member"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} → {self.event.title} ({self.get_attendance_display()})"

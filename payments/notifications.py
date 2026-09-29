@@ -43,21 +43,22 @@ def registration_confirmed(reg) -> None:
 
 
 def session_reminder(session) -> int:
-    """Remind every confirmed registrant the day before ``session`` (task
-    #716): bell row linking to the event page, email with the joining block.
-    Returns how many were notified. Idempotent per session via
-    ``Session.reminder_sent_at``, which the caller stamps."""
-    from events.joining import joining_recipients
+    """Remind everyone who may attend, the day before ``session`` (task #716):
+    bell row linking to the event page, email with the joining block. That is
+    the confirmed registrants — and, at a Day of Assembly or Working Day, every
+    member (task #756). Returns how many were notified. Idempotent per session
+    via ``Session.reminder_sent_at``, which the caller stamps."""
+    from events.joining import reminder_recipients
 
     event = session.event
     url = reverse("events:detail", args=[event.slug])
     count = 0
-    for reg in joining_recipients(event):
+    for user in reminder_recipients(event):
         notify(
-            reg.user, Category.EVENT_REMINDER,
+            user, Category.EVENT_REMINDER,
             title=f"Tomorrow: {event.title}",
             url=url, target=session, dedupe=True,
-            email_fn=lambda r=reg: emails.send_session_reminder(r, session),
+            email_fn=lambda u=user: emails.send_session_reminder(u, session),
         )
         count += 1
     return count

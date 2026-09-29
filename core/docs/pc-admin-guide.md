@@ -174,6 +174,16 @@ those three, so this is the only place they're made.
   all-day banner across its dates. For a gathering running over several
   days, set each day's times in the **Schedule** section of its edit
   page.
+  - **RSVP**: members see an RSVP button in place of Register (for a
+    hybrid gathering: *in person* or *online*). It doesn't control who
+    can join. It tells you who's coming. The count shows in the
+    Standalone events list, and the names (with the in-person/online
+    split) on the event page when you're signed in.
+  - **Reminders**: every member gets a reminder email the day before
+    the gathering begins, once, listing every day. To send one yourself,
+    with your own note, click **Send reminder** on the gathering's row.
+    Only members receive it, never auditors or other non-member
+    accounts.
 - **Who can register** (other standalone events) starts as *Members and
   guests*. Change it here if one event needs to differ, or later on the
   event's edit page. It controls registration only: the event still

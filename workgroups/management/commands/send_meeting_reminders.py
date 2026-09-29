@@ -68,6 +68,11 @@ class Command(BaseCommand):
         ))
         self._remind_sessions(now, opts["session_lead_hours"], dry)
 
+    @staticmethod
+    def _first_day(session) -> bool:
+        first = session.event.sessions.order_by("start_at", "pk").first()
+        return first is not None and first.pk == session.pk
+
     def _remind_sessions(self, now, lead_hours: int, dry: bool) -> None:
         """Event sessions (task #716): the day-before reminder to confirmed
         registrants. Rides this command because the host already runs it every
@@ -89,6 +94,15 @@ class Command(BaseCommand):
         )
         sessions = people = 0
         for session in due:
+            if session.event.is_school_gathering and not self._first_day(session):
+                # A Day of Assembly or Working Day is reminded once, before its
+                # first day, and that email lists every day (task #756) — the
+                # whole School should not get a note each evening of a
+                # three-day assembly. Stamp the later days so they are settled.
+                if not dry:
+                    session.reminder_sent_at = now
+                    session.save(update_fields=["reminder_sent_at"])
+                continue
             if dry:
                 self.stdout.write(
                     f"would remind registrants: {session} @ {session.start_at:%Y-%m-%d %H:%M}"

@@ -1,8 +1,12 @@
-{% load tz_filters %}{% autoescape off %}{{ registration.user.first_name|default:"Hello" }},
-
+{% load tz_filters %}{% autoescape off %}{{ recipient.first_name|default:"Hello" }},
+{% if days %}
+A reminder that "{{ event.title }}" begins tomorrow. It runs:
+{% for d in days %}
+  {{ d.start_at|user_datetime_text }} until {{ d.end_at|user_datetime_text }}{% endfor %}
+{% else %}
 A reminder that "{{ event.title }}"{% if total_sessions > 1 %} (session {{ session.sequence }} of {{ total_sessions }}{% if session.title %}: {{ session.title }}{% endif %}){% endif %} begins
 {{ session.start_at|user_datetime_text }} and runs until {{ session.end_at|user_datetime_text }}.
-{% if session.location %}
+{% endif %}{% if session.location %}
 Location: {{ session.location }}
 {% endif %}
 How to join

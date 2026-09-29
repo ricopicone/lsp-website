@@ -2249,7 +2249,33 @@ Done (see `git log` for specifics):
   proceedings" on both forms and the event page. The calendar feed shows a
   gathering as **one all-day banner** across `start_date`–`end_date`
   (`lsp-cal-gathering`, secondary color, beside the deadlines' warning
-  color) and leaves its sessions out. No migration, no flag, no backfill. Design:
+  color) and leaves its sessions out. No migration, no flag, no backfill.
+  **Fifth follow-up (Rico, 2026-09-29): reminders, RSVP, and a members-only
+  audit.** `accounts.permissions.lsp_members()` is `is_lsp_member` as a
+  queryset (active, personas excluded), and a test holds the two to the same
+  answer, so the door and the mailing list agree. `events.joining.
+  reminder_recipients(event)` is the *people* told how to join: registrants,
+  plus every member for a gathering. Both the day-before reminder
+  (`session_reminder`, now user-based, as is `send_session_reminder`) and the
+  "Email joining instructions" page use it. That page is the PC's **Send
+  reminder** button, linked from each gathering's row in Standalone events
+  and from the host tools card, which now shows for in-person gatherings too.
+  A gathering is reminded **once**, before its first session.
+  `send_meeting_reminders` stamps the later days without sending, and the
+  email lists every day. **`events.EventRSVP`** (migration `0056`, unique per
+  event and member, `attendance` asked only of a hybrid event) replaces
+  Register for members at a gathering. It admits no one and gates nothing;
+  `events/rsvp.py` holds the rules and `events:rsvp` is the endpoint. Hosts
+  see the count and names on the event page, and the PC sees the count on
+  the list.
+  **Who attends (audited):** `admits_member` is `is_lsp_member`, i.e. a
+  directory role at a member standing (resigned and removed are excluded),
+  LSP Staff, Django staff, or a serving committee member. Auditors
+  (`external`), students and prospective applicants are not admitted, and
+  tests pin each. The other doors are all deliberate human decisions: event
+  hosts (`can_edit_event`), the site-technical roles, a host's room
+  invitation, and a guest registration if the PC opens the gathering to
+  guests (or a code addressed to that person). Design:
   `docs/superpowers/specs/2026-09-24-pc-standalone-event-types-design.md`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run

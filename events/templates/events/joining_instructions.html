@@ -5,7 +5,7 @@
 <div class="max-w-2xl mx-auto space-y-8">
 
   <header class="space-y-1">
-    <h1 class="font-serif text-3xl text-base-content">Email joining instructions</h1>
+    <h1 class="font-serif text-3xl text-base-content">{% if event.is_school_gathering %}Email a reminder to every member{% else %}Email joining instructions{% endif %}</h1>
     <p class="text-base-content/70">{{ event.title }}</p>
     <p class="text-sm">
       <a href="{{ back_url }}" class="link link-hover text-base-content/70">← Back to the roster</a>
@@ -17,21 +17,21 @@
     {% if joining.kind == "insite" %}
     <p class="text-base-content/70">
       This event meets in the site's video room{% if joining.hybrid %} (and in person){% endif %}.
-      Registrants are told there is no separate link: a <strong>Join the meeting room</strong>
+      Recipients are told there is no separate link: a <strong>Join the meeting room</strong>
       button appears on the event page when the event begins{% if joining.next_start_at %},
       {{ joining.next_start_at|user_datetime }}{% endif %}.
     </p>
     {% elif joining.kind == "external" %}
     <p class="text-base-content/70">
-      This event meets on an external service. Registrants get the joining details
+      This event meets on an external service. Recipients get the joining details
       from the event's <em>Joining details</em> field{% if not joining.access_info %},
       <strong class="text-warning">which is currently empty</strong>. Set the link on the
       <a href="{% url 'events:edit' event.slug %}" class="link">edit page</a> before sending{% endif %}.
     </p>
     {% elif joining.kind == "in_person" %}
-    <p class="text-base-content/70">This event meets in person. Registrants get the venue from the event's <em>Joining details</em> field.</p>
+    <p class="text-base-content/70">This event meets in person. Recipients get the venue from the event's <em>Joining details</em> field.</p>
     {% else %}
-    <p class="text-base-content/70">This event meets online, but the site's video room is switched off, so registrants are told details will follow on the event page.</p>
+    <p class="text-base-content/70">This event meets online, but the site's video room is switched off, so recipients are told details will follow on the event page.</p>
     {% endif %}
     <p class="text-xs text-base-content/60">To change where the event meets, use <a href="{% url 'events:edit' event.slug %}" class="link">Edit event</a>.</p>
   </section>
@@ -46,15 +46,18 @@
       {% endif %}
     </div>
     <p class="text-sm text-base-content/70">
-      Everyone with a paid or complimentary registration. People still awaiting
-      approval or payment are not included.
+      {% if event.is_school_gathering %}Every member of the School, since members
+      attend without registering{% if event.registration_eligibility == "members_and_guests" %},
+      and any guest with a confirmed registration{% endif %}. A day-before reminder
+      also goes out on its own.{% else %}Everyone with a paid or complimentary
+      registration. People still awaiting approval or payment are not included.{% endif %}
     </p>
     {% if recipients %}
     <details class="text-sm">
       <summary class="cursor-pointer text-base-content/70">Show the list</summary>
       <ul class="mt-2 columns-1 sm:columns-2 text-base-content/80">
-        {% for reg in recipients %}
-        <li>{{ reg.user.get_full_name|default:reg.user.email }} <span class="text-base-content/50">· {{ reg.user.email }}</span></li>
+        {% for person in recipients %}
+        <li>{{ person.get_full_name|default:person.email }} <span class="text-base-content/50">· {{ person.email }}</span></li>
         {% endfor %}
       </ul>
     </details>
@@ -70,12 +73,12 @@
   <p class="text-sm text-base-content/70 rounded-lg bg-base-200/60 p-3">
     Last sent {{ last_send.sent_at|user_datetime }} by
     {{ last_send.sent_by.get_full_name|default:"a staff member" }} to
-    {{ last_send.recipient_count }} registrant{{ last_send.recipient_count|pluralize }}.
+    {{ last_send.recipient_count }} {% if event.is_school_gathering %}{{ last_send.recipient_count|pluralize:"person,people" }}{% else %}registrant{{ last_send.recipient_count|pluralize }}{% endif %}.
   </p>
   {% endif %}
 
   {% if recipients %}
-  <form method="post" class="space-y-6" onsubmit="return confirm('Send joining instructions to {{ recipients|length }} registrant{{ recipients|length|pluralize }} now?');">
+  <form method="post" class="space-y-6" onsubmit="return confirm('Send this email to {{ recipients|length }} {% if event.is_school_gathering %}{{ recipients|length|pluralize:"person,people" }}{% else %}registrant{{ recipients|length|pluralize }}{% endif %} now?');">
     {% csrf_token %}
 
     <div class="form-control space-y-1">
@@ -112,7 +115,7 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-3">
-      <button type="submit" class="btn btn-primary">Send to {{ recipients|length }} registrant{{ recipients|length|pluralize }}</button>
+      <button type="submit" class="btn btn-primary">Send to {{ recipients|length }} {% if event.is_school_gathering %}{{ recipients|length|pluralize:"person,people" }}{% else %}registrant{{ recipients|length|pluralize }}{% endif %}</button>
       <a href="{{ back_url }}" class="btn btn-ghost">Cancel</a>
     </div>
   </form>

@@ -91,12 +91,29 @@ def joining_recipients(event):
     )
 
 
+def reminder_recipients(event) -> list:
+    """The *people* told how to join: the users behind
+    :func:`joining_recipients` — and, for a Day of Assembly or Working Day,
+    every member of the School besides, since members attend those without
+    registering (task #756). A guest a gathering was opened to still comes in
+    through a registration. Deduplicated, ordered by name."""
+    users = {reg.user_id: reg.user for reg in joining_recipients(event)}
+    if event.is_school_gathering:
+        from accounts.permissions import lsp_members
+
+        users.update({u.pk: u for u in lsp_members()})
+    return sorted(
+        users.values(),
+        key=lambda u: (u.last_name.lower(), u.first_name.lower(), u.email.lower()),
+    )
+
+
 def recipient_addresses(event) -> list[str]:
     """Deduplicated email addresses of the recipients, for the copy box."""
     seen: set[str] = set()
     out: list[str] = []
-    for reg in joining_recipients(event):
-        addr = reg.user.email
+    for user in reminder_recipients(event):
+        addr = user.email
         if addr.lower() not in seen:
             seen.add(addr.lower())
             out.append(addr)
@@ -166,22 +183,22 @@ def send_joining_instructions(event, *, sender, message: str, sign_as: str) -> i
     throttled = ThrottledSender()
     sent = 0
 
-    def _one(reg):
+    def _one(user):
         body = render_joining_email(
-            event, recipient=reg.user, message=message, signature=signature,
+            event, recipient=user, message=message, signature=signature,
             sender_name=sender.get_full_name().strip(),
         )
         msg = EmailMultiAlternatives(
             subject=subject,
             body=body,
             from_email=school_from("Lacanian School of Psychoanalysis"),
-            to=[reg.user.email],
+            to=[user.email],
             reply_to=[reply_to],
         )
         msg.send(fail_silently=False)
 
-    for reg in joining_recipients(event):
-        throttled.send(_one, reg)
+    for user in reminder_recipients(event):
+        throttled.send(_one, user)
         sent += 1
 
     JoiningInstructionsSend.objects.create(

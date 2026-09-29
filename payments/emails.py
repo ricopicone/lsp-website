@@ -429,31 +429,38 @@ def send_installment_reminder(installment) -> None:
     _send(subject=subject, body=body, to=[registration.user.email])
 
 
-def send_session_reminder(registration: Registration, session) -> None:
-    """The day-before reminder to a confirmed registrant (task #716): when the
+def send_session_reminder(user, session) -> None:
+    """The day-before reminder to someone who may attend (task #716): when the
     session begins, in their timezone, and how to join — the same joining
-    block the confirmation carried, on the day it is needed."""
+    block the confirmation carried, on the day it is needed. A Day of Assembly
+    or Working Day is reminded once, before its first day, so the email lists
+    every day (task #756)."""
     import dataclasses
 
     from events.joining import joining_details
 
-    event = registration.event
+    event = session.event
     total = event.sessions.count()
     # The block's own "the button appears at …" line would repeat the start
     # time this email leads with, so it is dropped here.
     joining = dataclasses.replace(joining_details(event), next_start_at=None)
     subject = f"Tomorrow: {event.title}"
-    with _recipient_timezone(registration.user):
+    days = (
+        list(event.sessions.order_by("start_at"))
+        if event.is_school_gathering and total > 1 else []
+    )
+    with _recipient_timezone(user):
         body = render_to_string(
             "payments/email/session_reminder.txt",
             {
-                "registration": registration,
+                "recipient": user,
                 "event": event,
                 "session": session,
+                "days": days,
                 "total_sessions": total,
                 "joining": joining,
                 "support_email": settings.SUPPORT_EMAIL,
                 "site_base_url": settings.SITE_BASE_URL,
             },
         )
-    _send(subject=subject, body=body, to=[registration.user.email])
+    _send(subject=subject, body=body, to=[user.email])

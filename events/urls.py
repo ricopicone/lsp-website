@@ -23,6 +23,7 @@ urlpatterns = [
     path("<slug:slug>/roster.csv", views.event_roster_csv, name="roster_csv"),
     path("<slug:slug>/codes/", views.event_generate_code, name="generate_code"),
     path("<slug:slug>/codes/<int:pk>/revoke/", views.event_revoke_code, name="revoke_code"),
+    path("<slug:slug>/rsvp/", views.event_rsvp, name="rsvp"),
     path("<slug:slug>/joining-instructions/", views.event_joining_instructions,
          name="joining_instructions"),
     path("<slug:slug>/check-code/", views.check_pricing_code, name="check_code"),

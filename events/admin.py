@@ -9,6 +9,7 @@ from .models import (
     EventFeatureImage,
     EventMemberSpeaker,
     EventProposal,
+    EventRSVP,
     JoiningInstructionsSend,
     PriceTier,
     PricingCode,
@@ -46,6 +47,18 @@ class EventChangeRequestAdmin(admin.ModelAdmin):
     search_fields = ("event__title", "proposed_by__email")
     autocomplete_fields = ("event", "proposed_by", "reviewed_by")
     readonly_fields = ("created_at", "applied_at")
+
+
+@admin.register(EventRSVP)
+class EventRSVPAdmin(admin.ModelAdmin):
+    """RSVPs to Days of Assembly and Working Days (task #756): a headcount,
+    editable here if a member asks to be added or removed by hand."""
+
+    list_display = ("event", "user", "attendance", "created_at")
+    list_filter = ("attendance", "event")
+    search_fields = ("user__email", "user__first_name", "user__last_name", "event__title")
+    autocomplete_fields = ("user",)
+    raw_id_fields = ("event",)
 
 
 @admin.register(JoiningInstructionsSend)

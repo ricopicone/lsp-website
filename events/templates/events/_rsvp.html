@@ -1,0 +1,55 @@
+{% comment %}RSVP for a Day of Assembly or Working Day (task #756). Members attend
+without registering; the RSVP is the Program Committee's headcount and admits
+no one. Expects: event, gathering_cta, my_rsvp, rsvp_asks_attendance,
+rsvp_summary (hosts only).{% endcomment %}
+{% if gathering_cta == "member" %}
+<div class="mt-3 space-y-2">
+  {% if my_rsvp %}
+  <p class="text-sm text-base-content/80">
+    You've RSVP'd{% if rsvp_asks_attendance %}: attending <strong>{{ my_rsvp.get_attendance_display|lower }}</strong>{% else %} as attending{% endif %}.
+  </p>
+  <div class="flex flex-wrap items-center gap-2">
+    {% if rsvp_asks_attendance %}
+    <form method="post" action="{% url 'events:rsvp' event.slug %}">
+      {% csrf_token %}
+      <input type="hidden" name="attendance" value="{% if my_rsvp.attendance == 'in_person' %}online{% else %}in_person{% endif %}">
+      <button type="submit" class="btn btn-ghost btn-sm">Change to {% if my_rsvp.attendance == 'in_person' %}online{% else %}in person{% endif %}</button>
+    </form>
+    {% endif %}
+    <form method="post" action="{% url 'events:rsvp' event.slug %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="withdraw">
+      <button type="submit" class="btn btn-ghost btn-sm">Withdraw RSVP</button>
+    </form>
+  </div>
+  {% else %}
+  <form method="post" action="{% url 'events:rsvp' event.slug %}" class="flex flex-wrap items-center gap-2">
+    {% csrf_token %}
+    {% if rsvp_asks_attendance %}
+    <button type="submit" name="attendance" value="in_person" class="btn btn-primary">RSVP, in person</button>
+    <button type="submit" name="attendance" value="online" class="btn btn-primary btn-outline">RSVP, online</button>
+    {% else %}
+    <button type="submit" id="rsvp-cta" class="btn btn-primary">RSVP</button>
+    {% endif %}
+  </form>
+  <p class="text-xs text-base-content/60">An RSVP helps the Program Committee plan. You can join without one.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if rsvp_summary %}
+<details class="mt-4 rounded-lg border border-base-300 bg-base-100 p-3 text-sm">
+  <summary class="cursor-pointer font-medium text-base-content">
+    RSVPs: {{ rsvp_summary.total }}{% if rsvp_asks_attendance %} · {{ rsvp_summary.in_person }} in person, {{ rsvp_summary.online }} online{% endif %}
+  </summary>
+  {% if rsvp_summary.rsvps %}
+  <ul class="mt-2 columns-1 sm:columns-2 text-base-content/80">
+    {% for r in rsvp_summary.rsvps %}
+    <li>{{ r.user.get_full_name|default:r.user.email }}{% if rsvp_asks_attendance %} <span class="text-base-content/50">· {{ r.get_attendance_display|lower }}</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="mt-2 text-base-content/60">No RSVPs yet.</p>
+  {% endif %}
+</details>
+{% endif %}

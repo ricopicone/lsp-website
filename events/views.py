@@ -71,6 +71,12 @@ def _release_if_approval_turned_off(request, event, was_required: bool) -> None:
         ))
 
 
+def _rsvp_summary(event):
+    from .rsvp import summary
+
+    return summary(event)
+
+
 def event_summary_context(event, user) -> dict:
     """Context for the shared ``events/_event_summary.html`` partial (faculty,
     about, sessions, pricing, register/your-status CTA). Used by the standalone
@@ -160,6 +166,15 @@ def event_summary_context(event, user) -> dict:
         "event_next_session_at": next_session.start_at if next_session else None,
         "can_host": can_host,
         "admitted_as_member": admitted_as_member,
+        # RSVPs (task #756): the member's own, and the headcount for whoever
+        # runs the gathering.
+        "my_rsvp": (
+            event.rsvps.filter(user=user).first() if admitted_as_member else None
+        ),
+        "rsvp_asks_attendance": event.format == Event.Format.HYBRID,
+        "rsvp_summary": (
+            _rsvp_summary(event) if event.is_school_gathering and can_host else None
+        ),
         # What a gathering's call to action says instead of Register: a member
         # joins from the page, an anonymous visitor is asked to sign in (they
         # may well be a member). A signed-in guest falls through to the
@@ -761,6 +776,35 @@ def _resequence_and_sync_dates(event):
 
 @login_required
 @require_POST
+def event_rsvp(request, slug: str):
+    """A member RSVPs to a Day of Assembly or Working Day, or withdraws it
+    (task #756). Members attend those without registering; the RSVP is the
+    headcount — the in-person one, for a hybrid gathering — and admits no one.
+    Anyone who can't RSVP (a guest, a non-gathering) gets a 404."""
+    from . import rsvp as rsvps
+
+    event = get_object_or_404(Event, slug=slug)
+    if not (event.is_public_now and rsvps.can_rsvp(event, request.user)):
+        raise Http404()
+    if request.POST.get("action") == "withdraw":
+        if rsvps.withdraw(event, request.user):
+            messages.success(request, "Your RSVP is withdrawn. You can still join.")
+    else:
+        try:
+            r = rsvps.record(event, request.user, request.POST.get("attendance", ""))
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        else:
+            how = (
+                f" ({r.get_attendance_display().lower()})"
+                if rsvps.asks_attendance(event) else ""
+            )
+            messages.success(request, f"Thanks, you're down as attending{how}.")
+    return redirect("events:detail", slug=event.slug)
+
+
+@login_required
+@require_POST
 def event_registration_status(request, slug: str):
     """Faculty / conveners / PC / staff open or close registration for one event.
 
@@ -1303,8 +1347,11 @@ def program_admin_proposals(request):
     # Scholarly Seminar Series) get their management home here — the PC
     # creates, edits, and publishes them from this tab (they aren't part of any
     # program).
+    from django.db.models import Count
+
     special_events = list(
         Event.objects.filter(event_type__in=Event.PC_OWNED_TYPES)
+        .annotate(rsvp_count=Count("rsvps"))
         .order_by("-start_date", "title")
     )
     return _pc_admin_render(request, "proposals", "events/program_admin/proposals.html", {
@@ -1635,8 +1682,8 @@ def event_joining_instructions(request, slug: str):
     from .joining import (
         default_message,
         joining_details,
-        joining_recipients,
         recipient_addresses,
+        reminder_recipients,
         render_joining_email,
         send_joining_instructions,
         signature_for,
@@ -1647,7 +1694,9 @@ def event_joining_instructions(request, slug: str):
     if not _can_send_joining(request.user, event):
         return gate_or_login(request)
 
-    recipients = list(joining_recipients(event))
+    # Registrants — and at a Day of Assembly or Working Day, every member
+    # (task #756), which makes this page the PC's "send a reminder" button.
+    recipients = reminder_recipients(event)
     signs_own_event = event.is_faculty(request.user) or event.is_presenter(request.user)
     default_sign_as = (
         JoiningInstructionsSend.SignAs.ME if signs_own_event
@@ -1670,15 +1719,16 @@ def event_joining_instructions(request, slug: str):
             n = send_joining_instructions(
                 event, sender=request.user, message=message, sign_as=sign_as,
             )
-            messages.success(
-                request,
-                f"Joining instructions sent to {n} registrant{'s' if n != 1 else ''}.",
+            who = (
+                ("person" if n == 1 else "people") if event.is_school_gathering
+                else ("registrant" if n == 1 else "registrants")
             )
+            messages.success(request, f"Joining instructions sent to {n} {who}.")
             return redirect(reverse("events:joining_instructions", args=[event.slug]))
 
     # Preview in the sender's own timezone, addressed to a sample recipient.
     signature, reply_to = signature_for(event, request.user, sign_as)
-    sample = recipients[0].user if recipients else request.user
+    sample = recipients[0] if recipients else request.user
     preview = render_joining_email(
         event, recipient=sample, message=message, signature=signature,
     )

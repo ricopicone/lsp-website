@@ -230,6 +230,7 @@ show_access_info.{% endcomment %}
     {# A Day of Assembly or Working Day (task #756): members don't register. #}
     <p class="text-base-content/80"><strong>Open to all members, no registration needed.</strong>
       {% if gathering_cta == "member" %}Join from this page when it begins.{% else %}Sign in to join when it begins.{% endif %}</p>
+    {% include "events/_rsvp.html" %}
   {% elif event.status == "open" and event.is_public_now %}
     {% if user_registration %}
       <a href="{% url 'registrations:confirm' user_registration.id %}" class="btn btn-primary btn-lg">View your registration →</a>

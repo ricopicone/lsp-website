@@ -46,3 +46,39 @@ def is_lsp_member(user) -> bool:
         user=user,
         workgroup__kind=Workgroup.Kind.COMMITTEE,
     ).exists()
+
+
+def lsp_members():
+    """Active users for whom :func:`is_lsp_member` is true, as a queryset — the
+    whole School, for mail addressed to every member (task #756).
+
+    Mirrors the predicate clause for clause, and a test holds the two to the
+    same answer, so who may enter a gathering and who is told about it cannot
+    drift. Training-sandbox personas are left out: they are not people.
+    """
+    from django.db.models import Q
+
+    from accounts.models import Profile, User
+    from core.models import StaffRole
+    from workgroups.models import Workgroup, serving_membership_q
+
+    committee_ids = (
+        Workgroup.objects.filter(kind=Workgroup.Kind.COMMITTEE).values("pk")
+    )
+    return (
+        User.objects.filter(is_active=True)
+        .filter(
+            Q(is_staff=True)
+            | (
+                Q(profile__role__in=Profile.DIRECTORY_ROLES)
+                & ~Q(profile__standing__in=Profile.NON_MEMBER_STANDINGS)
+            )
+            | Q(staff_roles__key=StaffRole.LSP_STAFF)
+            | (
+                Q(workgroup_memberships__workgroup__in=committee_ids)
+                & serving_membership_q("workgroup_memberships__")
+            )
+        )
+        .exclude(profile__is_persona=True)
+        .distinct()
+    )

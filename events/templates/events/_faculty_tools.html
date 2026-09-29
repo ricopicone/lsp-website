@@ -43,20 +43,20 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
   {% endif %}
 
   {# Joining instructions (task #716) #}
-  {% if event.format != 'in_person' %}
+  {% if event.format != 'in_person' or event.is_school_gathering %}
   <div class="rounded-lg border border-base-300 bg-base-100 p-4 space-y-2">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h3 class="font-serif text-lg text-base-content">Tell registrants how to join</h3>
+        <h3 class="font-serif text-lg text-base-content">{% if event.is_school_gathering %}Send every member a reminder{% else %}Tell registrants how to join{% endif %}</h3>
         <p class="text-sm text-base-content/70">
-          {% if event.uses_insite_room %}There's no meeting link to send: the Join button appears on the event page when the event begins.{% else %}This event meets on an external service; the email carries its joining details.{% endif %}
-          Email everyone with a confirmed registration a reminder, with a note from you.
+          {% if event.format == 'in_person' %}The email carries the venue.{% elif event.uses_insite_room %}There's no meeting link to send: the Join button appears on the event page when the event begins.{% else %}This event meets on an external service; the email carries its joining details.{% endif %}
+          {% if event.is_school_gathering %}Email every member a reminder, with a note from you. A day-before reminder also goes out on its own.{% else %}Email everyone with a confirmed registration a reminder, with a note from you.{% endif %}
         </p>
         {% with last=event.joining_sends.first %}{% if last %}
         <p class="text-xs text-base-content/60">Last sent {{ last.sent_at|date:"M j, Y" }} by {{ last.sent_by.get_full_name|default:"a staff member" }} to {{ last.recipient_count }}.</p>
         {% endif %}{% endwith %}
       </div>
-      <a href="{% url 'events:joining_instructions' event.slug %}" class="btn btn-primary btn-sm whitespace-nowrap" data-tour="joining-instructions">Email joining instructions</a>
+      <a href="{% url 'events:joining_instructions' event.slug %}" class="btn btn-primary btn-sm whitespace-nowrap" data-tour="joining-instructions">{% if event.is_school_gathering %}Send reminder{% else %}Email joining instructions{% endif %}</a>
     </div>
   </div>
   {% endif %}
