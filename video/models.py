@@ -262,8 +262,11 @@ class Recording(models.Model):
         """On this recording's roster: an event's paid/comped registrants, or a
         group's members (``Workgroup.is_member`` already means the right thing
         for both — derived registrants for an offering, the stored roster for a
-        cartel or committee)."""
-        if self.event_id and self.event.has_access_registrant(user):
+        cartel or committee). At a Day of Assembly or Working Day the members
+        are the attendees, registered or not (task #756)."""
+        if self.event_id and (
+            self.event.has_access_registrant(user) or self.event.admits_member(user)
+        ):
             return True
         wg = self._workgroup()
         return bool(wg and (wg.is_member(user) or wg.has_archive_access(user)))

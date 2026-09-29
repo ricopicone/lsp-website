@@ -157,9 +157,14 @@ def calendar_events_json(request):
     start_param = request.GET.get("start")
     end_param = request.GET.get("end")
 
-    qs = Session.objects.select_related("event")
+    from events.models import Event
+
+    # Days of Assembly and Working Days appear once, as an all-day banner
+    # across their dates (task #756), not as sessions beside the seminars.
+    qs = Session.objects.select_related("event").exclude(
+        event__event_type__in=Event.SCHOOL_GATHERING_TYPES,
+    )
     if not _is_staff(request.user):
-        from events.models import Event
         qs = qs.filter(Event.public_now_q("event__"))
 
     start = _parse(start_param) if start_param else None
@@ -187,10 +192,45 @@ def calendar_events_json(request):
         }
         for s in qs
     ]
+    payload.extend(_gathering_events(request.user, start, end))
     # Payment deadlines (dues + tuition decision) — members only (#355).
     if request.user.is_authenticated:
         payload.extend(_payment_deadline_events(start, end))
     return JsonResponse(payload, safe=False)
+
+
+def _gathering_events(user, start, end):
+    """Days of Assembly and Working Days as all-day banners (task #756).
+
+    The School's own gatherings should stand out as the year is read ahead,
+    the way the tuition deadline does, rather than read as one more seminar
+    session. One item per event spans ``start_date``–``end_date``; the times
+    are on the event page it links to.
+    """
+    from datetime import timedelta
+
+    from events.models import Event
+
+    qs = Event.objects.filter(event_type__in=Event.SCHOOL_GATHERING_TYPES)
+    if not _is_staff(user):
+        qs = qs.filter(Event.public_now_q())
+    if start:
+        qs = qs.filter(end_date__gte=start.date())
+    if end:
+        qs = qs.filter(start_date__lte=end.date())
+    return [
+        {
+            "id": f"gathering-{e.pk}",
+            "title": e.title,
+            "start": e.start_date.isoformat(),
+            # FullCalendar's all-day end is exclusive.
+            "end": (e.end_date + timedelta(days=1)).isoformat(),
+            "allDay": True,
+            "url": reverse("events:detail", args=[e.slug]),
+            "className": "lsp-cal-gathering",
+        }
+        for e in qs.order_by("start_date")
+    ]
 
 
 def _payment_deadline_events(start, end):

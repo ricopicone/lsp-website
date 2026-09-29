@@ -41,13 +41,19 @@
     {% endif %}
 
     {# ---- Basics (all types) ---- #}
-    <div data-types="seminar reading_group special_event" data-tour="proposal-type">{% include "events/_proposal_field.html" with field=form.event_type %}</div>
-    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.title %}</div>
-    <div data-types="seminar reading_group special_event" class="space-y-1">
-      <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium">{{ form.description.label }}</label>
+    <div data-types="seminar reading_group special_event gathering" data-tour="proposal-type">{% include "events/_proposal_field.html" with field=form.event_type %}</div>
+    <div data-types="seminar reading_group special_event gathering">{% include "events/_proposal_field.html" with field=form.title %}</div>
+    <div data-types="seminar reading_group special_event gathering" class="space-y-1">
+      <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium">
+        {% if direct_create %}<span data-types="seminar reading_group special_event">{{ form.description.label }}</span><span data-types="gathering">Schedule of proceedings</span>{% else %}{{ form.description.label }}{% endif %}
+      </label>
       {% if direct_create %}
-      <p class="text-xs text-base-content/60">Shown on the event page. Introduce the
-        event's focus and its format (talk, discussion, presentations, and so on).</p>
+      <p data-types="special_event" class="text-xs text-base-content/60">Shown on the
+        event page. Introduce the event's focus and its format (talk, discussion,
+        presentations, and so on).</p>
+      <p data-types="gathering" class="text-xs text-base-content/60">The program,
+        with times, sessions, and who's presenting. Shown on the event page, and
+        it can stay short until the details are settled.</p>
       {% else %}
       <p class="text-xs text-base-content/60">Your description introduces the central
         focus and topics to be covered. It is also used by the Program Committee to
@@ -63,16 +69,16 @@
     </div>
 
     {# ---- Special-event date (offering term dates move down by the schedule) ---- #}
-    <div data-types="special_event">{% include "events/_proposal_field.html" with field=form.date_tbd %}</div>
-    <div data-types="special_event" id="datetime-row">{% include "events/_proposal_field.html" with field=form.proposed_datetime %}</div>
+    <div data-types="special_event gathering">{% include "events/_proposal_field.html" with field=form.date_tbd %}</div>
+    <div data-types="special_event gathering" id="datetime-row">{% include "events/_proposal_field.html" with field=form.proposed_datetime %}</div>
 
     {# ---- Location ---- #}
-    <div data-types="seminar reading_group special_event">
+    <div data-types="seminar reading_group special_event gathering">
       {% include "events/_proposal_field.html" with field=form.location_kind %}
       <p id="location-kind-insite-note" class="mt-1 text-xs text-base-content/60">Registrants
         join from the event page once they've registered. There's no link to send.</p>
     </div>
-    <div data-types="seminar reading_group special_event" id="location-detail-row" class="space-y-1">
+    <div data-types="seminar reading_group special_event gathering" id="location-detail-row" class="space-y-1">
       <label for="{{ form.location.id_for_label }}" class="block text-sm font-medium">
         <span data-location-for="online_external">Meeting link and details</span><span data-location-for="in_person hybrid">Venue address</span>
       </label>
@@ -84,7 +90,7 @@
         on the event page.</p>
       {% if form.location.errors %}<p class="text-error text-xs mt-1">{{ form.location.errors|join:", " }}</p>{% endif %}
     </div>
-    <div data-types="seminar reading_group special_event">{% include "events/_proposal_field.html" with field=form.contact %}</div>
+    <div data-types="seminar reading_group special_event gathering">{% include "events/_proposal_field.html" with field=form.contact %}</div>
 
     {% if direct_create %}
     <div data-types="special_event" id="eligibility-row">{% include "events/_proposal_field.html" with field=form.registration_eligibility %}</div>
@@ -319,8 +325,11 @@
     }
 
     // Every PC-organized one-off type (task #756) takes the special-event
-    // fields, so data-types="special_event" reads as "any standalone event".
-    var STANDALONE = ["special_event", "day_of_assembly", "working_day", "scholarly_seminar"];
+    // fields, so data-types="special_event" reads as "any standalone event" —
+    // except the School's own gatherings, which ask only for their date, place
+    // and schedule of proceedings (data-types="gathering").
+    var GATHERINGS = ["day_of_assembly", "working_day"];
+    var STANDALONE = ["special_event", "scholarly_seminar"];
     // "Who can register" (PC direct-create only) follows the type's default —
     // members only for Days of Assembly and Working Days — until the PC picks.
     var MEMBERS_ONLY_TYPES = ["day_of_assembly", "working_day"];
@@ -333,7 +342,8 @@
     }
     function sync() {
       var t = sel ? sel.value : "";
-      if (STANDALONE.indexOf(t) !== -1) { t = "special_event"; }
+      if (GATHERINGS.indexOf(t) !== -1) { t = "gathering"; }
+      else if (STANDALONE.indexOf(t) !== -1) { t = "special_event"; }
       document.querySelectorAll("[data-types]").forEach(function (el) {
         el.style.display = el.getAttribute("data-types").split(" ").indexOf(t) === -1 ? "none" : "";
       });
@@ -344,7 +354,7 @@
         tuition.disabled = offering;
       }
       // Branching: hide the datetime picker when the date is TBD (special events).
-      if (t === "special_event" && dtRow) { showRow(dtRow, !(tbd && tbd.checked)); }
+      if ((t === "special_event" || t === "gathering") && dtRow) { showRow(dtRow, !(tbd && tbd.checked)); }
       // Branching: the venue/address only applies to in-person & hybrid.
       // Branching: the details box holds a venue address (in person, hybrid)
       // or the meeting link (another platform); the site's own room needs none.

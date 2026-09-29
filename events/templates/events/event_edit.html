@@ -38,15 +38,19 @@
 
     <div class="form-control space-y-1">
       <label for="id_description" class="label-text">
-        <h2 class="font-serif text-lg text-base-content">Description</h2>
+        <h2 class="font-serif text-lg text-base-content">{% if event.is_school_gathering %}Schedule of proceedings{% else %}Description{% endif %}</h2>
       </label>
       {{ form.description }}
-      <p class="text-xs text-base-content/60">Plain text. Line breaks become paragraphs on the event page; wrap text in *asterisks* to italicize it.</p>
+      <p class="text-xs text-base-content/60">{% if event.is_school_gathering %}The program, with times, sessions, and who's presenting. {% endif %}Plain text. Line breaks become paragraphs on the event page; wrap text in *asterisks* to italicize it.</p>
       {% if form.description.errors %}
       <p class="text-xs text-error">{{ form.description.errors|join:", " }}</p>
       {% endif %}
     </div>
 
+    {% comment %}A Day of Assembly or Working Day asks only for its date, place and
+    schedule of proceedings (task #756): readings, fee and CE are left out, and
+    the form disables those fields so saving keeps whatever they hold.{% endcomment %}
+    {% if not event.is_school_gathering %}
     <div class="form-control space-y-1">
       <label for="id_readings" class="label-text">
         <h2 class="font-serif text-lg text-base-content">Readings</h2>
@@ -57,6 +61,7 @@
       <p class="text-xs text-error">{{ form.readings.errors|join:", " }}</p>
       {% endif %}
     </div>
+    {% endif %}
 
     <div class="form-control space-y-1">
       <label for="id_schedule_note" class="label-text">
@@ -80,6 +85,7 @@
       {% endif %}
     </div>
 
+    {% if not event.is_school_gathering %}
     <div class="form-control space-y-1">
       <label for="id_fee_note" class="label-text">
         <h2 class="font-serif text-lg text-base-content">Fee</h2>
@@ -94,6 +100,7 @@
     <div class="space-y-1">
       {% include "events/_price_fields.html" %}
     </div>
+    {% endif %}
 
     <label class="flex items-center gap-2 cursor-pointer">
       {{ form.record_video }}
@@ -156,6 +163,7 @@
       </div>
     </section>
 
+    {% if not event.is_school_gathering %}
     <section class="space-y-3 border-t border-base-300/60 pt-6">
       <h2 class="font-serif text-lg text-base-content">Continuing education</h2>
 
@@ -212,6 +220,7 @@
         <p class="text-xs text-base-content/60">Anything specific to this event, e.g. "full attendance is required for credit".</p>
       </div>
     </section>
+    {% endif %}
 
     <button type="submit" class="btn btn-primary">Save</button>
   </form>
@@ -229,6 +238,7 @@
     </p>
   </section>
 
+  {% if not event.is_school_gathering %}
   {# Its own form (HTML forbids nesting) — posts to the CE-organization view. #}
   <section class="space-y-3 border-t border-base-300/60 pt-6">
     <h2 class="font-serif text-lg text-base-content">Add a CE organization</h2>
@@ -271,6 +281,7 @@
       <button type="submit" class="btn btn-outline btn-sm">Add organization</button>
     </form>
   </section>
+  {% endif %}
 
   {% include "events/_feature_image_form.html" %}
 

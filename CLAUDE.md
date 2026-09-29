@@ -2225,7 +2225,31 @@ Done (see `git log` for specifics):
   address". `approve()` copies only a venue address onto the first
   Session, because a session's location is published through the public
   calendar feed (`core/views.py`), while the link belongs in the
-  registrants-only `access_info`. No flag, no backfill. Design:
+  registrants-only `access_info`. **Fourth follow-up** (John K, Program
+  Committee, 2026-09-28, after creating the November and May DoAs and the
+  January Working Day): Days of Assembly and Working Days are
+  **`Event.SCHOOL_GATHERING_TYPES`**, and **every member attends them
+  without registering** (Rico, 2026-09-29). John asked whether a member
+  could register once the event had started. Registration never closed at
+  the start, but on prod two of his three events had **no price tier**
+  ("Free" mints none), so nobody could register at all, and the tuition gate
+  would still have stopped any in-training member without a decision on
+  file. `Event.admits_member(user)` (gathering + `is_lsp_member`) is one
+  predicate asked by `can_enter_event` (the room), `Recording._in_roster`,
+  and `event_summary_context` (the Join button and `access_info`). A
+  `gathering_cta` replaces Register with "Open to all members, no
+  registration needed". Registration survives for guests only, when the PC
+  opens one to them. Both forms ask only for what a gathering needs: the
+  create form's JS maps the two types to `data-types="gathering"`, and
+  `EventProposalForm.clean` and the view drop fee, readings, CE and speakers
+  a type switch left posted. The edit page **disables**
+  `GATHERING_HIDDEN_FIELDS` and sets `price_hidden` rather than removing
+  them, so saving the trimmed page keeps what it no longer shows (the
+  January Working Day's $0 tier). The description is labeled "Schedule of
+  proceedings" on both forms and the event page. The calendar feed shows a
+  gathering as **one all-day banner** across `start_date`–`end_date`
+  (`lsp-cal-gathering`, secondary color, beside the deadlines' warning
+  color) and leaves its sessions out. No migration, no flag, no backfill. Design:
   `docs/superpowers/specs/2026-09-24-pc-standalone-event-types-design.md`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run

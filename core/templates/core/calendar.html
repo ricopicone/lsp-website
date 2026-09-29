@@ -36,6 +36,14 @@
     font-family: Georgia, "Iowan Old Style", serif;
     font-weight: 500;
   }
+  /* Days of Assembly and Working Days (task #756): the School's own
+     gatherings stand out from the seminar sessions around them. */
+  .fc-event.lsp-cal-gathering {
+    --fc-event-bg-color: var(--color-secondary);
+    --fc-event-border-color: var(--color-secondary);
+    --fc-event-text-color: var(--color-secondary-content);
+    font-weight: 600;
+  }
   /* Payment deadlines (#355) read distinctly from sessions. */
   .fc-event.lsp-cal-deadline {
     --fc-event-bg-color: var(--color-warning);

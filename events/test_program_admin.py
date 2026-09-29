@@ -573,7 +573,9 @@ def test_standalone_new_mints_pc_owned_type(client, pc_member, etype):
     assert e.published is True
     assert e.program is None
     assert e.sessions.exists()
-    assert e.price_tiers.exists()
+    # A gathering is free to members and takes no fee (task #756); the other
+    # standalone types keep the price they were given.
+    assert e.price_tiers.exists() is (etype not in Event.SCHOOL_GATHERING_TYPES)
     # PC-organized: provenance on the Program Committee's workgroup.
     assert e.workgroup is not None
     assert e.workgroup.kind == Workgroup.Kind.COMMITTEE

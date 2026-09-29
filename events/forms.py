@@ -111,7 +111,7 @@ class PriceFieldsMixin(forms.Form):
         from .price_spec import PriceSpec
 
         data = data if data is not None else {}
-        if getattr(self, "price_readonly", False):
+        if getattr(self, "price_readonly", False) or getattr(self, "price_hidden", False):
             data["price"] = None
             return data
 
@@ -208,6 +208,20 @@ class EventEditForm(PriceFieldsMixin, forms.ModelForm):
         # Same reasoning for the online venue (task #624).
         self.fields["online_venue"].required = False
         self.init_price_fields(self.instance if self.instance.pk else None)
+        if self.instance.pk and self.instance.is_school_gathering:
+            # A Day of Assembly or Working Day's page leaves these out (task
+            # #756). Disabled rather than removed: a disabled field keeps its
+            # stored value on save, where an absent input would read as
+            # blanked — and the price is left alone outright.
+            self.price_hidden = True
+            for name in self.GATHERING_HIDDEN_FIELDS:
+                self.fields[name].disabled = True
+
+    #: What a gathering's edit page leaves out (task #756).
+    GATHERING_HIDDEN_FIELDS = (
+        "readings", "fee_note", "offers_ce", "ce_credits", "ce_credits_basis",
+        "ce_note", "ce_organizations",
+    )
 
     def clean(self):
         return self.clean_price(super().clean())
@@ -740,6 +754,17 @@ class EventProposalForm(forms.ModelForm):
                     "proposed_datetime",
                     "Give a proposed date & time, or check “date/time TBD”.",
                 )
+        if etype in Event.SCHOOL_GATHERING_TYPES:
+            # A Day of Assembly or Working Day asks only for its date, place and
+            # schedule of proceedings (task #756). The other inputs are hidden
+            # in the browser, but a type switch can leave them posted, so drop
+            # them here: members attend free, without registering.
+            data["fee_type"] = "free"
+            data["tuition_covers"] = False
+            data["readings_text"] = ""
+            data["offers_ce"] = False
+            data["ce_credits"] = None
+            data["faculty"] = self.fields["faculty"].queryset.none()
         # Fee: keep only the inputs that match the chosen fee type.
         fee_type = data.get("fee_type") or "free"
         smin, smax = data.get("fee_sliding_min"), data.get("fee_sliding_max")

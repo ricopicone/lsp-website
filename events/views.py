@@ -104,6 +104,9 @@ def event_summary_context(event, user) -> dict:
     # registration. They never pay for their own event, so the payment gate
     # would withhold the meeting details from the people leading the meeting.
     can_host = can_edit_event(user, event)
+    # A member at a Day of Assembly or Working Day attends without registering
+    # (task #756): the room, the joining details, no Register step.
+    admitted_as_member = event.admits_member(user)
     daily_on = daily_enabled()
     # Whether *this event* meets in the site's own room. An event meeting on
     # Zoom must not also be offered the room, or the member gets two doors and
@@ -156,8 +159,19 @@ def event_summary_context(event, user) -> dict:
         "event_is_live": event.is_live(),
         "event_next_session_at": next_session.start_at if next_session else None,
         "can_host": can_host,
+        "admitted_as_member": admitted_as_member,
+        # What a gathering's call to action says instead of Register: a member
+        # joins from the page, an anonymous visitor is asked to sign in (they
+        # may well be a member). A signed-in guest falls through to the
+        # ordinary registration block, which a members-only one closes.
+        "gathering_cta": (
+            None if not event.is_school_gathering or user_registration
+            else "member" if admitted_as_member
+            else "signin" if not getattr(user, "is_authenticated", False)
+            else None
+        ),
         "show_access_info": bool(event.access_info) and (
-            has_paid_registration or can_host
+            has_paid_registration or can_host or admitted_as_member
         ),
         "event_room_live": bool(room_participants),
         "event_room_participants": room_participants,
@@ -1345,7 +1359,13 @@ def program_admin_special_event_new(request):
         form = EventProposalForm(request.POST)
         form.use_direct_create_copy()
         form.require_complete = True
-        speakers = ProposalSpeakerFormSet(request.POST, prefix="speakers")
+        data = request.POST
+        if data.get("event_type") in Event.SCHOOL_GATHERING_TYPES:
+            # A gathering has no speakers (task #756); rows the browser hid but
+            # still posted after a type switch are ignored, not attached.
+            data = data.copy()
+            data["speakers-TOTAL_FORMS"] = "0"
+        speakers = ProposalSpeakerFormSet(data, prefix="speakers")
         if form.is_valid() and speakers.is_valid():
             with transaction.atomic():
                 proposal = _save_proposal_form(

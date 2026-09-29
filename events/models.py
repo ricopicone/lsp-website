@@ -912,14 +912,29 @@ class Event(models.Model):
         "special_event", "day_of_assembly", "working_day", "scholarly_seminar",
     })
 
-    #: Types whose registration defaults to members only: a Day of Assembly and
-    #: a Working Day are the School's own gatherings. A default, not a rule —
-    #: the "Who can register" field can still open one to guests.
-    MEMBERS_ONLY_BY_DEFAULT_TYPES = frozenset({"day_of_assembly", "working_day"})
+    #: The School's own gatherings: Days of Assembly and Working Days. Every
+    #: member attends without registering (task #756); their registration
+    #: defaults to members only, which then governs guests alone — a default,
+    #: not a rule, since "Who can register" can still open one to guests.
+    SCHOOL_GATHERING_TYPES = frozenset({"day_of_assembly", "working_day"})
+
+    @property
+    def is_school_gathering(self) -> bool:
+        return self.event_type in self.SCHOOL_GATHERING_TYPES
+
+    def admits_member(self, user) -> bool:
+        """Whether ``user`` attends as a member, with no registration: true for
+        any member of the School at a gathering. A registration is how a guest
+        gets in, never a member."""
+        if not self.is_school_gathering:
+            return False
+        from accounts.permissions import is_lsp_member
+
+        return is_lsp_member(user)
 
     @classmethod
     def default_registration_eligibility(cls, event_type) -> str:
-        if event_type in cls.MEMBERS_ONLY_BY_DEFAULT_TYPES:
+        if event_type in cls.SCHOOL_GATHERING_TYPES:
             return cls.RegistrationEligibility.MEMBERS_ONLY
         return cls.RegistrationEligibility.MEMBERS_AND_GUESTS
 

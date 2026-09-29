@@ -75,7 +75,7 @@ show_access_info.{% endcomment %}
 {# ---------- About (+ CE panel, which stands alone if there's no body) ---------- #}
 {% if event.description %}
 <section class="space-y-3">
-  <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">About</h2>
+  <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">{% if event.is_school_gathering %}Schedule of proceedings{% else %}About{% endif %}</h2>
   <div class="text-base-content/90 leading-relaxed space-y-4">{{ event.description|inline_italics|linebreaks }}</div>
   {% if event.offers_ce %}{% include "events/_ce_credits.html" %}{% endif %}
 </section>
@@ -188,7 +188,8 @@ show_access_info.{% endcomment %}
 {% endif %}
 
 {# ---------- Pricing ---------- #}
-{% if price_tiers or event.fee_note %}
+{# A gathering is free to members (task #756); its price only speaks to guests. #}
+{% if price_tiers or event.fee_note %}{% if not event.is_school_gathering or event.registration_eligibility == "members_and_guests" %}
 <section class="space-y-3">
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Fee</h2>
   {% if event.fee_note %}
@@ -221,11 +222,15 @@ show_access_info.{% endcomment %}
   </div>
   {% endif %}
 </section>
-{% endif %}
+{% endif %}{% endif %}
 
 {# ---------- Registration CTA ---------- #}
 <section class="pt-2">
-  {% if event.status == "open" and event.is_public_now %}
+  {% if gathering_cta %}
+    {# A Day of Assembly or Working Day (task #756): members don't register. #}
+    <p class="text-base-content/80"><strong>Open to all members, no registration needed.</strong>
+      {% if gathering_cta == "member" %}Join from this page when it begins.{% else %}Sign in to join when it begins.{% endif %}</p>
+  {% elif event.status == "open" and event.is_public_now %}
     {% if user_registration %}
       <a href="{% url 'registrations:confirm' user_registration.id %}" class="btn btn-primary btn-lg">View your registration →</a>
     {% elif eligibility_reason %}

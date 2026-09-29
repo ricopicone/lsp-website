@@ -166,16 +166,23 @@ change **Type of event** to make a **Day of Assembly**, a **Working
 Day**, or a **Scholarly Seminar Series** instead. Members can't propose
 those three, so this is the only place they're made.
 
-- **Who can register** starts as *Members only* for a Day of Assembly
-  or a Working Day, and *Members and guests* otherwise. Change it here if
-  one event needs to differ, or later on the event's edit page. It
-  controls registration only: the event still appears on the site for
-  everyone.
+- **Days of Assembly and Working Days** ask only for a title, the
+  **Schedule of proceedings**, the date and time, where it meets, and a
+  contact. Every member attends **without registering**: once it begins,
+  the Join button (or the Zoom link) is on the event page for any member,
+  at any point in the day. The calendar shows each one as a highlighted
+  all-day banner across its dates. For a gathering running over several
+  days, set each day's times in the **Schedule** section of its edit
+  page.
+- **Who can register** (other standalone events) starts as *Members and
+  guests*. Change it here if one event needs to differ, or later on the
+  event's edit page. It controls registration only: the event still
+  appears on the site for everyone.
 - **Where it meets**: the site's own video room is recommended, since
-  registrants join from the event page and there's no link to send. For
-  Zoom or another platform, choose *Online, on another platform* and put
-  the link (and any passcode) in **Meeting link and details**. Only
-  registrants see it.
+  people join from the event page and there's no link to send. For Zoom
+  or another platform, choose *Online, on another platform* and put the
+  link (and any passcode) in **Meeting link and details**. Only the
+  people who may attend see it.
 
 When you save you choose:
 

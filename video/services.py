@@ -454,10 +454,11 @@ def can_enter(owner, user) -> bool:
 
 def can_enter_event(event, user) -> bool:
     """Room access for an event that owns its own room: paid/comped registrants,
-    the event's hosts (faculty/PC/staff)."""
+    the event's hosts (faculty/PC/staff), and — at a Day of Assembly or Working
+    Day — every member, registered or not (task #756)."""
     if not getattr(user, "is_authenticated", False):
         return False
-    if event.has_access_registrant(user):
+    if event.has_access_registrant(user) or event.admits_member(user):
         return True
     from events.permissions import can_edit_event
 
