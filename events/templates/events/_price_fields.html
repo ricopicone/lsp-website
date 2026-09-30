@@ -44,9 +44,13 @@
     </div>
   </div>
 
-  <label class="flex items-center gap-2 cursor-pointer text-sm">
+  <label data-price-tuition class="flex items-center gap-2 cursor-pointer text-sm">
     {{ form.tuition_covers }} <span>{{ form.tuition_covers.label }}</span>
   </label>
+  <p data-price-tba class="text-xs text-base-content/60">
+    The page shows the fee as to be announced, and registration can't open
+    until you choose one.
+  </p>
   <p class="text-xs text-base-content/50">
     Faculty and conveners may set alternative rates or waive the fee for
     individual students who indicate financial need.
@@ -60,12 +64,16 @@
     if (!block) return;
     var fixed = block.querySelector("[data-price-fixed]");
     var sliding = block.querySelector("[data-price-sliding]");
+    var tuition = block.querySelector("[data-price-tuition]");
+    var tba = block.querySelector("[data-price-tba]");
     if (!fixed || !sliding) return;
     function sync() {
       var checked = block.querySelector('input[name="fee_type"]:checked');
       var value = checked ? checked.value : "free";
       fixed.hidden = value !== "fixed";
       sliding.hidden = value !== "sliding";
+      if (tuition) tuition.hidden = value === "tba";
+      if (tba) tba.hidden = value !== "tba";
     }
     block.addEventListener("change", function (event) {
       if (event.target.name === "fee_type") sync();

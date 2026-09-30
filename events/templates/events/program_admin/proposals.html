@@ -45,7 +45,7 @@
           {% if p.honoraria_estimate %}<p class="text-xs text-base-content/60">Honoraria estimate: {{ p.honoraria_estimate }}</p>{% endif %}
           {% if p.offers_ce %}<p class="text-xs text-base-content/60">Requests CE credits{% if p.ce_credits %} ({{ p.ce_credits|floatformat:"-2" }} {{ p.get_ce_credits_basis_display }}){% endif %}.</p>{% endif %}
           <p class="text-xs text-base-content/60">Fee:
-            {% if p.fee_amount is not None %}${{ p.fee_amount }}{% elif p.fee_sliding_max is not None %}sliding ${{ p.fee_sliding_min|default:"0" }}–${{ p.fee_sliding_max }}{% else %}free{% endif %}{% if p.tuition_covers %} · tuition covers{% endif %}</p>
+            {% if p.fee_tba %}to be announced{% elif p.fee_amount is not None %}${{ p.fee_amount }}{% elif p.fee_sliding_max is not None %}sliding ${{ p.fee_sliding_min|default:"0" }}–${{ p.fee_sliding_max }}{% else %}free{% endif %}{% if p.tuition_covers and not p.fee_tba %} · tuition covers{% endif %}</p>
           {% with reads=p.readings.all %}{% if reads %}
           <div class="text-xs text-base-content/70">
             <span class="font-medium">Readings:</span>
@@ -136,6 +136,8 @@
                 {% if not e.is_school_gathering %}
                 {% if e.status == 'open' %}
                   <span class="badge badge-outline badge-sm">Registration open</span>
+                {% elif e.fee_tba %}
+                  <span class="badge badge-ghost badge-sm">Fee to be announced</span>
                 {% else %}
                   <span class="badge badge-sm {% if e.is_public_now %}badge-warning{% else %}badge-ghost{% endif %}">Registration closed</span>
                 {% endif %}
@@ -147,6 +149,8 @@
                 <a href="{% url 'events:edit' e.slug %}" class="link link-primary text-sm">Edit</a>
                 {% if e.is_school_gathering %}
                 <a href="{% url 'events:joining_instructions' e.slug %}" class="btn btn-outline btn-xs">Send reminder</a>
+                {% elif e.fee_tba and e.status != 'open' %}
+                <a href="{% url 'events:edit' e.slug %}" class="btn btn-outline btn-xs" title="Registration opens once the fee is set">Set the fee</a>
                 {% else %}
                 <form method="post" action="{% url 'program_admin_special_event_registration' e.slug %}">
                   {% csrf_token %}

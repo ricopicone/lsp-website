@@ -36,9 +36,13 @@ class PriceSpec:
     sliding_min: Decimal | None = None
     sliding_max: Decimal | None = None
     tuition_covers: bool = True
+    #: Fee to be announced (task #769): no tier, and registration can't open.
+    tba: bool = False
 
     @property
     def fee_type(self) -> str:
+        if self.tba:
+            return "tba"
         if self.sliding_min is not None or self.sliding_max is not None:
             return "sliding"
         if self.amount is not None:
@@ -56,6 +60,7 @@ class PriceSpec:
                 None if self.sliding_max is None else str(self.sliding_max)
             ),
             "tuition_covers": self.tuition_covers,
+            "tba": self.tba,
         }
 
     @classmethod
@@ -66,6 +71,7 @@ class PriceSpec:
             sliding_min=_dec(data.get("sliding_min")),
             sliding_max=_dec(data.get("sliding_max")),
             tuition_covers=bool(data.get("tuition_covers", True)),
+            tba=bool(data.get("tba", False)),
         )
 
 
@@ -86,6 +92,8 @@ def from_event(event) -> PriceSpec | None:
     """The event's current price, or None when it is unrepresentable."""
     if not is_representable(event):
         return None
+    if event.fee_tba:
+        return PriceSpec(tuition_covers=False, tba=True)
     tier = event.price_tiers.first()
     if tier is None:
         # No tier means nothing was ever specified, which is the state
@@ -110,6 +118,10 @@ def apply_to_event(event, spec: PriceSpec) -> None:
     Mirrors what ``EventProposal._build_price_tier`` has always done, including
     its "nothing specified" short-circuit: a free event that tuition does not
     cover carries no tier at all.
+
+    A fee to be announced carries no tier either, and since there is nothing to
+    charge, it also takes back open registration (task #769) — every path that
+    sets a price (edit form, change review, proposal approval) comes here.
     """
     if not is_representable(event):
         raise UnrepresentablePricing(
@@ -117,6 +129,16 @@ def apply_to_event(event, spec: PriceSpec) -> None:
             "edit its tiers in Django admin."
         )
     from .models import Audience, PriceTier
+
+    if event.fee_tba != spec.tba:
+        event.fee_tba = spec.tba
+        event.save(update_fields=["fee_tba"])
+    if spec.tba:
+        event.price_tiers.all().delete()
+        if event.status == event.Status.OPEN:
+            event.status = event.Status.DRAFT
+            event.save(update_fields=["status"])
+        return
 
     sliding = spec.fee_type == "sliding"
     if not sliding and spec.amount is None and not spec.tuition_covers:
@@ -155,6 +177,8 @@ def _money(value: Decimal) -> str:
 
 def label(spec: PriceSpec) -> str:
     """A short human description, for the review diff and the admin listings."""
+    if spec.tba:
+        return "To be announced"
     if spec.fee_type == "sliding":
         low = _money(spec.sliding_min or Decimal("0"))
         high = _money(spec.sliding_max or Decimal("0"))

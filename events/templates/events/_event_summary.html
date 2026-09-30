@@ -189,9 +189,12 @@ show_access_info.{% endcomment %}
 
 {# ---------- Pricing ---------- #}
 {# A gathering is free to members (task #756); its price only speaks to guests. #}
-{% if price_tiers or event.fee_note %}{% if not event.is_school_gathering or event.registration_eligibility == "members_and_guests" %}
+{% if price_tiers or event.fee_note or event.fee_tba %}{% if not event.is_school_gathering or event.registration_eligibility == "members_and_guests" %}
 <section class="space-y-3">
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Fee</h2>
+  {% if event.fee_tba %}
+  <p class="text-base-content/80 leading-relaxed">To be announced.</p>
+  {% endif %}
   {% if event.fee_note %}
   <p class="text-base-content/80 leading-relaxed">{{ event.fee_note|inline_italics }}</p>
   {% endif %}
@@ -253,7 +256,7 @@ show_access_info.{% endcomment %}
     {# Registrations are reviewed (#564) — but not news to someone barred. #}
     {% if not eligibility_reason %}{% include "events/_approval_notice.html" %}{% endif %}
   {% elif event.status == "draft" %}
-    <p class="text-base-content/60">Registration not yet open.</p>
+    <p class="text-base-content/60">Registration not yet open.{% if event.fee_tba %} It opens once the fee is announced.{% endif %}</p>
   {% elif event.status == "closed" %}
     <p class="text-base-content/60">Registration is closed.</p>
   {% endif %}

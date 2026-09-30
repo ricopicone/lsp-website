@@ -21,6 +21,14 @@ from .models import (
     Session,
 )
 
+#: The fee option for a save-the-date (task #769).
+TBA_LABEL = "To be announced"
+
+
+def drop_tba_choice(field):
+    """Remove "To be announced" from a fee_type field whose event can't take it."""
+    field.choices = [c for c in field.choices if c[0] != "tba"]
+
 
 class PriceFieldsMixin(forms.Form):
     """The event-price inputs, shared by the PC form and the faculty form.
@@ -46,7 +54,7 @@ class PriceFieldsMixin(forms.Form):
     fee_type = forms.ChoiceField(
         required=False, label="Price",
         choices=[("free", "Free"), ("fixed", "Fixed amount"),
-                 ("sliding", "Sliding scale")],
+                 ("sliding", "Sliding scale"), ("tba", TBA_LABEL)],
         widget=forms.RadioSelect, initial="free",
     )
     fee_amount = forms.DecimalField(
@@ -84,6 +92,8 @@ class PriceFieldsMixin(forms.Form):
 
         self.price_readonly = event is not None and not is_representable(event)
         self.price_tiers = []
+        if event is None or not Event.allows_fee_tba(event.event_type):
+            drop_tba_choice(self.fields["fee_type"])
         if self.price_readonly:
             self.price_tiers = list(event.price_tiers.all())
             for name in self.PRICE_FIELDS:
@@ -119,6 +129,20 @@ class PriceFieldsMixin(forms.Form):
         amount = data.get("fee_amount")
         smin, smax = data.get("fee_sliding_min"), data.get("fee_sliding_max")
 
+        if fee_type == "tba":
+            event = getattr(self, "instance", None)
+            from registrations.models import Registration
+
+            if event is not None and event.pk and event.registrations.exclude(
+                status__in=Registration.INACTIVE_ROSTER_STATUSES,
+            ).exists():
+                self.add_error(
+                    "fee_type",
+                    "People have already registered at the current fee, so it "
+                    "can't go back to to be announced.",
+                )
+            data["price"] = PriceSpec(tuition_covers=False, tba=True)
+            return data
         if fee_type == "free":
             amount = smin = smax = None
         elif fee_type == "fixed":
@@ -481,8 +505,12 @@ class EventProposalForm(forms.ModelForm):
     fee_type = forms.ChoiceField(
         required=False, label="Fee",
         choices=[("free", "Free"), ("fixed", "Fixed amount"),
-                 ("sliding", "Sliding scale")],
+                 ("sliding", "Sliding scale"), ("tba", TBA_LABEL)],
         widget=forms.RadioSelect, initial="free",
+        help_text=(
+            "To be announced publishes the date and description now; "
+            "registration opens once the fee is set."
+        ),
     )
 
     #: Seminars / reading groups: schedule the recurring meetings now, or leave TBD.
@@ -633,7 +661,9 @@ class EventProposalForm(forms.ModelForm):
         # Derive the fee type from stored amounts when editing.
         if self.instance and self.instance.pk and not self.is_bound:
             inst = self.instance
-            if inst.fee_sliding_min is not None or inst.fee_sliding_max is not None:
+            if inst.fee_tba:
+                self.initial["fee_type"] = "tba"
+            elif inst.fee_sliding_min is not None or inst.fee_sliding_max is not None:
                 self.initial["fee_type"] = "sliding"
             elif inst.fee_amount is not None:
                 self.initial["fee_type"] = "fixed"
@@ -768,7 +798,13 @@ class EventProposalForm(forms.ModelForm):
         # Fee: keep only the inputs that match the chosen fee type.
         fee_type = data.get("fee_type") or "free"
         smin, smax = data.get("fee_sliding_min"), data.get("fee_sliding_max")
-        if fee_type == "free":
+        if fee_type == "tba" and not Event.allows_fee_tba(etype):
+            self.add_error("fee_type", "Seminars and reading groups need a fee.")
+        self.instance.fee_tba = fee_type == "tba"
+        if fee_type == "tba":
+            data["fee_amount"] = data["fee_sliding_min"] = data["fee_sliding_max"] = None
+            data["tuition_covers"] = False
+        elif fee_type == "free":
             data["fee_amount"] = data["fee_sliding_min"] = data["fee_sliding_max"] = None
         elif fee_type == "fixed":
             data["fee_sliding_min"] = data["fee_sliding_max"] = None

@@ -200,7 +200,7 @@
         {% include "events/_proposal_field.html" with field=form.fee_sliding_min %}
         {% include "events/_proposal_field.html" with field=form.fee_sliding_max %}
       </div>
-      {% include "events/_proposal_field.html" with field=form.tuition_covers %}
+      <div id="fee-tuition">{% include "events/_proposal_field.html" with field=form.tuition_covers %}</div>
       <p class="text-xs text-base-content/50">Faculty and conveners may set alternative
         rates or waive the fee for individual students who indicate financial need.</p>
     </div>
@@ -304,6 +304,8 @@
     var feeRadios = document.querySelectorAll("input[name='fee_type']");
     var feeFixed = document.getElementById("fee-fixed");
     var feeSliding = document.getElementById("fee-sliding");
+    var feeTuition = document.getElementById("fee-tuition");
+    var feeTba = document.querySelector("input[name='fee_type'][value='tba']");
 
     function showRow(row, on) { if (row) row.style.display = on ? "" : "none"; }
 
@@ -315,6 +317,7 @@
       var ft = feeType();
       showRow(feeFixed, ft === "fixed");
       showRow(feeSliding, ft === "sliding");
+      showRow(feeTuition, ft !== "tba");
     }
 
     var schedRadios = document.querySelectorAll("input[name='schedule_choice']");
@@ -347,9 +350,19 @@
       document.querySelectorAll("[data-types]").forEach(function (el) {
         el.style.display = el.getAttribute("data-types").split(" ").indexOf(t) === -1 ? "none" : "";
       });
+      var offering = t === "seminar" || t === "reading_group";
+      // A fee to be announced is for one-off events only (task #769).
+      if (feeTba) {
+        var tbaOption = feeTba.closest("label") || feeTba.parentNode;
+        showRow(tbaOption, !offering);
+        if (offering && feeTba.checked) {
+          var freeRadio = document.querySelector("input[name='fee_type'][value='free']");
+          if (freeRadio) { freeRadio.checked = true; }
+          syncFee();
+        }
+      }
       // Tuition always covers seminars & reading groups — force checked + locked.
       if (tuition) {
-        var offering = t === "seminar" || t === "reading_group";
         if (offering) { tuition.checked = true; }
         tuition.disabled = offering;
       }
