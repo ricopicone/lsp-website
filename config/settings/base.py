@@ -93,6 +93,7 @@ LOCAL_APPS = [
     "suggestions",
     "referrals",
     "availability",
+    "elections",
     "devapi",
     "core",
 ]
