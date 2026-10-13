@@ -56,5 +56,9 @@ def available_tabs(user, *, account=None):
         tabs.append(("proposals", "Proposals"))
     if member and getattr(settings, "SUGGESTIONS_ENABLED", False):
         tabs.append(("suggestions", "Suggestions"))
+    # A Board election, while one is running for this member (task #813).
+    from elections.queries import visible_election_for
+    if visible_election_for(user) is not None:
+        tabs.append(("election", "Election"))
     tabs.append(("profile", "Profile"))
     return tabs

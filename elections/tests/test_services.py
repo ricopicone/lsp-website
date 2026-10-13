@@ -196,6 +196,9 @@ def test_ballot_recorded_email_has_no_choices(mailoutbox, django_capture_on_comm
         services.cast_ballot(e, v, [cand.id])
     assert [m.to for m in mailoutbox] == [[v.email]]
     assert "Quillfeather" not in mailoutbox[0].body + mailoutbox[0].subject
+    # The link is the member's My LSP hub, not the public About > Formation page.
+    assert "/formation/?tab=election" in mailoutbox[0].body
+    assert "/about/formation" not in mailoutbox[0].body
 
 
 def test_remind_nonvoters_only(mailoutbox, django_capture_on_commit_callbacks):

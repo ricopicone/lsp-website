@@ -25,7 +25,7 @@ def _reply_to() -> list[str]:
 
 
 def tab_link() -> str:
-    return f"{settings.SITE_BASE_URL.rstrip('/')}{reverse('formation')}?tab=election"
+    return f"{settings.SITE_BASE_URL.rstrip('/')}{reverse('formation:formation')}?tab=election"
 
 
 def _send(template: str, subject: str, user, election, **extra) -> None:

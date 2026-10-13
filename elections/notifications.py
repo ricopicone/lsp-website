@@ -14,7 +14,7 @@ from . import emails
 
 
 def tab_url() -> str:
-    return reverse("formation") + "?tab=election"
+    return reverse("formation:formation") + "?tab=election"
 
 
 def _one(user, election, title, send):

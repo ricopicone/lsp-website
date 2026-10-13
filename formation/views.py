@@ -164,6 +164,9 @@ def _formation_context(request, *, advisor_form=None, demande_form=None) -> dict
             EventProposal.objects.filter(proposed_by=user)
             .select_related("minted_event")
         )
+    elif active == "election":
+        from elections.queries import tab_context, visible_election_for
+        ctx.update(tab_context(request, visible_election_for(user)))
     elif active == "suggestions":
         from suggestions.models import Suggestion
         ctx["suggestions"] = Suggestion.objects.filter(submitted_by=user)

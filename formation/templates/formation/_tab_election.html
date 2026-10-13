@@ -1,0 +1,132 @@
+{% load tz_filters %}
+{# Election tab (task #813): the member's nomination, the slate, their ballot, and the results. #}
+<div class="space-y-6">
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-2">
+    <div class="flex flex-wrap items-center gap-2">
+      <h2 class="font-serif text-xl">{{ election.title }}</h2>
+      <span class="badge badge-primary badge-outline badge-sm">{{ election.get_phase_display }}</span>
+    </div>
+    <p class="text-sm text-base-content/75">
+      {% if phase == "nominating" %}Nominations are open until {{ election.nominations_close_at|user_datetime:True }}. Voting is planned from {{ election.voting_open_at|user_datetime:True }} until {{ election.voting_close_at|user_datetime:True }}.
+      {% elif phase == "review" %}Nominations have closed, and the Board is reviewing them. The slate of candidates will be published here.
+      {% elif phase == "slate" %}The slate is published. Voting opens {{ election.voting_open_at|user_datetime:True }} and closes {{ election.voting_close_at|user_datetime:True }}.
+      {% elif phase == "voting" %}Voting is open until {{ election.voting_close_at|user_datetime:True }}. {{ election.seats }} seat{{ election.seats|pluralize }} {{ election.seats|pluralize:"is,are" }} to be filled.
+      {% elif phase == "closed" or phase == "counted" %}Voting has closed. The results will be published here.
+      {% elif phase == "published" %}The results are in.
+      {% elif phase == "acclaimed" %}No vote was needed: the accepted candidates did not outnumber the seats, so under the bylaws they serve as the next directors.
+      {% endif %}
+    </p>
+    {% if turnout is not None %}<p class="text-sm">Turnout so far: {{ turnout }} of {{ roll_size }} voters.</p>{% endif %}
+  </section>
+
+  {# ── Nominating yourself ─────────────────────────────── #}
+  {% if phase == "nominating" %}
+    {% if nomination and nomination.is_live %}
+    <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-3">
+      <h3 class="font-medium">Your nomination</h3>
+      <form method="post" action="{% url 'elections:nominate' election.slug %}" class="space-y-2">
+        {% csrf_token %}
+        {% with field=nomination_form.letter %}{% include "elections/admin/_field.html" %}{% endwith %}
+        <button class="btn btn-primary btn-sm">Save changes</button>
+      </form>
+      <form method="post" action="{% url 'elections:withdraw' election.slug %}">
+        {% csrf_token %}
+        <button class="btn btn-ghost btn-sm">Withdraw my nomination</button>
+      </form>
+    </section>
+    {% elif may_stand %}
+    <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-3">
+      <h3 class="font-medium">Nominate yourself</h3>
+      <p class="text-sm text-base-content/70">Directors are elected from among the School's analysts and candidates. Your letter is published with the slate if the Board accepts your candidacy.</p>
+      <form method="post" action="{% url 'elections:nominate' election.slug %}" class="space-y-2">
+        {% csrf_token %}
+        {% with field=nomination_form.letter %}{% include "elections/admin/_field.html" %}{% endwith %}
+        <button class="btn btn-primary btn-sm">Submit my nomination</button>
+      </form>
+    </section>
+    {% endif %}
+  {% elif nomination and nomination.is_live %}
+    <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-1">
+      <h3 class="font-medium">Your nomination</h3>
+      {% if not decision_visible or nomination.status == "pending" %}<p class="text-sm">Under review by the Board.</p>
+      {% elif nomination.status == "accepted" %}<p class="text-sm">Accepted. You are on the slate.</p>
+      {% else %}<p class="text-sm">Not accepted. A member of the Board will be in touch with you.</p>{% endif %}
+    </section>
+  {% endif %}
+
+  {# ── Results ──────────────────────────────────────────── #}
+  {% if winners %}
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-2">
+    <h3 class="font-medium">Elected</h3>
+    <ul class="list-disc pl-5">{% for name in winners %}<li>{{ name }}</li>{% endfor %}</ul>
+    {% if stages %}
+    <details class="pt-2">
+      <summary class="cursor-pointer text-sm link">The count, stage by stage</summary>
+      <p class="text-xs text-base-content/60 mt-2">{{ result.valid_ballots }} valid ballot{{ result.valid_ballots|pluralize }}{% if result.quota %}, quota {{ result.quota }}{% endif %}.</p>
+      <div class="overflow-x-auto mt-2">
+        <table class="table table-sm">
+          <thead><tr><th>Stage</th><th></th><th>Totals</th></tr></thead>
+          <tbody>
+            {% for s in stages %}
+            <tr>
+              <td>{{ s.n }}</td>
+              <td>{% if s.action == "first" %}First choices{% elif s.action == "surplus" %}Surplus of {{ s.subject_name }} passed on{% elif s.action == "exclude" %}{{ s.subject_name }} excluded{% elif s.action == "elect_remaining" %}Remaining seats filled{% else %}Tally{% endif %}</td>
+              <td class="text-xs">{% for name, v in s.rows %}{{ name }}: {{ v }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# ── Voting ───────────────────────────────────────────── #}
+  {% if phase == "voting" %}
+    {% if not on_roll %}
+    <div class="alert alert-warning text-sm"><span>You are not on this election's voter roll. If that is a mistake, write to the Election Administrator.</span></div>
+    {% elif editing %}
+    <section id="ballot" class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-3">
+      <h3 class="font-medium">Your ballot</h3>
+      <p class="text-sm text-base-content/70">Rank as many candidates as you like, 1st for your first choice. You can change your ballot until voting closes. No page on the site shows anyone how you voted.</p>
+      <form method="post" action="{% url 'elections:ballot' election.slug %}" class="space-y-3">
+        {% csrf_token %}
+        <ul class="divide-y divide-base-300/50">
+          {% for candidate, field in ballot_form.rows %}
+          <li class="flex flex-wrap items-center justify-between gap-3 py-2">
+            <span class="font-medium">{{ candidate.name }}</span>
+            <span class="w-40">{{ field }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <button class="btn btn-primary btn-sm">Cast my ballot</button>
+      </form>
+    </section>
+    {% endif %}
+  {% endif %}
+  {% if own_ballot and not editing %}
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-2">
+    <h3 class="font-medium">Your ballot</h3>
+    <ol class="list-decimal pl-5">{% for n in own_ballot %}<li>{{ n.name }}</li>{% endfor %}</ol>
+    {% if phase == "voting" %}<a href="?tab=election&change=1#ballot" class="btn btn-ghost btn-sm">Change my ballot</a>{% endif %}
+  </section>
+  {% endif %}
+
+  {# ── The slate ────────────────────────────────────────── #}
+  {% if candidates and phase != "published" and phase != "acclaimed" %}
+  <section class="space-y-2">
+    <h3 class="font-serif text-lg">The candidates</h3>
+    <ul class="space-y-2">
+      {% for c in candidates %}
+      <li class="rounded-xl border border-base-300/60 bg-base-100 p-3">
+        <details>
+          <summary class="cursor-pointer font-medium">{{ c.name }}</summary>
+          <div class="prose prose-sm mt-2 max-w-none">{{ c.letter|linebreaks }}</div>
+        </details>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</div>
