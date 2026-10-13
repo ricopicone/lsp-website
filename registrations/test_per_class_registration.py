@@ -21,7 +21,9 @@ from payments import coverage
 from payments.models import Payment, TuitionEnrollment, TuitionPeriod
 from registrations.models import Registration
 from registrations.services import (
-    auto_apply_pinned_code, comp_registration, remove_registration,
+    auto_apply_pinned_code,
+    comp_registration,
+    remove_registration,
 )
 
 pytestmark = pytest.mark.django_db

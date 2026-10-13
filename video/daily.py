@@ -161,10 +161,33 @@ def verify_webhook(timestamp: str, raw_body: bytes, signature: str) -> bool:
     return hmac.compare_digest(computed, signature)
 
 
+def list_meetings(room_name: str, *, start: int, end: int) -> list[dict]:
+    """The meeting sessions held in ``room_name`` between two unix times,
+    each with its ``participants`` (``user_id`` is ours where the token set
+    it). Used to detect per-class attendance (task #811). Pages until done."""
+    out: list[dict] = []
+    params: dict = {
+        "room": room_name, "timeframe_start": start, "timeframe_end": end,
+        "limit": 100,
+    }
+    while True:
+        resp = requests.get(
+            _url("meetings"), headers=_headers(), params=params, timeout=20,
+        )
+        if resp.status_code != 200:
+            raise DailyError(f"list_meetings({room_name}) -> {resp.status_code}: {resp.text}")
+        data = resp.json().get("data") or []
+        out.extend(data)
+        if len(data) < params["limit"]:
+            return out
+        params["starting_after"] = data[-1]["id"]
+
+
 def create_meeting_token(
     *, room_name: str, user_name: str = "", is_owner: bool = False,
     exp: int | None = None, start_audio_off: bool = False,
     start_video_off: bool = False, knocking: bool = False,
+    user_id: str = "",
 ) -> str:
     """Mint a short-lived meeting token scoped to ``room_name``.
 
@@ -185,6 +208,10 @@ def create_meeting_token(
         props["knocking"] = True
     if user_name:
         props["user_name"] = user_name
+    if user_id:
+        # Daily reports this back on the meeting's participants, which is how
+        # per-class attendance is detected (task #811).
+        props["user_id"] = user_id[:36]
     if exp is not None:
         props["exp"] = exp
     if start_audio_off:

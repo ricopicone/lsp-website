@@ -11,10 +11,18 @@ from django.db.models.deletion import ProtectedError
 from events.forms import PricingCodeForm
 from events.models import ClassAttendance, Event, PricingCode
 from events.per_class_fixtures import (
-    enroll, make_event, make_session, make_tier, make_user,
+    enroll,
+    make_event,
+    make_session,
+    make_tier,
+    make_user,
 )
 from events.price_spec import (
-    BillingModeLocked, PriceSpec, apply_to_event, from_event, label,
+    BillingModeLocked,
+    PriceSpec,
+    apply_to_event,
+    from_event,
+    label,
 )
 from payments.models import Charge
 from registrations.models import Registration
@@ -97,7 +105,8 @@ def test_a_spec_dict_from_before_the_feature_reads_whole_seminar():
 
 
 def test_label_says_per_class():
-    assert label(PriceSpec(amount=Decimal("25"), tuition_covers=False, per_class=True)) == "$25 per class"
+    fixed = PriceSpec(amount=Decimal("25"), tuition_covers=False, per_class=True)
+    assert label(fixed) == "$25 per class"
     assert label(PriceSpec(
         sliding_min=Decimal("10"), sliding_max=Decimal("40"),
         tuition_covers=True, per_class=True,

@@ -104,20 +104,38 @@ def _charge_states(open_charges, paid_by_category: dict[str, Decimal],
     return states, covered_by_id
 
 
-def member_account(user) -> dict:
-    """The member's full account: statement lines, balance, category sums."""
+def _account_rows(user):
     charges = list(
         Charge.objects.filter(user=user)
         .exclude(status=Charge.Status.VOID)
-        .select_related("dues_period", "tuition_period", "registration__event")
+        .select_related(
+            "dues_period", "tuition_period", "registration__event",
+            "class_attendance__session__event",
+        )
         .order_by("effective_date", "id")
     )
-    open_charges = [c for c in charges if c.status == Charge.Status.OPEN]
     payments = list(
         Payment.objects.filter(user=user)
-        .select_related("registration__event")
+        .select_related("registration__event", "per_class_registration__event")
         .order_by(Coalesce("paid_at", "created_at").asc(), "id")
     )
+    return charges, payments
+
+
+def charge_coverage(user) -> tuple[dict[int, str], dict[int, Decimal]]:
+    """Each OPEN charge's sweep state and covered amount, exactly as
+    :func:`member_account` computes them — for callers that need one charge's
+    reading without building the whole statement (per-class balances, task
+    #811). One computation, never a second (the #723 lesson)."""
+    charges, payments = _account_rows(user)
+    open_charges = [c for c in charges if c.status == Charge.Status.OPEN]
+    return _charge_states(open_charges, _paid_by_category(payments))
+
+
+def member_account(user) -> dict:
+    """The member's full account: statement lines, balance, category sums."""
+    charges, payments = _account_rows(user)
+    open_charges = [c for c in charges if c.status == Charge.Status.OPEN]
     paid_by_category = _paid_by_category(payments)
     paid = sum(paid_by_category.values(), Decimal("0"))
     obligation = sum((c.amount for c in open_charges), Decimal("0"))

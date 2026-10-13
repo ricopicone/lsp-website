@@ -67,6 +67,29 @@ class Command(BaseCommand):
             f"{verb} {meetings} meeting(s)" + ("" if dry else f", {people} member-notice(s)")
         ))
         self._remind_sessions(now, opts["session_lead_hours"], dry)
+        self._per_class(now, dry)
+
+    def _per_class(self, now, dry: bool) -> None:
+        """Per-class seminars (task #811): record each ended class's
+        attendance, bill the ones whose correction window has closed, and on
+        Mondays send the week's billing notes. Rides this command for the
+        same reason the session reminders do: the host already runs it every
+        five minutes. A failure here must not stop the reminders above."""
+        from events import per_class
+
+        try:
+            stats = per_class.run(now, dry=dry)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("per-class billing pass failed")
+            self.stderr.write("per-class billing pass failed; see the log")
+            return
+        prefix = "would " if dry else ""
+        self.stdout.write(self.style.SUCCESS(
+            f"per-class: {prefix}record {stats['recorded']}, "
+            f"{prefix}bill {stats['billed']}, retry {stats['retry']}, "
+            f"notices {stats['notices']}"
+        ))
 
     @staticmethod
     def _first_day(session) -> bool:

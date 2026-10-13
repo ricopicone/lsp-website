@@ -1825,6 +1825,10 @@ def treasurer_tuition_set_status(request, user_id: int):
         # rule, and retro-billing a cleanup pass would bill years of events.
         if enr.covers_seminars:
             coverage.apply_coverage(target, period)
+            # The per-class twin (task #811): unpaid class charges the year
+            # now covers are voided, silently for the same reason.
+            from events.per_class import void_covered_open
+            void_covered_open(target, period)
     return _safe_next(request, "treasurer")
 
 
@@ -2484,6 +2488,13 @@ def tuition_decision(request):
                     for r in coverage.covered_registrations(request.user, period)
                 ]
                 rows = [r for r in rows if r["amount"] > 0]
+                # Per-class classes tuition covered bill too (task #811).
+                from events.per_class import covered_classes
+                rows += [
+                    {"registration": att.registration, "amount": amount,
+                     "class_date": att.session.start_at}
+                    for att, amount in covered_classes(request.user, period)
+                ]
                 if rows:
                     return render(request, "payments/skip_confirm.html", {
                         "period": period,
@@ -2533,12 +2544,18 @@ def tuition_decision(request):
                 # registrations — including ones made before the decision was
                 # recorded (task #561) — so committing returns their access
                 # without money moving.
+                from events import per_class
                 if status == "skipping":
                     billed = coverage.bill_skipped_coverage(request.user, period)
                     restored = []
+                    # Classes of a per-class seminar tuition had covered are
+                    # billed the same way (task #811); the weekly note tells
+                    # the member, and the interstitial already listed them.
+                    per_class.bill_covered_classes(request.user, period)
                 else:
                     billed = []
                     restored = coverage.apply_coverage(request.user, period)
+                    per_class.void_covered_open(request.user, period)
             if billed:
                 notify_coverage_rebilled(request.user, period, billed)
             if restored:
