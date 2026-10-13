@@ -522,3 +522,22 @@ def class_rebilled(att, *, removed: bool) -> None:
         ),
         url=_classes_url(reg), target=att,
     )
+
+
+def converted_to_per_class(reg, *, paid, since) -> None:
+    """A whole-seminar registration moved to per-class billing (task #810)."""
+    credit = (
+        f" The ${paid} you already paid counts toward your classes."
+        if paid else ""
+    )
+    notify(
+        reg.user, Category.REGISTRATION_STATUS,
+        title=f"{reg.event.title} is now billed per class",
+        body=(
+            f"{reg.event.title} is billed per class from {since:%b} {since.day}: "
+            f"${reg.per_class_rate} for each class you attend, billed a few days "
+            f"after the class.{credit} You're still registered, and there's "
+            "nothing you need to do."
+        ),
+        url=_classes_url(reg), target=reg,
+    )

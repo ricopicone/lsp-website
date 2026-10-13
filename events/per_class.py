@@ -615,3 +615,32 @@ def faculty_context(event, *, now=None) -> list[dict]:
          "present": sum(1 for r in rows if r["att"].present)}
         for session, rows in by_session.items()
     ]
+
+
+# ---- converting an existing event (task #810) ------------------------------------
+
+
+def converted_rate(registration) -> Decimal:
+    """What a registration made under whole-seminar billing pays per class
+    once its event becomes per-class.
+
+    Its code keeps the terms it was given, read per class, without asking
+    whether the code could still be redeemed today (a used-up code still
+    describes what its holder was offered). Without a code: the tier's base,
+    or its floor on a sliding tier, the figure a skipped year re-bills too.
+    """
+    from events.models import PricingCode
+    from payments.coverage import retro_amount
+
+    tier = registration.price_tier
+    code = registration.pricing_code
+    if code is None:
+        return retro_amount(tier)
+    value = code.amount_or_percent or Decimal("0")
+    if code.pricing_mode == PricingCode.Mode.PERCENT_OFF:
+        off = (tier.base_amount * value / Decimal("100")).quantize(Decimal("0.01"))
+        return max(tier.base_amount - off, Decimal("0"))
+    if code.pricing_mode in (PricingCode.Mode.FIXED_AMOUNT,
+                             PricingCode.Mode.SLIDING_FLOOR):
+        return value
+    return tier.base_amount
