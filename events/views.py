@@ -490,8 +490,11 @@ def event_edit(request, slug: str):
     # would compare the new value against itself.
     from .price_spec import from_event
 
+    # Line endings are normalized on both sides: a browser submits a
+    # <textarea> with CRLF while imported text is stored with LF, so a raw
+    # comparison read every save as a changed description (task #817).
     original = {
-        f: (getattr(event, f) or "")
+        f: _text(getattr(event, f))
         for f in REVIEWABLE_FIELDS if f != "price"
     }
     original_price = from_event(event)
@@ -511,7 +514,7 @@ def event_edit(request, slug: str):
     cd = form.cleaned_data
     changed = [
         f for f in REVIEWABLE_FIELDS
-        if f != "price" and (cd[f] or "") != original[f]
+        if f != "price" and _text(cd[f]) != original[f]
     ]
     # cd["price"] is None for a read-only multi-tier event, meaning "untouched".
     if cd.get("price") is not None and cd["price"] != original_price:
@@ -532,9 +535,19 @@ def event_edit(request, slug: str):
         # submitted values forward as hidden inputs so the choice POST re-binds.
         desc_ratio = change_ratio(original["description"], cd["description"]) \
             if "description" in changed else 0.0
+        # The dialog re-posts exactly what was submitted, one hidden input per
+        # value: re-rendering each field's value turned a many-to-many list
+        # into the string "[]", which failed validation on the choice POST, so
+        # no decision ever saved (task #817).
+        carried = [
+            (name, value)
+            for name, values in request.POST.lists()
+            if name not in ("csrfmiddlewaretoken", "decision")
+            for value in values
+        ]
         return render(request, "events/event_edit_confirm.html", {
             "event": event,
-            "form": form,
+            "carried": carried,
             "changed_labels": [_field_label(f) for f in changed],
             "description_ratio_pct": round(desc_ratio * 100),
             "description_changed": "description" in changed,
@@ -612,6 +625,11 @@ def event_edit(request, slug: str):
     cr.save()
     messages.success(request, "Change adopted.")
     return redirect("events:detail", slug=event.slug)
+
+
+def _text(value) -> str:
+    """A text value as the review loop compares it: blank for None, LF endings."""
+    return (value or "").replace("\r\n", "\n")
 
 
 @login_required

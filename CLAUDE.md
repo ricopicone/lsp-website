@@ -2376,6 +2376,31 @@ Done (see `git log` for specifics):
   now name the scope and add price to the reviewable list. No migration, no
   flag.
 
+- **The change-review dialog never saved** (task #817). Rico set *Lacanian
+  Clinical Practice* to meet on Zoom twice, once as an administrative change
+  and once as minor, and both times it reverted. Two defects, stacked, and
+  latent since #295 because nothing had ever entered the loop until #812.
+  **The dialog appeared at all** because a browser submits a `<textarea>` with
+  CRLF line endings while the script-imported description and readings are
+  stored with LF, and `event_edit` compared them raw, so *every* save of a
+  reviewed event read as a changed description and readings; the comparison
+  now normalizes both sides (`events.views._text`). **The decision never
+  landed** because `event_edit_confirm.html` re-posted each field as
+  `{{ field.value }}` in a hidden `<textarea>`, and a many-to-many's value is a
+  Python list, so `ce_organizations` arrived as the string `"[]"`, failed
+  validation, and the choice POST quietly re-rendered the edit page with the
+  error tucked inside the CE section. No `EventChangeRequest` was written and
+  nothing, the venue included, was saved. The dialog now carries forward
+  **exactly what was submitted** (`carried`, from `request.POST.lists()`), one
+  hidden input per value, which also retires the checkbox exception list
+  (`record_video` / `tuition_covers` / `requires_faculty_approval`): an
+  unticked box is simply absent from both posts. Every earlier test posted
+  `decision=` straight at the view and so skipped the dialog's rendering;
+  `events/test_confirm_dialog_roundtrip.py` now fetches the page, parses it,
+  submits CRLF, and posts the dialog's own hidden fields back, the way a
+  browser does. The two template-grep tests for the exception list are gone,
+  superseded by that. No migration.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
