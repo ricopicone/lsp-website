@@ -361,6 +361,27 @@ registration amount, or add a charge on their account page.
 the gate — they register on the regular rules: free where allowed, paid
 where required.
 
+### Per-class seminars
+
+A seminar can bill **per class attended** instead of for the whole year. Its
+registrants enroll at $0, and each class they attend becomes its own
+**Registration charge** on their statement, labelled with the seminar and the
+class date, a few days after the class. Their payments for classes show as
+Registration payments labelled "classes", and sweep onto those charges like any
+other registration money, so existing registration credit pays classes too.
+
+- **Tuition coverage** is decided class by class when each is billed. Recording
+  a covering decision for the year (yours or the member's) voids that year's
+  class charges no money has reached yet; a member recording that they're
+  skipping bills the classes tuition had covered, as for whole events. Your own
+  status changes never bill anything.
+- **Faculty corrections:** for two weeks after billing, faculty can take a class
+  off a member's bill by marking them absent, only while no money has reached
+  that charge. After that, or once paid, it's yours: void or waive the charge
+  from the statement as usual.
+- **Leaving or being removed** stops future classes; classes already billed stay
+  owed, and nothing is refunded automatically.
+
 ---
 
 ## Payments tab

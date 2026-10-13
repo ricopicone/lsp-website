@@ -2278,6 +2278,57 @@ Done (see `git log` for specifics):
   guests (or a code addressed to that person). Design:
   `docs/superpowers/specs/2026-09-24-pc-standalone-event-types-design.md`.
 
+- **Per-class billing** (task #811, REG-6, found triaging #810). Some faculty
+  bill per class ($25/class, sessions TBD) and the site could only sell the
+  whole seminar, so a $25 fixed code enrolled four people for the year. REG-6
+  had only ever been scaffolded (`PriceTier.session`, `Registration.sessions`,
+  `Profile.default_billing_mode` — none read; all three stay unused).
+  **Attendance-based, opt-in per seminar** (Rico, 2026-10-12). The design's
+  one idea is **isolation**: a per-class registration is an ordinary **$0
+  PAID** registration carrying `Registration.per_class_rate`, so every path
+  keyed on `quoted_amount` (plans, Checkout, coverage re-pricing, reminders,
+  access, roster) sees a normal enrolment. Its money flows through parallel
+  rows those paths can't see: `events.ClassAttendance` (one per registration ×
+  session), a billed class is an ordinary registration-category `Charge` with
+  **`registration` left NULL** and a new `class_attendance` FK (own non-void
+  unique constraint), and paying is a `Payment` with `registration` NULL and
+  a new `per_class_registration` FK — so `mint_registration_charge`,
+  `void_registration_charge`, `charge_unique_registration`, `complete_payment`'s
+  registration branch, refunds and removal never see a class. The ledger is
+  unchanged; a seminar's open balance is read from the ledger's own sweep via
+  the new `ledger.charge_coverage(user)` (the #723 lesson), which is also why
+  existing registration credit pays classes.
+  **Pipeline** (`events/per_class.py`, a pass of the 5-minute
+  `send_meeting_reminders`, no host change): after each class (15 min grace)
+  record a row per PAID/COMPED registrant created before it ended — **detected**
+  from Daily's `/meetings` where the event is online in the site's room
+  (`mint_token` now sets `user_id`), else **presumed present** (in person,
+  Zoom, *hybrid*); an unreadable room retries 24h then presumes. A **72h
+  window** (≥24h after a late recording): faculty/conveners mark anyone and
+  lock the row, a member marks themselves. Then **bill**: present → charge at
+  the rate, dated the school-local class day; absent/comped/covered/$0 record
+  an outcome. **Weekly note** Mondays from 09:00. For **14 days** after billing
+  faculty may mark absent (voids the charge only while *no* money has swept
+  onto it) or present (bills it).
+  **Billing mode is part of the price** (`Event.billing_mode`,
+  `EventProposal.billing_mode`, `PriceSpec.per_class`): proposed, PC-approved,
+  changed along the price's review route, and **locked once anyone is
+  registered** (`BillingModeLocked`); `per_class_since` bounds what's recorded.
+  **Tuition coverage is decided per class at billing** (covered tier, no code,
+  tuition-current for the event's AY); `covered_registrations`/`apply_coverage`
+  exclude per-class rows (the first one *would* have re-billed a covered
+  per-class registration as a whole seminar), and two twin hooks sit beside
+  them: a covering decision voids that year's untouched class charges (member
+  and treasurer paths, #561), a member's SKIPPING bills the covered classes
+  (#485; staff paths never). Skip-list also pinned: `cancel()` never refunds a
+  per-class registration (a converted one still holds its old $25 Stripe
+  payment), removal leaves no "money left", comp accepts PAID per-class, codes
+  set the rate (installments / full-price refused). Conversion:
+  `manage.py convert_event_to_per_class <slug> --price 25 --bill-from DATE
+  [--dry-run]`, the only route past the lock. Widening the review loop to
+  imported program events is sibling task #812. Design:
+  `docs/superpowers/specs/2026-10-12-per-class-billing-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

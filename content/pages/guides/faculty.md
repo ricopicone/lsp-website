@@ -226,6 +226,32 @@ the treasurer's.
   treasurer's to reverse.
 - **Work on another event.** Codes belong to the event they were minted on.
 
+### Billing per class
+
+Some seminars charge per class rather than for the whole year. **Per class**
+is part of the price, so you choose it on your proposal beside the fee, and it
+changes the way the fee does. Once anyone has registered it can't be switched;
+ask the Web Coordinator.
+
+How it works for your students:
+
+- They register once, without paying anything up front. The fee you set is
+  what each class costs them.
+- After each class the site records who attended. If the class met in the
+  site's own room, it knows who joined; otherwise everyone registered is
+  counted as present.
+- You and they have **three days** to correct it, on the **Attendance**
+  section of the Roster tab. Once you mark someone, they can't change it.
+- Then each class attended is billed, and they get a note once a week with
+  what was billed and a Pay button.
+- For **two weeks** after a class is billed, you can still mark someone
+  absent, which takes the class off their bill, as long as they haven't paid
+  for it yet. After that, it's the treasurer's.
+
+Pricing codes work per class too: a fixed amount is the price of each class,
+and a percentage comes off each class. A code can't spread payments out on a
+per-class seminar. Members covered by tuition aren't billed for classes.
+
 ## If you convene a reading group
 
 Everything above is yours too. Reading groups are convener-led rather than

@@ -45,7 +45,11 @@ existing notes and adds new ones.
   registration is confirmed with full access, the member receives the
   confirmation email, and the waived amount still appears on their ledger
   statement.
-- **Remove** — takes the person off the event: their place is released, they
+  On a **per-class seminar** registrations are confirmed at $0 and billed class
+  by class, so Comp is offered on confirmed ones too: classes from then on are
+  not billed, and any already billed stay for the treasurer.
+- **Remove** — on a per-class seminar, classes already billed stay owed and
+  no refund is offered. Otherwise, it takes the person off the event: their place is released, they
   drop off the roster, and they lose access. Removing and refunding are
   separate choices. Where the site can refund cleanly, one card payment, you
   are asked which you want and the safe option is preselected; where it
