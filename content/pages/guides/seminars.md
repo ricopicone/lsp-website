@@ -29,6 +29,12 @@ matches your role is pre-selected. A few things worth knowing:
 - **Covered by tuition.** If you're a tuition-paying member and the event is
   covered, you'll see a one-click "covered by tuition" option—no payment needed.
 - **Free events** skip payment entirely and confirm you on the spot.
+- **Per class.** Some seminars, or a code from your faculty, bill you for each
+  class you attend instead of the whole seminar. You register without paying,
+  and a few days after each class it's billed. Your registration page lists
+  your classes, lets you correct your attendance for three days after each
+  one, and has a Pay button for what's open. You get a note once a week when
+  classes are billed.
 
 Otherwise you'll be sent to a secure checkout. When you're done, you land on a
 confirmation page and get an email.
@@ -38,7 +44,8 @@ confirmation page and get an email.
 Your **access details**—the Zoom link, room, or materials—appear on the event
 page and in your confirmation email once you're registered. You can view or
 **cancel** a registration from its confirmation page; cancellations are refunded
-automatically.
+automatically. If you're billed per class, classes already billed stay owed and
+nothing is refunded automatically; write to the treasurer.
 
 ## Try it now
 

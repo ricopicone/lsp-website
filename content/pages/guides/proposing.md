@@ -36,9 +36,12 @@ tab lists everything you have saved or submitted, with its status, and a
 - **Contact**: how registrants reach you.
 - **Conveners or co-faculty**: other members who will run it with you.
 - **Fee**: free, a fixed amount, or a sliding scale with a floor and a
-  ceiling. Whether **tuition covers** it for tuition-paying members. The fee
+  ceiling. Whether **tuition covers** it for tuition-paying members. Under
+  **Billing**, *Whole seminar* or *Per class*: per class bills each person
+  for the classes they attend, with the fee as the price of one class. The fee
   you propose becomes the listed price if approved; only the Program
-  Committee can change it afterwards.
+  Committee can change it afterwards, and whole seminar or per class can't be
+  changed once anyone has registered.
 - **CE credits**, if you offer them, with the number and the basis. The
   accreditation itself is yours to arrange with an accrediting organization,
   an APA-approved sponsor or another accreditor; send the Program Committee

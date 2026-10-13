@@ -446,7 +446,8 @@ class PricingCodeForm(forms.ModelForm):
             self.fields["per_class"].help_text = (
                 "Instead of the whole seminar, they pay this amount for each "
                 "class they attend, billed a few days after each class. Choose "
-                "Fixed price (or Sliding floor) and enter the price of one class."
+                "Fixed amount (or Sliding-scale floor) and enter the price of "
+                "one class."
             )
 
     class Meta:

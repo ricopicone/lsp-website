@@ -123,6 +123,11 @@ add a new one attached to this program.
   yearly term of an existing seminar so its workspace, channel, and past
   members carry over (they renew by registering for this term). Leave
   blank for a brand-new seminar.
+- **Price**: free, a fixed amount, or a sliding scale, whether tuition
+  covers it, and **Billing**, *Whole seminar* or *Per class* (each person is
+  billed for the classes they attend, at the fee per class). Billing can't be
+  switched once anyone has registered; ask the Web Coordinator. Faculty can
+  still put one student on per-class billing with a pricing code.
 - **Requires faculty approval**: if set, each registration must be
   approved by the event's faculty before it's confirmed. Default off.
 - **Record video**: automatically record the event's online meeting.
