@@ -102,3 +102,49 @@ def test_parletre_index_renders_both(client, live):
     assert reverse("video:my_room") in html
     assert "Grace Hopper's meeting room" in html
     assert reverse("video:personal_room", args=[room.slug]) in html
+
+
+def test_posted_office_hours_listed_while_in_session(live):
+    from video.models import PersonalRoom
+
+    owner = member("owner@example.com", first="Grace", last="Hopper")
+    room = room_for(owner)
+    room.office_hours = PersonalRoom.OfficeHours.POSTED
+    room.hours_note = "Thursdays 3-4pm Pacific"
+    room.save()
+    visitor = member("visitor@example.com")
+
+    assert personal.parletre_rooms(visitor)["in_progress"] == []
+    live(room, "Grace Hopper")
+    [entry] = personal.parletre_rooms(visitor)["in_progress"]
+    assert entry["room"] == room and entry["reason"] == "office_hours"
+
+
+def test_appointment_hours_and_non_members_are_not_listed(live):
+    from video.models import PersonalRoom
+
+    owner = member("owner@example.com")
+    room = room_for(owner)
+    live(room)
+    room.office_hours = PersonalRoom.OfficeHours.APPOINTMENT
+    room.hours_note = "write to me"
+    room.save()
+    assert personal.parletre_rooms(member("visitor@example.com"))["in_progress"] == []
+
+    room.office_hours = PersonalRoom.OfficeHours.POSTED
+    room.save()
+    assert personal.parletre_rooms(non_member())["in_progress"] == []
+
+
+def test_invitation_wins_over_office_hours(live):
+    from video.models import PersonalRoom
+
+    owner = member("owner@example.com")
+    room = room_for(owner)
+    room.office_hours = PersonalRoom.OfficeHours.POSTED
+    room.save()
+    guest = member("guest@example.com")
+    invite(room, guest)
+    live(room)
+    [entry] = personal.parletre_rooms(guest)["in_progress"]
+    assert entry["reason"] == "invited"

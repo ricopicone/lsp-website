@@ -240,13 +240,14 @@ def parletre_rooms(user) -> dict:
     """The personal rooms Parlêtre's index lists for ``user`` (task #751).
 
     ``{"own": {room, is_live, people} | None, "in_progress": [{room, owner_name,
-    people}, ...]}``. The member's own room is always listed, whether or not it
-    has been created yet: ``my_room`` creates it on the first click. Someone
-    else's room is listed only while ``user`` holds a live invitation to it
-    *and* its owner is in it, which is the same pair of conditions
-    :func:`check_entry` asks at the door, so the Join button never leads to a
-    doorstep. Posted office hours are not listed: they admit every member, and
-    the board is not where hours are advertised.
+    people, reason}, ...]}``. The member's own room is always listed, whether or
+    not it has been created yet: ``my_room`` creates it on the first click.
+    Someone else's room is listed only while its owner is in it *and* ``user``
+    would be let in, either by a live invitation (``reason="invited"``) or by
+    posted office hours that admit them (``reason="office_hours"``). That is the
+    same pair of conditions :func:`check_entry` asks at the door, so the Join
+    button never leads to a doorstep. "By appointment" hours admit nobody, so
+    they are never listed.
     """
     empty = {"own": None, "in_progress": []}
     if not services.daily_enabled() or not getattr(user, "is_authenticated", False):
@@ -261,22 +262,45 @@ def parletre_rooms(user) -> dict:
             "people": _people_in(room),
         }
 
+    # Only rooms someone is in can be listed, so filter on presence first and
+    # ask the (query-bearing) admission rules of those few alone.
+    live_names = services.live_room_names()
+    if not live_names:
+        return {"own": own, "in_progress": []}
+
+    candidates = {}
     invitations = (
         RoomInvitation.objects.live()
-        .filter(invited_user=user, personal_room__isnull=False)
+        .filter(invited_user=user, personal_room__video_room__name__in=live_names)
         .exclude(personal_room__user=user)
         .select_related("personal_room__user", "personal_room__video_room")
     )
-    in_progress = []
-    seen = set()
     for invitation in invitations:
-        room = invitation.personal_room
-        if room.pk in seen or not owner_present(room):
-            continue
-        seen.add(room.pk)
-        in_progress.append(
-            {"room": room, "owner_name": owner_display(room), "people": _people_in(room)}
+        candidates.setdefault(invitation.personal_room.pk, (invitation.personal_room, "invited"))
+
+    posted = (
+        PersonalRoom.objects.filter(
+            office_hours=PersonalRoom.OfficeHours.POSTED,
+            video_room__name__in=live_names,
         )
+        .exclude(user=user)
+        .exclude(pk__in=candidates.keys())
+        .select_related("user", "video_room")
+    )
+    for room in posted:
+        if may_be_admitted(room, user):
+            candidates[room.pk] = (room, "office_hours")
+
+    in_progress = [
+        {
+            "room": room,
+            "owner_name": owner_display(room),
+            "people": _people_in(room),
+            "reason": reason,
+        }
+        for room, reason in candidates.values()
+        if owner_present(room)
+    ]
     in_progress.sort(key=lambda r: r["owner_name"].lower())
     return {"own": own, "in_progress": in_progress}
 
