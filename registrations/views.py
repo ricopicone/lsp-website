@@ -73,6 +73,12 @@ def _create_registration(
     *, request, event, tier, code, resolution
 ) -> Registration:
     requires_approval = event.requires_faculty_approval
+    if event.is_per_class:
+        return _create_per_class_registration(
+            request=request, event=event, tier=tier, code=code,
+            rate=resolution.amount,
+            explanation=resolution.explanation,
+        )
     with transaction.atomic():
         if requires_approval:
             status = Registration.Status.PENDING_APPROVAL
@@ -98,6 +104,39 @@ def _create_registration(
             registration_plans.build_schedule(reg, resolution.installments)
         # Consume the code now only for an immediately-active reg; the approval
         # flow consumes it on approval (a declined reg shouldn't burn a use).
+        if code and code.max_uses is not None and not requires_approval:
+            PricingCode.objects.filter(pk=code.pk).update(
+                uses_remaining=F("uses_remaining") - 1
+            )
+    return reg
+
+
+def _create_per_class_registration(
+    *, request, event, tier, code, rate, explanation,
+) -> Registration:
+    """Enroll on a per-class event (task #811).
+
+    The place itself costs nothing: ``quoted_amount`` is 0 and the row is PAID
+    (enrolled) at once, or waits for approval like any other. What the member
+    pays is ``per_class_rate`` for each class they attend, billed by
+    ``events.per_class``. Every path keyed on ``quoted_amount`` (plans,
+    Checkout, coverage, reminders) therefore sees an ordinary $0 enrolment.
+    """
+    requires_approval = event.requires_faculty_approval
+    with transaction.atomic():
+        reg = Registration.objects.create(
+            user=request.user,
+            event=event,
+            price_tier=tier,
+            pricing_code=code,
+            quoted_amount=Decimal("0"),
+            per_class_rate=rate,
+            quoted_explanation=f"Per class attended: ${rate} per class. {explanation}"[:500],
+            status=(
+                Registration.Status.PENDING_APPROVAL if requires_approval
+                else Registration.Status.PAID
+            ),
+        )
         if code and code.max_uses is not None and not requires_approval:
             PricingCode.objects.filter(pk=code.pk).update(
                 uses_remaining=F("uses_remaining") - 1
@@ -198,6 +237,13 @@ def register_for_event(request, event_slug: str):
             event=event,
             price_tier=covered_tier,
             quoted_amount=Decimal("0"),
+            # On a per-class event the classes are what tuition covers, each
+            # decided when it is billed (task #811). The rate is what a class
+            # would cost uncovered, the same figure a skipped year re-bills.
+            per_class_rate=(
+                coverage.retro_amount(covered_tier) if event.is_per_class
+                else None
+            ),
             quoted_explanation="Covered by tuition (tuition-paying member, REG-4).",
             status=(
                 Registration.Status.PENDING_APPROVAL if requires_approval
@@ -430,6 +476,9 @@ def apply_code(request, reg_id: int):
     reg = get_object_or_404(Registration, pk=reg_id, user=request.user)
     back = redirect("registrations:confirm", reg_id=reg.id)
 
+    if reg.is_per_class:
+        return _apply_per_class_code(request, reg, back)
+
     if reg.status != Registration.Status.AWAITING_PAYMENT:
         messages.error(
             request,
@@ -472,6 +521,55 @@ def apply_code(request, reg_id: int):
         messages.success(
             request, f"Your code was applied. The fee is now ${reg.quoted_amount}.",
         )
+    return back
+
+
+def _apply_per_class_code(request, reg, back):
+    """The code box on a per-class registration (task #811): a code changes
+    the rate for classes not yet billed. One code per registration, as on the
+    register form."""
+    from events.pricing import PricingError, resolve_price
+
+    from .services import apply_per_class_code
+
+    if reg.status != Registration.Status.PAID or reg.pricing_code_id:
+        messages.error(
+            request,
+            "A code can't be applied to this registration. If something "
+            "needs adjusting, contact the faculty or the treasurer.",
+        )
+        return back
+    raw = (request.POST.get("pricing_code") or "").strip().upper()
+    code = PricingCode.objects.filter(code=raw, event=reg.event).first()
+    if code is None:
+        messages.error(request, "That code isn't valid for this event.")
+        return back
+    sliding_raw = (request.POST.get("sliding_amount") or "").strip()
+    try:
+        sliding = Decimal(sliding_raw) if sliding_raw else None
+    except (InvalidOperation, ValueError):
+        messages.error(request, "Enter the amount as a number, like 20.")
+        return back
+    try:
+        resolution = resolve_price(
+            user=request.user, tier=reg.price_tier, sliding_amount=sliding,
+            pricing_code=code, ignore_tuition=True,
+        )
+    except PricingError as exc:
+        messages.error(request, str(exc))
+        return back
+    if resolution.installments > 1:
+        messages.error(
+            request,
+            "That code carries a payment plan, which doesn't apply to a "
+            "per-class seminar.",
+        )
+        return back
+    apply_per_class_code(reg, code, resolution)
+    messages.success(
+        request,
+        f"Your code was applied. Each class is now ${resolution.amount}.",
+    )
     return back
 
 

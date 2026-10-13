@@ -150,6 +150,13 @@ class Registration(models.Model):
         if self.status in (self.Status.CANCELLED, self.Status.REFUNDED):
             return None
 
+        if self.is_per_class:
+            # Classes attended stay billed and owed; future classes simply
+            # stop. Money paid against classes is never auto-refunded, which
+            # also covers a converted registration still holding the
+            # whole-seminar payment it was made with (task #811).
+            refund = False
+
         issued = None
         with transaction.atomic():
             if refund and self.status == self.Status.PAID:

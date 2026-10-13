@@ -19,11 +19,13 @@ class _TierChoiceField(forms.ModelChoiceField):
             return f"{audience} — Included in tuition for tuition-paying members"
         if obj.sliding_scale:
             floor = obj.minimum_amount if obj.minimum_amount is not None else Decimal("0")
+            per = " per class" if obj.event.is_per_class else ""
             return (
-                f"{audience} — Sliding scale "
+                f"{audience} — Sliding scale{per} "
                 f"(suggested ${obj.base_amount}, minimum ${floor})"
             )
-        return f"{audience} — ${obj.base_amount}"
+        suffix = " per class" if obj.event.is_per_class else ""
+        return f"{audience} — ${obj.base_amount}{suffix}"
 
 
 class RegistrationForm(forms.Form):
@@ -96,9 +98,19 @@ class RegistrationForm(forms.Form):
                 tier=tier,
                 sliding_amount=data.get("sliding_amount"),
                 pricing_code=code,
+                # A per-class rate ignores tuition: coverage is decided class
+                # by class, when each is billed (task #811).
+                ignore_tuition=self.event.is_per_class,
             )
         except PricingError as exc:
             self.add_error(None, str(exc))
+            return data
+        if self.event.is_per_class and resolution.installments > 1:
+            self.add_error(
+                "pricing_code",
+                "This seminar bills per class, so that code's payment plan "
+                "doesn't apply. Ask the faculty for a per-class code.",
+            )
             return data
 
         data["resolution"] = resolution
