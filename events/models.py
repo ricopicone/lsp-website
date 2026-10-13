@@ -690,12 +690,20 @@ class Event(models.Model):
         """Whether faculty edits to this event's content should offer the
         certify-or-submit dialog (task #295).
 
-        Scope: published events of a proposable type that were minted from an
-        approved Programming-Committee proposal. Drafts and staff-created
-        events (no originating proposal) edit freely as before.
+        Scope: public events of a proposable type that the Program Committee
+        approved — either minted from an approved proposal, or a seminar or
+        reading group on a program (task #812). The 2026–27 program was
+        script-imported with no proposals, and an offering is on the program
+        because the committee put it there, so that is the approval the loop
+        protects. Drafts, and standalone events with no proposal, edit freely.
+
+        Publication is ``is_public_now``, not the raw flag, because a program
+        event's visibility cascades from its Program (task #532).
         """
-        if not self.published or self.event_type not in self.REVIEW_LOOP_TYPES:
+        if self.event_type not in self.REVIEW_LOOP_TYPES or not self.is_public_now:
             return False
+        if self.program_id and self.event_type in self.ANNUAL_PROGRAM_TYPES:
+            return True
         return self.from_proposal.filter(
             status=EventProposal.Status.APPROVED
         ).exists()
