@@ -6,43 +6,21 @@
 {% block content %}
 <div class="space-y-8">
 
-  <header class="flex justify-end border-b border-base-300/60 pb-4">
+  <header class="flex flex-wrap justify-end gap-x-6 gap-y-1 border-b border-base-300/60 pb-4">
+    <a href="{% url 'events:past' %}" class="text-sm link link-hover text-base-content/70 hover:text-primary">Past events →</a>
     <a href="{% url 'core:calendar' %}" class="text-sm link link-hover text-base-content/70 hover:text-primary">Calendar view →</a>
   </header>
 
   {% if events %}
   <ul class="space-y-4">
     {% for e in events %}
-    <li>
-      <a href="{% url 'events:detail' e.slug %}"
-         class="block rounded-lg border border-base-300 bg-base-100 p-5 hover:border-primary/60 hover:bg-base-200/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-2">
-          <h2 class="font-serif text-xl text-base-content">{{ e.title }}</h2>
-          <span class="text-sm text-base-content/60">
-            {{ e.start_date|date:"M j" }}{% if e.end_date != e.start_date %} – {{ e.end_date|date:"M j, Y" }}{% else %}, {{ e.end_date|date:"Y" }}{% endif %}
-          </span>
-        </div>
-        <div class="flex flex-wrap gap-2 mb-3">
-          <span class="badge badge-sm badge-ghost">{{ e.get_event_type_display }}</span>
-          <span class="badge badge-sm badge-ghost">{{ e.get_format_display }}</span>
-          {% with faculty_list=e.faculty_members %}
-          {% if faculty_list %}
-          <span class="text-xs text-base-content/60 self-center ml-1">
-            {% for f in faculty_list %}{{ f.first_name }} {{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
-          </span>
-          {% endif %}
-          {% endwith %}
-        </div>
-        {% if e.description %}
-        <p class="text-sm text-base-content/80 line-clamp-3">{{ e.description|truncatewords:40 }}</p>
-        {% endif %}
-      </a>
-    </li>
+    {% include "events/_event_card.html" with e=e %}
     {% endfor %}
   </ul>
   {% else %}
   <div class="text-center py-16 text-base-content/60">
     <p>No upcoming events.</p>
+    <p class="mt-2 text-sm"><a href="{% url 'events:past' %}" class="link link-hover hover:text-primary">See past events</a></p>
   </div>
   {% endif %}
 

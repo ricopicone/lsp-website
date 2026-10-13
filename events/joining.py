@@ -73,6 +73,31 @@ def joining_details(event) -> JoiningDetails:
     )
 
 
+def access_info_visible(event, user, *, has_paid_registration=None) -> bool:
+    """Whether ``user`` may read the event's ``access_info`` (the meeting link
+    or venue): a paid or comped registrant, whoever runs the event, or a member
+    at a gathering they attend without registering. The event page and the
+    Workspace Meet tab both ask this, so they cannot disagree about who gets
+    the link."""
+    if not event.access_info:
+        return False
+    if not getattr(user, "is_authenticated", False):
+        return False
+    from events.permissions import can_edit_event
+
+    if has_paid_registration is None:
+        from registrations.models import Registration
+
+        has_paid_registration = Registration.objects.filter(
+            user=user, event=event,
+            status__in=(Registration.Status.PAID, Registration.Status.COMPED),
+        ).exists()
+    return bool(
+        has_paid_registration or can_edit_event(user, event)
+        or event.admits_member(user)
+    )
+
+
 def joining_recipients(event):
     """Registrations that have access to the joining details: paid or comped.
 

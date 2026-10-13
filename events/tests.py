@@ -578,17 +578,6 @@ def test_approval_toggle_is_on_the_faculty_form_and_not_reviewable():
     assert "requires_faculty_approval" not in REVIEWABLE_FIELDS
 
 
-def test_confirm_dialog_reposts_the_approval_checkbox():
-    """The change-review dialog re-posts every field as a hidden <textarea>,
-    which silently drops a checkbox — it has to follow the record_video
-    precedent or the toggle is eaten on exactly the events that route through
-    review (tasks #504, #532, #564)."""
-    from pathlib import Path
-
-    src = Path(__file__).resolve().parent / "templates/events/event_edit_confirm.html"
-    assert "requires_faculty_approval" in src.read_text()
-
-
 def _approval_seminar(**kwargs):
     """A published seminar requiring approval, with a tier and a workgroup."""
     defaults = dict(

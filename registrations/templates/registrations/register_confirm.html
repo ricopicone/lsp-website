@@ -99,7 +99,7 @@
     <div role="alert" class="alert alert-success">
       <div>
         <h3 class="font-medium mb-1">Your access details</h3>
-        <p class="whitespace-pre-wrap text-sm">{{ event.access_info }}</p>
+        <p class="whitespace-pre-wrap text-sm [&_a]:underline [&_a]:break-all">{{ event.access_info|urlize }}</p>
       </div>
     </div>
     {% endif %}

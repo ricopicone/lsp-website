@@ -8,6 +8,7 @@ urlpatterns = [
     path("speakers/invitation/<str:token>/",
          views.speaker_invitation_accept, name="speaker_invitation_accept"),
     path("", views.event_list, name="list"),
+    path("past/", views.past_event_list, name="past"),
     path("<slug:slug>/speakers/<int:speaker_id>/invite/",
          views.speaker_invite, name="speaker_invite"),
     path("attendance/<int:pk>/mark/", views.class_attendance_mark,

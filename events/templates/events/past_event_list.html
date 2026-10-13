@@ -1,0 +1,32 @@
+{% extends "core/base.html" %}
+{% block title %}Past events · Lacanian School of Psychoanalysis{% endblock %}
+
+{% block page_hero %}{% include "core/_page_hero.html" with title="Past events" %}{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <header class="flex flex-wrap justify-between gap-x-6 gap-y-1 border-b border-base-300/60 pb-4">
+    <a href="{% url 'events:list' %}" class="text-sm link link-hover text-base-content/70 hover:text-primary">← Upcoming events</a>
+    <a href="{% url 'program' %}" class="text-sm link link-hover text-base-content/70 hover:text-primary">Seminars and reading groups are on the program →</a>
+  </header>
+
+  {% if years %}
+  {% for label, events in years %}
+  <section class="space-y-4">
+    <h2 class="font-serif text-2xl text-base-content">AY {{ label|slice:":4" }}–{{ label|slice:"5:" }}</h2>
+    <ul class="space-y-4">
+      {% for e in events %}
+      {% include "events/_event_card.html" with e=e past=True %}
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+  {% else %}
+  <div class="text-center py-16 text-base-content/60">
+    <p>No past events yet.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

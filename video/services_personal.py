@@ -234,6 +234,82 @@ def room_context(request, room: PersonalRoom, *, is_owner: bool, guest_name: str
     }
 
 
+# ---- Parlêtre -----------------------------------------------------------
+
+def parletre_rooms(user) -> dict:
+    """The personal rooms Parlêtre's index lists for ``user`` (task #751).
+
+    ``{"own": {room, is_live, people} | None, "in_progress": [{room, owner_name,
+    people, reason}, ...]}``. The member's own room is always listed, whether or
+    not it has been created yet: ``my_room`` creates it on the first click.
+    Someone else's room is listed only while its owner is in it *and* ``user``
+    would be let in, either by a live invitation (``reason="invited"``) or by
+    posted office hours that admit them (``reason="office_hours"``). That is the
+    same pair of conditions :func:`check_entry` asks at the door, so the Join
+    button never leads to a doorstep. "By appointment" hours admit nobody, so
+    they are never listed.
+    """
+    empty = {"own": None, "in_progress": []}
+    if not services.daily_enabled() or not getattr(user, "is_authenticated", False):
+        return empty
+
+    own = None
+    if eligible_for_room(user):
+        room = PersonalRoom.objects.filter(user=user).select_related("video_room").first()
+        own = {
+            "room": room,
+            "is_live": room is not None and owner_present(room),
+            "people": _people_in(room),
+        }
+
+    # Only rooms someone is in can be listed, so filter on presence first and
+    # ask the (query-bearing) admission rules of those few alone.
+    live_names = services.live_room_names()
+    if not live_names:
+        return {"own": own, "in_progress": []}
+
+    candidates = {}
+    invitations = (
+        RoomInvitation.objects.live()
+        .filter(invited_user=user, personal_room__video_room__name__in=live_names)
+        .exclude(personal_room__user=user)
+        .select_related("personal_room__user", "personal_room__video_room")
+    )
+    for invitation in invitations:
+        candidates.setdefault(invitation.personal_room.pk, (invitation.personal_room, "invited"))
+
+    posted = (
+        PersonalRoom.objects.filter(
+            office_hours=PersonalRoom.OfficeHours.POSTED,
+            video_room__name__in=live_names,
+        )
+        .exclude(user=user)
+        .exclude(pk__in=candidates.keys())
+        .select_related("user", "video_room")
+    )
+    for room in posted:
+        if may_be_admitted(room, user):
+            candidates[room.pk] = (room, "office_hours")
+
+    in_progress = [
+        {
+            "room": room,
+            "owner_name": owner_display(room),
+            "people": _people_in(room),
+            "reason": reason,
+        }
+        for room, reason in candidates.values()
+        if owner_present(room)
+    ]
+    in_progress.sort(key=lambda r: r["owner_name"].lower())
+    return {"own": own, "in_progress": in_progress}
+
+
+def _people_in(room) -> list[str]:
+    daily_room = getattr(room, "video_room", None) if room is not None else None
+    return services.presence_names(daily_room)
+
+
 # ---- office hours -------------------------------------------------------
 
 def hours_for(user) -> PersonalRoom | None:

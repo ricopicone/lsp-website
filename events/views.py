@@ -29,6 +29,7 @@ from .models import (
     Event,
     PricingCode,
     academic_year_date_range,
+    academic_year_of,
     current_academic_year,
 )
 from .permissions import can_edit_event
@@ -102,6 +103,7 @@ def event_summary_context(event, user) -> dict:
             Registration.Status.COMPED,
         )
     )
+    from events.joining import access_info_visible
     from events.permissions import can_edit_event
     from video.services import daily_enabled, presence_names, room_participant_count
 
@@ -185,8 +187,8 @@ def event_summary_context(event, user) -> dict:
             else "signin" if not getattr(user, "is_authenticated", False)
             else None
         ),
-        "show_access_info": bool(event.access_info) and (
-            has_paid_registration or can_host or admitted_as_member
+        "show_access_info": access_info_visible(
+            event, user, has_paid_registration=has_paid_registration,
         ),
         "event_room_live": bool(room_participants),
         "event_room_participants": room_participants,
@@ -208,14 +210,43 @@ def event_list(request):
     # and dropped off this page seven hours early. ``end_date`` is a plain date
     # in the school's own timezone, so it must be compared against one (#571).
     today = timezone.localdate()
-    events = (
-        Event.objects.filter(Event.public_now_q(), end_date__gte=today)
-        .exclude(event_type__in=Event.ANNUAL_PROGRAM_TYPES)
-        .order_by("start_date", "title")
+    events = _standalone_events(request).filter(end_date__gte=today).order_by(
+        "start_date", "title",
+    )
+    return render(request, "events/event_list.html", {"events": events})
+
+
+def _standalone_events(request):
+    """The standalone events this viewer may see listed, upcoming or past.
+
+    One definition shared by /events/ and /events/past/ so the two lists cannot
+    disagree about what counts as a listable event.
+    """
+    events = Event.objects.filter(Event.public_now_q()).exclude(
+        event_type__in=Event.ANNUAL_PROGRAM_TYPES,
     )
     if not is_lsp_member(request.user):
         events = events.filter(visibility=Event.Visibility.PUBLIC)
-    return render(request, "events/event_list.html", {"events": events})
+    return events
+
+
+def past_event_list(request):
+    """Standalone events that have ended, grouped by academic year (task #814).
+
+    An ended special event, Day of Assembly or Working Day dropped off every
+    listing while its page lived on; this is where they go. Program types keep
+    their own history at /program/?year=… and /program/archive/.
+    """
+    today = timezone.localdate()  # the school's date, not UTC's (#571)
+    events = _standalone_events(request).filter(end_date__lt=today).order_by(
+        "-start_date", "title",
+    )
+    years: dict[str, list[Event]] = {}
+    for event in events:
+        years.setdefault(academic_year_of(event.start_date), []).append(event)
+    return render(request, "events/past_event_list.html", {
+        "years": list(years.items()),
+    })
 
 
 def program(request):
@@ -490,8 +521,11 @@ def event_edit(request, slug: str):
     # would compare the new value against itself.
     from .price_spec import from_event
 
+    # Line endings are normalized on both sides: a browser submits a
+    # <textarea> with CRLF while imported text is stored with LF, so a raw
+    # comparison read every save as a changed description (task #817).
     original = {
-        f: (getattr(event, f) or "")
+        f: _text(getattr(event, f))
         for f in REVIEWABLE_FIELDS if f != "price"
     }
     original_price = from_event(event)
@@ -511,7 +545,7 @@ def event_edit(request, slug: str):
     cd = form.cleaned_data
     changed = [
         f for f in REVIEWABLE_FIELDS
-        if f != "price" and (cd[f] or "") != original[f]
+        if f != "price" and _text(cd[f]) != original[f]
     ]
     # cd["price"] is None for a read-only multi-tier event, meaning "untouched".
     if cd.get("price") is not None and cd["price"] != original_price:
@@ -532,9 +566,19 @@ def event_edit(request, slug: str):
         # submitted values forward as hidden inputs so the choice POST re-binds.
         desc_ratio = change_ratio(original["description"], cd["description"]) \
             if "description" in changed else 0.0
+        # The dialog re-posts exactly what was submitted, one hidden input per
+        # value: re-rendering each field's value turned a many-to-many list
+        # into the string "[]", which failed validation on the choice POST, so
+        # no decision ever saved (task #817).
+        carried = [
+            (name, value)
+            for name, values in request.POST.lists()
+            if name not in ("csrfmiddlewaretoken", "decision")
+            for value in values
+        ]
         return render(request, "events/event_edit_confirm.html", {
             "event": event,
-            "form": form,
+            "carried": carried,
             "changed_labels": [_field_label(f) for f in changed],
             "description_ratio_pct": round(desc_ratio * 100),
             "description_changed": "description" in changed,
@@ -614,6 +658,11 @@ def event_edit(request, slug: str):
     return redirect("events:detail", slug=event.slug)
 
 
+def _text(value) -> str:
+    """A text value as the review loop compares it: blank for None, LF endings."""
+    return (value or "").replace("\r\n", "\n")
+
+
 @login_required
 @require_POST
 def ce_organization_add(request, slug: str):
@@ -632,11 +681,29 @@ def ce_organization_add(request, slug: str):
     org_form = CEOrganizationForm(
         request.POST, MultiValueDict({"logos": request.FILES.getlist("logo")}),
     )
+    # The edit page's dialog posts here by fetch and asks for JSON, so the
+    # unsaved edits in the details form survive the add (task #817); without
+    # JavaScript it is an ordinary POST that redirects back.
+    wants_json = "application/json" in request.headers.get("Accept", "")
     if org_form.is_valid():
         org = org_form.save(added_by=request.user)
         event.ce_organizations.add(org)
+        if wants_json:
+            return JsonResponse({
+                "pk": org.pk,
+                "name": org.name,
+                "logos": [logo.image.url for logo in org.logos.all()],
+                "manage_url": reverse(
+                    "events:ce_organization_edit", args=[event.slug, org.pk]
+                ),
+            })
         messages.success(request, f"Added {org.name} and applied it to this event.")
         return redirect("events:edit", slug=event.slug)
+    if wants_json:
+        return JsonResponse({"errors": {
+            field: [str(message) for message in messages_]
+            for field, messages_ in org_form.errors.items()
+        }}, status=400)
 
     form = EventEditForm(instance=event)
     return render(request, "events/event_edit.html", {

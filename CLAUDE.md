@@ -2376,6 +2376,63 @@ Done (see `git log` for specifics):
   now name the scope and add price to the reviewable list. No migration, no
   flag.
 
+- **The change-review dialog never saved** (task #817). Rico set *Lacanian
+  Clinical Practice* to meet on Zoom twice, once as an administrative change
+  and once as minor, and both times it reverted. Two defects, stacked, and
+  latent since #295 because nothing had ever entered the loop until #812.
+  **The dialog appeared at all** because a browser submits a `<textarea>` with
+  CRLF line endings while the script-imported description and readings are
+  stored with LF, and `event_edit` compared them raw, so *every* save of a
+  reviewed event read as a changed description and readings; the comparison
+  now normalizes both sides (`events.views._text`). **The decision never
+  landed** because `event_edit_confirm.html` re-posted each field as
+  `{{ field.value }}` in a hidden `<textarea>`, and a many-to-many's value is a
+  Python list, so `ce_organizations` arrived as the string `"[]"`, failed
+  validation, and the choice POST quietly re-rendered the edit page with the
+  error tucked inside the CE section. No `EventChangeRequest` was written and
+  nothing, the venue included, was saved. The dialog now carries forward
+  **exactly what was submitted** (`carried`, from `request.POST.lists()`), one
+  hidden input per value, which also retires the checkbox exception list
+  (`record_video` / `tuition_covers` / `requires_faculty_approval`): an
+  unticked box is simply absent from both posts. Every earlier test posted
+  `decision=` straight at the view and so skipped the dialog's rendering;
+  `events/test_confirm_dialog_roundtrip.py` now fetches the page, parses it,
+  submits CRLF, and posts the dialog's own hidden fields back, the way a
+  browser does. The two template-grep tests for the exception list are gone,
+  superseded by that. No migration. **Follow-up:** the seminar's Workspace
+  **Meet tab** now says where class meets when the offering is on Zoom
+  (`joining_details(...).kind == "external"`), with the link for whoever the
+  event page would show it to. That rule is now one predicate,
+  `events.joining.access_info_visible`, used by both surfaces; the group's own
+  room stays on the tab for meeting outside class. **Edit page pass (same
+  task):** the event's details are one card whose single **Save details** sits
+  in a bar that sticks to the bottom of the screen while the form is on it;
+  `static/js/event-edit.js` shows "Unsaved changes" and warns before leaving
+  with them (never on its own Save). Everything that saves on its own
+  (Registration, Sessions, the renamed schedule editor, Feature image,
+  External speakers) sits below under **Saved separately**, each card with its
+  own button; the main form's heading is now **Schedule note**. Adding a CE
+  organization moved into a `<dialog>` opened from "Approved by": the script
+  posts it by fetch asking for JSON (`ce_organization_add` answers JSON on
+  `Accept: application/json`, 400 with field errors when refused), ticks the
+  new organization in the list, and counts it as saved, since the view applies
+  it to the event at once; unsaved details survive. Without JavaScript the add
+  is the old POST and redirect, and a refused add renders the dialog open.
+  The script toggles only `hidden`, never a class (Tailwind scans templates).
+
+- **Past standalone events get a page** (task #814). `/events/` lists only
+  standalone events that haven't ended (special events, Days of Assembly,
+  Working Days, Scholarly Seminars), and the program types keep their own
+  history on `/program/?year=…` and `/program/archive/`. So an ended special
+  event fell off every listing while its page lived on. **`/events/past/`**
+  (`events:past`) lists those events newest first, grouped under
+  academic-year headings by start date. Upcoming and past share one query,
+  `views._standalone_events` (`public_now_q()`, program types excluded,
+  members-only hidden from non-members), and one card partial,
+  `events/_event_card.html`, with `past` muting it. Linked from the `/events/`
+  header and its empty state, both Events nav menus, and back. The
+  today-or-later boundary stays `timezone.localdate()` (#571). No migration.
+
 - **Board elections** (task #813). The School had no way to run the election
   of its Board on the site. New `elections` app, administered by a new
   **Election Administrator** `StaffRole` the Board appoints on Board →

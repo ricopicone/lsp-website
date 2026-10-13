@@ -123,3 +123,72 @@ def test_meet_tab_hidden_when_video_disabled(client):
     resp = client.get(reverse("workgroups:detail", args=[wg.slug]) + "?tab=meet")
     # Unknown/!available tab falls back to overview; no "Meet Now" anywhere.
     assert b"Meet Now" not in resp.content
+
+
+# ---- An offering that meets elsewhere (task #817) ---------------------------
+
+
+def _zoom_seminar():
+    event = Event.objects.create(
+        title="Clinical Practice", slug="clinical-practice",
+        event_type=Event.Type.SEMINAR, format=Event.Format.ONLINE,
+        online_venue=Event.OnlineVenue.EXTERNAL,
+        access_info="https://zoom.example/j/123",
+        start_date=date(2026, 9, 1), end_date=date(2027, 5, 1),
+        published=True,
+    )
+    return event, event.ensure_workgroup()
+
+
+def _meet(client, wg):
+    return client.get(reverse("workgroups:detail", args=[wg.slug]) + "?tab=meet")
+
+
+@daily_on
+def test_meet_tab_shows_an_external_venue_and_its_link_to_faculty(client):
+    event, wg = _zoom_seminar()
+    fac = _member("fac@x.test")
+    event.add_faculty(fac)
+    client.force_login(fac)
+    body = _meet(client, wg).content.decode()
+    assert "meets outside the site" in body
+    assert "https://zoom.example/j/123" in body
+    # The group's own room stays, for meeting outside class.
+    assert "Meet Now" in body
+
+
+@daily_on
+def test_meet_tab_withholds_the_link_from_a_member_without_access(client):
+    """A stored member who hasn't paid is told where class meets, not the link:
+    the same rule as the event page's access details."""
+    _event, wg = _zoom_seminar()
+    user = _member()
+    WorkgroupMembership.objects.create(
+        workgroup=wg, user=user, role=WorkgroupMembership.Role.MEMBER,
+        start_date=date(2026, 1, 1),
+    )
+    client.force_login(user)
+    body = _meet(client, wg).content.decode()
+    assert "meets outside the site" in body
+    assert "https://zoom.example/j/123" not in body
+
+
+@daily_on
+def test_meet_tab_says_nothing_extra_for_an_insite_offering(client):
+    event, wg = _zoom_seminar()
+    Event.objects.filter(pk=event.pk).update(online_venue=Event.OnlineVenue.INSITE)
+    fac = _member("fac@x.test")
+    event.add_faculty(fac)
+    client.force_login(fac)
+    body = _meet(client, wg).content.decode()
+    assert "meets outside the site" not in body
+
+
+@daily_on
+def test_overview_access_details_link_the_meeting_url(client):
+    event, wg = _zoom_seminar()
+    fac = _member("fac@x.test")
+    event.add_faculty(fac)
+    client.force_login(fac)
+    body = client.get(reverse("workgroups:detail", args=[wg.slug])).content.decode()
+    assert '<a href="https://zoom.example/j/123"' in body

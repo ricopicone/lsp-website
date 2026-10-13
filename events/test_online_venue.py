@@ -285,22 +285,6 @@ def _event_unsaved():
     )
 
 
-def test_confirm_dialog_reposts_the_venue_and_the_link():
-    """The dialog re-posts every field as a hidden <textarea>. A TextField and
-    a <select> both survive that (only checkboxes need the exception list), but
-    a silent revert would be invisible, so pin it (task #566's precedent)."""
-    from pathlib import Path
-
-    src = (
-        Path(__file__).resolve().parent / "templates/events/event_edit_confirm.html"
-    ).read_text()
-    # Not in the checkbox exception list — they must fall through to the textarea.
-    exception_line = [ln for ln in src.splitlines() if 'field.name == "record_video"' in ln]
-    assert exception_line, "the checkbox exception list moved"
-    assert "online_venue" not in exception_line[0]
-    assert "access_info" not in exception_line[0]
-
-
 @pytest.mark.django_db
 def test_faculty_can_set_their_own_zoom_link(client):
     """End to end: the person teaching the seminar sets the venue and the link

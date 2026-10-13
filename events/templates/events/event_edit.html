@@ -24,8 +24,13 @@
   </div>
   {% endif %}
 
-  <form method="post" class="space-y-6">
+  {% comment %}The event's details: one form, one Save, kept in reach by a bar
+  that sticks to the bottom of the screen while the form is on it. event-edit.js
+  says when there are unsaved changes and warns before leaving with them.{% endcomment %}
+  <form method="post" id="event-details-form" data-event-details
+        class="rounded-lg border border-base-300 bg-base-100 px-4 pt-4 sm:px-6 sm:pt-6 space-y-6">
     {% csrf_token %}
+    <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Event details</h2>
     <div class="form-control space-y-1">
       <label for="id_title" class="label-text">
         <h2 class="font-serif text-lg text-base-content">Title</h2>
@@ -65,7 +70,7 @@
 
     <div class="form-control space-y-1">
       <label for="id_schedule_note" class="label-text">
-        <h2 class="font-serif text-lg text-base-content">Schedule</h2>
+        <h2 class="font-serif text-lg text-base-content">Schedule note</h2>
       </label>
       {{ form.schedule_note }}
       <p class="text-xs text-base-content/60">Meeting cadence in your own words, e.g. "1st and 3rd Saturdays, 9–11:30am Pacific".</p>
@@ -192,6 +197,7 @@
 
       <div class="space-y-2">
         <span class="block text-xs text-base-content/60">Approved by</span>
+        <div id="ce-org-list" class="space-y-2">
         {% for org in ce_organizations %}
         <div class="flex items-center gap-3">
           <label class="flex flex-1 cursor-pointer items-center gap-3">
@@ -210,8 +216,11 @@
              class="link link-hover text-xs text-base-content/50">Manage logos</a>
         </div>
         {% empty %}
-        <p class="text-xs text-base-content/50">No organizations listed yet. Add yours below the form.</p>
+        <p class="text-xs text-base-content/50" data-ce-empty>No organizations listed yet.</p>
         {% endfor %}
+        </div>
+        <button type="button" class="btn btn-ghost btn-xs" data-open-dialog="ce-org-dialog">+ Add an organization</button>
+        <p class="text-xs text-success" data-ce-added hidden></p>
       </div>
 
       <div class="form-control space-y-1">
@@ -222,13 +231,78 @@
     </section>
     {% endif %}
 
-    <button type="submit" class="btn btn-primary">Save</button>
+    <div class="sticky bottom-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 border-t border-base-300 bg-base-100 rounded-b-lg flex flex-wrap items-center gap-3">
+      <button type="submit" class="btn btn-primary">Save details</button>
+      <span class="text-sm text-warning" data-dirty-note hidden>Unsaved changes</span>
+      <a href="{% url 'events:detail' event.slug %}" class="link link-hover text-sm text-base-content/60 ml-auto">Back to event page</a>
+    </div>
   </form>
+
+  {% if not event.is_school_gathering %}
+  {% comment %}Its own form (HTML forbids nesting), in a dialog opened from
+  "Approved by". event-edit.js posts it by fetch so unsaved details survive and
+  ticks the new organization in the list; without JavaScript it posts normally,
+  and a refused add comes back with the dialog open.{% endcomment %}
+  <dialog id="ce-org-dialog" class="modal" aria-labelledby="ce-org-dialog-title" {% if ce_org_form.errors %}open{% endif %}>
+  <div class="modal-box space-y-3">
+    <h2 id="ce-org-dialog-title" class="font-serif text-lg text-base-content">Add a CE organization</h2>
+    <p class="text-xs text-base-content/60">
+      If the body that approved your event isn't in the list, add it here.
+      It becomes available to every other event, so use the organization's full
+      name and its official logo. A transparent PNG looks best.
+    </p>
+    <form method="post" enctype="multipart/form-data"
+          action="{% url 'events:ce_organization_add' event.slug %}" class="space-y-3" data-ce-org-form>
+      {% csrf_token %}
+      {% with f=ce_org_form %}
+      <div class="space-y-1">
+        <label for="ce-org-name" class="block text-xs text-base-content/60">Name</label>
+        <input type="text" name="name" id="ce-org-name" required
+               value="{% if f %}{{ f.name.value|default_if_none:'' }}{% endif %}"
+               class="input input-bordered input-sm w-full">
+        <p class="text-xs text-error" data-error-for="name" {% if not f.name.errors %}hidden{% endif %}>{{ f.name.errors|join:", " }}</p>
+      </div>
+      <div class="space-y-1">
+        <span class="block text-xs text-base-content/60">Logos</span>
+        {% include "events/_ce_logo_inputs.html" with max_new=max_new_logos %}
+        <p class="text-xs text-error" data-error-for="logos" {% if not f.logos.errors %}hidden{% endif %}>{{ f.logos.errors|join:", " }}</p>
+      </div>
+      <div class="space-y-1">
+        <label for="ce-org-url" class="block text-xs text-base-content/60">Website (optional)</label>
+        <input type="url" name="url" id="ce-org-url"
+               value="{% if f %}{{ f.url.value|default_if_none:'' }}{% endif %}"
+               class="input input-bordered input-sm w-full">
+        <p class="text-xs text-error" data-error-for="url" {% if not f.url.errors %}hidden{% endif %}>{{ f.url.errors|join:", " }}</p>
+      </div>
+      <div class="space-y-1">
+        <label for="ce-org-statement" class="block text-xs text-base-content/60">Required approval language (optional)</label>
+        <textarea name="statement" id="ce-org-statement" rows="3"
+                  class="textarea textarea-bordered w-full">{% if f %}{{ f.statement.value|default_if_none:'' }}{% endif %}</textarea>
+        <p class="text-xs text-base-content/60">Wording this body requires on approved events. Shown under its logos on every event that claims it.</p>
+        <p class="text-xs text-error" data-error-for="statement" {% if not f.statement.errors %}hidden{% endif %}>{{ f.statement.errors|join:", " }}</p>
+      </div>
+      <p class="text-xs text-error" data-error-for="__all__" {% if not f.non_field_errors %}hidden{% endif %}>{{ f.non_field_errors|join:", " }}</p>
+      {% endwith %}
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost btn-sm" data-close-dialog>Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Add organization</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button aria-label="Close">close</button></form>
+  </dialog>
+  {% endif %}
+
+
+  <div class="space-y-1 pt-4">
+    <h2 class="font-serif text-xl text-base-content">Saved separately</h2>
+    <p class="text-sm text-base-content/60">Each of these has its own button and saves on its own, apart from the event details above.</p>
+  </div>
 
   {% comment %}Its own form (HTML forbids nesting) — an action, not a field on
   the edit form, so it applies at once and never rides the change-review
   re-post.{% endcomment %}
-  <section class="space-y-3 border-t border-base-300/60 pt-6">
+  <section class="rounded-lg border border-base-300 bg-base-100 p-4 sm:p-5 space-y-3">
     <h2 class="font-serif text-lg text-base-content">Registration</h2>
     {% include "events/_registration_status.html" %}
     <p class="text-xs text-base-content/60">
@@ -238,61 +312,14 @@
     </p>
   </section>
 
-  {% if not event.is_school_gathering %}
-  {# Its own form (HTML forbids nesting) — posts to the CE-organization view. #}
-  <section class="space-y-3 border-t border-base-300/60 pt-6">
-    <h2 class="font-serif text-lg text-base-content">Add a CE organization</h2>
-    <p class="text-xs text-base-content/60">
-      If the body that approved your event isn't in the list above, add it here.
-      It becomes available to every other event, so use the organization's full
-      name and its official logo. A transparent PNG looks best.
-    </p>
-    <form method="post" enctype="multipart/form-data"
-          action="{% url 'events:ce_organization_add' event.slug %}" class="space-y-3">
-      {% csrf_token %}
-      {% with f=ce_org_form %}
-      <div class="space-y-1">
-        <label for="id_name" class="block text-xs text-base-content/60">Name</label>
-        <input type="text" name="name" id="id_name" required
-               value="{% if f %}{{ f.name.value|default_if_none:'' }}{% endif %}"
-               class="input input-bordered input-sm w-full">
-        {% if f.name.errors %}<p class="text-xs text-error">{{ f.name.errors|join:", " }}</p>{% endif %}
-      </div>
-      <div class="space-y-1">
-        <span class="block text-xs text-base-content/60">Logos</span>
-        {% include "events/_ce_logo_inputs.html" with max_new=max_new_logos %}
-        {% if f.logos.errors %}<p class="text-xs text-error">{{ f.logos.errors|join:", " }}</p>{% endif %}
-      </div>
-      <div class="space-y-1">
-        <label for="id_url" class="block text-xs text-base-content/60">Website (optional)</label>
-        <input type="url" name="url" id="id_url"
-               value="{% if f %}{{ f.url.value|default_if_none:'' }}{% endif %}"
-               class="input input-bordered input-sm w-full">
-        {% if f.url.errors %}<p class="text-xs text-error">{{ f.url.errors|join:", " }}</p>{% endif %}
-      </div>
-      <div class="space-y-1">
-        <label for="id_statement" class="block text-xs text-base-content/60">Required approval language (optional)</label>
-        <textarea name="statement" id="id_statement" rows="3"
-                  class="textarea textarea-bordered w-full">{% if f %}{{ f.statement.value|default_if_none:'' }}{% endif %}</textarea>
-        <p class="text-xs text-base-content/60">Wording this body requires on approved events. Shown under its logos on every event that claims it.</p>
-        {% if f.statement.errors %}<p class="text-xs text-error">{{ f.statement.errors|join:", " }}</p>{% endif %}
-      </div>
-      {% endwith %}
-      <button type="submit" class="btn btn-outline btn-sm">Add organization</button>
-    </form>
-  </section>
-  {% endif %}
-
-  {% include "events/_feature_image_form.html" %}
-
   {% if show_schedule_editor %}
-  <section class="space-y-4 border-t border-base-300/60 pt-6">
+  <section class="rounded-lg border border-base-300 bg-base-100 p-4 sm:p-5 space-y-4">
     <div class="space-y-1">
-      <h2 class="font-serif text-lg text-base-content">Schedule</h2>
+      <h2 class="font-serif text-lg text-base-content">Sessions</h2>
       <p class="text-xs text-base-content/60">
         The event's session date(s) and times, in your timezone
         (<span class="font-medium">{% user_tz_name %}</span>). Add or remove
-        sessions, then Save schedule. Scheduling a not-yet-dated event lets it
+        sessions, then Save sessions. Scheduling a not-yet-dated event lets it
         be published.
       </p>
     </div>
@@ -360,7 +387,7 @@
 
       <div class="flex items-center justify-between gap-2">
         <button type="button" id="add-session" class="btn btn-ghost btn-sm">+ Add session</button>
-        <button type="submit" class="btn btn-primary btn-sm">Save schedule</button>
+        <button type="submit" class="btn btn-primary btn-sm">Save sessions</button>
       </div>
     </form>
   </section>
@@ -393,8 +420,10 @@
   </script>
   {% endif %}
 
+  {% include "events/_feature_image_form.html" %}
+
   {% if speaker_invites %}
-  <section class="space-y-3 border-t border-base-300/60 pt-6">
+  <section class="rounded-lg border border-base-300 bg-base-100 p-4 sm:p-5 space-y-3">
     <h2 class="font-serif text-lg text-base-content">External speakers</h2>
     <p class="text-xs text-base-content/60">
       Invite an external speaker to log in so they can join the meeting and see
@@ -438,4 +467,5 @@
   {% endif %}
 
 </div>
+<script src="{% static 'js/event-edit.js' %}" defer></script>
 {% endblock %}

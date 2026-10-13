@@ -31,13 +31,10 @@
 
   <form method="post" action="{% url 'events:edit' event.slug %}" class="space-y-4">
     {% csrf_token %}
-    {# Carry every submitted value forward so the choice re-binds the full form. #}
-    {% for field in form %}
-      {% if field.name == "record_video" or field.name == "tuition_covers" or field.name == "requires_faculty_approval" %}
-        {% if field.value %}<input type="hidden" name="{{ field.name }}" value="on">{% endif %}
-      {% else %}
-        <textarea name="{{ field.name }}" hidden>{{ field.value|default_if_none:"" }}</textarea>
-      {% endif %}
+    {# Carry forward exactly what was submitted (task #817). The newline after <textarea> is swallowed by the parser, so a value that begins with one keeps it. #}
+    {% for name, value in carried %}
+    <textarea name="{{ name }}" hidden>
+{{ value }}</textarea>
     {% endfor %}
 
     <div class="flex flex-col gap-3">

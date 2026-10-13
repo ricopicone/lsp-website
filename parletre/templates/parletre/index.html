@@ -41,6 +41,49 @@
     </span>
   </section>
 
+  {% if meeting_rooms.own or meeting_rooms.in_progress %}
+  {# Personal meeting rooms (task #751): your own always; someone else's only while it is in session and you'd be let in (invited, or posted office hours). #}
+  <section class="space-y-3" id="parletre-meeting-rooms">
+    <h2 class="font-serif text-lg text-base-content/80 border-b border-base-300/60 pb-1">Meeting rooms</h2>
+    <ul class="grid gap-3 sm:grid-cols-2">
+      {% with own=meeting_rooms.own %}{% if own %}
+      <li class="rounded-box border border-base-300 bg-base-100 p-4 space-y-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-medium text-base-content">My meeting room</span>
+          {% if own.is_live %}<span class="badge badge-sm badge-success gap-1 animate-breathe" title="Someone is in the room">{% icon "video" %} Live</span>
+          {% else %}<span class="badge badge-sm badge-primary gap-1" title="Your private video room">{% icon "video" %} Video</span>{% endif %}
+          <a href="{% url 'formation:formation' %}?tab=room" class="ml-auto text-xs text-base-content/50 hover:text-primary">Settings &amp; invitations</a>
+        </div>
+        {% if own.people %}
+        <p class="text-xs text-success/90">In the room: {{ own.people|slice:":6"|join:", " }}{% if own.people|length > 6 %} +{{ own.people|length|add:"-6" }} more{% endif %}</p>
+        {% else %}
+        <p class="text-sm text-base-content/60">Private to you and the people you invite.</p>
+        {% endif %}
+        <a href="{% url 'video:my_room' %}" class="btn btn-sm btn-primary gap-1">{% icon "video" %} {% if own.is_live %}Return to the room{% else %}Open my room{% endif %}</a>
+      </li>
+      {% endif %}{% endwith %}
+      {% for r in meeting_rooms.in_progress %}
+      <li class="rounded-box border border-success/40 bg-base-100 p-4 space-y-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          {% include "workgroups/_live_dot.html" %}
+          <span class="font-medium text-base-content">{{ r.owner_name }}'s meeting room</span>
+          <span class="badge badge-sm badge-success gap-1 animate-breathe">{% icon "video" %} Meeting in progress</span>
+        </div>
+        {% if r.people %}
+        <p class="text-xs text-success/90">In the room: {{ r.people|slice:":6"|join:", " }}{% if r.people|length > 6 %} +{{ r.people|length|add:"-6" }} more{% endif %}</p>
+        {% endif %}
+        {% if r.reason == "office_hours" %}
+        <p class="text-sm text-base-content/60">Office hours{% if r.room.hours_note %}, {{ r.room.hours_note }}{% endif %}</p>
+        {% else %}
+        <p class="text-sm text-base-content/60">You've been invited.</p>
+        {% endif %}
+        <a href="{% url 'video:personal_room' r.room.slug %}" class="btn btn-sm btn-success gap-1">{% icon "video" %} Join</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   {% if my_spaces %}
   <section class="space-y-3">
     <h2 class="font-serif text-lg text-base-content/80 border-b border-base-300/60 pb-1">Your groups &amp; private chats</h2>
