@@ -35,7 +35,14 @@ their fees are voting members."
 | Results published | Voters are emailed the results. |
 
 If the accepted candidates don't outnumber the seats, the Overview says so and
-offers **Close as elected without a vote**. Whether to use it is your call.
+offers **Close as elected without a vote**, once the Board has decided every
+nomination and until voting opens. Whether to use it is your call. If the
+voting date has already arrived, the site won't publish an uncontested slate
+on its own (that would open a vote at once): close without a vote, or move
+the voting dates later to hold one.
+
+A count with no ballots elects nobody; seats are never filled by lot from
+nothing.
 
 ## Dates
 
@@ -47,8 +54,10 @@ on the Overview do the same thing immediately.
 A date that has already passed can't be changed, so a closed window stays
 closed. To extend an open window, move its closing date later. Voting never
 opens before the slate is published: if the voting date arrives first, voting
-opens the moment you publish. Every change is written to the record on the
-Overview.
+opens the moment you publish. Until the slate is published the voting dates
+stay movable even once they have passed, since that window has never opened,
+so a Board review that runs late only needs new voting dates. Every change is
+written to the record on the Overview.
 
 ## Board review
 

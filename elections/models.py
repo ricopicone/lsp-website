@@ -239,8 +239,10 @@ class BallotRanking(models.Model):
     ballot = models.ForeignKey(
         Ballot, on_delete=models.CASCADE, related_name="rankings",
     )
+    # PROTECT: deleting a ranked candidate would silently rewrite cast
+    # ballots, and the admin's cascade-confirmation page would count them.
     nomination = models.ForeignKey(
-        Nomination, on_delete=models.CASCADE, related_name="+",
+        Nomination, on_delete=models.PROTECT, related_name="+",
     )
     rank = models.PositiveSmallIntegerField()
 

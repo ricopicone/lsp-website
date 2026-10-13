@@ -30,7 +30,9 @@
       </div>
       <div class="prose prose-sm max-w-none">{{ n.letter|linebreaks }}</div>
       {% if n.reviewed_by %}<p class="text-xs text-base-content/55">Decided by {{ n.reviewed_by.get_full_name|default:n.reviewed_by.email }}{% if n.board_note %}: {{ n.board_note }}{% endif %}</p>{% endif %}
-      {% if phase == "review" %}
+      {% if phase == "review" and n.user_id == user.id %}
+      <p class="text-sm text-base-content/70">This is your own nomination, so another director decides it.</p>
+      {% elif phase == "review" %}
       <form method="post" action="{% url 'elections:board_decide' n.pk %}" class="space-y-2">
         {% csrf_token %}
         <textarea name="note" rows="2" class="textarea textarea-bordered w-full" placeholder="Note for the Board (optional)">{{ n.board_note }}</textarea>

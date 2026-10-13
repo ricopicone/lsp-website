@@ -150,7 +150,12 @@ class ElectionSettingsForm(forms.ModelForm):
             if not self.is_new and old is not None and _minute(new) == _minute(old):
                 data[f] = old  # untouched: keep the stored value, seconds and all
                 continue
-            if not self.is_new and old is not None and old <= self.now:
+            # Voting dates stay movable until the slate is published: until
+            # then the voting window has never opened, so moving a passed
+            # date re-opens nothing (and a late Board review needs it).
+            unopened = (f in ("voting_open_at", "voting_close_at")
+                        and self.instance.slate_published_at is None)
+            if not self.is_new and old is not None and old <= self.now and not unopened:
                 self.add_error(f, "This date has already passed, so it can't be changed.")
             elif new < grace:
                 self.add_error(f, "Choose a time in the future.")

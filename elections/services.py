@@ -33,12 +33,29 @@ def _save(election, by, text, *fields) -> None:
 
 
 def current_election():
-    """The election in progress, else the most recent one."""
-    elections = list(Election.objects.all())
+    """The election in progress, else a draft, else the most recent one. An
+    election already under way wins over a newer draft (next year's, or a
+    by-election being set up), or the draft would hide it."""
+    elections = list(Election.objects.defer("audit_notes", "count_result"))
     live = [e for e in elections if e.phase not in Election.FINAL_PHASES]
+    under_way = [e for e in live if e.phase != P.DRAFT]
+    if under_way:
+        return under_way[0]
     if live:
         return live[0]
     return elections[0] if elections else None
+
+
+def _locked(election):
+    """Re-read ``election`` under a row lock. One-shot actions check their
+    phase on this copy, so a second submit from a stale page is refused
+    rather than repeated. Call inside ``transaction.atomic()``."""
+    return Election.objects.select_for_update().get(pk=election.pk)
+
+
+def _no_contest(election) -> bool:
+    accepted = len(ballots.candidates(election))
+    return 0 < accepted <= election.seats
 
 
 def roll_ids(election) -> set[int]:
@@ -77,6 +94,10 @@ def withdraw_nomination(nomination) -> None:
 
 def review_nomination(nomination, by, status, note: str = "") -> None:
     election = nomination.election
+    if not nomination.is_live:
+        raise ElectionError("That nomination was withdrawn.")
+    if by is not None and by.pk == nomination.user_id:
+        raise ElectionError("You can't decide your own nomination; another director will.")
     if election.phase != P.REVIEW:
         raise ElectionError(
             "Nominations can be reviewed after they close and before the slate "
@@ -97,42 +118,72 @@ def review_nomination(nomination, by, status, note: str = "") -> None:
 
 # --- the slate and acclamation -------------------------------------------------------
 
-def publish_slate(election, by) -> None:
-    if election.phase != P.REVIEW:
-        raise ElectionError("The slate can be published only during Board review.")
+def _review_complete(election) -> list:
+    """The accepted nominations, once the Board has decided every one."""
     live = election.nominations.filter(withdrawn_at__isnull=True)
     if live.filter(status=Nomination.Status.PENDING).exists():
         raise ElectionError("The Board has not decided every nomination yet.")
     accepted = list(live.filter(status=Nomination.Status.ACCEPTED).select_related("user"))
     if not accepted:
         raise ElectionError("No nominations were accepted.")
-    if election.voting_close_at <= timezone.now():
-        raise ElectionError(
-            "The voting close date has passed. Move it later in Settings first."
-        )
-    election.slate_published_at = timezone.now()
-    election.slate_published_by = by
-    _save(election, by, f"Published the slate ({len(accepted)} candidates).",
-          "slate_published_at", "slate_published_by")
-    notify.candidacy_accepted([n.user for n in accepted], election)
+    return accepted
+
+
+def publish_slate(election, by) -> None:
+    now = timezone.now()
+    with transaction.atomic():
+        e = _locked(election)
+        if e.phase_at(now) != P.REVIEW:
+            raise ElectionError("The slate can be published only during Board review.")
+        accepted = _review_complete(e)
+        if e.voting_close_at <= now:
+            raise ElectionError(
+                "The voting close date has passed. Move the voting dates later "
+                "in Settings first."
+            )
+        if len(accepted) <= e.seats and e.voting_open_at <= now:
+            # Publishing would open a vote at once, though the bylaws say an
+            # uncontested election needs none.
+            raise ElectionError(
+                "The candidates don't outnumber the seats, so the bylaws call for "
+                "no vote, and publishing now would open voting at once. Close the "
+                "election without a vote, or move the voting dates later to hold one."
+            )
+        e.slate_published_at = now
+        e.slate_published_by = by
+        _save(e, by, f"Published the slate ({len(accepted)} candidates).",
+              "slate_published_at", "slate_published_by")
+        notify.candidacy_accepted([n.user for n in accepted], e)
+    election.refresh_from_db()
 
 
 def acclaim(election, by) -> None:
     """Close as elected without a vote (bylaws: no election when the
-    accepted candidates do not outnumber the seats)."""
-    if election.phase != P.SLATE:
-        raise ElectionError(
-            "An election can be closed without a vote after the slate is "
-            "published and before voting opens."
-        )
-    if len(ballots.candidates(election)) > election.seats:
-        raise ElectionError(
-            "There are more candidates than seats, so the bylaws call for a vote."
-        )
-    election.acclaimed_at = timezone.now()
-    election.acclaimed_by = by
-    _save(election, by, "Closed as elected without a vote.", "acclaimed_at", "acclaimed_by")
-    notify.results(list(eligibility.roll_users(election)), election)
+    accepted candidates do not outnumber the seats). Allowed once the Board
+    has decided every nomination and before voting opens; from Board review
+    it publishes the slate in the same step."""
+    now = timezone.now()
+    with transaction.atomic():
+        e = _locked(election)
+        phase = e.phase_at(now)
+        if phase not in (P.REVIEW, P.SLATE):
+            raise ElectionError(
+                "An election can be closed without a vote after the Board has "
+                "decided the nominations and before voting opens."
+            )
+        accepted = _review_complete(e)
+        if len(accepted) > e.seats:
+            raise ElectionError(
+                "There are more candidates than seats, so the bylaws call for a vote."
+            )
+        fields = ["acclaimed_at", "acclaimed_by"]
+        if e.slate_published_at is None:
+            e.slate_published_at, e.slate_published_by = now, by
+            fields += ["slate_published_at", "slate_published_by"]
+        e.acclaimed_at, e.acclaimed_by = now, by
+        _save(e, by, "Closed as elected without a vote.", *fields)
+        notify.results(list(eligibility.roll_users(e)), e)
+    election.refresh_from_db()
 
 
 # --- the voter roll -------------------------------------------------------------------
@@ -239,7 +290,11 @@ def open_now(election, which, by) -> None:
 def close_now(election, which, by) -> None:
     start, end = _WINDOWS[which]
     now = timezone.now()
-    if not (getattr(election, start) <= now < getattr(election, end)):
+    # The phase, not the dates: voting whose date has come is still not open
+    # until the slate is published, and closing it then would strand the
+    # election in Board review.
+    open_phase = P.NOMINATING if which == "nominations" else P.VOTING
+    if election.phase_at(now) != open_phase:
         raise ElectionError(f"{which.capitalize()} are not open.")
     setattr(election, end, now)
     _save(election, by, f"Closed {which} now.", end)
@@ -274,34 +329,42 @@ def analyst_check(election, elected_ids) -> dict:
 
 
 def run_count(election, by) -> dict:
-    if election.phase != P.CLOSED:
-        raise ElectionError("The count runs after voting closes.")
-    slate = ballots.candidates(election)
-    seed = secrets.randbits(32)
-    result = counting.count(
-        election.count_method, ballots.anonymous_ballots(election),
-        [n.id for n in slate], election.seats, seed,
-    )
-    result["names"] = {str(n.id): n.name for n in slate}
-    result["analyst_check"] = analyst_check(election, result["elected"])
-    election.count_result = result
-    election.counted_at = timezone.now()
-    election.counted_by = by
-    note = f"Ran the count ({election.get_count_method_display()})."
-    if result["lots"]:
-        note += f" A tie was decided by lot (seed {seed})."
-    _save(election, by, note, "count_result", "counted_at", "counted_by")
+    with transaction.atomic():
+        e = _locked(election)
+        if e.phase != P.CLOSED:
+            raise ElectionError("The count runs once, after voting closes.")
+        slate = ballots.candidates(e)
+        seed = secrets.randbits(32)
+        result = counting.count(
+            e.count_method, ballots.anonymous_ballots(e),
+            [n.id for n in slate], e.seats, seed,
+        )
+        result["names"] = {str(n.id): n.name for n in slate}
+        result["analyst_check"] = analyst_check(e, result["elected"])
+        e.count_result = result
+        e.counted_at = timezone.now()
+        e.counted_by = by
+        note = f"Ran the count ({e.get_count_method_display()})."
+        if not result["valid_ballots"]:
+            note += " No ballots were cast, so nobody is elected."
+        if result["lots"]:
+            note += f" A tie was decided by lot (seed {seed})."
+        _save(e, by, note, "count_result", "counted_at", "counted_by")
+    election.refresh_from_db()
     return result
 
 
 def publish_results(election, by) -> None:
-    if election.phase != P.COUNTED:
-        raise ElectionError("Run the count first.")
-    election.results_published_at = timezone.now()
-    election.results_published_by = by
-    _save(election, by, "Published the results.",
-          "results_published_at", "results_published_by")
-    notify.results(list(eligibility.roll_users(election)), election)
+    with transaction.atomic():
+        e = _locked(election)
+        if e.phase != P.COUNTED:
+            raise ElectionError("Run the count first.")
+        e.results_published_at = timezone.now()
+        e.results_published_by = by
+        _save(e, by, "Published the results.",
+              "results_published_at", "results_published_by")
+        notify.results(list(eligibility.roll_users(e)), e)
+    election.refresh_from_db()
 
 
 # --- the scheduled job ------------------------------------------------------------------

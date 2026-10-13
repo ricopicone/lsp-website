@@ -126,7 +126,11 @@ def admin_overview(request, slug):
         "accepted_count": len(candidates),
         "roll_size": len(services.roll_ids(e)),
         "turnout": ballots.turnout(e),
-        "no_contest": e.phase == P.SLATE and len(candidates) <= e.seats,
+        "no_contest": (
+            e.phase in (P.REVIEW, P.SLATE)
+            and not live.filter(status=Nomination.Status.PENDING).exists()
+            and 0 < len(candidates) <= e.seats
+        ),
         "past": Election.objects.exclude(pk=e.pk),
     })
 

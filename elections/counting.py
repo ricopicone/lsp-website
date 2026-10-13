@@ -57,6 +57,10 @@ def count_stv(ballots, candidates, seats, rng) -> dict:
         if prefs:
             papers.append([prefs, 0, Decimal(1)])
     valid = len(papers)
+    if not valid:
+        # No ballots, nobody elected: never fill seats by lot from nothing.
+        return {"method": "stv", "seats": seats, "valid_ballots": 0, "quota": "0",
+                "stages": [], "elected": [], "excluded": [], "lots": []}
     quota = Decimal(valid // (seats + 1) + 1)
     piles = {c: [] for c in cands}
     for p in papers:
@@ -168,7 +172,7 @@ def count_top_n(ballots, candidates, seats, rng) -> dict:
             valid += 1
             for c in prefs:
                 tally[c] += 1
-    order = sorted(cands, key=lambda c: (-tally[c], c))
+    order = sorted(cands, key=lambda c: (-tally[c], c)) if valid else []
     elected, lots = [], []
     i = 0
     while len(elected) < seats and i < len(order):
