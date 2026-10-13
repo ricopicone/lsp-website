@@ -1,0 +1,9 @@
+{% load tz_filters %}{% autoescape off %}{{ recipient.first_name|default:"Hello" }},
+
+We received your nomination for {{ election.title }}. You can edit or withdraw it until nominations close, {{ election.nominations_close_at|user_datetime_text }}.
+
+After that the Board reviews the nominations and publishes the slate of candidates with their letters. You can follow your nomination's status here:
+{{ url }}
+
+The Election Administrator
+{% endautoescape %}

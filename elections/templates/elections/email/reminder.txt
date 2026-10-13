@@ -1,0 +1,9 @@
+{% load tz_filters %}{% autoescape off %}{{ recipient.first_name|default:"Hello" }},
+
+A reminder that voting in {{ election.title }} closes {{ election.voting_close_at|user_datetime_text }}, and we have not yet received your ballot.
+
+To vote:
+{{ url }}
+
+The Election Administrator
+{% endautoescape %}

@@ -1,0 +1,13 @@
+{% load tz_filters %}{% autoescape off %}{{ recipient.first_name|default:"Hello" }},
+
+Voting is open in {{ election.title }} until {{ election.voting_close_at|user_datetime_text }}. {{ election.seats }} seat{{ election.seats|pluralize }} {{ election.seats|pluralize:"is,are" }} to be filled.
+
+The ballot is ranked: give your first choice 1st, your second 2nd, and so on, ranking as many candidates as you like. You can read each candidate's letter beside the ballot, and you can change your ballot until voting closes.
+
+No page on the site shows anyone how you voted, including the Election Administrator's pages. The administrator sees only whether you have voted.
+
+To vote:
+{{ url }}
+
+The Election Administrator
+{% endautoescape %}

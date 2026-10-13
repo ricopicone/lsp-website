@@ -77,6 +77,9 @@ class Category(models.TextChoices):
     SUGGESTION_FILED = "suggestion_filed", _("Suggestion review")
     SUGGESTION_UPDATE = "suggestion_update", _("Updates on your suggestions")
 
+    # --- Elections -------------------------------------------------------
+    ELECTIONS = "elections", _("Board elections")
+
     # --- Account ---------------------------------------------------------
     ACCOUNT_ADVISOR = "account_advisor", _("Advisor assignments")
     ACCOUNT_UPDATES = "account_updates", _("Account updates")
@@ -104,6 +107,7 @@ SECTION_ADMISSIONS = _("Admissions")
 SECTION_GROUPS = _("Groups")
 SECTION_REFERRALS = _("Referrals")
 SECTION_SUGGESTIONS = _("Suggestions")
+SECTION_ELECTIONS = _("Elections")
 SECTION_ACCOUNT = _("Account")
 
 SECTION_ORDER = [
@@ -114,6 +118,7 @@ SECTION_ORDER = [
     SECTION_GROUPS,
     SECTION_REFERRALS,
     SECTION_SUGGESTIONS,
+    SECTION_ELECTIONS,
     SECTION_ACCOUNT,
 ]
 
@@ -322,6 +327,14 @@ CATEGORY_META: dict[str, CategoryMeta] = {
     _C.SUGGESTION_UPDATE: _M(
         SECTION_SUGGESTIONS, _("Updates on your suggestions"),
         _("When staff respond to or change the status of a suggestion you filed."),
+    ),
+    # Elections (task #813). Email-locked: the bylaws require that members be
+    # informed of an election, so a member cannot switch it off.
+    _C.ELECTIONS: _M(
+        SECTION_ELECTIONS, _("Board elections"),
+        _("Calls for nominations, voting, and results. Always emailed: the "
+          "bylaws require that members be informed."),
+        email_locked=True,
     ),
     # Account.
     _C.ACCOUNT_ADVISOR: _M(

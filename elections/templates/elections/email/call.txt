@@ -1,0 +1,13 @@
+{% load tz_filters %}{% autoescape off %}{{ recipient.first_name|default:"Hello" }},
+
+The School is electing its Board of Directors, and nominations are now open: {{ election.title }}.
+
+Analysts, scholars, candidates and candidate scholars may nominate themselves until {{ election.nominations_close_at|user_datetime_text }}. A nomination is a motivation letter, stating your motivation, your interests, and what you can bring to the Board and the School. The Board reviews the nominations and then publishes the slate of candidates with their letters.
+
+Voting is planned from {{ election.voting_open_at|user_datetime_text }} until {{ election.voting_close_at|user_datetime_text }}.
+
+To nominate yourself, or to follow the election:
+{{ url }}
+
+The Election Administrator
+{% endautoescape %}

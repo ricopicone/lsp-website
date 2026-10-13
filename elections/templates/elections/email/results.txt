@@ -1,0 +1,11 @@
+{% autoescape off %}{{ recipient.first_name|default:"Hello" }},
+
+{% if election.acclaimed_at %}{{ election.title }} is decided without a vote: the number of accepted candidates did not exceed the seats to be filled, so under the bylaws they serve as the next directors.{% else %}Voting in {{ election.title }} has closed and the votes are counted.{% endif %}
+
+Elected:
+{% for name in winners %}  {{ name }}
+{% endfor %}
+{{ url }}
+
+The Election Administrator
+{% endautoescape %}

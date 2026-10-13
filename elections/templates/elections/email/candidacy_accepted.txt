@@ -1,0 +1,10 @@
+{% load tz_filters %}{% autoescape off %}{{ recipient.first_name|default:"Hello" }},
+
+The Board has accepted your candidacy, and the slate for {{ election.title }} is now published with your motivation letter.
+
+Voting runs from {{ election.voting_open_at|user_datetime_text }} until {{ election.voting_close_at|user_datetime_text }}.
+
+{{ url }}
+
+The Election Administrator
+{% endautoescape %}
