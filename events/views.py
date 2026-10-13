@@ -681,11 +681,29 @@ def ce_organization_add(request, slug: str):
     org_form = CEOrganizationForm(
         request.POST, MultiValueDict({"logos": request.FILES.getlist("logo")}),
     )
+    # The edit page's dialog posts here by fetch and asks for JSON, so the
+    # unsaved edits in the details form survive the add (task #817); without
+    # JavaScript it is an ordinary POST that redirects back.
+    wants_json = "application/json" in request.headers.get("Accept", "")
     if org_form.is_valid():
         org = org_form.save(added_by=request.user)
         event.ce_organizations.add(org)
+        if wants_json:
+            return JsonResponse({
+                "pk": org.pk,
+                "name": org.name,
+                "logos": [logo.image.url for logo in org.logos.all()],
+                "manage_url": reverse(
+                    "events:ce_organization_edit", args=[event.slug, org.pk]
+                ),
+            })
         messages.success(request, f"Added {org.name} and applied it to this event.")
         return redirect("events:edit", slug=event.slug)
+    if wants_json:
+        return JsonResponse({"errors": {
+            field: [str(message) for message in messages_]
+            for field, messages_ in org_form.errors.items()
+        }}, status=400)
 
     form = EventEditForm(instance=event)
     return render(request, "events/event_edit.html", {

@@ -2404,7 +2404,21 @@ Done (see `git log` for specifics):
   (`joining_details(...).kind == "external"`), with the link for whoever the
   event page would show it to. That rule is now one predicate,
   `events.joining.access_info_visible`, used by both surfaces; the group's own
-  room stays on the tab for meeting outside class.
+  room stays on the tab for meeting outside class. **Edit page pass (same
+  task):** the event's details are one card whose single **Save details** sits
+  in a bar that sticks to the bottom of the screen while the form is on it;
+  `static/js/event-edit.js` shows "Unsaved changes" and warns before leaving
+  with them (never on its own Save). Everything that saves on its own
+  (Registration, Sessions, the renamed schedule editor, Feature image,
+  External speakers) sits below under **Saved separately**, each card with its
+  own button; the main form's heading is now **Schedule note**. Adding a CE
+  organization moved into a `<dialog>` opened from "Approved by": the script
+  posts it by fetch asking for JSON (`ce_organization_add` answers JSON on
+  `Accept: application/json`, 400 with field errors when refused), ticks the
+  new organization in the list, and counts it as saved, since the view applies
+  it to the event at once; unsaved details survive. Without JavaScript the add
+  is the old POST and redirect, and a refused add renders the dialog open.
+  The script toggles only `hidden`, never a class (Tailwind scans templates).
 
 - **Past standalone events get a page** (task #814). `/events/` lists only
   standalone events that haven't ended (special events, Days of Assembly,

@@ -61,8 +61,8 @@ def test_editor_shows_for_special_event_not_seminar(client, pc_member):
     client.force_login(pc_member)
     special_html = client.get(reverse("events:edit", args=[special.slug])).content
     seminar_html = client.get(reverse("events:edit", args=[seminar.slug])).content
-    assert b"Save schedule" in special_html
-    assert b"Save schedule" not in seminar_html
+    assert b"Save sessions" in special_html
+    assert b"Save sessions" not in seminar_html
 
 
 @pytest.mark.django_db
