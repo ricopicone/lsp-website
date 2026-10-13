@@ -182,3 +182,13 @@ def test_meet_tab_says_nothing_extra_for_an_insite_offering(client):
     client.force_login(fac)
     body = _meet(client, wg).content.decode()
     assert "meets outside the site" not in body
+
+
+@daily_on
+def test_overview_access_details_link_the_meeting_url(client):
+    event, wg = _zoom_seminar()
+    fac = _member("fac@x.test")
+    event.add_faculty(fac)
+    client.force_login(fac)
+    body = client.get(reverse("workgroups:detail", args=[wg.slug])).content.decode()
+    assert '<a href="https://zoom.example/j/123"' in body

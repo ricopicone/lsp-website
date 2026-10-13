@@ -26,7 +26,7 @@ every Join open the same room.{% endcomment %}
     <h3 class="font-medium text-base-content">Where class meets</h3>
     <p class="text-sm text-base-content/70">This {{ external_event.get_event_type_display|lower }} meets outside the site, on Zoom or another service.</p>
     {% if external_access_visible %}
-    <p class="whitespace-pre-wrap text-sm text-base-content">{{ external_event.access_info|urlize }}</p>
+    <p class="whitespace-pre-wrap text-sm text-base-content [&_a]:underline [&_a]:break-all">{{ external_event.access_info|urlize }}</p>
     {% else %}
     <p class="text-sm text-base-content/60">The meeting link appears here once your registration is complete.</p>
     {% endif %}
