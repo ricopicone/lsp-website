@@ -18,12 +18,14 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from events.models import Event, PriceTier, PricingCode
+from events.per_class import member_context as per_class_context
 from events.permissions import can_edit_event
 from payments import coverage, registration_plans
 from payments import notifications as notify_payments
 from payments.refund import PlanRefundRequiresTreasurer, RefundError
 from payments.stripe_checkout import (
     create_checkout_session,
+    create_per_class_session,
     create_registration_installment_session,
 )
 
@@ -349,6 +351,10 @@ def registration_confirm(request, reg_id: int):
             # A pinned code we deliberately left for the member to accept —
             # a plan or a sliding floor. Surfaced so it isn't invisible.
             "pending_code": pinned_code_for(reg),
+            # Per-class seminars (task #811): the classes and the balance.
+            "classes": (
+                per_class_context(reg) if reg.is_per_class else None
+            ),
         },
     )
 
@@ -522,6 +528,26 @@ def apply_code(request, reg_id: int):
             request, f"Your code was applied. The fee is now ${reg.quoted_amount}.",
         )
     return back
+
+
+@login_required
+@require_POST
+def pay_classes(request, reg_id: int):
+    """Pay a per-class registration's open balance (task #811). Expires any
+    earlier tab first, so the same classes can't be paid twice."""
+    from payments.stripe_sync import expire_open_sessions
+
+    reg = get_object_or_404(Registration, pk=reg_id, user=request.user)
+    back = redirect(reverse("registrations:confirm", args=[reg.id]) + "#classes")
+    if not reg.is_per_class:
+        return back
+    expire_open_sessions(reg, reason="A newer payment for these classes was started.")
+    try:
+        _payment, session = create_per_class_session(reg)
+    except ValueError:
+        messages.info(request, "There's nothing to pay right now.")
+        return back
+    return redirect(session.url)
 
 
 def _apply_per_class_code(request, reg, back):

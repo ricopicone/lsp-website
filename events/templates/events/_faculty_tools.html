@@ -88,7 +88,7 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
             <td>{{ reg.user.first_name }} {{ reg.user.last_name }}</td>
             <td class="text-base-content/70">{{ reg.user.email }}</td>
             <td>{{ reg.price_tier.get_audience_display }}</td>
-            <td class="whitespace-nowrap">${{ reg.quoted_amount }}</td>
+            <td class="whitespace-nowrap">{% if reg.is_per_class %}${{ reg.per_class_rate }}/class{% else %}${{ reg.quoted_amount }}{% endif %}</td>
             <td>
               <span class="badge badge-sm
                 {% if reg.status == 'paid' %}badge-success
@@ -110,6 +110,10 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
     <p class="text-base-content/60 text-sm">No registrations yet.</p>
     {% endif %}
   </div>
+
+  {% if event.is_per_class %}
+  {% include "events/_class_attendance.html" %}
+  {% endif %}
 
   {# Mint pricing code #}
   <div class="space-y-3">
@@ -144,7 +148,7 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
           <tr{% if code.is_revoked %} class="text-base-content/45"{% endif %}>
             <td><code class="badge badge-ghost font-mono{% if code.is_revoked %} line-through{% endif %}">{{ code.code }}</code></td>
             <td>{{ code.get_pricing_mode_display }}</td>
-            <td class="whitespace-nowrap">{% if code.pricing_mode == "full_price" %}—{% else %}{{ code.amount_or_percent }}{% if code.pricing_mode == "percent_off" %}%{% else %} USD{% endif %}{% endif %}</td>
+            <td class="whitespace-nowrap">{% if code.pricing_mode == "full_price" %}—{% else %}{{ code.amount_or_percent }}{% if code.pricing_mode == "percent_off" %}%{% else %} USD{% endif %}{% if event.is_per_class %} per class{% endif %}{% endif %}</td>
             <td class="whitespace-nowrap">{% if code.installments > 1 %}{{ code.installments }}{% else %}—{% endif %}</td>
             <td>{% if code.max_uses is None %}∞{% else %}{{ code.uses_remaining }}{% endif %}</td>
             <td class="whitespace-nowrap">{% if code.valid_until %}{{ code.valid_until|date:"M j, Y" }}{% else %}—{% endif %}</td>

@@ -170,6 +170,55 @@ def create_registration_installment_session(
     return payment, session
 
 
+def create_per_class_session(
+    registration: Registration,
+) -> tuple[Payment, stripe.checkout.Session]:
+    """Checkout for a per-class registration's open balance (task #811).
+
+    The Payment points at the registration through ``per_class_registration``,
+    never ``registration``, so ``complete_payment`` only issues the receipt:
+    the money sweeps onto the class charges in the ledger like any other
+    registration payment.
+    """
+    from django.utils import timezone
+
+    from events.per_class import open_charges
+
+    rows = open_charges(registration)
+    amount = sum((remaining for _c, remaining in rows), Decimal("0"))
+    if amount <= Decimal("0"):
+        raise ValueError(
+            f"Nothing to pay on per-class registration {registration.id}."
+        )
+    days = []
+    for charge, _remaining in rows:
+        day = timezone.localdate(charge.class_attendance.session.start_at)
+        days.append(f"{day:%b} {day.day}")
+    payment = Payment.objects.create(
+        payment_type=Payment.Type.REGISTRATION,
+        per_class_registration=registration,
+        user=registration.user,
+        amount=amount,
+        method=Payment.Method.STRIPE,
+        status=Payment.Status.PENDING,
+    )
+    noun = "class" if len(days) == 1 else "classes"
+    session = _make_session(
+        payment=payment,
+        product_name=registration.event.title,
+        product_description=f"{len(days)} {noun}: {', '.join(days)}",
+        success_path=(
+            reverse("registrations:confirm", args=[registration.id])
+            + "?stripe=success#classes"
+        ),
+        cancel_path=(
+            reverse("registrations:confirm", args=[registration.id])
+            + "?stripe=cancelled#classes"
+        ),
+    )
+    return payment, session
+
+
 def create_dues_session(payment: Payment) -> stripe.checkout.Session:
     """Build a Checkout Session for membership dues (REG-12).
 

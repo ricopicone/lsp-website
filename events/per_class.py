@@ -558,3 +558,60 @@ def run(now=None, *, dry: bool = False) -> dict:
     if not dry and _notice_due(now):
         stats["notices"] = send_billing_notices(now)
     return stats
+
+
+# ---- page context ----------------------------------------------------------------
+
+
+def _row(att: ClassAttendance, now, *, as_faculty: bool) -> dict:
+    billed = att.billed_at is not None
+    if billed:
+        editable = as_faculty and correction_open(att, now=now) and (
+            not att.present or can_unbill(att, now=now)
+        )
+    elif as_faculty:
+        editable = True
+    else:
+        editable = not att.faculty_locked and now <= window_closes(att)
+    return {
+        "att": att,
+        "day": _class_date(att),
+        "closes": window_closes(att),
+        "billed": billed,
+        "editable": editable,
+    }
+
+
+def member_context(registration, *, now=None) -> dict:
+    """The member's "Your classes" panel: each class recorded for them, what
+    it came to, and the open balance with its Pay button."""
+    now = now or timezone.now()
+    rows = [
+        _row(att, now, as_faculty=False)
+        for att in registration.class_attendance.select_related("session")
+        .order_by("-session__start_at")
+    ]
+    return {"rows": rows, "balance": open_balance(registration)}
+
+
+def faculty_context(event, *, now=None) -> list[dict]:
+    """The faculty Attendance section: recorded classes, newest first."""
+    now = now or timezone.now()
+    atts = (
+        ClassAttendance.objects
+        .filter(session__event=event)
+        .select_related("session", "registration__user")
+        .order_by("-session__start_at", "registration__user__last_name",
+                  "registration__user__first_name")
+    )
+    by_session: dict = {}
+    for att in atts:
+        by_session.setdefault(att.session, []).append(
+            _row(att, now, as_faculty=True)
+        )
+    return [
+        {"session": session, "day": timezone.localdate(session.start_at),
+         "rows": rows,
+         "present": sum(1 for r in rows if r["att"].present)}
+        for session, rows in by_session.items()
+    ]
