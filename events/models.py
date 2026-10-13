@@ -417,6 +417,15 @@ class Event(models.Model):
             "checkout; this preserves the human phrasing."
         ),
     )
+    fee_tba = models.BooleanField(
+        "Fee to be announced",
+        default=False,
+        help_text=(
+            "A save-the-date: the page is live but the fee isn't set, so it "
+            "carries no price tier and registration can't open until a fee is "
+            "chosen (task #769)."
+        ),
+    )
     event_type = models.CharField(
         max_length=20,
         choices=Type.choices,
@@ -955,6 +964,16 @@ class Event(models.Model):
     #: defaults to members only, which then governs guests alone — a default,
     #: not a rule, since "Who can register" can still open one to guests.
     SCHOOL_GATHERING_TYPES = frozenset({"day_of_assembly", "working_day"})
+
+    @classmethod
+    def allows_fee_tba(cls, event_type) -> bool:
+        """Whether a fee may be left "to be announced" (task #769): a one-off
+        event, not an annual offering (a Program opens its registration in
+        bulk, past any per-event guard) nor a gathering (free to members)."""
+        return not (
+            event_type in cls.ANNUAL_PROGRAM_TYPES
+            or event_type in cls.SCHOOL_GATHERING_TYPES
+        )
 
     @property
     def is_school_gathering(self) -> bool:
@@ -1578,6 +1597,11 @@ class EventProposal(models.Model):
         help_text="Tuition-current members attend at no charge. Always on for "
         "seminars and reading groups.",
     )
+    fee_tba = models.BooleanField(
+        default=False,
+        help_text="Fee to be announced: the event mints with no price tier and "
+        "registration not yet open (special events only, task #769).",
+    )
     billing_mode = models.CharField(
         max_length=20,
         choices=Event.BillingMode.choices,
@@ -1712,6 +1736,7 @@ class EventProposal(models.Model):
             sliding_min=self.fee_sliding_min,
             sliding_max=self.fee_sliding_max,
             tuition_covers=self.tuition_covers,
+            tba=self.fee_tba,
             per_class=self.billing_mode == Event.BillingMode.PER_CLASS,
         ))
 
@@ -1766,10 +1791,10 @@ class EventProposal(models.Model):
           standing); ``continues_seminar`` adds a new term to an existing one.
         - Reading group → OPEN; own READING_GROUP workgroup; conveners added as
           ORGANIZERs (reading groups are organizer-led, not faculty).
-        - Special event → DRAFT (the PC finalizes pricing/access before
-          publishing); links to the PC workgroup for *provenance only* — nobody
-          is added to the PC roster, so proposers/presenters never leak into the
-          committee.
+        - Special event → OPEN, published once it has a real date; a fee to
+          be announced (task #769) leaves registration DRAFT instead. Links
+          to the PC workgroup for *provenance only* — nobody is added to the
+          PC roster, so proposers/presenters never leak into the committee.
         """
         if self.status != self.Status.PROPOSED:
             return self.minted_event
@@ -1802,7 +1827,9 @@ class EventProposal(models.Model):
             start_date=start_date, end_date=end_date,
             format=self.event_format, online_venue=self.event_online_venue,
             access_info=access_info,
-            status=Event.Status.OPEN,
+            # A fee to be announced has nothing to charge, so registration
+            # waits until the PC sets one (task #769).
+            status=Event.Status.DRAFT if self.fee_tba else Event.Status.OPEN,
             published=(not is_offering and has_real_date),
             registration_eligibility=Event.default_registration_eligibility(
                 self.event_type,

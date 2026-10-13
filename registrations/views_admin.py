@@ -325,11 +325,15 @@ def registrar_event_toggle(request, pk: int):
     surfaces cannot disagree about what open and close mean. Publishing
     (Event.published) is a separate decision made elsewhere."""
     from events.models import Event
-    from events.registration_status import set_registration_status
+    from events.registration_status import open_refusal, set_registration_status
 
     event = get_object_or_404(Event, pk=pk)
-    new_status = set_registration_status(event, request.POST.get("action"))
-    if new_status == Event.Status.OPEN:
+    action = request.POST.get("action")
+    refusal = open_refusal(event) if action == "open" else None
+    new_status = set_registration_status(event, action)
+    if refusal:
+        messages.error(request, f"{event.title}: {refusal}")
+    elif new_status == Event.Status.OPEN:
         messages.success(request, f"Registration opened for {event.title}.")
     elif new_status == Event.Status.CLOSED:
         messages.success(request, f"Registration closed for {event.title}.")

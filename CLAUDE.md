@@ -2335,6 +2335,23 @@ Done (see `git log` for specifics):
   imported program events is sibling task #812. Design:
   `docs/superpowers/specs/2026-10-12-per-class-billing-design.md`.
 
+- **A save-the-date with no fee yet** (task #769). The Program Committee
+  wanted to publish the Izcovich seminar's page before its fee was settled. No
+  fee field was ever required, but *Free* is the default, so a published event
+  read "$0.00, included in tuition" beside an open Register button and anyone
+  could have enrolled for nothing. **"To be announced" is a fourth fee option**
+  (`Event.fee_tba` / `EventProposal.fee_tba`, `PriceSpec.tba`), offered on
+  one-off events only, never seminars, reading groups or gatherings. It
+  publishes the page with "Fee: To be announced", carries **no price tier**,
+  and keeps registration not open: `set_registration_status` refuses to open
+  it from the PC tab, the edit page and the Registrar console alike, and
+  `price_spec.apply_to_event` (the path every price edit takes) drops an OPEN
+  event back to DRAFT when TBA is chosen. Setting a real fee clears the flag
+  but **leaves opening to the PC**, and going back to TBA is refused once
+  anyone has registered. Merged after per-class billing (#811), so the
+  migration is `events/0059_fee_tba` and `PriceSpec` carries both `tba` and
+  `per_class`.
+
 - **The review loop covers the imported program** (task #812, sibling of
   #811). `Event.requires_change_review()` needed an approved `EventProposal`,
   and the 2026-27 program was script-imported with none, so the loop had
