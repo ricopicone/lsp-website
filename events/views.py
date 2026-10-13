@@ -459,7 +459,7 @@ def _ce_edit_context(form):
 def event_edit(request, slug: str):
     """Faculty-facing edit form for the event description (PROG-7).
 
-    Approved events (published + minted from a PC proposal) route reviewable
+    Approved events (``Event.requires_change_review``) route reviewable
     content changes through a certify-or-submit dialog (#295): non-reviewable
     fields apply immediately, but a change to the title / description / readings
     / fee note prompts the editor to either certify it as minor (adopted now) or

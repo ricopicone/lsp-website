@@ -1,7 +1,8 @@
 """Faculty editing review loop (task #295).
 
-An *approved* event (one that is published and was minted from an approved
-Programming-Committee proposal) carries an expectation that substantial content
+An *approved* event (``Event.requires_change_review``: a published seminar or
+reading group on a program, or an event minted from an approved Program
+Committee proposal) carries an expectation that substantial content
 changes pass back through the committee. Faculty may still make small edits —
 fixing a typo, clarifying a sentence — without ceremony, but a wholesale rewrite
 of the title or description should be reviewed.
