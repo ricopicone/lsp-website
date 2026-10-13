@@ -17,7 +17,11 @@ from django.utils import timezone
 from events import per_class
 from events.models import ClassAttendance, PricingCode
 from events.per_class_fixtures import (
-    enroll, make_event, make_session, make_tier, make_user,
+    enroll,
+    make_event,
+    make_session,
+    make_tier,
+    make_user,
 )
 from notifications.models import Notification
 from payments.models import Charge, Payment
