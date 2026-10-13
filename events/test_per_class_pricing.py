@@ -119,13 +119,12 @@ def test_from_event_reads_the_mode():
     assert from_event(event).per_class is True
 
 
-def test_apply_sets_the_mode_and_stamps_since_when_nobody_is_registered():
+def test_apply_sets_the_mode_when_nobody_is_registered():
     event = make_event(per_class=False)
     make_tier(event, amount="300")
     apply_to_event(event, PriceSpec(amount=Decimal("25"), tuition_covers=False, per_class=True))
     event.refresh_from_db()
     assert event.is_per_class
-    assert event.per_class_since is not None
 
 
 def test_mode_locks_once_anyone_is_registered():
@@ -154,18 +153,6 @@ def test_a_price_change_that_keeps_the_mode_is_not_locked():
     apply_to_event(event, PriceSpec(amount=Decimal("30"), tuition_covers=False, per_class=True))
     tier.refresh_from_db()
     assert tier.base_amount == Decimal("30")
-
-
-def test_force_passes_the_lock():
-    event = make_event(per_class=False)
-    tier = make_tier(event, amount="300")
-    enroll(make_user(), event, tier, rate=None)
-    apply_to_event(
-        event, PriceSpec(amount=Decimal("25"), tuition_covers=False, per_class=True),
-        force=True,
-    )
-    event.refresh_from_db()
-    assert event.is_per_class
 
 
 def test_proposal_approval_mints_per_class():

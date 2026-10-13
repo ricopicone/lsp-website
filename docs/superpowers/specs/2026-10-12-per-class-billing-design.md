@@ -200,3 +200,24 @@ Run on prod as dry-run first; the real run waits for Rico.
 Widening the review loop to imported program events (sibling task); a
 per-faculty default mode; picking specific sessions; per-session price tiers;
 automatic consequences for unpaid balances.
+
+## Amendment: per-class codes on whole-seminar events (2026-10-12, after deploy)
+
+Prod showed event 25 is a $500 whole-seminar event where most registrants pay
+the seminar price and only four used $25 codes meant per class; converting
+the event would have re-priced everyone. Per class is therefore also a
+**per-registrant arrangement granted by a code**, alongside the event-level
+mode (Rico, 2026-10-12):
+
+- `PricingCode.per_class`: on a whole-seminar event it must be Fixed or
+  Sliding floor (it names the price of one class) with one installment; on a
+  per-class event every code is per class.
+- Registering with one enrolls per class; entering one on an unpaid
+  whole-seminar registration switches it (`services.switch_to_per_class`). A
+  pinned per-class code is offered, never auto-applied.
+- The billing start moves to `Registration.per_class_since` (dropping
+  `Event.per_class_since`); the pipeline records any per-class registration on
+  any event.
+- `convert_to_per_class --registration … --bill-from … [--rate] [--dry-run]`
+  replaces the event-level conversion; it refuses a code-less registration
+  without `--rate`, and marks the converted codes per class.

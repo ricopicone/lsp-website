@@ -27,7 +27,7 @@ class UnrepresentablePricing(Exception):
 class BillingModeLocked(UnrepresentablePricing):
     """Whole-seminar ⇄ per-class cannot change once anyone is registered
     (task #811): every registration was priced for the mode it was made in.
-    ``manage.py convert_event_to_per_class`` is the one route past this."""
+    Registrations already made move with ``convert_to_per_class``."""
 
 
 def _dec(value) -> Decimal | None:
@@ -118,7 +118,7 @@ def from_event(event) -> PriceSpec | None:
     )
 
 
-def apply_to_event(event, spec: PriceSpec, *, force: bool = False) -> None:
+def apply_to_event(event, spec: PriceSpec) -> None:
     """Reconcile the event's single event-level tier to ``spec``.
 
     Mirrors what ``EventProposal._build_price_tier`` has always done, including
@@ -126,7 +126,7 @@ def apply_to_event(event, spec: PriceSpec, *, force: bool = False) -> None:
     cover carries no tier at all.
 
     Also sets the billing mode (task #811), refusing a change of mode while
-    anyone is registered unless ``force`` (the conversion command only).
+    anyone is registered.
     """
     if not is_representable(event):
         raise UnrepresentablePricing(
@@ -135,7 +135,7 @@ def apply_to_event(event, spec: PriceSpec, *, force: bool = False) -> None:
         )
     from .models import Audience, PriceTier
 
-    _apply_billing_mode(event, spec.per_class, force=force)
+    _apply_billing_mode(event, spec.per_class)
 
     sliding = spec.fee_type == "sliding"
     if not sliding and spec.amount is None and not spec.tuition_covers:
@@ -164,23 +164,20 @@ def apply_to_event(event, spec: PriceSpec, *, force: bool = False) -> None:
         tier.save(update_fields=list(values))
 
 
-def _apply_billing_mode(event, per_class: bool, *, force: bool) -> None:
-    from django.utils import timezone
-
+def _apply_billing_mode(event, per_class: bool) -> None:
     from .models import Event
 
     wanted = Event.BillingMode.PER_CLASS if per_class else Event.BillingMode.WHOLE
     if event.billing_mode == wanted:
         return
-    if not force and event.pk and has_active_registrations(event):
+    if event.pk and has_active_registrations(event):
         raise BillingModeLocked(
             "Whole seminar or per class can't be changed once people have "
             "registered. Contact the Web Coordinator."
         )
     event.billing_mode = wanted
-    event.per_class_since = timezone.now() if per_class else None
     if event.pk:
-        event.save(update_fields=("billing_mode", "per_class_since"))
+        event.save(update_fields=("billing_mode",))
 
 
 def has_active_registrations(event) -> bool:

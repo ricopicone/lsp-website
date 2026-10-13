@@ -100,12 +100,15 @@ class RegistrationForm(forms.Form):
                 pricing_code=code,
                 # A per-class rate ignores tuition: coverage is decided class
                 # by class, when each is billed (task #811).
-                ignore_tuition=self.event.is_per_class,
+                ignore_tuition=(
+                    self.event.is_per_class or bool(code and code.per_class)
+                ),
             )
         except PricingError as exc:
             self.add_error(None, str(exc))
             return data
-        if self.event.is_per_class and resolution.installments > 1:
+        if (self.event.is_per_class or (code and code.per_class)) \
+                and resolution.installments > 1:
             self.add_error(
                 "pricing_code",
                 "This seminar bills per class, so that code's payment plan "

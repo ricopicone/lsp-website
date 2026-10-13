@@ -85,6 +85,38 @@ def apply_per_class_code(registration, code, resolution):
             )
 
 
+def switch_to_per_class(registration, code, resolution):
+    """Move an awaiting-payment whole-seminar registration onto a per-class
+    code (task #811): enrolled now at $0, billed per class attended from now
+    on. Any open Checkout for the whole-seminar fee is expired first, or a
+    stale tab could still charge it."""
+    from events.models import PricingCode
+    from payments.stripe_sync import expire_open_sessions
+
+    expire_open_sessions(
+        registration, reason=f"Switched to per-class billing by code {code.code}.",
+    )
+    with transaction.atomic():
+        registration.per_class_rate = resolution.amount
+        registration.per_class_since = timezone.now()
+        registration.quoted_amount = Decimal("0")
+        registration.quoted_explanation = (
+            f"Per class attended: ${resolution.amount} per class. "
+            f"{resolution.explanation}"
+        )[:500]
+        registration.pricing_code = code
+        registration.status = Registration.Status.PAID
+        registration.save(update_fields=(
+            "per_class_rate", "per_class_since", "quoted_amount",
+            "quoted_explanation", "pricing_code", "status",
+        ))
+        if code.max_uses is not None:
+            PricingCode.objects.filter(pk=code.pk).update(
+                uses_remaining=F("uses_remaining") - 1
+            )
+    notify_payments.registration_confirmed(registration)
+
+
 def pinned_code_for(registration):
     """A redeemable code minted *for this member* on this event, or None."""
     from events.models import PricingCode
@@ -141,6 +173,8 @@ def auto_apply_pinned_code(registration):
         return None      # sliding floor, or otherwise needs an input
     if resolution.installments > 1:
         return None      # a schedule is a decision, not a discount
+    if code.per_class and not registration.is_per_class:
+        return None      # so is paying per class instead of for the seminar
     if registration.is_per_class:
         if resolution.amount >= registration.per_class_rate:
             return None

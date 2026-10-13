@@ -402,7 +402,7 @@ def workgroup_detail(request, slug):
         from events.forms import PricingCodeForm
 
         context["pricing_code_form"] = PricingCodeForm(event=primary_event)
-        if primary_event.is_per_class:
+        if primary_event.is_per_class or primary_event.has_per_class_registrants:
             from events.per_class import faculty_context
             context["class_attendance"] = faculty_context(primary_event)
         context["existing_codes"] = primary_event.pricing_codes.order_by("-created_at")

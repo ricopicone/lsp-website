@@ -438,12 +438,23 @@ class PricingCodeForm(forms.ModelForm):
             "spring. The total is the same either way."
         )
         self.fields["amount_or_percent"].required = False
+        self.fields["per_class"].label = "Per class attended"
+        if self.per_class:
+            # The whole event bills per class, so every code already does.
+            del self.fields["per_class"]
+        else:
+            self.fields["per_class"].help_text = (
+                "Instead of the whole seminar, they pay this amount for each "
+                "class they attend, billed a few days after each class. Choose "
+                "Fixed price (or Sliding floor) and enter the price of one class."
+            )
 
     class Meta:
         model = PricingCode
         fields = (
             "pricing_mode",
             "amount_or_percent",
+            "per_class",
             "installments",
             "valid_until",
             "max_uses",
@@ -463,6 +474,23 @@ class PricingCodeForm(forms.ModelForm):
         mode = data.get("pricing_mode")
         amount = data.get("amount_or_percent")
 
+        if data.get("per_class") and not self.per_class:
+            # On a whole-seminar event the listed price is for the year, so a
+            # per-class code has to name the price of one class itself.
+            if mode not in (PricingCode.Mode.FIXED_AMOUNT,
+                            PricingCode.Mode.SLIDING_FLOOR):
+                self.add_error(
+                    "pricing_mode",
+                    "A per-class code needs its own price per class: choose "
+                    "Fixed price or Sliding floor.",
+                )
+                return data
+            if (data.get("installments") or 1) > 1:
+                self.add_error(
+                    "installments",
+                    "A per-class code pays each class as it's billed. Leave "
+                    "this at 1.",
+                )
         if self.per_class:
             if mode == PricingCode.Mode.FULL_PRICE:
                 self.add_error(

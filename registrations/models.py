@@ -66,6 +66,11 @@ class Registration(models.Model):
         "attended costs this registrant. quoted_amount stays 0, and the "
         "classes are billed one by one (events.per_class).",
     )
+    per_class_since = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When this registration started being billed per class "
+        "(task #811); only classes ending after it are recorded.",
+    )
     quoted_explanation = models.CharField(
         max_length=500,
         blank=True,

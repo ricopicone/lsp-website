@@ -2295,9 +2295,7 @@ Done (see `git log` for specifics):
   a new `per_class_registration` FK — so `mint_registration_charge`,
   `void_registration_charge`, `charge_unique_registration`, `complete_payment`'s
   registration branch, refunds and removal never see a class. The ledger is
-  unchanged; a seminar's open balance is read from the ledger's own sweep via
-  the new `ledger.charge_coverage(user)` (the #723 lesson), which is also why
-  existing registration credit pays classes.
+  unchanged.
   **Pipeline** (`events/per_class.py`, a pass of the 5-minute
   `send_meeting_reminders`, no host change): after each class (15 min grace)
   record a row per PAID/COMPED registrant created before it ended — **detected**
@@ -2313,7 +2311,7 @@ Done (see `git log` for specifics):
   **Billing mode is part of the price** (`Event.billing_mode`,
   `EventProposal.billing_mode`, `PriceSpec.per_class`): proposed, PC-approved,
   changed along the price's review route, and **locked once anyone is
-  registered** (`BillingModeLocked`); `per_class_since` bounds what's recorded.
+  registered** (`BillingModeLocked`).
   **Tuition coverage is decided per class at billing** (covered tier, no code,
   tuition-current for the event's AY); `covered_registrations`/`apply_coverage`
   exclude per-class rows (the first one *would* have re-billed a covered
@@ -2323,9 +2321,17 @@ Done (see `git log` for specifics):
   (#485; staff paths never). Skip-list also pinned: `cancel()` never refunds a
   per-class registration (a converted one still holds its old $25 Stripe
   payment), removal leaves no "money left", comp accepts PAID per-class, codes
-  set the rate (installments / full-price refused). Conversion:
-  `manage.py convert_event_to_per_class <slug> --price 25 --bill-from DATE
-  [--dry-run]`, the only route past the lock. Widening the review loop to
+  set the rate (installments / full-price refused). **Per class is also a
+  per-registrant arrangement** (amended the same day, after prod showed event
+  25 is a $500 seminar where only four registrants meant per class):
+  `PricingCode.per_class` on a whole-seminar event (Fixed or Sliding floor, the
+  price of one class) enrolls just its redeemer per class, also switchable from
+  the code box before paying; billing starts at `Registration.per_class_since`,
+  and the pipeline records any per-class registration on any event.
+  Conversion: `manage.py convert_to_per_class --registration N … --bill-from
+  DATE [--rate R] [--dry-run]`. A seminar's class balance is computed from that
+  registration's own money (`per_class.class_coverage`), not the member-wide
+  registration bucket, which let imported credit "pay" classes. Widening the review loop to
   imported program events is sibling task #812. Design:
   `docs/superpowers/specs/2026-10-12-per-class-billing-design.md`.
 

@@ -76,11 +76,13 @@ def test_late_registrant_is_not_recorded_for_earlier_classes(seminar):
     assert not ClassAttendance.objects.exists()
 
 
-def test_classes_before_the_event_became_per_class_are_not_recorded(seminar):
+def test_classes_before_the_registration_became_per_class_are_not_recorded(seminar):
     event, tier = seminar
-    enroll(make_user(), event, tier)
+    reg = enroll(make_user(), event, tier)
     make_session(event, ends_ago=timedelta(days=3))
-    Event.objects.filter(pk=event.pk).update(per_class_since=timezone.now() - timedelta(days=1))
+    Registration.objects.filter(pk=reg.pk).update(
+        per_class_since=timezone.now() - timedelta(days=1),
+    )
     per_class.run()
     assert not ClassAttendance.objects.exists()
 

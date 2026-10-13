@@ -76,7 +76,7 @@ def _create_registration(
     *, request, event, tier, code, resolution
 ) -> Registration:
     requires_approval = event.requires_faculty_approval
-    if event.is_per_class:
+    if event.is_per_class or (code is not None and code.per_class):
         return _create_per_class_registration(
             request=request, event=event, tier=tier, code=code,
             rate=resolution.amount,
@@ -117,7 +117,8 @@ def _create_registration(
 def _create_per_class_registration(
     *, request, event, tier, code, rate, explanation,
 ) -> Registration:
-    """Enroll on a per-class event (task #811).
+    """Enroll per class: on a per-class event, or with a per-class code on a
+    whole-seminar one (task #811).
 
     The place itself costs nothing: ``quoted_amount`` is 0 and the row is PAID
     (enrolled) at once, or waits for approval like any other. What the member
@@ -134,6 +135,7 @@ def _create_per_class_registration(
             pricing_code=code,
             quoted_amount=Decimal("0"),
             per_class_rate=rate,
+            per_class_since=timezone.now(),
             quoted_explanation=f"Per class attended: ${rate} per class. {explanation}"[:500],
             status=(
                 Registration.Status.PENDING_APPROVAL if requires_approval
@@ -247,6 +249,7 @@ def register_for_event(request, event_slug: str):
                 coverage.retro_amount(covered_tier) if event.is_per_class
                 else None
             ),
+            per_class_since=timezone.now() if event.is_per_class else None,
             quoted_explanation="Covered by tuition (tuition-paying member, REG-4).",
             status=(
                 Registration.Status.PENDING_APPROVAL if requires_approval
@@ -486,6 +489,12 @@ def apply_code(request, reg_id: int):
 
     if reg.is_per_class:
         return _apply_per_class_code(request, reg, back)
+    raw_code = (request.POST.get("pricing_code") or "").strip().upper()
+    per_class_code = PricingCode.objects.filter(
+        code=raw_code, event=reg.event, per_class=True,
+    ).first()
+    if per_class_code is not None:
+        return _switch_to_per_class(request, reg, per_class_code, back)
 
     if reg.status != Registration.Status.AWAITING_PAYMENT:
         messages.error(
@@ -550,6 +559,43 @@ def pay_classes(request, reg_id: int):
         messages.info(request, "There's nothing to pay right now.")
         return back
     return redirect(session.url)
+
+
+def _switch_to_per_class(request, reg, code, back):
+    """A per-class code entered on a whole-seminar registration still awaiting
+    payment (task #811): the place becomes per class, and nothing is due now."""
+    from events.pricing import PricingError, resolve_price
+
+    from .services import switch_to_per_class
+
+    if reg.status != Registration.Status.AWAITING_PAYMENT:
+        messages.error(
+            request,
+            "A per-class code can only be used before you've paid. Contact the "
+            "faculty or the treasurer.",
+        )
+        return back
+    sliding_raw = (request.POST.get("sliding_amount") or "").strip()
+    try:
+        sliding = Decimal(sliding_raw) if sliding_raw else None
+    except (InvalidOperation, ValueError):
+        messages.error(request, "Enter the amount as a number, like 20.")
+        return back
+    try:
+        resolution = resolve_price(
+            user=request.user, tier=reg.price_tier, sliding_amount=sliding,
+            pricing_code=code, ignore_tuition=True,
+        )
+    except PricingError as exc:
+        messages.error(request, str(exc))
+        return back
+    switch_to_per_class(reg, code, resolution)
+    messages.success(
+        request,
+        f"You're registered per class: ${resolution.amount} for each class you "
+        "attend, billed a few days after the class.",
+    )
+    return back
 
 
 def _apply_per_class_code(request, reg, back):

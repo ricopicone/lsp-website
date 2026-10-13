@@ -543,11 +543,6 @@ class Event(models.Model):
             "registered."
         ),
     )
-    per_class_since = models.DateTimeField(
-        null=True, blank=True, editable=False,
-        help_text="When this event became per-class (task #811). Only classes "
-        "ending after this are recorded and billed.",
-    )
     visibility = models.CharField(
         max_length=20,
         choices=Visibility.choices,
@@ -675,6 +670,12 @@ class Event(models.Model):
     def is_per_class(self) -> bool:
         """Whether registrants are billed per class attended (task #811)."""
         return self.billing_mode == self.BillingMode.PER_CLASS
+
+    @property
+    def has_per_class_registrants(self) -> bool:
+        """Whether anyone here is billed per class, by the event's mode or a
+        per-class code (task #811)."""
+        return self.registrations.filter(per_class_rate__isnull=False).exists()
 
     def requires_change_review(self) -> bool:
         """Whether faculty edits to this event's content should offer the
@@ -1373,6 +1374,12 @@ class PricingCode(models.Model):
         null=True,
         blank=True,
         help_text="Decremented on successful redemption. Null when max_uses is null.",
+    )
+    per_class = models.BooleanField(
+        default=False,
+        help_text="Enrolls whoever redeems it at this price per class attended, "
+        "rather than for the whole seminar (task #811). On a per-class event "
+        "every code is per class.",
     )
     installments = models.PositiveSmallIntegerField(
         default=1,

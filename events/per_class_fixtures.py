@@ -36,9 +36,6 @@ def make_event(title="Beyond Principle", *, per_class=True, **kwargs):
         billing_mode=(
             Event.BillingMode.PER_CLASS if per_class else Event.BillingMode.WHOLE
         ),
-        per_class_since=(
-            timezone.now() - timedelta(days=60) if per_class else None
-        ),
         **kwargs,
     )
     return event
@@ -69,8 +66,9 @@ def enroll(user, event, tier, *, rate="25.00", status=Registration.Status.PAID,
         per_class_rate=None if rate is None else Decimal(rate),
         status=status, **kwargs,
     )
+    when = timezone.now() - created_ago
     Registration.objects.filter(pk=reg.pk).update(
-        created_at=timezone.now() - created_ago,
+        created_at=when, per_class_since=when if rate is not None else None,
     )
     reg.refresh_from_db()
     return reg

@@ -228,12 +228,19 @@ the treasurer's.
 
 ### Billing per class
 
-Some seminars charge per class rather than for the whole year. **Per class**
-is part of the price, so you choose it on your proposal beside the fee, and it
-changes the way the fee does. Once anyone has registered it can't be switched;
-ask the Web Coordinator.
+Some seminars charge per class rather than for the whole year, and some
+students in a whole-seminar class need to pay per class. Both work:
 
-How it works for your students:
+- **The whole seminar per class.** **Per class** is part of the price, so you
+  choose it on your proposal beside the fee. Once anyone has registered it
+  can't be switched; ask the Web Coordinator.
+- **One student per class.** Mint a pricing code with **Per class attended**
+  ticked and a **Fixed price** of one class (or a **Sliding floor**). Whoever
+  uses it pays that for each class they attend; everyone else keeps the
+  seminar price. They can use it when registering, or on their registration
+  page before they've paid.
+
+How it works for a student billed per class:
 
 - They register once, without paying anything up front. The fee you set is
   what each class costs them.
@@ -248,8 +255,8 @@ How it works for your students:
   absent, which takes the class off their bill, as long as they haven't paid
   for it yet. After that, it's the treasurer's.
 
-Pricing codes work per class too: a fixed amount is the price of each class,
-and a percentage comes off each class. A code can't spread payments out on a
+On a seminar that's per class throughout, every code works per class: a fixed
+amount is the price of each class, and a percentage comes off each class. A code can't spread payments out on a
 per-class seminar. Members covered by tuition aren't billed for classes.
 
 ## If you convene a reading group

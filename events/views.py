@@ -381,7 +381,7 @@ def event_detail(request, slug: str):
             status=Registration.Status.PENDING_APPROVAL
         ).select_related("user")
         context["pricing_code_form"] = PricingCodeForm(event=event)
-        if event.is_per_class:
+        if event.is_per_class or event.has_per_class_registrants:
             from .per_class import faculty_context
             context["class_attendance"] = faculty_context(event)
         context["existing_codes"] = event.pricing_codes.order_by("-created_at")
@@ -1008,6 +1008,8 @@ def event_generate_code(request, slug: str):
         code = form.save(commit=False)
         code.event = event
         code.issued_by = request.user
+        if event.is_per_class:
+            code.per_class = True
         code.save()
     else:
         # The form posts from a panel and redirects back, so an error left on

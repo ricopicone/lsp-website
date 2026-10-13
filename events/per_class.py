@@ -156,7 +156,9 @@ def _unrecorded_registrations(session: Session):
             event_id=session.event_id,
             per_class_rate__isnull=False,
             status__in=_enrolled_statuses(),
-            created_at__lt=session.end_at,
+            # Since when this registration is billed per class: its creation
+            # for one made that way, the conversion date for one moved over.
+            per_class_since__lt=session.end_at,
         )
         .exclude(class_attendance__session=session)
         .select_related("user")
@@ -201,14 +203,19 @@ def record_session(session: Session, *, now=None) -> Recorded | None:
 
 
 def due_sessions(now):
-    """Ended classes of per-class events, after the event became per-class."""
+    """Ended classes of any event with a per-class registrant, whether the
+    whole event bills per class or a per-class code made some registrants so.
+    Which registrants each class records is decided per registration."""
+    from registrations.models import Registration
+
+    events = (
+        Registration.objects
+        .filter(per_class_rate__isnull=False, status__in=_enrolled_statuses())
+        .values("event_id")
+    )
     return (
         Session.objects
-        .filter(
-            event__billing_mode=Event.BillingMode.PER_CLASS,
-            event__per_class_since__isnull=False,
-            end_at__lte=now - RECORD_DELAY,
-        )
+        .filter(event_id__in=events, end_at__lte=now - RECORD_DELAY)
         .select_related("event")
         .order_by("end_at")
     )
@@ -604,8 +611,6 @@ def run(now=None, *, dry: bool = False) -> dict:
     now = now or timezone.now()
     stats = {"recorded": 0, "retry": 0, "billed": 0, "notices": 0, "errors": 0}
     for session in due_sessions(now):
-        if session.end_at <= session.event.per_class_since:
-            continue
         if dry:
             stats["recorded"] += _unrecorded_registrations(session).count()
             continue
