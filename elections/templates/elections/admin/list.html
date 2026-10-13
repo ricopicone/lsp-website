@@ -1,0 +1,21 @@
+{% extends "elections/admin/base.html" %}
+{% block tab_content %}
+<div class="space-y-6 max-w-3xl">
+  <p class="text-base-content/70">No election is in progress. Create one to set its dates; nothing is sent to members until nominations open.</p>
+  <a href="{% url 'elections:admin_new' %}" class="btn btn-primary btn-sm">＋ New election</a>
+  {% if elections %}
+  <section class="space-y-2">
+    <h2 class="font-serif text-xl">Past elections</h2>
+    <ul class="divide-y divide-base-300/50 rounded-xl border border-base-300/60 bg-base-100">
+      {% for e in elections %}
+      <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+        <a href="{% url 'elections:admin_overview' e.slug %}" class="link link-hover">{{ e.title }}</a>
+        <span class="badge badge-ghost badge-sm">{{ e.get_phase_display }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+  <p class="text-sm"><a href="{% url 'elections:admin_help' %}" class="link">How an election runs</a></p>
+</div>
+{% endblock %}

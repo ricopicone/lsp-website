@@ -1,0 +1,7 @@
+{# One form field: label, widget, help, errors. #}
+<label class="form-control w-full space-y-1">
+  <span class="text-sm font-medium text-base-content">{{ field.label }}</span>
+  {{ field }}
+  {% if field.help_text %}<span class="block text-xs text-base-content/60">{{ field.help_text }}</span>{% endif %}
+  {% for err in field.errors %}<span class="block text-xs text-error">{{ err }}</span>{% endfor %}
+</label>

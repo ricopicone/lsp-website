@@ -1,0 +1,46 @@
+{% extends "elections/admin/base.html" %}
+{% block tab_content %}
+<div class="space-y-6">
+  <p class="text-sm text-base-content/70 max-w-3xl">
+    {% if frozen %}The roll was frozen when voting opened. You can still add someone who was missed; you can remove someone only if they haven't voted.{% else %}Every analyst, scholar, candidate, pre-candidate and member in active standing, plus anyone you add, minus anyone you remove. It is frozen when voting opens.{% endif %}
+    The dues column is for your information: whether someone has "paid their fees" (bylaws Art. 12) is your call, made here with a reason.
+  </p>
+
+  {% if roll_open %}
+  <form method="post" action="{% url 'elections:admin_override' election.slug %}" class="grid gap-3 sm:grid-cols-[2fr_1.2fr_2fr_auto] items-end max-w-4xl">
+    {% csrf_token %}
+    {% for field in form %}{% include "elections/admin/_field.html" %}{% endfor %}
+    <button class="btn btn-primary btn-sm">Update roll</button>
+  </form>
+  {% endif %}
+
+  {% if show_voted %}<p class="text-sm"><span class="font-medium">{{ voted_count }}</span> of {{ rows|length }} have voted.</p>{% endif %}
+
+  <div class="overflow-x-auto rounded-xl border border-base-300/60 bg-base-100">
+    <table class="table table-sm">
+      <thead><tr><th>Name</th><th>Role</th><th>Standing</th><th>Dues this year</th><th>Note</th>{% if show_voted %}<th>Voted</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.user.get_full_name|default:r.user.email }}</td>
+          <td>{{ r.user.profile.get_role_display }}</td>
+          <td>{{ r.user.profile.get_standing_display }}</td>
+          <td>{{ r.dues|default:"—" }}</td>
+          <td class="text-xs">{% if r.override %}{{ r.override.get_override_display }}: {{ r.override.reason }}{% endif %}</td>
+          {% if show_voted %}<td>{% if r.voted %}<span class="badge badge-success badge-sm">Voted</span>{% else %}<span class="badge badge-ghost badge-sm">Not yet</span>{% endif %}</td>{% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-base-content/60">Nobody is on the roll.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if removed %}
+  <section class="space-y-2">
+    <h2 class="font-serif text-lg">Removed from the roll</h2>
+    <ul class="text-sm space-y-1">{% for r in removed %}<li>{{ r.user.get_full_name|default:r.user.email }}: {{ r.reason }}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

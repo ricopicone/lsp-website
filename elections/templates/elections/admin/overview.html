@@ -1,0 +1,60 @@
+{% extends "elections/admin/base.html" %}
+{% load tz_filters %}
+{% block tab_content %}
+<div class="grid gap-6 lg:grid-cols-3">
+  <div class="space-y-6 lg:col-span-2">
+    <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-3">
+      <h2 class="font-serif text-xl">Next step</h2>
+      <p class="text-base-content/80">{{ next_step }}</p>
+      {% if no_contest %}
+      <div class="alert alert-warning text-sm">
+        <span>There are {{ accepted_count }} accepted candidate{{ accepted_count|pluralize }} for {{ election.seats }} seat{{ election.seats|pluralize }}. The bylaws say: "If there are seven or fewer candidates running who satisfy the other requirements of the Board, no election will take place and those individuals will serve as the next Board of Directors." You can close the election without a vote.</span>
+      </div>
+      {% endif %}
+      <div class="flex flex-wrap gap-2">
+        {% if phase == "draft" %}{% include "elections/admin/_action.html" with action="open_nominations_now" label="Open nominations now" style="btn-outline" %}{% endif %}
+        {% if phase == "nominating" %}{% include "elections/admin/_action.html" with action="close_nominations_now" label="Close nominations now" style="btn-outline" %}{% endif %}
+        {% if phase == "review" %}{% include "elections/admin/_action.html" with action="publish_slate" label="Publish the slate" %}{% endif %}
+        {% if phase == "slate" or phase == "review" %}{% include "elections/admin/_action.html" with action="open_voting_now" label="Open voting now" style="btn-outline" %}{% endif %}
+        {% if no_contest %}{% include "elections/admin/_action.html" with action="acclaim" label="Close as elected without a vote" style="btn-warning" %}{% endif %}
+        {% if phase == "voting" %}{% include "elections/admin/_action.html" with action="remind" label="Remind those who haven't voted" style="btn-outline" %}{% include "elections/admin/_action.html" with action="close_voting_now" label="Close voting now" style="btn-outline" %}{% endif %}
+        {% if phase == "closed" %}{% include "elections/admin/_action.html" with action="run_count" label="Run the count" %}{% endif %}
+        {% if phase == "counted" %}{% include "elections/admin/_action.html" with action="publish_results" label="Publish the results" %}{% endif %}
+      </div>
+    </section>
+
+    <section class="rounded-xl border border-base-300/60 bg-base-100 p-4">
+      <h2 class="font-serif text-xl mb-3">Timeline</h2>
+      <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        <dt class="text-base-content/60">Nominations open</dt><dd>{{ election.nominations_open_at|user_datetime:True }}</dd>
+        <dt class="text-base-content/60">Nominations close</dt><dd>{{ election.nominations_close_at|user_datetime:True }}</dd>
+        <dt class="text-base-content/60">Slate published</dt><dd>{% if election.slate_published_at %}{{ election.slate_published_at|user_datetime:True }}{% else %}Not yet{% endif %}</dd>
+        <dt class="text-base-content/60">Voting opens</dt><dd>{{ election.voting_open_at|user_datetime:True }}{% if not election.slate_published_at %} <span class="text-base-content/60">(or when the slate is published, if later)</span>{% endif %}</dd>
+        <dt class="text-base-content/60">Voting closes</dt><dd>{{ election.voting_close_at|user_datetime:True }}</dd>
+        <dt class="text-base-content/60">Results due</dt><dd>{{ election.results_due|default:"Not set" }}</dd>
+      </dl>
+    </section>
+
+    <section class="rounded-xl border border-base-300/60 bg-base-100 p-4">
+      <h2 class="font-serif text-xl mb-3">Record</h2>
+      {% if election.audit_notes %}<pre class="whitespace-pre-wrap text-xs text-base-content/80 font-mono">{{ election.audit_notes }}</pre>{% else %}<p class="text-sm text-base-content/60">Nothing recorded yet.</p>{% endif %}
+    </section>
+  </div>
+
+  <aside class="space-y-3">
+    <div class="stats stats-vertical w-full border border-base-300/60 bg-base-100">
+      <div class="stat"><div class="stat-title">Seats</div><div class="stat-value text-2xl">{{ election.seats }}</div></div>
+      <div class="stat"><div class="stat-title">Nominations</div><div class="stat-value text-2xl">{{ nomination_count }}</div><div class="stat-desc">{{ accepted_count }} accepted</div></div>
+      <div class="stat"><div class="stat-title">Voter roll</div><div class="stat-value text-2xl">{{ roll_size }}</div></div>
+      <div class="stat"><div class="stat-title">Ballots cast</div><div class="stat-value text-2xl">{{ turnout }}</div></div>
+    </div>
+    {% if past %}
+    <div class="text-sm space-y-1">
+      <p class="text-base-content/60">Other elections</p>
+      {% for p in past %}<a href="{% url 'elections:admin_overview' p.slug %}" class="link block">{{ p.title }}</a>{% endfor %}
+    </div>
+    {% endif %}
+    <a href="{% url 'elections:admin_new' %}" class="btn btn-ghost btn-sm">＋ New election</a>
+  </aside>
+</div>
+{% endblock %}

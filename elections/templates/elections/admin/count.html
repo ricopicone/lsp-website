@@ -1,0 +1,48 @@
+{% extends "elections/admin/base.html" %}
+{% block tab_content %}
+<div class="space-y-6 max-w-4xl">
+  {% if phase == "closed" %}
+    <p>Voting has closed. The count uses {{ election.get_count_method_display }}.</p>
+    {% include "elections/admin/_action.html" with action="run_count" label="Run the count" %}
+  {% elif not result %}
+    <p class="text-base-content/60">The count runs after voting closes.</p>
+  {% else %}
+    <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-2">
+      <h2 class="font-serif text-xl">Elected</h2>
+      <ol class="list-decimal pl-5">{% for name in elected %}<li>{{ name }}</li>{% endfor %}</ol>
+      <p class="text-sm text-base-content/60">{{ result.valid_ballots }} valid ballot{{ result.valid_ballots|pluralize }}{% if result.quota %}, quota {{ result.quota }}{% endif %}.</p>
+    </section>
+    {% if result.analyst_check.short %}
+    <div class="alert alert-warning text-sm">
+      <span>The bylaws want at least three analysts on the Board. The elected analysts ({{ result.analyst_check.elected_analysts }}) plus continuing directors who are analysts ({{ result.analyst_check.continuing_analysts }}) make {{ result.analyst_check.total }}. Directors with no recorded term end aren't counted, so check the Board roster. The remedy, such as appointing a Director-at-Large, is the Board's decision.</span>
+    </div>
+    {% endif %}
+    {% for lot in lots %}
+    <div class="alert alert-warning text-sm">
+      <span>A tie between {{ lot.tied_names|join:", " }} at stage {{ lot.stage }} was decided by lot (seed {{ result.seed }}). If you prefer, redo the draw publicly and record it.</span>
+    </div>
+    {% endfor %}
+    {% if stages %}
+    <section class="space-y-2">
+      <h2 class="font-serif text-xl">The count, stage by stage</h2>
+      <div class="overflow-x-auto rounded-xl border border-base-300/60 bg-base-100">
+        <table class="table table-sm">
+          <thead><tr><th>Stage</th><th>What happened</th><th>Totals</th><th>Exhausted</th></tr></thead>
+          <tbody>
+            {% for s in stages %}
+            <tr>
+              <td>{{ s.n }}</td>
+              <td>{% if s.action == "first" %}First preferences{% elif s.action == "surplus" %}Surplus of {{ s.subject_name }} transferred{% elif s.action == "exclude" %}{{ s.subject_name }} excluded{% elif s.action == "elect_remaining" %}Remaining candidates fill the remaining seats{% else %}Tally{% endif %}</td>
+              <td class="text-xs">{% for name, v in s.rows %}{{ name }}: {{ v }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+              <td>{{ s.exhausted }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+    {% if phase == "counted" %}{% include "elections/admin/_action.html" with action="publish_results" label="Publish the results" %}{% endif %}
+  {% endif %}
+</div>
+{% endblock %}

@@ -35,6 +35,7 @@ PANEL_ROLES = (
     StaffRole.WEB_DEVELOPER,
     StaffRole.REFERRAL_COORDINATOR,
     StaffRole.REGISTRAR,
+    StaffRole.ELECTION_ADMINISTRATOR,
 )
 
 
@@ -120,6 +121,13 @@ def _panels_for(user) -> list[dict]:
                 status=Registration.Status.PENDING_APPROVAL
             ).count(),
             "count_label": "pending",
+        })
+    if user.is_superuser or has_staff_role(user, StaffRole.ELECTION_ADMINISTRATOR):
+        panels.append({
+            "title": "Election Admin",
+            "blurb": "Run the Board election: dates, nominations, the voter "
+                     "roll, and the count.",
+            "url": reverse("elections:admin"),
         })
     if _can_meeting_of_analysts(user):
         from admissions.models import Application
@@ -494,6 +502,15 @@ def board_appointments(request):
                 request,
                 f"Appointed {member.get_full_name() or member.email} as {role.name}.",
             )
+            if role.key == StaffRole.ELECTION_ADMINISTRATOR:
+                from committees.permissions import is_on_committee
+                if is_on_committee(member, "board"):
+                    messages.warning(
+                        request,
+                        f"{member.get_full_name() or member.email} is a sitting "
+                        "director. The Election Administrator should be neither "
+                        "a director nor a candidate.",
+                    )
         elif action == "remove":
             role.holders.remove(member)
             messages.success(

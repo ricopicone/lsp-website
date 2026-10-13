@@ -99,6 +99,7 @@ def _directory_qs():
                         StaffRole.LSP_STAFF,
                         StaffRole.REGISTRAR,
                         StaffRole.WEB_DEVELOPER,
+                        StaffRole.ELECTION_ADMINISTRATOR,
                     )
                 ),
                 to_attr="public_staff_roles",

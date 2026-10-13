@@ -1,0 +1,37 @@
+{% extends "elections/admin/base.html" %}
+{% load tz_filters %}
+{% block tab_content %}
+<div class="space-y-4 max-w-3xl">
+  <p class="text-sm text-base-content/70">The Board accepts or declines each nomination on its own review page. A declined applicant is contacted personally by a Board member; the site does not notify them.</p>
+  {% if phase == "review" %}
+  <div class="flex flex-wrap items-center gap-3">
+    {% if pending %}<span class="badge badge-warning">{{ pending }} awaiting the Board</span>{% endif %}
+    {% include "elections/admin/_action.html" with action="publish_slate" label="Publish the slate" %}
+  </div>
+  {% endif %}
+  {% if nominations %}
+  <ul class="space-y-3">
+    {% for n in nominations %}
+    <li class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="font-medium">{{ n.name }}</span>
+        <span class="text-xs text-base-content/55">{{ n.role_at_submission|default:"" }}</span>
+        {% if not n.is_live %}<span class="badge badge-ghost badge-sm">Withdrawn</span>
+        {% elif n.status == "accepted" %}<span class="badge badge-success badge-sm">Accepted</span>
+        {% elif n.status == "declined" %}<span class="badge badge-warning badge-sm">Not accepted</span>
+        {% else %}<span class="badge badge-info badge-sm">Under review</span>{% endif %}
+      </div>
+      <details>
+        <summary class="cursor-pointer text-sm link">Motivation letter</summary>
+        <div class="prose prose-sm mt-2">{{ n.letter|linebreaks }}</div>
+      </details>
+      {% if n.board_note %}<p class="rounded bg-base-200 px-2 py-1 text-xs"><span class="font-medium">Board note:</span> {{ n.board_note }}</p>{% endif %}
+      {% if n.reviewed_by %}<p class="text-xs text-base-content/55">Decided by {{ n.reviewed_by.get_full_name|default:n.reviewed_by.email }}</p>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-base-content/60">No nominations yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

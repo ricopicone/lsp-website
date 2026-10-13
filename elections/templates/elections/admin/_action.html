@@ -1,0 +1,7 @@
+{# A one-button POST to the election's action endpoint. Params: action, label, style, next. #}
+<form method="post" action="{% url 'elections:admin_action' election.slug %}" class="inline">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="{{ action }}">
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+  <button class="btn btn-sm {{ style|default:'btn-primary' }}">{{ label }}</button>
+</form>

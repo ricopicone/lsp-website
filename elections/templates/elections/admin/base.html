@@ -1,0 +1,20 @@
+{% extends "core/base.html" %}
+{% block title %}Election Admin · LSP{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <header class="space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">Election Administrator</p>
+        <h1 class="font-serif text-3xl text-base-content">{% if election %}{{ election.title }}{% else %}Election Admin{% endif %}</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        {% if election %}<span class="badge badge-primary badge-outline">{{ election.get_phase_display }}</span>{% endif %}
+        <a href="{% url 'admin_tools' %}" class="btn btn-ghost btn-sm">← Admin Tools</a>
+      </div>
+    </div>
+  </header>
+  {% if tabs %}{% include "core/_admin_tab_nav.html" %}{% endif %}
+  <div class="pt-2">{% block tab_content %}{% endblock %}</div>
+</div>
+{% endblock %}

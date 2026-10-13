@@ -53,3 +53,24 @@ def make_nomination(election, user=None, status="accepted", letter="Why I would 
         election=election, user=user, letter=letter, status=status,
         role_at_submission=user.profile.role,
     )
+
+
+def make_director(**kw):
+    from datetime import date
+
+    from committees.models import Committee
+    from workgroups.models import WorkgroupMembership
+
+    u = make_member(**kw)
+    Committee.objects.get(slug="board").add_member(
+        u, role=WorkgroupMembership.Role.MEMBER, start_date=date(2026, 1, 1),
+    )
+    return u
+
+
+def make_administrator(**kw):
+    from core.models import StaffRole
+
+    u = make_member(**kw)
+    StaffRole.objects.get(key=StaffRole.ELECTION_ADMINISTRATOR).holders.add(u)
+    return u

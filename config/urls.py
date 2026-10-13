@@ -242,6 +242,7 @@ urlpatterns = [
          name="treasurer_charge_note"),
     path("payments/", include("payments.urls")),
     path("", include("registrations.urls")),
+    path("", include("elections.urls")),
     path("", include("core.urls")),
 ]
 
