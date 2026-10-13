@@ -29,6 +29,7 @@ from .models import (
     Event,
     PricingCode,
     academic_year_date_range,
+    academic_year_of,
     current_academic_year,
 )
 from .permissions import can_edit_event
@@ -208,14 +209,43 @@ def event_list(request):
     # and dropped off this page seven hours early. ``end_date`` is a plain date
     # in the school's own timezone, so it must be compared against one (#571).
     today = timezone.localdate()
-    events = (
-        Event.objects.filter(Event.public_now_q(), end_date__gte=today)
-        .exclude(event_type__in=Event.ANNUAL_PROGRAM_TYPES)
-        .order_by("start_date", "title")
+    events = _standalone_events(request).filter(end_date__gte=today).order_by(
+        "start_date", "title",
+    )
+    return render(request, "events/event_list.html", {"events": events})
+
+
+def _standalone_events(request):
+    """The standalone events this viewer may see listed, upcoming or past.
+
+    One definition shared by /events/ and /events/past/ so the two lists cannot
+    disagree about what counts as a listable event.
+    """
+    events = Event.objects.filter(Event.public_now_q()).exclude(
+        event_type__in=Event.ANNUAL_PROGRAM_TYPES,
     )
     if not is_lsp_member(request.user):
         events = events.filter(visibility=Event.Visibility.PUBLIC)
-    return render(request, "events/event_list.html", {"events": events})
+    return events
+
+
+def past_event_list(request):
+    """Standalone events that have ended, grouped by academic year (task #814).
+
+    An ended special event, Day of Assembly or Working Day dropped off every
+    listing while its page lived on; this is where they go. Program types keep
+    their own history at /program/?year=… and /program/archive/.
+    """
+    today = timezone.localdate()  # the school's date, not UTC's (#571)
+    events = _standalone_events(request).filter(end_date__lt=today).order_by(
+        "-start_date", "title",
+    )
+    years: dict[str, list[Event]] = {}
+    for event in events:
+        years.setdefault(academic_year_of(event.start_date), []).append(event)
+    return render(request, "events/past_event_list.html", {
+        "years": list(years.items()),
+    })
 
 
 def program(request):
