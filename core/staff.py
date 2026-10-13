@@ -339,12 +339,22 @@ def board_admin(request):
         if board and board.workgroup_id
         else None
     )
+    # An election in Board review gets a card (task #813).
+    from elections.models import Election, Nomination
+    from elections.services import current_election
+    election = current_election()
+    election_pending = None
+    if election is not None and election.phase == Election.Phase.REVIEW:
+        election_pending = election.nominations.filter(
+            withdrawn_at__isnull=True, status=Nomination.Status.PENDING,
+        ).count()
     return render(request, "core/staff/admin/board.html", {
         "workspace_url": workspace_url,
         "officers": school_officers(),
         "pending_plan_count": TuitionPlanApplication.objects.filter(
             status=TuitionPlanApplication.Status.PENDING
         ).count(),
+        "election_pending": election_pending,
     })
 
 

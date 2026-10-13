@@ -1,0 +1,49 @@
+{% extends "core/base.html" %}
+{% block title %}Election nominations · Board Admin{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+  <nav class="text-sm"><a href="{% url 'board_admin' %}" class="link link-hover text-base-content/60">← Board Admin</a></nav>
+  <header class="space-y-2">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-base-content/45">Governance · Board</p>
+    <h1 class="font-serif text-3xl text-base-content tracking-tight">Election nominations</h1>
+    {% if election %}<p class="text-base-content/70">{{ election.title }} · {{ election.get_phase_display }}</p>{% endif %}
+  </header>
+
+  <div class="alert alert-info text-sm">
+    <span>The bylaws give the review of candidacies to the Board. A declined applicant must be contacted personally by a Board member to explain the reasons (Bylaws, Article 3, Section 1); the site does not notify them. Your notes are seen only by the Board and the Election Administrator.</span>
+  </div>
+
+  {% if not election %}
+    <p class="text-base-content/60">There is no election.</p>
+  {% else %}
+    {% if phase == "draft" or phase == "nominating" %}
+    <p class="text-base-content/70">Nominations are still open. You can decide them once they close.</p>
+    {% endif %}
+    {% for n in nominations %}
+    <article class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <h2 class="font-medium">{{ n.name }}</h2>
+        <span class="text-xs text-base-content/55">{{ n.role_at_submission }}</span>
+        {% if n.status == "accepted" %}<span class="badge badge-success badge-sm">Accepted</span>
+        {% elif n.status == "declined" %}<span class="badge badge-warning badge-sm">Not accepted</span>
+        {% else %}<span class="badge badge-info badge-sm">Under review</span>{% endif %}
+      </div>
+      <div class="prose prose-sm max-w-none">{{ n.letter|linebreaks }}</div>
+      {% if n.reviewed_by %}<p class="text-xs text-base-content/55">Decided by {{ n.reviewed_by.get_full_name|default:n.reviewed_by.email }}{% if n.board_note %}: {{ n.board_note }}{% endif %}</p>{% endif %}
+      {% if phase == "review" %}
+      <form method="post" action="{% url 'elections:board_decide' n.pk %}" class="space-y-2">
+        {% csrf_token %}
+        <textarea name="note" rows="2" class="textarea textarea-bordered w-full" placeholder="Note for the Board (optional)">{{ n.board_note }}</textarea>
+        <div class="flex gap-2">
+          <button name="status" value="accepted" class="btn btn-success btn-sm">Accept</button>
+          <button name="status" value="declined" class="btn btn-warning btn-sm">Decline</button>
+        </div>
+      </form>
+      {% endif %}
+    </article>
+    {% empty %}
+    <p class="text-base-content/60">No nominations.</p>
+    {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

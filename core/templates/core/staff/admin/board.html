@@ -25,4 +25,8 @@
   {% include "core/staff/admin/_section.html" with title="Governance overview" body="Membership by standing, pending decisions across the school, and a link through to the Treasurer's finances — the Board's at-a-glance dashboard." link=governance_url link_label="Open governance overview" %}
   {% url 'tuition_plan_queue' as tuition_plans_url %}
   {% include "core/staff/admin/_section.html" with title="Tuition payment plans" body="Review members' requests for a Board-approved payment plan. Approving moves them onto the plan; declining returns them to a decision." link=tuition_plans_url link_label="Review requests" count=pending_plan_count count_label="pending" %}
+  {% if election_pending is not None %}
+  {% url 'elections:board_review' as election_review_url %}
+  {% include "core/staff/admin/_section.html" with title="Election nominations" body="Nominations for the Board election have closed. Accept or decline each one before the Election Administrator publishes the slate." link=election_review_url link_label="Review nominations" count=election_pending count_label="to decide" %}
+  {% endif %}
 {% endblock %}
