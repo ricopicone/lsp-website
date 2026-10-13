@@ -122,16 +122,6 @@ def _account_rows(user):
     return charges, payments
 
 
-def charge_coverage(user) -> tuple[dict[int, str], dict[int, Decimal]]:
-    """Each OPEN charge's sweep state and covered amount, exactly as
-    :func:`member_account` computes them — for callers that need one charge's
-    reading without building the whole statement (per-class balances, task
-    #811). One computation, never a second (the #723 lesson)."""
-    charges, payments = _account_rows(user)
-    open_charges = [c for c in charges if c.status == Charge.Status.OPEN]
-    return _charge_states(open_charges, _paid_by_category(payments))
-
-
 def member_account(user) -> dict:
     """The member's full account: statement lines, balance, category sums."""
     charges, payments = _account_rows(user)

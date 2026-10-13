@@ -9,7 +9,7 @@ none of the whole-registration paths (mint/void, refunds, removal, the
 one-charge-per-registration constraint) can see it. Members are told what was
 billed once a week. The ledger needs no change: these are registration
 charges like any other, and a seminar's open balance is read from the
-ledger's own sweep (:func:`payments.ledger.charge_coverage`).
+registration's own money (:func:`class_coverage`).
 
 ``run(now)`` is the whole pipeline, called every five minutes from
 ``send_meeting_reminders``. Every step is idempotent.
@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.db import transaction
@@ -44,6 +44,8 @@ RECORD_DELAY = timedelta(minutes=15)
 DETECT_RETRY = timedelta(hours=24)
 #: Joins this close to the class count as attending it.
 DETECT_MARGIN = timedelta(minutes=30)
+#: How far back to ask Daily for meetings that may have spanned the class.
+DETECT_LOOKBACK = timedelta(hours=12)
 #: Weekly billing notice: Monday, from this school-local hour.
 NOTICE_WEEKDAY = 0
 NOTICE_HOUR = 9
@@ -110,7 +112,13 @@ def detect_present(session: Session) -> set[int] | None:
     start = int((session.start_at - DETECT_MARGIN).timestamp())
     end = int((session.end_at + DETECT_MARGIN).timestamp())
     try:
-        meetings = daily.list_meetings(name, start=start, end=end)
+        # Daily filters meetings by when the *meeting* started, so a room
+        # opened well before class, or still running from earlier, would be
+        # missed by a tight window. Ask wide; judge each participant's own
+        # time in the room against the class below.
+        meetings = daily.list_meetings(
+            name, start=start - int(DETECT_LOOKBACK.total_seconds()), end=end,
+        )
     except Exception:
         logger.warning("Could not read Daily meetings for %s", name, exc_info=True)
         return None
@@ -118,8 +126,14 @@ def detect_present(session: Session) -> set[int] | None:
     for meeting in meetings:
         for p in meeting.get("participants") or []:
             uid = str(p.get("user_id") or "")
-            if uid.isdigit():
-                present.add(int(uid))
+            if not uid.isdigit():
+                continue
+            joined = p.get("join_time")
+            if joined is not None:
+                left = joined + (p.get("duration") or 0)
+                if left < start or joined > end:
+                    continue        # in the room, but not during this class
+            present.add(int(uid))
     return present
 
 
@@ -280,17 +294,51 @@ def class_charges(registration):
     )
 
 
-def open_charges(registration) -> list[tuple]:
-    """``(charge, remaining)`` for each billed class not yet fully paid, as
-    the ledger's own category sweep reads it."""
-    from payments.ledger import charge_coverage
+def class_coverage(registration) -> dict[int, Decimal]:
+    """How much of each open class charge this registration's own money
+    covers, oldest class first.
 
-    charges = list(class_charges(registration))
-    if not charges:
-        return []
-    _states, covered = charge_coverage(registration.user)
+    Scoped to the registration, deliberately, rather than read off the
+    member-wide registration bucket the statement sweeps (#473): old
+    registration credit (imported payments carry no charge) would otherwise
+    silently "pay" classes, and a class payment would land on an older
+    seminar's plan charge and leave these classes asking to be paid again.
+    The money that counts is what was paid *for this registration*: its
+    class payments, plus what it holds through ``registration`` (a converted
+    registration's original whole-seminar payment), less any whole-seminar
+    charge still open on it. The account balance is unaffected either way;
+    this only decides what this seminar's panel and corrections read.
+    """
+    from django.db.models import Q
+
+    from payments.ledger import _counts
+    from payments.models import Charge, Payment
+
+    pot = sum(
+        (p.amount for p in Payment.objects.filter(
+            Q(per_class_registration=registration) | Q(registration=registration),
+        ) if _counts(p)),
+        Decimal("0"),
+    )
+    pot -= sum(
+        (c.amount for c in Charge.objects.filter(
+            registration=registration, status=Charge.Status.OPEN,
+        )),
+        Decimal("0"),
+    )
+    covered: dict[int, Decimal] = {}
+    for charge in class_charges(registration):
+        take = max(min(charge.amount, pot), Decimal("0"))
+        covered[charge.id] = take
+        pot -= take
+    return covered
+
+
+def open_charges(registration) -> list[tuple]:
+    """``(charge, remaining)`` for each billed class not yet fully paid."""
+    covered = class_coverage(registration)
     out = []
-    for c in charges:
+    for c in class_charges(registration):
         remaining = c.amount - covered.get(c.id, Decimal("0"))
         if remaining > 0:
             out.append((c, remaining))
@@ -302,15 +350,13 @@ def open_balance(registration) -> Decimal:
 
 
 def _unpaid_charge(att: ClassAttendance):
-    """The row's open charge if no money at all has swept onto it, else None."""
-    from payments.ledger import charge_coverage
+    """The row's open charge if no money at all has reached it, else None."""
     from payments.models import Charge
 
     charge = att.charges.filter(status=Charge.Status.OPEN).first()
     if charge is None:
         return None
-    _states, covered = charge_coverage(att.registration.user)
-    if covered.get(charge.id, Decimal("0")) > 0:
+    if class_coverage(att.registration).get(charge.id, Decimal("0")) > 0:
         return None
     return charge
 
@@ -455,7 +501,6 @@ def void_covered_open(user, period) -> list:
     """Recording a covering decision (member or treasurer path): void each
     class charge in ``period`` that tuition now covers and no money has
     reached (mirrors #561). Paid classes are the treasurer's refund call."""
-    from payments.ledger import charge_coverage
     from payments.models import Charge
 
     charges = list(
@@ -467,14 +512,16 @@ def void_covered_open(user, period) -> list:
     )
     if not charges:
         return []
-    _states, covered = charge_coverage(user)
     voided = []
+    coverage_by_reg: dict = {}
     for charge in charges:
         att = charge.class_attendance
         reg = att.registration
         if not _in_period(reg.event, period) or not is_covered(reg):
             continue
-        if covered.get(charge.id, Decimal("0")) > 0:
+        if reg.pk not in coverage_by_reg:
+            coverage_by_reg[reg.pk] = class_coverage(reg)
+        if coverage_by_reg[reg.pk].get(charge.id, Decimal("0")) > 0:
             continue
         with transaction.atomic():
             charge.status = Charge.Status.VOID
@@ -501,16 +548,24 @@ def _notify_recorded(recorded: Recorded) -> int:
     return len(recorded.rows)
 
 
+def _week_start(now):
+    local = timezone.localtime(now)
+    monday = local.date() - timedelta(days=local.weekday())
+    return timezone.make_aware(datetime.combine(monday, time.min))
+
+
 def _notice_due(now) -> bool:
     local = timezone.localtime(now)
     return local.weekday() == NOTICE_WEEKDAY and local.hour >= NOTICE_HOUR
 
 
 def send_billing_notices(now) -> int:
-    """One note per member per seminar covering classes billed and not yet
-    announced. Returns how many notes went out."""
+    """One note per member per seminar, at most once a week, covering the
+    classes billed since the last one. Returns how many notes went out."""
     from payments import notifications as notify_payments
+    from payments.models import Charge
 
+    week = _week_start(now)
     rows = (
         ClassAttendance.objects
         .filter(outcome=ClassAttendance.Outcome.CHARGED, notified_at__isnull=True)
@@ -520,28 +575,49 @@ def send_billing_notices(now) -> int:
     groups = defaultdict(list)
     for att in rows:
         groups[att.registration_id].append(att)
-    for atts in groups.values():
-        notify_payments.classes_billed(atts[0].registration, atts)
+    sent = 0
+    for reg_id, atts in groups.items():
+        if ClassAttendance.objects.filter(
+            registration_id=reg_id, notified_at__gte=week,
+        ).exists():
+            continue                # already told this week; next Monday
+        charges = list(
+            Charge.objects.filter(class_attendance__in=atts)
+            .exclude(status=Charge.Status.VOID)
+            .select_related("class_attendance__session")
+        )
+        if charges:
+            try:
+                notify_payments.classes_billed(atts[0].registration, charges)
+            except Exception:
+                logger.exception("per-class billing note failed for reg %s", reg_id)
+                continue
+            sent += 1
         ClassAttendance.objects.filter(pk__in=[a.pk for a in atts]).update(notified_at=now)
-    return len(groups)
+    return sent
 
 
 def run(now=None, *, dry: bool = False) -> dict:
     """Record ended classes, bill closed windows, and (Mondays) send the
-    weekly billing notes."""
+    weekly billing notes. One bad session or row is logged and skipped, never
+    allowed to stall everyone else's billing."""
     now = now or timezone.now()
-    stats = {"recorded": 0, "retry": 0, "billed": 0, "notices": 0}
+    stats = {"recorded": 0, "retry": 0, "billed": 0, "notices": 0, "errors": 0}
     for session in due_sessions(now):
         if session.end_at <= session.event.per_class_since:
             continue
         if dry:
             stats["recorded"] += _unrecorded_registrations(session).count()
             continue
-        recorded = record_session(session, now=now)
-        if recorded is None:
-            stats["retry"] += 1
-            continue
-        stats["recorded"] += _notify_recorded(recorded)
+        try:
+            recorded = record_session(session, now=now)
+            if recorded is None:
+                stats["retry"] += 1
+                continue
+            stats["recorded"] += _notify_recorded(recorded)
+        except Exception:
+            logger.exception("per-class recording failed for session %s", session.pk)
+            stats["errors"] += 1
     unbilled = (
         ClassAttendance.objects
         .filter(billed_at__isnull=True)
@@ -553,8 +629,12 @@ def run(now=None, *, dry: bool = False) -> dict:
         if dry:
             stats["billed"] += 1
             continue
-        bill(att, now=now)
-        stats["billed"] += 1
+        try:
+            bill(att, now=now)
+            stats["billed"] += 1
+        except Exception:
+            logger.exception("per-class billing failed for attendance %s", att.pk)
+            stats["errors"] += 1
     if not dry and _notice_due(now):
         stats["notices"] = send_billing_notices(now)
     return stats

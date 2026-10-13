@@ -96,6 +96,11 @@ def pinned_code_for(registration):
             return None
         if registration.pricing_code_id:
             return None      # one code per registration, as on the form
+        from events.per_class import is_covered
+        if is_covered(registration):
+            # Tuition covers their classes; a code would set pricing_code and
+            # so end that coverage, billing them for what was free.
+            return None
     elif registration.status != Registration.Status.AWAITING_PAYMENT:
         return None
     for code in PricingCode.objects.filter(

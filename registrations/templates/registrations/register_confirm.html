@@ -116,7 +116,7 @@
   </div>
   {% endif %}
 
-  {% if registration.status == "awaiting_payment" or registration.is_per_class and registration.status == "paid" and not registration.pricing_code_id %}
+  {% if registration.status == "awaiting_payment" or registration.is_per_class and registration.status == "paid" and not registration.pricing_code_id and not classes_covered %}
   <details class="rounded-lg border border-base-300 p-4"{% if pending_code %} open{% endif %}>
     <summary class="cursor-pointer text-sm text-base-content/80">
       Have a code from your convener?

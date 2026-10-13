@@ -486,19 +486,22 @@ def class_attendance_recorded(session, rows, *, detect_failed=False) -> None:
         )
 
 
-def classes_billed(reg, rows) -> None:
-    """The weekly note: classes billed since the last one, and the balance."""
+def classes_billed(reg, charges) -> None:
+    """The weekly note: classes billed since the last one, and the balance.
+    Totals the charges themselves, so a rate changed since (a code) or a
+    charge voided since (the treasurer) reads correctly."""
     from events.per_class import open_balance
 
-    days = ", ".join(_class_label(a) for a in rows)
-    total = sum((a.registration.per_class_rate or 0) for a in rows)
+    days = ", ".join(_class_label(c.class_attendance) for c in charges)
+    total = sum((c.amount for c in charges), 0)
     balance = open_balance(reg)
-    noun = "class" if len(rows) == 1 else "classes"
+    one = len(charges) == 1
+    noun = "class" if one else "classes"
     notify(
         reg.user, Category.CLASS_BILLING,
-        title=f"{reg.event.title}: {len(rows)} {noun} billed",
+        title=f"{reg.event.title}: {len(charges)} {noun} billed",
         body=(
-            f"{reg.event.title}: the {noun} of {days} {'was' if len(rows) == 1 else 'were'} "
+            f"{reg.event.title}: the {noun} of {days} {'was' if one else 'were'} "
             f"billed, ${total}. Your open balance for this seminar is ${balance}."
         ),
         url=_classes_url(reg), target=reg,

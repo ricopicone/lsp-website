@@ -289,6 +289,11 @@ def mint_registration_charge(payment) -> Charge | None:
     """
     if not payment.registration_id or payment.amount <= 0:
         return None
+    if payment.registration.is_per_class:
+        # Its classes are its charges (task #811). A converted registration's
+        # whole-seminar charge was voided on purpose; re-minting it here (a
+        # late Checkout, a backfill re-run) would eat the class credit.
+        return None
     existing = (
         Charge.objects.filter(registration_id=payment.registration_id)
         .exclude(status=Charge.Status.VOID)

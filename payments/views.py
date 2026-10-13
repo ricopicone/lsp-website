@@ -1289,9 +1289,13 @@ def treasurer_payment_refund(request, payment_id: int):
         _record_offline_refund(target, treasurer=request.user)
         # Cascade to Registration (the Stripe path gets this via webhook).
         if target.registration_id:
+            # A per-class registration stays enrolled when a payment it holds
+            # is refunded (a converted one still owns its old whole-seminar
+            # payment, task #811): the money leaves, the place does not.
             Registration.objects.filter(
                 pk=target.registration_id,
                 status=Registration.Status.PAID,
+                per_class_rate__isnull=True,
             ).update(status=Registration.Status.REFUNDED)
             from .charges import void_registration_charge
             void_registration_charge(target.registration, "Offline refund recorded.")
@@ -2426,9 +2430,12 @@ def _handle_charge_refunded(charge: dict) -> None:
                     (part.notes + "\n" + audit) if part.notes else audit)
                 part.save(update_fields=("status", "notes"))
         if payment.registration_id:
+            # See treasurer_payment_refund: a per-class place survives a
+            # refund of money it holds (task #811).
             Registration.objects.filter(
                 pk=payment.registration_id,
                 status=Registration.Status.PAID,
+                per_class_rate__isnull=True,
             ).update(status=Registration.Status.REFUNDED)
             from .charges import void_registration_charge
             void_registration_charge(payment.registration, "Stripe refund (webhook).")

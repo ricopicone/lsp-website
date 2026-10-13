@@ -18,6 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from events.models import Event, PriceTier, PricingCode
+from events.per_class import is_covered as per_class_is_covered
 from events.per_class import member_context as per_class_context
 from events.permissions import can_edit_event
 from payments import coverage, registration_plans
@@ -355,6 +356,7 @@ def registration_confirm(request, reg_id: int):
             "classes": (
                 per_class_context(reg) if reg.is_per_class else None
             ),
+            "classes_covered": reg.is_per_class and per_class_is_covered(reg),
         },
     )
 
@@ -563,6 +565,12 @@ def _apply_per_class_code(request, reg, back):
             request,
             "A code can't be applied to this registration. If something "
             "needs adjusting, contact the faculty or the treasurer.",
+        )
+        return back
+    from events.per_class import is_covered
+    if is_covered(reg):
+        messages.info(
+            request, "Your tuition covers these classes, so there's nothing to discount.",
         )
         return back
     raw = (request.POST.get("pricing_code") or "").strip().upper()

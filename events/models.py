@@ -2071,7 +2071,18 @@ class EventChangeRequest(models.Model):
         if scalar:
             self.event.save(update_fields=scalar)
         if "price" in self.changed_fields:
-            apply_to_event(self.event, PriceSpec.from_dict(self.proposed_price))
+            import dataclasses
+
+            from .price_spec import has_active_registrations
+
+            spec = PriceSpec.from_dict(self.proposed_price)
+            if (spec.per_class != self.event.is_per_class
+                    and has_active_registrations(self.event)):
+                # People registered while the change waited for review: the
+                # billing mode is locked now, so the rest of the price still
+                # applies and the mode stays as they registered under (#811).
+                spec = dataclasses.replace(spec, per_class=self.event.is_per_class)
+            apply_to_event(self.event, spec)
         self.applied_at = timezone.now()
 
     def approve(self, reviewer):

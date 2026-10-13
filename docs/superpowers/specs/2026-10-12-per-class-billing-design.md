@@ -76,11 +76,16 @@ flows through new rows that the existing money paths cannot see:
   the recording pass only records classes ending after it).
 
 The ledger needs no change: class charges are registration-category charges,
-so balances, the statement, category-scoped coverage (#473) and
-`audit_ledger` include them as they are. Per-seminar "open balance" is read
-from the ledger's own per-charge states (`_charge_states`) — never a second
-calculation (the #723 lesson). Registration-category credit sweeps onto class
-charges oldest-first, which is what makes the #810 $25 cover a first class.
+so the account balance, the statement and `audit_ledger` include them as they
+are. **Amended after review:** a seminar's "open balance" (the panel, the Pay
+button, faculty un-billing, the coverage void) is computed from *that
+registration's own* money — payments linked by `per_class_registration` or
+`registration` — swept oldest-class-first (`per_class.class_coverage`), not
+from the member-wide registration bucket. Reading the bucket let imported
+registration credit (which carries no charge) silently "pay" classes, and let
+a class payment land on an older seminar's plan charge so the member was asked
+to pay again. The #810 $25 is held through `registration=reg`, so it still
+covers the first class.
 
 Rejected: a single growing registration Charge (rewrites a money row weekly;
 no per-class row to void), and a child Registration per class (breaks the

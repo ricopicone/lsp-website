@@ -94,6 +94,7 @@ class PriceFieldsMixin(forms.Form):
         """
         from .price_spec import from_event, is_representable
 
+        self._price_event = event
         self.price_readonly = event is not None and not is_representable(event)
         self.price_tiers = []
         if self.price_readonly:
@@ -155,10 +156,26 @@ class PriceFieldsMixin(forms.Form):
                     "Minimum can't exceed the suggested amount.",
                 )
 
+        # A free event has no per-class fee to bill (task #811).
+        per_class = (
+            fee_type != "free"
+            and data.get("billing_mode") == Event.BillingMode.PER_CLASS
+        )
+        event = getattr(self, "_price_event", None)
+        if event is not None and event.pk and per_class != event.is_per_class:
+            from .price_spec import has_active_registrations
+            if has_active_registrations(event):
+                # Caught here so the rest of the edit isn't saved before the
+                # lock refuses it in apply_to_event (which would 500).
+                self.add_error(
+                    "billing_mode",
+                    "Whole seminar or per class can't be changed once people "
+                    "have registered. Contact the Web Coordinator.",
+                )
         data["price"] = PriceSpec(
             amount=amount, sliding_min=smin, sliding_max=smax,
             tuition_covers=bool(data.get("tuition_covers")),
-            per_class=data.get("billing_mode") == Event.BillingMode.PER_CLASS,
+            per_class=per_class,
         )
         return data
 
@@ -1074,9 +1091,35 @@ class SessionScheduleForm(forms.ModelForm):
         return cd
 
 
+def session_has_billed_classes(session) -> bool:
+    """A class billed per class (task #811) keeps its session: its charges,
+    even voided ones, are the ledger's record of it, and they protect the
+    attendance row, so deleting would fail."""
+    from payments.models import Charge
+
+    return Charge.objects.filter(
+        class_attendance__session=session,
+    ).exists()
+
+
+class _ScheduleFormSet(forms.BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        for form in self.deleted_forms:
+            session = form.instance
+            if session.pk and session_has_billed_classes(session):
+                raise forms.ValidationError(
+                    f"The class on {timezone.localdate(session.start_at):%b} "
+                    f"{timezone.localdate(session.start_at).day} has been billed, "
+                    "so it can't be deleted. If it didn't happen, mark everyone "
+                    "absent instead, and the charges come off their bills."
+                )
+
+
 def _build_schedule_formset():
     return forms.inlineformset_factory(
-        Event, Session, form=SessionScheduleForm, extra=1, can_delete=True,
+        Event, Session, form=SessionScheduleForm, formset=_ScheduleFormSet,
+        extra=1, can_delete=True,
     )
 
 
