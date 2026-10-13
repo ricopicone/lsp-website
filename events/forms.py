@@ -40,7 +40,7 @@ class PriceFieldsMixin(forms.Form):
     #: loop that assumes a form field is an Event field.
     PRICE_FIELDS = (
         "fee_type", "fee_amount", "fee_sliding_min", "fee_sliding_max",
-        "tuition_covers",
+        "tuition_covers", "billing_mode",
     )
 
     fee_type = forms.ChoiceField(
@@ -74,6 +74,18 @@ class PriceFieldsMixin(forms.Form):
         required=False, initial=True, label="Covered by School tuition",
         widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
     )
+    #: Whole seminar or per class attended (task #811). Optional on the form
+    #: and coerced to "whole", so a POST that omits it changes nothing.
+    billing_mode = forms.ChoiceField(
+        required=False, label="Billing",
+        choices=Event.BillingMode.choices,
+        widget=forms.RadioSelect, initial=Event.BillingMode.WHOLE,
+        help_text=(
+            "Per class bills each person for the classes they attend, a few "
+            "days after each class. It can't be changed once people have "
+            "registered."
+        ),
+    )
 
     def init_price_fields(self, event):
         """Prefill from ``event`` and decide whether the block is editable.
@@ -99,6 +111,11 @@ class PriceFieldsMixin(forms.Form):
         self.initial.setdefault("fee_sliding_min", spec.sliding_min)
         self.initial.setdefault("fee_sliding_max", spec.sliding_max)
         self.initial.setdefault("tuition_covers", spec.tuition_covers)
+        self.initial.setdefault(
+            "billing_mode",
+            Event.BillingMode.PER_CLASS if spec.per_class
+            else Event.BillingMode.WHOLE,
+        )
 
     def clean_price(self, data):
         """Normalize the price inputs into ``data["price"]``.
@@ -141,6 +158,7 @@ class PriceFieldsMixin(forms.Form):
         data["price"] = PriceSpec(
             amount=amount, sliding_min=smin, sliding_max=smax,
             tuition_covers=bool(data.get("tuition_covers")),
+            per_class=data.get("billing_mode") == Event.BillingMode.PER_CLASS,
         )
         return data
 
@@ -372,8 +390,12 @@ def _person_label(user) -> str:
 class PricingCodeForm(forms.ModelForm):
     """Faculty-issued pricing code (PROG-8 / REG-17)."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, event=None, **kwargs):
         super().__init__(*args, **kwargs)
+        #: Set for a per-class event (task #811): amounts read per class, and a
+        #: payment plan has nothing to split, since classes are billed as
+        #: they happen.
+        self.per_class = bool(event is not None and event.is_per_class)
         # The field faculty reach for when extending a discount or a scholarship
         # to a named person: it defaulted to every account in the database,
         # unordered and labelled by bare email (task #495).
@@ -423,6 +445,21 @@ class PricingCodeForm(forms.ModelForm):
         data = super().clean()
         mode = data.get("pricing_mode")
         amount = data.get("amount_or_percent")
+
+        if self.per_class:
+            if mode == PricingCode.Mode.FULL_PRICE:
+                self.add_error(
+                    "pricing_mode",
+                    "This seminar bills per class, so there's no payment plan "
+                    "to carry. Choose a discount or a fixed price per class.",
+                )
+                return data
+            if (data.get("installments") or 1) > 1:
+                self.add_error(
+                    "installments",
+                    "This seminar bills per class, so each class is paid as "
+                    "it's billed. Leave this at 1.",
+                )
 
         if mode == PricingCode.Mode.FULL_PRICE:
             # No discount to state — the code exists to carry the schedule.
@@ -514,6 +551,7 @@ class EventProposalForm(forms.ModelForm):
             "location_kind", "location", "contact",
             "continues_seminar", "faculty",
             "fee_amount", "fee_sliding_min", "fee_sliding_max", "tuition_covers",
+            "billing_mode",
             "offers_ce", "ce_credits", "ce_credits_basis",
             "sched_frequency", "sched_start_time", "sched_end_time",
             "speaker_arrangement", "honoraria_estimate",
@@ -615,6 +653,17 @@ class EventProposalForm(forms.ModelForm):
         )
         self.fields["sched_start_time"].label = "Start time"
         self.fields["sched_end_time"].label = "End time"
+        # A choices+default field is required on a ModelForm unless told
+        # otherwise; existing POSTs omit it (coerced in clean_billing_mode).
+        self.fields["billing_mode"].required = False
+        self.fields["billing_mode"].label = "Billing"
+        self.fields["billing_mode"].widget = forms.RadioSelect(
+            choices=Event.BillingMode.choices,
+        )
+        self.fields["billing_mode"].help_text = (
+            "Per class bills each person for the classes they attend, a few "
+            "days after each class, at the fee above per class."
+        )
         self.fields["contact"].label = "Contact email"
         self.fields["contact"].help_text = (
             "An additional contact for this proposal, besides your own account email."
@@ -720,6 +769,9 @@ class EventProposalForm(forms.ModelForm):
             dt = timezone.make_aware(dt, timezone.get_current_timezone())
         return dt
 
+    def clean_billing_mode(self):
+        return self.cleaned_data.get("billing_mode") or Event.BillingMode.WHOLE
+
     def clean(self):
         data = super().clean()
         import datetime as _dt
@@ -770,6 +822,9 @@ class EventProposalForm(forms.ModelForm):
         smin, smax = data.get("fee_sliding_min"), data.get("fee_sliding_max")
         if fee_type == "free":
             data["fee_amount"] = data["fee_sliding_min"] = data["fee_sliding_max"] = None
+            # A free event has no per-class fee to bill (task #811).
+            data["billing_mode"] = Event.BillingMode.WHOLE
+            self.instance.billing_mode = Event.BillingMode.WHOLE
         elif fee_type == "fixed":
             data["fee_sliding_min"] = data["fee_sliding_max"] = None
             if require and data.get("fee_amount") is None:

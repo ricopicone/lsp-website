@@ -47,6 +47,16 @@
   <label class="flex items-center gap-2 cursor-pointer text-sm">
     {{ form.tuition_covers }} <span>{{ form.tuition_covers.label }}</span>
   </label>
+  <div class="space-y-1">
+    <span class="block text-xs text-base-content/60">{{ form.billing_mode.label }}</span>
+    {% for choice in form.billing_mode %}
+    <label class="flex items-center gap-2 cursor-pointer text-sm">
+      {{ choice.tag }} <span>{{ choice.choice_label }}</span>
+    </label>
+    {% endfor %}
+    <p class="text-xs text-base-content/50">{{ form.billing_mode.help_text }}</p>
+    {% if form.billing_mode.errors %}<p class="text-error text-xs mt-1">{{ form.billing_mode.errors|join:", " }}</p>{% endif %}
+  </div>
   <p class="text-xs text-base-content/50">
     Faculty and conveners may set alternative rates or waive the fee for
     individual students who indicate financial need.

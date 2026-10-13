@@ -20,6 +20,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models.functions import Lower
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.storage import private_storage
@@ -369,6 +370,14 @@ class Event(models.Model):
         INSITE = "insite", _("In the site's video room")
         EXTERNAL = "external", _("External link (Zoom, etc.)")
 
+    class BillingMode(models.TextChoices):
+        """Whole seminar, or per class attended (REG-6, task #811). Part of the
+        price: proposed, approved by the PC, and changed only along the route
+        a price change travels (``events.price_spec``)."""
+
+        WHOLE = "whole", _("Whole seminar")
+        PER_CLASS = "per_class", _("Per class attended")
+
     class Status(models.TextChoices):
         DRAFT = "draft", _("Draft")
         OPEN = "open", _("Open for registration")
@@ -524,6 +533,21 @@ class Event(models.Model):
             "still waiting."
         ),
     )
+    billing_mode = models.CharField(
+        max_length=20,
+        choices=BillingMode.choices,
+        default=BillingMode.WHOLE,
+        help_text=(
+            "Per class bills each registrant for the classes they attend, a few "
+            "days after each class. Part of the price; it locks once anyone is "
+            "registered."
+        ),
+    )
+    per_class_since = models.DateTimeField(
+        null=True, blank=True, editable=False,
+        help_text="When this event became per-class (task #811). Only classes "
+        "ending after this are recorded and billed.",
+    )
     visibility = models.CharField(
         max_length=20,
         choices=Visibility.choices,
@@ -646,6 +670,11 @@ class Event(models.Model):
 
     #: Event types whose approved instances route content edits through review.
     REVIEW_LOOP_TYPES = (Type.SEMINAR, Type.READING_GROUP, Type.SPECIAL_EVENT)
+
+    @property
+    def is_per_class(self) -> bool:
+        """Whether registrants are billed per class attended (task #811)."""
+        return self.billing_mode == self.BillingMode.PER_CLASS
 
     def requires_change_review(self) -> bool:
         """Whether faculty edits to this event's content should offer the
@@ -1158,6 +1187,72 @@ class Session(models.Model):
             raise ValidationError({"end_at": "end_at must be after start_at."})
 
 
+class ClassAttendance(models.Model):
+    """Whether one per-class registrant attended one class (task #811).
+
+    Recorded shortly after the class ends (detected from the site's room where
+    the event meets there, otherwise presumed present), correctable for a few
+    days, then billed: a present row becomes one ``payments.Charge`` linked
+    back through ``Charge.class_attendance``. See ``events.per_class``.
+    """
+
+    class Source(models.TextChoices):
+        DETECTED = "detected", _("Detected in the room")
+        PRESUMED = "presumed", _("Presumed present")
+        FACULTY = "faculty", _("Marked by faculty")
+        STUDENT = "student", _("Marked by the member")
+
+    class Outcome(models.TextChoices):
+        PENDING = "", _("Not billed yet")
+        CHARGED = "charged", _("Billed")
+        ABSENT = "absent", _("Absent, not billed")
+        COVERED = "covered", _("Covered by tuition")
+        COMPED = "comped", _("Comped")
+        NO_CHARGE = "no_charge", _("No charge")
+
+    registration = models.ForeignKey(
+        "registrations.Registration", on_delete=models.CASCADE,
+        related_name="class_attendance",
+    )
+    session = models.ForeignKey(
+        Session, on_delete=models.CASCADE, related_name="class_attendance",
+    )
+    present = models.BooleanField(default=True)
+    source = models.CharField(max_length=20, choices=Source.choices)
+    #: Set once faculty mark the row; the member can no longer change it.
+    faculty_locked = models.BooleanField(default=False)
+    marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        blank=True, related_name="+",
+    )
+    recorded_at = models.DateTimeField(default=timezone.now)
+    billed_at = models.DateTimeField(null=True, blank=True)
+    outcome = models.CharField(
+        max_length=20, choices=Outcome.choices, default=Outcome.PENDING,
+        blank=True,
+    )
+    #: When the member was told this class was billed (weekly batch).
+    notified_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, help_text="Append-only audit trail.")
+
+    class Meta:
+        ordering = ("session__start_at", "registration_id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("registration", "session"),
+                name="class_attendance_one_per_registration_session",
+            ),
+        ]
+
+    def __str__(self):
+        mark = "present" if self.present else "absent"
+        return f"{self.registration.user} @ {self.session} ({mark})"
+
+    def add_note(self, text: str) -> None:
+        stamp = timezone.localtime().strftime("%Y-%m-%d %H:%M")
+        self.notes = f"{self.notes}\n[{stamp}] {text}".strip()
+
+
 class Audience(models.TextChoices):
     """Pricing audience — Profile.Role values plus ``all``."""
 
@@ -1468,6 +1563,12 @@ class EventProposal(models.Model):
         help_text="Tuition-current members attend at no charge. Always on for "
         "seminars and reading groups.",
     )
+    billing_mode = models.CharField(
+        max_length=20,
+        choices=Event.BillingMode.choices,
+        default=Event.BillingMode.WHOLE,
+        help_text="Whole seminar, or per class attended (task #811).",
+    )
 
     # ---- Seminar / reading-group proposal-guide fields ----
     offers_ce = models.BooleanField(
@@ -1596,6 +1697,7 @@ class EventProposal(models.Model):
             sliding_min=self.fee_sliding_min,
             sliding_max=self.fee_sliding_max,
             tuition_covers=self.tuition_covers,
+            per_class=self.billing_mode == Event.BillingMode.PER_CLASS,
         ))
 
     def _build_meeting_series(self, event, reviewer):

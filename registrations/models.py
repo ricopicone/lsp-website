@@ -60,6 +60,12 @@ class Registration(models.Model):
         decimal_places=2,
         help_text="Amount due — resolved at registration time.",
     )
+    per_class_rate = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Set on a per-class event (task #811): what each class "
+        "attended costs this registrant. quoted_amount stays 0, and the "
+        "classes are billed one by one (events.per_class).",
+    )
     quoted_explanation = models.CharField(
         max_length=500,
         blank=True,
@@ -193,6 +199,13 @@ class Registration(models.Model):
                 ).update(uses_remaining=F("uses_remaining") + 1)
 
         return issued
+
+    @property
+    def is_per_class(self) -> bool:
+        """Billed per class attended (task #811). Every money path keyed on
+        ``quoted_amount`` sees a $0 enrolled row; the classes are billed by
+        ``events.per_class`` through their own charges."""
+        return self.per_class_rate is not None
 
     @property
     def on_payment_plan(self) -> bool:

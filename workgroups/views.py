@@ -401,7 +401,7 @@ def workgroup_detail(request, slug):
         ).select_related("user")
         from events.forms import PricingCodeForm
 
-        context["pricing_code_form"] = PricingCodeForm()
+        context["pricing_code_form"] = PricingCodeForm(event=primary_event)
         context["existing_codes"] = primary_event.pricing_codes.order_by("-created_at")
     elif active in ("discuss", "chat"):
         from parletre.views import channel_inline_context

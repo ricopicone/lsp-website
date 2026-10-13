@@ -380,7 +380,7 @@ def event_detail(request, slug: str):
         context["pending_registrations"] = event.registrations.filter(
             status=Registration.Status.PENDING_APPROVAL
         ).select_related("user")
-        context["pricing_code_form"] = PricingCodeForm()
+        context["pricing_code_form"] = PricingCodeForm(event=event)
         context["existing_codes"] = event.pricing_codes.order_by("-created_at")
         context["room_invite_panel"] = _room_invite_panel(request, event)
 
@@ -965,12 +965,18 @@ def event_generate_code(request, slug: str):
     if request.method != "POST":
         return redirect(_faculty_view_url(event))
 
-    form = PricingCodeForm(request.POST)
+    form = PricingCodeForm(request.POST, event=event)
     if form.is_valid():
         code = form.save(commit=False)
         code.event = event
         code.issued_by = request.user
         code.save()
+    else:
+        # The form posts from a panel and redirects back, so an error left on
+        # the bound form was never seen; say it instead.
+        for errors in form.errors.values():
+            for error in errors:
+                messages.error(request, error)
 
     return redirect(_faculty_view_url(event))
 
