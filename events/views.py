@@ -103,6 +103,7 @@ def event_summary_context(event, user) -> dict:
             Registration.Status.COMPED,
         )
     )
+    from events.joining import access_info_visible
     from events.permissions import can_edit_event
     from video.services import daily_enabled, presence_names, room_participant_count
 
@@ -186,8 +187,8 @@ def event_summary_context(event, user) -> dict:
             else "signin" if not getattr(user, "is_authenticated", False)
             else None
         ),
-        "show_access_info": bool(event.access_info) and (
-            has_paid_registration or can_host or admitted_as_member
+        "show_access_info": access_info_visible(
+            event, user, has_paid_registration=has_paid_registration,
         ),
         "event_room_live": bool(room_participants),
         "event_room_participants": room_participants,

@@ -2399,7 +2399,12 @@ Done (see `git log` for specifics):
   `events/test_confirm_dialog_roundtrip.py` now fetches the page, parses it,
   submits CRLF, and posts the dialog's own hidden fields back, the way a
   browser does. The two template-grep tests for the exception list are gone,
-  superseded by that. No migration.
+  superseded by that. No migration. **Follow-up:** the seminar's Workspace
+  **Meet tab** now says where class meets when the offering is on Zoom
+  (`joining_details(...).kind == "external"`), with the link for whoever the
+  event page would show it to. That rule is now one predicate,
+  `events.joining.access_info_visible`, used by both surfaces; the group's own
+  room stays on the tab for meeting outside class.
 
 - **Past standalone events get a page** (task #814). `/events/` lists only
   standalone events that haven't ended (special events, Days of Assembly,

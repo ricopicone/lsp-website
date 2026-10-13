@@ -21,10 +21,22 @@ every Join open the same room.{% endcomment %}
   </div>
   {% endif %}
 
+  {% if external_event %}
+  <div class="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-2">
+    <h3 class="font-medium text-base-content">Where class meets</h3>
+    <p class="text-sm text-base-content/70">This {{ external_event.get_event_type_display|lower }} meets outside the site, on Zoom or another service.</p>
+    {% if external_access_visible %}
+    <p class="whitespace-pre-wrap text-sm text-base-content">{{ external_event.access_info|urlize }}</p>
+    {% else %}
+    <p class="text-sm text-base-content/60">The meeting link appears here once your registration is complete.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <div class="rounded-lg border border-base-300 bg-base-100 p-5 flex items-center justify-between gap-3">
     <div>
       <h3 class="font-medium text-base-content">Meeting room</h3>
-      <p class="text-sm text-base-content/60">Start a video meeting in your browser — no app to install.</p>
+      <p class="text-sm text-base-content/60">{% if external_event %}The group's own room in the site, for meeting outside class.{% else %}Start a video meeting in your browser, no app to install.{% endif %}</p>
     </div>
     <div class="flex flex-col items-end gap-1">
       <a href="{% url 'video:workgroup_room' workgroup.slug %}" class="btn btn-primary btn-sm">Meet Now</a>

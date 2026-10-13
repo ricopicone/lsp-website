@@ -468,6 +468,18 @@ def workgroup_detail(request, slug):
             ),
         )
 
+        # An offering that meets on Zoom or another service says so here too,
+        # with the link for whoever the event page would show it to (task #817);
+        # the group's own room stays for meeting outside class.
+        if primary_event is not None:
+            from events.joining import access_info_visible, joining_details
+
+            if joining_details(primary_event).kind == "external":
+                context["external_event"] = primary_event
+                context["external_access_visible"] = access_info_visible(
+                    primary_event, request.user
+                )
+
         now = _tz.now()
         # Upcoming + still-ongoing meetings, soonest first (ongoing has a
         # future ends_at, so the gte-on-ends_at filter keeps it in the list).
