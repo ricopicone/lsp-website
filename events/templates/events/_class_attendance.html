@@ -1,0 +1,51 @@
+{% comment %}Faculty Attendance section for a per-class seminar (task #811).
+Expects: event, class_attendance (per_class.faculty_context), request.{% endcomment %}
+<div class="space-y-3" id="attendance">
+  <h3 class="font-serif text-lg text-base-content">Attendance</h3>
+  <p class="text-sm text-base-content/70">
+    Each person is billed {% if event.uses_insite_room and event.format == "online" %}for the classes they joined in the site's room{% else %}for every class unless marked absent{% endif %}.
+    You and they can correct a class for three days after it ends; then it's billed.
+    For two weeks after that, you can still mark someone absent if they haven't paid for the class yet.
+  </p>
+  {% if class_attendance %}
+  {% for cls in class_attendance %}
+  <details class="rounded-lg border border-base-300"{% if forloop.first %} open{% endif %}>
+    <summary class="cursor-pointer px-4 py-2 text-sm">
+      <span class="font-medium">{{ cls.day|date:"D, M j" }}</span>
+      <span class="text-base-content/60">· {{ cls.present }} of {{ cls.rows|length }} present</span>
+    </summary>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead><tr><th>Name</th><th>Attendance</th><th>Billing</th><th></th></tr></thead>
+        <tbody>
+        {% for row in cls.rows %}
+          <tr>
+            <td>{{ row.att.registration.user.get_full_name|default:row.att.registration.user.email }}</td>
+            <td>
+              <span class="badge badge-sm {% if row.att.present %}badge-success{% else %}badge-ghost{% endif %}">{% if row.att.present %}Present{% else %}Absent{% endif %}</span>
+              <span class="text-xs text-base-content/60">{{ row.att.get_source_display }}</span>
+            </td>
+            <td class="text-xs text-base-content/70 whitespace-nowrap">
+              {% if row.billed %}{{ row.att.get_outcome_display }}{% else %}Correctable until {{ row.closes|date:"M j, g:i a" }}{% endif %}
+            </td>
+            <td class="text-right">
+              {% if row.editable %}
+              <form method="post" action="{% url 'events:attendance_mark' row.att.pk %}" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="present" value="{% if row.att.present %}0{% else %}1{% endif %}">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}#attendance">
+                <button type="submit" class="btn btn-ghost btn-xs">Mark {% if row.att.present %}absent{% else %}present{% endif %}</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endfor %}
+  {% else %}
+  <p class="text-sm text-base-content/60">Attendance appears here shortly after each class ends.</p>
+  {% endif %}
+</div>

@@ -417,3 +417,130 @@ def approval_reminder_inapp(event, pending_count: int) -> None:
             title=f"{pending_count} registration(s) await your approval — {event.title}",
             url=url, target=event, email=False, dedupe=True,
         )
+
+
+# --- Per-class seminars (task #811) ------------------------------------------
+
+
+def _class_label(att) -> str:
+    from django.utils import timezone
+
+    day = timezone.localdate(att.session.start_at)
+    return f"{day:%b} {day.day}"
+
+
+def _attendance_url(event) -> str:
+    if event.workgroup_id and event.event_type in event.ANNUAL_PROGRAM_TYPES:
+        return event.workgroup.get_absolute_url() + "?tab=roster#attendance"
+    return reverse("events:detail", args=[event.slug]) + "?view=faculty#attendance"
+
+
+def _classes_url(reg) -> str:
+    return _confirm_url(reg) + "#classes"
+
+
+def class_attendance_recorded(session, rows, *, detect_failed=False) -> None:
+    """After a per-class class: one note to the people running it, one to each
+    registrant, each saying what was recorded and until when it can be
+    corrected."""
+    from django.utils import timezone
+
+    from events.per_class import window_closes
+    from events.permissions import offering_leads
+
+    event = session.event
+    first = rows[0]
+    day = _class_label(first)
+    closes = timezone.localtime(window_closes(first))
+    by = f"{closes:%a %b} {closes.day}"
+    present = sum(1 for r in rows if r.present)
+    lead_body = (
+        f"Attendance for the {day} class of {event.title} is recorded: "
+        f"{present} of {len(rows)} present. Correct it by {by}; after that "
+        "each class is billed."
+    )
+    if detect_failed:
+        lead_body += (
+            " The site couldn't read who was in the room, so everyone was "
+            "marked present."
+        )
+    for lead in offering_leads(event):
+        notify(
+            lead, Category.CLASS_ATTENDANCE,
+            title=f"Attendance to check: {event.title}, {day}",
+            body=lead_body, url=_attendance_url(event), target=session,
+            dedupe=True,
+        )
+    for att in rows:
+        reg = att.registration
+        mark = "present" if att.present else "absent"
+        notify(
+            reg.user, Category.CLASS_ATTENDANCE,
+            title=f"{event.title}, {day}: marked {mark}",
+            body=(
+                f"You were marked {mark} for the {day} class of {event.title}. "
+                f"If that's wrong, correct it by {by}. Each class you attend "
+                f"is billed at ${reg.per_class_rate}."
+            ),
+            url=_classes_url(reg), target=att, dedupe=True,
+        )
+
+
+def classes_billed(reg, charges) -> None:
+    """The weekly note: classes billed since the last one, and the balance.
+    Totals the charges themselves, so a rate changed since (a code) or a
+    charge voided since (the treasurer) reads correctly."""
+    from events.per_class import open_balance
+
+    days = ", ".join(_class_label(c.class_attendance) for c in charges)
+    total = sum((c.amount for c in charges), 0)
+    balance = open_balance(reg)
+    one = len(charges) == 1
+    noun = "class" if one else "classes"
+    notify(
+        reg.user, Category.CLASS_BILLING,
+        title=f"{reg.event.title}: {len(charges)} {noun} billed",
+        body=(
+            f"{reg.event.title}: the {noun} of {days} {'was' if one else 'were'} "
+            f"billed, ${total}. Your open balance for this seminar is ${balance}."
+        ),
+        url=_classes_url(reg), target=reg,
+    )
+
+
+def class_rebilled(att, *, removed: bool) -> None:
+    """Faculty changed a class after it was billed."""
+    from events.per_class import open_balance
+
+    reg = att.registration
+    day = _class_label(att)
+    what = "removed from your bill" if removed else "added to your bill"
+    notify(
+        reg.user, Category.CLASS_BILLING,
+        title=f"{reg.event.title}, {day}: {what}",
+        body=(
+            f"Your faculty updated your attendance for the {day} class of "
+            f"{reg.event.title}, so it was {what}. Your open balance for this "
+            f"seminar is ${open_balance(reg)}."
+        ),
+        url=_classes_url(reg), target=att,
+    )
+
+
+def converted_to_per_class(reg, *, paid, since) -> None:
+    """A whole-seminar registration moved to per-class billing (task #810)."""
+    credit = (
+        f" The ${paid} you already paid counts toward your classes."
+        if paid else ""
+    )
+    notify(
+        reg.user, Category.REGISTRATION_STATUS,
+        title=f"{reg.event.title} is now billed per class",
+        body=(
+            f"{reg.event.title} is billed per class from {since:%b} {since.day}: "
+            f"${reg.per_class_rate} for each class you attend, billed a few days "
+            f"after the class.{credit} You're still registered, and there's "
+            "nothing you need to do."
+        ),
+        url=_classes_url(reg), target=reg,
+    )

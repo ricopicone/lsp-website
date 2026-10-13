@@ -1,0 +1,53 @@
+{% comment %}"Your classes" for a per-class registration (task #811).
+Expects: registration, classes (per_class.member_context), request.{% endcomment %}
+<section class="space-y-3" id="classes">
+  <h2 class="font-serif text-xl text-base-content">Your classes</h2>
+  <p class="text-sm text-base-content/70">
+    Each class you attend is billed at ${{ registration.per_class_rate }}, three days after the class.
+    Until then you can correct your attendance here.
+  </p>
+  {% if classes.rows %}
+  <div class="overflow-x-auto rounded-lg border border-base-300">
+    <table class="table table-sm">
+      <thead><tr><th>Class</th><th>Attendance</th><th>Billing</th><th></th></tr></thead>
+      <tbody>
+      {% for row in classes.rows %}
+        <tr>
+          <td class="whitespace-nowrap">{{ row.day|date:"D, M j" }}</td>
+          <td>{% if row.att.present %}Present{% else %}Absent{% endif %}</td>
+          <td class="text-xs text-base-content/70">
+            {% if row.billed %}{{ row.att.get_outcome_display }}{% else %}You can correct this until {{ row.closes|date:"M j, g:i a" }}{% endif %}
+          </td>
+          <td class="text-right">
+            {% if row.editable %}
+            <form method="post" action="{% url 'events:attendance_mark' row.att.pk %}" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="present" value="{% if row.att.present %}0{% else %}1{% endif %}">
+              <input type="hidden" name="next" value="{{ request.get_full_path }}#classes">
+              <button type="submit" class="btn btn-ghost btn-xs">I was {% if row.att.present %}absent{% else %}there{% endif %}</button>
+            </form>
+            {% elif row.att.faculty_locked and not row.billed %}
+            <span class="text-xs text-base-content/50">Set by your faculty</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-sm text-base-content/60">Your classes appear here shortly after each one ends.</p>
+  {% endif %}
+
+  {% if classes.balance > 0 %}
+  <div class="flex flex-wrap items-center gap-3">
+    <span class="text-sm">Open balance: <span class="font-medium">${{ classes.balance }}</span></span>
+    <form method="post" action="{% url 'registrations:pay_classes' registration.id %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary btn-sm">Pay ${{ classes.balance }} →</button>
+    </form>
+  </div>
+  {% elif classes.rows %}
+  <p class="text-sm text-base-content/70">Nothing to pay right now.</p>
+  {% endif %}
+</section>

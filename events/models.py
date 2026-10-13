@@ -20,6 +20,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models.functions import Lower
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.storage import private_storage
@@ -369,6 +370,14 @@ class Event(models.Model):
         INSITE = "insite", _("In the site's video room")
         EXTERNAL = "external", _("External link (Zoom, etc.)")
 
+    class BillingMode(models.TextChoices):
+        """Whole seminar, or per class attended (REG-6, task #811). Part of the
+        price: proposed, approved by the PC, and changed only along the route
+        a price change travels (``events.price_spec``)."""
+
+        WHOLE = "whole", _("Whole seminar")
+        PER_CLASS = "per_class", _("Per class attended")
+
     class Status(models.TextChoices):
         DRAFT = "draft", _("Draft")
         OPEN = "open", _("Open for registration")
@@ -533,6 +542,16 @@ class Event(models.Model):
             "still waiting."
         ),
     )
+    billing_mode = models.CharField(
+        max_length=20,
+        choices=BillingMode.choices,
+        default=BillingMode.WHOLE,
+        help_text=(
+            "Per class bills each registrant for the classes they attend, a few "
+            "days after each class. Part of the price; it locks once anyone is "
+            "registered."
+        ),
+    )
     visibility = models.CharField(
         max_length=20,
         choices=Visibility.choices,
@@ -655,6 +674,17 @@ class Event(models.Model):
 
     #: Event types whose approved instances route content edits through review.
     REVIEW_LOOP_TYPES = (Type.SEMINAR, Type.READING_GROUP, Type.SPECIAL_EVENT)
+
+    @property
+    def is_per_class(self) -> bool:
+        """Whether registrants are billed per class attended (task #811)."""
+        return self.billing_mode == self.BillingMode.PER_CLASS
+
+    @property
+    def has_per_class_registrants(self) -> bool:
+        """Whether anyone here is billed per class, by the event's mode or a
+        per-class code (task #811)."""
+        return self.registrations.filter(per_class_rate__isnull=False).exists()
 
     def requires_change_review(self) -> bool:
         """Whether faculty edits to this event's content should offer the
@@ -1177,6 +1207,72 @@ class Session(models.Model):
             raise ValidationError({"end_at": "end_at must be after start_at."})
 
 
+class ClassAttendance(models.Model):
+    """Whether one per-class registrant attended one class (task #811).
+
+    Recorded shortly after the class ends (detected from the site's room where
+    the event meets there, otherwise presumed present), correctable for a few
+    days, then billed: a present row becomes one ``payments.Charge`` linked
+    back through ``Charge.class_attendance``. See ``events.per_class``.
+    """
+
+    class Source(models.TextChoices):
+        DETECTED = "detected", _("Detected in the room")
+        PRESUMED = "presumed", _("Presumed present")
+        FACULTY = "faculty", _("Marked by faculty")
+        STUDENT = "student", _("Marked by the member")
+
+    class Outcome(models.TextChoices):
+        PENDING = "", _("Not billed yet")
+        CHARGED = "charged", _("Billed")
+        ABSENT = "absent", _("Absent, not billed")
+        COVERED = "covered", _("Covered by tuition")
+        COMPED = "comped", _("Comped")
+        NO_CHARGE = "no_charge", _("No charge")
+
+    registration = models.ForeignKey(
+        "registrations.Registration", on_delete=models.CASCADE,
+        related_name="class_attendance",
+    )
+    session = models.ForeignKey(
+        Session, on_delete=models.CASCADE, related_name="class_attendance",
+    )
+    present = models.BooleanField(default=True)
+    source = models.CharField(max_length=20, choices=Source.choices)
+    #: Set once faculty mark the row; the member can no longer change it.
+    faculty_locked = models.BooleanField(default=False)
+    marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        blank=True, related_name="+",
+    )
+    recorded_at = models.DateTimeField(default=timezone.now)
+    billed_at = models.DateTimeField(null=True, blank=True)
+    outcome = models.CharField(
+        max_length=20, choices=Outcome.choices, default=Outcome.PENDING,
+        blank=True,
+    )
+    #: When the member was told this class was billed (weekly batch).
+    notified_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, help_text="Append-only audit trail.")
+
+    class Meta:
+        ordering = ("session__start_at", "registration_id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("registration", "session"),
+                name="class_attendance_one_per_registration_session",
+            ),
+        ]
+
+    def __str__(self):
+        mark = "present" if self.present else "absent"
+        return f"{self.registration.user} @ {self.session} ({mark})"
+
+    def add_note(self, text: str) -> None:
+        stamp = timezone.localtime().strftime("%Y-%m-%d %H:%M")
+        self.notes = f"{self.notes}\n[{stamp}] {text}".strip()
+
+
 class Audience(models.TextChoices):
     """Pricing audience — Profile.Role values plus ``all``."""
 
@@ -1297,6 +1393,12 @@ class PricingCode(models.Model):
         null=True,
         blank=True,
         help_text="Decremented on successful redemption. Null when max_uses is null.",
+    )
+    per_class = models.BooleanField(
+        default=False,
+        help_text="Enrolls whoever redeems it at this price per class attended, "
+        "rather than for the whole seminar (task #811). On a per-class event "
+        "every code is per class.",
     )
     installments = models.PositiveSmallIntegerField(
         default=1,
@@ -1492,6 +1594,12 @@ class EventProposal(models.Model):
         help_text="Fee to be announced: the event mints with no price tier and "
         "registration not yet open (special events only, task #769).",
     )
+    billing_mode = models.CharField(
+        max_length=20,
+        choices=Event.BillingMode.choices,
+        default=Event.BillingMode.WHOLE,
+        help_text="Whole seminar, or per class attended (task #811).",
+    )
 
     # ---- Seminar / reading-group proposal-guide fields ----
     offers_ce = models.BooleanField(
@@ -1621,6 +1729,7 @@ class EventProposal(models.Model):
             sliding_max=self.fee_sliding_max,
             tuition_covers=self.tuition_covers,
             tba=self.fee_tba,
+            per_class=self.billing_mode == Event.BillingMode.PER_CLASS,
         ))
 
     def _build_meeting_series(self, event, reviewer):
@@ -1996,7 +2105,18 @@ class EventChangeRequest(models.Model):
         if scalar:
             self.event.save(update_fields=scalar)
         if "price" in self.changed_fields:
-            apply_to_event(self.event, PriceSpec.from_dict(self.proposed_price))
+            import dataclasses
+
+            from .price_spec import has_active_registrations
+
+            spec = PriceSpec.from_dict(self.proposed_price)
+            if (spec.per_class != self.event.is_per_class
+                    and has_active_registrations(self.event)):
+                # People registered while the change waited for review: the
+                # billing mode is locked now, so the rest of the price still
+                # applies and the mode stays as they registered under (#811).
+                spec = dataclasses.replace(spec, per_class=self.event.is_per_class)
+            apply_to_event(self.event, spec)
         self.applied_at = timezone.now()
 
     def approve(self, reviewer):

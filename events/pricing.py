@@ -6,9 +6,10 @@ pricing code, return the amount due plus a human-readable explanation
 
 This is one of the two places where a bug costs money (the other is the
 Stripe webhook handler), so the resolver is a single function with
-exhaustive unit tests. Per-class registration in Phase 1 is handled by
-calling the resolver once per (session, tier) pair and summing — keeps
-this function single-purpose and the tests bounded.
+exhaustive unit tests. On a per-class event (task #811) the amount it
+resolves is the rate per class; whether tuition covers a given class is
+decided when that class is billed (``events.per_class``), so those callers
+pass ``ignore_tuition=True``.
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ def resolve_price(
     tier: PriceTier,
     sliding_amount: Decimal | None = None,
     pricing_code: PricingCode | None = None,
+    ignore_tuition: bool = False,
 ) -> PriceResolution:
     """Resolve the amount a user owes for ``tier``.
 
@@ -61,7 +63,11 @@ def resolve_price(
     if pricing_code is not None:
         return _apply_code(pricing_code, user, tier, sliding_amount)
 
-    if tier.covered_by_tuition and _is_tuition_paying(user, tier):
+    if (
+        not ignore_tuition
+        and tier.covered_by_tuition
+        and _is_tuition_paying(user, tier)
+    ):
         return PriceResolution(
             amount=ZERO,
             explanation="Covered by tuition (tuition-paying member, REG-4).",

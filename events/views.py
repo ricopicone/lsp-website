@@ -380,7 +380,10 @@ def event_detail(request, slug: str):
         context["pending_registrations"] = event.registrations.filter(
             status=Registration.Status.PENDING_APPROVAL
         ).select_related("user")
-        context["pricing_code_form"] = PricingCodeForm()
+        context["pricing_code_form"] = PricingCodeForm(event=event)
+        if event.is_per_class or event.has_per_class_registrants:
+            from .per_class import faculty_context
+            context["class_attendance"] = faculty_context(event)
         context["existing_codes"] = event.pricing_codes.order_by("-created_at")
         context["room_invite_panel"] = _room_invite_panel(request, event)
 
@@ -848,6 +851,41 @@ def event_registration_status(request, slug: str):
 
 @login_required
 @require_POST
+def class_attendance_mark(request, pk: int):
+    """Mark one per-class registrant present or absent for one class (task
+    #811). Faculty and conveners (``can_edit_event``) mark anyone; a member
+    marks only their own row. The rules live in ``per_class.mark``."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    from . import per_class
+    from .models import ClassAttendance
+
+    att = get_object_or_404(
+        ClassAttendance.objects.select_related("registration__event", "session"),
+        pk=pk,
+    )
+    event = att.registration.event
+    as_faculty = can_edit_event(request.user, event)
+    if not as_faculty and att.registration.user_id != request.user.pk:
+        return HttpResponseForbidden("You can't change this attendance.")
+    present = request.POST.get("present") == "1"
+    try:
+        messages.success(request, per_class.mark(
+            att, present=present, by=request.user, as_faculty=as_faculty,
+        ))
+    except per_class.AttendanceError as exc:
+        messages.error(request, str(exc))
+
+    nxt = request.POST.get("next") or ""
+    if nxt and url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return redirect(nxt)
+    return redirect("registrations:confirm", reg_id=att.registration_id)
+
+
+@login_required
+@require_POST
 def event_edit_schedule(request, slug: str):
     """Faculty/PC/staff edit the sessions (date + start/end + location) of a
     standalone one-off event. Isolated from the content edit form + review loop
@@ -969,12 +1007,20 @@ def event_generate_code(request, slug: str):
     if request.method != "POST":
         return redirect(_faculty_view_url(event))
 
-    form = PricingCodeForm(request.POST)
+    form = PricingCodeForm(request.POST, event=event)
     if form.is_valid():
         code = form.save(commit=False)
         code.event = event
         code.issued_by = request.user
+        if event.is_per_class:
+            code.per_class = True
         code.save()
+    else:
+        # The form posts from a panel and redirects back, so an error left on
+        # the bound form was never seen; say it instead.
+        for errors in form.errors.values():
+            for error in errors:
+                messages.error(request, error)
 
     return redirect(_faculty_view_url(event))
 

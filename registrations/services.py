@@ -57,11 +57,83 @@ def apply_resolution(registration, code, resolution):
         notify_payments.registration_confirmed(registration)
 
 
+def apply_per_class_code(registration, code, resolution):
+    """Change a per-class registration's rate under a resolved code (task #811).
+
+    The per-class twin of :func:`apply_resolution`. A per-class registration is
+    already enrolled at $0, so there is nothing to re-quote, settle or expire:
+    the code changes what each class *not yet billed* costs, and consumes a
+    use. Classes already billed keep their charges (the treasurer's call).
+    """
+    from events.models import PricingCode
+
+    if resolution.installments > 1:
+        raise ValueError("A per-class registration has no payment plan.")
+    with transaction.atomic():
+        registration.per_class_rate = resolution.amount
+        registration.pricing_code = code
+        registration.staff_notes = (
+            f"{registration.staff_notes}\n[{timezone.localdate().isoformat()}] "
+            f"Per-class rate now ${resolution.amount} via code {code.code}."
+        ).strip()
+        registration.save(update_fields=(
+            "per_class_rate", "pricing_code", "staff_notes",
+        ))
+        if code.max_uses is not None:
+            PricingCode.objects.filter(pk=code.pk).update(
+                uses_remaining=F("uses_remaining") - 1
+            )
+
+
+def switch_to_per_class(registration, code, resolution):
+    """Move an awaiting-payment whole-seminar registration onto a per-class
+    code (task #811): enrolled now at $0, billed per class attended from now
+    on. Any open Checkout for the whole-seminar fee is expired first, or a
+    stale tab could still charge it."""
+    from events.models import PricingCode
+    from payments.stripe_sync import expire_open_sessions
+
+    expire_open_sessions(
+        registration, reason=f"Switched to per-class billing by code {code.code}.",
+    )
+    with transaction.atomic():
+        registration.per_class_rate = resolution.amount
+        registration.per_class_since = timezone.now()
+        registration.quoted_amount = Decimal("0")
+        registration.quoted_explanation = (
+            f"Per class attended: ${resolution.amount} per class. "
+            f"{resolution.explanation}"
+        )[:500]
+        registration.pricing_code = code
+        registration.status = Registration.Status.PAID
+        registration.save(update_fields=(
+            "per_class_rate", "per_class_since", "quoted_amount",
+            "quoted_explanation", "pricing_code", "status",
+        ))
+        if code.max_uses is not None:
+            PricingCode.objects.filter(pk=code.pk).update(
+                uses_remaining=F("uses_remaining") - 1
+            )
+    notify_payments.registration_confirmed(registration)
+
+
 def pinned_code_for(registration):
     """A redeemable code minted *for this member* on this event, or None."""
     from events.models import PricingCode
 
-    if registration.status != Registration.Status.AWAITING_PAYMENT:
+    if registration.is_per_class:
+        # Enrolled at $0 and PAID, so the awaiting-payment test below would
+        # never offer it one; a per-class rate can still come down (task #811).
+        if registration.status != Registration.Status.PAID:
+            return None
+        if registration.pricing_code_id:
+            return None      # one code per registration, as on the form
+        from events.per_class import is_covered
+        if is_covered(registration):
+            # Tuition covers their classes; a code would set pricing_code and
+            # so end that coverage, billing them for what was free.
+            return None
+    elif registration.status != Registration.Status.AWAITING_PAYMENT:
         return None
     for code in PricingCode.objects.filter(
         event_id=registration.event_id,
@@ -95,12 +167,19 @@ def auto_apply_pinned_code(registration):
     try:
         resolution = resolve_price(
             user=registration.user, tier=registration.price_tier,
-            pricing_code=code,
+            pricing_code=code, ignore_tuition=registration.is_per_class,
         )
     except PricingError:
         return None      # sliding floor, or otherwise needs an input
     if resolution.installments > 1:
         return None      # a schedule is a decision, not a discount
+    if code.per_class and not registration.is_per_class:
+        return None      # so is paying per class instead of for the seminar
+    if registration.is_per_class:
+        if resolution.amount >= registration.per_class_rate:
+            return None
+        apply_per_class_code(registration, code, resolution)
+        return code
     if resolution.amount >= registration.quoted_amount:
         return None
     apply_resolution(registration, code, resolution)
@@ -116,7 +195,11 @@ def comp_registration(reg, by, *, via: str = "admin") -> tuple[bool, bool]:
     ``AWAITING_PAYMENT``; ``email_ok`` False when the status flip succeeded
     but the notification raised.
     """
-    if reg.status != Registration.Status.AWAITING_PAYMENT:
+    # A per-class registration is enrolled (PAID) at $0, so it is comped from
+    # PAID: billing then skips it (task #811). Classes already billed stay
+    # for the treasurer, and there is no whole-registration value to waive.
+    per_class_paid = reg.is_per_class and reg.status == Registration.Status.PAID
+    if reg.status != Registration.Status.AWAITING_PAYMENT and not per_class_paid:
         return False, True
     reg.status = Registration.Status.COMPED
     reg.staff_notes = (reg.staff_notes or "") + (
@@ -207,6 +290,11 @@ def remove_registration(reg, by, *, refund: bool = False, reason: str = "",
         (p.amount for p in reg.payments.filter(status=Payment.Status.SUCCEEDED)),
         Decimal("0"),
     )
+    if reg.is_per_class:
+        # Per-class money pays for classes, which stay billed: nothing is
+        # refunded and nothing is "left over" for the treasurer (task #811).
+        refund = False
+        settled = Decimal("0")
 
     issued = None
     if refund:

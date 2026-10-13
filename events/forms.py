@@ -48,7 +48,7 @@ class PriceFieldsMixin(forms.Form):
     #: loop that assumes a form field is an Event field.
     PRICE_FIELDS = (
         "fee_type", "fee_amount", "fee_sliding_min", "fee_sliding_max",
-        "tuition_covers",
+        "tuition_covers", "billing_mode",
     )
 
     fee_type = forms.ChoiceField(
@@ -82,6 +82,18 @@ class PriceFieldsMixin(forms.Form):
         required=False, initial=True, label="Covered by School tuition",
         widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"}),
     )
+    #: Whole seminar or per class attended (task #811). Optional on the form
+    #: and coerced to "whole", so a POST that omits it changes nothing.
+    billing_mode = forms.ChoiceField(
+        required=False, label="Billing",
+        choices=Event.BillingMode.choices,
+        widget=forms.RadioSelect, initial=Event.BillingMode.WHOLE,
+        help_text=(
+            "Per class bills each person for the classes they attend, a few "
+            "days after each class. It can't be changed once people have "
+            "registered."
+        ),
+    )
 
     def init_price_fields(self, event):
         """Prefill from ``event`` and decide whether the block is editable.
@@ -90,6 +102,7 @@ class PriceFieldsMixin(forms.Form):
         """
         from .price_spec import from_event, is_representable
 
+        self._price_event = event
         self.price_readonly = event is not None and not is_representable(event)
         self.price_tiers = []
         if event is None or not Event.allows_fee_tba(event.event_type):
@@ -109,6 +122,11 @@ class PriceFieldsMixin(forms.Form):
         self.initial.setdefault("fee_sliding_min", spec.sliding_min)
         self.initial.setdefault("fee_sliding_max", spec.sliding_max)
         self.initial.setdefault("tuition_covers", spec.tuition_covers)
+        self.initial.setdefault(
+            "billing_mode",
+            Event.BillingMode.PER_CLASS if spec.per_class
+            else Event.BillingMode.WHOLE,
+        )
 
     def clean_price(self, data):
         """Normalize the price inputs into ``data["price"]``.
@@ -162,9 +180,26 @@ class PriceFieldsMixin(forms.Form):
                     "Minimum can't exceed the suggested amount.",
                 )
 
+        # A free event has no per-class fee to bill (task #811).
+        per_class = (
+            fee_type != "free"
+            and data.get("billing_mode") == Event.BillingMode.PER_CLASS
+        )
+        event = getattr(self, "_price_event", None)
+        if event is not None and event.pk and per_class != event.is_per_class:
+            from .price_spec import has_active_registrations
+            if has_active_registrations(event):
+                # Caught here so the rest of the edit isn't saved before the
+                # lock refuses it in apply_to_event (which would 500).
+                self.add_error(
+                    "billing_mode",
+                    "Whole seminar or per class can't be changed once people "
+                    "have registered. Contact the Web Coordinator.",
+                )
         data["price"] = PriceSpec(
             amount=amount, sliding_min=smin, sliding_max=smax,
             tuition_covers=bool(data.get("tuition_covers")),
+            per_class=per_class,
         )
         return data
 
@@ -396,8 +431,12 @@ def _person_label(user) -> str:
 class PricingCodeForm(forms.ModelForm):
     """Faculty-issued pricing code (PROG-8 / REG-17)."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, event=None, **kwargs):
         super().__init__(*args, **kwargs)
+        #: Set for a per-class event (task #811): amounts read per class, and a
+        #: payment plan has nothing to split, since classes are billed as
+        #: they happen.
+        self.per_class = bool(event is not None and event.is_per_class)
         # The field faculty reach for when extending a discount or a scholarship
         # to a named person: it defaulted to every account in the database,
         # unordered and labelled by bare email (task #495).
@@ -423,12 +462,24 @@ class PricingCodeForm(forms.ModelForm):
             "spring. The total is the same either way."
         )
         self.fields["amount_or_percent"].required = False
+        self.fields["per_class"].label = "Per class attended"
+        if self.per_class:
+            # The whole event bills per class, so every code already does.
+            del self.fields["per_class"]
+        else:
+            self.fields["per_class"].help_text = (
+                "Instead of the whole seminar, they pay this amount for each "
+                "class they attend, billed a few days after each class. Choose "
+                "Fixed amount (or Sliding-scale floor) and enter the price of "
+                "one class."
+            )
 
     class Meta:
         model = PricingCode
         fields = (
             "pricing_mode",
             "amount_or_percent",
+            "per_class",
             "installments",
             "valid_until",
             "max_uses",
@@ -447,6 +498,38 @@ class PricingCodeForm(forms.ModelForm):
         data = super().clean()
         mode = data.get("pricing_mode")
         amount = data.get("amount_or_percent")
+
+        if data.get("per_class") and not self.per_class:
+            # On a whole-seminar event the listed price is for the year, so a
+            # per-class code has to name the price of one class itself.
+            if mode not in (PricingCode.Mode.FIXED_AMOUNT,
+                            PricingCode.Mode.SLIDING_FLOOR):
+                self.add_error(
+                    "pricing_mode",
+                    "A per-class code needs its own price per class: choose "
+                    "Fixed price or Sliding floor.",
+                )
+                return data
+            if (data.get("installments") or 1) > 1:
+                self.add_error(
+                    "installments",
+                    "A per-class code pays each class as it's billed. Leave "
+                    "this at 1.",
+                )
+        if self.per_class:
+            if mode == PricingCode.Mode.FULL_PRICE:
+                self.add_error(
+                    "pricing_mode",
+                    "This seminar bills per class, so there's no payment plan "
+                    "to carry. Choose a discount or a fixed price per class.",
+                )
+                return data
+            if (data.get("installments") or 1) > 1:
+                self.add_error(
+                    "installments",
+                    "This seminar bills per class, so each class is paid as "
+                    "it's billed. Leave this at 1.",
+                )
 
         if mode == PricingCode.Mode.FULL_PRICE:
             # No discount to state — the code exists to carry the schedule.
@@ -542,6 +625,7 @@ class EventProposalForm(forms.ModelForm):
             "location_kind", "location", "contact",
             "continues_seminar", "faculty",
             "fee_amount", "fee_sliding_min", "fee_sliding_max", "tuition_covers",
+            "billing_mode",
             "offers_ce", "ce_credits", "ce_credits_basis",
             "sched_frequency", "sched_start_time", "sched_end_time",
             "speaker_arrangement", "honoraria_estimate",
@@ -643,6 +727,17 @@ class EventProposalForm(forms.ModelForm):
         )
         self.fields["sched_start_time"].label = "Start time"
         self.fields["sched_end_time"].label = "End time"
+        # A choices+default field is required on a ModelForm unless told
+        # otherwise; existing POSTs omit it (coerced in clean_billing_mode).
+        self.fields["billing_mode"].required = False
+        self.fields["billing_mode"].label = "Billing"
+        self.fields["billing_mode"].widget = forms.RadioSelect(
+            choices=Event.BillingMode.choices,
+        )
+        self.fields["billing_mode"].help_text = (
+            "Per class bills each person for the classes they attend, a few "
+            "days after each class, at the fee above per class."
+        )
         self.fields["contact"].label = "Contact email"
         self.fields["contact"].help_text = (
             "An additional contact for this proposal, besides your own account email."
@@ -750,6 +845,9 @@ class EventProposalForm(forms.ModelForm):
             dt = timezone.make_aware(dt, timezone.get_current_timezone())
         return dt
 
+    def clean_billing_mode(self):
+        return self.cleaned_data.get("billing_mode") or Event.BillingMode.WHOLE
+
     def clean(self):
         data = super().clean()
         import datetime as _dt
@@ -806,6 +904,9 @@ class EventProposalForm(forms.ModelForm):
             data["tuition_covers"] = False
         elif fee_type == "free":
             data["fee_amount"] = data["fee_sliding_min"] = data["fee_sliding_max"] = None
+            # A free event has no per-class fee to bill (task #811).
+            data["billing_mode"] = Event.BillingMode.WHOLE
+            self.instance.billing_mode = Event.BillingMode.WHOLE
         elif fee_type == "fixed":
             data["fee_sliding_min"] = data["fee_sliding_max"] = None
             if require and data.get("fee_amount") is None:
@@ -1055,9 +1156,35 @@ class SessionScheduleForm(forms.ModelForm):
         return cd
 
 
+def session_has_billed_classes(session) -> bool:
+    """A class billed per class (task #811) keeps its session: its charges,
+    even voided ones, are the ledger's record of it, and they protect the
+    attendance row, so deleting would fail."""
+    from payments.models import Charge
+
+    return Charge.objects.filter(
+        class_attendance__session=session,
+    ).exists()
+
+
+class _ScheduleFormSet(forms.BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        for form in self.deleted_forms:
+            session = form.instance
+            if session.pk and session_has_billed_classes(session):
+                raise forms.ValidationError(
+                    f"The class on {timezone.localdate(session.start_at):%b} "
+                    f"{timezone.localdate(session.start_at).day} has been billed, "
+                    "so it can't be deleted. If it didn't happen, mark everyone "
+                    "absent instead, and the charges come off their bills."
+                )
+
+
 def _build_schedule_formset():
     return forms.inlineformset_factory(
-        Event, Session, form=SessionScheduleForm, extra=1, can_delete=True,
+        Event, Session, form=SessionScheduleForm, formset=_ScheduleFormSet,
+        extra=1, can_delete=True,
     )
 
 

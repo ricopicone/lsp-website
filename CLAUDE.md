@@ -2278,6 +2278,80 @@ Done (see `git log` for specifics):
   guests (or a code addressed to that person). Design:
   `docs/superpowers/specs/2026-09-24-pc-standalone-event-types-design.md`.
 
+- **Per-class billing** (task #811, REG-6, found triaging #810). Some faculty
+  bill per class ($25/class, sessions TBD) and the site could only sell the
+  whole seminar, so a $25 fixed code enrolled four people for the year. REG-6
+  had only ever been scaffolded (`PriceTier.session`, `Registration.sessions`,
+  `Profile.default_billing_mode` — none read; all three stay unused).
+  **Attendance-based, opt-in per seminar** (Rico, 2026-10-12). The design's
+  one idea is **isolation**: a per-class registration is an ordinary **$0
+  PAID** registration carrying `Registration.per_class_rate`, so every path
+  keyed on `quoted_amount` (plans, Checkout, coverage re-pricing, reminders,
+  access, roster) sees a normal enrolment. Its money flows through parallel
+  rows those paths can't see: `events.ClassAttendance` (one per registration ×
+  session), a billed class is an ordinary registration-category `Charge` with
+  **`registration` left NULL** and a new `class_attendance` FK (own non-void
+  unique constraint), and paying is a `Payment` with `registration` NULL and
+  a new `per_class_registration` FK — so `mint_registration_charge`,
+  `void_registration_charge`, `charge_unique_registration`, `complete_payment`'s
+  registration branch, refunds and removal never see a class. The ledger is
+  unchanged.
+  **Pipeline** (`events/per_class.py`, a pass of the 5-minute
+  `send_meeting_reminders`, no host change): after each class (15 min grace)
+  record a row per PAID/COMPED registrant created before it ended — **detected**
+  from Daily's `/meetings` where the event is online in the site's room
+  (`mint_token` now sets `user_id`), else **presumed present** (in person,
+  Zoom, *hybrid*); an unreadable room retries 24h then presumes. A **72h
+  window** (≥24h after a late recording): faculty/conveners mark anyone and
+  lock the row, a member marks themselves. Then **bill**: present → charge at
+  the rate, dated the school-local class day; absent/comped/covered/$0 record
+  an outcome. **Weekly note** Mondays from 09:00. For **14 days** after billing
+  faculty may mark absent (voids the charge only while *no* money has swept
+  onto it) or present (bills it).
+  **Billing mode is part of the price** (`Event.billing_mode`,
+  `EventProposal.billing_mode`, `PriceSpec.per_class`): proposed, PC-approved,
+  changed along the price's review route, and **locked once anyone is
+  registered** (`BillingModeLocked`).
+  **Tuition coverage is decided per class at billing** (covered tier, no code,
+  tuition-current for the event's AY); `covered_registrations`/`apply_coverage`
+  exclude per-class rows (the first one *would* have re-billed a covered
+  per-class registration as a whole seminar), and two twin hooks sit beside
+  them: a covering decision voids that year's untouched class charges (member
+  and treasurer paths, #561), a member's SKIPPING bills the covered classes
+  (#485; staff paths never). Skip-list also pinned: `cancel()` never refunds a
+  per-class registration (a converted one still holds its old $25 Stripe
+  payment), removal leaves no "money left", comp accepts PAID per-class, codes
+  set the rate (installments / full-price refused). **Per class is also a
+  per-registrant arrangement** (amended the same day, after prod showed event
+  25 is a $500 seminar where only four registrants meant per class):
+  `PricingCode.per_class` on a whole-seminar event (Fixed or Sliding floor, the
+  price of one class) enrolls just its redeemer per class, also switchable from
+  the code box before paying; billing starts at `Registration.per_class_since`,
+  and the pipeline records any per-class registration on any event.
+  Conversion: `manage.py convert_to_per_class --registration N … --bill-from
+  DATE [--rate R] [--dry-run]`. A seminar's class balance is computed from that
+  registration's own money (`per_class.class_coverage`), not the member-wide
+  registration bucket, which let imported credit "pay" classes. Widening the review loop to
+  imported program events is sibling task #812. Design:
+  `docs/superpowers/specs/2026-10-12-per-class-billing-design.md`.
+
+- **A save-the-date with no fee yet** (task #769). The Program Committee
+  wanted to publish the Izcovich seminar's page before its fee was settled. No
+  fee field was ever required, but *Free* is the default, so a published event
+  read "$0.00, included in tuition" beside an open Register button and anyone
+  could have enrolled for nothing. **"To be announced" is a fourth fee option**
+  (`Event.fee_tba` / `EventProposal.fee_tba`, `PriceSpec.tba`), offered on
+  one-off events only, never seminars, reading groups or gatherings. It
+  publishes the page with "Fee: To be announced", carries **no price tier**,
+  and keeps registration not open: `set_registration_status` refuses to open
+  it from the PC tab, the edit page and the Registrar console alike, and
+  `price_spec.apply_to_event` (the path every price edit takes) drops an OPEN
+  event back to DRAFT when TBA is chosen. Setting a real fee clears the flag
+  but **leaves opening to the PC**, and going back to TBA is refused once
+  anyone has registered. Merged after per-class billing (#811), so the
+  migration is `events/0059_fee_tba` and `PriceSpec` carries both `tba` and
+  `per_class`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

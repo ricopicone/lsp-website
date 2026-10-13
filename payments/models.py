@@ -212,6 +212,16 @@ class Payment(models.Model):
         related_name="payments",
         help_text="The tuition installment this payment satisfies — set for type=TUITION.",
     )
+    per_class_registration = models.ForeignKey(
+        "registrations.Registration",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="per_class_payments",
+        help_text="Pays down a per-class registration's billed classes (task "
+                  "#811). ``registration`` stays empty, so paying never "
+                  "flips the registration or mints a whole-registration charge.",
+    )
     registration_installment = models.ForeignKey(
         "payments.RegistrationInstallment",
         on_delete=models.PROTECT,
@@ -764,6 +774,12 @@ class Charge(models.Model):
         "registrations.Registration", on_delete=models.PROTECT, null=True,
         blank=True, related_name="charges",
     )
+    class_attendance = models.ForeignKey(
+        "events.ClassAttendance", on_delete=models.PROTECT, null=True,
+        blank=True, related_name="charges",
+        help_text="A per-class charge (task #811). ``registration`` stays "
+        "empty on these, so the whole-registration paths never see them.",
+    )
     source = models.CharField(
         max_length=20, choices=Source.choices, default=Source.STAFF,
         db_index=True, help_text="Provenance — how this charge entered the system.",
@@ -793,6 +809,14 @@ class Charge(models.Model):
                 fields=("registration",),
                 condition=models.Q(registration__isnull=False) & ~models.Q(status="void"),
                 name="charge_unique_registration",
+            ),
+            models.UniqueConstraint(
+                fields=("class_attendance",),
+                condition=(
+                    models.Q(class_attendance__isnull=False)
+                    & ~models.Q(status="void")
+                ),
+                name="charge_unique_class_attendance",
             ),
         ]
         indexes = [models.Index(fields=("user", "status"))]

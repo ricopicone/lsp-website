@@ -486,8 +486,12 @@ def test_accounts_overview_includes_reminder_history(member):
     p = _dues_period(2026)
     _charge(member, Charge.Category.DUES, "100", p.start_date, dues_period=p)
     _charge(other, Charge.Category.DUES, "100", p.start_date, dues_period=p)
-    BalanceReminder.objects.create(user=member, balance=Decimal("100"))
+    # Both stamps are pinned: sent_at defaults to now, so leaving the first
+    # one there made the test fail by the calendar once now passed Oct 9.
+    earlier = BalanceReminder.objects.create(user=member, balance=Decimal("100"))
     later = BalanceReminder.objects.create(user=member, balance=Decimal("100"))
+    BalanceReminder.objects.filter(pk=earlier.pk).update(
+        sent_at=datetime(2026, 10, 2, tzinfo=tz.utc))
     BalanceReminder.objects.filter(pk=later.pk).update(
         sent_at=datetime(2026, 10, 9, tzinfo=tz.utc))
 

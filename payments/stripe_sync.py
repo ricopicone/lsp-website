@@ -27,6 +27,7 @@ from datetime import timedelta
 import stripe
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from .models import Payment
@@ -72,7 +73,10 @@ def expire_open_sessions(registration, *, reason: str) -> int:
     """
     stripe.api_key = settings.STRIPE_SECRET_KEY
     killed = 0
-    open_payments = registration.payments.filter(
+    # A per-class registration's balance payments hang off their own FK
+    # (task #811); a stale tab there would pay classes twice.
+    open_payments = Payment.objects.filter(
+        Q(registration=registration) | Q(per_class_registration=registration),
         status=Payment.Status.PENDING,
         method=Payment.Method.STRIPE,
     ).exclude(stripe_checkout_session_id="")

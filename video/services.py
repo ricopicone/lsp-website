@@ -234,6 +234,7 @@ def mint_token(
     return daily.create_meeting_token(
         room_name=room.name, user_name=name[:255], is_owner=is_owner, exp=exp,
         start_audio_off=start_off, start_video_off=start_off, knocking=knocking,
+        user_id=str(user.pk) if user is not None and user.pk else "",
     )
 
 

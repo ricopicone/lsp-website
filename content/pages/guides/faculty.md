@@ -15,7 +15,9 @@ three. (If you're looking to *register* for something rather than run it, see
 **Yours:** the event page's description, readings, schedule note, contact line,
 CE credits, and guests-welcome note; the roster; whether registration is open;
 whether registrations are reviewed before they're confirmed, and the approvals
-themselves; and **what any individual pays, and when**.
+themselves; and **what any individual pays, and when**, including whether
+they pay per class. On a seminar billed per class, attendance is yours to
+correct too.
 
 **The Program Committee's:** the listed fee and its price tiers (built from
 the proposal they approved), publishing the page, the access details, and who is
@@ -64,6 +66,12 @@ substantial change waits.
 The Roster tab lists every registration with the person's name, email, tier,
 amount, and status—*awaiting payment*, *paid*, *comped*, or *cancelled*.
 **Download CSV** gives you the same list for your own records.
+
+Anyone billed per class shows their rate as an amount per class (for example
+*$25/class*), and their status reads *paid* from the start, since nothing is
+owed until they attend. When anyone in your offering is billed per class, an
+**Attendance** section appears on the Roster tab as well (see *Billing per
+class*, below).
 
 ### Opening and closing registration
 
@@ -116,6 +124,10 @@ To give someone a reduced fee, mint a **pricing code** on the Roster tab, under
 - **Full price**—no discount at all. Pick this when what you're offering is a
   payment plan rather than a lower price.
 
+Tick **Per class attended** when the person should pay for each class they
+attend instead of for the whole seminar; the amount is then the price of one
+class (see *Billing per class*, below).
+
 Then **Number of payments**, which spreads the fee over time rather than
 reducing it (see *Spreading the fee over several payments*, below), and
 optionally an expiry date, a **maximum number of uses** (leave it blank for
@@ -132,9 +144,10 @@ registration page, or the moment they register. They see the new price without
 entering anything, and a $0 code confirms their place on the spot. Sending them
 the code does no harm, but it isn't needed.
 
-Two kinds wait for them rather than applying themselves, because both ask for a
-decision: a **payment plan** (they should see the schedule before taking it) and
-a **sliding-scale floor** (they choose the amount). Those appear on their
+Three kinds wait for them rather than applying themselves, because each asks
+for a decision: a **payment plan** (they should see the schedule before taking
+it), a **sliding-scale floor** (they choose the amount), and a **per-class**
+code (it changes how they pay, not just how much). Those appear on their
 registration page as a code set aside for them, ready to accept.
 
 **If they registered before you minted the code**, that all still works. Their
@@ -225,6 +238,47 @@ the treasurer's.
 - **Refund or reduce something already paid.** Once money has moved, it's the
   treasurer's to reverse.
 - **Work on another event.** Codes belong to the event they were minted on.
+
+### Billing per class
+
+Some seminars charge per class rather than for the whole year, and some
+students in a whole-seminar class need to pay per class. Both work:
+
+- **The whole seminar per class.** **Per class** is part of the price, so you
+  choose it on your proposal beside the fee. Once anyone has registered it
+  can't be switched; ask the Web Coordinator.
+- **One student per class.** Mint a pricing code with **Per class attended**
+  ticked and a **Fixed amount** of one class (or a **Sliding-scale floor**).
+  Whoever uses it pays that for each class they attend; everyone else keeps
+  the seminar price. They can use it when registering, or on their
+  registration page before they've paid. Pin it to them and it waits on their
+  registration page for them to accept. Once they've paid for the whole
+  seminar, switching them is the Web Coordinator's.
+
+How it works for a student billed per class:
+
+- They register once, without paying anything up front. The fee you set is
+  what each class costs them.
+- After each class the site records who attended. If the class met in the
+  site's own room, it knows who joined; otherwise everyone registered is
+  counted as present.
+- You and they have **three days** to correct it, on the **Attendance**
+  section of the Roster tab. Once you mark someone, they can't change it.
+- Then each class attended is billed, and they get a note once a week with
+  what was billed. Their registration page has a **Your classes** list with
+  each class, its attendance, and a Pay button for what's open.
+- For **two weeks** after a class is billed, you can still mark someone
+  absent, which takes the class off their bill, as long as they haven't paid
+  for it yet. After that, it's the treasurer's.
+
+On a seminar that's per class throughout, every code works per class: a fixed
+amount is the price of each class, and a percentage comes off each class. A
+code can't spread payments out on a per-class seminar.
+
+Members covered by tuition aren't billed for classes. A student billed per
+class who cancels keeps owing for classes already billed, and nothing is
+refunded automatically. A comped student isn't billed for classes from then
+on.
 
 ## If you convene a reading group
 

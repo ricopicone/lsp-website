@@ -62,6 +62,9 @@ def covered_registrations(user, period) -> list:
             price_tier__covered_by_tuition=True,
             pricing_code__isnull=True,
             quoted_amount=Decimal("0"),
+            # A per-class registration is $0 by construction; its classes are
+            # what coverage pays for, handled in events.per_class (task #811).
+            per_class_rate__isnull=True,
             status__in=(
                 Registration.Status.PAID,
                 Registration.Status.PENDING_APPROVAL,
@@ -146,6 +149,7 @@ def apply_coverage(user, period) -> list:
             price_tier__covered_by_tuition=True,
             pricing_code__isnull=True,
             quoted_amount__gt=Decimal("0"),
+            per_class_rate__isnull=True,     # see covered_registrations
             status__in=(
                 Registration.Status.AWAITING_PAYMENT,
                 Registration.Status.PENDING_APPROVAL,

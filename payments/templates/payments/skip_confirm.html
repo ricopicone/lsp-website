@@ -17,7 +17,7 @@
       <tbody>
         {% for row in rows %}
         <tr>
-          <td>{{ row.registration.event.title }}</td>
+          <td>{{ row.registration.event.title }}{% if row.class_date %}, class of {{ row.class_date|date:"M j" }}{% endif %}</td>
           <td class="text-right whitespace-nowrap">${{ row.amount }}</td>
         </tr>
         {% endfor %}

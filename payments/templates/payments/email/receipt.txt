@@ -9,6 +9,7 @@ Lacanian School of Psychoanalysis
 
 {% if payment.registration %}For: {{ payment.registration.event.title }}
 Tier: {{ payment.registration.price_tier.get_audience_display }}
+{% elif payment.per_class_registration %}For: {{ payment.per_class_registration.event.title }}, classes billed
 {% else %}For: {{ payment.get_payment_type_display }}
 {% endif %}
 Amount paid: ${{ payment.amount }} {{ payment.currency|upper }}

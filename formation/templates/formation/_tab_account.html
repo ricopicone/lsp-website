@@ -397,13 +397,17 @@ payments/treasurer/member_detail.html for the full picture with actions).
                   <div class="text-xs text-base-content/60">{{ ln.obj.dues_period.name }}</div>
                   {% elif ln.obj.tuition_period %}
                   <div class="text-xs text-base-content/60">{{ ln.obj.tuition_period.name }}</div>
+                  {% elif ln.obj.class_attendance %}
+                  <div class="text-xs text-base-content/60">{{ ln.obj.class_attendance.session.event.title|truncatechars:32 }}, class of {{ ln.obj.class_attendance.session.start_at|date:"M j" }}</div>
                   {% elif ln.obj.registration %}
                   <div class="text-xs text-base-content/60">{{ ln.obj.registration.event.title|truncatechars:32 }}</div>
                   {% endif %}
                 {% else %}
                   {{ ln.obj.get_payment_type_display }} payment
                   {% if ln.obj.is_split %}<span class="badge badge-info badge-xs ml-1">split</span>{% endif %}
-                  {% if ln.obj.registration %}
+                  {% if ln.obj.per_class_registration %}
+                  <div class="text-xs text-base-content/60">{{ ln.obj.per_class_registration.event.title|truncatechars:32 }}, classes</div>
+                  {% elif ln.obj.registration %}
                   <div class="text-xs text-base-content/60">
                     <a href="{% url 'events:detail' ln.obj.registration.event.slug %}" class="link link-hover">{{ ln.obj.registration.event.title|truncatechars:32 }}</a>
                   </div>
@@ -427,7 +431,7 @@ payments/treasurer/member_detail.html for the full picture with actions).
               <td>
                 {% if ln.kind == "payment" %}
                 <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
-                  {% if not ln.obj.registration_id %}
+                  {% if not ln.obj.registration_id and not ln.obj.per_class_registration_id %}
                   {% include "payments/member/_retype_modal.html" with payment=ln.obj type_choices=payment_type_choices dues_periods=dues_periods tuition_periods=tuition_periods next_url=request.get_full_path %}
                   {% if ln.obj.status == "succeeded" and not ln.obj.is_split %}
                   {% include "payments/member/_split_modal.html" with payment=ln.obj type_choices=payment_type_choices next_url=request.get_full_path %}

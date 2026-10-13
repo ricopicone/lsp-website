@@ -33,8 +33,13 @@
   <dl class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-6 gap-y-2 text-sm border-y border-base-300/60 py-5">
     <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Tier</dt>
     <dd class="m-0">{{ registration.price_tier.get_audience_display }}</dd>
+    {% if registration.is_per_class %}
+    <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Per class</dt>
+    <dd class="m-0 font-medium">${{ registration.per_class_rate }} for each class you attend</dd>
+    {% else %}
     <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Amount due</dt>
     <dd class="m-0 font-medium">${{ registration.quoted_amount }}</dd>
+    {% endif %}
     <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">How priced</dt>
     <dd class="m-0 text-base-content/70">{{ registration.quoted_explanation }}</dd>
     <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Status</dt>
@@ -72,6 +77,10 @@
   <div role="alert" class="alert alert-info">
     <span>Your place is confirmed. You're paying in installments, so ${{ outstanding }} is still to come.</span>
   </div>
+  {% elif registration.status == "paid" and registration.is_per_class %}
+  <p class="text-base-content/80">
+    You're registered. Each class you attend is billed a few days after the class, and you pay as you go.
+  </p>
   {% elif registration.status == "paid" %}
   <p class="text-base-content/80">
     Payment received — you're all set. Your confirmation has been emailed.
@@ -97,13 +106,17 @@
   </section>
   {% endif %}
 
+  {% if classes %}
+  {% include "registrations/_your_classes.html" %}
+  {% endif %}
+
   {% if pending_code %}
   <div role="alert" class="alert">
     <span>Your convener has set aside a code for you, <code class="font-mono">{{ pending_code.code }}</code>. Enter it below to choose how it applies.</span>
   </div>
   {% endif %}
 
-  {% if registration.status == "awaiting_payment" %}
+  {% if registration.status == "awaiting_payment" or registration.is_per_class and registration.status == "paid" and not registration.pricing_code_id and not classes_covered %}
   <details class="rounded-lg border border-base-300 p-4"{% if pending_code %} open{% endif %}>
     <summary class="cursor-pointer text-sm text-base-content/80">
       Have a code from your convener?
@@ -172,10 +185,10 @@
   {% if registration.status == "awaiting_payment" or registration.status == "paid" or registration.status == "pending_approval" %}
   <form method="post"
         action="{% url 'registrations:cancel' registration.id %}"
-        onsubmit="return confirm('{% if registration.status == "paid" %}Cancel this registration and refund your payment?{% elif registration.status == "pending_approval" %}Withdraw this registration request?{% else %}Cancel this registration?{% endif %}');">
+        onsubmit="return confirm('{% if registration.is_per_class %}Leave this seminar? Classes already billed stay on your account.{% elif registration.status == "paid" %}Cancel this registration and refund your payment?{% elif registration.status == "pending_approval" %}Withdraw this registration request?{% else %}Cancel this registration?{% endif %}');">
     {% csrf_token %}
     <button type="submit" class="btn btn-outline btn-error btn-sm">
-      {% if registration.status == "pending_approval" %}Withdraw request{% else %}Cancel registration{% if registration.status == "paid" and not installments %} (full refund){% endif %}{% endif %}
+      {% if registration.status == "pending_approval" %}Withdraw request{% else %}Cancel registration{% if registration.status == "paid" and not installments and not registration.is_per_class %} (full refund){% endif %}{% endif %}
     </button>
   </form>
   {% endif %}

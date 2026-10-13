@@ -40,9 +40,9 @@ next_url (where the POST redirects back to).
   </dialog>
   {% endif %}
 
-  {% if r.status == 'awaiting_payment' %}
+  {% if r.status == 'awaiting_payment' or r.is_per_class and r.status == 'paid' %}
   <form method="post" action="{% url 'registrations:registrar_comp' r.id %}" class="contents"
-        onsubmit="return confirm('Comp {{ r.user.email|escapejs }} for {{ r.event.title|escapejs }}? Waives the ${{ r.quoted_amount }} fee and emails the confirmation with access info.');">
+        onsubmit="return confirm('Comp {{ r.user.email|escapejs }} for {{ r.event.title|escapejs }}? {% if r.is_per_class %}Classes from now on are not billed; classes already billed stay for the treasurer.{% else %}Waives the ${{ r.quoted_amount }} fee and emails the confirmation with access info.{% endif %}');">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ next_url }}">
     <button type="submit" class="btn btn-ghost btn-xs" title="Comp (no charge)" aria-label="Comp (no charge)">{% icon "ticket" %}</button>

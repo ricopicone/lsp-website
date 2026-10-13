@@ -163,6 +163,8 @@
                 <div class="text-xs text-base-content/60">{{ ln.obj.dues_period.name }}</div>
                 {% elif ln.obj.tuition_period %}
                 <div class="text-xs text-base-content/60">{{ ln.obj.tuition_period.name }}</div>
+                {% elif ln.obj.class_attendance %}
+                <div class="text-xs text-base-content/60">{{ ln.obj.class_attendance.session.event.title|truncatechars:32 }}, class of {{ ln.obj.class_attendance.session.start_at|date:"M j" }}</div>
                 {% elif ln.obj.registration %}
                 <div class="text-xs text-base-content/60">{{ ln.obj.registration.event.title|truncatechars:32 }}</div>
                 {% endif %}
@@ -170,7 +172,9 @@
               {% else %}
                 {{ ln.obj.get_payment_type_display }} payment
                 {% if ln.obj.is_split %}<span class="badge badge-info badge-xs ml-1" title="Part of a split payment — the entire original charge was ${{ ln.obj.split_family_total }}">split</span>{% endif %}
-                {% if ln.obj.registration %}
+                {% if ln.obj.per_class_registration %}
+                <div class="text-xs text-base-content/60">{{ ln.obj.per_class_registration.event.title|truncatechars:32 }}, classes</div>
+                {% elif ln.obj.registration %}
                 <div class="text-xs text-base-content/60">{{ ln.obj.registration.event.title|truncatechars:32 }}</div>
                 {% endif %}
                 {% include "payments/treasurer/_provenance_popover.html" with source=ln.obj.source source_label=ln.obj.get_source_display notes=ln.obj.notes member_note=ln.obj.member_note trigger="icon" %}

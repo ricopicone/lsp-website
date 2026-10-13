@@ -10,8 +10,13 @@ show_access_info.{% endcomment %}
 {% if user_registration %}
 <div role="alert" class="alert alert-info">
   <span>
+    {% if user_registration.is_per_class and user_registration.status == "paid" %}
+    You're registered, billed per class ·
+    <a href="{% url 'registrations:confirm' user_registration.id %}#classes" class="link">Your classes and balance</a>
+    {% else %}
     You're registered: <strong>{{ user_registration.get_status_display }}</strong> ·
     <a href="{% url 'registrations:confirm' user_registration.id %}" class="link">View / manage</a>
+    {% endif %}
   </span>
 </div>
 {% endif %}
@@ -198,6 +203,9 @@ show_access_info.{% endcomment %}
   {% if event.fee_note %}
   <p class="text-base-content/80 leading-relaxed">{{ event.fee_note|inline_italics }}</p>
   {% endif %}
+  {% if event.is_per_class %}
+  <p class="text-sm text-base-content/70">Billed per class: you pay for each class you attend, a few days after the class.</p>
+  {% endif %}
   {% if price_tiers %}
   <div class="overflow-x-auto rounded-lg border border-base-300">
     <table class="table">
@@ -212,7 +220,7 @@ show_access_info.{% endcomment %}
             {% if tier.session %}<span class="text-base-content/60 text-sm">(session #{{ tier.session.sequence }})</span>{% endif %}
           </td>
           <td class="whitespace-nowrap">
-            ${{ tier.base_amount }}
+            ${{ tier.base_amount }}{% if event.is_per_class %} per class{% endif %}
             {% if tier.sliding_scale %}<span class="text-base-content/60 text-sm">(sliding from ${{ tier.minimum_amount }})</span>{% endif %}
           </td>
           <td class="text-sm text-base-content/70">

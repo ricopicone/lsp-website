@@ -134,6 +134,16 @@ class Command(BaseCommand):
         if opts["dry_run"]:
             return
 
+        if opts["clear"]:
+            from events.forms import session_has_billed_classes
+
+            if any(session_has_billed_classes(x) for x in event.sessions.all()):
+                raise CommandError(
+                    "Some of these classes have been billed per class (task "
+                    "#811) and keep their sessions; --clear would delete them. "
+                    "Add sessions without --clear instead."
+                )
+
         with transaction.atomic():
             if opts["clear"]:
                 deleted, _ = event.sessions.all().delete()

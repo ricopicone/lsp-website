@@ -39,6 +39,8 @@ class Category(models.TextChoices):
     REGISTRATION_STATUS = "registration_status", _("Registration updates")
     REGISTRATION_CONFIRMED = "registration_confirmed", _("Registration confirmation")
     EVENT_REMINDER = "event_reminder", _("Event starting tomorrow")
+    CLASS_ATTENDANCE = "class_attendance", _("Class attendance")
+    CLASS_BILLING = "class_billing", _("Per-class bills")
     PAYMENT_RECEIPT = "payment_receipt", _("Payment receipts")
     DUES_REMINDER = "dues_reminder", _("Dues reminders")
     TUITION_REMINDER = "tuition_reminder", _("Tuition reminders")
@@ -192,6 +194,18 @@ CATEGORY_META: dict[str, CategoryMeta] = {
         SECTION_PAYMENTS, _("Event starting tomorrow"),
         _("A reminder the day before each session of an event you're "
           "registered for, with how to join."),
+    ),
+    # Per-class seminars (task #811): attendance to check after each class,
+    # and the weekly note of classes billed.
+    _C.CLASS_ATTENDANCE: _M(
+        SECTION_PAYMENTS, _("Class attendance"),
+        _("After each class of a per-class seminar, the attendance recorded, "
+          "with a few days to correct it."),
+    ),
+    _C.CLASS_BILLING: _M(
+        SECTION_PAYMENTS, _("Per-class bills"),
+        _("A weekly note of the classes billed in a per-class seminar, with "
+          "your balance."),
     ),
     _C.PAYMENT_RECEIPT: _M(
         SECTION_PAYMENTS, _("Payment receipts"),

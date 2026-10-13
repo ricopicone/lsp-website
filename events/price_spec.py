@@ -24,6 +24,12 @@ class UnrepresentablePricing(Exception):
     """The event's tiers are richer than a spec can describe."""
 
 
+class BillingModeLocked(UnrepresentablePricing):
+    """Whole-seminar ⇄ per-class cannot change once anyone is registered
+    (task #811): every registration was priced for the mode it was made in.
+    Registrations already made move with ``convert_to_per_class``."""
+
+
 def _dec(value) -> Decimal | None:
     return None if value is None else Decimal(str(value))
 
@@ -38,6 +44,9 @@ class PriceSpec:
     tuition_covers: bool = True
     #: Fee to be announced (task #769): no tier, and registration can't open.
     tba: bool = False
+    #: Billed per class attended rather than for the whole seminar (task
+    #: #811). Part of the price so it travels the price's review route.
+    per_class: bool = False
 
     @property
     def fee_type(self) -> str:
@@ -61,6 +70,7 @@ class PriceSpec:
             ),
             "tuition_covers": self.tuition_covers,
             "tba": self.tba,
+            "per_class": self.per_class,
         }
 
     @classmethod
@@ -72,6 +82,7 @@ class PriceSpec:
             sliding_max=_dec(data.get("sliding_max")),
             tuition_covers=bool(data.get("tuition_covers", True)),
             tba=bool(data.get("tba", False)),
+            per_class=bool(data.get("per_class", False)),
         )
 
 
@@ -92,23 +103,26 @@ def from_event(event) -> PriceSpec | None:
     """The event's current price, or None when it is unrepresentable."""
     if not is_representable(event):
         return None
+    per_class = getattr(event, "is_per_class", False)
     if event.fee_tba:
         return PriceSpec(tuition_covers=False, tba=True)
     tier = event.price_tiers.first()
     if tier is None:
         # No tier means nothing was ever specified, which is the state
         # ``apply_to_event`` produces for a free, uncovered event.
-        return PriceSpec(tuition_covers=False)
+        return PriceSpec(tuition_covers=False, per_class=per_class)
     if tier.sliding_scale:
         return PriceSpec(
             sliding_min=tier.minimum_amount or Decimal("0"),
             sliding_max=tier.base_amount,
             tuition_covers=tier.covered_by_tuition,
+            per_class=per_class,
         )
     if tier.base_amount == 0 and tier.covered_by_tuition:
-        return PriceSpec(tuition_covers=True)
+        return PriceSpec(tuition_covers=True, per_class=per_class)
     return PriceSpec(
         amount=tier.base_amount, tuition_covers=tier.covered_by_tuition,
+        per_class=per_class,
     )
 
 
@@ -122,6 +136,9 @@ def apply_to_event(event, spec: PriceSpec) -> None:
     A fee to be announced carries no tier either, and since there is nothing to
     charge, it also takes back open registration (task #769) — every path that
     sets a price (edit form, change review, proposal approval) comes here.
+
+    Also sets the billing mode (task #811), refusing a change of mode while
+    anyone is registered.
     """
     if not is_representable(event):
         raise UnrepresentablePricing(
@@ -129,6 +146,8 @@ def apply_to_event(event, spec: PriceSpec) -> None:
             "edit its tiers in Django admin."
         )
     from .models import Audience, PriceTier
+
+    _apply_billing_mode(event, spec.per_class)
 
     if event.fee_tba != spec.tba:
         event.fee_tba = spec.tba
@@ -167,6 +186,31 @@ def apply_to_event(event, spec: PriceSpec) -> None:
         tier.save(update_fields=list(values))
 
 
+def _apply_billing_mode(event, per_class: bool) -> None:
+    from .models import Event
+
+    wanted = Event.BillingMode.PER_CLASS if per_class else Event.BillingMode.WHOLE
+    if event.billing_mode == wanted:
+        return
+    if event.pk and has_active_registrations(event):
+        raise BillingModeLocked(
+            "Whole seminar or per class can't be changed once people have "
+            "registered. Contact the Web Coordinator."
+        )
+    event.billing_mode = wanted
+    if event.pk:
+        event.save(update_fields=("billing_mode",))
+
+
+def has_active_registrations(event) -> bool:
+    from registrations.models import Registration
+
+    return event.registrations.exclude(status__in=(
+        Registration.Status.CANCELLED, Registration.Status.REFUNDED,
+        Registration.Status.DECLINED,
+    )).exists()
+
+
 def _money(value: Decimal) -> str:
     """'$500' for whole dollars, '$62.50' otherwise."""
     value = Decimal(value)
@@ -187,6 +231,8 @@ def label(spec: PriceSpec) -> str:
         base = _money(spec.amount)
     else:
         base = "Free"
+    if spec.per_class and spec.fee_type != "free":
+        base = f"{base} per class"
     if spec.tuition_covers:
         return f"{base}, covered by School tuition"
     return base

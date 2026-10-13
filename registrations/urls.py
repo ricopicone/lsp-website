@@ -48,6 +48,11 @@ urlpatterns = [
         name="pay",
     ),
     path(
+        "registrations/<int:reg_id>/pay-classes/",
+        views.pay_classes,
+        name="pay_classes",
+    ),
+    path(
         "registrations/<int:reg_id>/apply-code/",
         views.apply_code,
         name="apply_code",
