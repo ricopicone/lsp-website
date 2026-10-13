@@ -2335,6 +2335,47 @@ Done (see `git log` for specifics):
   imported program events is sibling task #812. Design:
   `docs/superpowers/specs/2026-10-12-per-class-billing-design.md`.
 
+- **A save-the-date with no fee yet** (task #769). The Program Committee
+  wanted to publish the Izcovich seminar's page before its fee was settled. No
+  fee field was ever required, but *Free* is the default, so a published event
+  read "$0.00, included in tuition" beside an open Register button and anyone
+  could have enrolled for nothing. **"To be announced" is a fourth fee option**
+  (`Event.fee_tba` / `EventProposal.fee_tba`, `PriceSpec.tba`), offered on
+  one-off events only, never seminars, reading groups or gatherings. It
+  publishes the page with "Fee: To be announced", carries **no price tier**,
+  and keeps registration not open: `set_registration_status` refuses to open
+  it from the PC tab, the edit page and the Registrar console alike, and
+  `price_spec.apply_to_event` (the path every price edit takes) drops an OPEN
+  event back to DRAFT when TBA is chosen. Setting a real fee clears the flag
+  but **leaves opening to the PC**, and going back to TBA is refused once
+  anyone has registered. Merged after per-class billing (#811), so the
+  migration is `events/0059_fee_tba` and `PriceSpec` carries both `tba` and
+  `per_class`.
+
+- **The review loop covers the imported program** (task #812, sibling of
+  #811). `Event.requires_change_review()` needed an approved `EventProposal`,
+  and the 2026-27 program was script-imported with none, so the loop had
+  **never once fired on prod**: zero events qualified and zero
+  `EventChangeRequest` rows existed, while faculty changed title, description,
+  readings, fee note and price (billing mode included, since #811 put it in
+  the `PriceSpec`) with no PC step. It now also returns True for a seminar or
+  reading group **on a program**, since being on the program is the PC's
+  approval. Publication is read through `is_public_now`, not the raw
+  `published` flag, because a program event's visibility cascades from its
+  Program (#532), so a PC-created event with the flag unset is still covered.
+  Measured on prod before shipping: **16 live 2026-27 offerings** (15
+  seminars and the Freud Reading Group), plus 11 ended 2025-26 seminars. Out
+  of scope, deliberately: cartels (program events, but the PC approves no
+  content for them), proposal-less special events (not on a program), and the
+  faculty demo sandbox (unpublished, no program). Nothing downstream assumed a
+  proposal: `apply()`, `field_changes()`, the notifications and the Changes
+  queue all read the change request alone, and the baseline is the live event
+  snapshotted before binding, as before. PC members still get the
+  *administrative change* option, and the PC's own program-admin form is a
+  separate view that never routes through the dialog. Faculty and PC guides
+  now name the scope and add price to the reviewable list. No migration, no
+  flag.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

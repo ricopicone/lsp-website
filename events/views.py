@@ -459,7 +459,7 @@ def _ce_edit_context(form):
 def event_edit(request, slug: str):
     """Faculty-facing edit form for the event description (PROG-7).
 
-    Approved events (published + minted from a PC proposal) route reviewable
+    Approved events (``Event.requires_change_review``) route reviewable
     content changes through a certify-or-submit dialog (#295): non-reviewable
     fields apply immediately, but a change to the title / description / readings
     / fee note prompts the editor to either certify it as minor (adopted now) or
@@ -819,14 +819,18 @@ def event_registration_status(request, slug: str):
     """
     from django.utils.http import url_has_allowed_host_and_scheme
 
-    from .registration_status import set_registration_status
+    from .registration_status import open_refusal, set_registration_status
 
     event = get_object_or_404(Event, slug=slug)
     if not can_edit_event(request.user, event):
         return HttpResponseForbidden("You don't have permission to edit this event.")
 
-    new_status = set_registration_status(event, request.POST.get("action"))
-    if new_status == Event.Status.OPEN:
+    action = request.POST.get("action")
+    refusal = open_refusal(event) if action == "open" else None
+    new_status = set_registration_status(event, action)
+    if refusal:
+        messages.error(request, refusal)
+    elif new_status == Event.Status.OPEN:
         messages.success(request, "Registration is open. Members can register now.")
     elif new_status == Event.Status.CLOSED:
         messages.success(request, "Registration is closed. Nobody new can register.")
@@ -1536,7 +1540,13 @@ def program_admin_special_event_registration(request, slug: str):
     event = get_object_or_404(
         Event, slug=slug, event_type__in=Event.PC_OWNED_TYPES,
     )
+    from .registration_status import open_refusal
+
     action = request.POST.get("action")
+    refusal = open_refusal(event) if action == "open" else None
+    if refusal:
+        messages.error(request, f"“{event.title}”: {refusal}")
+        return redirect("program_admin_proposals")
     if action == "open":
         event.status = Event.Status.OPEN
     elif action == "close":

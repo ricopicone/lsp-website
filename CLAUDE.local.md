@@ -1,43 +1,13 @@
-# Resuming task #723
+# Resuming task #812
 
-**Task:** Tuition payment portal — an LSP member reports the account dashboard showing the wrong academic year and a $100 discrepancy against the tracker (Garret Barnwell → Rico, 2026-09-02 16:20 PDT)
+**Task:** Widen the change-review loop to imported program events
 
 ## Description
-I looked into this and recategorized a payment to tuition so it now says full tuition paid. However, the admin interface shows the following:
+Sibling of #811 (decided with Rico 2026-10-12). Today Event.requires_change_review() needs an approving EventProposal, so the script-imported 2026–27 program (no proposal) edits freely: price, title, description, and now billing mode change with no PC step. Rico wants those events under the same review loop.
 
-AY 2026–2027	Paid	$2,500.00	
-$2,500.00 / $2,500.00
+Sketch: requires_change_review() also returns True for published program events (seminar / reading group …) with no approving proposal; the baseline is the event's current published content. Check EventChangeRequest.apply()/field_changes() don't assume a proposal; check the faculty guide copy; measure on prod how many events this pulls in before shipping.
 
-AY 2025–2026	Paid in full	$2,500.00	
-$2,500.00 / $2,500.00
-
-AY 2024–2025	Paid in full	$2,000.00	
-$2,000.00 / $2,000.00
-
-AY 2023–2024	Paid	$2,000.00	
-$2,000.00 / $2,000.00
-
-AY 2022–2023	Skipping this year	$2,000.00	Skipping
-
-But the user's Account tab shows:
-
-AY 2022–2023
-
-$2000.00 / $2000.00
-
-AY 2023–2024
-
-$2000.00 / $2000.00
-
-AY 2024–2025
-
-$2000.00 / $2000.00
-
-AY 2025–2026
-
-$2500.00 / $2500.00
-
-That is, it has the wrong years in the user's Account interface. The skipping year isn't reflected.
+Independent of per-class billing; keep it its own change so each can be verified alone.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -90,6 +60,11 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **per-class-billing** (architecture) — Task #811 SHIPPED+LIVE 2026-10-12: per-class billing is attendance-based and isolated — a per-class registration is a $0 PAID row with per_class_rate; classes bill as registration-less Charges (class_attendance FK), paid via Payment.per_class_registration; per class can be an event mode OR a per-registrant "Per class attended" code
+- **per-class-billing-isolation** (architecture) — Task #811 (built on branch proud-falcon, not yet deployed): per-class billing is attendance-based and opt-in per seminar. A per-class registration is a $0 PAID row with per_class_rate. Class charges and payments carry registration=NULL so whole-registration paths can't see them. Billing mode is part of the price and locks once anyone registers.
+- **pc-creates-standalone-event-types** (architecture) — Task #756 SHIPPED+LIVE 2026-09-24: the PC creates Days of Assembly, Working Days and Scholarly Seminars from "+ New standalone event" on the Proposals tab (the widened special-event path); members still can't propose those three
+- **faculty-walkthrough-and-demo-sandbox** (architecture) — Task #749 SHIPPED 2026-09-19: /guides/faculty/ has a walkthrough whose 7 steps resolve to the viewer's OWN seminar or reading group (faculty or convener) and send nothing; the demo sandbox is prod DATA (practice-seminar-sandbox, event 34, unpublished, private workgroup, persona registrants) kept demo-only, not shared with all faculty; no slides, the card is the agenda
+- **account-tab-tuition-years-are-the-ledger** (architecture) — Task #723 SHIPPED+LIVE 2026-09-08: the member's Account tab computed its own tuition years beside the ledger's answer on the same page and disagreed for 21 of 64 members; payments/_tuition_years_table.html is now the one rendering, shared with the treasurer's member page
 - **faculty-close-their-own-registration** (architecture) — Task #721 SHIPPED 2026-09-07: faculty and conveners open and close their own event's registration from Edit event and the Roster tab; the mechanism was already complete and only the entry point was missing, and the Workspace Settings tab gets a pointer, never the control
 - **re-instructions-to-participants-stephanie-swales-rico-2026-09-06-0156-pdt-0856-utc** (reference) — Re: Instructions to participants (Stephanie Swales → Rico, 2026-09-06 01:56 PDT / 08:56 UTC)
 - **joining-instructions-said-once** (architecture) — Task #716 SHIPPED+LIVE 2026-09-05: events/joining.py + events/email/_joining_block.txt are the ONE description of how an event is joined (insite / external / in_person / online_unknown), rendered by the confirmation email AND page, the unpaid reminders (gated note), the installment reminder, the new day-before session reminder (Category.EVENT_REMINDER, rides the 5-min send_meeting_reminders timer), and the "Email joining instructions" page (/events/<slug>/joining-instructions/, Sign as me/School sets Reply-To) — any new join-telling surface renders the block, never re-derives the venue
@@ -217,7 +192,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=723`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=812`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

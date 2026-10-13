@@ -42,12 +42,16 @@ class PriceSpec:
     sliding_min: Decimal | None = None
     sliding_max: Decimal | None = None
     tuition_covers: bool = True
+    #: Fee to be announced (task #769): no tier, and registration can't open.
+    tba: bool = False
     #: Billed per class attended rather than for the whole seminar (task
     #: #811). Part of the price so it travels the price's review route.
     per_class: bool = False
 
     @property
     def fee_type(self) -> str:
+        if self.tba:
+            return "tba"
         if self.sliding_min is not None or self.sliding_max is not None:
             return "sliding"
         if self.amount is not None:
@@ -65,6 +69,7 @@ class PriceSpec:
                 None if self.sliding_max is None else str(self.sliding_max)
             ),
             "tuition_covers": self.tuition_covers,
+            "tba": self.tba,
             "per_class": self.per_class,
         }
 
@@ -76,6 +81,7 @@ class PriceSpec:
             sliding_min=_dec(data.get("sliding_min")),
             sliding_max=_dec(data.get("sliding_max")),
             tuition_covers=bool(data.get("tuition_covers", True)),
+            tba=bool(data.get("tba", False)),
             per_class=bool(data.get("per_class", False)),
         )
 
@@ -98,6 +104,8 @@ def from_event(event) -> PriceSpec | None:
     if not is_representable(event):
         return None
     per_class = getattr(event, "is_per_class", False)
+    if event.fee_tba:
+        return PriceSpec(tuition_covers=False, tba=True)
     tier = event.price_tiers.first()
     if tier is None:
         # No tier means nothing was ever specified, which is the state
@@ -125,6 +133,10 @@ def apply_to_event(event, spec: PriceSpec) -> None:
     its "nothing specified" short-circuit: a free event that tuition does not
     cover carries no tier at all.
 
+    A fee to be announced carries no tier either, and since there is nothing to
+    charge, it also takes back open registration (task #769) — every path that
+    sets a price (edit form, change review, proposal approval) comes here.
+
     Also sets the billing mode (task #811), refusing a change of mode while
     anyone is registered.
     """
@@ -136,6 +148,16 @@ def apply_to_event(event, spec: PriceSpec) -> None:
     from .models import Audience, PriceTier
 
     _apply_billing_mode(event, spec.per_class)
+
+    if event.fee_tba != spec.tba:
+        event.fee_tba = spec.tba
+        event.save(update_fields=["fee_tba"])
+    if spec.tba:
+        event.price_tiers.all().delete()
+        if event.status == event.Status.OPEN:
+            event.status = event.Status.DRAFT
+            event.save(update_fields=["status"])
+        return
 
     sliding = spec.fee_type == "sliding"
     if not sliding and spec.amount is None and not spec.tuition_covers:
@@ -199,6 +221,8 @@ def _money(value: Decimal) -> str:
 
 def label(spec: PriceSpec) -> str:
     """A short human description, for the review diff and the admin listings."""
+    if spec.tba:
+        return "To be announced"
     if spec.fee_type == "sliding":
         low = _money(spec.sliding_min or Decimal("0"))
         high = _money(spec.sliding_max or Decimal("0"))

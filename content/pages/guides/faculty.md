@@ -54,11 +54,11 @@ the default, lets anyone with a free account register and says so on the page.
 still admit one of them by hand with a pricing code addressed to them (see
 below).
 
-Changing the **title, description, readings, or fee note** of an event that
-came from an approved proposal is different. The School approved a particular
-offering, so those edits go through a short dialog: mark the change **minor**
-and it's adopted at once, or send it as **substantial** and the Program
-Committee sees it in their review queue. Your live page stays as it was while a
+Changing the **title, description, readings, fee note, or price** of a
+published seminar or reading group, or of an event that came from an approved
+proposal, is different. Those edits go through a short dialog: mark the change
+**minor** and it's adopted at once, or send it as **substantial** and the
+Program Committee sees it in their review queue. Your live page stays as it was while a
 substantial change waits.
 
 ## Who has registered

@@ -225,9 +225,10 @@ touching Django admin.
 ## Changes tab
 
 When faculty edit the *content* of an already-approved event (title,
-description, readings, fee note), the change routes through a
-certify-or-submit dialog rather than silently going live. This tab is
-where those land:
+description, readings, fee note, price), the change routes through a
+certify-or-submit dialog rather than silently going live. An approved
+event is any published seminar or reading group on a program, plus any
+event minted from an approved proposal. This tab is where those land:
 
 - **Pending review**: substantial changes the faculty member asked the
   PC to approve. The live event is untouched while a change is pending.
