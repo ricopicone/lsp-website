@@ -64,6 +64,8 @@ PAGE_ARTWORK: dict[str, Artwork] = {
         "img/artwork/program.jpg", artist="Piet Mondrian", title="Composition A (1920)"),
     "events:list": Artwork(
         "img/artwork/events.jpg", artist="Piet Mondrian", title="Composition (1921)"),
+    "events:past": Artwork(
+        "img/artwork/events.jpg", artist="Piet Mondrian", title="Composition (1921)"),
     "directory": Artwork(
         "img/artwork/directory.jpg", artist="Henri Matisse",
         title="Woman with a Hat (1905)"),

@@ -2401,6 +2401,19 @@ Done (see `git log` for specifics):
   browser does. The two template-grep tests for the exception list are gone,
   superseded by that. No migration.
 
+- **Past standalone events get a page** (task #814). `/events/` lists only
+  standalone events that haven't ended (special events, Days of Assembly,
+  Working Days, Scholarly Seminars), and the program types keep their own
+  history on `/program/?year=…` and `/program/archive/`. So an ended special
+  event fell off every listing while its page lived on. **`/events/past/`**
+  (`events:past`) lists those events newest first, grouped under
+  academic-year headings by start date. Upcoming and past share one query,
+  `views._standalone_events` (`public_now_q()`, program types excluded,
+  members-only hidden from non-members), and one card partial,
+  `events/_event_card.html`, with `past` muting it. Linked from the `/events/`
+  header and its empty state, both Events nav menus, and back. The
+  today-or-later boundary stays `timezone.localdate()` (#571). No migration.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

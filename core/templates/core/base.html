@@ -133,6 +133,7 @@
             <ul tabindex="0" class="dropdown-content menu menu-sm z-30 p-2 shadow-xl bg-base-100 border border-base-300 rounded-box w-52">
               <li><a href="{% url 'program' %}">Program</a></li>
               <li><a href="{% url 'events:list' %}">Other Events</a></li>
+              <li><a href="{% url 'events:past' %}">Past Events</a></li>
               <li><a href="{% url 'core:calendar' %}">Calendar</a></li>
               {% if user|is_lsp_member %}
               <li><a href="{% url 'propose_event' %}">Propose an event</a></li>
@@ -192,6 +193,7 @@
             <li class="menu-title">Events</li>
             <li><a href="{% url 'program' %}">Program</a></li>
             <li><a href="{% url 'events:list' %}">Other Events</a></li>
+            <li><a href="{% url 'events:past' %}">Past Events</a></li>
             <li><a href="{% url 'core:calendar' %}">Calendar</a></li>
             {% if user|is_lsp_member %}
             <li><a href="{% url 'propose_event' %}">Propose an event</a></li>
