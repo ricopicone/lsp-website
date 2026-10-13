@@ -58,7 +58,8 @@ def test_pay_classes_checks_out_the_open_balance(client, billed, fake_stripe):
     assert payment.per_class_registration == reg
     assert payment.registration is None
     assert payment.amount == Decimal("50.00")
-    desc = fake_stripe.call_args.kwargs["line_items"][0]["price_data"]["product_data"]["description"]
+    item = fake_stripe.call_args.kwargs["line_items"][0]
+    desc = item["price_data"]["product_data"]["description"]
     assert desc.startswith("2 classes")
 
 
