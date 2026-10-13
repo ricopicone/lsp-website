@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from .models import Election, Nomination, VoterRollEntry
 
-# Ballot and BallotRanking are deliberately NOT registered: the voter-to-vote
+# Ballots and their rankings are deliberately NOT registered: the voter-to-vote
 # link is shown to nobody but the voter (task #813). A test pins this.
 
 
