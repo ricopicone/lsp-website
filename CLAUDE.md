@@ -2406,7 +2406,7 @@ Done (see `git log` for specifics):
   roles in active standing, deliberately *not* `lsp_members()` (which admits
   Django staff, LSP Staff and committee-serving Auditors); "paid their fees"
   is the administrator's judgment, made per person with a recorded reason,
-  because the dues ledger is still mid-cleanup — dues state is shown on the
+  because the dues ledger is still mid-cleanup; dues state is shown on the
   roll, never enforced. **Secrecy** is "linked, shown only to the voter", and
   holds by structure: `elections/ballots.py` is the only module that reads
   rankings (a source scan pins it), ballots are in neither Django admin nor
