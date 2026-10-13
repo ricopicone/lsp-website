@@ -219,6 +219,11 @@ def index(request):
         seen[key].append(channel)
 
     my_spaces = _my_spaces(wg_channels, private_chats, unread, live_video)
+    # The member's own meeting room, and anyone else's they are invited into
+    # while it is in session (task #751).
+    from video.services_personal import parletre_rooms
+
+    meeting_rooms = parletre_rooms(request.user)
 
     return render(
         request,
@@ -227,6 +232,7 @@ def index(request):
             "groups": groups,
             "my_spaces": my_spaces,
             "online_now": presence.online_global(),
+            "meeting_rooms": meeting_rooms,
             "any_channels": bool(general) or bool(my_spaces),
             "private_chats_enabled": settings.PARLETRE_PRIVATE_CHATS_ENABLED,
         },

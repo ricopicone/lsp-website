@@ -234,6 +234,58 @@ def room_context(request, room: PersonalRoom, *, is_owner: bool, guest_name: str
     }
 
 
+# ---- Parlêtre -----------------------------------------------------------
+
+def parletre_rooms(user) -> dict:
+    """The personal rooms Parlêtre's index lists for ``user`` (task #751).
+
+    ``{"own": {room, is_live, people} | None, "in_progress": [{room, owner_name,
+    people}, ...]}``. The member's own room is always listed, whether or not it
+    has been created yet: ``my_room`` creates it on the first click. Someone
+    else's room is listed only while ``user`` holds a live invitation to it
+    *and* its owner is in it, which is the same pair of conditions
+    :func:`check_entry` asks at the door, so the Join button never leads to a
+    doorstep. Posted office hours are not listed: they admit every member, and
+    the board is not where hours are advertised.
+    """
+    empty = {"own": None, "in_progress": []}
+    if not services.daily_enabled() or not getattr(user, "is_authenticated", False):
+        return empty
+
+    own = None
+    if eligible_for_room(user):
+        room = PersonalRoom.objects.filter(user=user).select_related("video_room").first()
+        own = {
+            "room": room,
+            "is_live": room is not None and owner_present(room),
+            "people": _people_in(room),
+        }
+
+    invitations = (
+        RoomInvitation.objects.live()
+        .filter(invited_user=user, personal_room__isnull=False)
+        .exclude(personal_room__user=user)
+        .select_related("personal_room__user", "personal_room__video_room")
+    )
+    in_progress = []
+    seen = set()
+    for invitation in invitations:
+        room = invitation.personal_room
+        if room.pk in seen or not owner_present(room):
+            continue
+        seen.add(room.pk)
+        in_progress.append(
+            {"room": room, "owner_name": owner_display(room), "people": _people_in(room)}
+        )
+    in_progress.sort(key=lambda r: r["owner_name"].lower())
+    return {"own": own, "in_progress": in_progress}
+
+
+def _people_in(room) -> list[str]:
+    daily_room = getattr(room, "video_room", None) if room is not None else None
+    return services.presence_names(daily_room)
+
+
 # ---- office hours -------------------------------------------------------
 
 def hours_for(user) -> PersonalRoom | None:
