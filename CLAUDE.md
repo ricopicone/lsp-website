@@ -2376,6 +2376,57 @@ Done (see `git log` for specifics):
   now name the scope and add price to the reviewable list. No migration, no
   flag.
 
+- **Board elections** (task #813). The School had no way to run the election
+  of its Board on the site. New `elections` app, administered by a new
+  **Election Administrator** `StaffRole` the Board appoints on Board →
+  Appointments (which warns, never blocks, when the appointee is a sitting
+  director). The design follows the **bylaws**, which turned out to say more
+  than the ask did (2024 revision, Art. 3 §1 and Art. 12): candidates come
+  from "Candidates and Analysts" and send a motivation letter; **the Board
+  reviews candidacies** and a declined applicant is contacted personally by a
+  Board member, so the site sends them nothing; the Board publishes the slate
+  with the letters; seven or fewer accepted candidates means no vote; at least
+  three directors must be analysts; results are due within a week; voters are
+  members "who have paid their fees". The bylaws set **no counting rule**,
+  leaving the "means of vote" to the Board, so the rule is a **per-election
+  setting**: ranked ballots always, counted by **STV** (Scottish 2007 rules:
+  Droop quota, weighted inclusive Gregory, five-decimal truncation, ties by
+  earlier stage then a seeded and recorded lot) or **most votes** from each
+  ballot's top N. Visibility is per-election too (status or turnout while
+  voting; winners or the full count after), defaulting to the least shown,
+  because Rico is still asking the Board. The **phase is computed** from four
+  administrator-set dates plus step stamps, never stored (the #532 lesson),
+  and voting never opens before the slate is published. A passed date can't
+  be changed, so a closed window stays closed; extending an open one is moving
+  its future close later. Window openings that send mail (the call for
+  nominations, the roll freeze and voting notice) ride the five-minute
+  `send_meeting_reminders` timer, stamped under a row lock so overlapping runs
+  send once; every voting surface also freezes the roll on demand, so a voter
+  who arrives before the job finds a roll. **Voters** are the bylaws' member
+  roles in active standing, deliberately *not* `lsp_members()` (which admits
+  Django staff, LSP Staff and committee-serving Auditors); "paid their fees"
+  is the administrator's judgment, made per person with a recorded reason,
+  because the dues ledger is still mid-cleanup — dues state is shown on the
+  roll, never enforced. **Secrecy** is "linked, shown only to the voter", and
+  holds by structure: `elections/ballots.py` is the only module that reads
+  rankings (a source scan pins it), ballots are in neither Django admin nor
+  devapi, the administrator sees *voted / not yet* but never when (in an
+  electorate of about sixty a timestamp identifies a voter), the
+  ballot-recorded email lists no choices, and the help page says plainly that
+  the database still links the two. The three-analyst minimum is a warning on
+  the count, never a constraint on it; directors with no recorded term end
+  aren't counted as continuing, so it can over-warn but never under-warn.
+  Seating the winners stays a manual step on Board → Membership. Surfaces:
+  `/admin-tools/elections/` (console; deliberately **not** open to the Web
+  Coordinator by default), `/admin-tools/board/elections/` (Board review, with
+  a card on the Board landing page during review), and **My LSP → Election**
+  for voters and nominees, from the call until 30 days after the results. A
+  new email-locked notification category, *Board elections*. Found en route:
+  the URL name `formation` is the **public** About → Formation page and the
+  hub is `formation:formation`, so every election link was briefly pointing at
+  the wrong page; pinned by test. Design:
+  `docs/superpowers/specs/2026-10-12-board-elections-design.md`.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

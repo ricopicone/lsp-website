@@ -5,7 +5,10 @@ from django.urls import reverse
 
 from elections import services
 from elections.tests.factories import (
-    make_director, make_election, make_member, make_nomination,
+    make_director,
+    make_election,
+    make_member,
+    make_nomination,
 )
 
 pytestmark = pytest.mark.django_db

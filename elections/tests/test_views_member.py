@@ -8,7 +8,10 @@ from django.utils import timezone
 
 from elections import ballots, services
 from elections.tests.factories import (
-    make_administrator, make_election, make_member, make_nomination,
+    make_administrator,
+    make_election,
+    make_member,
+    make_nomination,
 )
 
 pytestmark = pytest.mark.django_db

@@ -68,6 +68,37 @@ class Command(BaseCommand):
         ))
         self._remind_sessions(now, opts["session_lead_hours"], dry)
         self._per_class(now, dry)
+        self._elections(now, dry)
+
+    def _elections(self, now, dry: bool) -> None:
+        """Board elections (task #813): send the call for nominations once
+        they open, and freeze the roll and send the voting notice once voting
+        opens. Rides this command because the host already runs it every five
+        minutes. A failure here must not stop the reminders above."""
+        from elections import services
+        from elections.models import Election
+
+        if dry:
+            for e in Election.objects.filter(acclaimed_at__isnull=True,
+                                             results_published_at__isnull=True,
+                                             counted_at__isnull=True):
+                phase = e.phase_at(now)
+                if e.call_sent_at is None and phase != Election.Phase.DRAFT:
+                    self.stdout.write(f"would send the call for nominations: {e}")
+                if phase == Election.Phase.VOTING and e.voting_notice_sent_at is None:
+                    self.stdout.write(f"would open voting: {e}")
+            return
+        try:
+            stats = services.advance_elections(now)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("election pass failed")
+            self.stderr.write("election pass failed; see the log")
+            return
+        self.stdout.write(self.style.SUCCESS(
+            f"elections: {stats['calls']} call(s), {stats['frozen']} roll(s) frozen, "
+            f"{stats['voting_notices']} voting notice(s)"
+        ))
 
     def _per_class(self, now, dry: bool) -> None:
         """Per-class seminars (task #811): record each ended class's

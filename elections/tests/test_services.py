@@ -92,7 +92,9 @@ def test_publish_slate_refuses_after_voting_close():
         services.publish_slate(e, make_member())
 
 
-def test_publish_slate_stamps_audits_and_tells_candidates(mailoutbox, django_capture_on_commit_callbacks):
+def test_publish_slate_stamps_audits_and_tells_candidates(
+    mailoutbox, django_capture_on_commit_callbacks,
+):
     e = make_election("review")
     cand = make_nomination(e)
     make_nomination(e, status="declined")
