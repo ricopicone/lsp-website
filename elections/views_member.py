@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 from . import ballots, services
 from .forms import BallotForm, NominationForm
 from .models import Election, Nomination
+from .queries import DRAFT_KEY
 
 
 def _tab():
@@ -57,6 +58,12 @@ def ballot(request, slug):
     if not form.is_valid():
         errors = form.non_field_errors() or ["That ballot couldn't be recorded."]
         messages.error(request, errors[0])
+        # Keep the selections for the redraw (read once, then dropped), so
+        # one duplicate rank doesn't cost the voter their whole ballot.
+        request.session[DRAFT_KEY] = {
+            "slug": election.slug,
+            "ranks": {k: v for k, v in request.POST.items() if k.startswith("rank_")},
+        }
         return redirect(reverse("formation:formation") + "?tab=election&change=1")
     try:
         services.cast_ballot(election, request.user, form.ranked_ids())

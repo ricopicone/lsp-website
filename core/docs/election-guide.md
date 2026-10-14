@@ -49,7 +49,10 @@ nothing.
 You set four dates: nominations open, nominations close, voting opens, voting
 closes. They open and close each window by themselves; the emails go out
 within about five minutes of the time you set. **Open now** and **Close now**
-on the Overview do the same thing immediately.
+on the Overview do the same thing immediately. If the site was down for the
+whole nomination window, the call is never sent late, since it would invite
+nominations that have closed; the record says so, and you can move the
+dates and write to voters yourself.
 
 A date that has already passed can't be changed, so a closed window stays
 closed. To extend an open window, move its closing date later. Voting never

@@ -15,11 +15,24 @@ P = Election.Phase
 SHOW_AFTER = timedelta(days=30)
 
 
+#: Where the answer is kept on the user object, so one request asks once.
+_MEMO = "_lsp_visible_election"
+#: The session key holding a refused ballot's selections until it is redrawn.
+DRAFT_KEY = "election_ballot_draft"
+
+
 def visible_election_for(user):
     """The election this member's tab shows, or None. Runs on every page (the
-    tab list feeds the avatar menu), so it stays cheap for non-voters."""
+    tab list feeds the avatar menu), so it stays cheap for non-voters, and
+    is remembered on the user object, which lives for one request."""
     if not getattr(user, "is_authenticated", False):
         return None
+    if not hasattr(user, _MEMO):
+        setattr(user, _MEMO, _visible_election_for(user))
+    return getattr(user, _MEMO)
+
+
+def _visible_election_for(user):
     profile = getattr(user, "profile", None)
     has_role = profile is not None and profile.role in eligibility.VOTER_ROLES
     if not has_role and not (
@@ -63,9 +76,15 @@ def tab_context(request, election) -> dict:
         own = ballots.own_ballot(user, election)
         ctx["own_ballot"] = own
         if phase == P.VOTING and ctx["on_roll"]:
-            ctx["editing"] = own is None or bool(request.GET.get("change"))
-            ctx["ballot_form"] = BallotForm(
-                candidates, initial_order=[n.id for n in own or []])
+            draft = request.session.pop(DRAFT_KEY, None)
+            if draft and draft.get("slug") == election.slug:
+                # A ballot just refused for an error: show it as it was sent.
+                ctx["editing"] = True
+                ctx["ballot_form"] = BallotForm(candidates, draft.get("ranks", {}))
+            else:
+                ctx["editing"] = own is None or bool(request.GET.get("change"))
+                ctx["ballot_form"] = BallotForm(
+                    candidates, initial_order=[n.id for n in own or []])
     if phase == P.VOTING and election.show_during_voting == Election.DuringVoting.TURNOUT:
         ctx["turnout"] = ballots.turnout(election)
         ctx["roll_size"] = len(services.roll_ids(election))

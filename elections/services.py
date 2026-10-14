@@ -218,25 +218,31 @@ def set_override(election, user, override, reason, by) -> None:
         raise ElectionError("Give a reason; it is kept in the record.")
     if override not in (VoterRollEntry.Override.ADD, VoterRollEntry.Override.REMOVE):
         raise ElectionError("Choose add or remove.")
-    if election.phase in (P.CLOSED, P.COUNTED, P.PUBLISHED, P.ACCLAIMED):
-        raise ElectionError("The voter roll is closed.")
-    if (override == VoterRollEntry.Override.REMOVE
-            and user.id in ballots.voted_user_ids(election)):
-        raise ElectionError(f"{_name(user)} has already voted; their ballot stands.")
-    row, _ = VoterRollEntry.objects.get_or_create(election=election, user=user)
-    row.override = override
-    row.reason = reason
-    row.override_by = by
-    row.override_at = timezone.now()
-    if election.roll_frozen_at:
-        row.on_roll = override == VoterRollEntry.Override.ADD
-        if row.on_roll and not row.role_at_freeze:
-            row.role_at_freeze = user.profile.role
-    row.save()
-    if override == VoterRollEntry.Override.ADD:
-        _save(election, by, f"Added {_name(user)} to the roll: {reason}")
-    else:
-        _save(election, by, f"Removed {_name(user)} from the roll: {reason}")
+    with transaction.atomic():
+        # Under the same lock the freeze takes, and reading the fresh row: an
+        # override from a page loaded before the freeze must still reach the
+        # frozen roll, not only the pre-freeze computation.
+        e = _locked(election)
+        if e.phase in (P.CLOSED, P.COUNTED, P.PUBLISHED, P.ACCLAIMED):
+            raise ElectionError("The voter roll is closed.")
+        if (override == VoterRollEntry.Override.REMOVE
+                and user.id in ballots.voted_user_ids(e)):
+            raise ElectionError(f"{_name(user)} has already voted; their ballot stands.")
+        row, _ = VoterRollEntry.objects.get_or_create(election=e, user=user)
+        row.override = override
+        row.reason = reason
+        row.override_by = by
+        row.override_at = timezone.now()
+        if e.roll_frozen_at:
+            row.on_roll = override == VoterRollEntry.Override.ADD
+            if row.on_roll and not row.role_at_freeze:
+                row.role_at_freeze = user.profile.role
+        row.save()
+        if override == VoterRollEntry.Override.ADD:
+            _save(e, by, f"Added {_name(user)} to the roll: {reason}")
+        else:
+            _save(e, by, f"Removed {_name(user)} from the roll: {reason}")
+    election.refresh_from_db()
 
 
 # --- voting -------------------------------------------------------------------------------
@@ -385,9 +391,17 @@ def advance_elections(now=None) -> dict:
                 locked = Election.objects.select_for_update().get(pk=e.pk)
                 if locked.call_sent_at is None:
                     locked.call_sent_at = now
-                    _save(locked, None, "Sent the call for nominations.", "call_sent_at")
-                    notify.call(list(eligibility.eligible_voters_qs()), locked)
-                    stats["calls"] += 1
+                    if phase == P.NOMINATING:
+                        _save(locked, None, "Sent the call for nominations.",
+                              "call_sent_at")
+                        notify.call(list(eligibility.eligible_voters_qs()), locked)
+                        stats["calls"] += 1
+                    else:
+                        # The job was down for the whole window: a call
+                        # inviting nominations that have closed would mislead.
+                        _save(locked, None, "Call for nominations not sent: "
+                              "nominations had already closed when the job ran.",
+                              "call_sent_at")
         if phase == P.VOTING:
             if ensure_roll_frozen(e, now):
                 stats["frozen"] += 1

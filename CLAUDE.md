@@ -2481,7 +2481,14 @@ Done (see `git log` for specifics):
   new email-locked notification category, *Board elections*. Found en route:
   the URL name `formation` is the **public** About → Formation page and the
   hub is `formation:formation`, so every election link was briefly pointing at
-  the wrong page; pinned by test. Design:
+  the wrong page; pinned by test. Five review follow-ups, each pinned by
+  test: a roll override takes the freeze's row lock, so one made from a
+  page loaded before the freeze still reaches the frozen roll; the secrecy
+  scan also covers the `rankings` relation; the tab check is remembered on
+  the user object, so a page asks once; a ballot refused for an error is
+  redrawn with the voter's selections (kept in the session, read once); and
+  a call for nominations is never sent after nominations have closed (the
+  record notes it instead). Design:
   `docs/superpowers/specs/2026-10-12-board-elections-design.md`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
