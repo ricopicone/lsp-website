@@ -66,7 +66,9 @@ def _style(form) -> None:
     templates, so Tailwind keeps them in the production build)."""
     for field in form.fields.values():
         w = field.widget
-        if isinstance(w, forms.Select):
+        if isinstance(w, forms.CheckboxInput):
+            css = "checkbox"
+        elif isinstance(w, forms.Select):
             css = "select select-bordered w-full"
         elif isinstance(w, forms.Textarea):
             css = "textarea textarea-bordered w-full"
@@ -85,7 +87,7 @@ class ElectionSettingsForm(forms.ModelForm):
         model = Election
         fields = [
             "title", "seats", *DATE_FIELDS, "results_due",
-            "count_method", "show_during_voting", "show_results",
+            "count_method", "show_during_voting", "show_results", "email_call",
         ]
         labels = {
             "nominations_open_at": "Nominations open",
@@ -128,6 +130,8 @@ class ElectionSettingsForm(forms.ModelForm):
         locked: set[str] = set()
         if phase in (P.VOTING, P.CLOSED, P.COUNTED, P.PUBLISHED, P.ACCLAIMED):
             locked.add("seats")
+        if self.instance.call_sent_at is not None:
+            locked.add("email_call")
         if phase in (P.COUNTED, P.PUBLISHED, P.ACCLAIMED):
             locked |= {"title", *DATE_FIELDS, "results_due", "count_method"}
         if phase in (P.PUBLISHED, P.ACCLAIMED):
@@ -209,6 +213,19 @@ class OverrideForm(forms.Form):
             raise forms.ValidationError("No account has that email address.")
         self.user = user
         return email
+
+
+class EnterNominationForm(OverrideForm):
+    """The administrator enters a nomination that arrived by email."""
+
+    override = None
+    reason = None
+    letter = forms.CharField(
+        label="Motivation letter",
+        widget=forms.Textarea(attrs={"rows": 8, "class": "textarea textarea-bordered w-full"}),
+        help_text="Paste the letter as the member sent it. They are emailed the "
+                  "usual confirmation that their nomination was received.",
+    )
 
 
 class NominationForm(forms.Form):

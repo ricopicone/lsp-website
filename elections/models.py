@@ -54,6 +54,12 @@ class Election(models.Model):
         max_length=10, choices=ResultsShown.choices, default=ResultsShown.WINNERS,
     )
 
+    email_call = models.BooleanField(
+        "Email the call for nominations", default=True,
+        help_text="Untick when the Board sends its own call. Members can still "
+                  "nominate themselves on the site, and you can enter nominations "
+                  "that arrive by email.",
+    )
     call_sent_at = models.DateTimeField(null=True, blank=True)
     slate_published_at = models.DateTimeField(null=True, blank=True)
     slate_published_by = models.ForeignKey(
@@ -142,6 +148,11 @@ class Nomination(models.Model):
     submitted_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     withdrawn_at = models.DateTimeField(null=True, blank=True)
+    #: Set when the administrator entered a nomination that arrived by email.
+    entered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.PENDING,
     )

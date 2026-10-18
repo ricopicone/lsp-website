@@ -19,7 +19,7 @@ from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from . import ballots, eligibility, services
-from .forms import ElectionSettingsForm, OverrideForm
+from .forms import ElectionSettingsForm, EnterNominationForm, OverrideForm
 from .models import Election, Nomination, VoterRollEntry
 from .permissions import is_election_administrator
 
@@ -157,6 +157,8 @@ def admin_nominations(request, slug):
         "nominations": e.nominations.select_related("user", "reviewed_by"),
         "pending": e.nominations.filter(
             withdrawn_at__isnull=True, status=Nomination.Status.PENDING).count(),
+        "enter_form": (EnterNominationForm()
+                       if e.phase in (P.NOMINATING, P.REVIEW) else None),
     })
 
 
@@ -266,6 +268,25 @@ def admin_action(request, slug):
     else:
         messages.success(request, done)
     return _back(request, e)
+
+
+@require_POST
+@administrator_required
+def admin_enter_nomination(request, slug):
+    e = _election(slug)
+    form = EnterNominationForm(request.POST)
+    if not form.is_valid():
+        for errors in form.errors.values():
+            for err in errors:
+                messages.error(request, err)
+        return redirect("elections:admin_nominations", e.slug)
+    try:
+        services.enter_nomination(e, form.user, form.cleaned_data["letter"], request.user)
+    except services.ElectionError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, "The nomination is entered.")
+    return redirect("elections:admin_nominations", e.slug)
 
 
 @require_POST

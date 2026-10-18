@@ -62,6 +62,20 @@ stay movable even once they have passed, since that window has never opened,
 so a Board review that runs late only needs new voting dates. Every change is
 written to the record on the Overview.
 
+## Nominations by email
+
+If the Board sends its own call for nominations, untick **Email the call
+for nominations** in Settings before nominations open, so members don't get
+two different calls. Members can still nominate themselves on the site.
+
+When a nomination arrives by email, enter it on the Nominations tab with the
+member's email address and their letter. You can do this until the slate is
+published, so a letter sent before the deadline can be entered after it. The
+member gets the usual confirmation, the nomination shows who entered it, and
+the Board reviews it like any other. Only analysts, scholars, candidates and
+candidate scholars can be entered, and you can't change a nomination the
+Board has already decided.
+
 ## Board review
 
 The Board accepts or declines each nomination, with a note only the Board and

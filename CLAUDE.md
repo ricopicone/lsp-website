@@ -2488,7 +2488,14 @@ Done (see `git log` for specifics):
   the user object, so a page asks once; a ballot refused for an error is
   redrawn with the voter's selections (kept in the session, read once); and
   a call for nominations is never sent after nominations have closed (the
-  record notes it instead). Design:
+  record notes it instead). **Emailed nominations (2026-10-17):** the
+  2026 Board sent its own call asking members to email nominations to the
+  administrator, so `Election.email_call` (default on) lets the
+  administrator stop the site's call (the job stamps it "not emailed"), and
+  `services.enter_nomination` enters an emailed nomination from the
+  Nominations tab through the Board's review, recorded as
+  `Nomination.entered_by`, refused for anyone who may not stand or whose
+  nomination the Board has decided. Design:
   `docs/superpowers/specs/2026-10-12-board-elections-design.md`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run

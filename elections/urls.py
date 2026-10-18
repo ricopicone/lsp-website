@@ -16,6 +16,8 @@ urlpatterns = [
     path(f"{_A}/<slug:slug>/roll/", views_admin.admin_roll, name="admin_roll"),
     path(f"{_A}/<slug:slug>/count/", views_admin.admin_count, name="admin_count"),
     path(f"{_A}/<slug:slug>/action/", views_admin.admin_action, name="admin_action"),
+    path(f"{_A}/<slug:slug>/nominations/enter/", views_admin.admin_enter_nomination,
+         name="admin_enter_nomination"),
     path(f"{_A}/<slug:slug>/override/", views_admin.admin_override, name="admin_override"),
     path("admin-tools/board/elections/", views_board.review, name="board_review"),
     path("admin-tools/board/elections/<int:pk>/decide/", views_board.decide,

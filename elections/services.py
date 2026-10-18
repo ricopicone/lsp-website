@@ -83,6 +83,32 @@ def submit_nomination(election, user, letter) -> Nomination:
     return nomination
 
 
+def enter_nomination(election, user, letter, by) -> Nomination:
+    """The administrator enters a nomination that arrived by email. Open
+    through the Board's review, since a letter sent before the deadline may
+    be entered after it; refused once the Board has decided that member."""
+    if election.phase not in (P.NOMINATING, P.REVIEW):
+        raise ElectionError("Nominations can be entered only until the slate is published.")
+    if not eligibility.may_stand(user):
+        raise ElectionError(
+            "Only analysts, scholars, candidates and candidate scholars may stand."
+        )
+    letter = (letter or "").strip()
+    if not letter:
+        raise ElectionError("Please paste the motivation letter.")
+    existing = Nomination.objects.filter(election=election, user=user).first()
+    if existing is not None and existing.status != Nomination.Status.PENDING:
+        raise ElectionError("The Board has already decided that nomination.")
+    nomination, _ = Nomination.objects.update_or_create(
+        election=election, user=user,
+        defaults={"letter": letter, "withdrawn_at": None, "entered_by": by,
+                  "role_at_submission": user.profile.role},
+    )
+    _save(election, by, f"Entered the nomination of {_name(user)}.")
+    notify.nomination_received(user, election)
+    return nomination
+
+
 def withdraw_nomination(nomination) -> None:
     if nomination.election.phase != P.NOMINATING:
         raise ElectionError(
@@ -391,7 +417,10 @@ def advance_elections(now=None) -> dict:
                 locked = Election.objects.select_for_update().get(pk=e.pk)
                 if locked.call_sent_at is None:
                     locked.call_sent_at = now
-                    if phase == P.NOMINATING:
+                    if phase == P.NOMINATING and not locked.email_call:
+                        _save(locked, None, "Call for nominations not emailed: "
+                              "the Board sends its own.", "call_sent_at")
+                    elif phase == P.NOMINATING:
                         _save(locked, None, "Sent the call for nominations.",
                               "call_sent_at")
                         notify.call(list(eligibility.eligible_voters_qs()), locked)
