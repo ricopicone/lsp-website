@@ -89,7 +89,7 @@
     {% elif editing %}
     <section id="ballot" class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-3">
       <h3 class="font-medium">Your ballot</h3>
-      <p class="text-sm text-base-content/70">Rank as many candidates as you like, 1st for your first choice. You can change your ballot until voting closes. No page on the site shows anyone how you voted.</p>
+      <p class="text-sm text-base-content/70">Rank as many candidates as you like, 1st for your first choice. Once cast, your ballot is final and can't be changed. It is stored without your name, so no one, on the site or off it, can tell how you voted.</p>
       <form method="post" action="{% url 'elections:ballot' election.slug %}" class="space-y-3">
         {% csrf_token %}
         <ul class="divide-y divide-base-300/50">
@@ -100,16 +100,15 @@
           </li>
           {% endfor %}
         </ul>
-        <button class="btn btn-primary btn-sm">Cast my ballot</button>
+        <button class="btn btn-primary btn-sm">Cast my ballot (final)</button>
       </form>
     </section>
     {% endif %}
   {% endif %}
-  {% if own_ballot and not editing %}
-  <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-2">
-    <h3 class="font-medium">Your ballot</h3>
-    <ol class="list-decimal pl-5">{% for n in own_ballot %}<li>{{ n.name }}</li>{% endfor %}</ol>
-    {% if phase == "voting" %}<a href="?tab=election&change=1#ballot" class="btn btn-ghost btn-sm">Change my ballot</a>{% endif %}
+  {% if has_voted %}
+  <section class="rounded-xl border border-base-300/60 bg-base-100 p-4 space-y-1">
+    <h3 class="font-medium">Your ballot is recorded</h3>
+    <p class="text-sm text-base-content/70">It is stored without your name, so it can't be shown to anyone, you included, and it can't be changed.</p>
   </section>
   {% endif %}
 

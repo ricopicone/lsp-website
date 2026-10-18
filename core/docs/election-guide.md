@@ -29,7 +29,7 @@ their fees are voting members."
 | Nominations open | Every voter is emailed the call. Analysts, scholars, candidates and candidate scholars nominate themselves with a letter, and can edit or withdraw until nominations close. |
 | Board review | Board members accept or decline each nomination on their own review page. |
 | Slate published | You publish the slate once every nomination is decided. Accepted candidates are told, and members can read the letters. |
-| Voting open | The voter roll is frozen and every voter is emailed. Voters rank the candidates and can change their ballot until voting closes. |
+| Voting open | The voter roll is frozen and every voter is emailed. Voters rank the candidates and cast one final ballot. |
 | Voting closed | You run the count. |
 | Counted | You check the count, then publish the results. |
 | Results published | Voters are emailed the results. |
@@ -123,10 +123,12 @@ is open.
 ## What ballot secrecy covers
 
 No page on the site shows how anyone voted, including these pages. You see
-whether each person has voted, never when, and the count reads the ballots
-with the voters removed. Each voter can see their own ballot, and the
-ballot-recorded email doesn't list their choices.
+whether each person has voted, never when.
 
-The database does keep each ballot linked to its voter, which is what lets a
-voter see and change their own ballot. Someone with direct access to the
-database could therefore read a ballot. No screen on the site can.
+A ballot is stored without the voter's name and without a time, under a
+random identifier, so it can't be traced to a voter even by someone reading
+the database. A separate record says only that a person has voted, which is
+what the roll shows and what stops a second ballot. The cost, which the
+Board chose, is that a ballot is final: nobody can see or change it once it
+is cast, the voter included. The ballot-recorded email doesn't list the
+voter's choices either.

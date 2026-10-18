@@ -1,9 +1,10 @@
 """The ONLY reader of ballot rankings (task #813).
 
-Two exits: ``own_ballot`` for the voter's own page, and
-``anonymous_ballots`` for the counter (voter dropped, order shuffled).
-Everything else may ask only whether a Ballot row exists
-(``voted_user_ids``, ``turnout``). A source-scan test pins that no other
+A ballot is anonymous and final (the Board's decision, 2026-10-14): it
+carries no voter and no time, and a separate VoteRecord says only who has
+voted. One exit for rankings, ``anonymous_ballots`` for the counter (order
+shuffled). Everything else may ask only who has voted (``voted_user_ids``,
+``has_voted``, ``turnout``). A source-scan test pins that no other
 module references BallotRanking, so secrecy holds by structure rather than
 by remembering.
 """
@@ -12,9 +13,9 @@ from __future__ import annotations
 
 import random
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
-from .models import Ballot, BallotRanking, Nomination
+from .models import Ballot, BallotRanking, Nomination, VoteRecord
 
 
 def candidates(election) -> list[Nomination]:
@@ -27,44 +28,42 @@ def candidates(election) -> list[Nomination]:
     )
 
 
+class AlreadyVoted(ValueError):
+    pass
+
+
 def cast(election, voter, ranked: list[int]) -> Ballot:
-    """Record ``voter``'s ballot (nomination ids, first choice first),
-    replacing any earlier one. Raises ValueError on an empty ballot, a
+    """Record that ``voter`` voted and store their ranking (nomination ids,
+    first choice first) as an anonymous ballot, in one transaction. Raises
+    AlreadyVoted on a second ballot, and ValueError on an empty ballot, a
     repeated candidate, or an id not on this election's slate."""
     allowed = {n.id for n in candidates(election)}
     if not ranked or len(set(ranked)) != len(ranked) or not set(ranked) <= allowed:
         raise ValueError("A ballot must rank at least one candidate, each once.")
-    with transaction.atomic():
-        ballot, _ = Ballot.objects.select_for_update().get_or_create(
-            election=election, voter=voter,
-        )
-        BallotRanking.objects.filter(ballot=ballot).delete()
-        BallotRanking.objects.bulk_create(
-            BallotRanking(ballot=ballot, nomination_id=nid, rank=i)
-            for i, nid in enumerate(ranked, start=1)
-        )
-        ballot.save(update_fields=["updated_at"])
+    try:
+        with transaction.atomic():
+            VoteRecord.objects.create(election=election, voter=voter)
+            ballot = Ballot.objects.create(election=election)
+            BallotRanking.objects.bulk_create(
+                BallotRanking(ballot=ballot, nomination_id=nid, rank=i)
+                for i, nid in enumerate(ranked, start=1)
+            )
+    except IntegrityError as exc:
+        raise AlreadyVoted("You have already voted; a ballot can't be changed.") from exc
     return ballot
 
 
-def own_ballot(user, election) -> list[Nomination] | None:
-    """The voter's own ranking, first choice first; None if they haven't voted."""
-    ballot = Ballot.objects.filter(election=election, voter=user).first()
-    if ballot is None:
-        return None
-    return [
-        r.nomination for r in
-        BallotRanking.objects.filter(ballot=ballot)
-        .select_related("nomination__user").order_by("rank")
-    ]
+def has_voted(user, election) -> bool:
+    return VoteRecord.objects.filter(election=election, voter=user).exists()
 
 
 def voted_user_ids(election) -> set[int]:
-    return set(Ballot.objects.filter(election=election).values_list("voter_id", flat=True))
+    return set(VoteRecord.objects.filter(election=election)
+               .values_list("voter_id", flat=True))
 
 
 def turnout(election) -> int:
-    return Ballot.objects.filter(election=election).count()
+    return VoteRecord.objects.filter(election=election).count()
 
 
 def anonymous_ballots(election) -> list[list[int]]:

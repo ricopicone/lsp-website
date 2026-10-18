@@ -73,18 +73,16 @@ def tab_context(request, election) -> dict:
     }
     if phase in (P.VOTING, P.CLOSED, P.COUNTED, P.PUBLISHED):
         ctx["on_roll"] = eligibility.is_on_roll(election, user)
-        own = ballots.own_ballot(user, election)
-        ctx["own_ballot"] = own
-        if phase == P.VOTING and ctx["on_roll"]:
+        ctx["has_voted"] = ballots.has_voted(user, election)
+        if phase == P.VOTING and ctx["on_roll"] and not ctx["has_voted"]:
             draft = request.session.pop(DRAFT_KEY, None)
             if draft and draft.get("slug") == election.slug:
                 # A ballot just refused for an error: show it as it was sent.
                 ctx["editing"] = True
                 ctx["ballot_form"] = BallotForm(candidates, draft.get("ranks", {}))
             else:
-                ctx["editing"] = own is None or bool(request.GET.get("change"))
-                ctx["ballot_form"] = BallotForm(
-                    candidates, initial_order=[n.id for n in own or []])
+                ctx["editing"] = True
+                ctx["ballot_form"] = BallotForm(candidates)
     if phase == P.VOTING and election.show_during_voting == Election.DuringVoting.TURNOUT:
         ctx["turnout"] = ballots.turnout(election)
         ctx["roll_size"] = len(services.roll_ids(election))

@@ -64,12 +64,11 @@ def ballot(request, slug):
             "slug": election.slug,
             "ranks": {k: v for k, v in request.POST.items() if k.startswith("rank_")},
         }
-        return redirect(reverse("formation:formation") + "?tab=election&change=1")
+        return redirect(reverse("formation:formation") + "?tab=election#ballot")
     try:
         services.cast_ballot(election, request.user, form.ranked_ids())
     except services.ElectionError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, "Your ballot was recorded. You can change it until "
-                                  "voting closes.")
+        messages.success(request, "Your ballot is recorded.")
     return _tab()

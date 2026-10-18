@@ -1,6 +1,6 @@
 {% load tz_filters %}{% autoescape off %}{{ recipient.first_name|default:"Hello" }},
 
-Your ballot in {{ election.title }} was recorded. This email does not list your choices, so your vote never sits in a mailbox; you can see your ballot on the site, and change it until voting closes, {{ election.voting_close_at|user_datetime_text }}.
+Your ballot in {{ election.title }} was recorded. It is stored without your name, so no one can tell how you voted, and it is final. Voting closes {{ election.voting_close_at|user_datetime_text }}.
 
 {{ url }}
 

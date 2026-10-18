@@ -115,17 +115,17 @@ def test_ballot_view_freezes_roll_lazily(client):
     assert e.roll_frozen_at and f"rank_{a.id}" in page
 
 
-def test_cast_and_change(client):
+def test_cast_once_and_no_second_ballot(client):
     e = make_election("voting")
     a, b = make_nomination(e), make_nomination(e)
     v = make_member()
     client.force_login(v)
     client.post(reverse("elections:ballot", args=[e.slug]),
                 {f"rank_{a.id}": "1", f"rank_{b.id}": "2"})
-    client.post(reverse("elections:ballot", args=[e.slug]), {f"rank_{b.id}": "1"})
-    assert [n.id for n in ballots.own_ballot(v, e)] == [b.id]
-    page = client.get(tab()).content.decode()
-    assert "Change my ballot" in page
+    r = client.post(reverse("elections:ballot", args=[e.slug]),
+                    {f"rank_{b.id}": "1"}, follow=True)
+    assert b"already voted" in r.content
+    assert ballots.anonymous_ballots(e) == [[a.id, b.id]]
 
 
 def test_duplicate_rank_rejected(client):
@@ -135,7 +135,7 @@ def test_duplicate_rank_rejected(client):
     client.force_login(v)
     r = client.post(reverse("elections:ballot", args=[e.slug]),
                     {f"rank_{a.id}": "1", f"rank_{b.id}": "1"}, follow=True)
-    assert ballots.own_ballot(v, e) is None and b"different rank" in r.content
+    assert not ballots.has_voted(v, e) and b"different rank" in r.content
 
 
 def test_off_roll_member_gets_no_ballot(client):

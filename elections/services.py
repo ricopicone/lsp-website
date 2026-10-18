@@ -284,6 +284,8 @@ def cast_ballot(election, voter, ranked) -> None:
         )
     try:
         ballots.cast(election, voter, ranked)
+    except ballots.AlreadyVoted as exc:
+        raise ElectionError("You have already voted; a ballot can't be changed.") from exc
     except ValueError as exc:
         raise ElectionError(str(exc)) from exc
     notify.ballot_recorded(voter, election)

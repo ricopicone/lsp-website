@@ -2469,8 +2469,13 @@ Done (see `git log` for specifics):
   rankings (a source scan pins it), ballots are in neither Django admin nor
   devapi, the administrator sees *voted / not yet* but never when (in an
   electorate of about sixty a timestamp identifies a voter), the
-  ballot-recorded email lists no choices, and the help page says plainly that
-  the database still links the two. The three-analyst minimum is a warning on
+  ballot-recorded email lists no choices. **Ballots are unlinked and final**
+  (the Board's decision, 2026-10-14, superseding the first "linked, shown
+  only to the voter" design): `Ballot` has no voter, no timestamps and a UUID
+  key, a separate `VoteRecord` says only who voted (what the roll shows and
+  what refuses a second ballot), and both are written in one transaction;
+  `elections/0004` drops and recreates the ballot tables, safe because no
+  election had opened voting anywhere. The three-analyst minimum is a warning on
   the count, never a constraint on it; directors with no recorded term end
   aren't counted as continuing, so it can over-warn but never under-warn.
   Seating the winners stays a manual step on Board → Membership. Surfaces:

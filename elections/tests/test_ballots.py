@@ -16,28 +16,29 @@ def _setup():
     return e, a, b, declined
 
 
-def test_cast_and_read_own():
+def test_cast_records_who_voted_and_an_anonymous_ballot():
     e, a, b, _ = _setup()
     v = make_member()
     ballots.cast(e, v, [b.id, a.id])
-    assert [n.id for n in ballots.own_ballot(v, e)] == [b.id, a.id]
+    assert ballots.has_voted(v, e)
+    assert ballots.anonymous_ballots(e) == [[b.id, a.id]]
     assert ballots.voted_user_ids(e) == {v.id}
     assert ballots.turnout(e) == 1
 
 
-def test_changing_replaces():
+def test_a_second_ballot_is_refused():
     e, a, b, _ = _setup()
     v = make_member()
     ballots.cast(e, v, [a.id, b.id])
-    ballots.cast(e, v, [b.id])
-    assert [n.id for n in ballots.own_ballot(v, e)] == [b.id]
-    assert ballots.anonymous_ballots(e) == [[b.id]]
+    with pytest.raises(ballots.AlreadyVoted):
+        ballots.cast(e, v, [b.id])
+    assert ballots.anonymous_ballots(e) == [[a.id, b.id]]
     assert ballots.turnout(e) == 1
 
 
-def test_own_ballot_is_none_before_voting():
+def test_not_voted_before_casting():
     e, *_ = _setup()
-    assert ballots.own_ballot(make_member(), e) is None
+    assert not ballots.has_voted(make_member(), e)
 
 
 def test_withdrawn_candidate_is_not_a_candidate():

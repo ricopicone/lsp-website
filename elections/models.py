@@ -7,6 +7,8 @@ them. Ballot rankings are read ONLY through ``elections.ballots``.
 
 from __future__ import annotations
 
+import uuid
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -223,27 +225,38 @@ class VoterRollEntry(models.Model):
         ]
 
 
-class Ballot(models.Model):
-    """Linked to its voter; the link is shown to nobody but the voter.
-    Read rankings ONLY through ``elections.ballots``."""
+class VoteRecord(models.Model):
+    """That ``voter`` has voted in ``election``: nothing more. No time (in an
+    electorate of about sixty a timestamp identifies a voter) and no link to
+    the ballot, which is a separate row with no voter on it."""
 
     election = models.ForeignKey(
-        Election, on_delete=models.CASCADE, related_name="ballots",
+        Election, on_delete=models.CASCADE, related_name="vote_records",
     )
     voter = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
-        related_name="election_ballots",
+        related_name="election_votes",
     )
-    cast_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["election", "voter"],
-                name="election_one_ballot_per_voter",
+                name="election_one_vote_per_voter",
             ),
         ]
+
+
+class Ballot(models.Model):
+    """An anonymous ballot: no voter, no time, and a random id so that row
+    order can't be matched against the order people voted. Final once cast
+    (the Board's decision, 2026-10-14). Read rankings ONLY through
+    ``elections.ballots``."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    election = models.ForeignKey(
+        Election, on_delete=models.CASCADE, related_name="ballots",
+    )
 
 
 class BallotRanking(models.Model):
