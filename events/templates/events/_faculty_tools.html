@@ -29,10 +29,14 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
             <input type="hidden" name="next" value="{{ request.get_full_path }}">
             <button class="btn btn-primary btn-xs">Approve</button>
           </form>
-          <form method="post" action="{% url 'registrations:decline' reg.id %}" style="display:contents"
+          {# The reason is shown to the member on their registration page (task #820: the view took one, the form never asked). #}
+          <form method="post" action="{% url 'registrations:decline' reg.id %}" class="flex items-center gap-2"
                 onsubmit="return confirm('Decline this registration?');">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <input type="text" name="reason" maxlength="500" placeholder="Reason (optional, they'll see it)"
+                   aria-label="Reason for declining, shown to the registrant"
+                   class="input input-bordered input-xs w-44 sm:w-56">
             <button class="btn btn-ghost btn-xs text-error">Decline</button>
           </form>
         </div>

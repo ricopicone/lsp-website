@@ -2568,6 +2568,15 @@ Done (see `git log` for specifics):
   Accounts table fits at desktop width with dates in place of timestamps
   (full time on hover); amounts read "$2,000.00" throughout; the Overview's
   collected tile lost a box drawn inside its box. Guide updated.
+  **Group 4, faculty tools:** Edit event held up after #817. What remained:
+  a refused feature image or session schedule re-rendered the edit page at
+  the top with its errors at the very bottom, so the page now scrolls to a
+  form marked `data-scroll-here` (`static/js/event-edit.js`); the roster's
+  Decline posted no reason although `decline_registration` takes one and
+  the member's page shows it, so the form now asks (optional, "they'll see
+  it"); and the joining-instructions page's collapsed "Show the list" sat
+  above an address box shown anyway (now "Show names"). Faculty help texts
+  lose their em dashes.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

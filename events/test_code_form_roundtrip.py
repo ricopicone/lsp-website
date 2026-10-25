@@ -93,3 +93,26 @@ def test_a_per_class_seminar_offers_no_payment_plan(client):
     code = PricingCode.objects.get()
     assert code.per_class and code.installments == 1
     assert code.valid_until is None
+
+
+def test_faculty_can_give_a_reason_when_declining(client, setup):
+    """The decline view took a reason the roster form never asked for (#820)."""
+    from decimal import Decimal
+
+    from registrations.models import Registration
+
+    event = setup
+    member = make_user("waiting@example.com")
+    reg = Registration.objects.create(
+        user=member, event=event, price_tier=event.price_tiers.get(),
+        quoted_amount=Decimal("500.00"),
+        status=Registration.Status.PENDING_APPROVAL,
+    )
+    data = browser_form(_roster(client, event), action=f"/registrations/{reg.pk}/decline/")
+    data["reason"] = ["The seminar is full this term."]
+
+    client.post(reverse("registrations:decline", args=[reg.pk]), data)
+
+    reg.refresh_from_db()
+    assert reg.status == Registration.Status.DECLINED
+    assert reg.decline_reason == "The seminar is full this term."

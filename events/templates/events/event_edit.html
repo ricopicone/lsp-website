@@ -66,7 +66,7 @@
         <h2 class="font-serif text-lg text-base-content">Readings</h2>
       </label>
       {{ form.readings }}
-      <p class="text-xs text-base-content/60">One citation per line—each renders as its own entry. Wrap book and journal titles in *asterisks* to italicize them. Notes ("Further readings will be added…") and sub-headings may be lines too.</p>
+      <p class="text-xs text-base-content/60">One citation per line, each shown as its own entry. Wrap book and journal titles in *asterisks* to italicize them. Notes ("Further readings will be added…") and sub-headings may be lines too.</p>
       {% if form.readings.errors %}
       <p class="text-xs text-error">{{ form.readings.errors|join:", " }}</p>
       {% endif %}
@@ -329,7 +329,7 @@
       </p>
     </div>
 
-    <form method="post" action="{% url 'events:edit_schedule' event.slug %}" class="space-y-3">
+    <form method="post" action="{% url 'events:edit_schedule' event.slug %}" class="space-y-3 scroll-mt-24"{% if schedule_formset.is_bound and schedule_formset.total_error_count %} data-scroll-here{% endif %}>
       {% csrf_token %}
       {{ schedule_formset.management_form }}
       {% if schedule_formset.non_form_errors %}

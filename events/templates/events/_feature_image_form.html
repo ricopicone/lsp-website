@@ -33,7 +33,7 @@
   {% endwith %}
 
   <form method="post" enctype="multipart/form-data" id="feature-image-form"
-        action="{% url 'events:feature_image' event.slug %}" class="space-y-3">
+        action="{% url 'events:feature_image' event.slug %}" class="space-y-3 scroll-mt-24"{% if feature_image_form.errors %} data-scroll-here{% endif %}>
     {% csrf_token %}
     {% with f=feature_image_form %}
     <div class="space-y-1">

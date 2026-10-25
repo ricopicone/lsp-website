@@ -897,7 +897,7 @@ class EventProposalForm(forms.ModelForm):
                 elif require and end < _dt.date.today():
                     self.add_error(
                         "end_date",
-                        "End date can't be in the past — the term wouldn't be active.",
+                        "End date can't be in the past, or the term wouldn't be active.",
                     )
         else:
             # Special event: a concrete date/time is required unless it's TBD.
@@ -1021,7 +1021,7 @@ class ProgramEventForm(PriceFieldsMixin, forms.ModelForm):
         label="Continue an existing seminar",
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
         help_text=(
-            "Optional. Make this a new yearly term of an existing seminar — its "
+            "Optional. Make this a new yearly term of an existing seminar: its "
             "workspace, channel, and past members carry over (they renew by "
             "registering for this term). Leave blank for a brand-new seminar."
         ),

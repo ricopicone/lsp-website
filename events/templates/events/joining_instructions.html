@@ -54,7 +54,7 @@
     </p>
     {% if recipients %}
     <details class="text-sm">
-      <summary class="cursor-pointer text-base-content/70">Show the list</summary>
+      <summary class="cursor-pointer text-base-content/70">Show names</summary>
       <ul class="mt-2 columns-1 sm:columns-2 text-base-content/80">
         {% for person in recipients %}
         <li>{{ person.get_full_name|default:person.email }} <span class="text-base-content/50">· {{ person.email }}</span></li>
