@@ -677,6 +677,7 @@
   {# forms too — signing in, signing up, donating, requesting a referral. #}
   <script src="{% static 'js/submit-guard.js' %}" defer></script>
   <script src="{% static 'js/scroll-to-refused.js' %}" defer></script>
+  <script src="{% static 'js/unsaved-guard.js' %}" defer></script>
 
   {% if user|is_parletre_member and request.resolver_match.app_name == 'parletre' %}
   {# Global "who's online" heartbeat — fires on every Parlêtre page. #}

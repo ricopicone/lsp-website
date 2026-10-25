@@ -2597,6 +2597,17 @@ Done (see `git log` for specifics):
   now names a reading group's conveners (`Event.leads()`); **Approve &
   mint** is **Approve and create** and asks first. Still open: proposals
   notify nobody on submission or decision (known since #749).
+  **Group 7, the Referral Coordinator:** the requester's free text was
+  labeled "For the Referral Coordinator" on the coordinator's request page
+  and edit form, though it is exactly what every clinician receives (#684);
+  it now reads "Their message (sent to clinicians)", the label that tells
+  her to scrub it. The distribute preview promised the message "exactly as
+  it will read" but kept the default due date after she changed the field;
+  the date in the preview now follows the field. The request page's Notes
+  box sat among eight other forms whose buttons discarded a typed note, so
+  `static/js/unsaved-guard.js` (site-wide, opt-in with
+  `form[data-warn-unsaved]`) asks before leaving a changed form; Notes uses
+  it.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

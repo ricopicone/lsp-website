@@ -175,7 +175,7 @@ def distribute(request, reference):
         else:
             messages.warning(
                 request,
-                "The referral list has no active clinicians — nothing was sent. "
+                "The referral list has no active clinicians, so nothing was sent. "
                 "Add clinicians on the Referral list page first.",
             )
         return redirect("referrals:detail", reference=reference)

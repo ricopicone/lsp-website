@@ -226,7 +226,7 @@ class RequestEditForm(forms.ModelForm):
             "email": "Email (withheld from clinicians)",
             "language": "Preferred language",
             "modalities": "Preferred modalities",
-            "additional_information": "For the Referral Coordinator",
+            "additional_information": "Their message (sent to clinicians)",
         }
         widgets = {
             "name": _TEXT_INPUT,

@@ -28,7 +28,7 @@
     <p class="text-xs font-medium text-base-content/60">Subject</p>
     <p class="text-sm font-medium">{{ subject }}</p>
     <p class="text-xs font-medium text-base-content/60 pt-2">Body</p>
-    <pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed">{{ body }}</pre>
+    <pre id="distribute-body" data-due-text="{{ default_due|date:'F j, Y' }}" class="whitespace-pre-wrap font-sans text-sm leading-relaxed">{{ body }}</pre>
   </section>
 
   <form method="post" class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-4">
@@ -52,4 +52,22 @@
     </div>
   </form>
 </div>
+<script>
+  // The preview is "exactly as it will read", so its date follows the field
+  // the email takes it from (task #820); it used to keep the default.
+  (function () {
+    var pre = document.getElementById("distribute-body");
+    var input = document.querySelector("input[name='responses_due_at']");
+    if (!pre || !input) return;
+    var months = ["January","February","March","April","May","June","July",
+                  "August","September","October","November","December"];
+    input.addEventListener("change", function () {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.value);
+      if (!m) return;
+      var text = months[+m[2] - 1] + " " + (+m[3]) + ", " + m[1];
+      pre.textContent = pre.textContent.split(pre.dataset.dueText).join(text);
+      pre.dataset.dueText = text;
+    });
+  })();
+</script>
 {% endblock %}

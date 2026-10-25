@@ -31,7 +31,8 @@
       <div><dt class="text-base-content/60">Preferred modalities</dt><dd>{{ req.modalities|default:"—" }}</dd></div>
     </dl>
     <div>
-      <p class="text-base-content/60 text-sm">For the Referral Coordinator</p>
+      {# It goes to every clinician on distribution (#684), so the label says so (task #820). #}
+      <p class="text-base-content/60 text-sm">Their message (sent to clinicians)</p>
       <p class="whitespace-pre-line text-sm mt-1">{{ req.additional_information }}</p>
     </div>
   </section>
@@ -233,7 +234,7 @@
   {# --- Notes ----------------------------------------------------------- #}
   <section class="rounded-xl border border-base-300/60 bg-base-100 p-5 space-y-3">
     <h2 class="font-serif text-xl text-base-content">Notes</h2>
-    <form method="post" action="{% url 'referrals:notes' req.reference %}" class="space-y-3">
+    <form method="post" action="{% url 'referrals:notes' req.reference %}" class="space-y-3" data-warn-unsaved>
       {% csrf_token %}
       {{ notes_form.coordinator_notes }}
       <button class="btn btn-sm">Save notes</button>
