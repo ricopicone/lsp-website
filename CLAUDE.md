@@ -2582,6 +2582,21 @@ Done (see `git log` for specifics):
   "$0.00 · Paid"; `Registration.status_label` now reads **Enrolled** for a
   per-class PAID row and the amount column shows the class rate, shared
   with the faculty roster and the member's page so the three can't differ.
+  **Group 6, the Program Committee and proposals:** a reading group created
+  on the site never appeared on the public program page, because the page
+  lists reading groups by their *workgroup's* dates and `ensure_workgroup`
+  gave the workgroup none (prod's only reading group was imported with dates
+  by hand, so nobody had hit it); it now carries the event's start date, and
+  `Workgroup.effective_window` falls back to the earliest event's start for
+  an undated offering group. A refused proposal re-rendered at the top with
+  its errors far down the form; `core/_form_error_summary.html` names and
+  links each failed field, and `static/js/scroll-to-refused.js` (site-wide,
+  from `base.html`) scrolls to any `[data-scroll-here]`, which replaced the
+  edit page's own copy. The proposal form showed "To be announced"'s help
+  on a seminar, where that option is hidden (#769). The PC's program table
+  now names a reading group's conveners (`Event.leads()`); **Approve &
+  mint** is **Approve and create** and asks first. Still open: proposals
+  notify nobody on submission or decision (known since #749).
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

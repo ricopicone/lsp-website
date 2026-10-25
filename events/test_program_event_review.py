@@ -101,3 +101,26 @@ def test_faculty_edit_to_an_imported_offering_shows_the_dialog(client, program):
     assert cr.original_description == "The description the committee published."
     event.refresh_from_db()
     assert event.description == "The description the committee published."
+
+
+@pytest.mark.django_db
+def test_a_reading_group_made_on_the_site_appears_on_the_program(client):
+    """ensure_workgroup gave the workgroup no start date, and the program page
+    lists reading groups by their workgroup's dates (task #820)."""
+    from datetime import date
+
+    from events.models import Event, Program
+
+    program = Program.objects.create(academic_year="2026-2027", published=True)
+    rg = Event.objects.create(
+        title="Lacan Reading Group", slug="lacan-rg",
+        event_type=Event.Type.READING_GROUP, program=program, published=True,
+        start_date=date(2026, 10, 1), end_date=date(2027, 3, 1),
+    )
+    rg.ensure_workgroup()
+    assert rg.workgroup.start_date == date(2026, 10, 1)
+
+    # A group made before the fix, with no date of its own, still shows.
+    type(rg.workgroup).objects.filter(pk=rg.workgroup_id).update(start_date=None)
+    html = client.get("/program/?year=2026-2027").content.decode()
+    assert "Lacan Reading Group" in html

@@ -134,14 +134,14 @@
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Title</th><th>Type</th><th>Faculty</th><th>Dates</th><th>Registration</th><th></th></tr>
+          <tr><th>Title</th><th>Type</th><th>Faculty or conveners</th><th>Dates</th><th>Registration</th><th></th></tr>
         </thead>
         <tbody>
           {% for e in offerings %}
           <tr>
             <td>{{ e.title }}</td>
             <td class="text-xs">{{ e.get_event_type_display }}</td>
-            <td class="text-xs text-base-content/70">{% for f in e.faculty_members %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td class="text-xs text-base-content/70">{% for f in e.leads %}{{ f.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
             <td class="text-xs text-base-content/70 whitespace-nowrap">{{ e.start_date|date:"M j" }} – {{ e.end_date|date:"M j, Y" }}</td>
             <td>
               <span class="badge badge-sm {% if e.status == 'open' %}badge-success{% elif e.status == 'closed' %}badge-neutral{% else %}badge-ghost{% endif %}">{{ e.get_status_display }}</span>

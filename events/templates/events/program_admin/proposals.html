@@ -3,10 +3,10 @@
 <div class="space-y-8">
   <p class="max-w-2xl text-sm text-base-content/60">
     Event proposals from members, whether a seminar, reading group, or special
-    event. Approving a seminar or reading group mints it into the proposed
-    academic year's program (you still publish the program separately);
-    approving a special event mints the event — published when it has a date,
-    otherwise held until you set one.
+    event. Approving a seminar or reading group creates it on the proposed
+    academic year's program (you still publish the program separately), and
+    approving a special event creates the event, published when it has a date
+    and otherwise held until you set one.
   </p>
 
   <section class="space-y-3">
@@ -57,10 +57,11 @@
           {% if p.contact %}<p class="text-xs text-base-content/60">Contact: {{ p.contact }}</p>{% endif %}
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <form method="post" action="{% url 'proposal_decide' p.pk %}">
+          <form method="post" action="{% url 'proposal_decide' p.pk %}"
+                onsubmit="return confirm('Approve “{{ p.title|escapejs }}” and create the event?');">
             {% csrf_token %}
             <input type="hidden" name="decision" value="approve">
-            <button class="btn btn-primary btn-sm">Approve &amp; mint</button>
+            <button class="btn btn-primary btn-sm">Approve and create</button>
           </form>
           <form method="post" action="{% url 'proposal_decide' p.pk %}"
                 class="flex items-center gap-2">

@@ -153,7 +153,7 @@ seminar confers faculty standing, granted automatically on approval.
   shows up here once they submit it. Each card shows the proposer, type,
   proposed date/time (or "TBD"), conveners, description, speakers, fee,
   readings, and contact.
-- **Approve & mint**: turns the proposal into a real Event. A seminar
+- **Approve and create**: turns the proposal into a real Event. A seminar
   or reading group is minted into the *proposed* academic year's
   program (you still publish that program separately); a special event
   is minted and published once it has a date, otherwise held until you
@@ -277,7 +277,7 @@ immediately and don't appear here.
 
 1. Go to the **Proposals** tab.
 2. Read the proposal under **Pending**.
-3. Click **Approve & mint** to turn it into an Event (a seminar or
+3. Click **Approve and create** to turn it into an Event (a seminar or
    reading group lands in the proposed year's program; a special event
    is minted directly), or **Decline** with a note to send it back.
 4. For a seminar or reading group, open the program and edit the minted

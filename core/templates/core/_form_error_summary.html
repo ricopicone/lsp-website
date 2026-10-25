@@ -1,0 +1,21 @@
+{% comment %}A refused form's errors, named at the top of the form (task #820).
+
+A long form re-rendered after a refused POST opens at the top while its field
+errors sit far below, so the member sees an unchanged page and nothing saved
+(the #817 lesson). This names each failed field and links to it. Pass ``form``
+and optionally ``what`` (e.g. "Your proposal"). static/js/scroll-to-refused.js
+brings it into view.
+{% endcomment %}
+{% if form.errors %}
+<div role="alert" class="alert alert-error text-sm scroll-mt-24" data-scroll-here>
+  <div class="space-y-1">
+    <p class="font-medium">{{ what|default:"This form" }} wasn't saved. Fix {% if form.errors|length > 1 %}these{% else %}this{% endif %} and try again:</p>
+    <ul class="list-disc pl-5">
+      {% for field in form %}{% if field.errors %}
+      <li><a href="#{{ field.id_for_label }}" class="link">{{ field.label }}</a>: {{ field.errors|join:" " }}</li>
+      {% endif %}{% endfor %}
+      {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}

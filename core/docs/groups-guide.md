@@ -140,7 +140,7 @@ works this way: every Analyst belongs to it automatically.
 - **Review cartel proposals** (PC / Coordinator)—**Groups → Cartels → Review
   proposals**.
 - **Approve a seminar proposal** (PC)—**Program admin → Proposals →
-  Approve & mint** (or Decline with a reason), then publish the program.
+  Approve and create** (or Decline with a reason), then publish the program.
 - **Edit a committee's charter** (chair / Board / staff)—the committee's
   Workspace → **Settings** tab.
 - **Add or remove a member** (leaders)—the Group's **Settings** tab →

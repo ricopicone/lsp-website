@@ -672,8 +672,16 @@ class Workgroup(models.Model):
     def effective_window(self):
         """The group's active ``(start, end)`` dates from its own fields;
         ``end`` is ``None`` for an ongoing group. ``start`` may be ``None`` if
-        unset (then it overlaps no specific year)."""
-        return self.start_date, self.end_date
+        unset and the group has no dated events (then it overlaps no specific
+        year). An offering group made before task #820 has no start date of its
+        own, so its earliest event's start stands in."""
+        start = self.start_date
+        if start is None and self.kind in (self.Kind.SEMINAR, self.Kind.READING_GROUP):
+            start = (
+                self.events.exclude(start_date__isnull=True)
+                .order_by("start_date").values_list("start_date", flat=True).first()
+            )
+        return start, self.end_date
 
     def overlaps_academic_year(self, year) -> bool:
         from events.models import academic_year_date_range

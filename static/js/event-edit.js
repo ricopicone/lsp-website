@@ -21,11 +21,6 @@
 (function () {
   "use strict";
 
-  // A separately saved form refused by the server re-renders this whole page,
-  // which opens at the top while the errors sit far below (task #820).
-  var refused = document.querySelector("[data-scroll-here]");
-  if (refused) refused.scrollIntoView({ block: "start" });
-
   var form = document.getElementById("event-details-form");
   if (!form) return;
 

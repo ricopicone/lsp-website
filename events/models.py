@@ -776,6 +776,13 @@ class Event(models.Model):
         roster. List of User objects — usable directly in templates."""
         return [m.user for m in self._faculty_memberships()]
 
+    def leads(self):
+        """Who runs this offering, conveners included (``offering_leads``), for
+        templates: a reading group's conveners are not ``faculty_members``."""
+        from .permissions import offering_leads
+
+        return offering_leads(self)
+
     def is_faculty(self, user) -> bool:
         if not getattr(user, "is_authenticated", False):
             return False
@@ -1034,6 +1041,10 @@ class Event(models.Model):
                 description=self.description or "",
                 landing_visibility="members",
                 content_visibility="private",
+                # The public program lists a reading group by its workgroup's
+                # dates, so a group made on the site with none never appeared
+                # (task #820; the imported groups were given dates by hand).
+                start_date=self.start_date,
             )
         else:
             # PC-organized event → the Programming Committee's workgroup.

@@ -25,7 +25,7 @@
     <p class="text-base-content/70">
       Any member can propose a <strong>seminar</strong>, <strong>reading group</strong>,
       or <strong>special event</strong>. The Program Committee reviews proposals and,
-      on approval, mints the event — seminars and reading groups go onto the program;
+      on approval, creates the event. Seminars and reading groups go onto the program;
       special events are set up by the committee before publishing. The form adapts
       to the type you pick.
     </p>
@@ -36,9 +36,7 @@
         action="{% if direct_create %}{% url 'program_admin_special_event_new' %}{% elif editing %}{% url 'proposal_edit' editing.pk %}{% else %}{% url 'propose_event' %}{% endif %}"
         class="space-y-5">
     {% csrf_token %}
-    {% if form.non_field_errors %}
-    <div class="alert alert-error text-sm">{{ form.non_field_errors }}</div>
-    {% endif %}
+    {% if editing or not direct_create %}{% include "core/_form_error_summary.html" with what="Your proposal" %}{% else %}{% include "core/_form_error_summary.html" with what="The event" %}{% endif %}
 
     {# ---- Basics (all types) ---- #}
     <div data-types="seminar reading_group special_event gathering" data-tour="proposal-type">{% include "events/_proposal_field.html" with field=form.event_type %}</div>
@@ -356,6 +354,9 @@
       if (feeTba) {
         var tbaOption = feeTba.closest("label") || feeTba.parentNode;
         showRow(tbaOption, !offering);
+        // Its help text explains only that option, so it goes with it (#820).
+        var tbaHelp = document.querySelector('[data-tour="proposal-fee"] p.text-xs');
+        if (tbaHelp) { showRow(tbaHelp, !offering); }
         if (offering && feeTba.checked) {
           var freeRadio = document.querySelector("input[name='fee_type'][value='free']");
           if (freeRadio) { freeRadio.checked = true; }
