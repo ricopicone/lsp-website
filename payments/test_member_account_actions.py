@@ -465,3 +465,72 @@ def test_decision_exempt_via_paid_charges_no_enrollments_needs_no_new_year_decis
     assert _tuition_block_reason(member, event=None) is None  # Gate 1 exempt
     resp = client.get(reverse("treasurer"))
     assert member not in resp.context["attention"]["undecided"]
+
+
+def _dues_period(start):
+    return DuesPeriod.objects.create(
+        name=f"AY {start}-{start + 1}", slug=f"ay-{start}-{start + 1}",
+        start_date=date(start, 9, 1), due_date=date(start, 9, 30),
+        end_date=date(start + 1, 8, 31),
+        dues_amount_pre_candidate=Decimal("50"),
+        dues_amount_candidate=Decimal("100"),
+        dues_amount_analyst=Decimal("150"))
+
+
+def test_record_offline_payment_takes_its_year_date_and_note(client, treasurer, member):
+    """It bound dues to the current year and dated everything today (#820)."""
+    from django.utils import timezone
+
+    today = timezone.localdate()
+    start = today.year if today.month >= 9 else today.year - 1
+    _dues_period(start)
+    last_year = _dues_period(start - 1)
+    received = today.replace(day=1) if today.day > 1 else today
+
+    client.post(reverse("treasurer_record_payment", args=[member.id]), {
+        "category": "dues", "amount": "100", "dues_period": last_year.id,
+        "received_on": received.isoformat(), "note": "check #1042",
+    })
+
+    p = Payment.objects.get(user=member)
+    assert p.dues_period == last_year
+    assert timezone.localtime(p.paid_at).date() == received
+    assert "check #1042" in p.notes
+
+
+def test_record_offline_payment_refuses_a_future_date(client, treasurer, member):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    resp = client.post(reverse("treasurer_record_payment", args=[member.id]), {
+        "category": "donation", "amount": "10",
+        "received_on": (timezone.localdate() + timedelta(days=2)).isoformat(),
+    })
+    assert resp.status_code == 302
+    assert not Payment.objects.exists()
+
+
+def test_record_offline_registration_payment_settles_the_registration(
+        client, treasurer, member):
+    from events.models import Audience, Event, PriceTier
+    from registrations.models import Registration
+
+    event = Event.objects.create(
+        title="Talk", slug="talk", event_type=Event.Type.SPECIAL_EVENT,
+        start_date=date(2027, 1, 1), end_date=date(2027, 1, 1))
+    tier = PriceTier.objects.create(event=event, audience=Audience.ALL,
+                                    base_amount=Decimal("40"))
+    reg = Registration.objects.create(
+        user=member, event=event, price_tier=tier, quoted_amount=Decimal("40"),
+        status=Registration.Status.AWAITING_PAYMENT)
+    page = client.get(reverse("treasurer_member_detail", args=[member.id])).content.decode()
+    assert f'<option value="{reg.id}">Talk' in page
+
+    client.post(reverse("treasurer_record_payment", args=[member.id]), {
+        "category": "registration", "amount": "40", "registration": reg.id,
+    })
+
+    reg.refresh_from_db()
+    assert reg.status == Registration.Status.PAID
+    assert Payment.objects.get(user=member).registration == reg

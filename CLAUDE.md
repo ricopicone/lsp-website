@@ -2554,6 +2554,20 @@ Done (see `git log` for specifics):
   #473 made untrue; it now says a miscategorized payment leaves a charge
   unpaid. Also fixed: a CI flake where the footer's random "Mirror Stage"
   aphorism failed an elections test asserting `"Stage" not in page`.
+  **Group 3, the treasurer:** *Record an offline payment* defaulted its
+  category to Registration (so typing an amount and pressing Record filed
+  an unattributed registration payment), bound dues and tuition to the
+  current year only, dated every payment today, and could not name the
+  registration it paid for; it now starts on "Choose a category…" and asks
+  for the year, the registration, the date received (stored as `paid_at`,
+  refused if in the future) and a note. *Mark paid* on a pending **Stripe**
+  row now says Stripe never reported it (pending means "sent to checkout",
+  #474) and is no longer the primary button there. The Settings tab's
+  amount inputs clipped "2000.00" (`core/_money_input.html` now defaults to
+  `w-40`) and its one Save sits stuck to the bottom of the screen; the
+  Accounts table fits at desktop width with dates in place of timestamps
+  (full time on hover); amounts read "$2,000.00" throughout; the Overview's
+  collected tile lost a box drawn inside its box. Guide updated.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

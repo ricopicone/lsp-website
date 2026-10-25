@@ -223,8 +223,10 @@ account page. It has four parts:
    the note under *Payments tab*, below) — so a line here can already carry
    a member-reported provenance and audit note by the time you look at it.
 4. **Actions** — an **Add a charge** form (any category, amount, effective
-   date, and an optional note) and a **Record an offline payment** form
-   that takes any category and amount. Recording an offline **tuition**
+   date, and an optional note) and a **Record an offline payment** form:
+   the category, the amount, the year it pays for (dues and tuition), the
+   registration it pays for (registrations), the date you received it, and
+   an optional note such as the check number. Recording an offline **tuition**
    payment keeps the old side-effects — it sets the year's enrollment to
    Committed if needed and creates the matching installment record — so
    nothing downstream breaks.
@@ -265,9 +267,9 @@ row is a best guess awaiting your review.
 ## Common workflows
 
 - **"A member paid me dues or tuition in cash or by check."** → open their
-  account page → **Record an offline payment** → pick the category and
-  enter the amount. A receipt and confirmation email go out automatically,
-  same as a Stripe payment.
+  account page → **Record an offline payment** → pick the category, the
+  year it pays for, and the date it arrived, and enter the amount. A receipt
+  and confirmation email go out automatically, same as a Stripe payment.
 - **"A student is skipping tuition this year."** → open their account page
   → **Tuition decisions** table → **Skipping** on the current year's row
   (or use the one-click **Skipping** button from the Overview queue if
@@ -410,8 +412,11 @@ For inspecting or correcting individual payments.
     marked verified, and a dated audit note records who it was
     attributed to before. Registration payments can't be re-assigned
     here — the registration owns its member.
-  - **Mark paid** — on pending offline payments. Runs the standard success
-    side-effects: marks succeeded, issues a receipt, sends emails.
+  - **Mark paid** — on pending payments. Runs the standard success
+    side-effects: marks succeeded, issues a receipt, sends emails. On a
+    pending **Stripe** payment it warns you first: pending only means the
+    member was sent to checkout, so use it only if the money reached the
+    School some other way.
   - **Refund** — on succeeded payments. For **Stripe** payments it issues
     an automatic refund and marks it refunded (**irreversible** — the
     prompt warns you). For **offline** payments it marks it refunded **for

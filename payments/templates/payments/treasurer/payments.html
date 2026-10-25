@@ -80,16 +80,16 @@
             <div class="text-xs text-base-content/60">→ {{ p.tuition_period.name }}</div>
             {% endif %}
           </td>
-          <td class="whitespace-nowrap">${{ p.amount }}</td>
+          <td class="whitespace-nowrap">{{ p.amount|usd }}</td>
           <td class="text-xs">{{ p.get_method_display }}</td>
           <td>{% status_badge p.status %}</td>
           <td>
             <div class="flex flex-nowrap items-center gap-1 whitespace-nowrap">
               {% if p.status == "pending" %}
               <form method="post" action="{% url 'treasurer_payment_apply_success' p.id %}" class="contents"
-                    onsubmit="return confirm('Mark this payment as paid? This sends a receipt + emails the member.');">
+                    onsubmit="return confirm('{% if p.method == "stripe" %}Stripe has not reported this payment. Pending only means the member was sent to checkout, so mark it paid only if the money reached the School another way.\n\n{% endif %}Mark this payment as paid? This sends a receipt and emails the member.');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-primary btn-xs" title="Mark paid" aria-label="Mark paid">{% icon "check" %}</button>
+                <button type="submit" class="btn {% if p.method == "stripe" %}btn-ghost{% else %}btn-primary{% endif %} btn-xs" title="Mark paid" aria-label="Mark paid">{% icon "check" %}</button>
               </form>
               {% elif p.status == "succeeded" and p.method == "stripe" %}
               <form method="post" action="{% url 'treasurer_payment_refund' p.id %}" class="contents"

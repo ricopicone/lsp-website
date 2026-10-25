@@ -9,9 +9,9 @@
     field   (required) — a Django form field bound to an
                          <input type="number"> widget.
     width   (optional) — Tailwind width class on the wrapper
-                         (default ``w-32``).
+                         (default ``w-40``; ``w-32`` clipped "2000.00", task #820).
 {% endcomment %}
-<div class="input input-bordered input-sm flex items-center gap-0 {{ width|default:'w-32' }}">
+<div class="input input-bordered input-sm flex items-center gap-0 {{ width|default:'w-40' }}">
   <span class="text-base-content/60 pl-1">$</span>
   {{ field }}
 </div>

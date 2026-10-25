@@ -22,7 +22,7 @@
   {% comment %}Tiles row{% endcomment %}
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
     <div class="rounded border border-base-300 p-2.5 space-y-1">
-      {% include "payments/treasurer/_money_tile.html" with label="Collected this AY" value=collected.total tone="success" %}
+      {% include "payments/treasurer/_money_tile.html" with label="Collected this AY" value=collected.total tone="success" bare=True %}
       {% if collected.by_category %}
       <p class="text-xs text-base-content/55 leading-snug">
         Dues {{ collected.by_category.dues|default:0|usd0 }} ·

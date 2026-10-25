@@ -914,12 +914,43 @@ def treasurer_record_payment(request, user_id: int):
         messages.error(request, "Enter a positive amount.")
         return redirect("treasurer_member_detail", user_id=target.id)
 
+    received_on = timezone.localdate()
+    if request.POST.get("received_on"):
+        try:
+            received_on = date.fromisoformat(request.POST["received_on"])
+        except ValueError:
+            messages.error(request, "Enter the date received as a date.")
+            return redirect("treasurer_member_detail", user_id=target.id)
+        if received_on > timezone.localdate():
+            messages.error(request, "The date received can't be in the future.")
+            return redirect("treasurer_member_detail", user_id=target.id)
+    registration = None
+    if category == Payment.Type.REGISTRATION and request.POST.get("registration"):
+        from registrations.models import Registration
+
+        registration = get_object_or_404(
+            Registration, pk=request.POST["registration"], user=target,
+        )
+
     note = (f"Offline {category} payment recorded by treasurer "
-            f"{request.user.email} on {timezone.localdate()}.")
+            f"{request.user.email} on {timezone.localdate()}"
+            + (f", received {received_on}" if received_on != timezone.localdate() else "")
+            + ".")
+    if request.POST.get("note", "").strip():
+        note += " " + request.POST["note"].strip()[:500]
     with transaction.atomic():
         kwargs = {}
+        if received_on != timezone.localdate():
+            # Midday, so the school-local date reads the same in UTC.
+            kwargs["paid_at"] = timezone.make_aware(
+                datetime.combine(received_on, datetime.min.time()).replace(hour=12))
+        if registration is not None:
+            kwargs["registration"] = registration
         if category == Payment.Type.TUITION:
-            period = TuitionPeriod.current()
+            period = (
+                TuitionPeriod.objects.filter(pk=request.POST.get("tuition_period") or 0).first()
+                or TuitionPeriod.current()
+            )
             if period is not None:
                 prior = TuitionEnrollment.objects.filter(
                     user=target, tuition_period=period,
@@ -971,7 +1002,10 @@ def treasurer_record_payment(request, user_id: int):
                     )
                     enr.save(update_fields=("notes",))
         elif category == Payment.Type.DUES:
-            kwargs["dues_period"] = DuesPeriod.current()
+            kwargs["dues_period"] = (
+                DuesPeriod.objects.filter(pk=request.POST.get("dues_period") or 0).first()
+                or DuesPeriod.current()
+            )
         payment = Payment.objects.create(
             payment_type=category, user=target, amount=amount,
             method=Payment.Method.OFFLINE, status=Payment.Status.PENDING,
