@@ -313,6 +313,23 @@ def _formation_steps(user):
     return steps
 
 
+def _decision_form(request, period, enrollment, **kwargs):
+    """A tuition decision form for ``period``, re-bound to a refused POST for
+    that year if one is waiting (``core.form_stash``, task #820)."""
+    from core.form_stash import take
+    from payments.forms import TuitionDecisionForm
+
+    data = take(request, f"tuition-decision:{period.slug}") if period else None
+    if data is not None:
+        form = TuitionDecisionForm(data, period=period, **kwargs)
+        form.is_valid()
+        return form
+    return TuitionDecisionForm(
+        initial={"status": enrollment.status} if enrollment else {},
+        period=period, **kwargs,
+    )
+
+
 def _formation_money_context(request) -> dict:
     """The Account tab (task #439): the unified ledger statement/balance,
     tuition (four-year progress, this year's decision/installments, folded
@@ -323,7 +340,6 @@ def _formation_money_context(request) -> dict:
 
     from payments import ledger
     from payments.dues import has_dues_payment_for, is_dues_obligated
-    from payments.forms import TuitionDecisionForm
     from payments.models import (
         DuesPeriod,
         LedgerSubmission,
@@ -448,9 +464,8 @@ def _formation_money_context(request) -> dict:
             (r["decision_label"] for r in acct["tuition_rows"]
              if enrollment and r["enrollment"].pk == enrollment.pk), None),
         "tuition_installments": installments,
-        "tuition_form": TuitionDecisionForm(
-            initial={"status": enrollment.status} if enrollment else {},
-            period=period,
+        "tuition_form": _decision_form(
+            request, period, enrollment,
         ),
         # pending Board payment-plan application, current period
         # (task #450 phase B)
@@ -471,11 +486,9 @@ def _formation_money_context(request) -> dict:
         ),
         "upcoming_enrollment": upcoming_enrollment,
         "upcoming_installments": upcoming_installments,
-        "upcoming_tuition_form": TuitionDecisionForm(
-            initial={"status": upcoming_enrollment.status}
-            if upcoming_enrollment else {},
+        "upcoming_tuition_form": _decision_form(
+            request, upcoming_period, upcoming_enrollment,
             auto_id="id_upcoming_%s",
-            period=upcoming_period,
         ),
         # pending Board payment-plan application, upcoming period
         # (task #450 phase B)

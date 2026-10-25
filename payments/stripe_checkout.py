@@ -13,6 +13,7 @@ Each creates a Stripe ``Checkout.Session`` whose ``id`` is stored on the
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 
 import stripe
@@ -22,6 +23,17 @@ from django.urls import reverse
 from registrations.models import Registration
 
 from .models import Payment
+
+logger = logging.getLogger(__name__)
+
+
+class CheckoutUnavailable(Exception):
+    """Stripe refused or couldn't be reached while opening Checkout.
+
+    Turned into a message and a redirect back by
+    ``payments.middleware.CheckoutUnavailableMiddleware`` rather than a server
+    error page (task #820): nothing was charged, and trying again is the fix.
+    """
 
 
 def _configure() -> None:
@@ -55,7 +67,27 @@ def _make_session(
             f"(payment {payment.id}: ${payment.amount})."
         )
 
-    session = stripe.checkout.Session.create(
+    try:
+        session = _create_session(payment, product_name, product_description,
+                                  success_path, cancel_path, customer_email)
+    except stripe.error.StripeError as exc:
+        # The row was minted for a session that never opened; leaving it
+        # PENDING would read to the treasurer as money that might arrive.
+        logger.exception("Stripe Checkout failed for payment %s", payment.pk)
+        payment.delete()
+        raise CheckoutUnavailable(str(exc)) from exc
+
+    payment.stripe_checkout_session_id = session.id
+    # Record the mode now (the webhook confirms from the session at completion);
+    # keeps test-mode payments out of real accounting.
+    payment.livemode = bool(getattr(session, "livemode", True))
+    payment.save(update_fields=("stripe_checkout_session_id", "livemode"))
+    return session
+
+
+def _create_session(payment, product_name, product_description,
+                    success_path, cancel_path, customer_email):
+    return stripe.checkout.Session.create(
         mode="payment",
         payment_method_types=["card"],
         line_items=[
@@ -80,13 +112,6 @@ def _make_session(
             "payment_type": payment.payment_type,
         },
     )
-
-    payment.stripe_checkout_session_id = session.id
-    # Record the mode now (the webhook confirms from the session at completion);
-    # keeps test-mode payments out of real accounting.
-    payment.livemode = bool(getattr(session, "livemode", True))
-    payment.save(update_fields=("stripe_checkout_session_id", "livemode"))
-    return session
 
 
 def create_checkout_session(

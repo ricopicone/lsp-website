@@ -14,14 +14,15 @@ Context: rows, years_required, actions (optional), target (with actions).
 <div class="overflow-x-auto rounded-lg border border-base-300">
   <table class="table table-sm">
     <thead>
-      <tr><th>Academic year</th><th>Decision</th><th class="text-right">Rate</th><th>Status</th>{% if actions %}<th>Actions</th>{% endif %}</tr>
+      {# On a phone the decision folds under the year and the rate drops (the status repeats it), so the fill bar stays on screen (task #820). #}
+      <tr><th>Academic year</th><th class="hidden sm:table-cell">Decision</th><th class="hidden sm:table-cell text-right">Rate</th><th>Status</th>{% if actions %}<th>Actions</th>{% endif %}</tr>
     </thead>
     <tbody>
       {% for r in rows %}
       <tr>
-        <td class="whitespace-nowrap">{{ r.period.name }}</td>
-        <td class="text-xs text-base-content/70">{{ r.decision_label }}</td>
-        <td class="text-right whitespace-nowrap">{{ r.rate|usd }}</td>
+        <td class="whitespace-nowrap">{{ r.period.name }}<span class="block text-xs text-base-content/60 whitespace-normal sm:hidden">{{ r.decision_label }}</span></td>
+        <td class="hidden sm:table-cell text-xs text-base-content/70">{{ r.decision_label }}</td>
+        <td class="hidden sm:table-cell text-right whitespace-nowrap">{{ r.rate|usd }}</td>
         <td>
           {% if r.pct is not None %}
           {# Fill bar (more informative than a Paid/Partial badge): covered vs the year's charge. #}

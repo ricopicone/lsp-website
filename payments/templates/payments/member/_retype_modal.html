@@ -1,4 +1,4 @@
-{% load parletre_tags %}
+{% load treasurer_filters parletre_tags %}
 {% comment %}
 Member's own re-categorize action (task #439) — mechanically mirrors the
 treasurer's _retype_modal.html, pointed at the member endpoint. Full
@@ -11,7 +11,7 @@ tuition_periods, next_url. Callers gate the button on: no registration link.
 <dialog id="myretype-{{ payment.id }}" class="modal">
   <div class="modal-box max-w-sm whitespace-normal text-left">
     <h3 class="font-serif text-lg mb-3">Re-categorize payment</h3>
-    <p class="text-sm text-base-content/70 mb-3">${{ payment.amount }}, currently {{ payment.get_payment_type_display }}</p>
+    <p class="text-sm text-base-content/70 mb-3">{{ payment.amount|usd }}, currently {{ payment.get_payment_type_display }}</p>
     <form method="post" action="{% url 'my_payment_retype' payment.id %}" class="space-y-2">
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ next_url }}">

@@ -112,6 +112,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "accounts.middleware.TimezoneMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "payments.middleware.CheckoutUnavailableMiddleware",
     "core.middleware.ImpersonationMiddleware",
     "accounts.middleware.TwoFactorEnforcementMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",

@@ -15,17 +15,18 @@ class _TierChoiceField(forms.ModelChoiceField):
 
     def label_from_instance(self, obj: PriceTier) -> str:
         audience = obj.get_audience_display()
-        if obj.covered_by_tuition:
-            return f"{audience} — Included in tuition for tuition-paying members"
+        per = " per class" if obj.event.is_per_class else ""
         if obj.sliding_scale:
             floor = obj.minimum_amount if obj.minimum_amount is not None else Decimal("0")
-            per = " per class" if obj.event.is_per_class else ""
-            return (
-                f"{audience} — Sliding scale{per} "
-                f"(suggested ${obj.base_amount}, minimum ${floor})"
-            )
-        suffix = " per class" if obj.event.is_per_class else ""
-        return f"{audience} — ${obj.base_amount}{suffix}"
+            price = f"Sliding scale{per} (suggested ${obj.base_amount}, minimum ${floor})"
+        else:
+            price = f"${obj.base_amount}{per}"
+        # A covered tier still has a price for anyone not paying tuition, and
+        # the label used to give only the coverage, so the fee was first seen
+        # on Stripe's page (task #820).
+        if obj.covered_by_tuition:
+            price += ", included in tuition for tuition-paying members"
+        return f"{audience}: {price}"
 
 
 class RegistrationForm(forms.Form):

@@ -2530,6 +2530,30 @@ Done (see `git log` for specifics):
   live. The member's per-class confirmation reads **Enrolled**, not Paid,
   and drops an empty "How priced" row and the "code from your convener"
   wording on a seminar. Messages in the review flow lose their em dashes.
+  **Group 2, registration and the member's money:** the register page's
+  covered tier gave only "Included in tuition", so a member not paying
+  tuition first saw the $500 on Stripe's page; every tier label now states
+  its price. A Stripe error opening Checkout was a server error on every Pay
+  button; `_make_session` now deletes the unsent PENDING row and raises
+  `CheckoutUnavailable`, which `payments.middleware.
+  CheckoutUnavailableMiddleware` turns into a message and a redirect back
+  (the registration stays held). A plan request with no reasons read
+  "Please choose one of the listed options" and dropped the choice; the
+  refused decision now comes back to its own year's form
+  (`core.form_stash`, the shared one-render session rebind, which the code
+  panel now uses too). On a phone the Account tab's tuition-years status
+  and the statement's payment, balance and action columns sat behind a
+  sideways scroll; both fold. Event description, readings and notes link
+  their URLs (`inline_italics` now `urlize`s the escaped text). The
+  calendar opens as a list on a phone; its month grid read "5p C". Members
+  no longer see "(tuition-paying member, REG-4)", "Standard All price",
+  "Payment received" for a $0 covered place, "(full refund)" on $0, or the
+  pricing resolver's developer errors ("sliding_amount … below floor");
+  `Registration.price_note` translates rows stored before the change. The
+  statement's footnote said categories were only reporting labels, which
+  #473 made untrue; it now says a miscategorized payment leaves a charge
+  unpaid. Also fixed: a CI flake where the footer's random "Mirror Stage"
+  aphorism failed an elections test asserting `"Stage" not in page`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

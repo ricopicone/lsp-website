@@ -829,3 +829,19 @@ def test_special_event_does_not_block_full_analyst(
         reverse("registrations:register", args=[special_event.slug])
     )
     assert resp.status_code == 200
+
+
+def test_a_covered_tier_still_states_its_price(client, event, user):
+    """The covered tier's label gave only the coverage, so a member not paying
+    tuition first saw the fee on Stripe's page (task #820)."""
+    from decimal import Decimal
+
+    from events.models import Audience, PriceTier
+
+    PriceTier.objects.create(
+        event=event, audience=Audience.ALL, base_amount=Decimal("500.00"),
+        covered_by_tuition=True,
+    )
+    client.force_login(user)
+    body = client.get(reverse("registrations:register", args=[event.slug])).content.decode()
+    assert "All: $500.00, included in tuition for tuition-paying members" in body

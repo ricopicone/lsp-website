@@ -22,7 +22,7 @@ from django.utils import timezone
 #: The explanation a tuition-covered registration carries. Matches the string
 #: written by ``registrations.views.register_for_event``'s covered short-circuit
 #: — keep them identical.
-COVERED_EXPLANATION = "Covered by tuition (tuition-paying member, REG-4)."
+COVERED_EXPLANATION = "Covered by your tuition."
 
 #: The explanation a re-billed registration carries. Nothing matches on it —
 #: ``apply_coverage`` asks the structural question instead (task #561) — but it

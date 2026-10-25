@@ -1,4 +1,4 @@
-{% load parletre_tags %}
+{% load treasurer_filters parletre_tags %}
 {% comment %}
 Assign-to-account modal for one payment. Requires a page-level
 <datalist id="member-options"> (rendered once per page). Include with:
@@ -11,7 +11,7 @@ callers hide the button for those rows.
   <div class="modal-box max-w-sm whitespace-normal text-left">
     <h3 class="font-serif text-lg mb-3">Assign payment to an account</h3>
     <p class="text-sm text-base-content/70 mb-3">
-      ${{ payment.amount }} · {{ payment.get_payment_type_display }}
+      {{ payment.amount|usd }} · {{ payment.get_payment_type_display }}
       {% if payment.user %}· currently on {{ payment.user.get_full_name|default:payment.user.email }}{% endif %}
     </p>
     <form method="post" action="{% url 'treasurer_payment_assign' payment.id %}" class="space-y-2">

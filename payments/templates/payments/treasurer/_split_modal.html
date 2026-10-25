@@ -1,4 +1,4 @@
-{% load parletre_tags %}
+{% load treasurer_filters parletre_tags %}
 {% comment %}
 Split-payment modal: divide one payment into sibling rows with different
 categories (amounts must sum exactly). Include with: payment, type_choices,
@@ -11,7 +11,7 @@ member attached, not already split.
   <div class="modal-box max-w-md whitespace-normal text-left">
     <h3 class="font-serif text-lg mb-1">Split payment</h3>
     <p class="text-sm text-base-content/70 mb-3">
-      ${{ payment.amount }} {{ payment.get_payment_type_display }} — the parts must add up to exactly ${{ payment.amount }}.
+      {{ payment.amount|usd }} {{ payment.get_payment_type_display }} — the parts must add up to exactly {{ payment.amount|usd }}.
     </p>
     <form method="post" action="{% url 'treasurer_payment_split' payment.id %}" class="space-y-3">
       {% csrf_token %}

@@ -2569,7 +2569,13 @@ def tuition_decision(request):
                 notify_coverage_restored(request.user, period, restored)
             messages.success(request, "Your tuition decision has been recorded.")
         else:
-            messages.error(request, "Please choose one of the listed options.")
+            # Back to the form for this year, with what was chosen and typed:
+            # a plan request with no reasons used to read "Please choose one
+            # of the listed options" and drop both (task #820).
+            from core.form_stash import stash
+
+            stash(request, f"tuition-decision:{period.slug}")
+            return redirect(_account_tab_url() + f"#decision-{period.slug}")
     return redirect(_account_tab_url())
 
 

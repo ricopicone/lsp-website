@@ -380,17 +380,19 @@ payments/treasurer/member_detail.html for the full picture with actions).
       <div class="overflow-x-auto rounded-lg border border-base-300">
         <table class="table table-sm">
           <thead>
+            {# On a phone the date, amount and status fold under the description, so the balance and the row's actions stay on screen (task #820). #}
             <tr>
-              <th>Date</th><th>Description</th>
-              <th class="text-right">Charge</th><th class="text-right">Payment</th>
-              <th class="text-right">Balance</th><th>Status</th><th></th>
+              <th class="hidden sm:table-cell">Date</th><th>Description</th>
+              <th class="hidden sm:table-cell text-right">Charge</th><th class="hidden sm:table-cell text-right">Payment</th>
+              <th class="text-right">Balance</th><th class="hidden sm:table-cell">Status</th><th></th>
             </tr>
           </thead>
           <tbody>
             {% for ln in acct.lines %}
             <tr>
-              <td class="whitespace-nowrap text-xs text-base-content/70">{{ ln.date|date:"M j, Y" }}</td>
+              <td class="hidden sm:table-cell whitespace-nowrap text-xs text-base-content/70">{{ ln.date|date:"M j, Y" }}</td>
               <td>
+                <div class="text-xs text-base-content/60 sm:hidden">{{ ln.date|date:"M j, Y" }}</div>
                 {% if ln.kind == "charge" %}
                   {{ ln.obj.get_category_display }} charge
                   {% if ln.obj.dues_period %}
@@ -413,11 +415,21 @@ payments/treasurer/member_detail.html for the full picture with actions).
                   </div>
                   {% endif %}
                 {% endif %}
+                <div class="mt-1 flex flex-wrap items-center gap-1 text-xs sm:hidden">
+                  {% if ln.kind == "charge" %}<span>Charge {{ ln.delta|usd }}</span>{% else %}<span>Paid {{ ln.obj.amount|usd }}</span>{% endif %}
+                  {% if ln.kind == "charge" %}
+                    {% if ln.obj.status == "open" %}
+                      {% if ln.state == "paid" %}<span class="badge badge-success badge-xs">Paid</span>
+                      {% elif ln.state == "partial" %}<span class="badge badge-warning badge-outline badge-xs">Partial</span>
+                      {% else %}<span class="badge badge-error badge-outline badge-xs">Unpaid</span>{% endif %}
+                    {% elif ln.obj.status == "waived" %}<span class="badge badge-ghost badge-xs">Waived</span>{% endif %}
+                  {% elif ln.obj.status != "succeeded" %}{% status_badge ln.obj.status %}{% endif %}
+                </div>
               </td>
-              <td class="text-right whitespace-nowrap">{% if ln.kind == "charge" %}{{ ln.delta|usd }}{% endif %}</td>
-              <td class="text-right whitespace-nowrap">{% if ln.kind == "payment" %}{{ ln.obj.amount|usd }}{% endif %}</td>
+              <td class="hidden sm:table-cell text-right whitespace-nowrap">{% if ln.kind == "charge" %}{{ ln.delta|usd }}{% endif %}</td>
+              <td class="hidden sm:table-cell text-right whitespace-nowrap">{% if ln.kind == "payment" %}{{ ln.obj.amount|usd }}{% endif %}</td>
               <td class="text-right whitespace-nowrap {% if ln.running > 0 %}text-warning{% elif ln.running < 0 %}text-success{% endif %}">{{ ln.running|usd }}</td>
-              <td>
+              <td class="hidden sm:table-cell">
                 {% if ln.kind == "charge" %}
                   {% if ln.obj.status == "open" %}
                     {% if ln.state == "paid" %}<span class="badge badge-success badge-sm">Paid</span>
@@ -531,7 +543,8 @@ payments/treasurer/member_detail.html for the full picture with actions).
     </section>
 
     <p class="text-xs text-base-content/50">
-      Your charges and payments sit on one running balance, oldest charges are covered first.
-      Categories are labels for reporting, your money is not split into separate pots.
+      Your charges and payments sit on one running balance. Within each category (tuition, dues,
+      events), payments cover that category's oldest charges first, so a payment filed under the
+      wrong category leaves a charge reading unpaid. The tag icon re-categorizes it.
     </p>
   </div>

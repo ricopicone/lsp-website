@@ -288,7 +288,7 @@ def test_code_from_different_event_rejected(event, faculty, regular_user, db):
         pricing_mode=PricingCode.Mode.PERCENT_OFF,
         amount_or_percent=Decimal("10"),
     )
-    with pytest.raises(PricingError, match="does not apply"):
+    with pytest.raises(PricingError, match="different event"):
         resolve_price(user=regular_user, tier=tier, pricing_code=code)
 
 
@@ -303,7 +303,7 @@ def test_expired_code_rejected(event, faculty, regular_user):
         amount_or_percent=Decimal("10"),
         valid_until=timezone.now() - timedelta(days=1),
     )
-    with pytest.raises(PricingError, match="not redeemable"):
+    with pytest.raises(PricingError, match="can.t be used"):
         resolve_price(user=regular_user, tier=tier, pricing_code=code)
 
 
@@ -319,7 +319,7 @@ def test_restricted_code_rejected_for_other_user(event, faculty, regular_user):
         amount_or_percent=Decimal("0"),
         restricted_to_user=sally,
     )
-    with pytest.raises(PricingError, match="not redeemable"):
+    with pytest.raises(PricingError, match="can.t be used"):
         resolve_price(user=regular_user, tier=tier, pricing_code=code)
 
 
@@ -347,7 +347,7 @@ def test_sliding_floor_code_below_floor_rejected(event, faculty, regular_user):
         pricing_mode=PricingCode.Mode.SLIDING_FLOOR,
         amount_or_percent=Decimal("20.00"),
     )
-    with pytest.raises(PricingError, match="below floor"):
+    with pytest.raises(PricingError, match="minimum of"):
         resolve_price(
             user=regular_user, tier=tier, pricing_code=code,
             sliding_amount=Decimal("10.00"),

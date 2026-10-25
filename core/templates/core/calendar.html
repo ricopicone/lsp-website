@@ -68,13 +68,24 @@
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     var el = document.getElementById('calendar');
+    // On a phone the month grid cuts every entry to "5p C" and the three-part
+    // toolbar ran wider than the screen (task #820): open in the list, and
+    // stack the toolbar.
+    var narrow = window.matchMedia('(max-width: 639px)').matches;
     var calendar = new FullCalendar.Calendar(el, {
-      initialView: 'dayGridMonth',
-      headerToolbar: {
+      initialView: narrow ? 'listMonth' : 'dayGridMonth',
+      headerToolbar: narrow ? {
+        left: 'title',
+        right: 'prev,next',
+      } : {
         left: 'prev,next today',
         center: 'title',
         right: 'dayGridMonth,timeGridWeek,listMonth',
       },
+      footerToolbar: narrow ? {
+        left: 'today',
+        right: 'listMonth,dayGridMonth',
+      } : false,
       height: 'auto',
       nowIndicator: true,
       // Render in the active TZ — the logged-in user's saved preference

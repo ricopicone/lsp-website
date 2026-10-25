@@ -70,14 +70,14 @@ def resolve_price(
     ):
         return PriceResolution(
             amount=ZERO,
-            explanation="Covered by tuition (tuition-paying member, REG-4).",
+            explanation="Covered by your tuition.",
         )
 
     if tier.sliding_scale:
         if sliding_amount is None:
             raise PricingError("Sliding-scale tier requires a sliding_amount.")
         if sliding_amount < ZERO:
-            raise PricingError("sliding_amount cannot be negative.")
+            raise PricingError("The amount cannot be negative.")
         minimum = tier.minimum_amount if tier.minimum_amount is not None else ZERO
         if sliding_amount < minimum:
             raise PricingError(
@@ -90,7 +90,10 @@ def resolve_price(
 
     return PriceResolution(
         amount=tier.base_amount,
-        explanation=f"Standard {tier.get_audience_display()} price.",
+        explanation=(
+            "Standard price." if tier.audience == "all"
+            else f"Standard {tier.get_audience_display()} price."
+        ),
     )
 
 
@@ -101,9 +104,12 @@ def _apply_code(
     sliding_amount: Decimal | None,
 ) -> PriceResolution:
     if code.event_id != tier.event_id:
-        raise PricingError("Pricing code does not apply to this event.")
+        raise PricingError("That code is for a different event.")
     if not code.is_redeemable(user=user):
-        raise PricingError("Pricing code is not redeemable for this user / time.")
+        raise PricingError(
+            "That code can't be used: it has expired, been used up, or is "
+            "addressed to someone else."
+        )
 
     if code.pricing_mode == PricingCode.Mode.PERCENT_OFF:
         discount = (tier.base_amount * code.amount_or_percent / Decimal("100")).quantize(
@@ -126,11 +132,11 @@ def _apply_code(
                 "enter the amount you'd like to pay."
             )
         if sliding_amount < ZERO:
-            raise PricingError("sliding_amount cannot be negative.")
+            raise PricingError("The amount cannot be negative.")
         if sliding_amount < floor:
             raise PricingError(
-                f"sliding_amount {sliding_amount} below floor ${floor} "
-                f"(code {code.code})."
+                f"Code {code.code} has a minimum of ${floor}. Enter ${floor} "
+                "or more."
             )
         amount = sliding_amount
         explanation = (

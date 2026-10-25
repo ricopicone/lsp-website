@@ -273,6 +273,17 @@ class Registration(models.Model):
         )
 
     @property
+    def price_note(self) -> str:
+        """``quoted_explanation`` as a member reads it. Rows covered before
+        task #820 carry "(tuition-paying member, REG-4)", a requirement ID."""
+        text = self.quoted_explanation or ""
+        if text.startswith("Covered by tuition (tuition-paying member"):
+            return "Covered by your tuition."
+        if text.startswith("Standard All price"):
+            return "Standard price."
+        return text
+
+    @property
     def needs_payment(self) -> bool:
         """Approved (or normal) but unpaid — a Stripe payment is still due."""
         return self.status == self.Status.AWAITING_PAYMENT and self.quoted_amount > 0

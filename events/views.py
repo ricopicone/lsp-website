@@ -46,21 +46,15 @@ def _faculty_view_url(event: Event) -> str:
     return reverse("events:detail", args=[event.slug]) + "?view=faculty"
 
 
-_CODE_FORM_KEY = "pricing_code_form:{}"
-
-
 def pricing_code_form(request, event) -> PricingCodeForm:
-    """The faculty panel's code form, re-bound to a refused submission.
+    """The faculty panel's code form, re-bound to a refused submission
+    (``core.form_stash``, task #820)."""
+    from core.form_stash import take
 
-    Minting posts from a panel and redirects back, so a refused form used to
-    lose what was typed and report its error at the top of a long page, far
-    from the form. The refused POST rides the session for exactly one render,
-    so the errors sit under their fields with the values intact.
-    """
-    data = request.session.pop(_CODE_FORM_KEY.format(event.pk), None)
+    data = take(request, f"pricing-code:{event.pk}")
     if data is None:
         return PricingCodeForm(event=event)
-    form = PricingCodeForm(MultiValueDict(data), event=event)
+    form = PricingCodeForm(data, event=event)
     form.is_valid()
     return form
 
@@ -1115,8 +1109,9 @@ def event_generate_code(request, slug: str):
             request, f"Code {code.code} created. Send it to whoever should use it."
         )
         return redirect(_faculty_view_url(event) + "#existing-codes")
-    data = {k: v for k, v in request.POST.lists() if k != "csrfmiddlewaretoken"}
-    request.session[_CODE_FORM_KEY.format(event.pk)] = data
+    from core.form_stash import stash
+
+    stash(request, f"pricing-code:{event.pk}")
     return redirect(_faculty_view_url(event) + "#generate-code")
 
 

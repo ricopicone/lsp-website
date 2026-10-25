@@ -183,9 +183,9 @@ def _tuition_block_reason(user, event) -> str | None:
     if enr is None:
         return (
             "Before registering for any event, please record your tuition "
-            f"decision for {period.name}. You'll be able to commit to pay, "
-            "set up a payment plan, or note that you're skipping tuition "
-            "this year — all options unlock registration."
+            f"decision for {period.name}. You can commit to pay, ask the "
+            "Board for a payment plan, or note that you're skipping tuition "
+            "this year. Any of the three opens registration."
         )
     return None
 
@@ -250,7 +250,7 @@ def register_for_event(request, event_slug: str):
                 else None
             ),
             per_class_since=timezone.now() if event.is_per_class else None,
-            quoted_explanation="Covered by tuition (tuition-paying member, REG-4).",
+            quoted_explanation=coverage.COVERED_EXPLANATION,
             status=(
                 Registration.Status.PENDING_APPROVAL if requires_approval
                 else Registration.Status.PAID

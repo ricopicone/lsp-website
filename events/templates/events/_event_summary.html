@@ -81,7 +81,7 @@ show_access_info.{% endcomment %}
 {% if event.description %}
 <section class="space-y-3">
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">{% if event.is_school_gathering %}Schedule of proceedings{% else %}About{% endif %}</h2>
-  <div class="text-base-content/90 leading-relaxed space-y-4">{{ event.description|inline_italics|linebreaks }}</div>
+  <div class="text-base-content/90 leading-relaxed space-y-4 [&_a]:link [&_a]:break-all">{{ event.description|inline_italics|linebreaks }}</div>
   {% if event.offers_ce %}{% include "events/_ce_credits.html" %}{% endif %}
 </section>
 {% elif event.offers_ce %}
@@ -96,7 +96,7 @@ show_access_info.{% endcomment %}
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Readings</h2>
   <ul class="space-y-3 text-base-content/90 leading-relaxed">
     {% for entry in event.readings_entries %}
-    <li class="pl-6 -indent-6">{{ entry|inline_italics }}</li>
+    <li class="pl-6 -indent-6 [&_a]:link [&_a]:break-all">{{ entry|inline_italics }}</li>
     {% endfor %}
   </ul>
 </section>
@@ -139,7 +139,7 @@ show_access_info.{% endcomment %}
   <section class="space-y-3">
     <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Schedule</h2>
     {% if event.schedule_note %}
-    <p class="text-base-content/80 leading-relaxed">{{ event.schedule_note|inline_italics }}</p>
+    <p class="text-base-content/80 leading-relaxed [&_a]:link [&_a]:break-all">{{ event.schedule_note|inline_italics }}</p>
     {% endif %}
     {% if sessions|length > 4 %}
       {# Long list: next few meetings above the fold, full table collapsed. #}
@@ -188,7 +188,7 @@ show_access_info.{% endcomment %}
 {% elif event.schedule_note %}
 <section class="space-y-3">
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Schedule</h2>
-  <p class="text-base-content/80 leading-relaxed">{{ event.schedule_note|inline_italics }}</p>
+  <p class="text-base-content/80 leading-relaxed [&_a]:link [&_a]:break-all">{{ event.schedule_note|inline_italics }}</p>
 </section>
 {% endif %}
 
@@ -201,7 +201,7 @@ show_access_info.{% endcomment %}
   <p class="text-base-content/80 leading-relaxed">To be announced.</p>
   {% endif %}
   {% if event.fee_note %}
-  <p class="text-base-content/80 leading-relaxed">{{ event.fee_note|inline_italics }}</p>
+  <p class="text-base-content/80 leading-relaxed [&_a]:link [&_a]:break-all">{{ event.fee_note|inline_italics }}</p>
   {% endif %}
   {% if event.is_per_class %}
   <p class="text-sm text-base-content/70">Billed per class: you pay for each class you attend, a few days after the class.</p>

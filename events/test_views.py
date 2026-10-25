@@ -381,3 +381,13 @@ def test_long_session_list_collapses_with_upcoming_preview(client, published_eve
     # Preview shows the next three upcoming (#3-#5), not past or later ones.
     assert "#3" in html and "#4" in html and "#5" in html
     assert "#1" not in html and "#2" not in html and "#6" not in html
+
+
+def test_inline_italics_links_urls_without_unescaping():
+    """A URL in a description or reading rendered as plain text (task #820)."""
+    from events.templatetags.event_format import inline_italics
+
+    out = inline_italics("*Dreams*. https://doi.org/10.1/x?a=1&b=2 <b>no</b>")
+    assert "<em>Dreams</em>" in out
+    assert '<a href="https://doi.org/10.1/x?a=1&amp;b=2" rel="nofollow">' in out
+    assert "&lt;b&gt;no&lt;/b&gt;" in out
