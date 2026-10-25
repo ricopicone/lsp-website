@@ -168,10 +168,12 @@ def test_results_winners_only_vs_full(client):
     services.run_count(e, admin)
     services.publish_results(e, admin)
     page = _page(client, v)
-    assert "Winningham" in page and "Stage" not in page
+    # The count table's header, not the bare word: the footer's random
+    # aphorism can be attributed to "Mirror Stage" (task #820, a CI flake).
+    assert "Winningham" in page and "<th>Stage</th>" not in page
     e.show_results = "full"
     e.save()
-    assert "Stage" in client.get(tab()).content.decode()
+    assert "<th>Stage</th>" in client.get(tab()).content.decode()
 
 
 def test_no_tally_while_counted_but_unpublished(client):
