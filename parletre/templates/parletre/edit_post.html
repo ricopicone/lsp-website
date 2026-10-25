@@ -15,7 +15,7 @@
 
   <h1 class="font-serif text-2xl tracking-tight text-base-content">Edit message</h1>
 
-  <form method="post" class="space-y-3">
+  <form method="post" class="space-y-3" data-warn-unsaved>
     {% csrf_token %}
     <div class="mention-host" data-mention-url="{% url 'parletre:mention_search' %}?channel={{ channel.slug }}">{{ form.body }}</div>
     {% if form.body.errors %}<p class="text-error text-sm">{{ form.body.errors|striptags }}</p>{% endif %}

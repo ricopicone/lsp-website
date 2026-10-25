@@ -13,7 +13,7 @@
 
   <h1 class="font-serif text-2xl tracking-tight text-base-content">New thread</h1>
 
-  <form method="post" enctype="multipart/form-data" class="space-y-4">
+  <form method="post" enctype="multipart/form-data" class="space-y-4" data-warn-unsaved>
     {% csrf_token %}
     <div class="space-y-1">
       <label class="text-sm text-base-content/70" for="{{ form.title.id_for_label }}">Title</label>

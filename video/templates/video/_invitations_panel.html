@@ -8,7 +8,7 @@ intro — and names no particular kind of room.{% endcomment %}
     <p class="max-w-prose text-sm text-base-content/60">{{ panel.intro }}</p>
 
     <form method="post" action="{{ panel.post_url }}"
-          class="space-y-5 rounded-xl border border-base-300/60 bg-base-100 p-5">
+          class="space-y-5 rounded-xl border border-base-300/60 bg-base-100 p-5" data-warn-unsaved>
       {% csrf_token %}
 
       {% if panel.form.non_field_errors %}

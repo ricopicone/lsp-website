@@ -2619,6 +2619,11 @@ Done (see `git log` for specifics):
   and the masthead's "Private" meant the content, not the page, beside a
   message saying the cartel is visible to the school; it reads "Private
   content" with an explanation on hover.
+  **Group 9, video and Parlêtre:** both held up. The artwork banner's
+  credit (`core/_page_hero.html`, Classic theme) ran into a two-line
+  subtitle on a phone; the band leaves room for it. The room tab's invite
+  and office-hours forms and Parlêtre's new-thread and edit-post forms opt
+  into the unsaved guard.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

@@ -34,7 +34,7 @@ its office hours, and its live invitations.
     </p>
 
     <form method="post" action="{% url 'video:room_settings' %}"
-          class="grid gap-4 rounded-xl border border-base-300/60 bg-base-100 p-5 sm:grid-cols-2">
+          class="grid gap-4 rounded-xl border border-base-300/60 bg-base-100 p-5 sm:grid-cols-2" data-warn-unsaved>
       {% csrf_token %}
       <div>
         <label for="{{ room_settings_form.office_hours.id_for_label }}" class="label">

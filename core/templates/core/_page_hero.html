@@ -35,7 +35,8 @@
     <div class="absolute inset-0" aria-hidden="true"
          style="background:linear-gradient(to top, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.12) 55%, rgba(0,0,0,0) 100%);"></div>
 
-    <div class="relative mx-auto max-w-5xl px-4 sm:px-6 min-h-48 sm:min-h-64 flex flex-col justify-end pt-6 pb-7 items-start">
+    {# Room under the text for the credit, which wraps to two lines on a phone and ran into a two-line subtitle (task #820). #}
+    <div class="relative mx-auto max-w-5xl px-4 sm:px-6 min-h-48 sm:min-h-64 flex flex-col justify-end pt-6 {% if page_artwork.artist or page_artwork.title %}pb-14 sm:pb-9{% else %}pb-7{% endif %} items-start">
       {% if kicker %}
       <p class="mb-2.5"><span class="lsp-hero-ink font-sans font-semibold text-xs uppercase tracking-[0.18em] text-white">{{ kicker|safe }}</span></p>
       {% endif %}
@@ -46,7 +47,7 @@
     </div>
 
     {% if page_artwork.artist or page_artwork.title %}
-    <p class="absolute bottom-1.5 right-3 text-xs text-white/55">
+    <p class="absolute bottom-1.5 left-3 right-3 text-right text-xs text-white/55">
       {{ page_artwork.artist }}{% if page_artwork.artist and page_artwork.title %}, {% endif %}{% if page_artwork.title %}<span class="italic">{{ page_artwork.title }}</span>{% endif %}
     </p>
     {% endif %}
