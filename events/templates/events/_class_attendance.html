@@ -9,23 +9,24 @@ Expects: event, class_attendance (per_class.faculty_context), request.{% endcomm
   </p>
   {% if class_attendance %}
   {% for cls in class_attendance %}
-  <details class="rounded-lg border border-base-300"{% if forloop.first %} open{% endif %}>
+  <details class="rounded-lg border border-base-300 scroll-mt-24" id="class-{{ cls.session.pk }}"{% if forloop.first %} open{% endif %}>
     <summary class="cursor-pointer px-4 py-2 text-sm">
       <span class="font-medium">{{ cls.day|date:"D, M j" }}</span>
       <span class="text-base-content/60">· {{ cls.present }} of {{ cls.rows|length }} present</span>
     </summary>
     <div class="overflow-x-auto">
       <table class="table table-sm">
-        <thead><tr><th>Name</th><th>Attendance</th><th>Billing</th><th></th></tr></thead>
+        {# On a phone the billing line folds under the name, so the Mark button stays on screen (task #820). #}
+        <thead><tr><th>Name</th><th>Attendance</th><th class="hidden sm:table-cell">Billing</th><th></th></tr></thead>
         <tbody>
         {% for row in cls.rows %}
           <tr>
-            <td>{{ row.att.registration.user.get_full_name|default:row.att.registration.user.email }}</td>
+            <td>{{ row.att.registration.user.get_full_name|default:row.att.registration.user.email }}<span class="block text-xs text-base-content/60 sm:hidden">{% if row.billed %}{{ row.att.get_outcome_display }}{% else %}Correctable until {{ row.closes|date:"M j, g:i a" }}{% endif %}</span></td>
             <td>
               <span class="badge badge-sm {% if row.att.present %}badge-success{% else %}badge-ghost{% endif %}">{% if row.att.present %}Present{% else %}Absent{% endif %}</span>
-              <span class="text-xs text-base-content/60">{{ row.att.get_source_display }}</span>
+              <span class="hidden sm:inline text-xs text-base-content/60">{{ row.att.get_source_display }}</span>
             </td>
-            <td class="text-xs text-base-content/70 whitespace-nowrap">
+            <td class="hidden sm:table-cell text-xs text-base-content/70 whitespace-nowrap">
               {% if row.billed %}{{ row.att.get_outcome_display }}{% else %}Correctable until {{ row.closes|date:"M j, g:i a" }}{% endif %}
             </td>
             <td class="text-right">
@@ -33,7 +34,7 @@ Expects: event, class_attendance (per_class.faculty_context), request.{% endcomm
               <form method="post" action="{% url 'events:attendance_mark' row.att.pk %}" class="inline">
                 {% csrf_token %}
                 <input type="hidden" name="present" value="{% if row.att.present %}0{% else %}1{% endif %}">
-                <input type="hidden" name="next" value="{{ request.get_full_path }}#attendance">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}#class-{{ cls.session.pk }}">
                 <button type="submit" class="btn btn-ghost btn-xs">Mark {% if row.att.present %}absent{% else %}present{% endif %}</button>
               </form>
               {% endif %}
@@ -45,6 +46,13 @@ Expects: event, class_attendance (per_class.faculty_context), request.{% endcomm
     </div>
   </details>
   {% endfor %}
+  <script>
+    {# Return to the class just corrected, open: a save used to collapse it. #}
+    (function () {
+      var el = location.hash && document.getElementById(location.hash.slice(1));
+      if (el && el.tagName === "DETAILS") { el.open = true; el.scrollIntoView(); }
+    })();
+  </script>
   {% else %}
   <p class="text-sm text-base-content/60">Attendance appears here shortly after each class ends.</p>
   {% endif %}

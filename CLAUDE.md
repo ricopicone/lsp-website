@@ -2503,6 +2503,34 @@ Done (see `git log` for specifics):
   nomination the Board has decided. Design:
   `docs/superpowers/specs/2026-10-12-board-elections-design.md`.
 
+- **Interface review, by role** (task #820, after #817). Every interface
+  is driven in a browser at desktop and phone width and checked for the
+  #817 failures: a form that drops what was typed, an error rendered far
+  from its field, a Save that isn't where the user is, a phone layout that
+  hides the action. `core/browser_forms.py` is the shared helper for tests
+  that submit a page's own rendered form (CRLF textareas, unchecked boxes,
+  every hidden field), extracted from the #817 round-trip test. **Group 1,
+  the surfaces #811/#812 put live:** the pricing-code panel spoke model
+  help text ("Interpreted per pricing_mode…", "Null = unlimited") and
+  offered a per-class seminar the payment plan its own `clean()` refused;
+  a refused code now comes back under its fields with the values intact
+  (the POST rides the session for one render, `events.views.
+  pricing_code_form`) instead of an error at the top of a long page, and a
+  minted one names its code. Correcting attendance collapsed the class
+  you'd just corrected; the save now returns to `#class-<pk>`, open. On a
+  phone the roster's status and the Mark absent/present button sat behind
+  a sideways scroll; both tables fold their secondary columns under the
+  name. The change dialog's **Keep editing** was a link that threw away
+  the edits it carried; it is now `decision=edit`, re-rendering the bound
+  form, and a form rendered back from a POST marks itself unsaved
+  (`data-unsaved`) so the leave-page guard still fires. The edit page names
+  a change still waiting for the PC, and the Changes queue warns when the
+  live field has moved since submission (`EventChangeRequest.
+  stale_labels`), since `apply()` writes the proposal over whatever is
+  live. The member's per-class confirmation reads **Enrolled**, not Paid,
+  and drops an empty "How priced" row and the "code from your convener"
+  wording on a seminar. Messages in the review flow lose their em dashes.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

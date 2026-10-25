@@ -2097,6 +2097,31 @@ class EventChangeRequest(models.Model):
             ))
         return out
 
+    def stale_labels(self):
+        """Labels of the changed fields whose LIVE value has moved since this
+        request was submitted (task #820).
+
+        The queue shows the value captured at submission, and ``apply()``
+        writes the proposal over whatever is live, so a minor edit made while
+        this one waited would be reverted without anyone seeing it.
+        """
+        from .price_spec import PriceSpec, from_event
+        from .review import FIELD_LABELS
+
+        def norm(v):
+            return (v or "").replace("\r\n", "\n").strip()
+
+        out = []
+        for f in self.changed_fields:
+            if f == "price":
+                if self.original_price is None:
+                    continue
+                if from_event(self.event) != PriceSpec.from_dict(self.original_price):
+                    out.append(FIELD_LABELS["price"])
+            elif norm(getattr(self.event, f)) != norm(getattr(self, f"original_{f}")):
+                out.append(FIELD_LABELS.get(f, f))
+        return out
+
     def apply(self):
         """Copy the proposed values onto the live event.
 

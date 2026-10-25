@@ -10,82 +10,19 @@ sends for a <textarea>), and the dialog's own hidden fields posted back.
 from __future__ import annotations
 
 from datetime import date
-from html import unescape
-from html.parser import HTMLParser
 
 import pytest
 from django.urls import reverse
 
 from accounts.models import User
+from core.browser_forms import browser_form
 from events.models import CEOrganization, Event, EventChangeRequest, Program
 
 pytestmark = pytest.mark.django_db
 
 
-class _FormParser(HTMLParser):
-    """Collect each <form>'s successful controls the way a browser submits them."""
-
-    def __init__(self):
-        super().__init__()
-        self.forms, self._form, self._textarea, self._select = [], None, None, None
-
-    def handle_starttag(self, tag, attrs):
-        a = dict(attrs)
-        if tag == "form":
-            self._form = []
-            self.forms.append(self._form)
-        if self._form is None:
-            return
-        name = a.get("name")
-        if tag == "input" and name:
-            kind = a.get("type", "text")
-            if kind in ("checkbox", "radio"):
-                if "checked" in a:
-                    self._form.append((name, a.get("value", "on")))
-            elif kind not in ("submit", "button", "file"):
-                self._form.append((name, a.get("value", "")))
-        elif tag == "textarea":
-            self._textarea = [name, ""]
-        elif tag == "select":
-            self._select = [name, None, None]
-        elif tag == "option" and self._select:
-            if self._select[2] is None:
-                self._select[2] = a.get("value", "")
-            if "selected" in a:
-                self._select[1] = a.get("value", "")
-
-    def handle_data(self, data):
-        if self._textarea:
-            self._textarea[1] += data
-
-    def handle_endtag(self, tag):
-        if tag == "textarea" and self._textarea:
-            name, value = self._textarea
-            # A browser drops one newline straight after <textarea>, and
-            # submits the content's line breaks as CRLF.
-            if value.startswith("\n"):
-                value = value[1:]
-            value = unescape(value).replace("\r\n", "\n").replace("\n", "\r\n")
-            if name:
-                self._form.append((name, value))
-            self._textarea = None
-        elif tag == "select" and self._select:
-            name, chosen, first = self._select
-            self._form.append((name, chosen if chosen is not None else first))
-            self._select = None
-        elif tag == "form":
-            self._form = None
-
-
 def _edit_form(html):
-    parser = _FormParser()
-    parser.feed(html)
-    form = next(f for f in parser.forms if any(k == "title" for k, _ in f))
-    data = {}
-    for key, value in form:
-        data.setdefault(key, []).append(unescape(value))
-    data.pop("csrfmiddlewaretoken", None)
-    return data
+    return browser_form(html, field="title")
 
 
 @pytest.fixture
@@ -177,3 +114,62 @@ def test_the_dialogs_own_repost_saves(
         assert program_seminar.description.startswith("First paragraph.")
     if with_ce_org:
         assert list(program_seminar.ce_organizations.all()) == [org]
+
+
+def test_keep_editing_returns_the_typed_edits(client, program_seminar, faculty):
+    """"Keep editing" was a link back to the edit page, which dropped every
+    edit the dialog was carrying (task #820)."""
+    client.force_login(faculty)
+    url = reverse("events:edit", args=[program_seminar.slug])
+    data = _browser_get(client, program_seminar)
+    data["description"] = ["Entirely new text.\r\n\r\nAnd more."]
+
+    dialog = client.post(url, data)
+    repost = _edit_form(dialog.content.decode())
+    repost["decision"] = ["edit"]
+    response = client.post(url, repost)
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "Entirely new text." in html
+    assert "data-unsaved" in html  # the page says it isn't saved yet
+    assert not EventChangeRequest.objects.exists()
+    program_seminar.refresh_from_db()
+    assert program_seminar.description.startswith("First paragraph.")
+
+
+def _submit_for_review(client, event, description):
+    url = reverse("events:edit", args=[event.slug])
+    data = _browser_get(client, event)
+    data["description"] = [description]
+    repost = _edit_form(client.post(url, data).content.decode())
+    repost["decision"] = ["review"]
+    assert client.post(url, repost).status_code == 302
+
+
+def test_a_waiting_change_is_named_on_the_edit_page(client, program_seminar, faculty):
+    client.force_login(faculty)
+    _submit_for_review(client, program_seminar, "A wholly rewritten description.")
+
+    html = client.get(reverse("events:edit", args=[program_seminar.slug])).content.decode()
+
+    assert "Waiting for the Program Committee: a change to the description" in html
+
+
+def test_the_queue_warns_when_the_live_text_moved_on(client, program_seminar, faculty):
+    """Approving writes the proposal over whatever is live, so an edit made
+    while it waited would be reverted unseen (task #820)."""
+    client.force_login(faculty)
+    _submit_for_review(client, program_seminar, "A wholly rewritten description.")
+    request = EventChangeRequest.objects.get()
+    assert request.stale_labels() == []
+
+    Event.objects.filter(pk=program_seminar.pk).update(
+        description="First paragraph.\n\nSecond paragraph, typo fixed."
+    )
+
+    assert EventChangeRequest.objects.get().stale_labels() == ["Description"]
+    staff = User.objects.create_user(email="pc@example.com", is_staff=True)
+    client.force_login(staff)
+    html = client.get(reverse("program_admin_changes")).content.decode()
+    assert "Since this was submitted, the live description changed." in html

@@ -15,19 +15,24 @@
     </p>
   </header>
 
+  {% with waiting=event.change_requests.all %}{% for cr in waiting %}{% if cr.status == "pending" %}
+  <div role="status" class="alert alert-info text-sm">
+    <span>Waiting for the Program Committee: a change to the {% for label, old, new in cr.field_changes %}{{ label|lower }}{% if not forloop.last %}, {% endif %}{% endfor %}, sent {{ cr.created_at|date:"M j" }}. The event page shows the approved version until they decide.</span>
+  </div>
+  {% endif %}{% endfor %}{% endwith %}
   {% if event.requires_change_review %}
   <div class="rounded-lg border border-base-300/60 bg-base-200/40 p-3 text-sm text-base-content/70">
     This event has been approved by the Program Committee. Small edits to the
-    title, description, readings, or fee note can be adopted right away; a
-    substantial change can be sent to the committee for review—you'll choose
-    when you save.
+    title, description, readings, fee note, or price can be adopted right away,
+    and a substantial change can be sent to the committee for review. You'll
+    choose when you save.
   </div>
   {% endif %}
 
   {% comment %}The event's details: one form, one Save, kept in reach by a bar
   that sticks to the bottom of the screen while the form is on it. event-edit.js
   says when there are unsaved changes and warns before leaving with them.{% endcomment %}
-  <form method="post" id="event-details-form" data-event-details
+  <form method="post" id="event-details-form"{% if form.is_bound %} data-unsaved{% endif %} data-event-details
         class="rounded-lg border border-base-300 bg-base-100 px-4 pt-4 sm:px-6 sm:pt-6 space-y-6">
     {% csrf_token %}
     <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">Event details</h2>

@@ -399,9 +399,9 @@ def workgroup_detail(request, slug):
         context["pending_registrations"] = primary_event.registrations.filter(
             status=Registration.Status.PENDING_APPROVAL
         ).select_related("user")
-        from events.forms import PricingCodeForm
+        from events.views import pricing_code_form
 
-        context["pricing_code_form"] = PricingCodeForm(event=primary_event)
+        context["pricing_code_form"] = pricing_code_form(request, primary_event)
         if primary_event.is_per_class or primary_event.has_per_class_registrants:
             from events.per_class import faculty_context
             context["class_attendance"] = faculty_context(primary_event)

@@ -46,6 +46,25 @@ def _faculty_view_url(event: Event) -> str:
     return reverse("events:detail", args=[event.slug]) + "?view=faculty"
 
 
+_CODE_FORM_KEY = "pricing_code_form:{}"
+
+
+def pricing_code_form(request, event) -> PricingCodeForm:
+    """The faculty panel's code form, re-bound to a refused submission.
+
+    Minting posts from a panel and redirects back, so a refused form used to
+    lose what was typed and report its error at the top of a long page, far
+    from the form. The refused POST rides the session for exactly one render,
+    so the errors sit under their fields with the values intact.
+    """
+    data = request.session.pop(_CODE_FORM_KEY.format(event.pk), None)
+    if data is None:
+        return PricingCodeForm(event=event)
+    form = PricingCodeForm(MultiValueDict(data), event=event)
+    form.is_valid()
+    return form
+
+
 def _release_if_approval_turned_off(request, event, was_required: bool) -> None:
     """Off is the inverse of on: unticking approval clears the queue it held.
 
@@ -411,7 +430,7 @@ def event_detail(request, slug: str):
         context["pending_registrations"] = event.registrations.filter(
             status=Registration.Status.PENDING_APPROVAL
         ).select_related("user")
-        context["pricing_code_form"] = PricingCodeForm(event=event)
+        context["pricing_code_form"] = pricing_code_form(request, event)
         if event.is_per_class or event.has_per_class_registrants:
             from .per_class import faculty_context
             context["class_attendance"] = faculty_context(event)
@@ -561,6 +580,16 @@ def event_edit(request, slug: str):
         return redirect("events:detail", slug=event.slug)
 
     decision = request.POST.get("decision")
+    if decision == "edit":
+        # "Keep editing" from the dialog: back to the form with what was typed.
+        # It used to be a link to the edit page, which threw every edit away.
+        return render(request, "events/event_edit.html", {
+            "event": event, "form": form,
+            "speaker_invites": _speaker_invite_rows(event),
+            **_feature_image_context(event),
+            **_ce_edit_context(form),
+            **_schedule_editor_context(event),
+        })
     if not decision:
         # First submission of a reviewable change → show the dialog. Carry the
         # submitted values forward as hidden inputs so the choice POST re-binds.
@@ -636,7 +665,7 @@ def event_edit(request, slug: str):
         event_notifications.notify_change_submitted(cr)
         messages.success(
             request,
-            "Submitted to the Program Committee — the event stays as it is "
+            "Submitted to the Program Committee. The event stays as it is "
             "until they review your change.",
         )
         return redirect("events:detail", slug=event.slug)
@@ -1082,14 +1111,13 @@ def event_generate_code(request, slug: str):
         if event.is_per_class:
             code.per_class = True
         code.save()
-    else:
-        # The form posts from a panel and redirects back, so an error left on
-        # the bound form was never seen; say it instead.
-        for errors in form.errors.values():
-            for error in errors:
-                messages.error(request, error)
-
-    return redirect(_faculty_view_url(event))
+        messages.success(
+            request, f"Code {code.code} created. Send it to whoever should use it."
+        )
+        return redirect(_faculty_view_url(event) + "#existing-codes")
+    data = {k: v for k, v in request.POST.lists() if k != "csrfmiddlewaretoken"}
+    request.session[_CODE_FORM_KEY.format(event.pk)] = data
+    return redirect(_faculty_view_url(event) + "#generate-code")
 
 
 @require_POST
@@ -1353,7 +1381,7 @@ def propose_event(request):
             )
             messages.success(
                 request,
-                f"{proposal.get_event_type_display()} submitted — the Programming "
+                f"{proposal.get_event_type_display()} submitted. The Program "
                 "Committee will review it." if is_submit
                 else f"{proposal.get_event_type_display()} saved. Submit it when ready.",
             )
@@ -1491,7 +1519,7 @@ def proposal_decide(request, pk: int):
         return redirect("program_admin_proposals")
     if request.POST.get("decision") == "approve":
         event = proposal.approve(request.user)
-        messages.success(request, f"Approved — minted “{event.title}”.")
+        messages.success(request, f"Approved, and “{event.title}” created.")
     else:
         proposal.decline(request.user, note=request.POST.get("note", ""))
         messages.success(request, "Proposal declined.")
@@ -1548,7 +1576,7 @@ def program_admin_special_event_new(request):
             if publish and not has_real_date:
                 messages.warning(
                     request,
-                    f"“{event.title}” was created as a draft — it needs a date "
+                    f"“{event.title}” was created as a draft. It needs a date "
                     "before it can be published.",
                 )
             elif event.published:
@@ -1634,7 +1662,7 @@ def program_admin_special_event_registration(request, slug: str):
         if not event.published:
             messages.warning(
                 request,
-                f"“{event.title}” is still a draft — publish it for anyone to "
+                f"“{event.title}” is still a draft. Publish it for anyone to "
                 "reach the registration page.",
             )
     else:
@@ -1676,7 +1704,7 @@ def change_request_decide(request, pk: int):
         return redirect("program_admin_changes")
     if request.POST.get("decision") == "approve":
         cr.approve(request.user)
-        messages.success(request, f"Approved — “{cr.event.title}” updated.")
+        messages.success(request, f"Approved, and “{cr.event.title}” updated.")
     else:
         cr.decline(request.user, note=request.POST.get("note", ""))
         messages.success(request, "Change declined.")

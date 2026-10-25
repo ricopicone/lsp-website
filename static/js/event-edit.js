@@ -49,14 +49,18 @@
   var baseline = snapshot();
   var saving = false;
   var note = form.querySelector("[data-dirty-note]");
+  // Rendered back from a POST (a refused save, or "Keep editing" in the
+  // review dialog): what the page loaded with is not what is saved.
+  var unsaved = form.hasAttribute("data-unsaved");
 
-  function dirty() { return !same(baseline, snapshot()); }
+  function dirty() { return unsaved || !same(baseline, snapshot()); }
 
   function refresh() { if (note) note.hidden = !dirty(); }
 
   form.addEventListener("input", refresh);
   form.addEventListener("change", refresh);
   form.addEventListener("submit", function () { saving = true; });
+  refresh();
 
   window.addEventListener("beforeunload", function (e) {
     if (saving || !dirty()) return;

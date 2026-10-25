@@ -40,8 +40,10 @@
     <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Amount due</dt>
     <dd class="m-0 font-medium">${{ registration.quoted_amount }}</dd>
     {% endif %}
+    {% if registration.quoted_explanation %}
     <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">How priced</dt>
     <dd class="m-0 text-base-content/70">{{ registration.quoted_explanation }}</dd>
+    {% endif %}
     <dt class="text-xs uppercase tracking-wider text-base-content/60 mt-1">Status</dt>
     <dd class="m-0">
       <span class="badge
@@ -49,7 +51,8 @@
         {% elif registration.status == 'comped' %}badge-info
         {% elif registration.status == 'cancelled' or registration.status == 'refunded' or registration.status == 'declined' %}badge-ghost
         {% else %}badge-warning{% endif %}">
-        {{ registration.get_status_display }}
+        {# A per-class row reads PAID from enrolment; its classes bill later (task #811). #}
+        {% if registration.is_per_class and registration.status == 'paid' %}Enrolled{% else %}{{ registration.get_status_display }}{% endif %}
       </span>
     </dd>
   </dl>
@@ -112,14 +115,14 @@
 
   {% if pending_code %}
   <div role="alert" class="alert">
-    <span>Your convener has set aside a code for you, <code class="font-mono">{{ pending_code.code }}</code>. Enter it below to choose how it applies.</span>
+    <span>A code has been set aside for you, <code class="font-mono">{{ pending_code.code }}</code>. Enter it below to choose how it applies.</span>
   </div>
   {% endif %}
 
   {% if registration.status == "awaiting_payment" or registration.is_per_class and registration.status == "paid" and not registration.pricing_code_id and not classes_covered %}
   <details class="rounded-lg border border-base-300 p-4"{% if pending_code %} open{% endif %}>
     <summary class="cursor-pointer text-sm text-base-content/80">
-      Have a code from your convener?
+      Have a pricing code?
     </summary>
     <form method="post" action="{% url 'registrations:apply_code' registration.id %}"
           class="mt-3 space-y-3 max-w-md">

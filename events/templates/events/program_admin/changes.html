@@ -21,12 +21,17 @@
               by {{ c.proposed_by.get_full_name|default:c.proposed_by.email }}</span>
           </p>
         </div>
+        {% with stale=c.stale_labels %}{% if stale %}
+        <div role="alert" class="alert alert-warning text-sm">
+          <span>Since this was submitted, the live {{ stale|join:", "|lower }} changed. Approving replaces {% if stale|length > 1 %}them{% else %}it{% endif %} with the proposed version, so <a href="{% url 'events:detail' c.event.slug %}" class="link">check the event</a> first.</span>
+        </div>
+        {% endif %}{% endwith %}
         {% for label, old, new in c.field_changes %}
         <div class="space-y-1 text-sm">
           <p class="font-medium text-base-content/80">{{ label }}</p>
           <div class="grid gap-2 sm:grid-cols-2">
             <div class="rounded-lg border border-base-300/50 bg-base-200/40 p-2">
-              <p class="text-xs uppercase tracking-wide text-base-content/45">Current</p>
+              <p class="text-xs uppercase tracking-wide text-base-content/45">When submitted</p>
               <p class="whitespace-pre-line text-base-content/70">{{ old|default:"—" }}</p>
             </div>
             <div class="rounded-lg border border-primary/30 bg-primary/5 p-2">

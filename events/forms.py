@@ -462,10 +462,34 @@ class PricingCodeForm(forms.ModelForm):
             "spring. The total is the same either way."
         )
         self.fields["amount_or_percent"].required = False
+        # The model's help texts were written for developers ("Interpreted per
+        # pricing_mode…", "Null = unlimited") and reached faculty verbatim.
+        self.fields["pricing_mode"].label = "Kind of code"
+        self.fields["amount_or_percent"].label = "Amount"
+        self.fields["amount_or_percent"].help_text = (
+            "Percent off: a number from 0 to 100. Fixed amount: the price they "
+            "pay, in dollars. Sliding-scale floor: the least they may pay, in "
+            "dollars."
+        )
+        self.fields["valid_until"].help_text = "Leave blank and it never expires."
+        self.fields["max_uses"].label = "How many times it can be used"
+        self.fields["max_uses"].help_text = "Leave blank for no limit."
         self.fields["per_class"].label = "Per class attended"
         if self.per_class:
-            # The whole event bills per class, so every code already does.
+            # The whole event bills per class, so every code already does, and
+            # there is no payment plan to carry (clean() refuses both, so
+            # offering them only invited a refusal).
             del self.fields["per_class"]
+            del self.fields["installments"]
+            self.fields["pricing_mode"].choices = [
+                c for c in self.fields["pricing_mode"].choices
+                if c[0] != PricingCode.Mode.FULL_PRICE
+            ]
+            self.fields["amount_or_percent"].help_text = (
+                "Percent off: a number from 0 to 100, off each class. Fixed "
+                "amount: the price of one class, in dollars. Sliding-scale "
+                "floor: the least they may pay for one class, in dollars."
+            )
         else:
             self.fields["per_class"].help_text = (
                 "Instead of the whole seminar, they pay this amount for each "
@@ -507,7 +531,7 @@ class PricingCodeForm(forms.ModelForm):
                 self.add_error(
                     "pricing_mode",
                     "A per-class code needs its own price per class: choose "
-                    "Fixed price or Sliding floor.",
+                    "Fixed amount or Sliding-scale floor.",
                 )
                 return data
             if (data.get("installments") or 1) > 1:
@@ -543,7 +567,7 @@ class PricingCodeForm(forms.ModelForm):
         if mode == PricingCode.Mode.PERCENT_OFF and not (
             Decimal("0") <= amount <= Decimal("100")
         ):
-            self.add_error("amount_or_percent", "percent_off requires a value between 0 and 100.")
+            self.add_error("amount_or_percent", "A percent off must be between 0 and 100.")
         if amount < 0:
             self.add_error("amount_or_percent", "Cannot be negative.")
         return data

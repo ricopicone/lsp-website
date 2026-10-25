@@ -80,14 +80,15 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
-          <tr><th>Name</th><th>Email</th><th>Tier</th><th class="whitespace-nowrap">Amount</th><th>Status</th></tr>
+          {# On a phone, email folds under the name and the tier drops, so the status stays on screen (task #820). #}
+          <tr><th>Name</th><th class="hidden sm:table-cell">Email</th><th class="hidden sm:table-cell">Tier</th><th class="whitespace-nowrap">Amount</th><th>Status</th></tr>
         </thead>
         <tbody>
         {% for reg in registrations %}
           <tr>
-            <td>{{ reg.user.first_name }} {{ reg.user.last_name }}</td>
-            <td class="text-base-content/70">{{ reg.user.email }}</td>
-            <td>{{ reg.price_tier.get_audience_display }}</td>
+            <td>{{ reg.user.first_name }} {{ reg.user.last_name }}<span class="block text-xs text-base-content/60 break-all sm:hidden">{{ reg.user.email }}</span></td>
+            <td class="hidden sm:table-cell text-base-content/70">{{ reg.user.email }}</td>
+            <td class="hidden sm:table-cell">{{ reg.price_tier.get_audience_display }}</td>
             <td class="whitespace-nowrap">{% if reg.is_per_class %}${{ reg.per_class_rate }}/class{% else %}${{ reg.quoted_amount }}{% endif %}</td>
             <td>
               <span class="badge badge-sm
@@ -118,8 +119,9 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
   {# Mint pricing code #}
   <div class="space-y-3">
     <h3 class="font-serif text-lg text-base-content">Generate a pricing code</h3>
-    <form method="post" action="{% url 'events:generate_code' event.slug %}" class="space-y-4 max-w-xl" data-tour="generate-code">
+    <form method="post" action="{% url 'events:generate_code' event.slug %}" class="space-y-4 max-w-xl scroll-mt-24" id="generate-code" data-tour="generate-code">
       {% csrf_token %}
+      {% if pricing_code_form.errors %}<div role="alert" class="alert alert-error text-sm">The code wasn't created. Fix the field{{ pricing_code_form.errors|length|pluralize }} below and mint it again.{% for e in pricing_code_form.non_field_errors %} {{ e }}{% endfor %}</div>{% endif %}
       {% for field in pricing_code_form %}
       <div class="form-control">
         <label class="label justify-start gap-1 pb-1">
@@ -136,7 +138,7 @@ registrations, pricing_code_form, existing_codes.{% endcomment %}
 
   {# Existing codes #}
   {% if existing_codes %}
-  <div class="space-y-3">
+  <div class="space-y-3 scroll-mt-24" id="existing-codes">
     <h3 class="font-serif text-lg text-base-content">Existing codes</h3>
     <div class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">

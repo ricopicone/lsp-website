@@ -21,7 +21,7 @@
     <p class="text-sm {% if description_ratio_pct >= 20 %}text-warning{% else %}text-base-content/60{% endif %}">
       About <strong>{{ description_ratio_pct }}%</strong> of the description changed.
       {% if description_ratio_pct >= 20 %}
-      That looks substantial — please consider sending it to the committee.
+      That looks substantial, so please consider sending it to the committee.
       {% else %}
       That's a small change.
       {% endif %}
@@ -39,10 +39,10 @@
 
     <div class="flex flex-col gap-3">
       <button type="submit" name="decision" value="minor" class="btn btn-primary">
-        It's a minor change — adopt now
+        It's a minor change, adopt it now
       </button>
       <button type="submit" name="decision" value="review" class="btn btn-outline">
-        It's substantial — send to the Program Committee
+        It's substantial, send it to the Program Committee
       </button>
       {% if is_reviewer %}
       <button type="submit" name="decision" value="admin" class="btn btn-ghost">
@@ -50,13 +50,13 @@
       </button>
       <p class="text-xs text-base-content/55">
         The administrative option applies your change immediately and records it
-        for the audit trail — use it when acting in your staff or committee role.
+        for the audit trail. Use it when acting in your staff or committee role.
       </p>
       {% endif %}
     </div>
 
     <p class="text-sm">
-      <a href="{% url 'events:edit' event.slug %}" class="link link-hover text-base-content/70">← Keep editing</a>
+      <button type="submit" name="decision" value="edit" class="link link-hover text-base-content/70">← Keep editing</button>
     </p>
   </form>
 

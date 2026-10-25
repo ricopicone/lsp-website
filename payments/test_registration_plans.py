@@ -1103,7 +1103,7 @@ def test_the_roster_hides_cancelled_and_refunded(client):
     # Scoped to the roster's own cells: every account also appears in the
     # pricing-code form's "Only this person may use it" dropdown.
     def on_roster(email):
-        return f'<td class="text-base-content/70">{email}</td>' in body
+        return f'<td class="hidden sm:table-cell text-base-content/70">{email}</td>' in body
 
     assert on_roster(live.user.email)
     assert not on_roster("gone@example.com")

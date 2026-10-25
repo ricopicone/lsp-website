@@ -182,10 +182,13 @@ def _code_form(event, **data):
     return PricingCodeForm(data=data, event=event)
 
 
-def test_per_class_code_refuses_installments():
+def test_per_class_code_offers_no_installments():
+    """A per-class seminar has nothing to split, so the field isn't offered
+    (task #820), and a hand-posted count is ignored."""
     form = _code_form(make_event(), installments="3")
-    assert not form.is_valid()
-    assert "installments" in form.errors
+    assert "installments" not in form.fields
+    assert form.is_valid(), form.errors
+    assert form.instance.installments == 1
 
 
 def test_per_class_code_refuses_full_price():
