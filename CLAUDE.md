@@ -2608,6 +2608,17 @@ Done (see `git log` for specifics):
   `static/js/unsaved-guard.js` (site-wide, opt-in with
   `form[data-warn-unsaved]`) asks before leaving a changed form; Notes uses
   it.
+  **Group 8, Workspaces and cartels:** the Settings tab (14 forms), the
+  cartel settings (10) and the cartel overview (7) each save card by card,
+  so a charter typed and then another card's Save pressed was lost; every
+  form there now opts into the unsaved guard. On a phone the Schedule tab's
+  "Recurring series" drop-down opened 60px off-screen; both scheduling forms
+  open inline below `sm` and stay drop-downs above. The notification badge
+  sat on top of the bell (site-wide header); it now sits beside it. A new
+  cartel's founder was shown "Forming · Join!" (now "Forming" to members),
+  and the masthead's "Private" meant the content, not the page, beside a
+  message saying the cartel is visible to the school; it reads "Private
+  content" with an explanation on hover.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

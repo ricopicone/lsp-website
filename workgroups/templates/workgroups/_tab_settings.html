@@ -30,7 +30,7 @@
       <h3 class="font-medium text-base-content">Overview</h3>
       <p class="text-xs text-base-content/50">The name and description shown on this group's page.</p>
     </div>
-    <form method="post" action="{% url 'workgroups:update_overview' workgroup.slug %}" class="space-y-3">
+    <form method="post" action="{% url 'workgroups:update_overview' workgroup.slug %}" class="space-y-3" data-warn-unsaved>
       {% csrf_token %}
       <div class="space-y-1">
         <label for="{{ overview_form.name.id_for_label }}" class="block text-xs text-base-content/60">Name</label>
@@ -53,7 +53,7 @@
       <p class="text-xs text-base-content/50">When this group runs. Leave the end date blank for a standing group.</p>
     </div>
     <form method="post" action="{% url 'workgroups:update_dates' workgroup.slug %}"
-          class="flex flex-wrap items-end gap-3">
+          class="flex flex-wrap items-end gap-3" data-warn-unsaved>
       {% csrf_token %}
       <div class="space-y-1">
         <label for="{{ dates_form.start_date.id_for_label }}" class="block text-xs text-base-content/60">Start</label>
@@ -79,7 +79,7 @@
       </p>
     </div>
     <form method="post" action="{% url 'workgroups:reminder_settings' workgroup.slug %}"
-          class="flex items-center gap-3">
+          class="flex items-center gap-3" data-warn-unsaved>
       {% csrf_token %}
       <label class="flex cursor-pointer items-center gap-2 text-sm">
         <input type="checkbox" name="meeting_reminders" class="toggle toggle-primary toggle-sm"
@@ -108,7 +108,7 @@
       {% endif %}
     </div>
     <form method="post" action="{% url 'workgroups:recording_settings' workgroup.slug %}"
-          class="flex flex-wrap items-end gap-3">
+          class="flex flex-wrap items-end gap-3" data-warn-unsaved>
       {% csrf_token %}
       <div class="space-y-1">
         <label for="recording_mode" class="block text-xs text-base-content/60">Record button</label>
@@ -138,7 +138,7 @@
       </p>
     </div>
     <form method="post" action="{% url 'workgroups:open_term' workgroup.slug %}"
-          class="flex flex-wrap items-end gap-3">
+          class="flex flex-wrap items-end gap-3" data-warn-unsaved>
       {% csrf_token %}
       <div class="space-y-1">
         <label for="{{ term_form.start_date.id_for_label }}" class="block text-xs text-base-content/60">Starts</label>
@@ -174,7 +174,7 @@
           <span class="badge badge-ghost badge-sm ml-1">{{ m.role_label }}</span>
         </span>
         <form method="post" action="{% url 'workgroups:roster_remove' workgroup.slug %}"
-              onsubmit="return confirm('Remove this role-holder?');">
+              onsubmit="return confirm('Remove this role-holder?');" data-warn-unsaved>
           {% csrf_token %}
           <input type="hidden" name="user" value="{{ m.user.pk }}">
           <button class="btn btn-ghost btn-xs text-error">Remove</button>
@@ -185,7 +185,7 @@
       {% endfor %}
     </ul>
     <form method="post" action="{% url 'workgroups:roster_add' workgroup.slug %}"
-          class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
+          class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3" data-warn-unsaved>
       {% csrf_token %}
       <div class="flex-1 space-y-1">
         <label for="add-member" class="block text-xs text-base-content/60">Member</label>
@@ -220,7 +220,7 @@
             {{ m.user.get_full_name|default:m.user.email }}
           </span>
           <form method="post" action="{% url 'workgroups:roster_remove' workgroup.slug %}"
-                onsubmit="return confirm('Remove this member?');">
+                onsubmit="return confirm('Remove this member?');" data-warn-unsaved>
             {% csrf_token %}
             <input type="hidden" name="user" value="{{ m.user.pk }}">
             <button class="btn btn-ghost btn-xs text-error">Remove</button>
@@ -228,7 +228,7 @@
         </div>
         <div class="flex flex-wrap items-end gap-x-4 gap-y-2">
           <form method="post" action="{% url 'workgroups:roster_set_role' workgroup.slug %}"
-                class="flex items-end gap-1">
+                class="flex items-end gap-1" data-warn-unsaved>
             {% csrf_token %}
             <input type="hidden" name="user" value="{{ m.user.pk }}">
             <div class="space-y-1">
@@ -243,7 +243,7 @@
           </form>
           {% if workgroup.has_terms %}
           <form method="post" action="{% url 'workgroups:roster_set_term' workgroup.slug %}"
-                class="flex items-end gap-1">
+                class="flex items-end gap-1" data-warn-unsaved>
             {% csrf_token %}
             <input type="hidden" name="user" value="{{ m.user.pk }}">
             <div class="space-y-1">
@@ -267,7 +267,7 @@
       {% endfor %}
     </ul>
     <form method="post" action="{% url 'workgroups:roster_add' workgroup.slug %}"
-          class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
+          class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3" data-warn-unsaved>
       {% csrf_token %}
       <div class="flex-1 space-y-1">
         <label for="add-member" class="block text-xs text-base-content/60">Add member (email or “First Last”)</label>
@@ -295,13 +295,13 @@
       </p>
     </div>
     {% if workgroup.is_archived %}
-    <form method="post" action="{% url 'workgroups:unarchive' workgroup.slug %}">
+    <form method="post" action="{% url 'workgroups:unarchive' workgroup.slug %}" data-warn-unsaved>
       {% csrf_token %}
       <button class="btn btn-outline btn-sm">Reactivate group</button>
     </form>
     {% else %}
     <form method="post" action="{% url 'workgroups:archive' workgroup.slug %}"
-          onsubmit="return confirm('Archive (dissolve) this group? It becomes read-only.');">
+          onsubmit="return confirm('Archive (dissolve) this group? It becomes read-only.');" data-warn-unsaved>
       {% csrf_token %}
       <button class="btn btn-outline btn-sm text-error">Archive group</button>
     </form>
@@ -315,7 +315,7 @@
       <h3 class="font-medium text-base-content">Charter</h3>
       <p class="text-xs text-base-content/50">This committee's one-line summary and longer-form charter.</p>
     </div>
-    <form method="post" action="{% url 'committees:edit_charter' workgroup.slug %}" class="space-y-3">
+    <form method="post" action="{% url 'committees:edit_charter' workgroup.slug %}" class="space-y-3" data-warn-unsaved>
       {% csrf_token %}
       <div class="space-y-1">
         <label for="{{ charter_form.description.id_for_label }}" class="block text-xs text-base-content/60">Summary</label>

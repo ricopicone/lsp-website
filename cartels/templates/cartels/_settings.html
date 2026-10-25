@@ -8,7 +8,7 @@ Expects: cartel, workgroup, members (active roster).{% endcomment %}
     <h3 class="font-medium text-base-content">Cartel details</h3>
     <p class="text-xs text-base-content/50">The name, guiding question, and overview shown on the cartel's page. Any member may edit these.</p>
   </div>
-  <form method="post" action="{% url 'cartels:edit' workgroup.slug %}" class="space-y-3">
+  <form method="post" action="{% url 'cartels:edit' workgroup.slug %}" class="space-y-3" data-warn-unsaved>
     {% csrf_token %}
     <div class="space-y-1">
       <label for="cartel-name" class="block text-xs text-base-content/60">Name</label>
@@ -44,7 +44,7 @@ Expects: cartel, workgroup, members (active roster).{% endcomment %}
     {% for m in members %}{% if m.role == "plus_one" %}
     <li class="flex items-center justify-between gap-2 rounded-md border border-base-300/50 bg-base-200/30 px-3 py-2 text-sm">
       <span>{{ m.user.get_full_name|default:m.user.email }} <span class="text-base-content/50">· plus-one</span></span>
-      <form method="post" action="{% url 'cartels:set_plus_one' workgroup.slug %}">
+      <form method="post" action="{% url 'cartels:set_plus_one' workgroup.slug %}" data-warn-unsaved>
         {% csrf_token %}
         <button class="btn btn-ghost btn-xs text-error">Remove</button>
       </form>
@@ -56,11 +56,11 @@ Expects: cartel, workgroup, members (active roster).{% endcomment %}
         <span class="text-base-content/50">· external{% if ext.invited_at %} · invited{% endif %}</span></span>
       <div class="flex items-center gap-1">
         {% if ext.email and not ext.invited_at %}
-        <form method="post" action="{% url 'cartels:invite_external_plus_one' workgroup.slug ext.pk %}">
+        <form method="post" action="{% url 'cartels:invite_external_plus_one' workgroup.slug ext.pk %}" data-warn-unsaved>
           {% csrf_token %}<button class="btn btn-ghost btn-xs">Invite to create account</button>
         </form>
         {% endif %}
-        <form method="post" action="{% url 'cartels:remove_external_plus_one' workgroup.slug ext.pk %}">
+        <form method="post" action="{% url 'cartels:remove_external_plus_one' workgroup.slug ext.pk %}" data-warn-unsaved>
           {% csrf_token %}<button class="btn btn-ghost btn-xs text-error">Remove</button>
         </form>
       </div>
@@ -69,7 +69,7 @@ Expects: cartel, workgroup, members (active roster).{% endcomment %}
   </ul>
 
   {# Assign an existing member as plus-one (reassigning demotes the previous one). #}
-  <form method="post" action="{% url 'cartels:set_plus_one' workgroup.slug %}" class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3">
+  <form method="post" action="{% url 'cartels:set_plus_one' workgroup.slug %}" class="flex flex-wrap items-end gap-2 border-t border-base-300/50 pt-3" data-warn-unsaved>
     {% csrf_token %}
     <div class="flex-1 space-y-1">
       <label for="assign-plus-one" class="block text-xs text-base-content/60">Assign a member as plus-one</label>
@@ -83,7 +83,7 @@ Expects: cartel, workgroup, members (active roster).{% endcomment %}
   </form>
 
   {# Invite an outside (non-LSP) guest as the plus-one. #}
-  <form method="post" action="{% url 'cartels:add_external_plus_one' workgroup.slug %}" class="space-y-2 border-t border-base-300/50 pt-3">
+  <form method="post" action="{% url 'cartels:add_external_plus_one' workgroup.slug %}" class="space-y-2 border-t border-base-300/50 pt-3" data-warn-unsaved>
     {% csrf_token %}
     <label class="block text-xs text-base-content/60">Add an external plus-one</label>
     <div class="flex flex-wrap items-end gap-2">
@@ -108,20 +108,20 @@ Expects: cartel, workgroup, members (active roster).{% endcomment %}
     This cartel is <strong>archived</strong> — read-only. Reactivating it reopens
     the workspace and lets members post and apply again.
   </div>
-  <form method="post" action="{% url 'cartels:manage' workgroup.slug %}">
+  <form method="post" action="{% url 'cartels:manage' workgroup.slug %}" data-warn-unsaved>
     {% csrf_token %}
     <button name="action" value="reactivate" class="btn btn-outline btn-sm">Reactivate cartel</button>
   </form>
   {% else %}
   <div class="flex flex-wrap items-center gap-2">
     {% if cartel.closed %}
-    <form method="post" action="{% url 'cartels:manage' workgroup.slug %}">
+    <form method="post" action="{% url 'cartels:manage' workgroup.slug %}" data-warn-unsaved>
       {% csrf_token %}
       <button name="action" value="reopen" class="btn btn-ghost btn-sm">Reopen to new members</button>
     </form>
     <span class="text-xs text-base-content/50">Currently closed — members can't apply to join.</span>
     {% else %}
-    <form method="post" action="{% url 'cartels:manage' workgroup.slug %}">
+    <form method="post" action="{% url 'cartels:manage' workgroup.slug %}" data-warn-unsaved>
       {% csrf_token %}
       <button name="action" value="close" class="btn btn-ghost btn-sm">Close to new members</button>
     </form>
@@ -136,7 +136,7 @@ Expects: cartel, workgroup, members (active roster).{% endcomment %}
       readable to its members. You can reactivate it later from here.
     </p>
     <form method="post" action="{% url 'cartels:manage' workgroup.slug %}"
-          onsubmit="return confirm('Archive (dissolve) this cartel? It becomes read-only. You can reactivate it later.');">
+          onsubmit="return confirm('Archive (dissolve) this cartel? It becomes read-only. You can reactivate it later.');" data-warn-unsaved>
       {% csrf_token %}
       <button name="action" value="archive" class="btn btn-outline btn-sm text-error">Archive cartel</button>
     </form>

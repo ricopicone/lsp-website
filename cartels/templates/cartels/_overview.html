@@ -3,7 +3,7 @@ is_member, has_invite, already_applied, can_apply, pending_requests,
 is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment %}
 <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-base-content/60">
   {% if cartel.workgroup.is_archived %}<span class="badge badge-ghost">Archived</span>
-  {% elif cartel.registration_status == "forming" and not cartel.closed %}<span class="badge badge-primary">Forming · Join!</span>
+  {% elif cartel.registration_status == "forming" and not cartel.closed %}<span class="badge badge-primary">Forming{% if not is_member %} · Join!{% endif %}</span>
   {% elif cartel.registration_status == "forming" and cartel.closed %}<span class="badge badge-ghost">Invitation only</span>
   {% elif cartel.registration_status == "submitted" %}<span class="badge badge-outline">Under PC review</span>
   {% elif cartel.registration_status == "registered" and not cartel.closed %}<span class="badge badge-primary">Registered · Open</span>
@@ -37,7 +37,7 @@ is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment
     <li class="text-base-content/60">{{ registration.questions_done }} of {{ registration.questions_total }} members have entered a question (recommended)</li>
   </ul>
   {% if cartel.registration_status == "forming" %}
-  <form method="post" action="{% url 'cartels:submit' workgroup.slug %}">
+  <form method="post" action="{% url 'cartels:submit' workgroup.slug %}" data-warn-unsaved>
     {% csrf_token %}
     <button class="btn btn-primary btn-sm" {% if not registration.can_submit %}disabled{% endif %}>Submit for registration</button>
   </form>
@@ -56,7 +56,7 @@ is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment
     <li class="text-sm"><span class="text-base-content/60">{{ q.member.get_full_name|default:q.member.email }}:</span> {{ q.text|default:"(no question yet)" }}</li>
     {% endfor %}
   </ul>
-  <form method="post" action="{% url 'cartels:set_question' workgroup.slug %}" class="space-y-2 border-t border-base-300/50 pt-3">
+  <form method="post" action="{% url 'cartels:set_question' workgroup.slug %}" class="space-y-2 border-t border-base-300/50 pt-3" data-warn-unsaved>
     {% csrf_token %}
     <label class="block text-xs text-base-content/60">Your question</label>
     <textarea name="text" rows="2" class="textarea textarea-bordered w-full">{{ my_question }}</textarea>
@@ -77,7 +77,7 @@ is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment
       {% for inv in pending_invitations %}
       <li class="inline-flex items-center gap-1.5 rounded-md border border-base-300/50 bg-base-200/40 px-2.5 py-1 text-sm">
         {{ inv.invited_user.get_full_name|default:inv.invited_user.email }}
-        <form method="post" action="{% url 'cartels:cancel_invitation' workgroup.slug inv.pk %}">
+        <form method="post" action="{% url 'cartels:cancel_invitation' workgroup.slug inv.pk %}" data-warn-unsaved>
           {% csrf_token %}
           <button class="text-base-content/40 hover:text-error" aria-label="Withdraw invitation" title="Withdraw invitation">&times;</button>
         </form>
@@ -87,7 +87,7 @@ is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment
   </div>
   {% endif %}
 
-  <form method="post" action="{% url 'cartels:invite' workgroup.slug %}" class="space-y-2 border-t border-base-300/50 pt-3">
+  <form method="post" action="{% url 'cartels:invite' workgroup.slug %}" class="space-y-2 border-t border-base-300/50 pt-3" data-warn-unsaved>
     {% csrf_token %}
     <label class="block text-xs text-base-content/60">Add members to invite</label>
     <div class="people-picker" data-search-url="{% url 'cartels:member_search' %}" data-field="invitees">
@@ -102,11 +102,11 @@ is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment
 
 <section class="flex flex-wrap items-start gap-2">
   {% if has_invite %}
-  <form method="post" action="{% url 'cartels:accept_invitation' workgroup.slug %}">
+  <form method="post" action="{% url 'cartels:accept_invitation' workgroup.slug %}" data-warn-unsaved>
     {% csrf_token %}<button class="btn btn-primary btn-sm">Accept invitation</button>
   </form>
   {% elif can_apply %}
-  <form method="post" action="{% url 'cartels:apply' workgroup.slug %}" class="w-full max-w-md space-y-2">
+  <form method="post" action="{% url 'cartels:apply' workgroup.slug %}" class="w-full max-w-md space-y-2" data-warn-unsaved>
     {% csrf_token %}
     <label class="block text-sm font-medium">Why would you like to join?</label>
     <textarea name="message" rows="3" class="textarea textarea-bordered w-full"
@@ -126,7 +126,7 @@ is_generator, is_coordinator, registration, my_question, workgroup.{% endcomment
     <li class="rounded-md border border-base-300/50 px-3 py-2 space-y-1">
       <div class="flex items-center justify-between gap-3">
         <span>{{ req.applicant.get_full_name|default:req.applicant.email }}</span>
-        <form method="post" action="{% url 'cartels:decide_request' workgroup.slug req.pk %}" class="flex gap-2">
+        <form method="post" action="{% url 'cartels:decide_request' workgroup.slug req.pk %}" class="flex gap-2" data-warn-unsaved>
           {% csrf_token %}
           <button name="decision" value="accept" class="btn btn-primary btn-xs">Accept</button>
           <button name="decision" value="decline" class="btn btn-ghost btn-xs">Decline</button>

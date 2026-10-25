@@ -1,4 +1,6 @@
-{% comment %}Schedule tab. Expects: workgroup, upcoming_meetings, past_meetings,
+{% comment %}Schedule tab. The two scheduling forms open inline on a phone, where a
+320px drop-down ran off the screen, and as drop-downs from sm up (task #820).
+Expects: workgroup, upcoming_meetings, past_meetings,
 meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
 {% load tz_filters %}
 <div class="max-w-2xl space-y-6">
@@ -11,10 +13,10 @@ meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
 
   {% if can_schedule %}
   <div class="flex flex-wrap gap-2">
-    <details class="dropdown">
+    <details class="max-sm:w-full sm:dropdown">
       <summary class="btn btn-primary btn-sm">＋ One meeting</summary>
       <form method="post" action="{% url 'workgroups:meeting_add' workgroup.slug %}"
-            class="dropdown-content z-10 mt-1 w-80 space-y-2 rounded-xl border border-base-300 bg-base-100 p-4 shadow">
+            class="mt-2 w-full space-y-2 rounded-xl border border-base-300 bg-base-100 p-4 shadow sm:dropdown-content sm:z-10 sm:mt-1 sm:w-80">
         {% csrf_token %}
         <div class="flex flex-wrap items-end gap-2">
           <label class="form-control"><span class="label-text text-xs text-base-content/60">Starts</span>{{ meeting_form.starts_at }}</label>
@@ -26,10 +28,10 @@ meeting_form, series_form, can_schedule, calendar_feed_url.{% endcomment %}
       </form>
     </details>
 
-    <details class="dropdown">
+    <details class="max-sm:w-full sm:dropdown">
       <summary class="btn btn-sm">↻ Recurring series</summary>
       <form method="post" action="{% url 'workgroups:series_add' workgroup.slug %}"
-            class="dropdown-content z-10 mt-1 w-80 space-y-2 rounded-xl border border-base-300 bg-base-100 p-4 shadow">
+            class="mt-2 w-full space-y-2 rounded-xl border border-base-300 bg-base-100 p-4 shadow sm:dropdown-content sm:z-10 sm:mt-1 sm:w-80">
         {% csrf_token %}
         {{ series_form.title }}
         <div class="flex flex-wrap gap-2">

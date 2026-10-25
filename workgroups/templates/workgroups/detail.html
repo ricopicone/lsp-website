@@ -48,9 +48,11 @@
           {% endif %}
           {% if workgroup.content_visibility == "private" %}
           <span class="text-base-content/30">·</span>
-          <span class="inline-flex items-center gap-1 normal-case tracking-normal text-base-content/50">
+          {# Content, not the page: a forming cartel is listed for the whole school while its discussion stays its own (task #820). #}
+          <span class="inline-flex items-center gap-1 normal-case tracking-normal text-base-content/50"
+                title="Only the group's members see its discussion, files and work.">
             <svg class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-            Private
+            Private content
           </span>
           {% endif %}
         </div>
