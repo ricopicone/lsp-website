@@ -54,7 +54,7 @@
               </td>
               <td class="px-3 py-2.5 text-center">
                 {% if row.email_editable %}
-                  <select name="{{ row.key }}__email" class="select select-bordered select-xs">
+                  <select name="{{ row.key }}__email" class="select select-bordered select-xs w-32 pr-7" aria-label="Email for {{ row.label }}">
                     {% for value, label in email_choices %}
                     <option value="{{ value }}" {% if value == row.email_mode %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
@@ -73,7 +73,8 @@
     </section>
     {% endfor %}
 
-    <div class="flex items-center gap-3">
+    {# Stuck to the screen bottom: one Save serves a page of every category (task #820). #}
+    <div class="sticky bottom-0 z-10 -mx-3 px-3 py-3 bg-base-100/95 backdrop-blur border-t border-base-300/60 flex items-center gap-3">
       <button type="submit" class="btn btn-primary btn-sm">Save preferences</button>
       <a href="{% url 'parletre:settings' %}" class="text-sm text-base-content/60 hover:text-primary">Discussion email cadence (digests) →</a>
     </div>

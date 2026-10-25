@@ -187,7 +187,8 @@
       {% include "accounts/_field.html" with field=pform.timezone label="Time zone" %}
     </section>
 
-    <div class="pt-2 border-t border-base-300/60 flex items-center gap-3">
+    {# Stuck to the screen bottom so Save and the autosave status are in view while editing a long form (task #820). #}
+    <div class="sticky bottom-0 z-10 -mx-3 px-3 py-3 bg-base-100/95 backdrop-blur border-t border-base-300/60 flex items-center gap-3">
       <button type="submit" class="btn btn-primary">Save changes</button>
       <span id="autosave-status" class="text-xs text-base-content/50 transition-opacity opacity-0" aria-live="polite"></span>
     </div>

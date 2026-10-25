@@ -2624,6 +2624,12 @@ Done (see `git log` for specifics):
   subtitle on a phone; the band leaves room for it. The room tab's invite
   and office-hours forms and Parlêtre's new-thread and edit-post forms opt
   into the unsaved guard.
+  **Group 10, profile, notifications, directory:** the profile editor
+  autosaves, but its "Saved" status sat beside a Save button at the bottom
+  of a long form; that bar is now stuck to the screen bottom, as is
+  notification settings' single Save. The settings page's email selects
+  drew their arrow over "Email me" (`w-32 pr-7`, and an accessible label
+  per row). Directory and Find an Analyst held up.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
