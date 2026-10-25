@@ -147,7 +147,9 @@
         <button class="btn btn-sm btn-outline">Clear deceased mark</button>
       </form>
     {% else %}
-      <form method="post" class="flex flex-wrap items-end gap-3">
+      {# Waives money and disables the account in one press, so it asks (task #820). #}
+      <form method="post" class="flex flex-wrap items-end gap-3"
+            onsubmit="return confirm('Record {{ member.get_full_name|default:member.email|escapejs }} as deceased? Their account is disabled and their open charges are waived.');">
         {% csrf_token %}
         <input type="hidden" name="action" value="set_deceased">
         <input type="hidden" name="member" value="{{ member.pk }}">
@@ -165,7 +167,8 @@
     {% endif %}
 
     {% if member.profile.standing == "removed" and open_owes %}
-      <form method="post" class="flex items-center gap-3">
+      <form method="post" class="flex items-center gap-3"
+            onsubmit="return confirm('Waive {{ member.get_full_name|default:member.email|escapejs }}\'s open charges of ${{ open_owes }}?');">
         {% csrf_token %}
         <input type="hidden" name="action" value="waive_charges">
         <input type="hidden" name="member" value="{{ member.pk }}">

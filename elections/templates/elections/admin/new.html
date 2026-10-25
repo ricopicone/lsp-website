@@ -1,8 +1,9 @@
 {% extends "elections/admin/base.html" %}
+{% load tz_filters %}
 {% block tab_content %}
 <form method="post" class="max-w-2xl space-y-4">
   {% csrf_token %}
-  <p class="text-base-content/70">Set the election's dates and rules. Nothing is sent to members until nominations open; you can change any date that hasn't passed.</p>
+  <p class="text-base-content/70">Set the election's dates and rules. Nothing is sent to members until nominations open; you can change any date that hasn't passed. Times are in your time zone ({% user_tz_label %}).</p>
   {% for err in form.non_field_errors %}<div class="alert alert-error text-sm">{{ err }}</div>{% endfor %}
   {% for field in form %}{% include "elections/admin/_field.html" %}{% endfor %}
   <button class="btn btn-primary">Create election</button>

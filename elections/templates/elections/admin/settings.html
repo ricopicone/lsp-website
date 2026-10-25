@@ -1,9 +1,10 @@
 {% extends "elections/admin/base.html" %}
+{% load tz_filters %}
 {% block tab_content %}
 <form method="post" class="max-w-2xl space-y-4">
   {% csrf_token %}
   <div class="alert alert-info text-sm">
-    <span>The dates open and close each window by themselves. A date that has already passed can't be changed, so a closed window stays closed; to extend an open window, move its closing date later. Every change is recorded on the Overview.</span>
+    <span>The dates open and close each window by themselves. A date that has already passed can't be changed, so a closed window stays closed; to extend an open window, move its closing date later. Every change is recorded on the Overview. Times are in your time zone ({% user_tz_label %}).</span>
   </div>
   {% for err in form.non_field_errors %}<div class="alert alert-error text-sm">{{ err }}</div>{% endfor %}
   {% for field in form %}{% include "elections/admin/_field.html" %}{% endfor %}

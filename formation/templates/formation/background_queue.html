@@ -15,7 +15,7 @@
         <span class="badge badge-ghost badge-sm">{{ p.get_formation_background_display }}</span>
         {% endif %}
       </div>
-      <form method="post" action="{% url 'formation:background_detail' p.user.pk %}" class="flex flex-wrap items-center gap-3 text-sm">
+      <form method="post" action="{% url 'formation:background_detail' p.user.pk %}" class="flex flex-wrap items-center gap-3 text-sm" data-warn-unsaved>
         {% csrf_token %}
         <label class="flex items-center gap-1"><input type="radio" name="background" value="clinical" class="radio radio-sm" {% if p.formation_background == "clinical" %}checked{% endif %}> Clinical</label>
         <label class="flex items-center gap-1"><input type="radio" name="background" value="academic" class="radio radio-sm" {% if p.formation_background == "academic" %}checked{% endif %}> Academic</label>

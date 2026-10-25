@@ -18,7 +18,7 @@
   </div>
 
   {% if rows %}
-  <form method="post">
+  <form method="post" data-warn-unsaved>
     {% csrf_token %}
     <div class="overflow-x-auto rounded-xl border border-base-300/60 bg-base-100">
       <table class="table table-sm">
@@ -55,7 +55,8 @@
         </tbody>
       </table>
     </div>
-    <div class="pt-4">
+    {# Stuck to the screen bottom: one Save serves every analyst's row (task #820). #}
+    <div class="sticky bottom-0 z-10 -mx-3 mt-4 px-3 py-3 bg-base-100/95 backdrop-blur border-t border-base-300/60">
       <button class="btn btn-primary btn-sm">Save changes</button>
     </div>
   </form>

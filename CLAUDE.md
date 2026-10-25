@@ -2630,6 +2630,19 @@ Done (see `git log` for specifics):
   notification settings' single Save. The settings page's email selects
   drew their arrow over "Email me" (`w-32 pr-7`, and an accessible label
   per row). Directory and Find an Analyst held up.
+  **Group 11, the low-traffic consoles:** the election forms' fields were
+  inline `<label>`s, so the form's spacing never applied and every field
+  sat against the next; they are blocks now, and both election forms name
+  the timezone their date-times are read in. That exposed help text across
+  the site printing "America/Los_Angeles": the new `user_tz_label` tag
+  gives "Pacific (Los Angeles)" from the profile editor's own list
+  (`user_tz_name` stays for the calendar script). The Board's *Mark
+  deceased* (which disables the account and waives open charges) and
+  *Waive open charges* now ask first, naming the member. The availability
+  grid's single Save sticks to the screen bottom and the grid, like the
+  Meeting of Analysts' per-student background cards, opts into the unsaved
+  guard. Applications, the Web Coordinator's admit and documents pages,
+  Board appointments and committees, and aphorisms held up.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

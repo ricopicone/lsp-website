@@ -164,3 +164,14 @@ def user_tz_name(context):
     Used to seed FullCalendar's ``timeZone`` option for logged-in users.
     """
     return str(timezone.get_current_timezone())
+
+
+@register.simple_tag(takes_context=True)
+def user_tz_label(context):
+    """The active timezone as a person reads it: "Pacific (Los Angeles)" from
+    the profile editor's own list, else the IANA name (task #820: help text
+    printed "America/Los_Angeles")."""
+    from accounts.timezones import LSP_TIMEZONES
+
+    name = str(timezone.get_current_timezone())
+    return dict(LSP_TIMEZONES).get(name, name)
