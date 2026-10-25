@@ -273,6 +273,14 @@ class Registration(models.Model):
         )
 
     @property
+    def status_label(self) -> str:
+        """The status as people read it. A per-class registration is PAID from
+        enrolment while its classes bill later (#811), so it reads Enrolled."""
+        if self.is_per_class and self.status == self.Status.PAID:
+            return "Enrolled"
+        return self.get_status_display()
+
+    @property
     def price_note(self) -> str:
         """``quoted_explanation`` as a member reads it. Rows covered before
         task #820 carry "(tuition-paying member, REG-4)", a requirement ID."""

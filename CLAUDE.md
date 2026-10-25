@@ -2577,6 +2577,11 @@ Done (see `git log` for specifics):
   it"); and the joining-instructions page's collapsed "Show the list" sat
   above an address box shown anyway (now "Show names"). Faculty help texts
   lose their em dashes.
+  **Group 5, the registrar:** the console held up (remove dialog, refund
+  choice, reason). One fix: it showed a per-class registration as
+  "$0.00 · Paid"; `Registration.status_label` now reads **Enrolled** for a
+  per-class PAID row and the amount column shows the class rate, shared
+  with the faculty roster and the member's page so the three can't differ.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

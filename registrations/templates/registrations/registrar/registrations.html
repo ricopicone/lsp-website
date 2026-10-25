@@ -76,12 +76,12 @@
           </td>
           <td><a href="{% url 'events:detail' r.event.slug %}" class="link link-hover">{{ r.event.title }}</a></td>
           <td class="text-xs">{{ r.price_tier.get_audience_display }}</td>
-          <td class="text-right whitespace-nowrap">${{ r.quoted_amount }}</td>
+          <td class="text-right whitespace-nowrap">{% if r.is_per_class %}${{ r.per_class_rate }}/class{% else %}${{ r.quoted_amount }}{% endif %}</td>
           <td><span class="badge badge-sm
             {% if r.status == 'paid' or r.status == 'comped' %}badge-success
             {% elif r.status == 'pending_approval' %}badge-warning
             {% elif r.status == 'awaiting_payment' %}badge-info
-            {% else %}badge-ghost{% endif %}">{{ r.get_status_display }}</span></td>
+            {% else %}badge-ghost{% endif %}">{{ r.status_label }}</span></td>
           <td class="whitespace-nowrap text-xs">{{ r.created_at|date:"M j, Y" }}</td>
           <td class="text-right">
             {% include "registrations/registrar/_row_actions.html" with r=r idp="row" next_url=request.get_full_path %}

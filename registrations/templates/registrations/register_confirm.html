@@ -52,7 +52,7 @@
         {% elif registration.status == 'cancelled' or registration.status == 'refunded' or registration.status == 'declined' %}badge-ghost
         {% else %}badge-warning{% endif %}">
         {# A per-class row reads PAID from enrolment; its classes bill later (task #811). #}
-        {% if registration.is_per_class and registration.status == 'paid' %}Enrolled{% else %}{{ registration.get_status_display }}{% endif %}
+        {{ registration.status_label }}
       </span>
     </dd>
   </dl>
