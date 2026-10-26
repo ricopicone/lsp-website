@@ -313,8 +313,8 @@ payments/treasurer/member_detail.html for the full picture with actions).
           </div>
           {% endif %}
 
-          {% if next_dues_period %}
-          {# Next year's dues, payable before it starts (task #625), named by year (task #599). #}
+          {% if next_dues_period and dues_paid or next_dues_period and not dues_period %}
+          {# Next year's dues, payable before it starts (task #625), named by year (task #599); only once this year's are paid, or two Pay buttons read as a choice (task #820). #}
           <div class="rounded-lg border border-base-300 bg-base-200/30 p-5 space-y-3">
             <h3 class="font-serif text-lg text-base-content">Pay ahead for {{ next_dues_period.name }}</h3>
             <p class="text-sm text-base-content/70">

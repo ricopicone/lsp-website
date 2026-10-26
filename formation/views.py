@@ -419,7 +419,11 @@ def _formation_money_context(request) -> dict:
     dues_amount = (
         dues_period.amount_for_role(profile.role) if dues_period is not None else None
     )
-    dues_paid = acct["dues_state"] in ("paid", "waived")
+    # The /dues/ page's two checks (the ledger state, or a dues payment bound
+    # to this year), so the two pages agree on who has paid.
+    dues_paid = acct["dues_state"] in ("paid", "waived") or (
+        dues_period is not None and has_dues_payment_for(user, dues_period)
+    )
     # Next year's dues, payable before it starts (task #625). Same per-year
     # double-payment guard as /dues/, so paying ahead neither settles this
     # year nor lets next year be paid twice.

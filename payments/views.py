@@ -2197,12 +2197,13 @@ def dues_pay(request):
         )
         session = create_dues_session(payment)
         return redirect(session.url)
+    # This year is unpaid, so no pay-ahead offer: two payment buttons for two
+    # years read as a choice between them (Rico, task #820). It appears on the
+    # paid-up page once this year is settled.
     return render(
         request,
         "payments/dues.html",
-        _next_year_dues_offer(
-            request.user, {"amount": amount, "period": period},
-        ),
+        {"amount": amount, "period": period},
     )
 
 

@@ -167,6 +167,16 @@ def test_paid_up_member_is_offered_next_year_instead_of_a_closed_door(
     assert f'value="{upcoming.slug}"' in body
 
 
+def test_no_pay_ahead_while_this_years_dues_are_unpaid(client, member, periods):
+    """Two Pay buttons for two years read as a choice; next year is offered
+    once this year is paid (task #820)."""
+    current, upcoming = periods
+    client.force_login(member)
+    body = client.get(reverse("dues")).content.decode()
+    assert current.name in body
+    assert upcoming.slug not in body
+
+
 def test_double_payment_guard_is_per_year(client, member, periods):
     """Paying next year early must not make this year look already paid, nor
     let next year be paid twice."""
