@@ -2644,6 +2644,22 @@ Done (see `git log` for specifics):
   guard. Applications, the Web Coordinator's admit and documents pages,
   Board appointments and committees, and aphorisms held up.
 
+- **The dues sync respects a treasurer's void** (task #845). No AY 2026–27
+  dues charge had been minted for 59 of 83 dues-owing members, because the
+  only scheduled caller of `sync_dues_charges` was
+  `create_dues_period_if_needed` inside `lsp-dues-cron.service`, whose timer
+  has been held since the cutover for the *reminders*; holding the reminders
+  held the year's billing too. Pressing Sync charges on prod minted them, and
+  also re-minted Christina Insalaco's charge over the treasurer's 2026-08-28
+  void, because the sync's "already has one" set excluded every VOID row.
+  It now excludes only voids the system made (`staff_adjusted=False`): a
+  treasurer's void is a decision that the member owes nothing that year, the
+  rule `sync_tuition_charges` already follows. The rollover moves to its own
+  daily host timer, `lsp-period-rollover.timer`, which sends no email, so the
+  reminders can stay held without stopping billing (`docs/operations.md`).
+  The re-minted charge was voided again on prod with an audit note. No
+  migration.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

@@ -153,7 +153,8 @@ management command in `lsp-website-web-1` (not in-container cron):
 
 | Timer | Command | Purpose |
 |---|---|---|
-| `lsp-dues-cron.timer` | `send_dues_reminders` + `send_tuition_reminders` | Weekly dues/tuition reminder emails to obligated unpaid/undecided members (from Sept 1, throttled per period) |
+| `lsp-period-rollover.timer` | `create_dues_period_if_needed` + `create_tuition_period_if_needed` | Daily, sends no email: keeps the current + next academic-year periods and mints the current year's dues charges. Kept apart from the reminders so holding them never holds the year's billing (task #845) |
+| `lsp-dues-cron.timer` | `send_balance_reminders` | Weekly balance-reminder email, only after the current dues period's due date. `send_dues_reminders` + `send_tuition_reminders` are commented out in the unit (task #494) |
 | `lsp-parletre-purge.timer` | `purge_expired_messages` | Redacts expired Parlêtre disappearing-channel messages (blackout body + delete attachment files, keep rows) |
 
 Inspect/trigger on the host:
@@ -165,8 +166,9 @@ ssh lsp 'journalctl -u lsp-parletre-purge.service -n 50'
 ```
 
 `create_dues_period_if_needed` / `create_tuition_period_if_needed` are
-idempotent and ensure the current + next academic-year periods exist;
-run them before opening a new year.
+idempotent and ensure the current + next academic-year periods exist.
+The dues command also mints the current year's dues charges, skipping any
+member whose charge for that year a treasurer has voided.
 
 ## Realtime chat (Parlêtre) deployment notes
 

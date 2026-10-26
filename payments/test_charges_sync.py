@@ -49,6 +49,24 @@ def test_sync_dues_charges_mints_tiered_amounts_once():
     assert charges.sync_dues_charges(p) == 0  # idempotent
 
 
+def test_sync_dues_charges_respects_a_treasurer_void():
+    """A treasurer's void is a decision, so a later sync must not re-mint
+    over it. A void the system made (sync-managed) still re-mints, since the
+    member still owes."""
+    p = _dues_period(timezone.localdate().year - 1)
+    decided = _member("v1@x.test")
+    system = _member("v2@x.test")
+    assert charges.sync_dues_charges(p) == 2
+    Charge.objects.filter(user=decided).update(
+        status=Charge.Status.VOID, staff_adjusted=True)
+    Charge.objects.filter(user=system).update(status=Charge.Status.VOID)
+    assert charges.sync_dues_charges(p) == 1
+    assert not Charge.objects.filter(
+        user=decided).exclude(status=Charge.Status.VOID).exists()
+    assert Charge.objects.filter(
+        user=system, status=Charge.Status.OPEN).count() == 1
+
+
 def test_sync_dues_charges_skips_future_periods():
     p = _dues_period(timezone.localdate().year + 2)
     _member("f@x.test")

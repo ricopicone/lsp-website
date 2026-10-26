@@ -29,6 +29,11 @@ def sync_dues_charges(period) -> int:
 
     Refuses future periods (rollover maintains current+next AY — next year's
     members must not show as owing early). Returns the number created.
+
+    A treasurer's void (``staff_adjusted``) counts as having a charge: it is a
+    decision that this member owes nothing for the year, and the daily
+    rollover would otherwise re-mint over it every night (task #845). A void
+    the system made still re-mints, as the member still owes.
     """
     from .dues import obligated_users_qs
 
@@ -39,7 +44,7 @@ def sync_dues_charges(period) -> int:
         Charge.objects.filter(
             category=Charge.Category.DUES, dues_period=period,
         )
-        .exclude(status=Charge.Status.VOID)
+        .exclude(status=Charge.Status.VOID, staff_adjusted=False)
         .values_list("user_id", flat=True)
     )
     created = 0
