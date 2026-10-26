@@ -1,4 +1,5 @@
-"""Notifications for the events app — the faculty editing review loop (#295).
+"""Notifications for the events app: the faculty editing review loop (#295)
+and event proposals entering review and being decided (task #820).
 
 Routed through the central :func:`notifications.dispatch.notify` chokepoint so
 each message lands on the bell and (preference-gated) in email.
@@ -62,4 +63,44 @@ def notify_change_decided(change_request):
         title=title, body=body,
         url=reverse("events:detail", args=[event.slug]),
         actor=change_request.reviewed_by, target=change_request,
+    )
+
+
+def notify_proposal_submitted(proposal, *, resubmitted=False):
+    """Tell the Program Committee a member's proposal awaits review (task #820)."""
+    actor = proposal.proposed_by
+    who = (actor.get_full_name() or actor.email) if actor else "A member"
+    kind = proposal.get_event_type_display().lower()
+    verb = "resubmitted" if resubmitted else "submitted"
+    title = f"Proposal: “{proposal.title}”"
+    body = f"{who} {verb} a {kind} proposal for review."
+    url = reverse("program_admin_proposals")
+    for reviewer in _program_committee_users():
+        if actor and reviewer == actor:
+            continue
+        notify(
+            reviewer, Category.EVENT_PROPOSAL,
+            title=title, body=body, url=url, actor=actor, target=proposal,
+        )
+
+
+def notify_proposal_decided(proposal):
+    """Tell the proposer the committee approved or declined their proposal."""
+    proposer = proposal.proposed_by
+    if not proposer or proposer == proposal.reviewed_by:
+        return
+    if proposal.status == proposal.Status.APPROVED and proposal.minted_event_id:
+        title = f"Your proposal “{proposal.title}” was approved"
+        body = "The Program Committee approved it, and the event has been created."
+        url = reverse("events:detail", args=[proposal.minted_event.slug])
+    else:
+        title = f"Your proposal “{proposal.title}” was declined"
+        body = "The Program Committee declined it. You can edit it and resubmit."
+        if proposal.review_note:
+            body += f" Their note: {proposal.review_note}"
+        url = reverse("formation:formation") + "?tab=proposals"
+    notify(
+        proposer, Category.EVENT_PROPOSAL,
+        title=title, body=body, url=url,
+        actor=proposal.reviewed_by, target=proposal,
     )

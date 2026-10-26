@@ -72,8 +72,9 @@ Committee decides, and you can delete anything that has not been approved.
 
 ## What happens next
 
-The Program Committee reads submitted proposals in its own queue. The site
-does not yet email you when they decide, so check your Proposals tab.
+The Program Committee reads submitted proposals in its own queue. When they
+decide, the site tells you on the bell and by email, and your Proposals tab
+shows the outcome.
 
 - **Approved.** The site creates the event from your proposal. A seminar or
   reading group goes onto the program for the academic year your dates fall

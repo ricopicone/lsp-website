@@ -1374,6 +1374,9 @@ def propose_event(request):
             proposal = _save_proposal_form(
                 request, form, speakers, None, is_submit=is_submit
             )
+            if is_submit:
+                from .notifications import notify_proposal_submitted
+                notify_proposal_submitted(proposal)
             messages.success(
                 request,
                 f"{proposal.get_event_type_display()} submitted. The Program "
@@ -1405,6 +1408,7 @@ def proposal_edit(request, pk: int):
         raise Http404()
     if request.method == "POST":
         is_submit = request.POST.get("action") == "submit"
+        prior_status = proposal.status    # status isn't a form field
         form = EventProposalForm(request.POST, instance=proposal)
         form.require_complete = is_submit
         speakers = ProposalSpeakerFormSet(
@@ -1412,6 +1416,14 @@ def proposal_edit(request, pk: int):
         )
         if form.is_valid() and speakers.is_valid():
             _save_proposal_form(request, form, speakers, proposal, is_submit=is_submit)
+            # Tell the PC only when it enters review; re-saving a pending one
+            # doesn't ring the committee again.
+            if is_submit and prior_status != EventProposal.Status.PROPOSED:
+                from .notifications import notify_proposal_submitted
+                notify_proposal_submitted(
+                    proposal,
+                    resubmitted=prior_status == EventProposal.Status.DECLINED,
+                )
             messages.success(
                 request,
                 "Submitted for review." if is_submit else "Proposal saved.",
@@ -1446,10 +1458,13 @@ def proposal_submit(request, pk: int):
     if missing:
         messages.error(request, f"Add {missing} before submitting.")
         return redirect("proposal_edit", pk=p.pk)
+    resubmitted = p.status == EventProposal.Status.DECLINED
     p.status = EventProposal.Status.PROPOSED
     p.reviewed_by = p.reviewed_at = None
     p.review_note = ""
     p.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_note"])
+    from .notifications import notify_proposal_submitted
+    notify_proposal_submitted(p, resubmitted=resubmitted)
     messages.success(request, "Submitted for review.")
     return redirect("my_proposals")
 
@@ -1518,6 +1533,8 @@ def proposal_decide(request, pk: int):
     else:
         proposal.decline(request.user, note=request.POST.get("note", ""))
         messages.success(request, "Proposal declined.")
+    from .notifications import notify_proposal_decided
+    notify_proposal_decided(proposal)
     return redirect("program_admin_proposals")
 
 

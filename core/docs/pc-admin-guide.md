@@ -148,7 +148,9 @@ Any LSP member can submit an event proposal (a seminar, reading group,
 or special event) from their **My LSP → Proposals** area. Teaching a
 seminar confers faculty standing, granted automatically on approval.
 
-- **Pending**: proposals submitted for review. A proposal the member
+- **Pending**: proposals submitted for review. Each submission (and each
+  resubmission after a decline) notifies the Committee on the bell and by
+  email, under *Event proposals* in notification settings. A proposal the member
   only *saved* (a work-in-progress draft) never reaches this queue—it
   shows up here once they submit it. Each card shows the proposer, type,
   proposed date/time (or "TBD"), conveners, description, speakers, fee,
@@ -159,7 +161,8 @@ seminar confers faculty standing, granted automatically on approval.
   is minted and published once it has a date, otherwise held until you
   set one.
 - **Decline**: sends it back with an optional reason. The proposer can
-  revise and resubmit.
+  revise and resubmit. The proposer is notified of either decision, with
+  your reason if you gave one.
 - **Decided**: a table of already-approved and declined proposals, with
   a link to the minted event.
 

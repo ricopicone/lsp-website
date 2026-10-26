@@ -68,6 +68,7 @@ class Category(models.TextChoices):
     GROUP_DECISION = "group_decision", _("Group decisions & minutes")
     GROUP_RECORDING = "group_recording", _("Meeting recordings ready")
     EVENT_CHANGE_REVIEW = "event_change_review", _("Event content change reviews")
+    EVENT_PROPOSAL = "event_proposal", _("Event proposals")
     MEETING_ROOM_INVITE = "meeting_room_invite", _("Private meeting room invitations")
 
     # --- Referrals ---------------------------------------------------------
@@ -309,6 +310,11 @@ CATEGORY_META: dict[str, CategoryMeta] = {
     _C.EVENT_CHANGE_REVIEW: _M(
         SECTION_GROUPS, _("Event content change reviews"),
         _("When a faculty content change is submitted for committee review, "
+          "and when the committee decides on yours."),
+    ),
+    _C.EVENT_PROPOSAL: _M(
+        SECTION_GROUPS, _("Event proposals"),
+        _("When a member submits an event proposal for committee review, "
           "and when the committee decides on yours."),
     ),
     # Referrals — distribution to the referral list. Email defaults on (a

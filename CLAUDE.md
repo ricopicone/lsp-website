@@ -2164,10 +2164,9 @@ Done (see `git log` for specifics):
   sponsor or another accreditor" and points at the Program Committee (Rico,
   2026-09-20), with the form overriding `offers_ce`'s help text so no
   migration was needed.
-  **Known gap, deliberately not built yet:** submitting a proposal notifies
-  nobody and neither does a decision — there is no proposal notification
-  category (only `CARTEL_PROPOSAL`); the guide says to check the Proposals
-  tab.
+  **Known gap, closed by task #820:** submitting a proposal notified
+  nobody and neither did a decision; the `EVENT_PROPOSAL` category now
+  covers both.
 
 - **The PC creates every standalone event type** (task #756). The Program
   Committee chair asked how to create a Day of Assembly or a Working Day, and
@@ -2595,8 +2594,18 @@ Done (see `git log` for specifics):
   edit page's own copy. The proposal form showed "To be announced"'s help
   on a seminar, where that option is hidden (#769). The PC's program table
   now names a reading group's conveners (`Event.leads()`); **Approve &
-  mint** is **Approve and create** and asks first. Still open: proposals
-  notify nobody on submission or decision (known since #749).
+  mint** is **Approve and create** and asks first. **Proposal notifications** (Rico,
+  2026-10-25, after the review): new `Category.EVENT_PROPOSAL` ("Event
+  proposals", Groups section). Entering review notifies the serving Program
+  Committee, minus the proposer (`events.notifications.
+  notify_proposal_submitted`, "resubmitted" after a decline); re-saving a
+  proposal already under review does not ring again. A decision notifies the
+  proposer (`notify_proposal_decided`), linking the event when approved and
+  the Proposals tab with the note when declined, skipped when the reviewer
+  is the proposer. The PC's direct-create shares `_save_proposal_form` and
+  `approve()`, so the calls sit in the member-facing views, never the
+  helper, and direct-create sends nothing. Migration `notifications/0019`
+  only changes choices.
   **Group 7, the Referral Coordinator:** the requester's free text was
   labeled "For the Referral Coordinator" on the coordinator's request page
   and edit form, though it is exactly what every clinician receives (#684);
