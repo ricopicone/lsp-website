@@ -22,7 +22,8 @@ show_access_info.{% endcomment %}
 {% endif %}
 
 {# ---------- Faculty / Speakers ---------- #}
-{% with faculty_list=event.faculty_members %}
+{# leads, not faculty_members: a reading group's conveners hold ORGANIZER (task #820). #}
+{% with faculty_list=event.leads %}
 {% if faculty_list or event.speakers.all or event.member_speakers.all %}
 <section class="space-y-5">
   <h2 class="font-serif text-xl text-base-content border-b border-base-300/60 pb-2">
@@ -32,12 +33,14 @@ show_access_info.{% endcomment %}
     {% for f in faculty_list %}
       <article class="flex flex-col sm:flex-row gap-4 items-start">
         {% if f.profile.headshot %}
+        {% if f.profile.is_listed %}<a href="{% url 'directory_detail' f.profile.directory_slug %}" class="shrink-0" tabindex="-1" aria-hidden="true">{% endif %}
         <img src="{{ f.profile.headshot.url }}"
              alt="{{ f.first_name }} {{ f.last_name }}"
              class="w-24 h-24 rounded-full object-cover shrink-0">
+        {% if f.profile.is_listed %}</a>{% endif %}
         {% endif %}
         <div class="flex-1">
-          <h3 class="font-serif text-lg text-base-content mb-1">{{ f.first_name }} {{ f.last_name }}</h3>
+          <h3 class="font-serif text-lg text-base-content mb-1">{% if f.profile.is_listed %}<a href="{% url 'directory_detail' f.profile.directory_slug %}" class="link link-hover">{{ f.first_name }} {{ f.last_name }}</a>{% else %}{{ f.first_name }} {{ f.last_name }}{% endif %}</h3>
           {% if f.profile.bio %}<div class="text-sm text-base-content/80 leading-relaxed space-y-2">{{ f.profile.bio|linebreaks }}</div>{% endif %}
         </div>
       </article>
@@ -46,12 +49,14 @@ show_access_info.{% endcomment %}
       {% if u not in faculty_list %}
       <article class="flex flex-col sm:flex-row gap-4 items-start">
         {% if u.profile.headshot %}
+        {% if u.profile.is_listed %}<a href="{% url 'directory_detail' u.profile.directory_slug %}" class="shrink-0" tabindex="-1" aria-hidden="true">{% endif %}
         <img src="{{ u.profile.headshot.url }}"
              alt="{{ u.first_name }} {{ u.last_name }}"
              class="w-24 h-24 rounded-full object-cover shrink-0">
+        {% if u.profile.is_listed %}</a>{% endif %}
         {% endif %}
         <div class="flex-1">
-          <h3 class="font-serif text-lg text-base-content mb-1">{{ u.first_name }} {{ u.last_name }}</h3>
+          <h3 class="font-serif text-lg text-base-content mb-1">{% if u.profile.is_listed %}<a href="{% url 'directory_detail' u.profile.directory_slug %}" class="link link-hover">{{ u.first_name }} {{ u.last_name }}</a>{% else %}{{ u.first_name }} {{ u.last_name }}{% endif %}</h3>
           {% if u.profile.display_event_bio %}<div class="text-sm text-base-content/80 leading-relaxed space-y-2">{{ u.profile.display_event_bio|linebreaks }}</div>{% endif %}
         </div>
       </article>

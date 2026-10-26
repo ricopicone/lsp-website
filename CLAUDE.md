@@ -2606,6 +2606,14 @@ Done (see `git log` for specifics):
   `approve()`, so the calls sit in the member-facing views, never the
   helper, and direct-create sends nothing. Migration `notifications/0019`
   only changes choices.
+  **Leaders link to the directory** (Rico, 2026-10-25): the event summary's
+  faculty, conveners and member speakers link name and photo to their
+  directory page when `Profile.is_listed` (the directory's own test, so no
+  link lands on a 404). The section now lists `event.leads`, not
+  `faculty_members`: a reading group's conveners hold ORGANIZER, so a
+  site-created reading group showed an empty "Organizers". Two older links
+  (`content/_roster.html`, the cartel coordinators line) tested
+  `is_in_directory`, role only, and so linked unlisted members to a 404.
   **Group 7, the Referral Coordinator:** the requester's free text was
   labeled "For the Referral Coordinator" on the coordinator's request page
   and edit form, though it is exactly what every clinician receives (#684);
