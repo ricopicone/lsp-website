@@ -2669,6 +2669,23 @@ Done (see `git log` for specifics):
   The re-minted charge was voided again on prod with an audit note. No
   migration.
 
+- **A free event can be registered for; any member can be an LSP speaker**
+  (task #851, found posting the first Scholarly Seminar Series talk). Free
+  with "Included in tuition" unticked minted **no price tier** (the proposal
+  form's old "nothing specified" shortcut, kept by #532), so the event page
+  offered Register over a register page with nothing to choose, and an online
+  event's link reached no one but its hosts. `price_spec.apply_to_event` now
+  gives every free event a $0 tier, and `from_event` reads any $0 tier back as
+  Free, so a "Fixed $0" event shows as Free. Fee to be announced stays the one
+  tier-less price. Days of Assembly and Working Days now carry a $0 tier too,
+  which is what lets guests register for one the PC opens to them; members
+  still attend without registering. No live event was affected (checked all
+  public event pages). And the proposal form's "LSP speakers" / co-conveners
+  picker listed faculty only, so a Candidate Scholar presenter had to be added
+  in Django admin; it now lists `accounts.permissions.lsp_members()`. On a
+  seminar or reading group that means a proposer can name a non-faculty
+  co-convener, which the PC sees before approving. No migration.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).

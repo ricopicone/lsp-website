@@ -363,6 +363,69 @@ def test_special_event_new_get_renders_locked_to_special(client, pc_member):
 
 
 @pytest.mark.django_db
+def test_a_free_standalone_event_can_be_registered_for(client, pc_member):
+    """Free with "Included in tuition" unticked used to mint no price tier, so
+    the page showed Register over a register page with nothing to choose."""
+    from accounts.models import Profile
+    from registrations.models import Registration
+
+    client.force_login(pc_member)
+    client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(
+            event_type="scholarly_seminar", title="A Free Talk",
+            fee_type="free", location_kind="online_external",
+            location="https://zoom.example/j/1",
+        ),
+    )
+    e = Event.objects.get(title="A Free Talk")
+    tier = e.price_tiers.get()
+
+    member = User.objects.create_user(email="analyst@x.test", password="x")
+    member.profile.role = Profile.Role.ANALYST
+    member.profile.save()
+    client.force_login(member)
+    client.post(reverse("registrations:register", args=[e.slug]),
+                {"price_tier": tier.pk})
+    reg = Registration.objects.get(event=e, user=member)
+    assert reg.status == Registration.Status.PAID
+    assert reg.quoted_amount == 0
+
+
+@pytest.mark.django_db
+def test_any_member_can_be_named_an_lsp_speaker(client, pc_member):
+    """The picker listed faculty only, so a Candidate Scholar presenting at the
+    Scholarly Seminar Series had to be added in Django admin."""
+    from accounts.models import Profile
+
+    speaker = User.objects.create_user(
+        email="scholar@x.test", password="x", first_name="Can", last_name="Didate",
+    )
+    speaker.profile.role = Profile.Role.CANDIDATE_SCHOLAR
+    speaker.profile.save()
+    auditor = User.objects.create_user(
+        email="auditor@x.test", password="x", first_name="Out", last_name="Sider",
+    )
+    auditor.profile.role = Profile.Role.EXTERNAL
+    auditor.profile.save()
+
+    client.force_login(pc_member)
+    resp = client.get(reverse("program_admin_special_event_new"))
+    offered = resp.context["form"].fields["faculty"].queryset
+    assert speaker in offered
+    assert auditor not in offered
+
+    client.post(
+        reverse("program_admin_special_event_new"),
+        _special_event_payload(
+            event_type="scholarly_seminar", title="A Talk", faculty=[speaker.pk],
+        ),
+    )
+    e = Event.objects.get(title="A Talk")
+    assert list(e.member_speakers.all()) == [speaker]
+
+
+@pytest.mark.django_db
 def test_special_event_publish_mints_wired_published_event(client, pc_member):
     client.force_login(pc_member)
     resp = client.post(
@@ -575,7 +638,8 @@ def test_standalone_new_mints_pc_owned_type(client, pc_member, etype):
     assert e.sessions.exists()
     # A gathering is free to members and takes no fee (task #756); the other
     # standalone types keep the price they were given.
-    assert e.price_tiers.exists() is (etype not in Event.SCHOOL_GATHERING_TYPES)
+    expected = 0 if etype in Event.SCHOOL_GATHERING_TYPES else 20
+    assert e.price_tiers.get().base_amount == expected
     # PC-organized: provenance on the Program Committee's workgroup.
     assert e.workgroup is not None
     assert e.workgroup.kind == Workgroup.Kind.COMMITTEE

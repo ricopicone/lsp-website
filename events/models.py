@@ -1879,8 +1879,7 @@ class EventProposal(models.Model):
             event.workgroup_id = self.continues_seminar_id
             event.save(update_fields=["workgroup"])
         # The proposer always convenes an offering they proposed: the form's
-        # picker holds only *additional* conveners and lists existing faculty
-        # alone, so a first-time proposer cannot pick themselves.
+        # picker holds only *additional* conveners.
         conveners = list(self.faculty.all())
         if self.proposed_by_id and self.proposed_by not in conveners:
             conveners.insert(0, self.proposed_by)

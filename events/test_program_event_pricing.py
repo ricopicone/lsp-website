@@ -90,7 +90,7 @@ def test_free_is_accepted_without_any_amount(program):
     assert form.is_valid(), form.errors
     event = form.save()
     form.save_price(event)
-    assert event.price_tiers.count() == 0
+    assert event.price_tiers.get().base_amount == 0
 
 
 def test_editing_prefills_the_current_price(program):

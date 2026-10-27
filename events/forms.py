@@ -675,7 +675,7 @@ class EventProposalForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from accounts.models import User
+        from accounts.permissions import lsp_members
         from workgroups.models import Workgroup
 
         self.fields["event_type"].label = "Type of event"
@@ -697,9 +697,11 @@ class EventProposalForm(forms.ModelForm):
         self.fields["description"].help_text = ""  # guidance shown above the field
 
         self.fields["faculty"].required = False
-        self.fields["faculty"].queryset = User.objects.filter(
-            profile__is_faculty=True, is_active=True,
-        ).order_by("last_name", "first_name")
+        # Any member, not only faculty: a Candidate Scholar presenting at the
+        # Scholarly Seminar Series had to be added in Django admin.
+        self.fields["faculty"].queryset = lsp_members().order_by(
+            "last_name", "first_name",
+        )
         self.fields["faculty"].label_from_instance = _member_name
         # Label and help differ by event type, so the template renders them
         # (see propose_event.html); these are only the no-JS fallback.
