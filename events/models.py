@@ -673,7 +673,11 @@ class Event(models.Model):
         return self.event_type in {self.Type.READING_GROUP, self.Type.CARTEL}
 
     #: Event types whose approved instances route content edits through review.
-    REVIEW_LOOP_TYPES = (Type.SEMINAR, Type.READING_GROUP, Type.SPECIAL_EVENT)
+    #: The Scholarly Seminar Series joined when its coordinator began proposing
+    #: its talks (task #851): what the PC approved is protected the same way.
+    REVIEW_LOOP_TYPES = (
+        Type.SEMINAR, Type.READING_GROUP, Type.SPECIAL_EVENT, Type.SCHOLARLY_SEMINAR,
+    )
 
     @property
     def is_per_class(self) -> bool:
@@ -1530,12 +1534,24 @@ class EventProposal(models.Model):
     #: Event types a member may propose. The other PC-organized types — Days of
     #: Assembly, Working Days, the Scholarly Seminar Series — are the Program
     #: Committee's to create, through its direct-create form (task #756), so the
-    #: field's choices below are wider than what the member form offers.
+    #: field's choices below are wider than what the member form offers. The
+    #: one exception is ``types_proposable_by``.
     PROPOSABLE_TYPES = (
         Event.Type.SEMINAR,
         Event.Type.READING_GROUP,
         Event.Type.SPECIAL_EVENT,
     )
+
+    @classmethod
+    def types_proposable_by(cls, user) -> tuple:
+        """What ``user``'s proposal form offers: ``PROPOSABLE_TYPES``, plus the
+        Scholarly Seminar Series for its coordinator, whose talks go through
+        the same queue (task #851)."""
+        from .permissions import is_series_coordinator
+
+        if user is not None and is_series_coordinator(user):
+            return (*cls.PROPOSABLE_TYPES, Event.Type.SCHOLARLY_SEMINAR)
+        return cls.PROPOSABLE_TYPES
 
     proposed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,

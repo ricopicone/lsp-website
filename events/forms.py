@@ -673,16 +673,19 @@ class EventProposalForm(forms.ModelForm):
             "sched_end_time": forms.TimeInput(attrs={"type": "time"}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, proposer=None, **kwargs):
         super().__init__(*args, **kwargs)
         from accounts.permissions import lsp_members
         from workgroups.models import Workgroup
 
         self.fields["event_type"].label = "Type of event"
         # The model also allows the PC-curated types (task #756); a member's
-        # form offers only what a member may propose. The PC's direct-create
-        # view widens this again.
-        proposable = {t.value for t in EventProposal.PROPOSABLE_TYPES}
+        # form offers only what this member may propose (the series coordinator
+        # gets the Scholarly Seminar Series too, task #851). The PC's
+        # direct-create view widens this again.
+        proposable = {
+            t.value for t in EventProposal.types_proposable_by(proposer)
+        }
         self.fields["event_type"].choices = [
             c for c in self.fields["event_type"].choices if c[0] in proposable
         ]

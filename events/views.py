@@ -262,6 +262,57 @@ def past_event_list(request):
     })
 
 
+def scholarly_series(request):
+    """The Scholarly Seminar Series page (task #851): what the series is, its
+    talks on the site (upcoming and past), and the talks before the site.
+
+    Its title strikes through "Scholarly", as the series' own description
+    does, so it is passed to the hero pre-marked.
+    """
+    from django.utils.safestring import mark_safe
+
+    from video.models import Recording
+
+    from . import scholarly_series as series
+    from .permissions import is_series_coordinator
+
+    today = timezone.localdate()  # the school's date, not UTC's (#571)
+    talks = list(
+        _standalone_events(request)
+        .filter(event_type=Event.Type.SCHOLARLY_SEMINAR)
+        .prefetch_related("member_speakers", "speakers")
+        .order_by("start_date", "title")
+    )
+    upcoming = [e for e in talks if e.end_date >= today]
+    ended = [e for e in talks if e.end_date < today]
+    recorded = {
+        r.event_id for r in Recording.objects.filter(
+            event__in=ended, status=Recording.Status.READY,
+        ) if r.listing_visible_to(request.user)
+    }
+    past = [
+        {"date": e.start_date, "title": e.title, "presenter": series.presenters(e),
+         "event": e, "recorded": e.pk in recorded}
+        for e in ended
+    ] + [
+        {"date": t.date, "title": t.title, "presenter": t.presenter}
+        for t in series.HISTORY
+    ]
+    past.sort(key=lambda t: t["date"], reverse=True)
+    years: dict[int, list[dict]] = {}
+    for talk in past:
+        years.setdefault(talk["date"].year, []).append(talk)
+    return render(request, "events/scholarly_series.html", {
+        "series_title": mark_safe("<s>Scholarly</s> Seminar Series"),
+        "upcoming": [
+            {"event": e, "presenter": series.presenters(e)} for e in upcoming
+        ],
+        "past_years": list(years.items()),
+        "submissions_email": series.SUBMISSIONS_EMAIL,
+        "is_coordinator": is_series_coordinator(request.user),
+    })
+
+
 def program(request):
     """Annual program: seminars + other offerings for an academic year (PROG-2).
 
@@ -1367,7 +1418,7 @@ def propose_event(request):
 
     if request.method == "POST":
         is_submit = request.POST.get("action") == "submit"
-        form = EventProposalForm(request.POST)
+        form = EventProposalForm(request.POST, proposer=request.user)
         form.require_complete = is_submit
         speakers = ProposalSpeakerFormSet(request.POST, prefix="speakers")
         if form.is_valid() and speakers.is_valid():
@@ -1385,7 +1436,12 @@ def propose_event(request):
             )
             return redirect("my_proposals")
     else:
-        form = EventProposalForm()
+        form = EventProposalForm(proposer=request.user)
+        # ``?type=`` preselects a type the viewer may propose (the series
+        # page's "Propose a talk" link); anything else is ignored.
+        wanted = request.GET.get("type")
+        if wanted in dict(form.fields["event_type"].choices):
+            form.initial["event_type"] = wanted
         speakers = ProposalSpeakerFormSet(prefix="speakers")
     return render(request, "events/propose_event.html", {
         "form": form, "speakers": speakers,
@@ -1409,7 +1465,9 @@ def proposal_edit(request, pk: int):
     if request.method == "POST":
         is_submit = request.POST.get("action") == "submit"
         prior_status = proposal.status    # status isn't a form field
-        form = EventProposalForm(request.POST, instance=proposal)
+        form = EventProposalForm(
+            request.POST, instance=proposal, proposer=request.user,
+        )
         form.require_complete = is_submit
         speakers = ProposalSpeakerFormSet(
             request.POST, instance=proposal, prefix="speakers"
@@ -1430,7 +1488,7 @@ def proposal_edit(request, pk: int):
             )
             return redirect("my_proposals")
     else:
-        form = EventProposalForm(instance=proposal)
+        form = EventProposalForm(instance=proposal, proposer=request.user)
         speakers = ProposalSpeakerFormSet(instance=proposal, prefix="speakers")
     return render(request, "events/propose_event.html", {
         "form": form, "speakers": speakers, "editing": proposal,

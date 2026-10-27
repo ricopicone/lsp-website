@@ -2693,6 +2693,31 @@ Done (see `git log` for specifics):
   in Django admin; it now lists `accounts.permissions.lsp_members()`. On a
   seminar or reading group that means a proposer can name a non-faculty
   co-convener, which the PC sees before approving. No migration.
+  **The series gets a coordinator and a page** (same task, Rico's decisions
+  2026-10-27). A new **Scholarly Seminar Series Coordinator** `StaffRole`
+  (`core/0015`, held by Sheila Cavanagh, appointed on Board → Appointments,
+  badged in the directory) proposes the series' talks through the ordinary
+  member proposal form: `EventProposal.types_proposable_by(user)` adds the
+  type for the role's holders only, the form takes `proposer=` and enforces
+  it on POST, and the proposal reaches the PC's Proposals tab like any other
+  (approval publishes it, as for a special event). `can_edit_event` grants
+  the coordinator every scholarly-seminar event, so she hosts each talk as a
+  presenter does: moderator and Record in the room (`is_owner`), the
+  recording's visibility, joining instructions, the roster. The type joins
+  `Event.REVIEW_LOOP_TYPES`, so later content edits to an approved talk come
+  to the Changes tab. **`/events/scholarly-seminar-series/`**
+  (`events:scholarly_series`, linked from both Events menus and each talk's
+  type badge) carries Sheila's description verbatim, upcoming and past talks
+  from the site (`_standalone_events`, so members-only talks stay hidden
+  from visitors; a "Recording" badge where one is listed to the viewer), and
+  `events/scholarly_series.HISTORY`, the seven talks given before the site.
+  "Scholarly" is struck through in the title and her first sentence, as in
+  her own document (the hero's title is passed pre-marked; plain text in
+  badges, menus and email). Recording already needed nothing: `record_video`
+  lists a recording to members, and a one-off event's recording is exempt
+  from the retention sweep. `?type=` on `/propose/` preselects a type the
+  viewer may propose (the page's "Propose a talk" button). Proposals are
+  emailed to her first (`SUBMISSIONS_EMAIL`).
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

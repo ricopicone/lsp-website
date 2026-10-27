@@ -57,6 +57,14 @@ def _is_lsp_staff(user) -> bool:
     return has_staff_role(user, StaffRole.LSP_STAFF)
 
 
+def is_series_coordinator(user) -> bool:
+    """Whether ``user`` coordinates the Scholarly Seminar Series (task #851)."""
+    from core.access import has_staff_role
+    from core.models import StaffRole
+
+    return has_staff_role(user, StaffRole.SCHOLARLY_SEMINAR_COORDINATOR)
+
+
 def can_edit_event(user, event) -> bool:
     """True if ``user`` may edit ``event`` (PROG-7) or see its faculty surfaces (PROG-8).
 
@@ -64,14 +72,19 @@ def can_edit_event(user, event) -> bool:
     replaced the former 'lsp-staff' committee), the event's own faculty, the
     presenters of a PC-organized event (``Event.is_presenter``, task #463), the
     leads of a seminar's or reading group's own workgroup (task #495 — a reading
-    group's conveners hold ORGANIZER, not FACULTY), or Programming Committee
-    membership.
+    group's conveners hold ORGANIZER, not FACULTY), the Scholarly Seminar
+    Series Coordinator on that series' events (task #851), or Programming
+    Committee membership.
     """
     if not getattr(user, "is_authenticated", False):
         return False
     if user.is_staff or _is_lsp_staff(user):
         return True
     if event.is_faculty(user) or event.is_presenter(user):
+        return True
+    # The series coordinator hosts every talk in the series, as a presenter
+    # hosts their own: the room, the recording, the joining instructions.
+    if event.event_type == "scholarly_seminar" and is_series_coordinator(user):
         return True
     if _leads_offering(user, event):
         return True
