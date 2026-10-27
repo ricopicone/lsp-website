@@ -622,7 +622,17 @@ def test_account_tab_offers_next_years_dues_by_name(client):
     )
     member = _user("acctnextdues@x.test")
     client.force_login(member)
-    body = client.get(reverse("formation:formation") + "?tab=account").content.decode()
+    url = reverse("formation:formation") + "?tab=account"
+    # This year unpaid: no pay-ahead beside this year's Pay button (task #820).
+    assert upcoming.slug not in client.get(url).content.decode()
+
+    Payment.objects.create(
+        user=member, payment_type=Payment.Type.DUES, amount=Decimal("100"),
+        status=Payment.Status.SUCCEEDED, method=Payment.Method.OFFLINE,
+        dues_period=DuesPeriod.objects.get(slug="ay-2025-2026-acct"),
+        paid_at=timezone.now(),
+    )
+    body = client.get(url).content.decode()
     squashed = " ".join(body.split())
 
     assert f'name="period" value="{upcoming.slug}"' in squashed

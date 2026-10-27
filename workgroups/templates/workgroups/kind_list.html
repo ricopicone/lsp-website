@@ -33,7 +33,7 @@
     <p class="text-sm text-base-content/70 border-t border-base-300/60 pt-3">
       Questions about forming or joining a cartel? Contact the Cartel
       Coordinator,
-      {% for c in cartel_coordinators %}{% if not forloop.first %}{% if forloop.last %} and {% else %}, {% endif %}{% endif %}{% if c.profile.public_email %}<a href="mailto:{{ c.profile.public_email }}" class="link link-primary">{{ c.first_name }} {{ c.last_name }}</a>{% elif c.profile.is_in_directory %}<a href="{% url 'directory_detail' c.profile.directory_slug %}" class="link link-primary">{{ c.first_name }} {{ c.last_name }}</a>{% else %}{{ c.first_name }} {{ c.last_name }}{% endif %}{% endfor %}.
+      {% for c in cartel_coordinators %}{% if not forloop.first %}{% if forloop.last %} and {% else %}, {% endif %}{% endif %}{% if c.profile.public_email %}<a href="mailto:{{ c.profile.public_email }}" class="link link-primary">{{ c.first_name }} {{ c.last_name }}</a>{% elif c.profile.is_listed %}<a href="{% url 'directory_detail' c.profile.directory_slug %}" class="link link-primary">{{ c.first_name }} {{ c.last_name }}</a>{% else %}{{ c.first_name }} {{ c.last_name }}{% endif %}{% endfor %}.
     </p>
     {% endif %}
   </section>

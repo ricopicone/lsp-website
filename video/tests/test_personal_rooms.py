@@ -7,6 +7,7 @@ site-technical roles.
 from __future__ import annotations
 
 import datetime as _dt
+import re
 
 import pytest
 from django.utils import timezone
@@ -92,8 +93,9 @@ def test_slug_is_opaque_not_the_directory_handle():
     """Daily's room name rides in the iframe URL, where a guest can read it."""
     u = member(first="Ada", last="Lovelace")
     room = personal.personal_room_for(u, create=True)
-    assert room.slug.startswith("pr-")
-    assert "ada" not in room.slug and "lovelace" not in room.slug
+    # Random hex after the prefix; "ada" alone can occur in hex by chance.
+    assert re.fullmatch(r"pr-[0-9a-f]{16}", room.slug)
+    assert "lovelace" not in room.slug
 
 
 # ---- the invariant ------------------------------------------------------
