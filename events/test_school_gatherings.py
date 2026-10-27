@@ -141,7 +141,7 @@ def test_create_form_discards_fields_a_gathering_does_not_use(client):
         offers_ce="on", ce_credits="3",
     ))
     e = Event.objects.get(title="Assembly")
-    assert not e.price_tiers.exists()
+    assert e.price_tiers.get().base_amount == 0  # the posted $40 is dropped
     assert e.readings == ""
     assert e.offers_ce is False
     assert e.description.startswith("9:00 Opening")

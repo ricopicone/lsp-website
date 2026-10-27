@@ -1,13 +1,9 @@
-# Resuming task #812
+# Resuming task #851
 
-**Task:** Widen the change-review loop to imported program events
+**Task:** Add scholarly seminar series to the website
 
 ## Description
-Sibling of #811 (decided with Rico 2026-10-12). Today Event.requires_change_review() needs an approving EventProposal, so the script-imported 2026–27 program (no proposal) edits freely: price, title, description, and now billing mode change with no PC step. Rico wants those events under the same review loop.
-
-Sketch: requires_change_review() also returns True for published program events (seminar / reading group …) with no approving proposal; the baseline is the event's current published content. Check EventChangeRequest.apply()/field_changes() don't assume a proposal; check the faculty guide copy; measure on prod how many events this pulls in before shipping.
-
-Independent of per-class billing; keep it its own change so each can be verified alone.
+I think some of the infra exists. website@lacanschool.org has an email "Reminder: Scholarly Seminar Series with Marshall Meyer - Nov. 7th". Check what infra exists for the scholarly seminar series. I'd like to make this official on the site. Sheila's been coordinating it so I need to loop her in.
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -60,6 +56,13 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **form-safety-helpers** (convention) — Task #820 SHIPPED+LIVE 2026-10-25: shared helpers for the #817 failure class — core.form_stash (refused panel POST rebinds with errors), _form_error_summary + site-wide scroll-to-refused.js, opt-in unsaved-guard.js (form data-warn-unsaved), core/browser_forms.py for browser-shaped tests; long single-Save forms get a sticky save bar
+- **board-elections** (architecture) — Task #813 SHIPPED+LIVE 2026-10-13 (main edb09e6): elections app run by an Election Administrator StaffRole (not the Web Coordinator); phase computed from admin-set dates; Board reviews nominations; ranked ballots counted by STV or most votes per election; a ballot is linked to its voter but shown only to that voter
+- **change-review-dialog-never-saved** (architecture) — Task #817: the event change-review dialog never saved any decision (ce_organizations re-posted as "[]"), and browser CRLF vs stored LF opened it on every save; fixed on fleet-willow by re-posting request.POST verbatim + normalizing line endings
+- **personal-rooms-on-parletre** (architecture) — Task #751 SHIPPED+LIVE 2026-10-12: Parlêtre's index lists your own meeting room always, and someone else's only while its owner is in it AND you'd be admitted (live invitation or posted office hours) — the same two checks the door makes, so Join never lands on a doorstep
+- **bylaws-election-rules** (reference) — The 2024-12-29 bylaws (wix-files/2024.12.29 LSP Bylaws.pdf; static/documents/lsp-bylaws.pdf) define Board elections: Board reviews candidacies, no vote if ≤7 accepted, ≥3 analysts, voters = members who paid fees; they set NO counting rule, secrecy rule, or quorum
+- **review-loop-covers-program-events** (architecture) — Task #812 SHIPPED+LIVE 2026-10-12: the faculty change-review loop needed an approved proposal and had never fired on prod; any public seminar/reading group on a program now qualifies (27 events)
+- **fee-to-be-announced** (architecture) — Task #769 SHIPPED+LIVE 2026-10-12: a one-off event's fee can be "To be announced" (Event.fee_tba / PriceSpec.tba): page publishes, no price tier, registration can't open until a real fee is set; setting one leaves opening to the PC
 - **per-class-billing** (architecture) — Task #811 SHIPPED+LIVE 2026-10-12: per-class billing is attendance-based and isolated — a per-class registration is a $0 PAID row with per_class_rate; classes bill as registration-less Charges (class_attendance FK), paid via Payment.per_class_registration; per class can be an event mode OR a per-registrant "Per class attended" code
 - **per-class-billing-isolation** (architecture) — Task #811 (built on branch proud-falcon, not yet deployed): per-class billing is attendance-based and opt-in per seminar. A per-class registration is a $0 PAID row with per_class_rate. Class charges and payments carry registration=NULL so whole-registration paths can't see them. Billing mode is part of the price and locks once anyone registers.
 - **pc-creates-standalone-event-types** (architecture) — Task #756 SHIPPED+LIVE 2026-09-24: the PC creates Days of Assembly, Working Days and Scholarly Seminars from "+ New standalone event" on the Proposals tab (the widened special-event path); members still can't propose those three
@@ -192,7 +195,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=812`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=851`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

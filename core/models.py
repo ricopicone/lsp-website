@@ -78,6 +78,9 @@ class StaffRole(models.Model):
     # Election Administrator (task #813): runs Board elections; appointed by
     # the Board; should be neither a director nor a candidate. Never badged.
     ELECTION_ADMINISTRATOR = "election_administrator"
+    # Scholarly Seminar Series Coordinator (task #851): proposes the series'
+    # talks through the PC's queue and hosts them. Badged.
+    SCHOLARLY_SEMINAR_COORDINATOR = "scholarly_seminar_coordinator"
     # School officers — one appointment governs the Board AND the Meeting of
     # Analysts (and the school at large). The Vice-President is sometimes styled
     # "Co-President": that's just this role's editable display ``name`` (the

@@ -1,0 +1,66 @@
+{% extends "core/base.html" %}
+{% block title %}Scholarly Seminar Series · Lacanian School of Psychoanalysis{% endblock %}
+
+{% block page_hero %}{% include "core/_page_hero.html" with title=series_title %}{% endblock %}
+
+{% block content %}
+<div class="space-y-10">
+
+  <header class="flex flex-wrap justify-between gap-x-6 gap-y-2 border-b border-base-300/60 pb-4">
+    <a href="{% url 'events:list' %}" class="text-sm link link-hover text-base-content/70 hover:text-primary">← Events</a>
+    {% if is_coordinator %}
+    <a href="{% url 'propose_event' %}?type=scholarly_seminar" class="btn btn-primary btn-sm">Propose a talk</a>
+    {% endif %}
+  </header>
+  {% if is_coordinator %}
+  <p class="text-sm text-base-content/70 -mt-6">A talk you propose goes to the Program Committee, and appears here once they approve it.</p>
+  {% endif %}
+
+  <section class="space-y-4 max-w-3xl text-base-content/90 leading-relaxed">
+    <p>I created the <s>Scholarly</s> Seminar Series to provide a forum for those working on scholarly, artistic, or literary works, relevant to Lacanian psychoanalysis, to present works in progress and/or completed works. Independent and personal studies geared to external conference presentations, publications, artistic, and/or literary events relating to Lacanian psychoanalysis are welcome. While clinical material can be presented in the Series, it provides a supportive audience for those pursuing more theoretical contributions to Lacanian psychoanalysis. The Series will be of interest to everyone in the School. But it may be particularly relevant to those pursuing a scholarly formation with interests in Lacanian psychoanalysis beyond the clinic. Lacanian psychoanalysis makes tremendous contributions to the clinic and to the theory and culture of psychoanalysis more broadly. The latter is what the Series intends to foreground.</p>
+    <p>The intention is to have three presentations per year. If you are interested in presenting your work, please send <a href="mailto:{{ submissions_email }}" class="link link-primary">Sheila Cavanagh</a> an email along with a title and short abstract.</p>
+    <p class="text-sm text-base-content/60">Sheila Cavanagh</p>
+  </section>
+
+  <section class="space-y-4">
+    <h2 class="font-serif text-2xl text-base-content">Upcoming</h2>
+    {% if upcoming %}
+    <ul class="space-y-3">
+      {% for t in upcoming %}
+      <li>
+        <a href="{% url 'events:detail' t.event.slug %}" class="block rounded-lg border border-base-300 bg-base-100 p-4 hover:border-primary/60 hover:bg-base-200/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+          <p class="text-sm text-base-content/60">{{ t.event.start_date|date:"l, F j, Y" }}</p>
+          <h3 class="font-serif text-xl text-base-content">{{ t.event.title }}</h3>
+          {% if t.presenter %}<p class="text-sm text-base-content/80">{{ t.presenter }}</p>{% endif %}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-base-content/60">The next talk hasn't been announced yet.</p>
+    {% endif %}
+  </section>
+
+  <section class="space-y-6">
+    <h2 class="font-serif text-2xl text-base-content">Past presentations</h2>
+    {% for year, talks in past_years %}
+    <div class="space-y-2">
+      <h3 class="font-serif text-lg text-base-content/80">{{ year }}</h3>
+      <ul class="space-y-3">
+        {% for t in talks %}
+        <li class="border-l-2 border-base-300 pl-4">
+          <p class="text-sm text-base-content/60">{{ t.date|date:"F j" }}</p>
+          <p class="text-base-content">
+            {% if t.event %}<a href="{% url 'events:detail' t.event.slug %}" class="link link-hover">“{{ t.title }}”</a>{% else %}“{{ t.title }}”{% endif %}
+            {% if t.recorded %}<a href="{% url 'events:detail' t.event.slug %}" class="badge badge-sm badge-ghost ml-1">Recording</a>{% endif %}
+          </p>
+          {% if t.presenter %}<p class="text-sm text-base-content/80">{{ t.presenter }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  </section>
+
+</div>
+{% endblock %}

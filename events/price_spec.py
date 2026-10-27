@@ -108,8 +108,7 @@ def from_event(event) -> PriceSpec | None:
         return PriceSpec(tuition_covers=False, tba=True)
     tier = event.price_tiers.first()
     if tier is None:
-        # No tier means nothing was ever specified, which is the state
-        # ``apply_to_event`` produces for a free, uncovered event.
+        # A free, uncovered event saved before free events carried a tier.
         return PriceSpec(tuition_covers=False, per_class=per_class)
     if tier.sliding_scale:
         return PriceSpec(
@@ -118,8 +117,11 @@ def from_event(event) -> PriceSpec | None:
             tuition_covers=tier.covered_by_tuition,
             per_class=per_class,
         )
-    if tier.base_amount == 0 and tier.covered_by_tuition:
-        return PriceSpec(tuition_covers=True, per_class=per_class)
+    if tier.base_amount == 0:
+        # A $0 fixed fee and Free are one price, so it reads back as Free.
+        return PriceSpec(
+            tuition_covers=tier.covered_by_tuition, per_class=per_class,
+        )
     return PriceSpec(
         amount=tier.base_amount, tuition_covers=tier.covered_by_tuition,
         per_class=per_class,
@@ -129,9 +131,11 @@ def from_event(event) -> PriceSpec | None:
 def apply_to_event(event, spec: PriceSpec) -> None:
     """Reconcile the event's single event-level tier to ``spec``.
 
-    Mirrors what ``EventProposal._build_price_tier`` has always done, including
-    its "nothing specified" short-circuit: a free event that tuition does not
-    cover carries no tier at all.
+    A free event carries a $0 tier whether or not tuition covers it. It used
+    to carry none when tuition didn't (the proposal form's old "nothing
+    specified" short-circuit), and with no tier the event page offered
+    Register over a register page with nothing to choose, while an online
+    event's link stayed hidden from everyone who couldn't register.
 
     A fee to be announced carries no tier either, and since there is nothing to
     charge, it also takes back open registration (task #769) — every path that
@@ -160,10 +164,6 @@ def apply_to_event(event, spec: PriceSpec) -> None:
         return
 
     sliding = spec.fee_type == "sliding"
-    if not sliding and spec.amount is None and not spec.tuition_covers:
-        event.price_tiers.all().delete()
-        return
-
     base = spec.amount
     if base is None:
         base = spec.sliding_max if spec.sliding_max is not None else Decimal("0")

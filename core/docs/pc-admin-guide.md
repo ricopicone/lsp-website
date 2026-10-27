@@ -172,7 +172,13 @@ You don't have to wait for a proposal. Click **+ New standalone event**
 to create one yourself. It opens the event form set to a special event;
 change **Type of event** to make a **Day of Assembly**, a **Working
 Day**, or a **Scholarly Seminar Series** instead. Members can't propose
-those three, so this is the only place they're made.
+those three, so this is the only place they're made, with one
+exception: the **Scholarly Seminar Series Coordinator** proposes the
+series' talks, and they reach your Proposals tab like any other
+proposal. Once a talk is approved, the coordinator hosts it as its
+presenter does (the meeting room, the recording, the joining
+instructions), and later changes to its description come to the
+Changes tab.
 
 - **Days of Assembly and Working Days** ask only for a title, the
   **Schedule of proceedings**, the date and time, where it meets, and a

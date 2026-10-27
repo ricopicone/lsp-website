@@ -9,6 +9,7 @@ urlpatterns = [
          views.speaker_invitation_accept, name="speaker_invitation_accept"),
     path("", views.event_list, name="list"),
     path("past/", views.past_event_list, name="past"),
+    path("scholarly-seminar-series/", views.scholarly_series, name="scholarly_series"),
     path("<slug:slug>/speakers/<int:speaker_id>/invite/",
          views.speaker_invite, name="speaker_invite"),
     path("attendance/<int:pk>/mark/", views.class_attendance_mark,

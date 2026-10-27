@@ -63,10 +63,24 @@ def test_applying_twice_leaves_one_tier(event):
     assert event.price_tiers.get().base_amount == Decimal("400")
 
 
-def test_free_and_uncovered_creates_no_tier(event):
-    """Matches _build_price_tier's 'nothing specified' short-circuit."""
+def test_free_and_uncovered_creates_a_zero_tier(event):
+    """A free event is still registered for, and with no tier the register
+    page had nothing to choose while the page showed Register."""
     apply_to_event(event, PriceSpec(tuition_covers=False))
-    assert event.price_tiers.count() == 0
+    tier = event.price_tiers.get()
+    assert tier.base_amount == Decimal("0")
+    assert tier.covered_by_tuition is False
+    assert tier.sliding_scale is False
+    assert from_event(event) == PriceSpec(tuition_covers=False)
+
+
+def test_a_fixed_zero_reads_back_as_free(event):
+    apply_to_event(event, PriceSpec(amount=Decimal("0"), tuition_covers=False))
+    assert from_event(event).fee_type == "free"
+
+
+def test_an_event_with_no_tier_still_reads_as_free(event):
+    """Events saved before a free event carried a tier."""
     assert from_event(event) == PriceSpec(tuition_covers=False)
 
 

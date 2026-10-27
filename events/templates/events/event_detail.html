@@ -45,7 +45,11 @@
     {% include "events/_feature_image.html" with img=event.feature %}
     <h1 class="font-serif text-3xl sm:text-4xl text-base-content leading-tight">{{ event.title }}</h1>
     <div class="flex flex-wrap items-center gap-2">
+      {% if event.event_type == "scholarly_seminar" %}
+      <a href="{% url 'events:scholarly_series' %}" class="badge badge-ghost hover:border-primary/60 hover:text-primary">{{ event.get_event_type_display }}</a>
+      {% else %}
       <span class="badge badge-ghost">{{ event.get_event_type_display }}</span>
+      {% endif %}
       <span class="badge badge-ghost">{{ event.get_format_display }}</span>
       <span class="text-sm text-base-content/70">
         {{ event.start_date|date:"M j" }}{% if event.end_date != event.start_date %} – {{ event.end_date|date:"M j, Y" }}{% else %}, {{ event.end_date|date:"Y" }}{% endif %}
