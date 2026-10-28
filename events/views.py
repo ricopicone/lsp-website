@@ -21,7 +21,8 @@ from django.utils.datastructures import MultiValueDict
 from django.views.decorators.http import require_POST
 
 from accounts.permissions import is_lsp_member
-from core.access import gate_or_login
+from core.access import gate_or_login, staff_role_required
+from core.models import StaffRole
 
 from .forms import EventEditForm, PricingCodeForm
 from .models import (
@@ -263,8 +264,8 @@ def past_event_list(request):
 
 
 def scholarly_series(request):
-    """The Scholarly Seminar Series page (task #851): what the series is, its
-    talks on the site (upcoming and past), and the talks before the site.
+    """The Scholarly Seminar Series page (task #851): what the series is and
+    its talks, upcoming and past (the ones before the site are events too).
 
     Its title strikes through "Scholarly", as the series' own description
     does, so it is passed to the hero pre-marked.
@@ -290,27 +291,64 @@ def scholarly_series(request):
             event__in=ended, status=Recording.Status.READY,
         ) if r.listing_visible_to(request.user)
     }
-    past = [
-        {"date": e.start_date, "title": e.title, "presenter": series.presenters(e),
-         "event": e, "recorded": e.pk in recorded}
-        for e in ended
-    ] + [
-        {"date": t.date, "title": t.title, "presenter": t.presenter}
-        for t in series.HISTORY
-    ]
-    past.sort(key=lambda t: t["date"], reverse=True)
     years: dict[int, list[dict]] = {}
-    for talk in past:
-        years.setdefault(talk["date"].year, []).append(talk)
+    for e in reversed(ended):  # newest first
+        years.setdefault(e.start_date.year, []).append({
+            "event": e, "presenter": series.presenters(e),
+            "recorded": e.pk in recorded,
+        })
     return render(request, "events/scholarly_series.html", {
         "series_title": mark_safe("<s>Scholarly</s> Seminar Series"),
         "upcoming": [
             {"event": e, "presenter": series.presenters(e)} for e in upcoming
         ],
         "past_years": list(years.items()),
-        "submissions_email": series.SUBMISSIONS_EMAIL,
+        "coordinators": series.coordinators(),
         "is_coordinator": is_series_coordinator(request.user),
     })
+
+
+@staff_role_required(StaffRole.SCHOLARLY_SEMINAR_COORDINATOR)
+def scholarly_series_admin(request):
+    """The coordinator's admin (task #851): every talk in the series, whether
+    it records, and its recordings, each linked to the recording page where a
+    host sets who can watch it. Proposing a talk stays the ordinary form."""
+    from video.models import Recording
+
+    talks = list(
+        Event.objects.filter(event_type=Event.Type.SCHOLARLY_SEMINAR)
+        .order_by("-start_date", "title")
+    )
+    recordings: dict[int, list] = {}
+    for rec in Recording.objects.filter(
+        event__in=talks, status=Recording.Status.READY,
+    ).order_by("started_at", "created_at"):
+        recordings.setdefault(rec.event_id, []).append(rec)
+    today = timezone.localdate()  # the school's date, not UTC's (#571)
+    return render(request, "events/scholarly_series_admin.html", {
+        "talks": [
+            {"event": e, "recordings": recordings.get(e.pk, []),
+             "upcoming": e.end_date >= today}
+            for e in talks
+        ],
+    })
+
+
+@staff_role_required(StaffRole.SCHOLARLY_SEMINAR_COORDINATOR)
+@require_POST
+def scholarly_series_record(request, slug: str):
+    """Turn a series talk's automatic recording on or off."""
+    event = get_object_or_404(
+        Event, slug=slug, event_type=Event.Type.SCHOLARLY_SEMINAR,
+    )
+    event.record_video = request.POST.get("record") == "on"
+    event.save(update_fields=["record_video"])
+    messages.success(
+        request,
+        f"“{event.title}” will be recorded." if event.record_video
+        else f"“{event.title}” won't be recorded.",
+    )
+    return redirect("scholarly_series_admin")
 
 
 def program(request):

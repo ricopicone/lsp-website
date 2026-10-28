@@ -2709,15 +2709,44 @@ Done (see `git log` for specifics):
   (`events:scholarly_series`, linked from both Events menus and each talk's
   type badge) carries Sheila's description verbatim, upcoming and past talks
   from the site (`_standalone_events`, so members-only talks stay hidden
-  from visitors; a "Recording" badge where one is listed to the viewer), and
-  `events/scholarly_series.HISTORY`, the seven talks given before the site.
+  from visitors; a "Recording" badge where one is listed to the viewer); the
+  seven talks given before the site were at first a hand-kept list and are
+  now events too (below).
   "Scholarly" is struck through in the title and her first sentence, as in
   her own document (the hero's title is passed pre-marked; plain text in
   badges, menus and email). Recording already needed nothing: `record_video`
   lists a recording to members, and a one-off event's recording is exempt
   from the retention sweep. `?type=` on `/propose/` preselects a type the
-  viewer may propose (the page's "Propose a talk" button). Proposals are
-  emailed to her first (`SUBMISSIONS_EMAIL`).
+  viewer may propose (the page's "Propose a talk" button). **Follow-up, the
+  same day:** the description is introduced as "A word from the Scholarly
+  Seminar Series Coordinator <name>", set off beneath that line, with the
+  coordinator's event bio (`display_event_bio`, as on an event page) below
+  it; the name comes from the role's holders (`scholarly_series.coordinators`),
+  and the sentence asking for proposals links their directory profile rather
+  than a `mailto:` (Sheila's public email there is the one she gave). The
+  description itself stays her first-person text in the template, so a new
+  coordinator would need it rewritten. A **Scholarly Seminar Series Admin**
+  (`/admin-tools/scholarly-seminar-series/`, the role's card on the hub, in
+  `PANEL_ROLES`) lists every talk with a Record switch for upcoming talks in
+  the site's room (`scholarly_series_record`, sets `record_video`) and each
+  ready recording linked to its page, where a host already sets who can
+  watch, keeps or deletes it. **The earlier talks are events** (Rico,
+  2026-10-27): `manage.py import_scholarly_series_history` makes the seven
+  pre-site talks `scholarly_seminar` events (closed, published, public, no
+  sessions since their times aren't known), each presenter linked as a
+  member speaker by directory slug when they have an account (all seven do
+  on prod) and named as an outside speaker otherwise. It is create-only, so
+  a re-run never undoes an abstract added later, and the series page now
+  lists events and nothing else; each talk also lists itself on
+  `/events/past/`. That exposed that **no event page knew it had ended**: a
+  past event said "Registration is closed" and that joining details go to
+  registrants. `Event.has_ended` (the school's date past `end_date` and no
+  session still to come, since `end_date` isn't kept in step with sessions
+  added later) now replaces the registration CTA with "This event has
+  ended." (a registrant keeps the link to their registration) and drops the
+  joining copy from the Where block. Three test helpers had pinned their
+  events to 2026-09-01, a date that has since passed, and are now dated from
+  today.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

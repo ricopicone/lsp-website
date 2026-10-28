@@ -1,0 +1,58 @@
+{% extends "core/staff/admin/_base.html" %}
+{% block admin_heading_title %}Scholarly Seminar Series Admin{% endblock %}
+{% block admin_kicker %}Staff role{% endblock %}
+{% block admin_heading %}Scholarly Seminar Series{% endblock %}
+{% block admin_intro %}Propose the series' talks and choose which ones are recorded. Record a talk only with its presenter's agreement.{% endblock %}
+
+{% block admin_after_header %}
+<div class="flex flex-wrap gap-2">
+  <a href="{% url 'propose_event' %}?type=scholarly_seminar" class="btn btn-primary btn-sm">Propose a talk</a>
+  <a href="{% url 'my_proposals' %}" class="btn btn-ghost btn-sm">Your proposals</a>
+  <a href="{% url 'events:scholarly_series' %}" class="btn btn-ghost btn-sm">Series page</a>
+</div>
+<p class="text-sm text-base-content/70 max-w-2xl">A talk you propose goes to the Program Committee, and appears here once they approve it. A recording starts when a host joins the site's room. Once it's ready, members can watch it on the talk's page and the series page; open it to change who can watch.</p>
+
+<section class="space-y-3">
+  <h2 class="font-serif text-xl text-base-content">Talks</h2>
+  {% if talks %}
+  <ul class="divide-y divide-base-300/60 rounded-lg border border-base-300">
+    {% for t in talks %}
+    {% with e=t.event %}
+    <li class="p-4 flex flex-col sm:flex-row sm:items-start gap-3 sm:justify-between">
+      <div class="space-y-1">
+        <p class="text-sm text-base-content/60">{{ e.start_date|date:"l, F j, Y" }}{% if not e.is_public_now %} <span class="badge badge-sm badge-warning ml-1">Draft</span>{% endif %}</p>
+        <a href="{% url 'events:detail' e.slug %}" class="font-serif text-lg text-base-content link link-hover">{{ e.title }}</a>
+        <p class="text-sm text-base-content/70">{% if e.uses_insite_room %}Meets in the site's room{% elif e.format == "in_person" %}Meets in person{% else %}Meets on an external link{% endif %}</p>
+        {% for r in t.recordings %}
+        <p class="text-sm"><a href="{% url 'video:recording_play' r.pk %}" class="link link-primary">Recording{% if r.started_at %} of {{ r.started_at|date:"F j" }}{% endif %}</a> <span class="text-base-content/60">· watchable by {{ r.effective_visibility_label }}</span></p>
+        {% endfor %}
+      </div>
+      <div class="shrink-0 text-sm">
+        {% if e.uses_insite_room and t.upcoming %}
+        <form method="post" action="{% url 'scholarly_series_record' e.slug %}" class="flex items-center gap-2">
+          {% csrf_token %}
+          {% if e.record_video %}
+          <span class="badge badge-success badge-sm">Recording on</span>
+          <input type="hidden" name="record" value="off">
+          <button class="btn btn-ghost btn-xs">Turn off</button>
+          {% else %}
+          <span class="badge badge-ghost badge-sm">Not recorded</span>
+          <input type="hidden" name="record" value="on">
+          <button class="btn btn-outline btn-xs">Record it</button>
+          {% endif %}
+        </form>
+        {% elif t.upcoming %}
+        <span class="text-base-content/60">Recorded only in the site's room</span>
+        {% elif not t.recordings %}
+        <span class="text-base-content/60">No recording</span>
+        {% endif %}
+      </div>
+    </li>
+    {% endwith %}
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-base-content/60">No talks on the site yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

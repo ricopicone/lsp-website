@@ -242,7 +242,10 @@ show_access_info.{% endcomment %}
 
 {# ---------- Registration CTA ---------- #}
 <section class="pt-2">
-  {% if gathering_cta %}
+  {% if event.has_ended %}
+    <p class="text-base-content/60">This event has ended.</p>
+    {% if user_registration %}<p class="text-sm mt-1"><a href="{% url 'registrations:confirm' user_registration.id %}" class="link link-primary">View your registration</a></p>{% endif %}
+  {% elif gathering_cta %}
     {# A Day of Assembly or Working Day (task #756): members don't register. #}
     <p class="text-base-content/80"><strong>Open to all members, no registration needed.</strong>
       {% if gathering_cta == "member" %}Join from this page when it begins.{% else %}Sign in to join when it begins.{% endif %}</p>

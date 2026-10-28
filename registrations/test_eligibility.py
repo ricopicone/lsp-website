@@ -1,6 +1,6 @@
 """Who may register: members only, or members and guests (task #566)."""
 
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from django.utils import timezone
@@ -9,12 +9,15 @@ from accounts.models import Profile, User
 from events.models import Event, PricingCode
 from registrations.permissions import eligibility_block_reason
 
+#: Upcoming, whatever today is: an ended event's page offers no registration.
+_SOON = timezone.localdate() + timedelta(days=30)
+
 
 def _event(**kwargs):
     defaults = dict(
         title="Special Evening", slug="special-evening",
         event_type=Event.Type.SPECIAL_EVENT,
-        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        start_date=_SOON, end_date=_SOON,
         status=Event.Status.OPEN, published=True,
         registration_eligibility=Event.RegistrationEligibility.MEMBERS_ONLY,
     )
