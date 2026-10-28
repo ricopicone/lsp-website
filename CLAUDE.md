@@ -2716,8 +2716,20 @@ Done (see `git log` for specifics):
   badges, menus and email). Recording already needed nothing: `record_video`
   lists a recording to members, and a one-off event's recording is exempt
   from the retention sweep. `?type=` on `/propose/` preselects a type the
-  viewer may propose (the page's "Propose a talk" button). Proposals are
-  emailed to her first (`SUBMISSIONS_EMAIL`).
+  viewer may propose (the page's "Propose a talk" button). **Follow-up, the
+  same day:** the description is introduced as "A word from the Scholarly
+  Seminar Series Coordinator <name>", set off beneath that line, with the
+  coordinator's event bio (`display_event_bio`, as on an event page) below
+  it; the name comes from the role's holders (`scholarly_series.coordinators`),
+  and the sentence asking for proposals links their directory profile rather
+  than a `mailto:` (Sheila's public email there is the one she gave). The
+  description itself stays her first-person text in the template, so a new
+  coordinator would need it rewritten. A **Scholarly Seminar Series Admin**
+  (`/admin-tools/scholarly-seminar-series/`, the role's card on the hub, in
+  `PANEL_ROLES`) lists every talk with a Record switch for upcoming talks in
+  the site's room (`scholarly_series_record`, sets `record_video`) and each
+  ready recording linked to its page, where a host already sets who can
+  watch, keeps or deletes it.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

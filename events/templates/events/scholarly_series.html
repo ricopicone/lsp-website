@@ -16,10 +16,28 @@
   <p class="text-sm text-base-content/70 -mt-6">A talk you propose goes to the Program Committee, and appears here once they approve it.</p>
   {% endif %}
 
-  <section class="space-y-4 max-w-3xl text-base-content/90 leading-relaxed">
-    <p>I created the <s>Scholarly</s> Seminar Series to provide a forum for those working on scholarly, artistic, or literary works, relevant to Lacanian psychoanalysis, to present works in progress and/or completed works. Independent and personal studies geared to external conference presentations, publications, artistic, and/or literary events relating to Lacanian psychoanalysis are welcome. While clinical material can be presented in the Series, it provides a supportive audience for those pursuing more theoretical contributions to Lacanian psychoanalysis. The Series will be of interest to everyone in the School. But it may be particularly relevant to those pursuing a scholarly formation with interests in Lacanian psychoanalysis beyond the clinic. Lacanian psychoanalysis makes tremendous contributions to the clinic and to the theory and culture of psychoanalysis more broadly. The latter is what the Series intends to foreground.</p>
-    <p>The intention is to have three presentations per year. If you are interested in presenting your work, please send <a href="mailto:{{ submissions_email }}" class="link link-primary">Sheila Cavanagh</a> an email along with a title and short abstract.</p>
-    <p class="text-sm text-base-content/60">Sheila Cavanagh</p>
+  <section class="space-y-5 max-w-3xl">
+    {% if coordinators %}
+    <p class="font-serif text-lg text-base-content/80 italic">A word from the Scholarly Seminar Series Coordinator {% for c in coordinators %}{% if not forloop.first %}{% if forloop.last %} and {% else %}, {% endif %}{% endif %}{{ c.profile.display_full_name }}{% endfor %}</p>
+    {% endif %}
+    <div class="{% if coordinators %}border-l-2 border-primary/40 pl-5 {% endif %}space-y-4 text-base-content/90 leading-relaxed">
+      <p>I created the <s>Scholarly</s> Seminar Series to provide a forum for those working on scholarly, artistic, or literary works, relevant to Lacanian psychoanalysis, to present works in progress and/or completed works. Independent and personal studies geared to external conference presentations, publications, artistic, and/or literary events relating to Lacanian psychoanalysis are welcome. While clinical material can be presented in the Series, it provides a supportive audience for those pursuing more theoretical contributions to Lacanian psychoanalysis. The Series will be of interest to everyone in the School. But it may be particularly relevant to those pursuing a scholarly formation with interests in Lacanian psychoanalysis beyond the clinic. Lacanian psychoanalysis makes tremendous contributions to the clinic and to the theory and culture of psychoanalysis more broadly. The latter is what the Series intends to foreground.</p>
+      <p>The intention is to have three presentations per year. If you are interested in presenting your work, please send {% for c in coordinators %}{% if not forloop.first %}{% if forloop.last %} or {% else %}, {% endif %}{% endif %}{% if c.profile.is_listed %}<a href="{% url 'directory_detail' c.profile.directory_slug %}" class="link link-primary">{{ c.profile.display_full_name }}</a>{% else %}{{ c.profile.display_full_name }}{% endif %}{% empty %}the Program Committee{% endfor %} an email along with a title and short abstract.</p>
+    </div>
+    {% for c in coordinators %}
+    <article class="flex flex-col sm:flex-row gap-4 items-start pt-2">
+      {% if c.profile.headshot %}
+      {% if c.profile.is_listed %}<a href="{% url 'directory_detail' c.profile.directory_slug %}" class="shrink-0" tabindex="-1" aria-hidden="true">{% endif %}
+      <img src="{{ c.profile.headshot.url }}" alt="{{ c.profile.display_full_name }}" class="w-24 h-24 rounded-full object-cover shrink-0">
+      {% if c.profile.is_listed %}</a>{% endif %}
+      {% endif %}
+      <div class="flex-1">
+        <h3 class="font-serif text-lg text-base-content">{% if c.profile.is_listed %}<a href="{% url 'directory_detail' c.profile.directory_slug %}" class="link link-hover">{{ c.profile.display_full_name }}</a>{% else %}{{ c.profile.display_full_name }}{% endif %}</h3>
+        <p class="text-sm text-base-content/60 mb-1">Scholarly Seminar Series Coordinator</p>
+        {% if c.profile.display_event_bio %}<div class="text-sm text-base-content/80 leading-relaxed space-y-2">{{ c.profile.display_event_bio|linebreaks }}</div>{% endif %}
+      </div>
+    </article>
+    {% endfor %}
   </section>
 
   <section class="space-y-4">

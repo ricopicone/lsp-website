@@ -10,10 +10,6 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
-#: Where presentation proposals go: the coordinator, by email, with a title
-#: and a short abstract.
-SUBMISSIONS_EMAIL = "sheilalcavanagh@gmail.com"
-
 
 @dataclass(frozen=True)
 class PastTalk:
@@ -41,6 +37,21 @@ HISTORY = (
     PastTalk(dt.date(2026, 3, 7), "Diana Cuello, PhD",
              "The Perpetual Writing of the Dream"),
 )
+
+
+def coordinators() -> list:
+    """Who holds the Scholarly Seminar Series Coordinator role, for the page:
+    the description is introduced in their name, their bio sits beside it, and
+    proposals go to them by way of their directory profile."""
+    from accounts.models import User
+    from core.models import StaffRole
+
+    return list(
+        User.objects.filter(
+            is_active=True,
+            staff_roles__key=StaffRole.SCHOLARLY_SEMINAR_COORDINATOR,
+        ).select_related("profile").order_by("last_name", "first_name")
+    )
 
 
 def presenters(event) -> str:

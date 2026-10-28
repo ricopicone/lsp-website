@@ -36,6 +36,7 @@ PANEL_ROLES = (
     StaffRole.REFERRAL_COORDINATOR,
     StaffRole.REGISTRAR,
     StaffRole.ELECTION_ADMINISTRATOR,
+    StaffRole.SCHOLARLY_SEMINAR_COORDINATOR,
 )
 
 
@@ -164,6 +165,15 @@ def _panels_for(user) -> list[dict]:
                 workgroup__proposal__status=Cartel.Status.PROPOSED
             ).count(),
             "count_label": "pending",
+        })
+    if user.is_superuser or has_staff_role(
+        user, StaffRole.SCHOLARLY_SEMINAR_COORDINATOR,
+    ):
+        panels.append({
+            "title": "Scholarly Seminar Series Admin",
+            "blurb": "The series' talks: propose one, and choose which are "
+                     "recorded and who can watch.",
+            "url": reverse("scholarly_series_admin"),
         })
     if user.is_superuser or has_staff_role(user, StaffRole.ADMIN_ASSISTANT):
         panels.append({

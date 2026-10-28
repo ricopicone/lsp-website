@@ -175,3 +175,84 @@ def test_a_series_event_page_links_the_series(client):
     talk = _event()
     page = client.get(reverse("events:detail", args=[talk.slug])).content.decode()
     assert reverse("events:scholarly_series") in page
+
+
+def test_the_coordinator_introduces_the_description_with_their_bio(client, coordinator):
+    coordinator.profile.bio = "Practice bio."
+    coordinator.profile.event_bio = "Professor of sociology."
+    coordinator.profile.save()
+    page = client.get(reverse("events:scholarly_series")).content.decode()
+    assert (
+        "A word from the Scholarly Seminar Series Coordinator Sheila Coordinator"
+        in page
+    )
+    # The event bio, as on an event page, not the practice bio.
+    assert "Professor of sociology." in page
+    assert "Practice bio." not in page
+    # Proposals are sent to the coordinator by way of their profile.
+    profile = reverse("directory_detail", args=["sheila-coordinator"])
+    assert f'href="{profile}"' in page
+    assert "mailto:sheila@x.test" not in page
+
+
+def test_with_no_coordinator_the_page_names_no_one(client):
+    page = client.get(reverse("events:scholarly_series")).content.decode()
+    assert "A word from" not in page
+    assert "the Program Committee" in page
+
+
+# --- The coordinator's admin -------------------------------------------------
+
+def test_the_admin_is_the_coordinators(client, coordinator):
+    url = reverse("scholarly_series_admin")
+    assert client.get(url).status_code == 302  # anonymous → sign in
+    client.force_login(_member("plain@x.test"))
+    assert client.get(url).status_code == 403
+    client.force_login(coordinator)
+    assert client.get(url).status_code == 200
+
+
+def test_the_admin_hub_lists_the_coordinators_admin(client, coordinator):
+    client.force_login(coordinator)
+    page = client.get(reverse("admin_tools")).content.decode()
+    assert reverse("scholarly_series_admin") in page
+
+
+def test_the_admin_lists_talks_with_their_recordings(client, coordinator):
+    from video.models import Recording
+
+    talk = _event(title="Recorded Talk", slug="recorded-talk", days=-5)
+    rec = Recording.objects.create(
+        event=talk, daily_recording_id="r1", status=Recording.Status.READY,
+        listing_visibility=Recording.Visibility.MEMBERS,
+        content_visibility=Recording.Visibility.MEMBERS,
+    )
+    _event(Event.Type.SPECIAL_EVENT, title="Not The Series", slug="not-series")
+    client.force_login(coordinator)
+    page = client.get(reverse("scholarly_series_admin")).content.decode()
+    assert "Recorded Talk" in page
+    assert "Not The Series" not in page
+    assert reverse("video:recording_play", args=[rec.pk]) in page
+
+
+def test_the_coordinator_turns_recording_on_and_off(client, coordinator):
+    talk = _event(online_venue=Event.OnlineVenue.INSITE, format=Event.Format.ONLINE)
+    url = reverse("scholarly_series_record", args=[talk.slug])
+    client.force_login(coordinator)
+    assert client.post(url, {"record": "on"}).status_code == 302
+    talk.refresh_from_db()
+    assert talk.record_video
+    client.post(url, {"record": "off"})
+    talk.refresh_from_db()
+    assert not talk.record_video
+
+
+def test_the_record_switch_is_only_for_series_talks(client, coordinator):
+    other = _event(Event.Type.SPECIAL_EVENT, title="Other", slug="other")
+    client.force_login(coordinator)
+    resp = client.post(
+        reverse("scholarly_series_record", args=[other.slug]), {"record": "on"},
+    )
+    assert resp.status_code == 404
+    other.refresh_from_db()
+    assert not other.record_video
