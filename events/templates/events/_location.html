@@ -8,6 +8,7 @@ branded label with registration/live-aware messaging + a tech-check link.
   <h3 class="font-medium text-base-content">
     {% if event.format == 'in_person' %}In person
     {% elif event.format == 'hybrid' %}Hybrid — in person &amp; online
+    {% elif event.has_ended %}Online
     {% else %}Online · video meeting{% endif %}
   </h3>
 
@@ -15,7 +16,7 @@ branded label with registration/live-aware messaging + a tech-check link.
   <p class="text-sm text-base-content/70">{{ sessions.0.location }}</p>
   {% endif %}
 
-  {% if event.format != 'in_person' %}
+  {% if event.format != 'in_person' and not event.has_ended %}
     {% if meets_insite %}<p class="text-sm text-base-content/60">In your browser — no app to install.</p>{% endif %}
 
     {% comment %}Registrants join here; so do the people running the event

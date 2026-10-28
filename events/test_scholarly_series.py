@@ -7,6 +7,7 @@ queue, and hosts them: the same rights a presenter has on their own event.
 from __future__ import annotations
 
 import datetime as dt
+import io
 
 import pytest
 from django.urls import reverse
@@ -140,7 +141,7 @@ def test_an_approved_talk_routes_content_edits_through_review(coordinator):
 
 # --- The series page ---------------------------------------------------------
 
-def test_the_series_page_lists_its_talks_and_history(client):
+def test_the_series_page_lists_its_talks(client):
     _event(title="Coming Talk", slug="coming-talk")
     _event(title="Ended Talk", slug="ended-talk", days=-30)
     _event(Event.Type.SPECIAL_EVENT, title="Not The Series", slug="not-series")
@@ -149,9 +150,69 @@ def test_the_series_page_lists_its_talks_and_history(client):
     assert "&lt;s&gt;" not in page  # the heading's strike isn't escaped
     assert "Coming Talk" in page and "Ended Talk" in page
     assert "Not The Series" not in page
-    # Talks given before the site existed.
-    assert "The Perpetual Writing of the Dream" in page
     assert page.index("Coming Talk") < page.index("Ended Talk")
+    assert reverse("events:detail", args=["ended-talk"]) in page
+
+
+# --- The talks before the site -----------------------------------------------
+
+def _import(**opts):
+    from django.core.management import call_command
+
+    call_command("import_scholarly_series_history", stdout=io.StringIO(), **opts)
+
+
+def _dream():
+    return Event.objects.get(title="The Perpetual Writing of the Dream")
+
+
+def test_the_import_makes_the_earlier_talks_events():
+    _import()
+    talks = Event.objects.filter(event_type=Event.Type.SCHOLARLY_SEMINAR)
+    assert talks.count() == 7
+    dream = _dream()
+    assert dream.start_date == dream.end_date == dt.date(2026, 3, 7)
+    assert dream.published and dream.status == Event.Status.CLOSED
+    assert dream.visibility == Event.Visibility.PUBLIC
+
+
+def test_the_import_links_a_member_presenter(client):
+    diana = _member("diana@x.test", "Diana", "Cuello")
+    _import()
+    dream = _dream()
+    assert list(dream.member_speakers.all()) == [diana]
+    assert not dream.speakers.exists()
+
+
+def test_without_the_member_the_presenter_is_named():
+    _import()
+    assert [s.name for s in _dream().speakers.all()] == ["Diana Cuello"]
+
+
+def test_the_import_runs_once_and_keeps_later_edits():
+    _import()
+    dream = _dream()
+    dream.description = "An abstract Sheila added."
+    dream.save(update_fields=["description"])
+    _import()
+    assert Event.objects.filter(event_type=Event.Type.SCHOLARLY_SEMINAR).count() == 7
+    assert _dream().description == "An abstract Sheila added."
+
+
+def test_a_dry_run_writes_nothing():
+    _import(dry_run=True)
+    assert not Event.objects.filter(event_type=Event.Type.SCHOLARLY_SEMINAR).exists()
+
+
+def test_the_earlier_talks_are_listed_as_events(client):
+    _import()
+    dream = _dream()
+    detail = reverse("events:detail", args=[dream.slug])
+    assert client.get(detail).status_code == 200
+    series = client.get(reverse("events:scholarly_series")).content.decode()
+    assert f'href="{detail}"' in series
+    assert "Femininity and the Spirit of Decision" in series
+    assert detail in client.get(reverse("events:past")).content.decode()
 
 
 def test_the_series_page_hides_members_only_talks_from_visitors(client):

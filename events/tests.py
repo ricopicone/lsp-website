@@ -476,11 +476,15 @@ def test_eligibility_survives_the_change_review_repost():
     assert form.cleaned_data["registration_eligibility"] == "members_only"
 
 
+#: Upcoming, whatever today is: an ended event's page offers no registration.
+_SOON = timezone.localdate() + timedelta(days=30)
+
+
 def _special_event(**kwargs):
     defaults = dict(
         title="Special Evening", slug="special-evening",
         event_type=Event.Type.SPECIAL_EVENT,
-        start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        start_date=_SOON, end_date=_SOON,
         status=Event.Status.OPEN, published=True,
     )
     defaults.update(kwargs)

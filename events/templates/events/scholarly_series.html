@@ -67,9 +67,9 @@
       <ul class="space-y-3">
         {% for t in talks %}
         <li class="border-l-2 border-base-300 pl-4">
-          <p class="text-sm text-base-content/60">{{ t.date|date:"F j" }}</p>
+          <p class="text-sm text-base-content/60">{{ t.event.start_date|date:"F j" }}</p>
           <p class="text-base-content">
-            {% if t.event %}<a href="{% url 'events:detail' t.event.slug %}" class="link link-hover">“{{ t.title }}”</a>{% else %}“{{ t.title }}”{% endif %}
+            <a href="{% url 'events:detail' t.event.slug %}" class="link link-hover">“{{ t.event.title }}”</a>
             {% if t.recorded %}<a href="{% url 'events:detail' t.event.slug %}" class="badge badge-sm badge-ghost ml-1">Recording</a>{% endif %}
           </p>
           {% if t.presenter %}<p class="text-sm text-base-content/80">{{ t.presenter }}</p>{% endif %}
@@ -77,6 +77,8 @@
         {% endfor %}
       </ul>
     </div>
+    {% empty %}
+    <p class="text-base-content/60">No past talks yet.</p>
     {% endfor %}
   </section>
 

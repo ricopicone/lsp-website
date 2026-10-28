@@ -103,3 +103,33 @@ def test_empty_upcoming_list_points_at_the_past(client):
 
 def test_empty_past_list(client):
     assert "No past events yet." in _past(client)
+
+
+def test_an_ended_events_page_says_it_has_ended(client):
+    """A past event's page tells no one that registration is closed or that
+    joining details are on their way (task #851, the series' earlier talks)."""
+    e = _event("given-in-march", end=timezone.localdate() - dt.timedelta(days=200),
+               status=Event.Status.CLOSED, format=Event.Format.ONLINE)
+    page = client.get(reverse("events:detail", args=[e.slug])).content.decode()
+    assert "This event has ended." in page
+    assert "Registration is closed" not in page
+    assert "Joining details" not in page
+
+
+def test_a_registrant_still_finds_their_registration_after_it_ends(client):
+    from registrations.models import Registration
+
+    e = _event("ended-with-me", end=timezone.localdate() - dt.timedelta(days=3),
+               status=Event.Status.CLOSED)
+    from events.models import PriceTier
+
+    tier = PriceTier.objects.create(event=e, base_amount=0)
+    u = User.objects.create_user(email="went@x.test", password="x")
+    reg = Registration.objects.create(
+        event=e, user=u, price_tier=tier, status=Registration.Status.PAID,
+        quoted_amount=0,
+    )
+    client.force_login(u)
+    page = client.get(reverse("events:detail", args=[e.slug])).content.decode()
+    assert "This event has ended." in page
+    assert reverse("registrations:confirm", args=[reg.id]) in page

@@ -1,7 +1,7 @@
 """Context-aware event location display + live-window timing."""
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -28,9 +28,11 @@ def _clear_presence_cache():
 
 
 def _event(slug="talk", fmt=Event.Format.ONLINE):
+    # Upcoming, whatever today is: an ended event's page drops the joining copy.
+    day = timezone.localdate() + timedelta(days=30)
     return Event.objects.create(
         title="Special Talk", slug=slug, event_type=Event.Type.SPECIAL_EVENT,
-        format=fmt, start_date=date(2026, 9, 1), end_date=date(2026, 9, 1),
+        format=fmt, start_date=day, end_date=day,
         published=True, status=Event.Status.OPEN,
     )
 

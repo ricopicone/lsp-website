@@ -264,8 +264,8 @@ def past_event_list(request):
 
 
 def scholarly_series(request):
-    """The Scholarly Seminar Series page (task #851): what the series is, its
-    talks on the site (upcoming and past), and the talks before the site.
+    """The Scholarly Seminar Series page (task #851): what the series is and
+    its talks, upcoming and past (the ones before the site are events too).
 
     Its title strikes through "Scholarly", as the series' own description
     does, so it is passed to the hero pre-marked.
@@ -291,18 +291,12 @@ def scholarly_series(request):
             event__in=ended, status=Recording.Status.READY,
         ) if r.listing_visible_to(request.user)
     }
-    past = [
-        {"date": e.start_date, "title": e.title, "presenter": series.presenters(e),
-         "event": e, "recorded": e.pk in recorded}
-        for e in ended
-    ] + [
-        {"date": t.date, "title": t.title, "presenter": t.presenter}
-        for t in series.HISTORY
-    ]
-    past.sort(key=lambda t: t["date"], reverse=True)
     years: dict[int, list[dict]] = {}
-    for talk in past:
-        years.setdefault(talk["date"].year, []).append(talk)
+    for e in reversed(ended):  # newest first
+        years.setdefault(e.start_date.year, []).append({
+            "event": e, "presenter": series.presenters(e),
+            "recorded": e.pk in recorded,
+        })
     return render(request, "events/scholarly_series.html", {
         "series_title": mark_safe("<s>Scholarly</s> Seminar Series"),
         "upcoming": [

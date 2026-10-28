@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime as _dt
 import secrets
 from decimal import Decimal
+from functools import cached_property
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -732,6 +733,16 @@ class Event(models.Model):
                 return self.program.is_public_now
             return self.published
         return self.published
+
+    @cached_property
+    def has_ended(self) -> bool:
+        """Its last day is behind us, in the school's date (#571), and no
+        session is still to come (``end_date`` isn't kept in step with sessions
+        added later). The page then says so rather than offering registration or
+        joining details."""
+        if self.end_date >= timezone.localdate():
+            return False
+        return not self.sessions.filter(end_at__gte=timezone.now()).exists()
 
     @classmethod
     def public_now_q(cls, prefix: str = ""):
