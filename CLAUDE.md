@@ -2747,6 +2747,29 @@ Done (see `git log` for specifics):
   joining copy from the Where block. Three test helpers had pinned their
   events to 2026-09-01, a date that has since passed, and are now dated from
   today.
+  **Uploading a recording made elsewhere** (same day): a talk held on Zoom
+  had no way to put its recording on the site, since recordings came only
+  from Daily's webhook. The coordinator's admin now offers **Upload a
+  recording** on every talk whose date has come
+  (`scholarly_series_upload`): one video (MP4/WebM/MOV, up to 4 GB), the
+  date recorded, who can watch (LSP Members by default), and a required
+  confirmation that the presenter agreed. An upload is an ordinary
+  `video.Recording` with the new `source=upload`, so the event page, the
+  series page's badge, the admin and the recording page (availability,
+  notes, keep, delete) show it with no change. Its file is in the **private
+  bucket** under `recordings/uploads/<event pk>/`, where browsers already
+  upload Works video (CORS and the instance role known good), uploaded
+  straight from the browser by presigned POST (`video/uploads.py`, the Works
+  pattern; S3 enforces the cap) and played by a presigned GET; without a
+  bucket or JavaScript the file posts to the site and `video:recording_file`
+  streams it. `daily_recording_id` became nullable (`video/0011`, still
+  unique among Daily's rows), and deletion is one method,
+  `Recording.delete_files()`, shared by the recording page, the retention
+  purge and the Django admin's action, so an upload is never sent to Daily.
+  Kept from retention like any one-off event's recording; no notification,
+  as for one made in such an event's room. An abandoned direct upload
+  leaves its object (no lifecycle rule on that prefix). Design:
+  `docs/superpowers/specs/2026-10-27-recording-upload-design.md`.
 
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and

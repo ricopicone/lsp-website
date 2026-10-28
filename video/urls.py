@@ -7,6 +7,7 @@ app_name = "video"
 urlpatterns = [
     path("video/system-check/", views.system_check, name="system_check"),
     path("video/recordings/<int:pk>/", views.recording_play, name="recording_play"),
+    path("video/recordings/<int:pk>/file/", views.recording_file, name="recording_file"),
     path("video/recordings/<int:pk>/keep/", views.recording_keep, name="recording_keep"),
     path("video/recordings/<int:pk>/note/", views.recording_annotate, name="recording_annotate"),
     path(

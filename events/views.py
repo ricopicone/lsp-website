@@ -311,8 +311,9 @@ def scholarly_series(request):
 @staff_role_required(StaffRole.SCHOLARLY_SEMINAR_COORDINATOR)
 def scholarly_series_admin(request):
     """The coordinator's admin (task #851): every talk in the series, whether
-    it records, and its recordings, each linked to the recording page where a
-    host sets who can watch it. Proposing a talk stays the ordinary form."""
+    it records in the site's room, its recordings, each linked to the recording
+    page where a host sets who can watch it, and an upload for a recording made
+    elsewhere. Proposing a talk stays the ordinary form."""
     from video.models import Recording
 
     talks = list(
@@ -328,7 +329,7 @@ def scholarly_series_admin(request):
     return render(request, "events/scholarly_series_admin.html", {
         "talks": [
             {"event": e, "recordings": recordings.get(e.pk, []),
-             "upcoming": e.end_date >= today}
+             "upcoming": e.end_date >= today, "given": e.start_date <= today}
             for e in talks
         ],
     })
@@ -349,6 +350,71 @@ def scholarly_series_record(request, slug: str):
         else f"“{event.title}” won't be recorded.",
     )
     return redirect("scholarly_series_admin")
+
+
+def _series_talk_given(slug: str):
+    """A series talk, and whether its date has come: a recording can only be
+    of a talk that has happened."""
+    event = get_object_or_404(
+        Event, slug=slug, event_type=Event.Type.SCHOLARLY_SEMINAR,
+    )
+    return event, event.start_date <= timezone.localdate()  # the school's date (#571)
+
+
+@staff_role_required(StaffRole.SCHOLARLY_SEMINAR_COORDINATOR)
+def scholarly_series_upload(request, slug: str):
+    """Upload a recording made outside the site's room, on Zoom say, to a
+    talk (task #851). It becomes an ordinary recording of the talk, listed and
+    managed on its own page like one the site made. The browser sends the file
+    straight to S3 (``scholarly_series_upload_presign``) and posts only its
+    key; without a bucket or JavaScript, the file comes here."""
+    from video.forms_upload import RecordingUploadForm
+    from video.uploads import MAX_LABEL
+
+    event, given = _series_talk_given(slug)
+    if not given:
+        messages.error(request, f"“{event.title}” hasn't happened yet.")
+        return redirect("scholarly_series_admin")
+    form = RecordingUploadForm(
+        request.POST or None, request.FILES or None, event=event,
+    )
+    if request.method == "POST" and form.is_valid():
+        rec = form.save(by=request.user)
+        messages.success(
+            request, f"The recording of “{event.title}” is on the site, watchable "
+            f"by: {rec.effective_visibility_label}.",
+        )
+        return redirect("video:recording_play", rec.pk)
+    return render(request, "events/scholarly_series_upload.html", {
+        "event": event, "form": form, "max_label": MAX_LABEL,
+    })
+
+
+@staff_role_required(StaffRole.SCHOLARLY_SEMINAR_COORDINATOR)
+@require_POST
+def scholarly_series_upload_presign(request, slug: str):
+    """A one-time ticket for the browser to upload a talk's recording straight
+    to S3. ``{fallback: true}`` where there's no bucket, so the form posts the
+    file to the site instead."""
+    import json
+
+    from django.http import JsonResponse
+
+    from video import uploads
+
+    event, given = _series_talk_given(slug)
+    if not given:
+        return JsonResponse({"error": "That talk hasn't happened yet."}, status=400)
+    try:
+        payload = json.loads(request.body or "{}")
+        ticket = uploads.presign(
+            event, (payload.get("filename") or "").strip(),
+            (payload.get("content_type") or "").strip(),
+        )
+    except ValueError as exc:  # bad JSON, or an UploadError naming the problem
+        message = str(exc) if isinstance(exc, uploads.UploadError) else "Bad request."
+        return JsonResponse({"error": message}, status=400)
+    return JsonResponse(ticket or {"fallback": True})
 
 
 def program(request):
