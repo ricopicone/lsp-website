@@ -95,11 +95,18 @@ class DailyRoom(models.Model):
 
 
 class Recording(models.Model):
-    """A cloud recording of a meeting in a ``DailyRoom``.
+    """A recording of a meeting: made by Daily in a ``DailyRoom``, or made
+    elsewhere (on Zoom, say) and uploaded to its event (task #851).
 
-    Storage-agnostic: ``daily_recording_id`` is the source of truth; ``s3_key`` is
-    populated when recordings are stored in our own bucket. ``playable_url`` resolves
-    either. Visibility mirrors works.Work (listing vs content)."""
+    A Daily recording is identified by ``daily_recording_id``; ``s3_key`` is
+    populated when it is stored in our own recordings bucket. An upload has no
+    Daily id and its ``s3_key`` is in the private bucket, where browsers already
+    upload video (``video.uploads``). ``playable_url`` and ``delete_files``
+    resolve either. Visibility mirrors works.Work (listing vs content)."""
+
+    class Source(models.TextChoices):
+        DAILY = "daily", "Recorded in the site's room"
+        UPLOAD = "upload", "Uploaded"
 
     class Status(models.TextChoices):
         RECORDING = "recording", "Recording"
@@ -138,7 +145,10 @@ class Recording(models.Model):
         related_name="started_recordings",
     )
 
-    daily_recording_id = models.CharField(max_length=128, unique=True)
+    source = models.CharField(max_length=8, choices=Source.choices, default=Source.DAILY)
+    #: Null for an upload. Still unique among Daily's recordings: Postgres and
+    #: SQLite both let any number of rows be null under a unique constraint.
+    daily_recording_id = models.CharField(max_length=128, unique=True, null=True, blank=True)
     room_name = models.CharField(max_length=128, blank=True)
     s3_key = models.CharField(max_length=512, blank=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.RECORDING)
@@ -164,7 +174,11 @@ class Recording(models.Model):
         ordering = ("-started_at", "-created_at")
 
     def __str__(self) -> str:
-        return self.title or self.daily_recording_id
+        return self.title or self.daily_recording_id or f"Recording {self.pk}"
+
+    @property
+    def is_upload(self) -> bool:
+        return self.source == self.Source.UPLOAD
 
     # ---- visibility (mirrors works.Work) ----
 
@@ -310,21 +324,38 @@ class Recording(models.Model):
         its host (faculty/lead) or staff."""
         return self._can_host(user)
 
-    def delete_everywhere(self):
-        """Delete the S3 object + the Daily recording + this row."""
+    def delete_files(self) -> list[str]:
+        """Delete the stored file and, for Daily's recordings, Daily's copy.
+
+        The one definition, shared by the recording page, the retention purge
+        and the Django admin, so an upload is never sent to Daily and a file is
+        never looked for in the wrong bucket. Best-effort: returns what failed,
+        for a caller that reports it."""
         from . import daily
 
+        failures = []
         if self.s3_key:
             try:
-                from core.storage import recordings_storage
+                if self.is_upload:
+                    from core.storage import private_storage
 
-                recordings_storage().delete(self.s3_key)
-            except Exception:  # noqa: BLE001 — best-effort cleanup
-                pass
-        try:
-            daily.delete_recording(self.daily_recording_id)
-        except daily.DailyError:
-            pass
+                    private_storage().delete(self.s3_key)
+                else:
+                    from core.storage import recordings_storage
+
+                    recordings_storage().delete(self.s3_key)
+            except Exception as exc:  # noqa: BLE001 — best-effort cleanup
+                failures.append(f"file: {exc}")
+        if self.daily_recording_id:
+            try:
+                daily.delete_recording(self.daily_recording_id)
+            except daily.DailyError as exc:
+                failures.append(f"Daily: {exc}")
+        return failures
+
+    def delete_everywhere(self):
+        """Delete the stored file + Daily's copy + this row."""
+        self.delete_files()
         self.delete()
 
     # No clean() guard on the visibility pair: the two settings intersect rather
@@ -334,13 +365,24 @@ class Recording(models.Model):
 
     def playable_url(self, *, download: bool = False):
         """A temporary URL to stream/download the recording, or None if not ready.
-        Presigned from our S3 (owned mode) else Daily's access-link."""
+        An upload is presigned from the private bucket; a Daily recording from
+        our recordings bucket (owned mode), else Daily's access-link."""
         from django.conf import settings
 
         from . import daily
 
         if self.status != self.Status.READY:
             return None
+        if self.is_upload:
+            from django.urls import reverse
+
+            from core.storage import presigned_private_url
+
+            # Without a private bucket (development) the site streams the file.
+            return presigned_private_url(self.s3_key, download=download) or (
+                reverse("video:recording_file", args=[self.pk])
+                + ("?download=1" if download else "")
+            )
         if getattr(settings, "RECORDING_OWN_S3", False) and self.s3_key:
             from core.storage import presigned_recordings_url
             return presigned_recordings_url(self.s3_key, download=download)

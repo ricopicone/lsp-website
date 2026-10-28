@@ -317,3 +317,108 @@ def test_the_record_switch_is_only_for_series_talks(client, coordinator):
     assert resp.status_code == 404
     other.refresh_from_db()
     assert not other.record_video
+
+
+# --- Uploading a recording made elsewhere ------------------------------------
+
+@pytest.fixture
+def private_media(settings, tmp_path):
+    settings.PRIVATE_MEDIA_ROOT = str(tmp_path)
+
+
+def _upload_form(**extra):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    data = {
+        "video": SimpleUploadedFile("zoom.mp4", b"\0" * 32, content_type="video/mp4"),
+        "recorded_on": "2026-10-01", "visibility": "members", "consent": "on",
+    }
+    data.update(extra)
+    return {k: v for k, v in data.items() if v is not None}
+
+
+def test_the_coordinator_uploads_a_talks_recording(client, coordinator, private_media):
+    from video.models import Recording
+
+    talk = _event(title="Zoom Talk", slug="zoom-talk", days=-3)
+    client.force_login(coordinator)
+    url = reverse("scholarly_series_upload", args=[talk.slug])
+    assert client.get(url).status_code == 200
+    resp = client.post(url, _upload_form())
+    rec = Recording.objects.get(event=talk)
+    assert resp.status_code == 302
+    assert resp["Location"] == reverse("video:recording_play", args=[rec.pk])
+    assert rec.source == Recording.Source.UPLOAD and rec.started_by == coordinator
+    # Listed where any recording of the talk is.
+    client.force_login(_member("watcher@x.test"))
+    series = client.get(reverse("events:scholarly_series")).content.decode()
+    assert "Recording</a>" in series
+    detail = client.get(reverse("events:detail", args=[talk.slug])).content.decode()
+    assert reverse("video:recording_play", args=[rec.pk]) in detail
+
+
+def test_an_upload_needs_the_presenters_agreement(client, coordinator, private_media):
+    from video.models import Recording
+
+    talk = _event(days=-3)
+    client.force_login(coordinator)
+    resp = client.post(
+        reverse("scholarly_series_upload", args=[talk.slug]), _upload_form(consent=None),
+    )
+    assert resp.status_code == 200
+    assert not Recording.objects.exists()
+
+
+def test_a_direct_upload_attaches_by_its_key(client, coordinator, monkeypatch):
+    import core.storage as storage
+    from video.models import Recording
+
+    monkeypatch.setattr(storage, "head_private_object",
+                        lambda key: {"size": 10, "content_type": "video/mp4"})
+    talk = _event(days=-3)
+    key = f"recordings/uploads/{talk.pk}/abc.mp4"
+    client.force_login(coordinator)
+    client.post(reverse("scholarly_series_upload", args=[talk.slug]),
+                _upload_form(video=None, video_key=key))
+    assert Recording.objects.get(event=talk).s3_key == key
+
+
+def test_only_the_coordinator_uploads(client, private_media):
+    talk = _event(days=-3)
+    client.force_login(_member("plain@x.test"))
+    url = reverse("scholarly_series_upload", args=[talk.slug])
+    assert client.get(url).status_code == 403
+    assert client.post(url, _upload_form()).status_code == 403
+
+
+def test_a_talk_still_to_come_takes_no_upload(client, coordinator, private_media):
+    from video.models import Recording
+
+    talk = _event(days=5)
+    client.force_login(coordinator)
+    resp = client.post(reverse("scholarly_series_upload", args=[talk.slug]), _upload_form())
+    assert resp.status_code == 302
+    assert resp["Location"] == reverse("scholarly_series_admin")
+    assert not Recording.objects.exists()
+
+
+def test_without_a_bucket_the_browser_posts_the_file(client, coordinator):
+    import json
+
+    talk = _event(days=-3)
+    client.force_login(coordinator)
+    resp = client.post(
+        reverse("scholarly_series_upload_presign", args=[talk.slug]),
+        data=json.dumps({"filename": "zoom.mp4", "content_type": "video/mp4"}),
+        content_type="application/json",
+    )
+    assert resp.json() == {"fallback": True}
+
+
+def test_the_admin_offers_an_upload_once_a_talk_has_happened(client, coordinator):
+    given = _event(title="Given", slug="given", days=-3)
+    coming = _event(title="Coming", slug="coming", days=5)
+    client.force_login(coordinator)
+    page = client.get(reverse("scholarly_series_admin")).content.decode()
+    assert reverse("scholarly_series_upload", args=[given.slug]) in page
+    assert reverse("scholarly_series_upload", args=[coming.slug]) not in page

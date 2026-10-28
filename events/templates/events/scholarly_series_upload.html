@@ -1,0 +1,112 @@
+{% extends "core/staff/admin/_base.html" %}
+{% block admin_heading_title %}Upload a recording{% endblock %}
+{% block admin_kicker %}Scholarly Seminar Series{% endblock %}
+{% block admin_heading %}Upload a recording{% endblock %}
+{% block admin_intro %}For a talk recorded somewhere other than the site's room, on Zoom for example. It will be listed on the talk's page and the series page for whoever you choose below.{% endblock %}
+
+{% block admin_after_header %}
+<div class="rounded-lg border border-base-300 bg-base-100 p-4 max-w-2xl">
+  <p class="text-sm text-base-content/60">{{ event.start_date|date:"l, F j, Y" }}</p>
+  <a href="{% url 'events:detail' event.slug %}" class="font-serif text-lg text-base-content link link-hover">{{ event.title }}</a>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="space-y-5 max-w-2xl" id="recording-upload">
+  {% csrf_token %}
+  {% include "core/_form_error_summary.html" with what="The recording" %}
+  {{ form.video_key }}
+
+  <div class="space-y-1">
+    <label for="{{ form.video.id_for_label }}" class="block font-medium text-base-content">{{ form.video.label }}</label>
+    {{ form.video }}
+    <p class="text-sm text-base-content/60">{{ form.video.help_text }} A large file takes a while; keep this page open until it says the upload is done.</p>
+    <p class="text-sm{% if form.video_key.value %} text-success{% endif %}" id="upload-status" aria-live="polite">{% if form.video_key.value %}Your file is already uploaded; you don't need to choose it again.{% endif %}</p>
+    {% for e in form.video.errors %}<p class="text-sm text-error">{{ e }}</p>{% endfor %}
+  </div>
+
+  <div class="space-y-1">
+    <label for="{{ form.recorded_on.id_for_label }}" class="block font-medium text-base-content">{{ form.recorded_on.label }}</label>
+    {{ form.recorded_on }}
+    {% for e in form.recorded_on.errors %}<p class="text-sm text-error">{{ e }}</p>{% endfor %}
+  </div>
+
+  <div class="space-y-1">
+    <label for="{{ form.visibility.id_for_label }}" class="block font-medium text-base-content">{{ form.visibility.label }}</label>
+    {{ form.visibility }}
+    <p class="text-sm text-base-content/60">{{ form.visibility.help_text }}</p>
+    {% for e in form.visibility.errors %}<p class="text-sm text-error">{{ e }}</p>{% endfor %}
+  </div>
+
+  <div class="space-y-1">
+    <label class="flex items-start gap-3 cursor-pointer" for="{{ form.consent.id_for_label }}">
+      {{ form.consent }}
+      <span class="text-base-content">{{ form.consent.label }}</span>
+    </label>
+    {% for e in form.consent.errors %}<p class="text-sm text-error">{{ e }}</p>{% endfor %}
+  </div>
+
+  <div class="flex items-center gap-3 border-t border-base-300/60 pt-5">
+    <button type="submit" class="btn btn-primary">Add the recording</button>
+    <a href="{% url 'scholarly_series_admin' %}" class="btn btn-ghost">Cancel</a>
+  </div>
+</form>
+
+{% comment %}Direct-to-S3 upload, as on the Works form: the file goes straight
+to the bucket and only its key is posted. Without a bucket (development) the
+presign answers {fallback: true} and the file posts with the form; without
+JavaScript it always does.{% endcomment %}
+<script>
+(function () {
+  var form = document.getElementById("recording-upload");
+  var input = document.getElementById("{{ form.video.id_for_label }}");
+  var keyField = document.getElementById("{{ form.video_key.id_for_label }}");
+  var status = document.getElementById("upload-status");
+  if (!form || !input || !keyField) return;
+  var submit = form.querySelector("[type=submit]");
+  var csrf = form.querySelector("[name=csrfmiddlewaretoken]").value;
+  var uploading = false;
+  function say(msg, cls) { status.textContent = msg || ""; status.className = "text-sm " + (cls || "text-base-content/60"); }
+  function busy(b) { uploading = b; submit.classList.toggle("btn-disabled", b); }
+  form.addEventListener("submit", function (e) { if (uploading) e.preventDefault(); });
+
+  input.addEventListener("change", function () {
+    var file = input.files && input.files[0];
+    keyField.value = "";
+    if (!file) { say(""); return; }
+    busy(true);
+    say("Preparing the upload…");
+    fetch("{% url 'scholarly_series_upload_presign' event.slug %}", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+      body: JSON.stringify({ filename: file.name, content_type: file.type || "video/mp4" })
+    })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok) { busy(false); input.value = ""; say(res.j.error || "The upload couldn't start.", "text-error"); return; }
+      if (res.j.fallback) { busy(false); say("The file will upload when you press Add the recording."); return; }
+      var fd = new FormData();
+      Object.keys(res.j.fields).forEach(function (k) { fd.append(k, res.j.fields[k]); });
+      fd.append("file", file);
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", res.j.url, true);
+      xhr.upload.onprogress = function (e) {
+        if (e.lengthComputable) say("Uploading… " + Math.round(e.loaded / e.total * 100) + "%");
+      };
+      xhr.onload = function () {
+        busy(false);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          keyField.value = res.j.key;
+          input.value = "";  // don't send the file to the site as well
+          say("Uploaded. Press Add the recording to put it on the site.", "text-success");
+        } else {
+          say("The upload failed (" + xhr.status + "). Please try again.", "text-error");
+        }
+      };
+      xhr.onerror = function () { busy(false); say("The upload failed. Please try again.", "text-error"); };
+      say("Uploading… 0%");
+      xhr.send(fd);
+    })
+    .catch(function () { busy(false); input.value = ""; say("The upload couldn't start.", "text-error"); });
+  });
+})();
+</script>
+{% endblock %}

@@ -87,6 +87,26 @@ def recording_play(request, pk):
     )
 
 
+def recording_file(request, pk):
+    """An uploaded recording's file, streamed by the site (task #851). Only
+    where there is no private bucket to presign from, i.e. in development;
+    ``Recording.playable_url`` sends a browser here only then."""
+    from django.http import FileResponse
+
+    from core.storage import private_storage
+
+    rec = get_object_or_404(
+        Recording, pk=pk, source=Recording.Source.UPLOAD, status=Recording.Status.READY,
+    )
+    if not rec.content_visible_to(request.user):
+        raise PermissionDenied("You don't have access to this recording.")
+    name = rec.s3_key.rsplit("/", 1)[-1]
+    return FileResponse(
+        private_storage().open(rec.s3_key, "rb"), filename=name,
+        as_attachment=bool(request.GET.get("download")),
+    )
+
+
 @login_required
 @require_POST
 def recording_keep(request, pk):

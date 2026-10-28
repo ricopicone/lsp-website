@@ -103,7 +103,7 @@
     <p class="text-xs text-base-content/40">This recording is private to the School; please don't redistribute it.</p>
     {% if can_manage %}
     <form method="post" action="{% url 'video:recording_delete' recording.pk %}"
-          onsubmit="return confirm('Delete this recording permanently? It will be removed from AWS storage and Daily — this cannot be undone.');">
+          onsubmit="return confirm('Delete this recording permanently? It will be removed from AWS storage{% if not recording.is_upload %} and Daily{% endif %} — this cannot be undone.');">
       {% csrf_token %}
       <button class="btn btn-xs btn-error btn-outline">Delete recording</button>
     </form>
