@@ -1,9 +1,6 @@
-# Resuming task #851
+# Resuming task #870
 
-**Task:** Add scholarly seminar series to the website
-
-## Description
-I think some of the infra exists. website@lacanschool.org has an email "Reminder: Scholarly Seminar Series with Marshall Meyer - Nov. 7th". Check what infra exists for the scholarly seminar series. I'd like to make this official on the site. Sheila's been coordinating it so I need to loop her in.
+**Task:** Triage: LSP find an analyst map says Access blocked App is not following the tile usage policy of OpenStreetMap's volunteer-run servers: http://osm.wiki/Blocked
 
 ## Project memory
 _Durable, shared context for this project. Read a full entry with `get_project_memory(name=…)`._
@@ -56,6 +53,9 @@ A custom **Django 5.2 / Python 3.10+** web app for the **Lacanian School of Psyc
 
 Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amazon SES email, Django Channels + daphne (realtime), Tailwind v4 + DaisyUI. See [[tech-stack]].
 
+- **scholarly-seminar-series-coordinator** (architecture) — Task #851: a badged Scholarly Seminar Series Coordinator StaffRole (Sheila Cavanagh) proposes talks through the PC queue and hosts them; the seven pre-site talks are Event rows (import_scholarly_series_history); the coordinator admin uploads recordings made on Zoom (Recording.source=upload, private bucket)
+- **free-standalone-event-has-no-tier** (architecture) — FIXED+LIVE 2026-10-27 (task #851, main d517e4d): every Free event now gets a $0 tier (a $0 tier reads back as Free), and the LSP-speakers / co-convener picker lists every LSP member, not only faculty
+- **ai-meeting-notes-request** (reference) — PARKED: Ayelet Schafir-Hirshfeld asked (2026-09-14, to website@) for AI-generated minutes/summaries of virtual meetings; the site has none; Rico pursues it, and asks the Board first, ONLY if she follows up (task #847)
 - **form-safety-helpers** (convention) — Task #820 SHIPPED+LIVE 2026-10-25: shared helpers for the #817 failure class — core.form_stash (refused panel POST rebinds with errors), _form_error_summary + site-wide scroll-to-refused.js, opt-in unsaved-guard.js (form data-warn-unsaved), core/browser_forms.py for browser-shaped tests; long single-Save forms get a sticky save bar
 - **board-elections** (architecture) — Task #813 SHIPPED+LIVE 2026-10-13 (main edb09e6): elections app run by an Election Administrator StaffRole (not the Web Coordinator); phase computed from admin-set dates; Board reviews nominations; ranked ballots counted by STV or most votes per election; a ballot is linked to its voter but shown only to that voter
 - **change-review-dialog-never-saved** (architecture) — Task #817: the event change-review dialog never saved any decision (ce_organizations re-posted as "[]"), and browser CRLF vs stored LF opened it on every save; fixed on fleet-willow by re-posting request.POST verbatim + normalizing line endings
@@ -195,7 +195,7 @@ Stack: uv deps, SQLite (dev) / Postgres-RDS (prod), Stripe hosted Checkout, Amaz
 - **tech-stack** (architecture) — Django 5.2/Python 3.10+, uv for deps, SQLite (dev)/Postgres-RDS (prod via DATABASE_URL), Stripe hosted Checkout, Amazon SES, Django Channels+daphne (ASGI realtime), Tailwind v4 + DaisyUI v5 (build step), settings split by env
 
 ---
-_Manage your context as you work — `project_slug="lsp-management"`, `task_id=851`:_
+_Manage your context as you work — `project_slug="lsp-management"`, `task_id=870`:_
 - **Briefing** — before you pause/wrap up, `write_task_briefing(…)`: a concise “where things stand / next steps” so the next session resumes cleanly.
 - **Task** — `set_task_next_action`, `edit_task`, `set_task_block`/`clear_task_block`, `complete_task` (or the dashboard’s **Done**).
 - **Project memory** — when you learn something durable & project-wide (a convention, decision, gotcha), `add_project_memory` / `update_project_memory` so every future session across the project inherits it.

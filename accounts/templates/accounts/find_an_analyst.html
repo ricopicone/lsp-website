@@ -287,9 +287,13 @@
     });
 
     var map = L.map(el, { worldCopyJump: true }).setView([20, 0], 2);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    // OSM's tile servers refuse a request with no Referer (a 403 "Access
+    // blocked" tile), and the site's Referrer-Policy (same-origin) sends
+    // none cross-origin. So the tiles ask for the origin alone.
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 18,
-      attribution: "© OpenStreetMap contributors",
+      referrerPolicy: "strict-origin",
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
     // Cluster overlapping markers so a city with five members reads as

@@ -2771,6 +2771,22 @@ Done (see `git log` for specifics):
   leaves its object (no lifecycle rule on that prefix). Design:
   `docs/superpowers/specs/2026-10-27-recording-upload-design.md`.
 
+- **The Find-an-Analyst map was blocked by OSM** (task #870). Every tile
+  on `/find-an-analyst/` rendered as OpenStreetMap's 403 "Access blocked"
+  image. OSM's tile servers now refuse a tile request that carries no
+  `Referer` (verified with curl: the same tile is a 403 image without one and
+  the real map with `https://lacanschool.org/`), and the site sends none:
+  `SECURE_REFERRER_POLICY` was never set, so Django's `SecurityMiddleware`
+  emits its default `Referrer-Policy: same-origin`, which strips the Referer
+  from every cross-origin request. The fix is on the tile layer, not the
+  site: Leaflet 1.9's `referrerPolicy: "strict-origin"` sends the bare origin
+  to the tile host only, so the page-wide policy (which keeps token-bearing
+  URLs off other sites) is unchanged. While there, the rest of the tile
+  usage policy: the deprecated `{s}` a/b/c subdomains are gone and the
+  attribution links to openstreetmap.org/copyright. Verified in a browser
+  before (live: 15 blocked tiles) and after (local: 24 real tiles). Any new
+  map on the site needs the same option. No migration.
+
 Milestones 7–8 then cover production deploy + Swales &amp; Hook dry-run
 (M7 — we're already on prod, so M7 is mostly data load + dry run) and
 opening fall registration (M8).
