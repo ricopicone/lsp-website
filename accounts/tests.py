@@ -916,3 +916,21 @@ def test_safe_next_rejects_hostful_and_backslash_urls(rf):
     for evil in ("//evil.example", "/\\evil.example", "http://evil.example",
                  "\\/evil.example", ""):
         assert _safe_next(rf.get("/", {"next": evil})) is None, evil
+
+
+@pytest.mark.django_db
+def test_find_an_analyst_map_tiles_send_a_referer(client):
+    """OSM's tile servers answer a request with no Referer with a 403
+    "Access blocked" image (task #870). The site's Referrer-Policy is
+    Django's default same-origin, which sends no Referer cross-origin, so
+    the tile layer must ask for one itself — the origin only, so no page
+    path leaves the site. Also pins the rest of the tile usage policy: the
+    deprecated a/b/c subdomains are gone and the attribution links to the
+    copyright page."""
+    from django.urls import reverse
+
+    body = client.get(reverse("find_an_analyst")).content.decode()
+    assert 'referrerPolicy: "strict-origin"' in body
+    assert "https://tile.openstreetmap.org/{z}/{x}/{y}.png" in body
+    assert "{s}.tile.openstreetmap.org" not in body
+    assert "https://www.openstreetmap.org/copyright" in body
